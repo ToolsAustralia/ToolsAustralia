@@ -33,7 +33,27 @@ const SUMMARY_FIELDS = [
 const DEEP_ONLY_FIELDS = ["specSections", "detailedDescription"] as const;
 
 const SUMMARIES_SOURCE_PATH = path.resolve(process.cwd(), "src/config/prize-summaries.ts");
-const SOURCE_SIZE_BUDGET_BYTES = 40 * 1024;
+/**
+ * Raised 40 KB -> 56 KB for draw 9 (2026-07-27), when GearWrench became the fourth toolbox
+ * (catalog 15 -> 20 prizes) and its 14 toolbox-contents shots joined the galleries.
+ *
+ * This is a TRIPWIRE, not a physical limit: it exists so heavy DEEP data can't creep into
+ * the client half unnoticed. It is not meant to cap the number of prizes — the prize builder
+ * was explicitly designed so "adding a brand is one more data entry", and a budget that
+ * blocks the growth the architecture was built for is mis-calibrated rather than protective.
+ *
+ * 56, not 48: the file lands at ~47.7 KB, and a tripwire set within 0.3 KB of current size
+ * fires on the next ordinary copy edit — which trains people to raise it reflexively, the
+ * opposite of a guard. ~8 KB of headroom absorbs normal growth while still catching what it
+ * actually watches for: `prizes.ts` is ~170 KB, so a real deep-data leak blows straight past
+ * 56 rather than creeping under it.
+ *
+ * A prize entry costs ~1.2 KB; a shared gallery array is defined once and spread, so it costs
+ * its definition, not its uses. Raise this only for MORE PRIZES; if it trips because
+ * per-entry cost grew instead, that is the leak it is watching for — move the weight into
+ * src/config/prizes.ts rather than raising the number.
+ */
+const SOURCE_SIZE_BUDGET_BYTES = 56 * 1024;
 
 /** Slug lists must match exactly — same entries, same ORDER (consumers rely on catalog order). */
 function testSlugParity() {

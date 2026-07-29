@@ -38,6 +38,35 @@ ScheduledPromo dates: are they stored as UTC or AEST? _TODO: confirm and documen
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).
 
+## Never derive the landing-asset mapping from the art team's filenames (2026-07-27)
+
+The draw 9 export shipped **nine desktop files whose name disagreed with their artwork** —
+three Ryobi banners named as HiKOKI, a Kincrome banner named as GearWrench, three files whose
+bare name was `drawn-tonight` when the convention says bare = `drawn-tomorrow`, and one
+tonight/tomorrow pair that was simply reversed. Every one was a clean, finished banner; only
+the label was wrong, and each was the ONLY copy of that combination + tier.
+
+A filename-derived ingest would have passed lint, types, the manifest check and every URL
+assertion while shipping the wrong prize on live pages. **Nothing automated catches this** —
+`dewalt-gwTB.webp` containing Makita art satisfies all of them. The only defences are reading
+the artwork before renaming, and a proof recording afterwards.
+
+So: `EXCEPTIONS` in `scripts/convert-draw9-landing-to-webp.ts` records what each file
+ACTUALLY shows, with the reason. Do not add an entry from a guess, and do not assume a new
+drop repeats the last one's ordering — the 2026-07 export already differed from 2026-06.
+
+## A resolver's "return the broken URL so the failure is visible" stops being safe once the case is reachable (2026-07-27)
+
+`resolveLandingHeroImage` ended with `return desired` when nothing existed for a
+brand × toolbox — deliberate, so a missing asset would show up. That was fine while every
+combination had art. Draw 9 shipped GearWrench without its Ryobi pairing, making the branch
+reachable for the first time, and the "visible failure" turned out to be a **400 from
+`/_next/image`**: a blank hero plus a console error on a real customer page, not a placeholder.
+
+It now falls back to the evergreen collage. Caught by the e2e QA watchdog mid-recording —
+worth remembering that a unit test asserting "this URL is not in the manifest" happily
+documented the gap without noticing it rendered as a 400.
+
 ## CSS-hidden `<video preload="auto">` still downloads — mount per-viewport, don't just hide with CSS (2026-07-19)
 
 `lg:hidden` / `hidden lg:block` (or any `display:none`) does **not** stop a `<video preload="auto">` from fetching — the browser starts the network request as soon as the `<video>`/`<source>` elements are in the DOM, regardless of visibility. `PromoHero` used to render BOTH the mobile and desktop `<LandingHeroVideo>` unconditionally (gated only by `showVideo`, not by which one was actually visible), so every promo landing visit downloaded two full hero clips — one hidden, one shown. Fixed by adding a client-only `viewport: "mobile" | "desktop" | null` state (`null` until mount, resolved via `matchMedia("(min-width: 1024px)")`) and gating each container's video branch on `viewport === "mobile"` / `viewport === "desktop"` so only the on-screen container ever mounts a `<video>`. **Don't reach for `useIsLgUp`** for this: its SSR/first-paint snapshot is `false` (not `null`), which would mount the MOBILE branch during SSR on every request including desktop — a tri-state local `viewport` is required to render zero videos before mount (see `PromoHero.tsx`). This is the same class of bug documented for images in [shared-ui/gotchas.md](../shared-ui/gotchas.md) "viewport-correct `priority`/preload" — same rule applies to `<video>`, just with a bigger payload.
@@ -46,9 +75,19 @@ The package flag `isMemberOnly` was renamed to **`isAdditional`** across the cod
 
 **`LandingHeroVideo`'s `onUnavailable` does not fire when every `<source>` is exhausted (known, practically unreachable).** `<source>` `error` events do not bubble to the parent `<video>` element — only an error on the `<video>` element ITSELF (e.g. a decode failure after a source loads) triggers `onError`. When all `<source>`s 404/fail to decode, the browser sets the media element to `networkState === NETWORK_NO_SOURCE` silently, with no error event at all — so `onUnavailable` (wired via `<video onError=...>`) never fires and the caller never falls back to the still. In practice this is unreachable today because every clip ships both a WebM and an MP4 twin (see the WebM-first entry in [frontend.md](./frontend.md)) and the resolver always emits at least the base tier, so total exhaustion would require BOTH format twins to be missing from disk — a deployment error, not a runtime condition. Documented so the next editor doesn't assume `onUnavailable` is a complete safety net if that assumption ever changes (e.g. a future tier ships only one format).
 
+## `PromoHero` withholds theme-forked art until the default-theme experiment settles (2026-07-28)
+
+An earlier draft of the default-theme A/B design (`docs/superpowers/specs/2026-07-28-promo-theme-split-design.md`) asserted "the hero physically cannot paint before JS runs, so the banner is never wrong." **That was wrong** — an audit caught it before ship. `PromoHero` only gates the `<video>` on the post-mount `viewport` tri-state (see the CSS-hidden-video entry above). Pre-mount, and whenever there's no video for a slug, BOTH the `isLoading` stage and the main-render still-image branch fall through to theme-forked assets: the `isLoading` stage background comes from `resolveLandingHeroBackground(themeMode)`, and the main branch's `<Image src>` comes from `getImageForMode(landingHeroPaths, themeMode, …)`. Both read `themeMode` from `useThemeStore`, which is populated from `localStorage`/media-query on mount — so on first paint of the *default*-theme experiment (before the visitor's assigned arm is known), these would paint (and fetch) the wrong-arm hero.
+
+That matters specifically because `PromoThemeExperimentGate` (`src/components/ab-testing/PromoThemeExperimentGate.tsx`, Task 8) is an **overlay**, not a replacement — the page is ISR-static for SEO, so `children` (including `PromoHero`) always render underneath the full-screen loader, gated only by `inert`/`aria-hidden`, not by unmounting. A mounted `<Image>` underneath an opaque loader still gets **fetched**. Without withholding the art, a dark-arm visitor would download the light hero (whatever `themeMode` resolves to pre-decision), discard it, then fetch the dark one once the experiment settles — a systematic bandwidth/LCP handicap on exactly one arm, which would corrupt the experiment's own result (the arm being penalized would look like it "converts worse" purely from the extra fetch + repaint).
+
+Fixed by reading `usePromoThemeSettled()` (default `true` outside the gate — a no-op everywhere except promo landings) and adding a new early return **above** the `isLoading` block: when `!themeSettled`, `PromoHero` returns the same reserved `<section>` box (identical className, so no layout shift either way it resolves) with a plain themed `bg-white dark:bg-neutral-950` div and **no `<Image>` elements at all** — no theme-forked asset is emitted until the arm is known. The `isLoading` and main-render still-image branches are unchanged; this only closes the gap between mount and the experiment settling.
+
 ## Raw-path image preloads never match `/_next/image` URLs — use `getImageProps` (2026-07-19)
 
 A `<link rel="preload" as="image" href="/images/foo.webp">` preloads the **raw source path**, but `next/image` actually requests the browser-optimized `/_next/image?url=...&w=...&q=75` URL — the two never match, so the hand-written preload silently does nothing useful (no error, just a wasted/ignored hint) while the real image request still incurs full latency. Fixed across the promo landing hero preloads (`ToolsetLandingPage` AND the dynamic-slug `app/promotions/[slug]/page.tsx` — both compute `getLandingHeroVideoPaths(slug, urgency)` first: a video-eligible slug emits NO image preload at all, since the still never paints there), the homepage `Hero`, and the `/promotions` gallery's featured card: compute the preload via `getImageProps({ src, alt: "", fill: true, sizes: "100vw" })` (from `next/image`) and pass its `props.srcSet` to `imageSrcSet` (+ `imageSizes`) on the `<link>`, so the preloaded URL is the SAME one the browser will actually request. `getImageProps` is a plain function (no hooks) — safe to call in both Server and Client Components. Also fold in the viewport split via `media="(max-width: 1023px)"` / `media="(min-width: 1024px)"` on each `<link>` rather than emitting both unconditionally — an unconditional pair downloads both the mobile AND desktop variant regardless of which one the visitor will actually see. **The preload `<link>` alone is not the whole fix** — if the visible markup still mounts two separate `<Image>`s toggled by CSS `hidden`/`lg:block`, BOTH still download regardless of what you preload; see [shared-ui/gotchas.md](../shared-ui/gotchas.md) "Viewport-correct `priority`/preload" for the paired `<picture>` fix (`Hero.tsx`, `/promotions` featured card).
+
+**Second skip trigger added 2026-07-28:** both files' `heroImagePreload` guard now also returns `null` when the baked `themeExperimentId` (the default-theme A/B sentinel, see [frontend.md](./frontend.md#default-theme-ab-gate-wired-into-both-promo-landing-pages-2026-07-28)) is non-null, not just when `heroVideo` is truthy. `heroImagePaths` here is always the LIGHT variant — the server has no theme — so with the theme test live, preloading it would hand exactly one arm (dark) a wasted download-then-discard while the other arm benefits, a one-sided LCP handicap that would bias the experiment's own conversion numbers.
 
 ## Hero "Enter Now" needs the page's package section to listen for `openMembershipModal` (2026-07-01)
 
@@ -77,3 +116,29 @@ on focus — this is the **accepted trade** for eliminating the every-30/60 s po
 banner **countdown ticks client-side from `endDate`** (`useLeafTimer` leaf tickers in `PromoBanner` /
 `FloatingCountdownBanner`) — no on-screen clock depends on the poll; only the multiplier/banner-text *values*
 do. See [client-state/rules.md R8](../client-state/rules.md#r8-prefer-cdn-s-maxage--focusnavigation-refetch-over-a-guest-refetchinterval).
+
+## Drawn-tier stills were redesigned but the drawn CLIPS were not — motion users still see the old art (2026-07-24)
+
+The 2026-07 export re-shipped every `drawn-tomorrow` / `drawn-tonight` **still** in the new
+brand-coloured "WIN A …" design and added HiKOKI. The drawn **video clips** under
+`public/videos/landing/{brand}/` were **not** part of that drop — they are still the previous dark
+"WIN THE ULTIMATE" design for the four original brands, and HiKOKI has no drawn clip at all.
+
+This matters because `PromoHero` is **video-first**: `showVideo = heroVideoPaths != null &&
+!videoFailed`, and the still is rendered alongside but CSS-hidden (`motion-reduce:hidden` on the
+`<video>`, `hidden … motion-reduce:block` on the `<Image>`). So on the drawn tier today:
+
+| Brand | Motion on (default) | Reduced motion |
+|---|---|---|
+| milwaukee / dewalt / makita / ryobi | **old** dark drawn clip | **new** drawn still |
+| hikoki | base clip (no drawn clip exists) | **new** drawn still |
+
+So the redesign is only visible to reduced-motion users until the matching drawn clips land. Nothing
+is broken — every path resolves to real art — but the animated and still heroes are **different
+designs** in the meantime. When the new clips arrive, run
+`npm run convert:drawn-tonight-tomorrow-videos` (re-verify its numbering mapping first — see
+[architecture.md](architecture.md), the numbering scheme changed between drops) and the two agree again.
+
+To *see* a drawn still in a browser without waiting for the clips, emulate reduced motion
+(DevTools → Rendering → "Emulate CSS prefers-reduced-motion") — that is exactly what the
+`landing drawn-state` demo spec does.

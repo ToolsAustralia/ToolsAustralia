@@ -2,12 +2,21 @@
  * Convert the numbered "drawn tonight / drawn tomorrow" landing exports to WebP and
  * rename them into the resolver's brand-folder convention, then remove the PNG sources.
  *
- * The art team ships 24 numbered desktop + 24 numbered mobile PNGs under
- *   public/images/background/promo/landing/drawn-tonight-tomorrow/{desktop,mobile}/<1..24>.png
- * Each number is a (brand × toolbox × state) hero. Verified mapping (see README in PR):
- *   group of 8 by toolbox: milTB (1-8), kinTB (9-16), sidTB (17-24)
- *   within each group, pairs of 2 by brand: milwaukee, dewalt, makita, ryobi
+ * The art team ships numbered desktop + mobile PNGs under
+ *   public/images/background/promo/landing/drawn-tonight-tomorrow/{desktop,mobile}/<1..N>.png
+ * Each number is a (brand × toolbox × state) hero.
+ *
+ * ── 2026-07 export (30 per viewport, the current scheme) ─────────────────────────────
+ * Verified by scanning every file — perceptual match against the already-named shipped
+ * assets, plus a per-image read of the badge plate and the sub-headline:
+ *   groups of 10 by toolbox: milTB (1-10), sidTB (11-20), kinTB (21-30)
+ *   pairs of 2 by brand within a group: milwaukee, dewalt, makita, ryobi, hikoki
  *   within each pair: odd = drawn-tomorrow, even = drawn-tonight
+ *
+ * NOTE — this differs from the 2026-06 export (24 per viewport), which grouped by toolbox
+ * in EIGHTS in the order milTB / kinTB / sidTB across only 4 brands. Do not assume the
+ * ordering carries over between drops: re-verify each new batch before running this, or
+ * every asset silently lands under the wrong brand.
  *
  * Output matches buildLandingUrl() in landing-image-resolver.ts:
  *   desktop -> landing/{brand}/{brand}-{toolbox}-drawn-{state}.webp
@@ -27,10 +36,28 @@ const LANDING_ROOT = path.join(process.cwd(), "public", "images", "background", 
 const DRAWN_ROOT = path.join(LANDING_ROOT, "drawn-tonight-tomorrow");
 const BG_DIR = path.join(LANDING_ROOT, "background");
 
-/** Order matches the verified export numbering (see header). */
-const TOOLBOXES = ["milTB", "kinTB", "sidTB"] as const; // groups of 8
-const BRANDS = ["milwaukee", "dewalt", "makita", "ryobi"] as const; // pairs of 2 within a group
+/** Order matches the verified 2026-07 export numbering (see header). */
+const TOOLBOXES = ["milTB", "sidTB", "kinTB"] as const; // groups of 10
+const BRANDS = ["milwaukee", "dewalt", "makita", "ryobi", "hikoki"] as const; // pairs of 2 within a group
 const STATES = ["drawn-tomorrow", "drawn-tonight"] as const; // odd, even within a pair
+
+const EXPORTS_PER_VIEWPORT = TOOLBOXES.length * BRANDS.length * STATES.length; // 30
+
+/**
+ * Defective source files to skip, keyed `${viewport}/${n}`. Empty — nothing is held back.
+ *
+ * Kept (rather than deleted) because a drop CAN arrive defective and this is the lever: add
+ * the keys, and those targets retain their previously shipped art instead of regressing
+ * customer-facing copy, while the rest of the batch still converts.
+ *
+ * History — 2026-07: mobile kinTB 21-28 first arrived carrying HiKOKI's sub-headline
+ * ("A 15 PIECE HIKOKI POWER TOOL KIT & STORAGE SYSTEM COMBO & $5K CASH.") over Milwaukee /
+ * DeWalt / Makita / Ryobi artwork — copy that contradicted both its own imagery and its
+ * desktop twin. They were held back and re-exported on 2026-07-27; the replacements were
+ * re-verified (sub-headline now names each file's OWN brand, hue-histogram brand match
+ * against the desktop twins, badge re-read for the drawn tier) and converted normally.
+ */
+const SKIP_SOURCES = new Set<string>([]);
 
 interface DrawnTarget {
   brand: (typeof BRANDS)[number];
@@ -40,11 +67,12 @@ interface DrawnTarget {
 
 /** Map a 1-based export number to its brand / toolbox / state. */
 function targetForNumber(n: number): DrawnTarget {
-  const idx = n - 1; // 0..23
-  const toolbox = TOOLBOXES[Math.floor(idx / 8)];
-  const within = idx % 8;
-  const brand = BRANDS[Math.floor(within / 2)];
-  const state = STATES[within % 2];
+  const idx = n - 1; // 0..29
+  const perToolbox = BRANDS.length * STATES.length; // 10
+  const toolbox = TOOLBOXES[Math.floor(idx / perToolbox)];
+  const within = idx % perToolbox;
+  const brand = BRANDS[Math.floor(within / STATES.length)];
+  const state = STATES[within % STATES.length];
   return { brand, toolbox, state };
 }
 
@@ -77,12 +105,19 @@ interface Job {
   dest: string;
 }
 
-async function buildJobs(): Promise<Job[]> {
+async function buildJobs(): Promise<{ jobs: Job[]; skipped: string[] }> {
   const jobs: Job[] = [];
+  const skipped: string[] = [];
   for (const viewport of ["desktop", "mobile"] as const) {
-    for (let n = 1; n <= 24; n++) {
+    for (let n = 1; n <= EXPORTS_PER_VIEWPORT; n++) {
       const src = path.join(DRAWN_ROOT, viewport, `${n}.png`);
-      if (await exists(src)) jobs.push({ src, dest: destFor(targetForNumber(n), viewport) });
+      if (!(await exists(src))) continue;
+      if (SKIP_SOURCES.has(`${viewport}/${n}`)) {
+        const t = targetForNumber(n);
+        skipped.push(`${viewport}/${n}.png (${t.brand}-${t.toolbox}-${t.state})`);
+        continue;
+      }
+      jobs.push({ src, dest: destFor(targetForNumber(n), viewport) });
     }
   }
   // Hero-stage backgrounds (skeleton-loader stand-ins): the shared bg-{desktop,mobile}
@@ -96,14 +131,20 @@ async function buildJobs(): Promise<Job[]> {
       }
     }
   }
-  return jobs;
+  return { jobs, skipped };
 }
 
 async function main() {
-  const jobs = await buildJobs();
-  if (jobs.length === 0) {
+  const { jobs, skipped } = await buildJobs();
+  if (jobs.length === 0 && skipped.length === 0) {
     console.log("No source PNGs found under", rel(DRAWN_ROOT), "or", rel(BG_DIR), "— nothing to do.");
     return;
+  }
+
+  if (skipped.length > 0) {
+    console.log(`Skipping ${skipped.length} defective source file(s) — see SKIP_SOURCES:`);
+    for (const s of skipped) console.log(`  - ${s}`);
+    console.log("");
   }
 
   console.log(`Converting ${jobs.length} PNG -> WebP (quality 82, effort 5)\n`);
@@ -132,12 +173,17 @@ async function main() {
     }
   }
 
-  // Remove the now-empty numbered source folders.
-  for (const viewport of ["desktop", "mobile"] as const) {
-    const dir = path.join(DRAWN_ROOT, viewport);
-    if (await exists(dir)) await fs.rm(dir, { recursive: true, force: true });
+  // Remove the now-empty numbered source folders. Skipped (defective) sources stay on
+  // disk so a re-export can drop straight in beside them.
+  if (skipped.length === 0) {
+    for (const viewport of ["desktop", "mobile"] as const) {
+      const dir = path.join(DRAWN_ROOT, viewport);
+      if (await exists(dir)) await fs.rm(dir, { recursive: true, force: true });
+    }
+    if (await exists(DRAWN_ROOT)) await fs.rm(DRAWN_ROOT, { recursive: true, force: true });
+  } else {
+    console.log(`\nLeft ${skipped.length} skipped source file(s) under ${rel(DRAWN_ROOT)} for re-export.`);
   }
-  if (await exists(DRAWN_ROOT)) await fs.rm(DRAWN_ROOT, { recursive: true, force: true });
 
   console.log(
     `\nDone. ${jobs.length} files · ${(totalBefore / 1024 / 1024).toFixed(1)} MB (PNG) -> ${(totalAfter / 1024 / 1024).toFixed(1)} MB (WebP).`

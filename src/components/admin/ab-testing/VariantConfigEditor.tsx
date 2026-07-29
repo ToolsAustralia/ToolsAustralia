@@ -81,12 +81,18 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
     trafficPercentage: variant?.trafficPercentage || 50,
     isControl: variant?.isControl ?? false,
     config: {
+      // Spread the stored config FIRST so unknown/future keys survive a save
+      // round-trip, then re-assert the explicit keys below — other code in
+      // this file reads them as always-present, so they must win over
+      // whatever (possibly absent) value the spread carried.
+      ...(variant?.config ?? {}),
       hero: variant?.config?.hero ?? {},
       banner: variant?.config?.banner ?? {},
       packages: variant?.config?.packages ?? {},
       membershipModal: variant?.config?.membershipModal ?? {},
       packageColors: variant?.config?.packageColors ?? { oneTime: {}, membership: {} },
       membershipTheme: variant?.config?.membershipTheme ?? {},
+      promoTheme: variant?.config?.promoTheme ?? {},
     },
   });
 
@@ -712,6 +718,41 @@ export default function VariantConfigEditor({ variant, experimentId: _experiment
             label="Force light mode on the membership section"
             description="A/B test: when enabled, the membership section always renders in light mode for this variant, ignoring the site's dark-mode schedule/toggle. Leave OFF for the control variant."
           />
+        </div>
+      </FormSection>
+
+      {/* Promo Landing Default Theme (A/B theme-split test) */}
+      <FormSection title="Promo Landing Default Theme" icon={Palette}>
+        <div className="space-y-4">
+          <div>
+            <Select
+              id="promoDefaultTheme"
+              name="promoDefaultTheme"
+              value={formData.config.promoTheme?.defaultTheme ?? "light"}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  config: {
+                    ...formData.config,
+                    promoTheme: {
+                      ...formData.config.promoTheme,
+                      defaultTheme: e.target.value as "light" | "dark",
+                    },
+                  },
+                })
+              }
+              options={[
+                { value: "light", label: "Light (control)" },
+                { value: "dark", label: "Dark" },
+              ]}
+              label="Default theme for bucketed visitors"
+            />
+            <p className="text-xs text-gray-500 dark:text-neutral-500 mt-0.5 sm:mt-1">
+              A/B test: the theme a visitor is sent through with on promo landings. Applied only to visitors who have
+              never used the theme toggle; a manual toggle always wins. Set &quot;Light (control)&quot; for the
+              control variant.
+            </p>
+          </div>
         </div>
       </FormSection>
 

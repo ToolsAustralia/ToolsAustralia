@@ -941,6 +941,37 @@
   background-color: var(--pbc-mark-d);
 }
 
+/* Two-tone brand mark (prize-selection/BrandMark.tsx, DUO mode).
+   A CSS mask is single-colour by construction, so a lockup like GearWrench's
+   (theme-ink "GEAR" + orange "WRENCH" + an orange gear badge holding a black "GW")
+   ships one finished SVG per theme instead. Both are stacked and CSS picks one, so the
+   swap matches the mask path: pure CSS, no JS theme read, no hydration flash.
+   Rendered PLATELESS per the Prize Showcase handoff — no background, no border. */
+.pbc-brand-mark-duo {
+  position: relative;
+}
+
+.pbc-brand-mark-duo-light,
+.pbc-brand-mark-duo-dark {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.pbc-brand-mark-duo-dark {
+  display: none;
+}
+
+.dark .pbc-brand-mark-duo-light {
+  display: none;
+}
+
+.dark .pbc-brand-mark-duo-dark {
+  display: block;
+}
+
 /* ---------------------------------------------------------------------------
  * Product stage — the lit plate a combo render sits on
  * ---------------------------------------------------------------------------

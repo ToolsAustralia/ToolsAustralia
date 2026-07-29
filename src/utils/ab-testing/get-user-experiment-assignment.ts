@@ -1,9 +1,13 @@
 import mongoose from "mongoose";
 import VariantAssignmentRepository from "@/repositories/ab-testing/VariantAssignmentRepository";
 import ExperimentRepository from "@/repositories/ab-testing/ExperimentRepository";
+import { PROMO_THEME_SLUG } from "@/lib/ab-testing/promo-theme-slug";
 
 /** Cosmetic site-wide experiments that must never be credited with purchases. */
-export const NON_CONVERSION_SENTINEL_SLUGS = new Set(["__membership-theme__"]);
+export const NON_CONVERSION_SENTINEL_SLUGS = new Set([
+  "__membership-theme__",
+  PROMO_THEME_SLUG,
+]);
 
 /**
  * Rank experiments for purchase attribution when no slug is provided.

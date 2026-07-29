@@ -87,6 +87,77 @@ npm run seed:static-vs-video-hero:prod       # PROD: create the draft experiment
 
 > Historical: the promo packages-design experiment (2026-07, concluded — control won) had its own seed/cleanup scripts (`seed:promo-packages-design`, `cleanup:promo-packages-design`); both scripts and their npm entries were removed when the experiment ended.
 
+### A/B seed: promo landing default theme (light vs dark)
+
+`scripts/seed-promo-theme-experiment.ts` creates a **draft** experiment + two
+50/50 variants (`Light (control)` / `Dark`, via `promoTheme.defaultTheme`) that
+target the **sentinel** slug `__promo-theme__` — never a real prize slug, so it
+can't shadow a slug-targeted promo experiment (`findActiveBySlug` is a
+`findOne`). The reverse direction — a wildcard `"*"` experiment hijacking the
+sentinel — is guarded separately by the exact-match
+`ExperimentRepository.findActiveBySentinelSlug`. Idempotent (safe to re-run on
+a draft; skips unless `--force`); refuses to touch active/paused/ended
+experiments. No `--prod` npm variants exist for this one — it's seeded in
+dev/staging first, same as every other draft experiment; add `:prod` variants
+on request if a prod seed is ever needed (CLAUDE.md rule 4, don't add
+speculative flags/variants).
+
+```bash
+npm run seed:promo-theme:dry          # dev: preview, no writes
+npm run seed:promo-theme              # dev: create the draft experiment
+npm run seed:promo-theme -- --force   # dev: repopulate an existing draft's variants
+```
+
+#### Pre-activation check — do not skip
+
+`VariantConfigService.mergeVariantConfig` rebuilds variant config from an
+explicit key whitelist. If `promoTheme` were ever dropped from that whitelist,
+the config would be silently stripped between MongoDB and the browser — **both**
+arms would render light while the admin dashboard still shows a healthy,
+evenly-split experiment. That's a silent A/A producing confident, wrong
+conclusions, so probe it before every activation, not just the first.
+
+**A bare unauthenticated `curl -X POST /api/ab-testing/assign` CANNOT be used
+for this check and must not be.** Traced from `src/app/api/ab-testing/assign/route.ts`:
+the route only returns a *specific* variant's config when the request carries
+both an admin session **and** the httpOnly `ta_ab_preview_<experimentId>`
+cookie (the `previewVariantId && isAdmin` branch). Without both, it falls
+through to `VariantAssignmentService.assignVariant(experimentId, userId,
+anonymousId)`, which deterministically hashes `experimentId + anonymousId` — a
+cookie-less curl gets a fresh anonymous id every call and lands on whichever
+arm the hash happens to pick. Two such curls could hit the SAME arm by chance,
+see `defaultTheme` present, and the operator would wrongly conclude the
+whitelist is fine while the *other* arm is still silently stripped.
+
+The mechanism that actually targets a chosen arm is the **admin preview
+cookie** (`src/app/api/admin/ab-testing/preview/route.ts`, permission
+`abTesting.edit`), the same one the admin A/B Testing UI's per-variant
+**"Preview"** button (eye icon, `ExperimentDetailModal.handlePreviewVariant` in
+`src/components/admin/ab-testing/ExperimentDetailModal.tsx`) sets before
+opening a promo tab. Per variant:
+
+1. Sign in as a user with `role: "admin"` and keep that browser session (cookie
+   jar) for every step below — the assign route's preview branch checks
+   `session?.user?.role === "admin"`.
+2. Find the variant's `_id` (admin → A/B Testing → open the experiment →
+   Variants tab lists `Light (control)` / `Dark`; the id is visible in the
+   Preview/Edit/Delete network requests in devtools, or read it directly:
+   `db.variants.find({ experimentId: ObjectId("<experimentId>") })`).
+3. Set the preview cookie for that variant: click the variant's **"Preview"**
+   button in the admin UI, or call `POST /api/admin/ab-testing/preview` with
+   `{ "experimentId": "<experimentId>", "variantId": "<variantId>" }` from the
+   SAME authenticated session. This sets an httpOnly
+   `ta_ab_preview_<experimentId>` cookie (1-hour TTL, path `/`).
+4. Still in that session (both the admin session cookie and the preview cookie
+   must ride along — e.g. run this from the browser devtools console, or with
+   an HTTP client seeded from the browser's cookie jar, never a fresh
+   cookie-less request), call `POST /api/ab-testing/assign` with
+   `{ "experimentId": "<experimentId>", "slug": "__promo-theme__" }`.
+5. Assert the response is `{ ..., isPreview: true }` and
+   `variantConfig.promoTheme.defaultTheme` equals the expected arm
+   (`"light"` for `Light (control)`, `"dark"` for `Dark`).
+6. Repeat steps 2-5 for the other variant.
+
 ### Affiliate commission reconciliation (safety net)
 
 The shared core [`reconcileAffiliateCommissions()`](../../src/utils/affiliate/reconcile-commissions.ts)

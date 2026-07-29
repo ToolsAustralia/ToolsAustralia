@@ -9,6 +9,7 @@ import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import type { ServerPromo } from "@/utils/database/queries/promo-queries";
 import type { ServerMajorDraw } from "@/utils/database/queries/major-draw-server-queries";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
+import { usePromoThemeSettled } from "@/components/ab-testing/PromoThemeExperimentGate";
 import { useExperimentTracking } from "@/hooks/ab-testing/useExperimentTracking";
 import {
   getLandingHeroUrgencyFromDrawDay,
@@ -67,6 +68,7 @@ export default function PromoHero({
   };
 
   const themeMode = useThemeStore((s) => s.theme);
+  const themeSettled = usePromoThemeSettled();
   const [imageError, setImageError] = useState(false);
   /** Set if the hero clip's sources all fail — fall back to the still hero. */
   const [videoFailed, setVideoFailed] = useState(false);
@@ -141,7 +143,7 @@ export default function PromoHero({
   // tier the resolver returns the animated badge clip.
   const heroVideoPaths =
     effectiveSlug && !perSlugVariantImage && !variantConfig?.hero?.disableVideo
-      ? getLandingHeroVideoPaths(effectiveSlug, landingDrawDayUrgency)
+      ? getLandingHeroVideoPaths(effectiveSlug, landingDrawDayUrgency, themeMode)
       : null;
 
   // Video-first: once mounted, the clip is the PRIMARY hero for its viewport (the still never
@@ -166,12 +168,27 @@ export default function PromoHero({
   const isDewaltTheme = (effectiveSlug ?? "").startsWith("dewalt-");
   const shouldUseBlackText = preferDark || isDewaltTheme;
 
+  // Hold theme-forked art until the default-theme experiment has decided. The
+  // gate overlays rather than replaces the page (SEO), so a mounted <Image>
+  // here would still be fetched — a dark-arm visitor would download the light
+  // hero and discard it, exactly the handicap the preload skip removes. This
+  // returns the same reserved box as the isLoading stage, minus the two
+  // theme-forked <Image>s, so there is no layout shift when it resolves.
+  if (!themeSettled) {
+    return (
+      <section className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-[2560/1044] lg:min-h-0">
+        <div className="absolute inset-0 z-0 bg-white dark:bg-neutral-950" />
+      </section>
+    );
+  }
+
   if (isLoading) {
-    // Brand-aware stage background: when the slug maps to a brand with a shipped
-    // bg-{brand} asset, that brand background stands in for the skeleton; otherwise the
-    // shared generic background. effectiveSlug is set on first paint (prizeSlug prop),
-    // so the right background shows immediately even while the draw query loads.
-    const loaderBackground = resolveLandingHeroBackground(effectiveSlug);
+    // Theme-aware stage background standing in for the skeleton. Keyed on THEME rather than
+    // brand since draw 9: the backdrop is the same wall behind every brand's shoot, but a
+    // dark-mode visitor used to get the light backdrop and then a dark hero painted over it.
+    // `themeMode` is available on first paint, so the right backdrop shows immediately even
+    // while the draw query is still loading.
+    const loaderBackground = resolveLandingHeroBackground(themeMode);
     return (
       <section className="relative flex flex-col items-center overflow-visible pt-20 sm:pt-40 aspect-[1080/1164] min-h-[clamp(380px,228px+38vw,520px)] lg:aspect-[2560/1044] lg:min-h-0">
         {/* Hero "stage" background stands in for the skeleton so the load-in is seamless. */}

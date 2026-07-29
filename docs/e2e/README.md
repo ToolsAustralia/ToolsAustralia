@@ -32,6 +32,8 @@ entirely through a single orchestrator (`e2e/run.ts`) — never a bare `npx play
 | Wipe-and-seed | `e2e/seed/` | `wipeAndSeed()` re-runs the safety guard, drops the e2e DB, seeds member + admin + one active MajorDraw. CLI: `npx tsx e2e/seed/index.ts`. |
 | Fixtures | `e2e/fixtures/test.ts`, `demo.ts`, `ui-audit.ts` | Extended `test`/`expect`: auto QA `watchdog` (console/network/third-party blocking), per-worker rate-limit-safe IP, `freshUser` factory, `demo` proof-mode narration, `uiAudit` lens. |
 | Marketing/membership `@smoke` specs | `e2e/specs/marketing/*.spec.ts`, `e2e/specs/membership/modal.spec.ts` | Landing hero + membership CTAs, `/mini-draws`, `/membership` tier display, and the CLAUDE.md §11 legal-copy guard (bans gambling/sold-entry vocabulary, asserts free-entry framing). |
+| Landing countdown tiers (`@demo`) | `e2e/specs/marketing/landing-drawn-states.spec.ts` | Moves the active major draw's `drawDate` and reloads to prove every one of the 15 prize combinations (5 brands x 3 toolboxes) swaps to its own `drawn-tomorrow` / `drawn-tonight` hero still. The mobile test closes on the four Kincrome pages whose first export described the wrong prize, re-walking them to show the 2026-07-27 corrected copy. **Two tests, one per viewport** — a mobile test pinned to `mobile-chrome` and a desktop test pinned to `chromium-desktop`, because Playwright cannot rescale a video canvas mid-recording (see proof-mode.md rule 4); join the clips with `npm run e2e:proof:join`. **Serial** — it mutates the shared seeded draw and restores it in `afterAll`. |
+| Promo default-theme A/B split (`@smoke`) | `e2e/specs/marketing/promo-theme-split.spec.ts` | Two tests guarding the promo-landing default-theme experiment (light vs dark, see `docs/promo/frontend.md#default-theme-ab-gate-wired-into-both-promo-landing-pages-2026-07-28`): (1) stubs `POST /api/ab-testing/assign` for a deterministic dark arm and samples `<html>`'s class every animation frame from first paint, asserting no dark→light regression once the theme resolves; (2) asserts the control-arm SSR HTML is substantial (`>20_000` chars), guarding the "overlay, not replacement" architecture. **Serial** — `beforeAll` inserts a real active `Experiment` doc (`slugTargets: ["__promo-theme__"]`) directly into the e2e DB (same pattern as `landing-drawn-states.spec.ts`'s `majordraws` mutation) because `PromoThemeExperimentGate`'s `experimentId` prop is resolved server-side per request and the client hook makes no request at all when it's null; `afterAll` deletes it. Both tests pass. |
 | Auth/account/admin `@smoke` specs | `e2e/specs/auth/*.spec.ts`, `e2e/specs/account/*.spec.ts`, `e2e/specs/admin/*.spec.ts` | Login, the registration guest-bridge (no auto-login), `/my-account` gate, `/admin` gate + member-blocked boundary. |
 | Purchase (money-path) `@purchase` specs | `e2e/helpers/payment.ts`; `e2e/specs/membership/{purchase-subscription,purchase-one-time,purchase-decline,purchase-idempotency,webhook-replay,purchase-via-showcase}.spec.ts` | Real Stripe TEST-MODE payments through the real UI + real webhook delivery, DB-level exactly-once assertions. |
 | Flagship full-journey (`npm run e2e:journey`) | `e2e/specs/membership/full-journey.spec.ts`, `e2e/seed/promo.ts`, run.ts `--promo` | The longest single flow, under a seeded production-style 10× promo: showcase entry → register → pay (150 entries exactly-once) → auto-login → upsell accepted one-click with the promo-correct artwork asserted loaded (300 entries exactly-once) → dashboard EntryWallet shows 450. Self-skips outside journey mode — see how-to-run.md. |
@@ -93,11 +95,42 @@ architecture.md's env-overlay section and gotchas.md's leak write-ups.
 As of Task 13's final verification, a fresh, fully unscoped `npm run e2e` run passes end to end
 (exit 0) — the full-run split (architecture.md), its `isFullRun` hardening, and the a11y scoping
 decision below are all in place together. See the Task 13 report's Part C for the verbatim run.
-The two gaps below remain genuinely open (documented, not silently worked around) but neither
-currently blocks a normal `npm run e2e`.
+The gaps below remain genuinely open (documented, not silently worked around) but none of them
+currently blocks a normal `npm run e2e` — the promo-theme A/B test spec's Strict Mode and
+client-boundary bugs were both fixed (2026-07-28), and both tests in `promo-theme-split.spec.ts`
+now pass end to end.
 
 ## Known, currently-open gaps (tracked here, not silently worked around)
 
+- **FIXED (2026-07-28, Task 12 re-verification): the promo default-theme A/B gate's
+  `themeExperimentId` was always `null`.** Root cause confirmed: `PROMO_THEME_SLUG` was
+  imported into `/promotions/[slug]/page.tsx` and `ToolsetLandingPage.tsx` (both Server
+  Components) from `src/hooks/ab-testing/usePromoThemeExperiment.ts`, a `"use client"` file —
+  a Server Component importing a plain constant across that boundary gets a client reference,
+  not the string value, so `ExperimentService.getActiveExperimentForSentinelSlug` matched
+  nothing. Fixed by moving the constant (and `promoThemeMarkerKey`) to
+  `src/lib/ab-testing/promo-theme-slug.ts`, a boundary-neutral module with no `"use client"`
+  directive; both Server Components now import from there directly. See
+  `docs/ab-testing/gotchas.md` ("A Server Component cannot import a constant from a
+  `"use client"` module") for the full incident writeup, and the task-12 report
+  (`.superpowers/sdd/2026-07-28-promo-theme-split/task-12-report.md`) for the original
+  diagnosis and the fix's verification trail.
+- **FIXED (2026-07-28, Task 12 re-verification): React Strict Mode double-invoke blocked the
+  test's "dark arm never paints light before dark" check.** Strict Mode's dev-only effect
+  double-invocation interacted with `usePromoThemeExperiment`'s single-shot `ranRef` guard:
+  the first mount started the `/api/ab-testing/assign` fetch and aborted it in cleanup via
+  an `AbortController`; the second mount saw `ranRef.current = true` and returned early,
+  leaving the request permanently stranded with no retry. A closure-local `aborted` boolean
+  was itself flipped by Strict Mode's cleanup and never un-flipped, causing a silent drop of
+  the eventual `setState` even after the fetch resolved. **The fix (verified 2026-07-28):**
+  promoted the `aborted` flag to `abortedRef` (a `useRef` that resets to `false` at the
+  **top** of every effect invocation, before the `ranRef` guard), allowing Strict Mode's
+  second mount to un-poison it so the in-flight request can settle normally; removed the
+  `AbortController` entirely (unnecessary since `ranRef` alone prevents duplicate requests,
+  and aborting buys nothing — the `/assign` endpoint persists server-side before building
+  the response). See `docs/ab-testing/gotchas.md` ("`ranRef` + `AbortController` single-shot
+  effects can permanently strand in dev — FIXED") for the full account, including the
+  second-order trap and the empirical verification against two consecutive test runs.
 - **The a11y baseline (`KNOWN_VIOLATIONS` in `e2e/specs/quality/a11y.spec.ts`) has only ever been
   verified against `chromium-desktop`.** Task 13's success-criteria gate ran `@a11y` across all
   three browser projects for the first time and found real, unbaselined axe violations on

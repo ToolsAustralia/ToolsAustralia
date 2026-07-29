@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useUserContext } from "@/contexts/UserContext";
@@ -50,7 +50,25 @@ interface MembershipSectionProps {
   variantConfig?: VariantConfig["packages"]; // Optional variant config for packages
 }
 
-function MembershipSectionInner({
+/**
+ * Client-only read of the `?packages=` ad-landing tab override. Returns null during SSR.
+ *
+ * Deliberately NOT `useSearchParams()`: this section renders on PRERENDERED marketing-class
+ * pages (`/`, `/promotions/*` — see docs/security-csp/rules.md R8), and `useSearchParams()`
+ * there de-opts the whole client subtree up to the nearest Suspense boundary to CLIENT-ONLY
+ * rendering. The 1,265px packages grid then ships as an empty `<section>` in the static HTML
+ * and appears only after hydration, shoving everything below it down the page — the bulk of a
+ * measured CLS 0.4352 → 0.0566 on /promotions/* (2026-07-27). PromoBanner already reads this
+ * exact param the same way, for the same reason.
+ */
+function readForcedPackagesTab(): "membership" | "one-time" | null {
+  if (typeof window === "undefined") return null;
+  return parseMembershipPackagesTab(
+    new URLSearchParams(window.location.search).get(MEMBERSHIP_PACKAGES_QUERY_PARAM),
+  );
+}
+
+function MembershipSection({
   title: _title = "CHOOSE YOUR PACKAGE",
   padding = "py-12 sm:py-16 lg:py-20",
   titleColor = "text-black",
@@ -65,16 +83,12 @@ function MembershipSectionInner({
   // Get variant config from context for A/B testing (membershipModal config)
   const { variantConfig: contextVariantConfig, experimentId, variantId } = useVariantContext();
   const { trackEvent } = useExperimentTracking();
-  // Ad landings can pre-select the One-Time tab via `?packages=one-time`. A valid param seeds the
-  // initial tab and overrides the user-state default effect below; the visitor can still toggle
-  // manually afterwards. Absent/invalid → null → unchanged behavior.
-  const searchParams = useSearchParams();
-  const forcedPackagesTab = parseMembershipPackagesTab(
-    searchParams.get(MEMBERSHIP_PACKAGES_QUERY_PARAM),
-  );
-  const [activeTab, setActiveTab] = useState<"membership" | "one-time">(
-    forcedPackagesTab ?? "membership",
-  );
+  // Ad landings can pre-select the One-Time tab via `?packages=one-time`. The server always
+  // renders the "membership" default and the forced tab applies on mount (see
+  // `readForcedPackagesTab` above) — that keeps the section in the static HTML instead of
+  // trading the whole grid for a query-string read. It still overrides the user-state default
+  // effect below, and the visitor can toggle manually afterwards.
+  const [activeTab, setActiveTab] = useState<"membership" | "one-time">("membership");
   const [isMounted, setIsMounted] = useState(false);
   const [isInclusionsExpanded, setIsInclusionsExpanded] = useState(false);
   /** Must be top-level — image onError fallback for multiplier banner */
@@ -83,6 +97,8 @@ function MembershipSectionInner({
   // Handle client-side mounting to prevent hydration mismatch
   useEffect(() => {
     setIsMounted(true);
+    const forced = readForcedPackagesTab();
+    if (forced) setActiveTab(forced);
   }, []);
 
   // Fetch membership data from API
@@ -149,7 +165,9 @@ function MembershipSectionInner({
   // landing on `?packages=one-time` still opens on One-Time, and a later userData change won't fight
   // a manual toggle.
   useEffect(() => {
-    if (forcedPackagesTab) return;
+    // Read the URL live rather than closing over a mount-time value: this effect and the
+    // mount effect above land in the same commit, so a captured value would still be null here.
+    if (readForcedPackagesTab()) return;
     if (!userLoading && userData) {
       // Users without an active subscription always default to membership so they can subscribe
       const newTab = !hasActiveSubscription
@@ -167,7 +185,7 @@ function MembershipSectionInner({
         );
       }
     }
-  }, [hasActiveSubscription, hasAccessToAdditionalPackages, userLoading, userData, forcedPackagesTab]);
+  }, [hasActiveSubscription, hasAccessToAdditionalPackages, userLoading, userData]);
 
   // Note: PromoBanner independently seeds its own tab from the same `?packages=` param (it is a third
   // `activeTab` owner), so a forced landing needs no mount-time `membershipTabChanged` dispatch here —
@@ -690,11 +708,10 @@ function MembershipSectionInner({
   );
 }
 
-// Suspense self-wrap: useSearchParams requires a boundary for prerendered (marketing-class) pages — docs/security-csp/rules.md R8.
-export default function MembershipSection(props: MembershipSectionProps) {
-  return (
-    <Suspense fallback={null}>
-      <MembershipSectionInner {...props} />
-    </Suspense>
-  );
-}
+// No Suspense self-wrap: the old `<Suspense fallback={null}>` existed only to satisfy
+// `useSearchParams()` on prerendered pages (docs/security-csp/rules.md R8) — and a null fallback
+// is exactly what made the CSR de-opt silent, shipping an empty section and a 1,265px jump on
+// hydration. With the query read moved to `readForcedPackagesTab()`, nothing here suspends, so
+// re-introducing `useSearchParams()` (directly or via a hook) now FAILS THE BUILD on `/` — a loud
+// error instead of a silent CLS regression. Keep it that way.
+export default MembershipSection;

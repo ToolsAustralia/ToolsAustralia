@@ -68,13 +68,17 @@ function run(name: string, fn: () => void) {
 console.log("\nRegistry integrity");
 /* -------------------------------------------------------------------------- */
 
-run("GearWrench is not offered this draw", () => {
-  // Widened to string: if GearWrench is ever added to ToolboxBrand, this stays a runtime
-  // assertion (which the draw-9 change is expected to delete) rather than a type error.
+run("GearWrench is offered from draw 9 and carries the New badge", () => {
+  // Was "GearWrench is not offered this draw" until 2026-07-27; the old assertion existed to
+  // be deleted by exactly this change, and its inverse now guards the launch.
   const ids: string[] = TOOLBOXES.map((b) => b.id);
+  assert.ok(ids.includes("gearwrench"), "GearWrench shipped in draw 9 — it must appear in the toolbox lane");
+  const gw = TOOLBOXES.find((b) => b.id === "gearwrench")!;
+  assert.equal(gw.isNew, true, "the newest toolbox must light the New badge");
+  assert.equal(gw.eyebrow, "288 PIECE", "piece count is read off the draw 9 banner artwork");
   assert.ok(
-    !ids.includes("gearwrench"),
-    "GearWrench ships in draw 9 — it must not appear in the toolbox lane yet"
+    gw.markImageLight,
+    "GearWrench is two-tone, so it must ship a light-theme mark — a single-colour CSS mask cannot render it"
   );
 });
 
@@ -188,13 +192,41 @@ run("every toolbox × toolset combination has a catalog prize", () => {
   }
 });
 
-run("every combination's composite render exists on disk", () => {
+run("every combination resolves to a render that exists on disk", () => {
   for (const box of TOOLBOXES) {
     for (const set of TOOLSETS) {
       const { image } = getComboPresentation(box, set, false);
       assert.ok(assetExists(image), `missing combo render: ${image}`);
     }
   }
+});
+
+run("combo-art fallback is per COMBINATION, not per toolbox", () => {
+  // The GearWrench shoot delivered four of five: Milwaukee, DeWalt, Makita and HiKOKI have
+  // composites; Ryobi does not — the same combination missing from the rest of the draw 9
+  // drop. A toolbox-level flag (which this briefly was) would wrongly send the four that DO
+  // have art back to the standalone render.
+  const gw = getToolbox("gearwrench")!;
+
+  for (const set of TOOLSETS) {
+    const combo = getComboPresentation(gw, set, false);
+    if (set.id === "ryobi") {
+      assert.equal(combo.image, gw.image, "ryobi × gearwrench has no composite — must show the standalone box");
+      assert.match(combo.imageAlt, /coming soon/i, "alt must not claim to show a combination it isn't showing");
+    } else {
+      assert.equal(
+        combo.image,
+        `/images/majordraws/${set.id}-set/${set.id}-gearwrench.webp`,
+        `${set.id} × gearwrench has a composite and must use it`
+      );
+      assert.doesNotMatch(combo.imageAlt, /coming soon/i, `${set.id} × gearwrench art exists — alt must not say coming soon`);
+    }
+  }
+
+  // A different toolbox is unaffected either way.
+  const kincrome = getToolbox("kincrome")!;
+  const withArt = getComboPresentation(kincrome, TOOLSETS[0], false);
+  assert.equal(withArt.image, `/images/majordraws/${TOOLSETS[0].id}-set/${TOOLSETS[0].id}-kincrome.webp`);
 });
 
 run("cash mode short-circuits to the cash prize and hides the $5,000 flag", () => {
@@ -215,7 +247,9 @@ run("fromPrizeSlug round-trips every combination and rejects the rest", () => {
     }
   }
   assert.equal(fromPrizeSlug(CASH_OPTION.slug), null);
-  assert.equal(fromPrizeSlug("makita-gearwrench"), null, "an unreleased toolbox must not resolve");
+  // `makita-gearwrench` was the "unreleased toolbox" case until draw 9 shipped GearWrench;
+  // the loop above now round-trips it. Use a genuinely absent brand for the negative case.
+  assert.equal(fromPrizeSlug("makita-stanley"), null, "an unknown toolbox must not resolve");
   assert.equal(fromPrizeSlug(undefined), null);
   assert.equal(fromPrizeSlug(""), null);
 });
@@ -294,10 +328,13 @@ run("the cash opt-out round-trips, and other query params survive", () => {
 });
 
 run("garbage query values fall back to the default rather than throwing", () => {
-  for (const bad of ["", "  ", "gearwrench", "MILWAUKEE!", "../etc"]) {
+  // "gearwrench" was in this list until draw 9 released it; it is now a real toolbox and is
+  // asserted to hydrate below instead.
+  for (const bad of ["", "  ", "stanley", "MILWAUKEE!", "../etc"]) {
     assert.equal(parseToolboxQueryParam(bad), null, `"${bad}" must not resolve to a toolbox`);
   }
   assert.equal(parseToolboxQueryParam("KINCROME"), "kincrome", "casing is normalised");
+  assert.equal(parseToolboxQueryParam("gearwrench"), "gearwrench", "the draw 9 toolbox hydrates from the URL");
 });
 
 /* -------------------------------------------------------------------------- */

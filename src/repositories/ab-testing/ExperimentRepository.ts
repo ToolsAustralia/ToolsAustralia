@@ -3,6 +3,32 @@ import Experiment, { IExperiment } from "@/models/ab-testing/Experiment";
 import mongoose from "mongoose";
 
 /**
+ * Build the "active experiment" match for a slug.
+ *
+ * `allowWildcard` is the whole point of this helper. Page lookups must keep
+ * matching `"*"` (an "All Pages" experiment legitimately applies to a prize
+ * page). Sentinel lookups must NOT: `findOne` returns the newest match, so an
+ * active wildcard experiment would be returned for `__promo-theme__`, and the
+ * caller would bake an unrelated experiment's id — holding promo traffic on a
+ * config with no promoTheme and polluting that experiment with sentinel-tagged
+ * page_view rows. Post-filtering cannot recover from it.
+ */
+export function buildActiveExperimentQuery(
+  slug: string,
+  opts: { allowWildcard: boolean },
+  now: Date,
+): Record<string, unknown> {
+  return {
+    status: "active",
+    slugTargets: opts.allowWildcard ? { $in: [slug, "*"] } : slug,
+    $and: [
+      { $or: [{ startDate: { $exists: false } }, { startDate: { $lte: now } }] },
+      { $or: [{ endDate: { $exists: false } }, { endDate: { $gte: now } }] },
+    ],
+  };
+}
+
+/**
  * Experiment Repository
  * Handles all database operations for experiments
  */
@@ -20,28 +46,20 @@ export class ExperimentRepository {
    */
   async findActiveBySlug(slug: string): Promise<IExperiment | null> {
     await connectDB();
-    
-    const now = new Date();
-    
-    return Experiment.findOne({
-      status: "active",
-      slugTargets: { $in: [slug, "*"] },
-      $and: [
-        {
-          $or: [
-            { startDate: { $exists: false } },
-            { startDate: { $lte: now } },
-          ],
-        },
-        {
-          $or: [
-            { endDate: { $exists: false } },
-            { endDate: { $gte: now } },
-          ],
-        },
-      ],
-    })
+    return Experiment.findOne(buildActiveExperimentQuery(slug, { allowWildcard: true }, new Date()))
       .sort({ createdAt: -1 }) // Get most recent if multiple match
+      .exec();
+  }
+
+  /**
+   * Find an active experiment by SENTINEL slug (e.g. `__promo-theme__`).
+   * Exact array-membership only — never matches `"*"`. See the note on
+   * buildActiveExperimentQuery.
+   */
+  async findActiveBySentinelSlug(slug: string): Promise<IExperiment | null> {
+    await connectDB();
+    return Experiment.findOne(buildActiveExperimentQuery(slug, { allowWildcard: false }, new Date()))
+      .sort({ createdAt: -1 })
       .exec();
   }
 

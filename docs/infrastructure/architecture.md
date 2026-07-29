@@ -32,6 +32,7 @@ Plus:
 - `scripts/seed-*.ts` — dev seeds. Currently:
   - `scripts/seed-admin-data.ts` — admin user
   - `scripts/seed-variation1-vs-variation2-experiment.ts` — landing-page variation 1 vs 2 A/B experiment (npm `seed:variation-experiment[:dry]`). Idempotent: populates an empty admin-created draft of the same name in place, or creates a fresh one. See [ab-testing/api.md](../ab-testing/api.md#seed-scripts).
+  - `scripts/seed-promo-theme-experiment.ts` — promo landing default-theme (light vs dark) A/B experiment (npm `seed:promo-theme[:dry]`), targeting the sentinel slug `__promo-theme__`. Idempotent: populates an empty draft of the same name in place, or creates a fresh one. See [infrastructure/testing.md](./testing.md#ab-seed-promo-landing-default-theme-light-vs-dark) (detailed) / [ab-testing/testing.md](../ab-testing/testing.md) (cross-reference).
 - `scripts/fix-*.{ts,mjs,js}` → fix:* npm script — one-off corrective scripts; **must** ship with a `:dry` sibling that disables writes
 - `scripts/codemods/` — UI/Tailwind codemod scripts (see [dev-tooling architecture](../dev-tooling/architecture.md))
 
@@ -45,7 +46,29 @@ One-shot build-asset converters that turn numbered design exports into the brand
 - `convert:drawn-tonight-tomorrow-webp` → `scripts/convert-drawn-tonight-tomorrow-to-webp.ts` (sharp) — converts the numbered "drawn tonight/tomorrow" landing-hero PNG exports to brand-named WebP stills and converts the shared `bg-desktop`/`bg-mobile` hero-stage background; removes the PNG sources.
 - `convert:drawn-tonight-tomorrow-videos` → `scripts/convert-drawn-tonight-tomorrow-videos.ts` (**ffmpeg-based**) — remuxes the numbered drawn-hero MP4 exports into brand-named files (audio stripped, `faststart`) and encodes matching VP9 WebM; removes the numbered source folder.
 
-> **External-tool dependency:** the WebP/PNG converters above only need the `sharp` npm dependency, but `convert:drawn-tonight-tomorrow-videos` shells out to **`ffmpeg`, which must be on `PATH`** — it is an external binary, not an npm package, so it is **not** installed by `npm install`. The script fails immediately if ffmpeg is absent. This is the only asset-conversion script with an external-binary prerequisite.
+- `convert:draw9-landing-webp` → `scripts/convert-draw9-landing-to-webp.ts` (sharp) — ingests the draw 9 landing export (228 stills) into the resolver's brand folders.
+- `convert:draw9-landing-videos` → `scripts/convert-draw9-landing-videos.ts` (**ffmpeg-based**) — the clip twin, 228 clips → 456 outputs (MP4 remux + VP9 WebM).
+
+> **The draw 9 pair differs from every converter above it in three ways**, all deliberate:
+> 1. **`--dry-run` by default.** They only write with `--apply`, and take `--src` for the export
+>    location, because they read from wherever the art drop landed rather than from a fixed path
+>    inside `public/`.
+> 2. **They do NOT delete their sources**, unlike the older converters. The export lives outside
+>    the repo and is the only copy.
+> 3. **They are not a filename parse.** Nine files in the draw 9 export carried a name that
+>    disagreed with their artwork, so `convert-draw9-landing-to-webp.ts` holds an `EXCEPTIONS`
+>    table recording what each file actually shows. The video script **imports** that table
+>    rather than duplicating it — see `docs/promo/gotchas.md`.
+
+> **External-tool dependency:** the WebP/PNG converters above only need the `sharp` npm dependency, but `convert:drawn-tonight-tomorrow-videos` and `convert:draw9-landing-videos` shell out to **`ffmpeg`, which must be on `PATH`** — it is an external binary, not an npm package, so it is **not** installed by `npm install`. Both fail immediately if ffmpeg is absent.
+
+### Generated manifests chained into `prebuild` / `predev`
+
+`build:landing-manifest` (stills) and **`build:landing-video-manifest`** (clips, added draw 9)
+emit `src/generated/landingImageManifest.ts` / `landingVideoManifest.ts` — the on-disk sets the
+promo resolvers consult so they never emit a URL for an asset that isn't there. Both are chained
+into `prebuild`/`predev` beside the upsell, Norm and chat-knowledge generators, so a fresh clone
+or a new asset drop is picked up without anyone remembering to run them.
 
 ### Dashboard stats snapshot backfill + drift check
 
