@@ -18,7 +18,7 @@ you only need one for a demo.
 `playwright.config.ts`'s profile to `retries: 0`, `workers: 1`, `video: "on"`,
 `launchOptions.slowMo: 200` (see `playwright.config.ts`). Today's `@demo` flows:
 `landing.spec.ts`, `landing-drawn-states.spec.ts`, `my-account.spec.ts`,
-`purchase-subscription.spec.ts`, `purchase-via-showcase.spec.ts`.
+`purchase-subscription.spec.ts`, `purchase-via-showcase.spec.ts`, `streak-journey.spec.ts`.
 
 ### Rules learned recording `landing-drawn-states.spec.ts` (2026-07-24)
 
@@ -83,6 +83,47 @@ plain `npm run build` passes. Dev mode is fine once the run isn't provoking serv
 which is the real lesson: the first dev-mode attempt died mid-walk right after Next's image
 optimizer logged a 400 for a genuinely missing asset. **Fix the 404s before blaming the
 server.** The QA watchdog reporting a `400 Bad Request` is a real product bug, not test noise.
+
+### Rules learned recording `streak-journey.spec.ts` (2026-07-28)
+
+The seed helpers this spec drives (`e2e/seed/streak.ts`) are documented in architecture.md — this
+is what broke specifically in proof mode getting them on camera.
+
+**The feature flag gate is documented in architecture.md** — the one thing that doc doesn't say:
+a missing flag still records a *plausible-looking* blank card, not an obviously broken one, so a
+quick screenshot spot-check can miss it.
+
+**The whole spec is one device: mutate Mongo, reload, narrate what's already true.** The demo
+walks ONE member through their entire lifecycle by writing state to Mongo between beats and
+reloading — months of real membership compress into seconds of video while every number on
+screen (streak count, entry totals, draw name) stays the real counter the app itself computed,
+never a mocked value.
+
+**A page-scoped `addInitScript` cannot be unregistered — plan the whole spec around that, not
+just the one call.** `seedCelebrationMarker` uses `page.addInitScript` to plant the "last seen"
+milestone marker before load (required — see architecture.md). Left alone it re-plants that same
+value before every later navigation for the rest of the test, re-arming a celebration on every
+reload from then on — and the celebration's `justHit` banner outranks the Founding chip in
+`LoyaltyStreak.tsx`, which would silently break the Founding beat several beats later. Resolved
+by registering a second marker, once, with a value no later streak in the test will ever cross —
+later-registered init scripts run last, so it permanently wins.
+
+**A locator that's unique today can stop being unique as the demo mutates state — anchor on text
+one component structurally cannot render, and add a guard that fails loudly if it drifts.** A
+`section` filtered on `hasText: "Streak"` silently began resolving to `EntryWallet` from the
+milestone beat onward, because granting streak entries makes the wallet render its own
+"Streak {n}" legend row — and on mobile the wallet precedes the streak card in DOM order. Every
+test still passed (`toBeVisible()` was true either way); only the spotlight ring landed on the
+wrong card while the caption narrated the other one. Fixed by anchoring on `/LEVEL|FOUNDING/i` —
+grepped unique to the streak card's own medallion label across the whole `src/` tree — plus a
+positive/negative guard assertion (`toContainText`/`not.toContainText`) that fails the test the
+moment the two locators' containment relationship changes again.
+
+**Scope proof runs by FULL test title, not just `--grep` on a substring.** `--grep "on mobile"`
+also matches `draw9-assets.spec.ts` and `landing-drawn-states.spec.ts` — the former mutates the
+shared seeded draw and is `mode: "serial"` specifically because of that, so a broad grep at
+multiple workers contaminates it. Proof mode itself forces `workers: 1`, so the curated `@demo`
+bundle (`--grep @demo`) is safe from this; it only bites a broader, non-proof `--grep` run.
 
 ## Joining clips into one deliverable (`e2e/proof/join.ts`)
 
@@ -308,3 +349,34 @@ unscoped proof run ever renders them). The curated client bundle is exactly
 Checklist for tagging a test `@demo`: client-meaningful story, `demo-title` annotation,
 route warmed before the first beat, captions explain (never label), and the video passes
 the `/video-review` panel once rendered.
+
+## Round 5 — the spotlight can be real and still invisible (2026-07-28, streak-journey)
+
+**A beat that scrolls inside its own body draws its spotlight too late to be seen.**
+`demo.step` paints the caption and holds `holdFor(title)` ms BEFORE running the body, and
+`demo.smoothScrollTo` then glides in ~350px increments taking seconds more — so a body shaped
+`smoothScrollTo(x); highlight(x)` puts the ring on screen well past that beat's own midpoint,
+which is exactly where a `/video-review` panel samples.
+
+The panel reported this as "no ring at all" and hypothesised a selector resolving to null.
+Instrumenting the beat disproved that: the ring existed, and its box was *pixel-identical* to
+the target's, fully inside the viewport —
+`ringRect == walletRect == {x:18,y:156,w:376,h:280}`, `matchCount:1`, `scrollY:0`. The
+spotlight was real and simply late.
+
+**Fix: scroll BEFORE `demo.step`; call `demo.highlight` as the first statement in the body.**
+The page is then settled when the beat opens, which also keeps `highlight`'s read-the-box-once
+behaviour correct. Any beat that scrolls inside its own body carries this defect latently — it
+does not surface until someone samples cue midpoints rather than convenient timestamps.
+
+**Corollary for reading a `/video-review` report:** a judge's stated *mechanism* is a lead, not
+a finding. The observation ("no ring in this frame") was correct and valuable; the cause it
+proposed was wrong, and fixing that proposed cause would have chased a selector that was never
+broken. Instrument before you believe it.
+
+**Re-framing a shot to keep something off-camera is viewport-specific.** The closing beat
+scrolls `/terms` so §5.1 is centred. A scroll correction that successfully hid §5.2's
+"Mini Pack entries sold" line at 392x800 still left it on screen at 800x450 — the shorter,
+wider canvas exposes more vertical content from the same offset, and the caption above it reads
+"free entries, never sold". Any "scroll so X is out of frame" fix must be verified on EVERY
+viewport it ships to, from a frame rather than from the scroll arithmetic.
