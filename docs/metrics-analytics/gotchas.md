@@ -53,30 +53,40 @@ fails, and the UI renders a confident zero. Any read that takes `platform` must 
 collection from it — grep for `MetaAdInsightsDaily.` / `MetaAdDestination.` inside a
 platform-aware function before assuming it's scoped.
 
-## The Advertising card reads SNAPSHOTS, and snapshots never self-heal
+## The Advertising card reads SNAPSHOTS, not the insights collections
 
-The admin Overview's Advertising card does not query `TikTokAdInsightsDaily` for historical
-ranges — it sums `DashboardStatsDailySnapshot.adChannels`, written once per day by the
-`dashboard-stats-daily-snapshot` cron. `tiktokAdChannelProvider` returns `{status:"empty"}`
-when a day has no insight rows and `{status:"error"}` when creds are unset; in both cases **no
-`tiktok` key is written at all**, and the card renders "Awaiting sync".
+The admin Overview's Advertising card does not query `TikTokAdInsightsDaily`/`MetaAdInsightsDaily`
+for a historical range — it sums `DashboardStatsDailySnapshot.adChannels`, written by the
+`dashboard-stats-daily-snapshot` cron. `tiktokAdChannelProvider` returns `{status:"empty"}` when
+a day has no insight rows and `{status:"error"}` when creds are unset; in both cases **no
+`tiktok` key is written**, and the card renders "Awaiting sync" — which is honest, but reads to
+a human like a broken integration.
 
-Consequence: backfilling `TikTokAdInsightsDaily` for past days does **not** fix the Advertising
-card. The snapshots for those days were written when the data didn't exist and are never
-revisited. You must also re-run:
+**The snapshot cron rewrites a 90-day SLIDING WINDOW** (`SLIDING_WINDOW_DAYS = 90` in
+[the cron route](../../src/app/api/cron/dashboard-stats-daily-snapshot/route.ts)), so snapshots
+DO self-heal — a day gains its `tiktok` key on the next nightly run once insight rows exist for
+it. Two preconditions, and both were false in production until 2026-07-29:
+
+1. `TikTokAdInsightsDaily` must actually have rows for that day. Prod had **zero** until the
+   token went live and the history was backfilled, so every nightly run wrote `empty`.
+2. The deployment's env must have `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN`, or
+   the provider returns `error` and preserves whatever was stored (i.e. nothing).
+
+So the usual fix is to backfill the INSIGHTS and let the nightly window catch up. To make it
+visible immediately instead of waiting a day:
 
 ```bash
 npm run backfill:dashboard-stats-snapshots -- --start-date 2026-07-24 --end-date 2026-07-28
 ```
 
-(idempotent upsert by date; `--dry-run` first). Applied to production 2026-07-29 — before it,
-prod snapshots contained only a `facebook` key on every day in the range.
+(idempotent upsert by date; `--dry-run` first). Run on production 2026-07-29 for exactly that
+reason — the 90-day window would have healed those days on its own that night.
 
-Two things this does NOT fix, by design: days before the platform had any spend keep no
-`tiktok` key (correct — there was nothing to record), and **future** snapshots only gain a
-`tiktok` key if the deployment's env actually has `TIKTOK_ADVERTISER_ID` +
-`TIKTOK_MARKETING_ACCESS_TOKEN`; without them the provider returns `error` and preserves
-whatever was stored.
+Days before the platform had any spend keep no `tiktok` key permanently, which is correct:
+there was nothing to record.
+
+Ordering note: `sync-tiktok-ads` runs `45 2 * * *` UTC and the snapshot cron `0 14/15 * * *`
+UTC, so on any given day the insights land before the snapshots that read them.
 
 ## Spend-by-URL caveats
 
