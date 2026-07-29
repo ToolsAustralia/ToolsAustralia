@@ -166,17 +166,41 @@ export default function ExperimentResultsDashboard({
 
   // Prepare chart data
   // ✅ FIX: Use variant names instead of "Variant 1", "Variant 2"
-  const conversionRateData = comparison.variants.map((v, index) => ({
-    name: v.variantName || `Variant ${index + 1}`,
-    "Conversion Rate": v.metrics.conversionRate,
-    "CTR": v.metrics.ctr,
-  }));
+  /**
+   * A sentinel experiment records no legacy conversion/revenue events by design, so the
+   * legacy series are structurally zero and the charts render as empty axes. The numbers
+   * are NOT missing though — the Bayesian card computes them from the durable assignment
+   * and PaymentEvent tables. So for a sentinel, plot the Bayesian series instead of hiding
+   * the charts: "which variant earns more" is the whole point of running the test.
+   *
+   * CTR is genuinely unavailable either way — click events are tracked against the
+   * page-targeted experiment's id, never the sentinel's — so it is simply omitted rather
+   * than plotted as a misleading flat zero.
+   */
+  const useBayesianSeries = isSentinelExperiment && (bayesian?.variants?.length ?? 0) > 0;
 
-  const revenueData = comparison.variants.map((v, index) => ({
-    name: v.variantName || `Variant ${index + 1}`,
-    Revenue: v.metrics.revenue,
-    "Revenue per User": v.metrics.revenuePerUser,
-  }));
+  const conversionRateData = useBayesianSeries
+    ? bayesian!.variants.map((v) => ({
+        name: v.variantName,
+        "Conversion Rate": Number((v.conversionRate * 100).toFixed(2)),
+      }))
+    : comparison.variants.map((v, index) => ({
+        name: v.variantName || `Variant ${index + 1}`,
+        "Conversion Rate": v.metrics.conversionRate,
+        "CTR": v.metrics.ctr,
+      }));
+
+  const revenueData = useBayesianSeries
+    ? bayesian!.variants.map((v) => ({
+        name: v.variantName,
+        Revenue: Number(v.firstPurchaseRevenue.toFixed(2)),
+        "Revenue per User": Number(v.revenuePerUser.toFixed(2)),
+      }))
+    : comparison.variants.map((v, index) => ({
+        name: v.variantName || `Variant ${index + 1}`,
+        Revenue: v.metrics.revenue,
+        "Revenue per User": v.metrics.revenuePerUser,
+      }));
 
   const trafficDistribution = comparison.variants.map((v, index) => ({
     name: v.variantName || `Variant ${index + 1}`,
@@ -455,32 +479,51 @@ export default function ExperimentResultsDashboard({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Conversion Rate Chart */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-3">Conversion Rate & CTR</h4>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-3">
+              {useBayesianSeries ? "Conversion Rate (user-level)" : "Conversion Rate & CTR"}
+            </h4>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={conversionRateData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip formatter={(value) => `${Number(value).toFixed(2)}%`} />
                 <Legend />
                 <Bar dataKey="Conversion Rate" fill="#3b82f6" />
-                <Bar dataKey="CTR" fill="#10b981" />
+                {!useBayesianSeries && <Bar dataKey="CTR" fill="#10b981" />}
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           {/* Revenue Chart */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-3">Revenue Metrics</h4>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-neutral-200 mb-3">
+              {useBayesianSeries ? "First-purchase revenue (user-level)" : "Revenue Metrics"}
+            </h4>
             <ResponsiveContainer width="100%" height={300}>
+              {/* Two Y axes on purpose: totals run in the hundreds of dollars while
+                  revenue-per-user runs around $1, so on a shared axis the per-user bars
+                  scale to an invisible sliver and read as zero. Left axis = dollar totals,
+                  right axis = per-user. */}
               <BarChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
-                <YAxis />
+                <YAxis yAxisId="total" tickFormatter={(v) => `$${Number(v).toLocaleString()}`} />
+                <YAxis
+                  yAxisId="perUser"
+                  orientation="right"
+                  tickFormatter={(v) => `$${Number(v).toFixed(2)}`}
+                />
                 <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
                 <Legend />
-                <Bar dataKey="Revenue" fill="#f59e0b" />
-                <Bar dataKey="Revenue per User" fill="#ef4444" />
+                {/* Recurring is deliberately NOT charted. It is renewal revenue from
+                    members who already subscribed, so a banner theme cannot have caused
+                    it — plotting it beside the real result invites reading "this arm
+                    earns more" when the difference is just which arm happened to receive
+                    more existing subscribers. It stays as a diagnostic column on the
+                    Bayesian table above, where it belongs. */}
+                <Bar yAxisId="total" dataKey="Revenue" fill="#f59e0b" />
+                <Bar yAxisId="perUser" dataKey="Revenue per User" fill="#ef4444" />
               </BarChart>
             </ResponsiveContainer>
           </div>
