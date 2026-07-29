@@ -91,6 +91,40 @@ While accumulating row totals it also accumulates the **`packagesFocus`** split 
 
 Read side: `getAggregatedSpendByUrl` sums the subdoc across days when present; `getSpendByUrlListFormatted` maps it to dollar-level `packagesFocus` totals per row (`spend/spendCents/revenue/revenueCents/conversions/roas`), additively — rows without the split are byte-identical to pre-feature output.
 
+### `?platform=` on the spend-by-url surfaces — and why there is no "all" (2026-07-29)
+
+`GET /api/admin/analytics/spend-by-url`, its `/detail` sibling, and both Norm mirrors accept
+`?platform=meta|tiktok` (default `meta`, so existing callers are unchanged). The account id is
+resolved per platform via
+[adPlatformAccounts.ts](../../src/services/analytics/adPlatformAccounts.ts).
+
+There is deliberately **no server-side `all`**. Spend is additive across platforms and safe to
+sum, but `revenue` is each platform's OWN attributed value — the same purchase can be claimed
+by Meta and TikTok, so a blended row inflates revenue and ROAS with nothing in the payload to
+warn the reader. Callers that want a company-wide view request each platform and combine
+explicitly, which forces the caveat to be visible at the point of display.
+
+`/detail` is single-platform for a harder reason: **ad ids are only unique within a platform**,
+so a merged per-ad tree would be ambiguous by construction.
+
+The **sync** route (`POST …/spend-by-url/sync`) does take `platform: meta | tiktok | all`,
+because syncing is per-platform work with no blending problem. Platforms run sequentially
+inside the one 300s invocation (parallel doubles peak memory and rate-limit pressure for no
+wall-clock win worth the risk), and an unconfigured platform is skipped rather than failing the
+whole request — syncing Meta must not fail because TikTok is absent.
+
+### Prize performance combines spend, never revenue (2026-07-29)
+
+[PrizePerformanceCard](../../src/app/admin/component/overview/sections/PrizePerformanceCard.tsx)
+runs one query per platform and merges per brand. Platform chips are **All / Meta / TikTok**,
+defaulting to All. When a visible row actually mixes platforms, the card prints the caveat
+inline: spend is the true combined total, but revenue and ROAS are per-platform attributions
+added together and therefore read high. If TikTok is unconfigured, its query 500s — that must
+not blank a card whose Meta half is fine, so it degrades to a "Meta only" note.
+
+Row click opens `PrizePerformanceAdsModal` on the row's platform when the row has exactly one,
+Meta when it mixes; the modal's own chips switch platform and refetch.
+
 ### Spend-by-url detail rows: campaign hierarchy + focus (2026-07-17)
 
 `getSpendByUrlDetailForCanonicalUrls` / `getSpendByUrlDetailFormatted` rows now also carry `campaignId/campaignName/adsetId/adsetName` (denormalized from the insights rows, latest-non-null-wins) and a required `packagesFocus: "membership" | "one-time" | "unclassified"` derived per ad from its `MetaAdDestination` (unresolved/`unknown://` → `unclassified`). Additive; consumed by the Prize Performance drill-down modal's campaign tree. Hook types (`src/hooks/queries/useSpendByUrlAnalytics.ts`) and Norm schemas (`analytics-spend.ts`) mirror the shape in lockstep.

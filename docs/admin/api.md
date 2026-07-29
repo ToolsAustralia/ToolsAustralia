@@ -511,6 +511,16 @@ Mirrored to Norm as `analytics.packages-focus` (`/api/internal/norm/v1/analytics
 
 **Related additive shape changes (2026-07-17):** `GET /api/admin/analytics/spend-by-url` list rows gained an optional `packagesFocus` split (`{ membership, "one-time" }` of `spend/spendCents/revenue/revenueCents/conversions/roas`); `…/spend-by-url/detail` rows gained optional `campaignId/campaignName/adsetId/adsetName` + a required `packagesFocus: "membership" | "one-time" | "unclassified"`. Norm's list/detail schemas updated in lockstep.
 
+### `?platform=` on the spend-by-url family (2026-07-29)
+
+`GET …/spend-by-url`, `GET …/spend-by-url/detail`, and both Norm mirrors accept `?platform=meta|tiktok` (default `meta`, so existing callers are unchanged) and echo the resolved `platform` in the response. The ad account id is resolved per platform (`FACEBOOK_AD_ACCOUNT_ID` vs `TIKTOK_ADVERTISER_ID`) by `src/services/analytics/adPlatformAccounts.ts`; an unknown value is `400`, an unconfigured platform `500`. On-read freshness runs for Meta only — TikTok's rollup is rebuilt by its nightly cron.
+
+There is deliberately **no `all`** on the read endpoints. Spend is additive across platforms, but `revenue` is each platform's OWN attribution and the same purchase can be claimed by both, so a server-blended row would inflate revenue and ROAS with nothing in the payload to warn the reader. `/detail` has a harder reason: ad ids are only unique WITHIN a platform, so a merged per-ad tree is ambiguous by construction.
+
+`POST …/spend-by-url/sync` **does** take `platform: "meta" | "tiktok" | "all"` (default `meta`) — syncing is per-platform work with no blending problem. Platforms run sequentially inside the one 300s invocation, and an unconfigured platform is skipped rather than failing the request (so syncing Meta never fails because TikTok is absent). Response keeps `data` as the first platform's result for back-compat and adds `platforms: RunSpendByUrlSyncResult[]`.
+
+**Prize performance** (`PrizePerformanceCard`) queries each platform separately and merges per brand, with All / Meta / TikTok chips defaulting to All. When a visible row mixes platforms it prints the caveat inline: combined spend is exact, combined revenue/ROAS double-counts any purchase both platforms claim. Row click opens the drill-down on the row's platform (Meta when it mixes); the modal's own chips switch and refetch.
+
 ## TikTok ad-level insights (per-ad breakdown)
 
 ### `GET /api/admin/tiktok-ads/insights?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`
