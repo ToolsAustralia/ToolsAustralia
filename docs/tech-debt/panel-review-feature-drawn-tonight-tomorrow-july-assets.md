@@ -56,19 +56,24 @@
 Fresh session? Run `/panel-fix` on this branch, or paste:
 
 > Read `docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md`. Fix ONLY the Now
-> item: F-015.
+> items: F-015, F-016, F-017.
 > Findings were written against `99f4739f` — re-grep each `file:line`, they may have moved.
-> (F-014 and F-015 were raised later, on 2026-07-28, against the post-fix tree.)
+> (F-014, F-015 were raised 2026-07-28 and F-016, F-017 on 2026-07-29, against the post-merge tree.)
 > One commit-worthy change per finding. Do NOT commit. When a finding is done, tick its box
 > and fill `_Handled:_` with the date. If a fix turns out to be wrong, mark it Overridden with
 > a reason instead of silently skipping it.
 
-**Now:** **F-015** — the only open item. P2, and not root-caused.
+**Now:** **F-015, F-016, F-017** — three open items, all P2, none introduced by this branch.
 
 **Everything from the original panel is closed**, as are F-013 (found on staging), F-008 (the e2e
 spec) and F-014 (superseded by main). What remains:
 - **F-015** (P2, open) — `/api/major-draw` intermittently 404s under load despite an active draw.
   Not root-caused; reproducible in the e2e run. Would make the draw vanish from a live promo page.
+- **F-016** (P2, open) — `/admin` fires 500s from `spend-by-url` when the Meta ad account is
+  unconfigured, where its sibling endpoint returns `supported: false`. Inherited from main.
+- **F-017** (P2, open) — a React hydration mismatch on `/membership` (`Carousel3D`'s `useId`).
+  The mismatching components are byte-identical to main; the likely trigger is our rewards-return
+  banner rendering upstream of them, but causation is NOT proven. Reproduce before patching.
 - **F-009** — deferred with measurements (see its entry): the collection is 1.1 MB and no row carries
   the field yet, so the index would be premature.
 
@@ -182,6 +187,21 @@ Everything else (F-001 … F-008, F-010 … F-014) is closed.
       _Why it matters beyond e2e:_ a customer hitting this on a live promo page sees the draw disappear from the page. The e2e run is simply the first place it was reproducible.
       _Fix:_ Needs investigation before a fix can be named. Start by logging the branch taken inside `getCurrentMajorDrawForDisplay` when it returns `null`, and check whether `transitionMajorDrawsIfNeeded` can transiently move a draw out of `active`/`frozen` under concurrent calls.
       _Raised by:_ controller, while writing the F-008 spec. _Verified:_ seed values read from `e2e/seed/draw.ts`; the failure is recorded in the run logs and is allowlisted **only** in that spec's one navigation-heavy test — the other five tests load the same route under the strict watchdog, so a frequent recurrence still fails the file.
+      _Shot:_ code-only  _Handled:_ —
+
+- [ ] **F-016** · P2 · Bug · `src/app/api/admin/analytics/spend-by-url/route.ts` (+ `e2e/lib/env.ts:69`) — **Opening the admin dashboard fires 500s whenever the Meta ad account isn't configured, instead of degrading like its sibling endpoint does.**
+      _What:_ Surfaced by the full `e2e:smoke` run on the merged tree (2026-07-29): `admin-gate.spec.ts` ("admin reaches /admin") tripped the QA watchdog with `HTTP 500 /api/admin/analytics/spend-by-url` **twice per page load**, on two projects. Cause is not a merge defect — `e2e/lib/env.ts:69` deliberately overlays `FACEBOOK_AD_ACCOUNT_ID: ""`, and main's endpoint returns `500 misconfigured` when it is unset (documented behaviour, `docs/internal-norm/norm-context.md`). So the failure is the harness meeting main's new analytics work, and it will flake `/admin` for anyone whose environment lacks that var. **Inherited from `origin/main`; not introduced by this branch** — our diff touches none of these files.
+      _Why it is still worth fixing:_ main's OWN sibling endpoint `/analytics/packages-focus` returns `supported: false` for an unconfigured platform rather than 500ing. A missing optional ad-platform integration should not make an admin page emit server errors; the two endpoints should agree.
+      _Fix:_ Make `spend-by-url` (and `/detail`) mirror `packages-focus`: return a `supported: false` / empty-bucket payload when the platform's account id is unset, reserving 500 for genuine failures. Then drop the resulting dead expectation, if any, from the admin specs.
+      _Raised by:_ controller, from the merged-tree `e2e:smoke` run. _Verified:_ `grep -n FACEBOOK_AD_ACCOUNT_ID e2e/lib/env.ts` → line 69 sets `""`; the 500s appear in the run log under the admin-gate test.
+      _Shot:_ code-only  _Handled:_ —
+
+- [ ] **F-017** · P2 · Bug · `src/components/ui/Carousel3D.tsx:470` (trigger likely upstream in `src/app/(site)/membership/components/MembershipPageClient.tsx:53`) — **`/membership` logs a React hydration mismatch, which React explicitly does not repair.**
+      _What:_ Also surfaced by the merged-tree `e2e:smoke` run, under `registration.spec.ts`. React reported *"A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up."* The mismatching attribute is `id="_R_…-stage"` on a `motion.div` inside `Carousel3D` → `MembershipDrawCycle`, i.e. a **`useId()`** value (`Carousel3D.tsx:470` `const baseId = useId()`) differing between server and client.
+      _What I ruled out:_ `Carousel3D.tsx` and `MembershipDrawCycle.tsx` are **byte-identical to `origin/main`** (`git diff --quiet origin/main --` on both). So the components that mismatch are not ours.
+      _Unproven hypothesis, stated as such:_ `useId` is positional, so a component rendering a different subtree shape between SSR and first client render shifts every id after it. `MembershipPortalReturnBanner` (ours, arriving via the staging merge) renders at `MembershipPageClient.tsx:53`, **before** `MembershipDrawCycle` at `:65`, and has four `return null` paths (`:86, :94, :97, :102`) plus an `aria-busy` skeleton branch (`:112`). That is the classic way to shift a `useId` sequence. **I did not prove causation** — the error is intermittent (the test passed on retry), which is unusual for a deterministic mismatch and suggests it depends on session/`guestUserData` state mid-registration.
+      _Fix:_ Reproduce first, don't patch blind. Load `/membership` with and without the banner rendering (portal params absent vs present, guest vs seeded member) and diff the SSR HTML against the hydrated DOM around `Carousel3D`'s `baseId`. If the banner is confirmed as the trigger, make its server and first-client render agree (render the skeleton on both, or gate the whole banner behind a single stable branch) rather than changing `Carousel3D`.
+      _Raised by:_ controller, from the merged-tree `e2e:smoke` run.
       _Shot:_ code-only  _Handled:_ —
 
 ---

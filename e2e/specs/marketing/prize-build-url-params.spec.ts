@@ -113,6 +113,9 @@ async function settleAtShowcase(page: Page, target?: import("@playwright/test").
  * an HTML `request.get()` compiles the server route but not the client chunks.
  */
 async function warmPromoRoute(browser: import("@playwright/test").Browser): Promise<void> {
+  // NB: callers must also raise the HOOK's own timeout — a `beforeEach`-set test timeout does not
+  // apply to `beforeAll`. Under a full `e2e:smoke` run (85 tests, 3 projects, one dev server) this
+  // warm-up exceeded the default 90s hook budget on mobile-safari and flaked the whole file.
   const warm = await browser.newPage();
   try {
     await warm.goto(PROMO_PATH, { waitUntil: "domcontentloaded" });
@@ -135,6 +138,7 @@ test.describe("prize build URL params @smoke", () => {
   });
 
   test.beforeAll(async ({ browser }) => {
+    test.setTimeout(240_000); // hook budget, separate from the per-test one
     await warmPromoRoute(browser);
   });
 
@@ -334,6 +338,7 @@ const navHeavyTest = test.extend({
 
 navHeavyTest.describe("prize build URL params — multi-load @smoke", () => {
   navHeavyTest.beforeAll(async ({ browser }) => {
+    navHeavyTest.setTimeout(240_000); // hook budget, separate from the per-test one
     await warmPromoRoute(browser);
   });
 
