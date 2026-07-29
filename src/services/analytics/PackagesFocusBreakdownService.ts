@@ -122,15 +122,11 @@ export class PackagesFocusBreakdownService {
       };
     }
 
-    // Near-real-time: refresh the trailing 1-2 days from Meta when stale
-    // (>5min), bounded by a hard time budget — see spendByUrlFreshness.
-    // Meta-only: TikTok's rollup is rebuilt by its nightly cron (sync-tiktok-ads runs the
-    // full pipeline). Adding an on-read TikTok refresh is deliberate future work, not an
-    // oversight — TikTok's report API is slower per call and intraday drift there is not
-    // yet a reported problem.
-    if (platform === "meta") {
-      await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
-    }
+    // Near-real-time: refresh the trailing 1-2 days when stale (>5min), bounded by a hard
+    // time budget — see spendByUrlFreshness. Both platforms since 2026-07-29: TikTok's
+    // report API measures ~0.33s for a 2-day window (vs Meta's ~8.7s), so the earlier
+    // "TikTok is too slow for on-read" reasoning was simply wrong.
+    await ensureSpendByUrlFreshness(platform, adAccountId, startDate, endDate);
 
     const [summary, detail] = await Promise.all([
       this.buildSummary(platform, adAccountId, startDate, endDate),

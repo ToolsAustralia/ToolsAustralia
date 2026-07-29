@@ -47,8 +47,12 @@ interface PrizeRow extends Record<string, unknown> {
   revenue: number;
   conversions: number;
   roas: number;
-  /** Landing URLs matched to this brand — handed to the drill-down modal on row click. */
-  canonicalUrls: string[];
+  /**
+   * Landing URLs matched to this brand, PER PLATFORM — handed to the drill-down modal on
+   * row click. Per-platform (not a flat union) because the modal switches platform and each
+   * platform advertises a different set of URLs for the same brand.
+   */
+  canonicalUrlsByPlatform: Record<SpendByUrlPlatform, string[]>;
   /** Which platforms actually contributed to this row (drives the blended-ROAS caveat). */
   platforms: SpendByUrlPlatform[];
 }
@@ -191,7 +195,6 @@ export default function PrizePerformanceCard({
       let spend = 0;
       let revenue = 0;
       let conversions = 0;
-      const canonicalUrls = new Set<string>();
       const platforms: SpendByUrlPlatform[] = [];
 
       for (const source of included) {
@@ -204,9 +207,21 @@ export default function PrizePerformanceCard({
           spend += r.spend;
           revenue += r.revenue;
           conversions += r.conversions;
-          canonicalUrls.add(r.canonicalUrl);
         }
       }
+
+      // The drill-down's URL set is built from BOTH platforms regardless of which tab is
+      // active, keyed by platform. The modal has its own platform chips, so scoping these
+      // to the active tab meant switching to Meta inside a modal opened from TikTok showed
+      // only the URLs TikTok happened to use — Milwaukee rendered $101 instead of its real
+      // $43.7k, because Meta's main /promotions/milwaukee URL was never passed (2026-07-29).
+      const urlsFor = (rows: SpendByUrlRow[] | undefined) => [
+        ...new Set(
+          (rows ?? [])
+            .filter((r) => promotionsToolsetSlug(r.canonicalUrl) === promo.slug)
+            .map((r) => r.canonicalUrl)
+        ),
+      ];
 
       return {
         id: promo.slug,
@@ -216,7 +231,7 @@ export default function PrizePerformanceCard({
         revenue,
         conversions,
         roas: spend > 0 ? revenue / spend : 0,
-        canonicalUrls: [...canonicalUrls],
+        canonicalUrlsByPlatform: { meta: urlsFor(metaRows), tiktok: urlsFor(tiktokRows) },
         platforms,
       };
     }).filter((m) => m.spend > 0 || m.revenue > 0 || m.conversions > 0); // Only show rows with data
@@ -228,7 +243,7 @@ export default function PrizePerformanceCard({
   const [selectedBrand, setSelectedBrand] = useState<{
     brand: string;
     slug: string;
-    canonicalUrls: string[];
+    canonicalUrlsByPlatform: Record<SpendByUrlPlatform, string[]>;
     platform: SpendByUrlPlatform;
   } | null>(null);
 
@@ -366,10 +381,13 @@ export default function PrizePerformanceCard({
               setSelectedBrand({
                 brand: row.brand as string,
                 slug: row.id as string,
-                canonicalUrls: row.canonicalUrls as string[],
+                canonicalUrlsByPlatform: row.canonicalUrlsByPlatform as Record<
+                  SpendByUrlPlatform,
+                  string[]
+                >,
                 // Per-ad detail is single-platform (ad ids aren't unique across platforms).
                 // Open on the row's only platform, or Meta when it mixes — the modal's own
-                // chips let the reader switch.
+                // chips let the reader switch, and each platform brings its own URL set.
                 platform: platforms.length === 1 ? platforms[0] : "meta",
               });
             }}
@@ -393,7 +411,9 @@ export default function PrizePerformanceCard({
       slug={selectedBrand?.slug ?? ""}
       startDate={startDate ?? ""}
       endDate={endDate ?? ""}
-      canonicalUrls={selectedBrand?.canonicalUrls ?? []}
+      canonicalUrlsByPlatform={
+        selectedBrand?.canonicalUrlsByPlatform ?? { meta: [], tiktok: [] }
+      }
       platform={selectedBrand?.platform ?? "meta"}
     />
     </>

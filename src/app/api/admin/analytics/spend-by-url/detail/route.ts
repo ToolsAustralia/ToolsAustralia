@@ -63,9 +63,7 @@ export async function GET(request: NextRequest) {
 
     // Near-real-time: refresh the trailing 1-2 days from Meta when stale (>5min),
     // bounded by a hard time budget — see spendByUrlFreshness.
-    if (platform === "meta") {
-      await ensureSpendByUrlFreshness(adAccountId, startDate, endDate);
-    }
+    await ensureSpendByUrlFreshness(platform, adAccountId, startDate, endDate);
 
     const result = await aggService.getSpendByUrlDetailFormatted(
       platform,
