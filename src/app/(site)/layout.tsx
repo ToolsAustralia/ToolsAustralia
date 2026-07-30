@@ -12,7 +12,22 @@ import SupportChatWidgetMount from "@/components/support-chat/SupportChatWidgetM
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <Suspense fallback={<div className="h-[86px] sm:h-[106px] site-header" />}>
+      {/* The fallback reserves NO height on purpose.
+       *
+       * `Header` renders `fixed top-0 left-0 right-0 z-40` (isFixed defaults to true and no
+       * caller overrides it), so once it resolves this wrapper computes to height 0 —
+       * measured live: `.site-header` is `static, h=0` while its child header is
+       * `fixed, h=100`. Pages already clear the fixed header with their own
+       * `pt-[var(--app-header-h)]`.
+       *
+       * The previous `h-[86px] sm:h-[106px]` therefore reserved flow height that the real
+       * header never occupies: everything below jumped UP by 106px at hydration, worth a
+       * measured 0.073 CLS on every (site) route (`/`, `/winners`, `/membership`,
+       * `/mini-draws`). Reserving zero matches what actually renders.
+       *
+       * Keep the `site-header` class — `body[data-account-layout]` targets it to hide the
+       * chrome on /my-account routes. */}
+      <Suspense fallback={<div className="site-header" aria-hidden />}>
         <div className="site-header">
           <Header />
         </div>

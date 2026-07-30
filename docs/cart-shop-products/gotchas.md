@@ -84,3 +84,29 @@ The cart and product callsites — `CartContext.trackKlaviyoRemoveFromCart`, `Pr
 ## Shop brand pages: generateStaticParams removed (2026-07-19)
 
 `/shop/brand/[brand]` had `generateStaticParams` + `force-dynamic` together — the params won and the pages prerendered, which is a breakage under the nonce-CSP route class (prerendered HTML has no nonces; the runtime CSP header expects them). generateStaticParams was removed; params resolve per-request. Nonce-class pages must never prerender — check the `next build` route table.
+
+## The `ShopContent` Suspense fallback must reserve a viewport, or `/shop` scores CLS 0.55 (2026-07-30)
+
+`/shop` and `/shop/brand/[brand]` render `<MembershipSection>` immediately after the
+`<Suspense>` that wraps `ShopContent`. The fallback was a bare `py-12`/`py-16` line of text
+(~120px), so while the grid streamed, the membership section sat **inside** the viewport and
+was then shoved ~1500px down when products arrived:
+
+```
+shift: section#membership.pt-8.pb-32  from y=378 h=522  ->  to y=0 h=0
+0.527 of /shop's 0.551 total (desktop, throttled)
+```
+
+`h=0` does **not** mean the section unmounted — `LayoutShiftAttribution` rects are
+viewport-relative, so an element pushed below the fold reports an empty `currentRect`. Do not
+go looking for a conditional render; look for the unreserved thing above it.
+
+Both fallbacks now carry `min-h-screen-svh`. A viewport is the correct size for a reason worth
+keeping: the section starts 258px down the page, so `100svh` clears the fold at **any** window
+height (a fractional reservation like `75svh` fails on tall monitors, where `0.25 × vh > 258`),
+while still being shorter than the real grid — measured 1539px desktop / 864px mobile — so the
+swap can only push the section further down, never back up into view. Measured after:
+**/shop 0.551 → 0.023**, `/shop/brand/*` → 0.017, three runs each.
+
+`/shop/[slug]` has no Suspense boundary and is unaffected. Same failure family as the promo
+footer/newsletter shifts — see [docs/promo/gotchas.md](../promo/gotchas.md).

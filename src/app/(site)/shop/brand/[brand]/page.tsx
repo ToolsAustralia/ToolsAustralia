@@ -300,7 +300,9 @@ export default async function BrandShopPage({ params }: BrandPageProps) {
           <MetallicDivider height="h-[2px]" className="absolute bottom-0 left-0 right-0" />
         </section>
 
-        <Suspense fallback={<div className="py-16 text-center text-gray-600 dark:text-neutral-400">Loading {brand.name} products...</div>}>
+        {/* Reserves a viewport for the same reason /shop's fallback does — without it the
+         * membership section below sits on screen until the grid streams in. */}
+        <Suspense fallback={<div className="min-h-screen-svh py-16 text-center text-gray-600 dark:text-neutral-400">Loading {brand.name} products...</div>}>
           <ShopContent initialProducts={[]} totalProducts={0} defaultBrand={brandKey} />
         </Suspense>
 
