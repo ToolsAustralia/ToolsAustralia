@@ -19,7 +19,12 @@ export default function PromotionalLayout({ children }: { children: React.ReactN
        * and a shift of an off-screen element does not count toward CLS. It is the same
        * reservation `(site)/layout.tsx` already makes via `.site-main-content`, which is
        * why those routes score 0.073 instead of 0.59. */}
-      <div className="min-h-screen-svh">{children}</div>
+      {/* `pb-*` reserves the overlap of the newsletter card, which is
+       * `absolute … -translate-y-1/2` (NewsletterSection.tsx) and rises INTO the content
+       * above it. `(site)/layout.tsx` carries the identical reservation and says why;
+       * this layout never did, which left a residual ~0.10 shift on promo routes after
+       * the footer fix removed the larger one. Mirrors Footer's pt-20/24/32. */}
+      <div className="min-h-screen-svh pb-20 sm:pb-24 lg:pb-32">{children}</div>
       <div className="relative">
         <NewsletterSection />
         <Footer />
