@@ -188,3 +188,52 @@ unload flush suppressed by the `lastSent` payload dedup.
 **or neither** (writes double). And do not infer engagement from `toolboxSwitches`/`toolsetSwitches`:
 cash is a toggle, not a reel card, so a cash-only visitor sits at `0/0` and has still engaged (F-010).
 The payload carries `interacted` explicitly for that reason.
+
+## The footer paints at the top of the viewport before promo content streams (CLS 0.59)
+
+**Found 2026-07-30 by measurement; fixed by one line in `src/app/promotions/layout.tsx`.**
+
+Desktop Speed Insights showed `/promotions/*` at **CLS 0.59** — the largest contributor to a
+Real Experience Score of 78. Every affected route reported the *same* value, which is the
+tell for one shared cause rather than per-page content.
+
+### Mechanism (traced live, not inferred)
+
+`promotions/layout.tsx` rendered `{children}` followed immediately by
+`<NewsletterSection /> + <Footer />`, with nothing reserving height for the page. Page
+sections sit behind `<Suspense fallback={null}>` boundaries, which reserve none either. On a
+slow connection the footer is therefore in the shell and paints first — at the very top of
+the viewport — then gets displaced when content arrives:
+
+```
+t=3332ms  footerTop=0     footerH=537  mainH=null   ← footer at viewport top
+t=3758ms  footerTop=5210  footerH=537               ← content arrives, footer shoved down
+```
+
+A 537px, full-width element moving 5210px is an enormous shift fraction.
+
+### The fix, and why it works
+
+`<div className="min-h-screen-svh">{children}</div>` in the LAYOUT. Being in the layout is
+the whole point: it is part of the RSC shell, so it renders immediately and the footer
+starts below the fold. The later displacement is then off-screen, and a shift of an
+off-screen element does not count toward CLS. `(site)/layout.tsx` already made exactly this
+reservation via `.site-main-content`, which is why those routes scored 0.073 rather than
+0.59.
+
+### Two things measurement disproved — do not re-suspect them
+
+- **Not the theme experiment.** Identical CLS with the gate disabled (0.604 vs 0.604) and
+  present on `/promotions` which has neither the gate nor `PromoHero`.
+- **Not the urgency tiers.** base / final-hours / drawn-tomorrow / drawn-tonight all produce
+  the byte-identical `footer y0 h537 -> h0` shift. The hero art is dimension-matched across
+  tiers (2560x1044 desktop, 1080x1164 mobile) and all three `PromoHero` branches share one
+  `<section>` className, so the tier swap contributes nothing.
+
+### Measuring it at all requires throttling
+
+Unthrottled runs score **0.000** and prove nothing — the shift only appears when content
+streams slowly, which is the P75 cohort Speed Insights reports. Reproduce with 4x CPU
+throttling on a ~1.6 Mbps / 150 ms link, and read `layout-shift` PerformanceEntries with
+their `sources[]` so the finding names an element rather than a number. An unthrottled
+"looks fine" is a false negative, and it briefly sent this investigation down the wrong path.
