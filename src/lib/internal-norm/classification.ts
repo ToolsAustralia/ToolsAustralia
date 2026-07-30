@@ -846,7 +846,8 @@ export const NORM_ENDPOINTS = {
     requiredPermission: "majorDraw.view",
     path: "/v1/major-draw/history",
     method: "GET",
-    summary: "Paged major-draw history with per-draw winner summary and rollup stats",
+    summary:
+      "Paged major-draw history with per-draw winner summary, derived net revenue (+ revenue per entry) and rollup stats",
     responseSchema: NormMajorDrawHistorySchema,
   },
   "major-draw.participants": {
