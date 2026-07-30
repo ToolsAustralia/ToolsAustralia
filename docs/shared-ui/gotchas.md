@@ -607,3 +607,46 @@ Two related notes:
   `presentation="sheet"`, whose flush-to-bottom alignment flips at ModalContainer's `sm` (640px).
   The shell's top-radius override is keyed to the same `sm`, not to the draws `900px` breakpoint —
   keying them differently would round the top corners of a *centered* dialog between 640 and 900.
+## The header Suspense fallback reserved height a `fixed` header never occupies (CLS 0.073)
+
+**Found 2026-07-30 by measurement; fixed in `src/app/(site)/layout.tsx`.**
+
+`(site)/layout.tsx` wrapped `<Header />` in:
+
+```tsx
+<Suspense fallback={<div className="h-[86px] sm:h-[106px] site-header" />}>
+```
+
+`Header` renders `fixed top-0 left-0 right-0 z-40` (`isFixed` defaults to `true`, and no
+caller overrides it — both call sites use a bare `<Header />`). A fixed element is out of
+flow, so once it resolves the `.site-header` wrapper computes to **height 0**. Measured on
+production:
+
+```
+.site-header wrapper : static  h=0
+its first child      : fixed   h=100  (header)
+```
+
+So the fallback reserved 106px of flow height that the real header never uses, and at
+hydration everything below jumped **up** by that amount:
+
+```
+t=2803ms  headerH=106  mainTop=106
+t=3147ms  headerH=0    mainTop=0     ← content jumps up 106px
+```
+
+Worth a measured **0.073 CLS on every `(site)` route** — `/`, `/winners`, `/membership`,
+`/mini-draws`. Small individually, but it is the most widespread shift on the site, and the
+source element reported by the browser is `div.site-main-content`, which misleadingly points
+at the content rather than the header above it.
+
+**Fix:** the fallback reserves zero height (`<div className="site-header" aria-hidden />`),
+matching what actually renders. Pages already clear the fixed header with their own
+`pt-[var(--app-header-h)]`.
+
+**Keep the `site-header` class on the fallback** — `body[data-account-layout]` in
+globals.css targets it to hide site chrome on `/my-account` routes.
+
+**Rule:** a Suspense fallback must reserve the height its real content will occupy in FLOW.
+For a `fixed`/`absolute` child that is **zero**, not the element's visual height. Reserving
+its visual height guarantees a shift in the opposite direction.

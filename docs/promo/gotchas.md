@@ -188,3 +188,83 @@ unload flush suppressed by the `lastSent` payload dedup.
 **or neither** (writes double). And do not infer engagement from `toolboxSwitches`/`toolsetSwitches`:
 cash is a toggle, not a reel card, so a cash-only visitor sits at `0/0` and has still engaged (F-010).
 The payload carries `interacted` explicitly for that reason.
+
+## The footer paints at the top of the viewport before promo content streams (CLS 0.59)
+
+**Found 2026-07-30 by measurement; fixed by one line in `src/app/promotions/layout.tsx`.**
+
+Desktop Speed Insights showed `/promotions/*` at **CLS 0.59** — the largest contributor to a
+Real Experience Score of 78. Every affected route reported the *same* value, which is the
+tell for one shared cause rather than per-page content.
+
+### Mechanism (traced live, not inferred)
+
+`promotions/layout.tsx` rendered `{children}` followed immediately by
+`<NewsletterSection /> + <Footer />`, with nothing reserving height for the page. Page
+sections sit behind `<Suspense fallback={null}>` boundaries, which reserve none either. On a
+slow connection the footer is therefore in the shell and paints first — at the very top of
+the viewport — then gets displaced when content arrives:
+
+```
+t=3332ms  footerTop=0     footerH=537  mainH=null   ← footer at viewport top
+t=3758ms  footerTop=5210  footerH=537               ← content arrives, footer shoved down
+```
+
+A 537px, full-width element moving 5210px is an enormous shift fraction.
+
+### The fix, and why it works
+
+`<div className="min-h-screen-svh">{children}</div>` in the LAYOUT. Being in the layout is
+the whole point: it is part of the RSC shell, so it renders immediately and the footer
+starts below the fold. The later displacement is then off-screen, and a shift of an
+off-screen element does not count toward CLS. `(site)/layout.tsx` already made exactly this
+reservation via `.site-main-content`, which is why those routes scored 0.073 rather than
+0.59.
+
+### A viewport of reservation is 92px too short — the newsletter overhangs it (CLS 0.102)
+
+Reserving a flat `100svh` leaves a smaller, second shift behind. `NewsletterSection` is
+`absolute top-0 -translate-y-1/2` inside the wrapper it shares with the footer, so it paints
+**half its own height above** that wrapper's top edge. With the wrapper's top at exactly
+100svh, that half lands inside the viewport:
+
+```
+reservedH=900  newsH=184  newsTop=808        <- 92px of card visible in a 900px viewport
+shift: div.absolute.top-0.left-0.right-0  from y=808 h=92  ->  to y=0 h=0
+92/900 = CLS 0.1015, deterministic across runs
+```
+
+The reservation therefore has to be `100svh + half the card's height`, which is what
+`.min-h-screen-svh-newsletter` (globals.css) does. Measured card heights are 120 / 140 / 188px
+at `<640` / `640–1023` / `≥1024`, so the overhang is 60 / 70 / 94px, reserved as 64 / 72 / 96.
+After the fix `newsTop=904` — just below the fold — and all seven promo routes measure
+**0.000** on desktop and mobile.
+
+**`pb-*` cannot substitute for this, and an earlier commit that tried was reverted.**
+`min-height` resolves against the border box here, so bottom padding is absorbed by the
+reservation rather than added to it — the box stays exactly 100svh tall and the score stays
+exactly 0.102. The `pb-20 sm:pb-24 lg:pb-32` on `(site)`'s `.site-main-content` is spacing
+so content clears the same overhang visually; it is **not** a CLS reservation, and copying it
+here fixed nothing. Verify any change to this by measurement, not by reading the class list.
+
+`(site)` routes carry the identical markup but do **not** exhibit this shift: their reserved
+block already holds real content at first paint (measured 2457px on `/`, 3211px on
+`/winners`), so it is never exactly 100svh tall and the card never enters the viewport. The
+promo layout is exposed because its `children` is a Suspense boundary that paints empty.
+
+### Two things measurement disproved — do not re-suspect them
+
+- **Not the theme experiment.** Identical CLS with the gate disabled (0.604 vs 0.604) and
+  present on `/promotions` which has neither the gate nor `PromoHero`.
+- **Not the urgency tiers.** base / final-hours / drawn-tomorrow / drawn-tonight all produce
+  the byte-identical `footer y0 h537 -> h0` shift. The hero art is dimension-matched across
+  tiers (2560x1044 desktop, 1080x1164 mobile) and all three `PromoHero` branches share one
+  `<section>` className, so the tier swap contributes nothing.
+
+### Measuring it at all requires throttling
+
+Unthrottled runs score **0.000** and prove nothing — the shift only appears when content
+streams slowly, which is the P75 cohort Speed Insights reports. Reproduce with 4x CPU
+throttling on a ~1.6 Mbps / 150 ms link, and read `layout-shift` PerformanceEntries with
+their `sources[]` so the finding names an element rather than a number. An unthrottled
+"looks fine" is a false negative, and it briefly sent this investigation down the wrong path.

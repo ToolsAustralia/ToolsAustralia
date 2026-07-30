@@ -207,3 +207,24 @@ npx tailwindcss -i ./src/app/globals.css -o /tmp/tw-check.css
 grep -c -e "--m-tblCols" /tmp/tw-check.css   # tokens present
 grep -E '\:grid-cols-2\b' /tmp/tw-check.css # the named-screen variant emits
 ```
+## 12. Viewport-height utilities, and why one of them adds an overhang (2026-07-30)
+
+`globals.css` `@layer utilities` owns the `svh`/`dvh` helpers, each written as two
+declarations so browsers without `svh`/`dvh` still get a `vh` fallback: `.h-screen-svh`,
+`.min-h-screen-svh`, `.h-screen-dvh`, `.min-h-screen-dvh`. Use these rather than a bare
+Tailwind `min-h-screen` when the box must survive mobile browser-chrome changes — and note
+an arbitrary class like `min-h-[calc(100svh+96px)]` **cannot** carry the fallback, so an
+older browser drops the declaration entirely rather than degrading.
+
+`.min-h-screen-svh-newsletter` is the same reservation **plus the height `NewsletterSection`
+overhangs upward**. That component is `absolute top-0 -translate-y-1/2`, so it paints half
+its own height above the block it follows; a flat `100svh` leaves that half inside the
+viewport and it shifts away when content streams in. The overhang is responsive because the
+card is — measured 120 / 140 / 188px tall at `<640` / `640–1023` / `≥1024`, reserved via a
+`--ta-newsletter-overhang` custom property at 64 / 72 / 96px.
+
+**`pb-*` is not an alternative.** `min-height` resolves against the border box, so bottom
+padding is absorbed by the reservation instead of extending it — the box stays exactly
+100svh and the layout shift is unchanged. A commit that tried this was reverted after
+measurement. Full geometry and the before/after numbers:
+[docs/promo/gotchas.md](../promo/gotchas.md) → "A viewport of reservation is 92px too short".

@@ -74,9 +74,16 @@ export default function ShopPage() {
       </div>
 
       {/* Main Shop Content - Client Component for Interactivity */}
+      {/* The fallback reserves a viewport because the membership section below it is
+       * otherwise on screen while the grid streams, then gets shoved ~1500px down —
+       * measured CLS 0.527 on desktop, the whole of /shop's 0.55. A viewport is the
+       * right size: the section only has to clear the fold, and it starts 258px down,
+       * so 100svh puts it below the fold at ANY window height while still being
+       * shorter than the real grid (1539px desktop / 864px mobile) — the swap can only
+       * push it further down, never back up into view. */}
       <Suspense
         fallback={
-          <div className="py-12 text-center text-gray-600 dark:text-neutral-400 bg-white dark:bg-neutral-950">
+          <div className="min-h-screen-svh py-12 text-center text-gray-600 dark:text-neutral-400 bg-white dark:bg-neutral-950">
             Loading shop...
           </div>
         }
