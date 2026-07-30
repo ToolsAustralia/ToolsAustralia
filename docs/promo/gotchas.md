@@ -221,6 +221,37 @@ off-screen element does not count toward CLS. `(site)/layout.tsx` already made e
 reservation via `.site-main-content`, which is why those routes scored 0.073 rather than
 0.59.
 
+### A viewport of reservation is 92px too short — the newsletter overhangs it (CLS 0.102)
+
+Reserving a flat `100svh` leaves a smaller, second shift behind. `NewsletterSection` is
+`absolute top-0 -translate-y-1/2` inside the wrapper it shares with the footer, so it paints
+**half its own height above** that wrapper's top edge. With the wrapper's top at exactly
+100svh, that half lands inside the viewport:
+
+```
+reservedH=900  newsH=184  newsTop=808        <- 92px of card visible in a 900px viewport
+shift: div.absolute.top-0.left-0.right-0  from y=808 h=92  ->  to y=0 h=0
+92/900 = CLS 0.1015, deterministic across runs
+```
+
+The reservation therefore has to be `100svh + half the card's height`, which is what
+`.min-h-screen-svh-newsletter` (globals.css) does. Measured card heights are 120 / 140 / 188px
+at `<640` / `640–1023` / `≥1024`, so the overhang is 60 / 70 / 94px, reserved as 64 / 72 / 96.
+After the fix `newsTop=904` — just below the fold — and all seven promo routes measure
+**0.000** on desktop and mobile.
+
+**`pb-*` cannot substitute for this, and an earlier commit that tried was reverted.**
+`min-height` resolves against the border box here, so bottom padding is absorbed by the
+reservation rather than added to it — the box stays exactly 100svh tall and the score stays
+exactly 0.102. The `pb-20 sm:pb-24 lg:pb-32` on `(site)`'s `.site-main-content` is spacing
+so content clears the same overhang visually; it is **not** a CLS reservation, and copying it
+here fixed nothing. Verify any change to this by measurement, not by reading the class list.
+
+`(site)` routes carry the identical markup but do **not** exhibit this shift: their reserved
+block already holds real content at first paint (measured 2457px on `/`, 3211px on
+`/winners`), so it is never exactly 100svh tall and the card never enters the viewport. The
+promo layout is exposed because its `children` is a Suspense boundary that paints empty.
+
 ### Two things measurement disproved — do not re-suspect them
 
 - **Not the theme experiment.** Identical CLS with the gate disabled (0.604 vs 0.604) and

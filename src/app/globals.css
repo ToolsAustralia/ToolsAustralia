@@ -175,6 +175,39 @@
     min-height: 100svh; /* Modern browsers that support it */
   }
 
+  /* A viewport, PLUS the amount NewsletterSection overhangs upward.
+   *
+   * The newsletter card is `absolute top-0 -translate-y-1/2` inside the wrapper it shares
+   * with the footer, so it renders half its own height ABOVE that wrapper's top edge.
+   * Reserving a flat 100svh therefore leaves that half poking into the viewport while the
+   * page below is still an empty Suspense boundary — and it shifts off-screen the moment
+   * content streams in. Measured on /promotions/*: card 184px tall, top at y=808 in a
+   * 900px viewport, 92/900 = CLS 0.102, deterministic across runs.
+   *
+   * Padding cannot fix this: `min-height` is border-box here, so `pb-*` is absorbed rather
+   * than added. The reservation itself has to be taller.
+   *
+   * Overhang is half the card's height, measured per breakpoint (60 / 70 / 94px at
+   * <640 / 640-1023 / >=1024) and rounded up for headroom. Over-reserving is free —
+   * promo pages run ~5200px, so this min-height only ever binds during the stream. */
+  .min-h-screen-svh-newsletter {
+    --ta-newsletter-overhang: 64px;
+    min-height: calc(100vh + var(--ta-newsletter-overhang)); /* Fallback for older browsers */
+    min-height: calc(100svh + var(--ta-newsletter-overhang)); /* Modern browsers that support it */
+  }
+
+  @media (min-width: 640px) {
+    .min-h-screen-svh-newsletter {
+      --ta-newsletter-overhang: 72px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .min-h-screen-svh-newsletter {
+      --ta-newsletter-overhang: 96px;
+    }
+  }
+
   .h-screen-dvh {
     height: 100vh; /* Fallback for older browsers */
     height: 100dvh; /* Modern browsers that support it */
