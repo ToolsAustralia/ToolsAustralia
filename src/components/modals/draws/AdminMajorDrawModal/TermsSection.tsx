@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { FormSection, Input } from "../ui";
+import { FormSection, Input } from "../../ui";
 
 interface TermsSectionProps {
   terms: string[];

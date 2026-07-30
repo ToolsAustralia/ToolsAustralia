@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { AlertCircle, Trophy } from "lucide-react";
-import UserSearchModal from "../UserSearchModal";
-import { ModalContainer, ModalHeader, ModalContent, Button } from "../ui";
+import { AlertCircle } from "lucide-react";
+import UserSearchModal from "../../UserSearchModal";
+import DrawModalShell from "../DrawModalShell";
 import WinnerPicker from "./WinnerPicker";
 import DrawResultLinkField from "./DrawResultLinkField";
 import PrizeField from "./PrizeField";
@@ -80,9 +80,9 @@ export default function WinnerSelectionModal({
     setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  // Invoked by the shell's primary button, which lives outside any <form> —
+  // hence no FormEvent. The guard below is the real gate, unchanged.
+  const handleSubmit = async () => {
     if (!selectedUser) {
       setError("Please select a winner");
       return;
@@ -174,52 +174,47 @@ export default function WinnerSelectionModal({
 
   return (
     <>
-      <ModalContainer isOpen={isOpen} onClose={onClose} size="2xl" height="fixed">
-        <ModalHeader title="Select Winner" subtitle={drawName} onClose={onClose} />
+      <DrawModalShell
+        isOpen={isOpen}
+        onClose={onClose}
+        size="2xl"
+        eyebrow={drawName}
+        title="Record the winner"
+        primaryLabel="Publish winner"
+        // The shell's primary sits outside the <form>, so submit is invoked
+        // directly rather than relying on an implicit form submit.
+        onPrimary={() => void handleSubmit()}
+        isSubmitting={isSubmitting}
+        submittingLabel="Publishing…"
+        // Guards the same condition the old submit button did.
+        errorCount={!selectedUser && !isSubmitting ? 1 : 0}
+      >
+        {error && (
+          <div
+            role="alert"
+            className="mb-[14px] flex items-start gap-[8px] rounded-[9px] border border-[var(--danger-line)] bg-[var(--danger-bg)] px-[12px] py-[10px]"
+          >
+            <AlertCircle className="mt-[1px] h-[16px] w-[16px] shrink-0 text-[var(--danger)]" aria-hidden />
+            <span className="text-[12px] leading-[1.5] text-[var(--danger)]">{error}</span>
+          </div>
+        )}
 
-        <ModalContent>
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 dark:bg-red-950/30 border-2 border-red-200 dark:border-red-900/50 rounded-lg flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-              <span className="text-red-700 dark:text-red-300 text-sm">{error}</span>
-            </div>
+        <div className="flex flex-col gap-[14px]">
+          <WinnerPicker selectedUser={selectedUser} onOpenSearch={() => setIsUserSearchOpen(true)} />
+
+          <DrawResultLinkField value={drawResultUrl} onChange={setDrawResultUrl} />
+
+          {drawType === "major" && <PrizeField value={selectedPrize} onChange={setSelectedPrize} />}
+
+          <TestimonyField value={testimony} onChange={setTestimony} />
+
+          {(drawType === "major" || enableImageField) && (
+            <WinnerImageField images={winnerImages} onImagesChange={setWinnerImages} />
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <WinnerPicker
-              selectedUser={selectedUser}
-              onOpenSearch={() => setIsUserSearchOpen(true)}
-            />
-
-            <DrawResultLinkField value={drawResultUrl} onChange={setDrawResultUrl} />
-
-            {drawType === "major" && (
-              <PrizeField value={selectedPrize} onChange={setSelectedPrize} />
-            )}
-
-            <TestimonyField value={testimony} onChange={setTestimony} />
-
-            {(drawType === "major" || enableImageField) && (
-              <WinnerImageField images={winnerImages} onImagesChange={setWinnerImages} />
-            )}
-
-            {currentWinner && currentWinner.userId && <ReplaceWarning />}
-
-            <div className="pt-4">
-              <Button
-                type="submit"
-                disabled={!selectedUser || isSubmitting}
-                loading={isSubmitting}
-                icon={Trophy}
-                fullWidth
-                size="lg"
-              >
-                {isSubmitting ? "Recording Winner..." : "Record Winner"}
-              </Button>
-            </div>
-          </form>
-        </ModalContent>
-      </ModalContainer>
+          {currentWinner && currentWinner.userId && <ReplaceWarning />}
+        </div>
+      </DrawModalShell>
 
       <UserSearchModal
         isOpen={isUserSearchOpen}

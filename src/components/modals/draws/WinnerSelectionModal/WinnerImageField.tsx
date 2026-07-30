@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Image as ImageIcon } from "lucide-react";
-import ImageUpload from "../ui/ImageUpload";
+import ImageUpload from "../../ui/ImageUpload";
 
 interface WinnerImageFieldProps {
   images: (File | string)[];

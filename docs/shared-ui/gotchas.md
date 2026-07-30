@@ -578,3 +578,32 @@ and (because the beacon re-fires on the new slug) with a build nobody made there
 **Rule:** when an effect re-derives state for a route-param change, reset **every** piece of
 per-page state in that same effect, not just the visible ones. Analytics counters are the easy ones
 to miss because nothing on screen looks wrong.
+
+## A portal escapes a scoped-token block — `DrawModalShell` (2026-07-30)
+
+`ModalContainer` renders via `createPortal(modalContent, document.body)`. That escapes the React
+tree, so **a modal opened from inside a scoped-token container is not a DOM descendant of it.**
+
+The admin draws pages scope their design tokens to `.admin-draws` (see
+[tailwind-conventions §11](./tailwind-conventions.md)). A modal opened from one of those pages
+would therefore resolve every `var(--panel)` / `var(--m-btn-h)` to **nothing** — no error, no
+warning, just unstyled boxes and zero-height buttons.
+
+Fix: [`DrawModalShell`](../../src/components/modals/draws/DrawModalShell.tsx) puts the
+`admin-draws` class on **its own panel**, via `ModalContainer`'s `className` passthrough. Verified
+in the browser — the panel reports `isInPortal: true` **and** resolves `--accent: #e00`, with the
+primary button computing to `rgb(238, 0, 0)`.
+
+**The general rule:** a CSS-variable scope only reaches what is inside it *in the DOM*. React
+context crosses a portal; CSS inheritance does not. Any portal-rendered UI that needs scoped tokens
+must re-apply the scope class itself.
+
+Two related notes:
+
+- **`.dark` still works across the portal** without re-application, because it lives on `<html>`,
+  which *is* an ancestor of `document.body`. Only the page-level scope class is lost. Confirmed:
+  the portaled panel picks up `--accent: #f44` in dark.
+- **Match the breakpoint the container already uses.** `DrawModalShell` passes
+  `presentation="sheet"`, whose flush-to-bottom alignment flips at ModalContainer's `sm` (640px).
+  The shell's top-radius override is keyed to the same `sm`, not to the draws `900px` breakpoint —
+  keying them differently would round the top corners of a *centered* dialog between 640 and 900.

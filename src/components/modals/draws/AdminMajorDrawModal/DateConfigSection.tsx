@@ -2,7 +2,7 @@
 
 import React from "react";
 import { AlertTriangle, Calendar } from "lucide-react";
-import { DateTimePicker, FormSection } from "../ui";
+import { DateTimePicker, FormSection } from "../../ui";
 import { cn } from "@/utils/cn";
 import type { FieldChangeEvent, RestrictedMonth, ScheduledDraw } from "./types";
 

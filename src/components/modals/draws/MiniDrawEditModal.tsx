@@ -1,20 +1,17 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ClipboardList, Save, Settings, Trophy } from "lucide-react";
+import { AlertTriangle, ClipboardList, Settings, Trophy } from "lucide-react";
 import { brandOptions } from "@/utils/brand-utils";
 
 import {
-  Button,
   FormSection,
   ImageUpload,
   Input,
-  ModalContainer,
-  ModalContent,
-  ModalHeader,
   Select,
-} from "./ui";
+} from "../ui";
 import RichTextEditor from "@/components/ui/RichTextEditor";
+import DrawModalShell from "./DrawModalShell";
 
 interface MiniDrawPrizeForm {
   name: string;
@@ -206,8 +203,8 @@ export default function MiniDrawEditModal({
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+  // Invoked by DrawModalShell's primary, which sits outside the <form>.
+  const handleSubmit = async () => {
     if (!miniDraw || !formState) return;
 
     if (!validateForm()) {
@@ -279,38 +276,45 @@ export default function MiniDrawEditModal({
   }
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl" height="fixed" closeOnBackdrop={false}>
-      <ModalHeader
-        title="Edit Mini Draw"
-        subtitle={`Update settings for ${miniDraw.name}`}
-        onClose={onClose}
-        showLogo={false}
-      />
-
-      <ModalContent>
+    <DrawModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      size="4xl"
+      eyebrow={`Mini draw · ${miniDraw.status}`}
+      title="Edit mini draw"
+      primaryLabel="Save mini draw"
+      onPrimary={() => void handleSubmit()}
+      isSubmitting={isSubmitting || isSaving}
+      submittingLabel="Saving…"
+      // Field-level errors only — `submit` is a request failure, shown as a banner.
+      errorCount={Object.keys(errors).filter((k) => k !== "submit").length}
+    >
         {miniDraw.configurationLocked && (
-          <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-yellow-800">
-            <div className="flex items-center gap-2 font-semibold">
-              <AlertTriangle className="h-4 w-4" />
-              Configuration Locked
+          <div className="mb-[14px] rounded-[9px] border border-[var(--warn-line)] bg-[var(--warn-bg)] px-[12px] py-[10px]">
+            <div className="flex items-center gap-[7px] text-[12.5px] font-semibold text-[var(--warn)]">
+              <AlertTriangle className="h-[15px] w-[15px] shrink-0" aria-hidden />
+              Configuration locked
             </div>
-            <p className="mt-1 text-sm">
+            <p className="mt-[3px] text-[11.5px] leading-[1.5] text-[var(--warn)]">
               Entries are frozen for this draw, so prize details cannot be changed until the configuration unlocks.
             </p>
           </div>
         )}
 
         {errors.submit && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-            <div className="flex items-center gap-2 font-semibold">
-              <AlertTriangle className="h-4 w-4" />
+          <div
+            role="alert"
+            className="mb-[14px] rounded-[9px] border border-[var(--danger-line)] bg-[var(--danger-bg)] px-[12px] py-[10px]"
+          >
+            <div className="flex items-center gap-[7px] text-[12.5px] font-semibold text-[var(--danger)]">
+              <AlertTriangle className="h-[15px] w-[15px] shrink-0" aria-hidden />
               Save failed
             </div>
-            <p className="mt-1 text-sm">{errors.submit}</p>
+            <p className="mt-[3px] text-[11.5px] leading-[1.5] text-[var(--text2)]">{errors.submit}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex flex-col gap-[16px]">
           <FormSection title="Basic Information" icon={ClipboardList}>
             <Input
               id="name"
@@ -446,22 +450,7 @@ export default function MiniDrawEditModal({
             />
           </FormSection>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting || isSaving}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              icon={Save}
-              loading={isSubmitting || isSaving}
-              disabled={isSubmitting || isSaving}
-            >
-              {isSubmitting || isSaving ? "Saving..." : "Save Changes"}
-            </Button>
-          </div>
-        </form>
-      </ModalContent>
-    </ModalContainer>
+        </div>
+    </DrawModalShell>
   );
 }

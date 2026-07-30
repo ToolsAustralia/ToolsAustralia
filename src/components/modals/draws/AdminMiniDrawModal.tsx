@@ -2,16 +2,8 @@
 
 import React, { useState } from "react";
 import { ClipboardList, Trophy, AlertTriangle, Settings } from "lucide-react";
-import {
-  ModalContainer,
-  ModalHeader,
-  ModalContent,
-  Input,
-  Select,
-  Button,
-  FormSection,
-  ImageUpload,
-} from "./ui";
+import { Input, Select, FormSection, ImageUpload } from "../ui";
+import DrawModalShell from "./DrawModalShell";
 import { brandOptions } from "@/utils/brand-utils";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 
@@ -100,8 +92,8 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Invoked by DrawModalShell's primary, which sits outside the <form>.
+  const handleSubmit = async () => {
     setIsSubmitting(true);
     setErrors({});
 
@@ -180,16 +172,20 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
   };
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={handleClose} size="4xl" height="fixed" closeOnBackdrop={false}>
-      <ModalHeader
-        title="Create New Mini Draw"
-        subtitle="Set up a new mini draw (no monthly restriction - multiple can be active)"
-        onClose={handleClose}
-        showLogo={false}
-      />
-
-      <ModalContent>
-        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
+    <DrawModalShell
+      isOpen={isOpen}
+      onClose={handleClose}
+      size="4xl"
+      eyebrow="Mini draw"
+      title="New mini draw"
+      primaryLabel="Create mini draw"
+      onPrimary={() => void handleSubmit()}
+      isSubmitting={isSubmitting}
+      submittingLabel="Creating…"
+      // Field errors only — `submit` is a request failure shown as a banner.
+      errorCount={Object.keys(errors).filter((k) => k !== "submit").length}
+    >
+        <div className="space-y-3 sm:space-y-6">
           <FormSection title="Basic Information" icon={ClipboardList}>
             <Input
               id="name"
@@ -328,23 +324,16 @@ const AdminMiniDrawModal: React.FC<AdminMiniDrawModalProps> = ({ isOpen, onClose
           </FormSection>
 
           {errors.submit && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
-              <span>{errors.submit}</span>
+            <div
+              role="alert"
+              className="flex items-start gap-[8px] rounded-[9px] border border-[var(--danger-line)] bg-[var(--danger-bg)] px-[12px] py-[10px]"
+            >
+              <AlertTriangle className="mt-[1px] h-[16px] w-[16px] shrink-0 text-[var(--danger)]" aria-hidden />
+              <span className="text-[12px] leading-[1.5] text-[var(--danger)]">{errors.submit}</span>
             </div>
           )}
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="secondary" onClick={handleClose} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" disabled={isSubmitting}>
-              {isSubmitting ? "Creating..." : "Create Mini Draw"}
-            </Button>
-          </div>
-        </form>
-      </ModalContent>
-    </ModalContainer>
+        </div>
+    </DrawModalShell>
   );
 };
 

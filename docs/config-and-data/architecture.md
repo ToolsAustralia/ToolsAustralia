@@ -58,7 +58,7 @@
 |---|---|
 | [src/data/australianStates.ts](../../src/data/australianStates.ts) | AU state codes + names (reference) |
 | [src/data/brandLogos.ts](../../src/data/brandLogos.ts) | Brand logo asset paths |
-| [src/data/dev/](../../src/data/dev/) | Dev fixtures |
+| [src/data/dev/](../../src/data/dev/) | Dev fixtures. **`modal-reachability.json` is generated, not hand-edited** — run `npm run analyze:modals` after moving, adding or deleting a modal. Hand-patching it makes the report disagree with the tree; it had gone stale from 2026-03-31 until the draws-modal regroup regenerated it on 2026-07-30. |
 | [src/data/faqs.ts](../../src/data/faqs.ts) | `/faq` **page** FAQ content (generic, owner-controlled) + the shared `FaqEntry` type |
 | [src/data/supportChatFaqs.ts](../../src/data/supportChatFaqs.ts) | **Cobber chatbot** FAQ corpus (`getSupportChatFaqEntries`) — deflection + knowledge pack only, NOT the /faq page |
 | [src/data/index.ts](../../src/data/index.ts) | Re-exports |

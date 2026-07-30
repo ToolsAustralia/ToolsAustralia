@@ -10,13 +10,13 @@ import type { ErrorContext } from "@/types/error-reporting";
 import { DEFAULT_PRIZE_SLUG, getPrizeBySlug } from "@/config/prizes";
 import { brandOptions } from "@/utils/brand-utils";
 import type { RevenueCategory } from "@/hooks/queries/useAdminQueries";
-import AdminMiniDrawModal from "@/components/modals/AdminMiniDrawModal";
-import AdminMajorDrawModal from "@/components/modals/AdminMajorDrawModal";
-import MajorDrawEditModal from "@/components/modals/MajorDrawEditModal";
-import MiniDrawEditModal, { type AdminMiniDrawSummary } from "@/components/modals/MiniDrawEditModal";
-import ParticipantsModal from "@/components/modals/ParticipantsModal";
-import WinnerSelectionModal from "@/components/modals/WinnerSelectionModal";
-import WinnerEditModal from "@/components/modals/WinnerEditModal";
+import AdminMiniDrawModal from "@/components/modals/draws/AdminMiniDrawModal";
+import AdminMajorDrawModal from "@/components/modals/draws/AdminMajorDrawModal";
+import MajorDrawEditModal from "@/components/modals/draws/MajorDrawEditModal";
+import MiniDrawEditModal, { type AdminMiniDrawSummary } from "@/components/modals/draws/MiniDrawEditModal";
+import ParticipantsModal from "@/components/modals/draws/ParticipantsModal";
+import WinnerSelectionModal from "@/components/modals/draws/WinnerSelectionModal";
+import WinnerEditModal from "@/components/modals/draws/WinnerEditModal";
 import UserSearchModal from "@/components/modals/UserSearchModal";
 import AdminPromoToggle from "@/components/modals/AdminPromoToggle";
 import AdminBonusEntryPromoModal from "@/components/modals/AdminBonusEntryPromoModal";
@@ -49,7 +49,7 @@ import PrizeSpecificationsModal from "@/components/modals/PrizeSpecificationsMod
 import PackageDetailModal from "@/components/modals/PackageDetailModal";
 import RenewalFailedModal from "@/components/modals/RenewalFailedModal";
 import DowngradeConfirmModal from "@/components/modals/DowngradeConfirmModal";
-import ExportModal from "@/components/modals/ExportModal";
+import ExportModal from "@/components/modals/draws/ExportModal";
 import IconPickerModal from "@/components/modals/ui/IconPickerModal";
 import SettingsModal from "@/components/modals/SettingsModal";
 import SubscriptionManagementModal from "@/components/modals/SubscriptionManagementModal";
@@ -315,15 +315,15 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   "report-problem": "src/components/modals/ReportProblemModal.tsx",
   confirmation: "src/components/modals/ConfirmationModal.tsx",
   "prize-specs": "src/components/modals/PrizeSpecificationsModal/index.tsx",
-  export: "src/components/modals/ExportModal.tsx",
+  export: "src/components/modals/draws/ExportModal.tsx",
   "icon-picker": "src/components/modals/ui/IconPickerModal.tsx",
-  "admin-mini-draw-create": "src/components/modals/AdminMiniDrawModal.tsx",
-  "admin-major-draw-create": "src/components/modals/AdminMajorDrawModal.tsx",
-  "admin-major-draw-edit": "src/components/modals/MajorDrawEditModal.tsx",
-  "admin-mini-draw-edit": "src/components/modals/MiniDrawEditModal.tsx",
-  "admin-participants": "src/components/modals/ParticipantsModal.tsx",
-  "admin-winner-select": "src/components/modals/WinnerSelectionModal.tsx",
-  "admin-winner-edit": "src/components/modals/WinnerEditModal.tsx",
+  "admin-mini-draw-create": "src/components/modals/draws/AdminMiniDrawModal.tsx",
+  "admin-major-draw-create": "src/components/modals/draws/AdminMajorDrawModal/index.tsx",
+  "admin-major-draw-edit": "src/components/modals/draws/MajorDrawEditModal.tsx",
+  "admin-mini-draw-edit": "src/components/modals/draws/MiniDrawEditModal.tsx",
+  "admin-participants": "src/components/modals/draws/ParticipantsModal.tsx",
+  "admin-winner-select": "src/components/modals/draws/WinnerSelectionModal/index.tsx",
+  "admin-winner-edit": "src/components/modals/draws/WinnerEditModal.tsx",
   "admin-user-search": "src/components/modals/UserSearchModal.tsx",
   "admin-promo-toggle": "src/components/modals/AdminPromoToggle.tsx",
   "admin-bonus-entry-promo": "src/components/modals/AdminBonusEntryPromoModal.tsx",
