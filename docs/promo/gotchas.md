@@ -237,32 +237,3 @@ streams slowly, which is the P75 cohort Speed Insights reports. Reproduce with 4
 throttling on a ~1.6 Mbps / 150 ms link, and read `layout-shift` PerformanceEntries with
 their `sources[]` so the finding names an element rather than a number. An unthrottled
 "looks fine" is a false negative, and it briefly sent this investigation down the wrong path.
-
-### The residual the footer fix uncovered: the newsletter card overlaps upward (CLS 0.102)
-
-With the 0.593 footer shift gone, a second, smaller shift became visible on promo routes —
-**deterministic, 0.102 on three consecutive runs**, sourced to `div.absolute.top-0.left-0`.
-
-That is [`NewsletterSection`](../../src/components/sections/NewsletterSection.tsx), which
-renders `absolute top-0 left-0 right-0 z-20 -translate-y-1/2`. Being pulled up half its own
-height, it rises **into** the content above it, so the content must reserve that space.
-`(site)/layout.tsx` does exactly this and says so in a comment:
-
-```tsx
-/* pb-* reserves space for the newsletter card, which is absolute -translate-y-1/2
-   and overlaps upward into page content. Mirrors Footer's pt-20/24/32. */
-<div className="site-main-content min-h-screen-svh … pb-20 sm:pb-24 lg:pb-32">
-```
-
-`promotions/layout.tsx` never carried that reservation. The promo wrapper now mirrors it:
-`min-h-screen-svh pb-20 sm:pb-24 lg:pb-32`.
-
-**The lesson worth keeping:** this shift existed all along and was simply *masked* by the
-much larger footer one — a 0.10 shift is invisible underneath a 0.59. Re-measure after every
-CLS fix rather than assuming one pass clears a route; the next-largest shift only becomes
-observable once the biggest is gone.
-
-**Also note the source attribution is indirect.** The browser named the newsletter's own
-`div`, because that is the element whose rect moved — but the *cause* is the missing
-reservation in the layout above it. Treat `sources[]` as "what moved", then look upward for
-"what failed to reserve space".
