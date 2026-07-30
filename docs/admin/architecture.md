@@ -56,7 +56,7 @@ Safety guards:
 
 ### Edit Draw links (2026-06-11)
 
-The [`MajorDrawEditModal`](../../src/components/modals/MajorDrawEditModal.tsx) has a **Draw Links** section with two optional fields, persisted on the `MajorDraw` model:
+The [`MajorDrawEditModal`](../../src/components/modals/draws/MajorDrawEditModal.tsx) has a **Draw Links** section with two optional fields, persisted on the `MajorDraw` model:
 
 - **View Results Link** → `resultUrl` (the randomdraws verification page).
 - **Watch Draw Link** → `watchUrl` (the Facebook live-draw / announcement video).

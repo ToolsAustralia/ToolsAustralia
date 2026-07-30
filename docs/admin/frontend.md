@@ -1050,3 +1050,197 @@ that imports nothing, so both the admin UI and the server-side attribution logic
 it. Do **not** import it from `src/utils/ab-testing/get-user-experiment-assignment.ts` in a
 client component: that module pulls in mongoose and the repositories. See
 [docs/ab-testing/gotchas.md](../ab-testing/gotchas.md).
+
+## Draws modals grouped under `modals/draws/` (2026-07-30)
+
+The eight modals reachable from the four draws tabs (`major-draw`, `mini-draws`,
+`draw-results`, `upcoming-draws`) moved out of the flat `src/components/modals/` list into
+[`src/components/modals/draws/`](../../src/components/modals/draws/), behind an `index.ts`
+barrel. Pure relocation — no behaviour changed. The convention is documented in
+[shared-ui architecture → Modal folder layout](../shared-ui/architecture.md).
+
+| Modal | Opened from |
+|---|---|
+| `WinnerSelectionModal` | Major Draw, Mini Draws card, Draw Results row |
+| `WinnerEditModal` | Major Draw, Mini Draws card, Draw Results |
+| `ParticipantsModal` | Major Draw → View participants |
+| `ExportModal` | Draw Results row → Export |
+| `AdminMajorDrawModal` | Overview → Quick actions (create) |
+| `MajorDrawEditModal` | Draw Results, Upcoming Draws (edit) |
+| `AdminMiniDrawModal` | Mini Draws toolbar (create) |
+| `MiniDrawEditModal` | Mini Draws card (edit) |
+
+Import from the barrel, not a deep path:
+
+```ts
+import { WinnerSelectionModal, type WinnerSelectionData } from "@/components/modals/draws";
+```
+
+**Create and edit stay separate for major draws — this is deliberate, do not "simplify" it.**
+`AdminMajorDrawModal` owns the `/api/admin/major-draw/scheduled-months` restriction (so a
+month cannot be double-booked), the 8:30 PM AEST draw-date default, the activation-date
+derivation from the previous draw, the −30-minute freeze derivation, and the 30-minute
+freeze↔draw discrepancy warning. `MajorDrawEditModal` owns `configurationLocked` gating and
+has **none** of that. There is no shared behaviour to collapse, so a `mode` prop would fork
+most of the component and put a live create flow and a live edit flow in one blast radius.
+They share **field sections**, not a mode flag. The same reasoning does *not* apply to the
+mini-draw pair, whose field sets are identical.
+
+`ConfirmationModal` deliberately stayed at `src/components/modals/` — 20+ non-draws callers.
+
+## Draws pages revamp — shared primitives under `components/admin/draws/` (2026-07-30)
+
+The four draws tabs (`major-draw`, `mini-draws`, `draw-results`, `upcoming-draws`) were rebuilt to
+the `design_handoff_admin_draws` specification. **No routing, permission or schema change** — the
+tabs still render inside `AdminPage.tsx` via the `[tab]` dynamic route.
+
+### What the shell does and does not own
+
+`AdminPage.tsx` keeps the 280px sidebar, mobile drawer, hamburger, top bar and scroll container —
+those are shared with 25 other tabs and were **not** rebuilt. The revamp lives entirely inside the
+tab components plus [`src/components/admin/draws/`](../../src/components/admin/draws/).
+
+| File | Owns |
+|---|---|
+| `tokens.css` | The `.admin-draws` scoped custom-property block (see [shared-ui tailwind-conventions §11](../shared-ui/tailwind-conventions.md)) |
+| `DrawsPageShell` | Padding/gap rhythm **and the `.admin-draws` class** — the token scope boundary |
+| `DrawsListPage` | KPI strip → toolbar → split view; mobile detail sheet |
+| `DrawsTable` | 7-column grid, sticky header + group headers, all four data states |
+| `DrawInspector` | The fixed 320px panel / mobile sheet content |
+| `DrawsToolbar` | Search input, filter dropdowns, action buttons |
+| `DrawsKpiStrip`, `DrawStatusPill` | KPI cells; the 21px status pill |
+| `MiniDrawCard` | One mini-draw card (extracted from the 935-line page component) |
+| `DrawStatusRibbon`, `DrawGatesCard`, `EntryPoolCard` | Major Draw page pieces |
+
+**These own layout only.** Fetching, filter state, pagination and every modal stay in the page
+containers — they already owned that logic and splitting it would put one piece of state in two
+files. There is deliberately no `useDrawsListState` hook.
+
+### `DrawsPageShell` cancels AdminPage's padding — and must
+
+It applies `-m-4 lg:-m-6` to cancel `AdminPage`'s own `p-4 lg:p-6`, so `--m-pad` is the single
+source of padding truth (the design specifies 20px desktop / 14px mobile). Note the negative
+margin uses **`lg:`** (1024px), mirroring AdminPage's own breakpoint — *not* the `draws:` (900px)
+breakpoint. They must match AdminPage's, or the two paddings stop cancelling between 900–1024px.
+
+### Draw Results and Upcoming Draws are one component, two configs
+
+Both render `DrawsListPage`. Differences are config only: KPI labels, filter sets, grouping
+(Results by year; Upcoming by Live now / Scheduled), column 6 header (`Winner` vs `Gate`), and the
+inspector primary. If a change to one needs a new shared component, that is a signal the split is
+wrong — fix the primitive rather than forking.
+
+**Upcoming keeps its two-call fetch.** "All" (queued + active) fans out into two parallel requests
+because the API's Zod schema takes a single status enum. `stats.totalRevenue` is summed across both
+responses, like every other stat on that path.
+
+### Desktop rows and mobile cards are separate markup, one handler
+
+`DrawsTable` renders a `DesktopRow` and a `MobileCard` per row, both calling the same `onSelect`.
+The handoff flags this as the defect most likely to ship — wire only one and the other silently
+goes dead. Same for the inspector: the desktop panel and the mobile bottom sheet render the *same*
+`DrawInspector` with the same props.
+
+### The four table states are built together
+
+`loading` (six skeletons on the real column grid, `aria-busy`), `empty` (names the filter as the
+cause + `Clear filters`, which clears the **search query too**), `error` (reassures that retrying
+is safe, shows the **real** endpoint — the handoff's sample `/api/admin/draws` does not exist here),
+and `ready`. The shell, KPI strip, toolbar and inspector do not move between them.
+
+### Deliberate divergences from the design
+
+| Design says | We ship | Why |
+|---|---|---|
+| KPI delta chips (`+9%`) | No deltas | No prior-period data exists; a fabricated movement figure on an ops dashboard is worse than none |
+| Entries sub-line `+2,714 in 24 h` | Omitted | Same — no 24-hour delta in the data |
+| `Edit prize` on Major Draw | Omitted | The card renders the **static** `src/config/prizes` prize; `MajorDraw.prize` is `@deprecated`. The button would edit a different field than the one shown |
+| Participants list read-only | Rows stay clickable | They open the admin user modal today; losing a working drill-through to match a visual spec is a net regression |
+| Mini-draw card: 2 actions | 4 actions | `CSV` and `Edit winner & testimony` exist and are used on draw night |
+| No slot for `Remove winner` | Subordinated danger row in the inspector | Hairline-separated, `--danger`, only when a winner exists — keeps the design's three actions intact |
+
+### Capabilities preserved (verify these after any further change)
+
+Draw Results: Select Winner · Edit Winner · **Remove winner** (incl. the "Winner record ID not
+found" fallback) · Edit Draw · Export · Status/Winner/Sort filters · search · pagination · winner →
+admin user modal. Mini Draws: Winner · CSV · Edit winner & testimony · card→edit · delete ·
+**reorder** (drag, Save order, Discard, dirty guard) · the `?search=` deep link from Overview.
+Major Draw: winner gating by status · export gated off `cancelled` · winner display · edit-winner ·
+permission gates · lock notice.
+
+### Locked draws route through one guard
+
+`UpcomingDraws.openDrawEditor()` is the single edit gate: a `configurationLocked` draw opens
+[`DrawLockedModal`](../../src/components/modals/draws/DrawLockedModal.tsx) instead of the form.
+Inspector primary and the `Edit draw` secondary both call it. Add a new edit entry point and it
+must call this, not `setIsEditModalOpen` directly.
+
+### Search is server-side and debounced
+
+All three search boxes hit the API so results span every page, not just the loaded one. The fetch
+callback is keyed on the **debounced** value (300ms) — without that, a five-letter query fires five
+requests.
+
+## All eight draws modals on `DrawModalShell` (2026-07-30)
+
+Every modal reachable from the four draws tabs now renders through
+[`DrawModalShell`](../../src/components/modals/draws/DrawModalShell.tsx): one header
+(eyebrow + title + close), one scrolling body, one `--panel2` footer with the actions
+right-aligned, one pending treatment, and the mobile bottom-sheet presentation.
+
+| Modal | Title | Primary |
+|---|---|---|
+| `WinnerSelectionModal` | Record the winner | Publish winner |
+| `WinnerEditModal` | Edit winner & testimony | Save changes |
+| `AdminMajorDrawModal` | Create major draw | Create draw |
+| `MajorDrawEditModal` | Edit draw | Save draw |
+| `AdminMiniDrawModal` | New mini draw | Create mini draw |
+| `MiniDrawEditModal` | Edit mini draw | Save mini draw |
+| `ExportModal` | Export participants | Download CSV / XLSX |
+| `ParticipantsModal` | Participants | Close |
+| `DrawLockedModal` | This draw is locked | Got it |
+
+### What moved, and what deliberately did not
+
+The **actions** moved out of each form's body into the shell footer. Because the shell's
+primary sits **outside** the `<form>`, each `handleSubmit` lost its `FormEvent` parameter and
+is now invoked directly (`onPrimary={() => void handleSubmit()}`). The validation and submit
+bodies are otherwise untouched.
+
+**Transport was not unified.** Create and edit still differ per pair and that is intentional:
+
+| | Create | Edit |
+|---|---|---|
+| Major | fetches `/scheduled-months`, derives activation + freeze from the draw date, warns on a ≠30-minute gap | `configurationLocked` gating; no derivation |
+| Mini | `File[]` → `multipart/form-data`, self-submits | `string[]` URLs → JSON, delegates via `onSave` |
+
+Collapsing either pair behind a `mode` prop would fork the image handling, body encoding and
+submit ownership — everything except the labels. See the Task 11 note in
+[the plan](../superpowers/plans/2026-07-30-admin-draws-revamp.md).
+
+Shared **presentation** is factored into [`fields.tsx`](../../src/components/modals/draws/fields.tsx)
+(`FieldLabel` / `FieldHint` / `FieldError` / `TextField` / `SelectField` / `FormSection` /
+`FieldRow`) — markup only, no submit logic, which is why it is safe to share where a form
+component is not.
+
+### Mobile tap targets in the forms
+
+The draws forms reuse `src/components/modals/ui` `Input` / `Select` / `DateTimePicker`, which
+render ~42px and are used by 50+ other modals. Rather than edit those, `tokens.css` sets a
+`min-height: var(--m-field)` floor **scoped to `.admin-draws`** below 900px. Two deliberate
+exclusions:
+
+- `input[type="search"]` — those sit `align-self: stretch` inside an already-44px bordered row,
+  so the row is the target; a floor would push it past 44px.
+- `<button>` — the `RichTextEditor` formatting toolbar is ~32px by design. A dense
+  bold/italic/align toolbar is not the control class the 44px rule addresses, and stretching it
+  would wreck the editor.
+
+Verified in the browser at 390px: **60 form fields across all eight modals, zero under 44px.**
+
+### Sort dropdowns removed from the list pages
+
+Draw Results and Upcoming Draws no longer expose a Sort control. Results is always
+newest-draw-first and Upcoming soonest-first — the only orders those screens are read in — so
+the dropdown cost toolbar width without earning it. `sortBy` / `sortOrder` are still sent to
+the API, fixed as `DEFAULT_SORT_BY` / `DEFAULT_SORT_ORDER` in each container.

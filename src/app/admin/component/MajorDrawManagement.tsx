@@ -1,45 +1,85 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Download, Trophy, AlertCircle } from "lucide-react";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 // Full catalog import (not usePrizeCatalog): this admin card renders `detailedDescription`,
 // a deep field deliberately excluded from the client prize-summaries split. Admin-chunk only —
 // never reachable from the marketing/landing graph, so the heavy module is acceptable here.
 import { DEFAULT_PRIZE_SLUG, getPrizeBySlug } from "@/config/prizes";
-import { formatDateInAEST, formatCountdown } from "@/utils/common/timezone";
+import { formatDateInAEST } from "@/utils/common/timezone";
 import { useToast } from "@/components/ui/Toast";
-import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
-import WinnerEditModal from "@/components/modals/WinnerEditModal";
-import ParticipantsModal from "@/components/modals/ParticipantsModal";
 import {
-  Trophy,
-  Users,
-  Calendar,
-  Clock,
-  FileSpreadsheet,
-  Lock,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  RefreshCw,
-  UserPlus,
-} from "lucide-react";
-import { AdminBadge } from "@/components/admin/ui/AdminBadge";
+  WinnerSelectionModal,
+  WinnerEditModal,
+  ParticipantsModal,
+  ExportModal,
+  type WinnerSelectionData,
+} from "@/components/modals/draws";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
+import {
+  DrawsPageShell,
+  DrawStatusRibbon,
+  DrawGatesCard,
+  EntryPoolCard,
+  type RibbonStat,
+  type DrawGate,
+  type TopEntrant,
+} from "@/components/admin/draws";
+
+/** The five business rules, verbatim from the design. */
+const DRAW_RULES = [
+  "Export is available at any status except cancelled.",
+  "Entries freeze automatically 30 minutes before the draw.",
+  "Winner can only be recorded once the draw is frozen or completed.",
+  "Configuration locks the moment entries freeze.",
+  "Renewals paid between 8:00 PM and midnight route into the next month's draw.",
+];
+
+const currency = (amount: number) =>
+  new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(amount);
+const currencyPrecise = (amount: number) =>
+  new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: 2 }).format(amount);
+
+const fmt = (date: Date | string | null | undefined, pattern = "d MMM · h:mm a") =>
+  date ? formatDateInAEST(new Date(date), pattern) : null;
+
+/**
+ * Compact "time until draw" for the ribbon stat.
+ *
+ * NOT `formatCountdown` — that never rolls hours into days, so a draw four weeks
+ * out reads "669 hours 51 minutes", which wraps to two lines and buries the one
+ * number an admin actually wants. It is also shared with customer-facing
+ * countdowns where the hours-only form is deliberate, so it is left alone and
+ * the compact form lives here.
+ */
+function formatTimeUntilDraw(ms: number): string {
+  if (ms <= 0) return "Completed";
+  const totalMinutes = Math.floor(ms / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
 
 export default function MajorDrawManagement() {
   const { has } = usePermissions();
   const canEditMajor = has("majorDraw.edit");
   const canSelectMajorWinner = has("majorDraw.selectWinner");
   const { showToast } = useToast();
+  const { openUserModal } = useAdminUserModal();
   const { data: currentMajorDraw, isLoading, error, refetch } = useCurrentMajorDraw();
   const activePrize = getPrizeBySlug(DEFAULT_PRIZE_SLUG);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
   const [isWinnerModalOpen, setIsWinnerModalOpen] = useState(false);
   const [isParticipantsModalOpen, setIsParticipantsModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isEditWinnerModalOpen, setIsEditWinnerModalOpen] = useState(false);
   const [currentWinner, setCurrentWinner] = useState<{
     userId: string;
     entryNumber: number;
@@ -52,302 +92,180 @@ export default function MajorDrawManagement() {
     winnerName?: string;
     drawResultUrl?: string | null;
   } | null>(null);
-  const [_isLoadingWinner, setIsLoadingWinner] = useState(false);
-  const [isEditWinnerModalOpen, setIsEditWinnerModalOpen] = useState(false);
+
+  // Supporting reads for the ribbon / gates / pool.
+  const [drawRevenue, setDrawRevenue] = useState<{ revenue: number; perEntry: number | null } | null>(null);
+  const [nextDrawActivation, setNextDrawActivation] = useState<string | null>(null);
+  const [topEntrants, setTopEntrants] = useState<TopEntrant[]>([]);
+  const [isLoadingPool, setIsLoadingPool] = useState(true);
+
+  const drawId = currentMajorDraw?._id;
 
   // Fetch current winner from Winner model
   useEffect(() => {
-    if (!currentMajorDraw?._id) return;
-    
+    if (!drawId) return;
+
     const fetchWinner = async () => {
-      setIsLoadingWinner(true);
       try {
-        // First, get basic winner info
-        const response = await fetch(`/api/admin/major-draw/select-winner?majorDrawId=${currentMajorDraw._id}`);
+        const response = await fetch(`/api/admin/major-draw/select-winner?majorDrawId=${drawId}`);
         const data = await response.json();
-        
-        if (data.hasWinner && data.winner) {
-          // Now fetch full winner details using the winners API
-          // We need to find the winner document by drawId and drawType
-          // Since we don't have the winner document ID yet, let's query all winners for this draw
-          try {
-            const allWinnersResponse = await fetch(`/api/winners/all?drawType=major&limit=100`);
-            if (allWinnersResponse.ok) {
-              const allWinnersData = await allWinnersResponse.json();
-              if (allWinnersData.success && allWinnersData.winners) {
-                // Find the winner for this specific draw
-                const winnerForDraw = allWinnersData.winners.find(
-                  (w: { drawId: string; drawType: string }) =>
-                    w.drawId === currentMajorDraw._id?.toString() && w.drawType === "major"
-                );
-                
-                if (winnerForDraw) {
-                  // Now fetch full details using the winner ID
-                  const winnerDetailsResponse = await fetch(`/api/admin/winners/${winnerForDraw.id}`);
-                  if (winnerDetailsResponse.ok) {
-                    const winnerDetailsData = await winnerDetailsResponse.json();
-                    if (winnerDetailsData.success && winnerDetailsData.winner) {
-                      setCurrentWinner({
-                        userId: data.winner.userId.toString(),
-                        entryNumber: data.winner.entryNumber || 0,
-                        selectedDate: new Date(data.winner.selectedDate),
-                        selectionMethod: data.winner.selectionMethod,
-                        imageUrl: data.winner.imageUrl,
-                        testimony: winnerDetailsData.winner.testimony,
-                        selectedPrize: winnerDetailsData.winner.selectedPrize || winnerDetailsData.winner.selectedPrizeSlug,
-                        winnerId: winnerDetailsData.winner.id,
-                        winnerName: `${winnerDetailsData.winner.winnerFirstName} ${winnerDetailsData.winner.winnerLastName}`.trim(),
-                        drawResultUrl:
-                          winnerDetailsData.winner.drawResultUrl ?? data.winner.drawResultUrl ?? null,
-                      });
-                    } else {
-                      // Fallback
-                      setCurrentWinner({
-                        userId: data.winner.userId.toString(),
-                        entryNumber: data.winner.entryNumber || 0,
-                        selectedDate: new Date(data.winner.selectedDate),
-                        selectionMethod: data.winner.selectionMethod,
-                        imageUrl: data.winner.imageUrl,
-                        testimony: winnerForDraw.testimony,
-                        selectedPrize: winnerForDraw.selectedPrize || winnerForDraw.selectedPrizeSlug,
-                        winnerId: winnerForDraw.id,
-                        drawResultUrl: winnerForDraw.drawResultUrl ?? data.winner.drawResultUrl ?? null,
-                      });
-                    }
-                  } else {
-                    // Fallback
-                    setCurrentWinner({
-                      userId: data.winner.userId.toString(),
-                      entryNumber: data.winner.entryNumber || 0,
-                      selectedDate: new Date(data.winner.selectedDate),
-                      selectionMethod: data.winner.selectionMethod,
-                      imageUrl: data.winner.imageUrl,
-                      testimony: winnerForDraw.testimony,
-                      selectedPrize: winnerForDraw.selectedPrize || winnerForDraw.selectedPrizeSlug,
-                      winnerId: winnerForDraw.id,
-                      drawResultUrl: winnerForDraw.drawResultUrl ?? data.winner.drawResultUrl ?? null,
-                    });
-                  }
-                } else {
-                  // No winner found in all winners, use basic data
-                  setCurrentWinner({
-                    userId: data.winner.userId.toString(),
-                    entryNumber: data.winner.entryNumber || 0,
-                    selectedDate: new Date(data.winner.selectedDate),
-                    selectionMethod: data.winner.selectionMethod,
-                    imageUrl: data.winner.imageUrl,
-                    testimony: data.winner.testimony,
-                    selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
-                    drawResultUrl: data.winner.drawResultUrl ?? null,
-                  });
-                }
-              } else {
-                // Fallback to basic winner data
-                setCurrentWinner({
-                  userId: data.winner.userId.toString(),
-                  entryNumber: data.winner.entryNumber || 0,
-                  selectedDate: new Date(data.winner.selectedDate),
-                  selectionMethod: data.winner.selectionMethod,
-                  imageUrl: data.winner.imageUrl,
-                  testimony: data.winner.testimony,
-                    selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
-                    drawResultUrl: data.winner.drawResultUrl ?? null,
-                });
-              }
-            } else {
-              // Fallback to basic winner data
-              setCurrentWinner({
-                userId: data.winner.userId.toString(),
-                entryNumber: data.winner.entryNumber || 0,
-                selectedDate: new Date(data.winner.selectedDate),
-                selectionMethod: data.winner.selectionMethod,
-                imageUrl: data.winner.imageUrl,
-                testimony: data.winner.testimony,
-                    selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
-                    drawResultUrl: data.winner.drawResultUrl ?? null,
-              });
-            }
-          } catch (detailError) {
-            console.error("Error fetching winner details:", detailError);
-            // Fallback to basic winner data
+
+        if (!data.hasWinner || !data.winner) {
+          setCurrentWinner(null);
+          return;
+        }
+
+        const base = {
+          userId: data.winner.userId.toString(),
+          entryNumber: data.winner.entryNumber || 0,
+          selectedDate: new Date(data.winner.selectedDate),
+          selectionMethod: data.winner.selectionMethod,
+          imageUrl: data.winner.imageUrl,
+        };
+
+        // Enrich with the Winner document (testimony, prize, result link) when we
+        // can find it; fall back to the basic record rather than showing nothing.
+        try {
+          const allWinnersResponse = await fetch(`/api/winners/all?drawType=major&limit=100`);
+          const allWinnersData = allWinnersResponse.ok ? await allWinnersResponse.json() : null;
+          const winnerForDraw = allWinnersData?.success
+            ? allWinnersData.winners?.find(
+                (w: { drawId: string; drawType: string }) =>
+                  w.drawId === drawId?.toString() && w.drawType === "major"
+              )
+            : null;
+
+          if (!winnerForDraw) {
             setCurrentWinner({
-              userId: data.winner.userId.toString(),
-              entryNumber: data.winner.entryNumber || 0,
-              selectedDate: new Date(data.winner.selectedDate),
-              selectionMethod: data.winner.selectionMethod,
-              imageUrl: data.winner.imageUrl,
+              ...base,
               testimony: data.winner.testimony,
-                    selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
-                    drawResultUrl: data.winner.drawResultUrl ?? null,
+              selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+              drawResultUrl: data.winner.drawResultUrl ?? null,
+            });
+            return;
+          }
+
+          const detailsResponse = await fetch(`/api/admin/winners/${winnerForDraw.id}`);
+          const details = detailsResponse.ok ? await detailsResponse.json() : null;
+
+          if (details?.success && details.winner) {
+            setCurrentWinner({
+              ...base,
+              testimony: details.winner.testimony,
+              selectedPrize: details.winner.selectedPrize || details.winner.selectedPrizeSlug,
+              winnerId: details.winner.id,
+              winnerName: `${details.winner.winnerFirstName} ${details.winner.winnerLastName}`.trim(),
+              drawResultUrl: details.winner.drawResultUrl ?? data.winner.drawResultUrl ?? null,
+            });
+          } else {
+            setCurrentWinner({
+              ...base,
+              testimony: winnerForDraw.testimony,
+              selectedPrize: winnerForDraw.selectedPrize || winnerForDraw.selectedPrizeSlug,
+              winnerId: winnerForDraw.id,
+              drawResultUrl: winnerForDraw.drawResultUrl ?? data.winner.drawResultUrl ?? null,
             });
           }
-        } else {
-          setCurrentWinner(null);
+        } catch (detailError) {
+          console.error("Error fetching winner details:", detailError);
+          setCurrentWinner({
+            ...base,
+            testimony: data.winner.testimony,
+            selectedPrize: data.winner.selectedPrize || data.winner.selectedPrizeSlug,
+            drawResultUrl: data.winner.drawResultUrl ?? null,
+          });
         }
-      } catch (error) {
-        console.error("Error fetching winner:", error);
+      } catch (err) {
+        console.error("Error fetching winner:", err);
         setCurrentWinner(null);
-      } finally {
-        setIsLoadingWinner(false);
       }
     };
 
-    fetchWinner();
-  }, [currentMajorDraw?._id, refetch]);
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
-          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 truncate">
-            Major Draw
-          </h2>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-4 animate-pulse">
-              <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded mb-2 w-1/2"></div>
-              <div className="h-8 bg-gray-200 dark:bg-neutral-700 rounded mb-2 w-3/4"></div>
-              <div className="h-3 bg-gray-200 dark:bg-neutral-700 rounded w-1/2"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !currentMajorDraw) {
-    return (
-      <div className="space-y-4 sm:space-y-6">
-        <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white">Major Draw</h2>
-        <div className="bg-red-50 dark:bg-red-950/40 border-2 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <div>
-            <p className="font-bold">Error Loading Major Draw</p>
-            <p className="text-sm mt-1 text-red-800 dark:text-red-200">Failed to load major draw data. Please try again.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const majorDraw = currentMajorDraw;
-
-  // Check if draw is frozen or completed
-  const isFrozen = majorDraw.status === "frozen" || majorDraw.status === "completed";
-  const canExport = majorDraw.status !== "cancelled";
-  const canSelectWinner = (majorDraw.status === "frozen" || majorDraw.status === "completed") && !currentWinner;
-
-  // Calculate time until draw
-  const timeUntilDraw = majorDraw.drawDate
-    ? Math.max(0, new Date(majorDraw.drawDate).getTime() - new Date().getTime())
-    : 0;
-
-  const getStatusBadge = () => {
-    switch (majorDraw.status) {
-      case "active":
-        return (
-          <AdminBadge
-            variant="success"
-            icon={CheckCircle}
-            iconClassName="text-emerald-600 dark:text-emerald-400"
-            className="text-sm py-1.5 px-3"
-          >
-            Active
-          </AdminBadge>
-        );
-      case "frozen":
-        return (
-          <AdminBadge variant="info" icon={Lock} iconClassName="text-sky-600 dark:text-sky-300" className="text-sm py-1.5 px-3">
-            Frozen
-          </AdminBadge>
-        );
-      case "completed":
-        return (
-          <AdminBadge variant="neutral" icon={CheckCircle} className="text-sm py-1.5 px-3">
-            Completed
-          </AdminBadge>
-        );
-      case "queued":
-        return (
-          <AdminBadge variant="warning" icon={Clock} className="text-sm py-1.5 px-3">
-            Queued
-          </AdminBadge>
-        );
-      case "cancelled":
-        return (
-          <AdminBadge variant="danger" icon={XCircle} className="text-sm py-1.5 px-3">
-            Cancelled
-          </AdminBadge>
-        );
-      default:
-        return null;
-    }
-  };
+    void fetchWinner();
+  }, [drawId, refetch]);
 
   /**
-   * Handle CSV/Excel export
+   * Revenue for THIS draw + the next queued draw's activation date, both read
+   * from the existing history endpoint — no new route.
    */
-  const handleExport = async (format: "csv" | "excel") => {
-    if (!canExport) {
-      showToast({
-        type: "error",
-        title: "Export Not Available",
-        message: "Cannot export cancelled draws",
-        duration: 5000,
-      });
-      return;
-    }
+  useEffect(() => {
+    if (!drawId) return;
+    let cancelled = false;
 
-    setIsExporting(true);
-    try {
-      const response = await fetch(`/api/admin/major-draw/export?format=${format}&majorDrawId=${majorDraw._id}`);
+    const load = async () => {
+      try {
+        const [selfRes, nextRes] = await Promise.all([
+          fetch(`/api/admin/major-draw/history?limit=100`),
+          fetch(`/api/admin/major-draw/history?status=queued&sortBy=drawDate&sortOrder=asc&limit=1`),
+        ]);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Export failed" }));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        if (selfRes.ok) {
+          const selfData = await selfRes.json();
+          const match = selfData?.data?.draws?.find((d: { _id: string }) => d._id === drawId);
+          if (!cancelled && match) {
+            setDrawRevenue({ revenue: match.revenue ?? 0, perEntry: match.revenuePerEntry ?? null });
+          }
+        }
+
+        if (nextRes.ok) {
+          const nextData = await nextRes.json();
+          const next = nextData?.data?.draws?.[0];
+          if (!cancelled) setNextDrawActivation(next?.activationDate ?? null);
+        }
+      } catch (err) {
+        // Supporting figures only — never block the page on them.
+        console.error("Error loading draw revenue / next draw:", err);
       }
+    };
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `major-draw-export-${majorDraw.name}-${new Date().toISOString().split("T")[0]}.${
-        format === "excel" ? "xlsx" : "csv"
-      }`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-
-      showToast({
-        type: "success",
-        title: "Export Successful!",
-        message: `Successfully exported ${majorDraw.name} to ${format.toUpperCase()} format`,
-        duration: 5000,
-      });
-    } catch (error) {
-      console.error("Export error:", error);
-
-      const errorMessage = error instanceof Error ? error.message : "Failed to export data. Please try again.";
-      showToast({
-        type: "error",
-        title: "Export Failed",
-        message: errorMessage,
-        duration: 7000,
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [drawId]);
 
   /**
-   * Handle winner selection from modal
+   * Top three entrants. Correct only because the participants route now sorts
+   * BEFORE paginating (docs/admin/api.md, 2026-07-30) — previously `?limit=3`
+   * returned the first three in insertion order.
    */
+  useEffect(() => {
+    if (!drawId) return;
+    let cancelled = false;
+
+    const load = async () => {
+      setIsLoadingPool(true);
+      try {
+        const res = await fetch(`/api/admin/major-draw/participants?majorDrawId=${drawId}&limit=3`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
+        setTopEntrants(
+          (data?.data?.participants ?? []).map(
+            (p: { userId: string; firstName: string; lastName: string; totalEntries: number }) => ({
+              userId: p.userId,
+              name: `${p.firstName} ${p.lastName}`.trim() || "Unnamed entrant",
+              entries: p.totalEntries,
+            })
+          )
+        );
+      } catch (err) {
+        console.error("Error loading top entrants:", err);
+        if (!cancelled) setTopEntrants([]);
+      } finally {
+        if (!cancelled) setIsLoadingPool(false);
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [drawId]);
+
+  /** Handle winner selection from modal */
   const handleWinnerSelected = async (winnerData: WinnerSelectionData) => {
-    if (winnerData.drawType !== "major") {
-      return;
-    }
+    if (winnerData.drawType !== "major" || !currentMajorDraw) return;
 
     setIsSubmitting(true);
     try {
@@ -362,63 +280,38 @@ export default function MajorDrawManagement() {
         majorDrawId: winnerData.drawId,
         winnerUserId: winnerData.winnerUserId,
       };
-      
-      // Explicitly include imageUrl if it exists (check for truthy string)
-      if (winnerData.imageUrl && typeof winnerData.imageUrl === 'string' && winnerData.imageUrl.trim() !== '') {
+
+      if (winnerData.imageUrl && typeof winnerData.imageUrl === "string" && winnerData.imageUrl.trim() !== "") {
         requestBody.imageUrl = winnerData.imageUrl.trim();
-      } else {
-        console.warn("⚠️ [MajorDrawManagement] No imageUrl in winnerData:", {
-          hasImageUrl: !!winnerData.imageUrl,
-          imageUrlType: typeof winnerData.imageUrl,
-          imageUrlValue: winnerData.imageUrl,
-          winnerDataKeys: Object.keys(winnerData),
-        });
       }
-
-      // Include testimony and selectedPrizeSlug if provided
-      if (winnerData.testimony !== undefined) {
-        requestBody.testimony = winnerData.testimony || undefined;
-      }
-      if (winnerData.selectedPrize !== undefined) {
-        requestBody.selectedPrize = winnerData.selectedPrize;
-      }
-
-      if (winnerData.drawResultUrl !== undefined) {
-        requestBody.drawResultUrl = winnerData.drawResultUrl;
-      }
+      if (winnerData.testimony !== undefined) requestBody.testimony = winnerData.testimony || undefined;
+      if (winnerData.selectedPrize !== undefined) requestBody.selectedPrize = winnerData.selectedPrize;
+      if (winnerData.drawResultUrl !== undefined) requestBody.drawResultUrl = winnerData.drawResultUrl;
 
       const response = await fetch("/api/admin/major-draw/select-winner", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to select winner");
-      }
+      if (!response.ok) throw new Error(data.error || "Failed to select winner");
 
       showToast({
         type: "success",
         title: "Winner Recorded Successfully!",
-        message: `Winner has been recorded for ${majorDraw.name}`,
+        message: `Winner has been recorded for ${currentMajorDraw.name}`,
         duration: 5000,
       });
 
       setIsWinnerModalOpen(false);
-      // Refetch winner from Winner model - trigger the useEffect to reload
       refetch();
-    } catch (error) {
-      console.error("Winner selection error:", error);
-
-      const errorMessage = error instanceof Error ? error.message : "Failed to record winner. Please try again.";
+    } catch (err) {
+      console.error("Winner selection error:", err);
       showToast({
         type: "error",
         title: "Failed to Record Winner",
-        message: errorMessage,
+        message: err instanceof Error ? err.message : "Failed to record winner. Please try again.",
         duration: 7000,
       });
     } finally {
@@ -426,256 +319,297 @@ export default function MajorDrawManagement() {
     }
   };
 
-  return (
-    <div className="space-y-4 sm:space-y-6">
-   
-      {/* Message Display */}
-      {message && (
-        <div
-          className={`px-4 sm:px-6 py-3 sm:py-4 rounded-xl border-2 flex items-center gap-3 ${
-            message.type === "success"
-              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300"
-              : "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-800 dark:text-red-300"
-          }`}
-        >
-          {message.type === "success" ? (
-            <CheckCircle className="w-5 h-5 flex-shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          )}
-          <span className="text-sm font-medium flex-1">{message.text}</span>
-          <button
-            onClick={() => setMessage(null)}
-            className="text-current hover:opacity-70 transition-opacity p-1 rounded-full hover:bg-white/50 dark:hover:bg-neutral-800/60"
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
-        </div>
-      )}
+  // ── Derived display values ──────────────────────────────────────────────
+  const majorDraw = currentMajorDraw;
 
-      {/* Main Draw Card */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+  const isFrozen = majorDraw?.status === "frozen" || majorDraw?.status === "completed";
+  const canExport = majorDraw?.status !== "cancelled";
+  const canSelectWinner = (majorDraw?.status === "frozen" || majorDraw?.status === "completed") && !currentWinner;
+
+  const timeUntilDraw = majorDraw?.drawDate ? Math.max(0, new Date(majorDraw.drawDate).getTime() - Date.now()) : 0;
+
+  const ribbonStats: RibbonStat[] = useMemo(() => {
+    const participants = majorDraw?.totalParticipants ?? 0;
+    const entries = majorDraw?.totalEntries ?? 0;
+    return [
+      {
+        label: "Participants",
+        value: participants.toLocaleString(),
+        sub: participants > 0 ? `${(entries / participants).toFixed(1)} avg entries` : undefined,
+      },
+      // No sub-line: the design shows a 24-hour delta, but no such figure exists
+      // in the data and inventing one would put a fabricated number on an ops screen.
+      { label: "Entries", value: entries.toLocaleString() },
+      {
+        label: "Draw revenue",
+        value: drawRevenue ? currency(drawRevenue.revenue) : "—",
+        sub: drawRevenue?.perEntry != null ? `${currencyPrecise(drawRevenue.perEntry)} per entry` : undefined,
+        tone: "positive",
+      },
+      {
+        label: "Draws in",
+        value: formatTimeUntilDraw(timeUntilDraw),
+        sub: majorDraw?.freezeEntriesAt ? `freezes ${fmt(majorDraw.freezeEntriesAt, "h:mm a")}` : undefined,
+        tone: "urgent",
+      },
+    ];
+  }, [majorDraw, drawRevenue, timeUntilDraw]);
+
+  /** Activation → draw as a 0–100 bar. */
+  const progressPercent = useMemo(() => {
+    if (!majorDraw?.activationDate || !majorDraw?.drawDate) return 0;
+    const start = new Date(majorDraw.activationDate).getTime();
+    const end = new Date(majorDraw.drawDate).getTime();
+    if (end <= start) return 100;
+    return ((Date.now() - start) / (end - start)) * 100;
+  }, [majorDraw?.activationDate, majorDraw?.drawDate]);
+
+  const gates: DrawGate[] = useMemo(
+    () => [
+      {
+        label: "Entries open",
+        time: fmt(majorDraw?.activationDate),
+        note: "Draw opened; renewals routed into this pool.",
+        current: majorDraw?.status === "active",
+      },
+      {
+        label: "Entries freeze",
+        time: fmt(majorDraw?.freezeEntriesAt),
+        note: "Purchases route to the next draw. Config locks automatically.",
+        current: majorDraw?.status === "frozen",
+      },
+      {
+        label: "Draw live on Facebook",
+        time: fmt(majorDraw?.drawDate),
+        note: "Export the locked entry list to randomdraws.com.au.",
+        current: majorDraw?.status === "completed",
+      },
+      {
+        label: "Next draw opens",
+        time: fmt(nextDrawActivation),
+        note: nextDrawActivation
+          ? "Gap window ends; the next draw opens for entries."
+          : "No draw is queued yet — schedule one before this draw closes.",
+      },
+    ],
+    [majorDraw, nextDrawActivation]
+  );
+
+  // ── States ──────────────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <DrawsPageShell>
+        <div className="admin-draws-skeleton h-[190px] rounded-[14px]" aria-busy="true" />
+        <div className="grid grid-cols-[var(--m-majorCols)] gap-[var(--m-gap)]">
+          <div className="admin-draws-skeleton h-[220px] rounded-[11px]" />
+          <div className="admin-draws-skeleton h-[220px] rounded-[11px]" />
+        </div>
+      </DrawsPageShell>
+    );
+  }
+
+  if (error || !majorDraw) {
+    return (
+      <DrawsPageShell>
+        <div className="flex items-start gap-[10px] rounded-[var(--m-radius)] border border-[var(--danger-line)] bg-[var(--danger-bg)] px-[14px] py-[12px]">
+          <AlertCircle className="mt-[1px] h-[18px] w-[18px] shrink-0 text-[var(--danger)]" aria-hidden />
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Trophy className="w-6 h-6 text-red-600" />
-              {getStatusBadge()}
-            </div>
-            <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-1">{majorDraw.name}</h3>
-            <div
-              className="text-gray-600 dark:text-neutral-400 text-sm [&_p]:my-0 line-clamp-2"
-              dangerouslySetInnerHTML={{ __html: majorDraw.description || "Monthly Major Draw" }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        {/* Participants Card */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-neutral-400">Participants</span>
-            <Users className="w-4 h-4 text-blue-600" />
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{majorDraw.totalParticipants || 0}</p>
-          <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">{majorDraw.totalEntries || 0} total entries</p>
-          <button
-            onClick={() => setIsParticipantsModalOpen(true)}
-            className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-          >
-            <Users className="w-4 h-4" />
-            View Participants
-          </button>
-        </div>
-
-        {/* Draw Date Card */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-neutral-400">Draw Date</span>
-            <Calendar className="w-4 h-4 text-emerald-600" />
-          </div>
-          <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-            {majorDraw.drawDate ? formatDateInAEST(new Date(majorDraw.drawDate), "MMM dd, yyyy") : "Not set"}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-neutral-400">
-            {majorDraw.drawDate ? formatDateInAEST(new Date(majorDraw.drawDate), "h:mm a") : "Time TBD"}
-          </p>
-        </div>
-
-        {/* Countdown Card */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs sm:text-sm font-semibold text-gray-600 dark:text-neutral-400">Time Until Draw</span>
-            <Clock className="w-4 h-4 text-purple-600" />
-          </div>
-          <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">
-            {timeUntilDraw > 0 ? formatCountdown(timeUntilDraw) : "Completed"}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-neutral-400">{isFrozen ? "Entries frozen" : "Entries active"}</p>
-        </div>
-      </div>
-
-      {/* Prize Information */}
-      {activePrize && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">Prize Information</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <div className="bg-gray-50 dark:bg-neutral-800/50 rounded-lg p-3 sm:p-4 border border-gray-100 dark:border-neutral-700">
-              <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1">Prize Name</p>
-              <p className="text-base sm:text-lg font-bold text-gray-900 dark:text-white">{activePrize.label}</p>
-            </div>
-            <div className="bg-emerald-50 dark:bg-emerald-950/40 rounded-lg p-3 sm:p-4 border border-emerald-100 dark:border-emerald-800/60">
-              <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1">Value</p>
-              <p className="text-base sm:text-lg font-bold text-emerald-700 dark:text-emerald-400">
-                {activePrize.prizeValueLabel ?? "See Prize Options"}
-              </p>
-            </div>
-            {activePrize.detailedDescription && (
-              <div className="sm:col-span-2 bg-blue-50 dark:bg-blue-950/40 rounded-lg p-3 sm:p-4 border border-blue-100 dark:border-blue-800/60">
-                <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1">Description</p>
-                <p className="text-sm text-gray-600 dark:text-neutral-300 leading-relaxed">{activePrize.detailedDescription}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Export Actions */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2">Export Participants</h3>
-        <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
-          Export all participants and their entry counts for the current draw in your preferred format.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => handleExport("csv")}
-            disabled={isExporting || !canExport}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            {isExporting ? "Exporting..." : "Export CSV"}
-          </button>
-          <button
-            onClick={() => handleExport("excel")}
-            disabled={isExporting || !canExport}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            {isExporting ? "Exporting..." : "Export Excel"}
-          </button>
-          <button
-            onClick={() => refetch()}
-            className="flex items-center gap-2 px-4 py-2.5 border-2 border-gray-300 dark:border-neutral-600 text-gray-600 dark:text-neutral-300 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors text-sm font-medium"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {/* Winner Selection */}
-      {canSelectWinner && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-          <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-2">Record Winner</h3>
-          <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
-            Select the winner using our enhanced user search and selection system.
-          </p>
-          {canSelectMajorWinner && (
-            <button
-              onClick={() => setIsWinnerModalOpen(true)}
-              disabled={isSubmitting}
-              className="w-full px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold flex items-center justify-center gap-2"
-            >
-              <UserPlus className="w-5 h-5" />
-              {isSubmitting ? "Processing..." : "Select Winner"}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Winner Display */}
-      {currentWinner && (
-        <div className="bg-amber-50 dark:bg-amber-950/35 rounded-xl shadow-sm dark:shadow-none border border-amber-200 dark:border-amber-800/60 p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-amber-600" />
-                Winner Selected
-              </h3>
-              {currentWinner.winnerId && canEditMajor && (
-                <button
-                  onClick={() => setIsEditWinnerModalOpen(true)}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 w-full sm:w-auto transition-colors"
-                >
-                  <UserPlus className="w-4 h-4" />
-                  Edit Winner
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Winner User ID</p>
-                <p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">{currentWinner.userId}</p>
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Entry Number</p>
-                <p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">{currentWinner.entryNumber || "N/A"}</p>
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Selection Method</p>
-                <p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base capitalize">
-                  {currentWinner.selectionMethod || "N/A"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">Selected At</p>
-                <p className="font-semibold text-gray-900 dark:text-white text-sm sm:text-base">
-                  {currentWinner.selectedDate
-                    ? formatDateInAEST(currentWinner.selectedDate, "MMM dd, yyyy h:mm a")
-                    : "N/A"}
-                </p>
-              </div>
-            </div>
-          {currentWinner.selectedPrize && (
-            <div className="mt-4 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-amber-200 dark:border-amber-800/60">
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-1">Selected Prize</p>
-              <p className="font-semibold text-gray-900 dark:text-white">{currentWinner.selectedPrize}</p>
-            </div>
-          )}
-          {currentWinner.testimony && (
-            <div className="mt-4 p-3 bg-white dark:bg-neutral-900 rounded-lg border border-amber-200 dark:border-amber-800/60">
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400 mb-1">Testimony Preview</p>
-              <p className="text-sm text-gray-600 dark:text-neutral-300 line-clamp-3">{currentWinner.testimony}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Configuration Lock Warning */}
-      {majorDraw.configurationLocked && (
-        <div className="bg-blue-50 dark:bg-blue-950/40 border-2 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 px-4 py-3 rounded-xl flex items-center gap-2">
-          <Lock className="w-5 h-5 flex-shrink-0" />
-          <div>
-            <p className="font-semibold text-sm sm:text-base">Configuration Locked</p>
-            <p className="text-xs sm:text-sm text-blue-800 dark:text-blue-200">
-              This draw&apos;s configuration is locked and cannot be modified until after the draw is completed.
+            <p className="font-poppins text-[14px] font-bold text-[var(--danger)]">Couldn&apos;t load the major draw</p>
+            <p className="mt-[3px] text-[12.5px] leading-[1.6] text-[var(--text2)]">
+              Nothing has changed — retrying is safe.
             </p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="mt-[10px] flex h-[var(--m-btn-h)] items-center rounded-[9px] bg-[var(--accent)] px-[15px] text-[12.5px] font-semibold text-white"
+            >
+              Try again
+            </button>
           </div>
         </div>
-      )}
+      </DrawsPageShell>
+    );
+  }
 
-      {/* Instructions */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">Admin Instructions</h3>
-        <ul className="text-xs sm:text-sm text-gray-600 dark:text-neutral-300 space-y-1 list-disc list-inside">
-            <li>Export buttons are available anytime to download participant data</li>
-            <li>Entries freeze automatically 30 minutes before the draw date</li>
-            <li>Winner selection is only available after the draw has been frozen or completed</li>
-            <li>Use the enhanced user search to find and select winners easily</li>
-            <li>Configuration becomes locked when entries are frozen</li>
+  const statusWord =
+    majorDraw.status === "active"
+      ? "ENTRIES OPEN"
+      : majorDraw.status === "frozen"
+        ? "ENTRIES FROZEN"
+        : majorDraw.status === "completed"
+          ? "DRAW COMPLETE"
+          : majorDraw.status === "queued"
+            ? "QUEUED"
+            : "CANCELLED";
+  const statusEyebrow = `${statusWord} · ${majorDraw.configurationLocked ? "CONFIG LOCKED" : "CONFIG UNLOCKED"}`;
+
+  // 38px is the design's ribbon-specific button height, but ONLY above the
+  // breakpoint — these are tappable, so below it they take --m-btn-h (44px) like
+  // every other control. A bare h-[38px] here would be the one sub-44px target
+  // on the page.
+  const showMobileActionBar =
+    (canSelectWinner && canSelectMajorWinner) || Boolean(currentWinner?.winnerId && canEditMajor);
+
+  const ribbonButton =
+    "flex h-[var(--m-btn-h)] draws:h-[38px] w-[var(--m-ribbonBtnW)] items-center justify-center gap-[7px] rounded-[9px] px-[14px] text-[12.5px] font-semibold";
+
+  return (
+    <DrawsPageShell>
+      <DrawStatusRibbon
+        eyebrow={statusEyebrow}
+        title={majorDraw.name || "Untitled draw"}
+        subtitle={`Draws ${fmt(majorDraw.drawDate, "d MMM yyyy · h:mm a") ?? "date TBC"} · entries freeze ${
+          fmt(majorDraw.freezeEntriesAt, "h:mm a") ?? "TBC"
+        } AEST`}
+        stats={ribbonStats}
+        progressPercent={progressPercent}
+        // Mobile: Export is a quiet icon in the top-right. It is a secondary
+        // action, and the labelled buttons all live in the pinned bottom bar.
+        utility={
+          canExport ? (
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              aria-label="Export entry pool"
+              title="Export pool"
+              className="flex h-[var(--m-icon)] w-[var(--m-icon)] items-center justify-center rounded-[9px] border border-[var(--ribbon-ghost-line)] text-white hover:bg-white/10"
+            >
+              <Download className="h-[17px] w-[17px]" />
+            </button>
+          ) : null
+        }
+        actions={
+          <>
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(true)}
+                className={`${ribbonButton} border border-[var(--ribbon-ghost-line)] bg-transparent text-white hover:bg-white/10`}
+              >
+                <Download className="h-[15px] w-[15px]" />
+                Export pool
+              </button>
+            )}
+            {canSelectWinner && canSelectMajorWinner && (
+              <button
+                type="button"
+                onClick={() => setIsWinnerModalOpen(true)}
+                disabled={isSubmitting}
+                className={`${ribbonButton} bg-[#ee0000] text-white hover:opacity-90 disabled:opacity-60`}
+              >
+                <Trophy className="h-[15px] w-[15px]" />
+                {isSubmitting ? "Recording…" : "Record winner"}
+              </button>
+            )}
+            {currentWinner?.winnerId && canEditMajor && (
+              <button
+                type="button"
+                onClick={() => setIsEditWinnerModalOpen(true)}
+                className={`${ribbonButton} border border-[var(--ribbon-ghost-line)] bg-transparent text-white hover:bg-white/10`}
+              >
+                Edit winner
+              </button>
+            )}
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-[var(--m-majorCols)] items-start gap-[var(--m-gap)]">
+        {/* Prize — READ-ONLY on purpose. It renders the STATIC config prize
+            (src/config/prizes), while MajorDraw.prize in the DB is @deprecated.
+            An "Edit prize" button here would edit a DIFFERENT field than the one
+            shown, so it is deliberately absent. Do not add it back without first
+            resolving which prize is canonical. */}
+        {activePrize && (
+          <section className="rounded-[11px] border border-[var(--line)] bg-[var(--panel)] p-[14px] shadow-[var(--shadow)]">
+            <h3 className="font-poppins text-[15px] font-bold text-[var(--text)]">This month&apos;s prize</h3>
+            <div className="mt-[12px] flex flex-col gap-[12px] draws:flex-row">
+              <div className="h-[96px] w-[96px] shrink-0 rounded-[9px] bg-[var(--panel2)]" aria-hidden />
+              <div className="min-w-0">
+                <div className="font-poppins text-[17px] font-bold leading-[1.25] text-[var(--text)]">
+                  {activePrize.label}
+                </div>
+                {activePrize.detailedDescription && (
+                  <p className="mt-[5px] text-[13px] leading-[1.6] text-[var(--text2)]">
+                    {activePrize.detailedDescription}
+                  </p>
+                )}
+                <dl className="mt-[12px] grid grid-cols-2 gap-[8px]">
+                  <div className="rounded-[9px] border border-[var(--line)] bg-[var(--panel2)] px-[10px] py-[8px]">
+                    <dt className="text-[10px] font-semibold uppercase tracking-[.1em] text-[var(--text3)]">
+                      Prize value
+                    </dt>
+                    <dd data-figure className="mt-[2px] font-poppins text-[15px] font-bold text-[var(--ok)]">
+                      {activePrize.prizeValueLabel ?? "See prize options"}
+                    </dd>
+                  </div>
+                  <div className="rounded-[9px] border border-[var(--line)] bg-[var(--panel2)] px-[10px] py-[8px]">
+                    <dt className="text-[10px] font-semibold uppercase tracking-[.1em] text-[var(--text3)]">Status</dt>
+                    <dd className="mt-[2px] font-poppins text-[15px] font-bold text-[var(--text)]">
+                      {isFrozen ? "Entries frozen" : "Entries active"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <DrawGatesCard gates={gates} />
+      </div>
+
+      <div className="grid grid-cols-[var(--m-majorCols)] items-start gap-[var(--m-gap)]">
+        <EntryPoolCard
+          entrants={topEntrants}
+          isLoading={isLoadingPool}
+          onViewParticipants={() => setIsParticipantsModalOpen(true)}
+          onOpenEntrant={openUserModal}
+        />
+
+        <section className="rounded-[11px] border border-[var(--line)] bg-[var(--panel)] p-[14px] shadow-[var(--shadow)]">
+          <h3 className="font-poppins text-[15px] font-bold text-[var(--text)]">Rules</h3>
+          <ul className="mt-[10px] list-outside list-disc space-y-[5px] pl-[16px]">
+            {DRAW_RULES.map((rule) => (
+              <li key={rule} className="text-[12.5px] leading-[1.7] text-[var(--text2)]">
+                {rule}
+              </li>
+            ))}
           </ul>
-        </div>
+        </section>
+      </div>
+
+      {/* Mobile bottom action bar. The ribbon's actions scroll away on a phone,
+          and on draw night the two that matter must stay reachable. Hidden at
+          `draws:` where the ribbon buttons are always visible.
+          `pb-[env(safe-area-inset-bottom)]` keeps it clear of the iOS home bar. */}
+      {/* Export is NOT repeated here — it is the ribbon's top-right icon on
+          mobile. This bar carries only the actions that warrant a labelled,
+          always-reachable target on draw night. Rendered only when it has
+          something in it, or the border + padding leave a stray strip. */}
+      {showMobileActionBar && (
+      <div className="sticky bottom-0 -mx-[var(--m-pad)] -mb-[var(--m-pad)] mt-[var(--m-gap)] flex items-center gap-[8px] border-t border-[var(--line)] bg-[var(--panel)] px-[var(--m-pad)] py-[8px] pb-[calc(8px+env(safe-area-inset-bottom))] draws:hidden">
+        {canSelectWinner && canSelectMajorWinner && (
+          <button
+            type="button"
+            onClick={() => setIsWinnerModalOpen(true)}
+            disabled={isSubmitting}
+            className="flex h-[var(--m-btn-h)] flex-1 items-center justify-center gap-[7px] rounded-[9px] bg-[var(--accent)] text-[13px] font-semibold text-white disabled:opacity-60"
+          >
+            <Trophy className="h-[16px] w-[16px]" />
+            {isSubmitting ? "Recording…" : "Record winner"}
+          </button>
+        )}
+        {currentWinner?.winnerId && canEditMajor && (
+          <button
+            type="button"
+            onClick={() => setIsEditWinnerModalOpen(true)}
+            className="flex h-[var(--m-btn-h)] flex-1 items-center justify-center rounded-[9px] border border-[var(--line)] bg-[var(--panel)] text-[13px] font-semibold text-[var(--text)]"
+          >
+            Edit winner
+          </button>
+        )}
+      </div>
+      )}
 
       {/* Winner Selection Modal */}
       <WinnerSelectionModal
@@ -726,6 +660,17 @@ export default function MajorDrawManagement() {
         majorDrawId={majorDraw._id || ""}
         majorDrawName={majorDraw.name || ""}
       />
-    </div>
+
+      {/* Export pool. The old page had two bare CSV/Excel buttons; the design
+          routes both through the format-picker modal, which already owns the
+          same /api/admin/major-draw/export download. */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        majorDrawId={majorDraw._id || ""}
+        majorDrawName={majorDraw.name || ""}
+        totalParticipants={majorDraw.totalParticipants ?? majorDraw.totalEntries ?? 0}
+      />
+    </DrawsPageShell>
   );
 }

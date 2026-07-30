@@ -77,3 +77,31 @@ setTimeout(() => doSomething(useStore.getState().items), 1000);
 ## Banner-text hook: no client `cache:"no-store"` (2026-07-19)
 
 `useActivePromoBannerText` dropped its `cache: "no-store"` fetch option — the route serves `s-maxage=60` now and the CDN should absorb the polling. Don't re-add no-store to hooks whose endpoints are deliberately CDN-cached; React Query's staleTime/refetchInterval already governs client freshness.
+
+## A query hook can point at a route that doesn't exist — `useMajorDrawStats` removed (2026-07-30)
+
+`useMajorDrawStats()` in [`useMajorDrawQueries.ts`](../../src/hooks/queries/useMajorDrawQueries.ts)
+fetched `/api/major-draw/stats`. **That route has never existed** (`src/app/api/major-draw/`
+contains `completed`, `next`, `route.ts`, `select-winner`, `user-entries`). Nothing called the
+hook — it was only re-exported from `hooks/queries/index.ts` — so the dead endpoint never
+produced a visible 404 and the hook survived indefinitely.
+
+The cost was not the dead code. Its `MajorDrawStats` interface declared `totalRevenue`,
+`topParticipants` and `dailyEntries[].revenue`, so during the admin draws audit **per-draw
+revenue looked already-implemented** when no such aggregation existed anywhere in the app. A
+type with no backing implementation is worse than no type: it reads as a contract.
+
+Both the hook and the interface are deleted. Real per-draw revenue now lives in
+[`src/services/admin/drawRevenue.ts`](../../src/services/admin/drawRevenue.ts).
+
+**Two lessons for this folder:**
+
+1. **A `useQuery` hook is not evidence its endpoint exists.** TanStack Query hooks fail at
+   runtime, not compile time, and an uncalled hook never runs. When trusting a hook's shape as a
+   description of available data, check the route file exists.
+2. **`useMajorDrawStats` and `useUserMajorDrawStats` are one word apart.** The second is very much
+   alive — `/my-account`, `/rewards` and the header entry badge all read it, and it is the
+   write-target for the optimistic "+N entries" ecosystem. When deleting near-identically named
+   hooks, grep for the *exact* identifier with a word boundary; a substring grep for
+   `MajorDrawStats` matches `userMajorDrawStats` at ~30 live call sites and an unrelated
+   `src/components/sections/MajorDrawStats.tsx` component.

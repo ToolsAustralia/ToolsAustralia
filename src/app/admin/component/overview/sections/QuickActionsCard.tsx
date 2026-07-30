@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Card, SectionTitle } from "@/components/admin/ui";
-import AdminMajorDrawModal from "@/components/modals/AdminMajorDrawModal";
+import AdminMajorDrawModal from "@/components/modals/draws/AdminMajorDrawModal";
 
 /**
  * Quick actions grid for the admin Overview.

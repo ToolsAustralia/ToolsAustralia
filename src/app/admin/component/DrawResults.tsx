@@ -1,34 +1,20 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  Trophy,
-  Calendar,
-  DollarSign,
-  Users,
-  Search,
-  Download,
-  UserPlus,
-  UserX,
-  CheckCircle,
-  AlertCircle,
-  Edit,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
-import { Button, Input, Select } from "@/components/modals/ui";
-import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
+import { useDebounce } from "@/hooks/useDebounce";
 import { formatDateInAEST } from "@/utils/common/timezone";
-import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
-import WinnerEditModal from "@/components/modals/WinnerEditModal";
-import ExportModal from "@/components/modals/ExportModal";
-import MajorDrawEditModal from "@/components/modals/MajorDrawEditModal";
-import { DrawWinnerOutcomeBadge, MajorDrawTableStatusBadge } from "@/components/admin/ui/AdminBadge";
+import {
+  WinnerSelectionModal,
+  WinnerEditModal,
+  ExportModal,
+  MajorDrawEditModal,
+  type WinnerSelectionData,
+} from "@/components/modals/draws";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
-import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
+import { DrawsListPage, type DrawGroup, type DrawRow } from "@/components/admin/draws";
+import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 
 // Import MajorDrawData type from modal
 type MajorDrawData = {
@@ -86,6 +72,10 @@ interface DrawResult {
     terms?: string[];
   };
   totalEntries: number;
+  /** Derived net revenue — see src/services/admin/drawRevenue.ts. */
+  revenue: number;
+  /** null (never Infinity/NaN) when the draw has no entries. */
+  revenuePerEntry: number | null;
   winner?: {
     winnerId?: string;
     userId: string;
@@ -122,20 +112,11 @@ interface DrawResultsResponse {
       hasPrevPage: boolean;
       limit: number;
     };
-    filters: {
-      status?: string;
-      hasWinner?: string;
-      category?: string;
-      search?: string;
-      dateFrom?: string;
-      dateTo?: string;
-      sortBy: string;
-      sortOrder: string;
-    };
     stats: {
       totalDraws: number;
       totalEntries: number;
       totalPrizeValue: number;
+      totalRevenue: number;
       drawsWithWinners: number;
       drawsWithoutWinners: number;
       winnerSelectionRate: number;
@@ -143,39 +124,57 @@ interface DrawResultsResponse {
   };
 }
 
-const STATUS_OPTIONS = [
-  { value: "", label: "All Statuses" },
-  { value: "completed", label: "Completed" },
-  { value: "frozen", label: "Frozen" },
-  { value: "active", label: "Active" },
-  { value: "queued", label: "Queued" },
-  { value: "cancelled", label: "Cancelled" },
+const HISTORY_ENDPOINT = "/api/admin/major-draw/history";
+
+// Dropdown label ↔ API value. The design specifies human labels in the filter
+// menus; the API takes enum values, so the two are mapped rather than letting
+// display strings leak into query params.
+const STATUS_OPTIONS: Array<{ label: string; value: string }> = [
+  { label: "Completed", value: "completed" },
+  { label: "Frozen", value: "frozen" },
+  { label: "Cancelled", value: "cancelled" },
+  { label: "All", value: "" },
 ];
 
-const WINNER_OPTIONS = [
-  { value: "", label: "All Draws" },
-  { value: "true", label: "With Winner" },
-  { value: "false", label: "Without Winner" },
+const WINNER_OPTIONS: Array<{ label: string; value: string }> = [
+  { label: "Any", value: "" },
+  { label: "Published", value: "true" },
+  { label: "Outstanding", value: "false" },
 ];
 
-const CATEGORY_OPTIONS = [
-  { value: "", label: "All Categories" },
-  { value: "vehicle", label: "Vehicle" },
-  { value: "electronics", label: "Electronics" },
-  { value: "travel", label: "Travel" },
-  { value: "cash", label: "Cash" },
-  { value: "experience", label: "Experience" },
-  { value: "home", label: "Home & Garden" },
-  { value: "fashion", label: "Fashion" },
-  { value: "sports", label: "Sports" },
-  { value: "other", label: "Other" },
-];
+// No sort control. Results are always newest-draw-first, which is the only
+// order this screen is read in; a dropdown for it cost horizontal space in the
+// toolbar without earning it. The API still takes sortBy/sortOrder — they are
+// just fixed below rather than user-selectable.
+const DEFAULT_SORT_BY = "drawDate";
+const DEFAULT_SORT_ORDER = "desc";
+
+const labelFor = (options: Array<{ label: string; value: string }>, value: string) =>
+  options.find((o) => o.value === value)?.label ?? options[0].label;
+const valueFor = (options: Array<{ label: string; value: string }>, label: string) =>
+  options.find((o) => o.label === label)?.value ?? "";
+
+const currency = (amount: number) =>
+  new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(amount);
+
+/** Per-entry needs cents; the KPI and column figures do not. */
+const currencyPrecise = (amount: number) =>
+  new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: 2 }).format(amount);
+
+const compactCurrency = (amount: number) =>
+  amount >= 1_000_000
+    ? `$${(amount / 1_000_000).toFixed(2)}M`
+    : amount >= 10_000
+      ? `$${Math.round(amount / 1000)}K`
+      : currency(amount);
 
 export default function DrawResults() {
   const { showToast } = useToast();
+  const { openUserModal } = useAdminUserModal();
   const [draws, setDraws] = useState<DrawResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -188,6 +187,7 @@ export default function DrawResults() {
     totalDraws: 0,
     totalEntries: 0,
     totalPrizeValue: 0,
+    totalRevenue: 0,
     drawsWithWinners: 0,
     drawsWithoutWinners: 0,
     winnerSelectionRate: 0,
@@ -197,11 +197,14 @@ export default function DrawResults() {
   const [filters, setFilters] = useState({
     status: "",
     hasWinner: "",
-    category: "",
     search: "",
-    sortBy: "drawDate",
-    sortOrder: "desc",
   });
+  // Search hits the API so it spans every page, not just the loaded one.
+  // Debounced because the fetch is keyed on it — otherwise a five-letter query
+  // fires five requests.
+  const debouncedSearch = useDebounce(filters.search, 300);
+  const [openFilterKey, setOpenFilterKey] = useState<string | null>(null);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   // Modals
   const [selectedDraw, setSelectedDraw] = useState<DrawResult | null>(null);
@@ -228,20 +231,24 @@ export default function DrawResults() {
     async (page: number = 1) => {
       setIsLoading(true);
       setError(null);
+      setErrorStatus(null);
 
       try {
         const queryParams = new URLSearchParams({
           page: page.toString(),
           limit: pagination.limit.toString(),
-          sortBy: filters.sortBy,
-          sortOrder: filters.sortOrder,
+          sortBy: DEFAULT_SORT_BY,
+          sortOrder: DEFAULT_SORT_ORDER,
           ...(filters.status && { status: filters.status }),
           ...(filters.hasWinner && { hasWinner: filters.hasWinner }),
-          ...(filters.category && { category: filters.category }),
-          ...(filters.search && { search: filters.search }),
+          ...(debouncedSearch && { search: debouncedSearch }),
         });
 
-        const response = await fetch(`/api/admin/major-draw/history?${queryParams}`);
+        const response = await fetch(`${HISTORY_ENDPOINT}?${queryParams}`);
+        if (!response.ok) {
+          setErrorStatus(response.status);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         const data: DrawResultsResponse = await response.json();
 
         if (data.success) {
@@ -258,28 +265,18 @@ export default function DrawResults() {
         setIsLoading(false);
       }
     },
-    [filters, pagination.limit]
+    [filters.status, filters.hasWinner, debouncedSearch, pagination.limit]
   );
 
-  // Initial load
+  // Initial load + refetch whenever a filter changes
   useEffect(() => {
     fetchDraws();
   }, [fetchDraws]);
 
-  // Handle filter changes
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
-
-  // Handle pagination
   const handlePageChange = (newPage: number) => {
     fetchDraws(newPage);
   };
 
-  // Handle winner selection
   const handleSelectWinner = (draw: DrawResult) => {
     setSelectedDraw(draw);
     setIsWinnerModalOpen(true);
@@ -296,8 +293,7 @@ export default function DrawResults() {
         const allWinnersData = await allWinnersResponse.json();
         if (allWinnersData.success && allWinnersData.winners) {
           const winnerForDraw = allWinnersData.winners.find(
-            (w: { drawId: string; drawType: string }) =>
-              w.drawId === draw._id && w.drawType === "major"
+            (w: { drawId: string; drawType: string }) => w.drawId === draw._id && w.drawType === "major"
           );
 
           if (winnerForDraw) {
@@ -349,7 +345,7 @@ export default function DrawResults() {
         majorDrawId: winnerData.drawId,
         winnerUserId: winnerData.winnerUserId,
       };
-      
+
       if (winnerData.imageUrl) {
         requestBody.imageUrl = winnerData.imageUrl;
       }
@@ -384,7 +380,6 @@ export default function DrawResults() {
       setIsWinnerModalOpen(false);
       setSelectedDraw(null);
 
-      // Show success toast
       showToast({
         type: "success",
         title: "Winner Recorded Successfully!",
@@ -394,7 +389,6 @@ export default function DrawResults() {
     } catch (err) {
       console.error("Error recording winner:", err);
 
-      // Show error toast
       const errorMessage = err instanceof Error ? err.message : "Failed to record winner";
       showToast({
         type: "error",
@@ -471,7 +465,6 @@ export default function DrawResults() {
     }
   };
 
-  // Handle export
   const handleExport = (draw: DrawResult) => {
     setSelectedDraw(draw);
     setIsExportModalOpen(true);
@@ -502,7 +495,6 @@ export default function DrawResults() {
     };
   };
 
-  // Handle edit draw
   const handleEditDraw = (draw: DrawResult) => {
     setEditingDraw(draw);
     setIsEditDrawModalOpen(true);
@@ -527,12 +519,10 @@ export default function DrawResults() {
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      // Refresh the draws list
       await fetchDraws(pagination.currentPage);
       setIsEditDrawModalOpen(false);
       setEditingDraw(null);
 
-      // Show success toast
       showToast({
         type: "success",
         title: "Draw Updated Successfully!",
@@ -542,7 +532,6 @@ export default function DrawResults() {
     } catch (err) {
       console.error("Error updating draw:", err);
 
-      // Show error toast
       const errorMessage = err instanceof Error ? err.message : "Failed to update draw";
       showToast({
         type: "error",
@@ -557,341 +546,277 @@ export default function DrawResults() {
     }
   };
 
-  // Format date in AEST
-  const formatDate = (date: Date | string) => {
-    return formatDateInAEST(new Date(date), "dd MMM yyyy, hh:mm a");
+  const formatDate = (date: Date | string) => formatDateInAEST(new Date(date), "dd MMM yyyy, h:mm a");
+
+  // ── Presentation mapping ────────────────────────────────────────────────
+  const rows: DrawRow[] = useMemo(
+    () =>
+      draws.map((draw) => {
+        const hasWinner = !!(draw.winner && draw.winner.userId);
+        const winnerName = draw.winner?.userDetails
+          ? `${draw.winner.userDetails.firstName} ${draw.winner.userDetails.lastName}`.trim()
+          : hasWinner
+            ? `User ${draw.winner?.userId?.slice(-6)}`
+            : "Awaiting winner";
+
+        return {
+          id: draw._id,
+          name: draw.name,
+          kind: "Major draw",
+          date: formatDate(draw.drawDate),
+          status: draw.status,
+          entries: draw.totalEntries,
+          entriesLabel: draw.totalEntries.toLocaleString(),
+          revenue: draw.revenue ?? 0,
+          revenueLabel: currency(draw.revenue ?? 0),
+          revenuePerEntryLabel:
+            draw.revenuePerEntry == null ? "—" : `${currencyPrecise(draw.revenuePerEntry)} / entry`,
+          prizeValueLabel: draw.prize?.value ? currency(draw.prize.value) : "No prize value",
+          trailing: winnerName,
+          trailingSub: hasWinner
+            ? draw.resultUrl
+              ? "randomdraws · verified"
+              : `Entry #${draw.winner?.entryNumber ?? "—"}`
+            : "needs action",
+          locked: !!draw.configurationLocked,
+          hasWinner,
+        };
+      }),
+    [draws]
+  );
+
+  const selectedRow = rows.find((row) => row.id === selectedRowId) ?? null;
+  const selectedDrawResult = draws.find((draw) => draw._id === selectedRowId) ?? null;
+  const searchTerm = filters.search.trim();
+
+  /**
+   * Results groups by year. With a search active the grouped view collapses
+   * into a single "Search results" group, per the design.
+   */
+  const groups: DrawGroup[] = useMemo(() => {
+    if (searchTerm) {
+      return [
+        {
+          label: "Search results",
+          meta: `${rows.length} ${rows.length === 1 ? "draw matches" : "draws match"} “${searchTerm}”`,
+          rows,
+        },
+      ];
+    }
+
+    const yearOf = new Map(draws.map((d) => [d._id, d.drawDate ? String(new Date(d.drawDate).getFullYear()) : "Undated"]));
+    const byYear = new Map<string, DrawRow[]>();
+    for (const row of rows) {
+      const year = yearOf.get(row.id) ?? "Undated";
+      byYear.set(year, [...(byYear.get(year) ?? []), row]);
+    }
+
+    return [...byYear.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([year, yearRows]) => {
+        const revenue = yearRows.reduce((sum, r) => sum + r.revenue, 0);
+        const outstanding = yearRows.filter((r) => !r.hasWinner).length;
+        const parts = [
+          `${yearRows.length} ${yearRows.length === 1 ? "draw" : "draws"}`,
+          `${currency(revenue)} revenue`,
+        ];
+        if (outstanding > 0) {
+          parts.push(`${outstanding} winner${outstanding === 1 ? "" : "s"} outstanding`);
+        }
+        return { label: year, meta: parts.join(" · "), rows: yearRows };
+      });
+  }, [rows, draws, searchTerm]);
+
+  const dataState = isLoading ? "loading" : error ? "error" : rows.length === 0 ? "empty" : "ready";
+
+  const emptyTitle = searchTerm ? `No draws match “${searchTerm}”` : "No results match these filters";
+  const emptyBody = searchTerm
+    ? "Nothing in the draw history matches that name or description. Clear the search to see every result."
+    : "No completed draw matches this status and winner combination. Clear the filters to see all results.";
+
+  // Clears the query AND the dropdowns — not just the dropdowns.
+  const clearFilters = () => {
+    setFilters({ status: "", hasWinner: "", search: "" });
+    setOpenFilterKey(null);
   };
 
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(amount);
+  const onPickFilter = (key: string, label: string) => {
+    setOpenFilterKey(null);
+    if (key === "status") setFilters((prev) => ({ ...prev, status: valueFor(STATUS_OPTIONS, label) }));
+    if (key === "winner") setFilters((prev) => ({ ...prev, hasWinner: valueFor(WINNER_OPTIONS, label) }));
   };
 
-  if (isLoading && draws.length === 0) {
-    return (
-      <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
-          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 truncate">
-            Draw Results
-          </h2>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-4 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded mb-2 w-1/2"></div>
-              <div className="h-8 bg-gray-200 rounded mb-2 w-3/4"></div>
-              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-            </div>
-          ))}
-        </div>
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6 animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="h-10 bg-gray-200 rounded w-full"></div>
-        </div>
-      </div>
-    );
-  }
+  const drawById = (id: string) => draws.find((draw) => draw._id === id);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-     
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <MetricCard
-          title="Total Draws"
-          value={stats.totalDraws}
-          icon={Trophy}
-          color="blue"
-          subtitle="Completed draws"
-        />
-        <MetricCard
-          title="Total Entries"
-          value={stats.totalEntries.toLocaleString()}
-          icon={Users}
-          color="emerald"
-          subtitle="All entries combined"
-        />
-        <MetricCard
-          title="Total Prize Value"
-          value={formatCurrency(stats.totalPrizeValue)}
-          icon={DollarSign}
-          color="yellow"
-          subtitle="Prize pool value"
-        />
-        <MetricCard
-          title="Winner Rate"
-          value={`${stats.winnerSelectionRate}%`}
-          icon={CheckCircle}
-          color="purple"
-          subtitle="Selection completion"
-        />
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">Filter & Search</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-            <Input
-              placeholder="Search draws..."
-              value={filters.search}
-              onChange={(e) => handleFilterChange("search", e.target.value)}
-              icon={Search}
-            />
-            <Select
-              value={filters.status}
-              onChange={(e) => handleFilterChange("status", e.target.value)}
-              options={STATUS_OPTIONS}
-            />
-            <Select
-              value={filters.hasWinner}
-              onChange={(e) => handleFilterChange("hasWinner", e.target.value)}
-              options={WINNER_OPTIONS}
-            />
-            <Select
-              value={filters.category}
-              onChange={(e) => handleFilterChange("category", e.target.value)}
-              options={CATEGORY_OPTIONS}
-            />
-            <Select
-              value={`${filters.sortBy}-${filters.sortOrder}`}
-              onChange={(e) => {
-                const [sortBy, sortOrder] = e.target.value.split("-");
-                setFilters((prev) => ({ ...prev, sortBy, sortOrder }));
-              }}
-              options={[
-                { value: "drawDate-desc", label: "Draw Date (Newest)" },
-                { value: "drawDate-asc", label: "Draw Date (Oldest)" },
-                { value: "createdAt-desc", label: "Created (Newest)" },
-                { value: "createdAt-asc", label: "Created (Oldest)" },
-                { value: "name-asc", label: "Name (A-Z)" },
-                { value: "name-desc", label: "Name (Z-A)" },
-                { value: "prize.value-desc", label: "Prize Value (High)" },
-                { value: "prize.value-asc", label: "Prize Value (Low)" },
-              ]}
-            />
-          </div>
-        </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-950/40 border-2 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Draws List */}
-      <div className="space-y-3 sm:space-y-4">
-        {draws.map((draw) => {
-            return (
-              <div key={draw._id} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{draw.name}</h3>
-                        <MajorDrawTableStatusBadge status={draw.status} />
-                        <DrawWinnerOutcomeBadge
-                          status={draw.status}
-                          hasWinnerUserId={!!(draw.winner && draw.winner.userId)}
-                        />
-                      </div>
-
-                      <div
-                        className="text-gray-600 dark:text-neutral-400 mb-3 [&_p]:my-0"
-                        dangerouslySetInnerHTML={{ __html: draw.description || "" }}
-                      />
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                          <Calendar className="w-4 h-4" />
-                          <span>Draw: {formatDate(draw.drawDate)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                          <DollarSign className="w-4 h-4" />
-                          <span>{draw.prize?.value ? formatCurrency(draw.prize.value) : "N/A"}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                          <Users className="w-4 h-4" />
-                          <span>{draw.totalEntries.toLocaleString()} entries</span>
-                        </div>
-                      </div>
-
-                      {draw.winner && draw.winner.userId && (
-                        <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3 mb-4">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Trophy className="w-4 h-4 text-green-600 dark:text-green-400" />
-                            <span className="text-sm font-medium text-green-800 dark:text-green-200">Winner Details</span>
-                          </div>
-                          <div className="text-sm text-green-700 dark:text-green-300">
-                            <ClickableUserDisplay
-                              displayText={
-                                draw.winner.userDetails
-                                  ? `${draw.winner.userDetails.firstName} ${draw.winner.userDetails.lastName} (${draw.winner.userDetails.email})`
-                                  : `User ID: ${draw.winner.userId}`
-                              }
-                              userId={draw.winner.userId}
-                              subtext={`Entry #${draw.winner.entryNumber} • ${formatDate(draw.winner.selectedDate)} • ${draw.winner.selectionMethod === "manual" ? "Manual" : "Government App"}`}
-                              className="text-sm text-green-700 dark:text-green-300 hover:text-green-800 dark:hover:text-green-200"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                  <div className="flex flex-wrap gap-2 sm:flex-col sm:flex-shrink-0">
-                    {(draw.status === "completed" || draw.status === "frozen") &&
-                      (!draw.winner || !draw.winner.userId) && (
-                        <Button onClick={() => handleSelectWinner(draw)} size="sm" icon={UserPlus}>
-                          Select Winner
-                        </Button>
-                      )}
-                    {draw.winner && draw.winner.userId && (
-                      <>
-                        <Button onClick={() => handleEditWinner(draw)} size="sm" variant="outline" icon={Edit}>
-                          Edit Winner
-                        </Button>
-                        <Button
-                          onClick={() => setRemoveWinnerTarget(draw)}
-                          size="sm"
-                          variant="outline"
-                          icon={UserX}
-                          className="border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                        >
-                          Remove winner
-                        </Button>
-                      </>
-                    )}
-                    <Button onClick={() => handleEditDraw(draw)} size="sm" variant="outline" icon={Edit}>
-                      Edit Draw
-                    </Button>
-                    <Button onClick={() => handleExport(draw)} size="sm" variant="outline" icon={Download}>
-                      Export
-                    </Button>
-                  </div>
-                </div>
+    <>
+      <DrawsListPage
+        variant="results"
+        kpis={[
+          { label: "Completed draws", value: stats.totalDraws.toLocaleString() },
+          { label: "Total entries", value: stats.totalEntries.toLocaleString() },
+          { label: "Draw revenue", value: compactCurrency(stats.totalRevenue ?? 0) },
+          { label: "Prize value awarded", value: compactCurrency(stats.totalPrizeValue) },
+        ]}
+        searchValue={filters.search}
+        onSearchChange={(value) => setFilters((prev) => ({ ...prev, search: value }))}
+        searchPlaceholder="Search draws…"
+        filters={[
+          {
+            key: "status",
+            label: "Status",
+            value: labelFor(STATUS_OPTIONS, filters.status),
+            options: STATUS_OPTIONS.map((o) => o.label),
+          },
+          {
+            key: "winner",
+            label: "Winner",
+            value: labelFor(WINNER_OPTIONS, filters.hasWinner),
+            options: WINNER_OPTIONS.map((o) => o.label),
+          },
+        ]}
+        openFilterKey={openFilterKey}
+        onToggleFilter={setOpenFilterKey}
+        onPickFilter={onPickFilter}
+        groups={groups}
+        dataState={dataState}
+        selectedRow={selectedRow}
+        onSelectRow={(row) => setSelectedRowId(row?.id ?? null)}
+        onClearFilters={clearFilters}
+        onRetry={() => fetchDraws(pagination.currentPage)}
+        emptyTitle={emptyTitle}
+        emptyBody={emptyBody}
+        errorEndpoint={`GET ${HISTORY_ENDPOINT}${errorStatus ? ` · ${errorStatus}` : ""}`}
+        verificationUrl={selectedDrawResult?.resultUrl ?? null}
+        // Primary edits the winner when there is one, otherwise records one —
+        // the two states the old card list exposed as separate buttons.
+        onInspectorPrimary={(row) => {
+          const draw = drawById(row.id);
+          if (!draw) return;
+          if (row.hasWinner) void handleEditWinner(draw);
+          else handleSelectWinner(draw);
+        }}
+        onEditDraw={(row) => {
+          const draw = drawById(row.id);
+          if (draw) handleEditDraw(draw);
+        }}
+        onExport={(row) => {
+          const draw = drawById(row.id);
+          if (draw) handleExport(draw);
+        }}
+        onRemoveWinner={(row) => {
+          const draw = drawById(row.id);
+          if (draw) setRemoveWinnerTarget(draw);
+        }}
+        onOpenWinnerUser={(row) => {
+          const draw = drawById(row.id);
+          if (draw?.winner?.userId) openUserModal(draw.winner.userId);
+        }}
+        footer={
+          pagination.totalPages > 1 ? (
+            <div className="flex items-center justify-between gap-[10px] rounded-[var(--m-radius)] border border-[var(--line)] bg-[var(--panel)] px-[14px] py-[10px] shadow-[var(--shadow)]">
+              <div className="flex items-center gap-[6px]">
+                <PagerButton
+                  onClick={() => handlePageChange(1)}
+                  disabled={!pagination.hasPrevPage || isLoading}
+                  label="First page"
+                >
+                  <ChevronsLeft className="h-[15px] w-[15px]" />
+                </PagerButton>
+                <PagerButton
+                  onClick={() => handlePageChange(pagination.currentPage - 1)}
+                  disabled={!pagination.hasPrevPage || isLoading}
+                  label="Previous page"
+                >
+                  <ChevronLeft className="h-[15px] w-[15px]" />
+                </PagerButton>
               </div>
-            );
-          })}
-        </div>
+              <span data-figure className="text-[12px] font-medium text-[var(--text2)]">
+                Page {pagination.currentPage} of {pagination.totalPages} · {pagination.totalCount.toLocaleString()} draws
+              </span>
+              <div className="flex items-center gap-[6px]">
+                <PagerButton
+                  onClick={() => handlePageChange(pagination.currentPage + 1)}
+                  disabled={!pagination.hasNextPage || isLoading}
+                  label="Next page"
+                >
+                  <ChevronRight className="h-[15px] w-[15px]" />
+                </PagerButton>
+                <PagerButton
+                  onClick={() => handlePageChange(pagination.totalPages)}
+                  disabled={!pagination.hasNextPage || isLoading}
+                  label="Last page"
+                >
+                  <ChevronsRight className="h-[15px] w-[15px]" />
+                </PagerButton>
+              </div>
+            </div>
+          ) : null
+        }
+      />
 
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 px-4 sm:px-6 py-3 sm:py-4">
-          <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
-            <div className="flex items-center gap-1 sm:gap-2">
-              <button
-                type="button"
-                onClick={() => handlePageChange(1)}
-                disabled={!pagination.hasPrevPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                aria-label="First page"
-              >
-                <ChevronsLeft className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePageChange(pagination.currentPage - 1)}
-                disabled={!pagination.hasPrevPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-            </div>
-            <span className="text-xs sm:text-sm text-gray-700 dark:text-neutral-200 font-medium">
-              Page {pagination.currentPage} of {pagination.totalPages}
-            </span>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <button
-                type="button"
-                onClick={() => handlePageChange(pagination.currentPage + 1)}
-                disabled={!pagination.hasNextPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                aria-label="Next page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePageChange(pagination.totalPages)}
-                disabled={!pagination.hasNextPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                aria-label="Last page"
-              >
-                <ChevronsRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Winner Selection Modal */}
+      {selectedDraw && (
+        <WinnerSelectionModal
+          isOpen={isWinnerModalOpen}
+          onClose={() => {
+            setIsWinnerModalOpen(false);
+            setSelectedDraw(null);
+          }}
+          onWinnerSelected={handleWinnerSelected}
+          drawId={selectedDraw._id}
+          drawName={selectedDraw.name}
+          drawType="major"
+          totalEntries={selectedDraw.totalEntries}
+          enableImageField
+          currentWinner={
+            selectedDraw.winner
+              ? {
+                  userId: selectedDraw.winner.userId,
+                  imageUrl: selectedDraw.winner.imageUrl,
+                  drawResultUrl: selectedDraw.winner.drawResultUrl,
+                }
+              : undefined
+          }
+        />
       )}
 
-        {/* Winner Selection Modal */}
-        {selectedDraw && (
-          <WinnerSelectionModal
-            isOpen={isWinnerModalOpen}
-            onClose={() => {
-              setIsWinnerModalOpen(false);
-              setSelectedDraw(null);
-            }}
-            onWinnerSelected={handleWinnerSelected}
-            drawId={selectedDraw._id}
-            drawName={selectedDraw.name}
-            drawType="major"
-            totalEntries={selectedDraw.totalEntries}
-            enableImageField
-            currentWinner={
-              selectedDraw.winner
-                ? {
-                    userId: selectedDraw.winner.userId,
-                    imageUrl: selectedDraw.winner.imageUrl,
-                    drawResultUrl: selectedDraw.winner.drawResultUrl,
-                  }
-                : undefined
-            }
-          />
-        )}
+      {/* Export Modal */}
+      {selectedDraw && (
+        <ExportModal
+          isOpen={isExportModalOpen}
+          onClose={() => {
+            setIsExportModalOpen(false);
+            setSelectedDraw(null);
+          }}
+          majorDrawId={selectedDraw._id}
+          majorDrawName={selectedDraw.name}
+          totalParticipants={selectedDraw.totalEntries}
+        />
+      )}
 
-        {/* Export Modal */}
-        {selectedDraw && (
-          <ExportModal
-            isOpen={isExportModalOpen}
-            onClose={() => {
-              setIsExportModalOpen(false);
-              setSelectedDraw(null);
-            }}
-            majorDrawId={selectedDraw._id}
-            majorDrawName={selectedDraw.name}
-            totalParticipants={selectedDraw.totalEntries}
-          />
-        )}
-
-        {/* Winner Edit Modal */}
-        {selectedDraw && editingWinner && (
-          <WinnerEditModal
-            isOpen={isEditWinnerModalOpen}
-            onClose={() => {
-              setIsEditWinnerModalOpen(false);
-              setEditingWinner(null);
-              setSelectedDraw(null);
-            }}
-            winnerId={editingWinner.winnerId}
-            winnerName={editingWinner.winnerName}
-            drawName={selectedDraw.name}
-            drawType="major"
-            currentTestimony={editingWinner.testimony}
-            currentSelectedPrize={editingWinner.selectedPrize}
-            currentImageUrl={editingWinner.imageUrl}
-            currentDrawResultUrl={editingWinner.drawResultUrl}
-            onUpdate={async () => {
-              // Refresh the draws list after update
-              await fetchDraws(pagination.currentPage);
-            }}
-          />
-        )}
+      {/* Winner Edit Modal */}
+      {selectedDraw && editingWinner && (
+        <WinnerEditModal
+          isOpen={isEditWinnerModalOpen}
+          onClose={() => {
+            setIsEditWinnerModalOpen(false);
+            setEditingWinner(null);
+            setSelectedDraw(null);
+          }}
+          winnerId={editingWinner.winnerId}
+          winnerName={editingWinner.winnerName}
+          drawName={selectedDraw.name}
+          drawType="major"
+          currentTestimony={editingWinner.testimony}
+          currentSelectedPrize={editingWinner.selectedPrize}
+          currentImageUrl={editingWinner.imageUrl}
+          currentDrawResultUrl={editingWinner.drawResultUrl}
+          onUpdate={async () => {
+            await fetchDraws(pagination.currentPage);
+          }}
+        />
+      )}
 
       <ConfirmationModal
         isOpen={removeWinnerTarget !== null}
@@ -922,6 +847,30 @@ export default function DrawResults() {
           isLoading={isSubmittingDraw}
         />
       )}
-    </div>
+    </>
+  );
+}
+
+function PagerButton({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="flex h-[var(--m-icon)] w-[var(--m-icon)] items-center justify-center rounded-[7px] border border-[var(--line)] bg-[var(--panel)] text-[var(--text2)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {children}
+    </button>
   );
 }

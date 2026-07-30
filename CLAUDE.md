@@ -268,7 +268,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-29",
+  "lastModified": "2026-07-30",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -706,6 +706,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useTilt.ts",
         "src/types/upsell.ts",
         "src/app/globals.css",
+        "tailwind.config.ts",
         "src/app/not-found.tsx",
         "src/app/(site)/page.tsx",
         "src/app/(site)/components/HomeProducts.tsx",
@@ -714,7 +715,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-07-30"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -739,7 +740,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-07-28"
+      "lastVerified": "2026-07-30"
     },
     "internal-norm": {
       "docs": "docs/internal-norm/",
@@ -761,7 +762,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-07-28"
+      "lastVerified": "2026-07-30"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -790,7 +791,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-07-30"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -868,7 +869,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/connect-ops-db.ts",
         "scripts/check-env.mjs"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-07-30"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",
