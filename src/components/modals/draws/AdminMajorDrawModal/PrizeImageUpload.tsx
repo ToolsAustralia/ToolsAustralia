@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ImageUpload } from "../ui";
+import { ImageUpload } from "../../ui";
 
 interface PrizeImageUploadProps {
   images: (string | File)[];

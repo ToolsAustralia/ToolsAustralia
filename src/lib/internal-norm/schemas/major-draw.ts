@@ -77,6 +77,13 @@ const MajorDrawHistoryItemSchema = z.object({
     })
     .nullable(),
   totalEntries: z.number(),
+  // Net revenue (AUD dollars) for this draw's entry window. DERIVED from
+  // PaymentEvent — MajorDraw has no revenue field. Window is
+  // [prevDraw.freezeEntriesAt, thisDraw.freezeEntriesAt), matching entry routing.
+  // See src/services/admin/drawRevenue.ts + docs/draws/architecture.md.
+  revenue: z.number(),
+  // revenue / totalEntries. Null — never Infinity/NaN — when the draw has no entries.
+  revenuePerEntry: z.number().nullable(),
   hasWinner: z.boolean(),
   winner: z
     .object({
@@ -105,6 +112,7 @@ export const NormMajorDrawHistorySchema = z.object({
     totalDraws: z.number().int(),
     totalEntries: z.number().int(),
     totalPrizeValue: z.number(),          // AUD dollars; sum of prize.value
+    totalRevenue: z.number(),             // AUD dollars; derived, filter-wide (not page-wide)
     drawsWithWinners: z.number().int(),
     drawsWithoutWinners: z.number().int(),
     winnerSelectionRate: z.number().int().min(0).max(100), // percent

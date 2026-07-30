@@ -771,3 +771,82 @@ Per [auth rules R1-R2](../auth/rules.md): every handler must call `requireAdmin(
 ## Promo banner-text active endpoint — cache headers (2026-07-19)
 
 `GET /api/admin/promo/banner-text/active` (public read despite living under /api/admin — no auth, admin-scheduled content, no per-user data) now returns `Cache-Control: public, s-maxage=60, stale-while-revalidate=120` instead of `no-store`, matching `/api/promo/effective-for-banner`. It is fetched above the fold by every promotions visitor; no-store forced one serverless + Mongo round trip per ad click. The admin WRITE endpoints under `banner-text/` are unchanged (still uncached).
+
+## `GET /api/admin/major-draw/history` — per-draw revenue (2026-07-30)
+
+Three **additive** fields. No existing field was renamed or removed; `DrawResults.tsx` and
+`UpcomingDraws.tsx` both read this response and ignore the new keys until wired.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `data.draws[].revenue` | `number` | Net revenue (dollars) for that draw's entry window |
+| `data.draws[].revenuePerEntry` | `number \| null` | `revenue / totalEntries`; **`null`** when the draw has no entries — never `Infinity` or `NaN` |
+| `data.stats.totalRevenue` | `number` | Net revenue across the **whole filtered set** |
+
+Revenue is **derived, not stored** — `MajorDraw` has no revenue field. It comes from
+[`getRevenueByDraw`](../../src/services/admin/drawRevenue.ts), which windows `PaymentEvent`
+`BenefitsGranted` rows (refund-netted) to `[previousDraw.freezeEntriesAt, thisDraw.freezeEntriesAt)`
+so the money matches the entries the draw actually holds. The window rule and its lockstep
+requirement with `getTargetMajorDraw` are documented in
+[draws/architecture.md](../draws/architecture.md).
+
+**`stats.totalRevenue` is filter-scoped, not page-scoped** — deliberately, because every
+sibling (`totalDraws`, `totalEntries`, `totalPrizeValue`) is a filter-wide aggregate. A
+page-scoped revenue figure would sit in the same KPI strip contradicting the numbers beside
+it. Like `summaryStats.totalDraws`, it is computed **before** the post-query `hasWinner`
+filter; keep the three consistent if any one of them changes.
+
+Cost is one extra lean 3-field projection plus **one** `PaymentEvent` aggregation per
+request — not a query per row. The aggregation is wrapped in try/catch: on failure the
+endpoint logs via `console.error` and returns zeros rather than failing the list, because
+revenue is a supporting figure and the draws are the payload.
+
+### Norm mirror — done in lockstep
+
+`major-draw.history` is mirrored to Norm, and the Norm route calls `getMajorDrawHistory()` in
+`MajorDrawService` — a **separate implementation** from this route handler. So the same three
+fields had to be added there too, and were:
+
+- `MajorDrawHistoryItem` gained `revenue` + `revenuePerEntry`; `MajorDrawHistoryResult.stats`
+  gained `totalRevenue` (same filter-wide scoping, same try/catch-to-zeros fallback).
+- `NormMajorDrawHistorySchema` (`src/lib/internal-norm/schemas/major-draw.ts`) extended to match.
+- Registry summary updated, `npm run build:norm-manifest` re-run.
+- [`docs/internal-norm/norm-context.md`](../internal-norm/norm-context.md) documents the window
+  rule and the interpretation caveats Norm needs (null-vs-zero per-entry, filter-vs-page scoping,
+  zeros-on-failure).
+
+Verified live with `npm run norm:smoke` against
+`GET /v1/major-draw/history` — **200 OK**, which is the real check: `withNorm` validates
+`responseSchema` at runtime, so a schema↔output mismatch would have been a 500 that `tsc` cannot
+catch. Also confirmed `stats.totalRevenue` stays filter-wide at `limit=1` (page showed one draw's
+$974.97 while `totalRevenue` reported the full $4,139.46 across `totalDraws: 3`).
+
+**Remaining tech debt (not this branch):** the two implementations are near-duplicate reads and
+must now be kept in step by hand — this change had to be made twice. Collapsing them requires
+giving the service a projection mode, since the Norm output is deliberately PII-bounded (opaque
+`userId`, no email) and the admin one is not.
+
+## `GET /api/admin/major-draw/participants` — two fixes (2026-07-30)
+
+### 1. Sorted before paginating (behaviour fix)
+
+The route sorted by `totalEntries` descending **after** `entries.slice(skip, skip + limit)`,
+on the already-paginated array. That sorted *within* the page, not across the set — so page 1
+was "the first N entries in `MajorDraw.entries` insertion order, then sorted", not "the top N",
+and ordering was not monotonic across page boundaries.
+
+The sort now runs on the full `entries` array before the slice. This also makes
+`?limit=3` return the genuine top three entrants, which the Major Draw **Entry pool** card
+depends on.
+
+**No response-shape change** — same fields, correct order. Any consumer that was
+(accidentally) relying on insertion order will now see entry-count order; the existing
+`ParticipantsModal` always intended entry-count order, so it is a straight fix there.
+
+### 2. Search now matches `mobile`
+
+The `$or` covered `firstName`, `lastName`, `email` and the concatenated full name. `mobile`
+is a real `String` field on `User` (and was already in the route's `.select(...)`), and the
+participants modal advertises "search by name / email / mobile", so it is now matched with
+the same case-insensitive regex. Admins commonly paste an unspaced mobile, so the raw stored
+value is matched as-is rather than normalised.

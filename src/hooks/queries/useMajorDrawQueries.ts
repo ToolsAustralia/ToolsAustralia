@@ -60,30 +60,6 @@ export interface MajorDrawEntry {
   };
 }
 
-export interface MajorDrawStats {
-  totalEntries: number;
-  totalParticipants: number;
-  totalRevenue: number;
-  averageEntriesPerParticipant: number;
-  entriesThisMonth: number;
-  entriesLastMonth: number;
-  monthlyGrowth: number;
-  topParticipants: Array<{
-    userId: string;
-    firstName: string;
-    lastName: string;
-    entryCount: number;
-    totalSpent: number;
-  }>;
-  entriesByState: Record<string, number>;
-  dailyEntries: Array<{
-    date: string;
-    entries: number;
-    participants: number;
-    revenue: number;
-  }>;
-}
-
 export interface UserMajorDrawStats {
   totalEntries: number;
   membershipEntries: number;
@@ -175,19 +151,21 @@ export const useCurrentMajorDraw = () => {
   });
 };
 
-export const useMajorDrawStats = () => {
-  return useQuery({
-    queryKey: ["major-draw-stats"],
-    queryFn: async () => {
-      const response = await apiGet<{ success: boolean; data: MajorDrawStats }>("/api/major-draw/stats");
-      return response.data;
-    },
-    staleTime: 10 * 60 * 1000, // 10 minutes - increased for better performance
-    gcTime: 30 * 60 * 1000, // 30 minutes - increased for better caching
-    refetchOnWindowFocus: false, // Disabled to prevent duplicate requests
-    refetchOnMount: false, // Don't refetch if data is fresh
-  });
-};
+/*
+ * REMOVED 2026-07-30: `useMajorDrawStats()` and its `MajorDrawStats` interface.
+ *
+ * The hook fetched `/api/major-draw/stats`, a route that does not exist, and
+ * nothing consumed it — it was only re-exported from `hooks/queries/index.ts`.
+ * Its interface declared `totalRevenue`, `topParticipants` and
+ * `dailyEntries[].revenue`, which made per-draw revenue LOOK implemented during
+ * the admin draws audit when no such aggregation existed anywhere.
+ *
+ * Real per-draw revenue now lives in `src/services/admin/drawRevenue.ts` and is
+ * served by `/api/admin/major-draw/history` (see docs/draws/architecture.md).
+ *
+ * Not to be confused with `useUserMajorDrawStats` below — one word apart, live,
+ * and consumed by /my-account, /rewards and the header entry badge.
+ */
 
 /**
  * The current user's stats for the active draw.

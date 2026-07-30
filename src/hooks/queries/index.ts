@@ -159,7 +159,6 @@ export {
 export {
   useMajorDraws,
   useCurrentMajorDraw,
-  useMajorDrawStats,
   useUserMajorDrawStats,
   useUserMajorDrawEntries,
   useEnterMajorDraw,
@@ -169,7 +168,6 @@ export {
   useMajorDrawPrefetch,
   type MajorDraw,
   type MajorDrawEntry,
-  type MajorDrawStats,
   type UserMajorDrawStats,
 } from "./useMajorDrawQueries";
 

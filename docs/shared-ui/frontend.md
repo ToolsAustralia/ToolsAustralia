@@ -1153,8 +1153,8 @@ Twelve flat-file modals were decomposed into the canonical orchestrator-folder p
 
 | Modal | Pre-LOC | Sub-components | Smoke test |
 |---|---|---|---|
-| [WinnerSelectionModal/](../../src/components/modals/WinnerSelectionModal/) | 452 | 6 | `npm run test:winner-selection` (6 combos) |
-| [AdminMajorDrawModal/](../../src/components/modals/AdminMajorDrawModal/) | 731 | 6 | `npm run test:admin-major-draw` (4 combos) |
+| [draws/WinnerSelectionModal/](../../src/components/modals/draws/WinnerSelectionModal/) | 452 | 6 | `npm run test:winner-selection` (6 combos) |
+| [draws/AdminMajorDrawModal/](../../src/components/modals/draws/AdminMajorDrawModal/) | 731 | 6 | `npm run test:admin-major-draw` (4 combos) |
 | [CampaignTargetingModal/](../../src/components/modals/CampaignTargetingModal/) | 603 | 8 (incl. CVA tier chips) | `npm run test:campaign-targeting` (6 combos) |
 | [SettingsModal/](../../src/components/modals/SettingsModal/) | 526 | 3 (delegates to Subscription/Payment siblings) | `npm run test:settings-modal` (5 combos) |
 | [PackageSelectionModal/](../../src/components/modals/PackageSelectionModal/) | 780 | 4 | `npm run test:package-selection` (5 combos) |

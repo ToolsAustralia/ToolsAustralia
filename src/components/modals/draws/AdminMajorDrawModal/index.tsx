@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { ModalContainer, ModalContent, ModalHeader } from "../ui";
+import DrawModalShell from "../DrawModalShell";
 import { calculateActivationDate, convertUTCToAEST, createAESTDateAsUTC } from "@/utils/common/timezone";
 import BasicInfoSection from "./BasicInfoSection";
 import PrizeDetailsSection from "./PrizeDetailsSection";
@@ -217,8 +217,8 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Invoked by DrawModalShell's primary, which sits outside the <form>.
+  const handleSubmit = async () => {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
@@ -324,16 +324,20 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
   };
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={handleClose} size="4xl" height="fixed" closeOnBackdrop={false}>
-      <ModalHeader
-        title="Create New Major Draw"
-        subtitle="Set up a new major draw with monthly restriction validation"
-        onClose={handleClose}
-        showLogo={false}
-      />
-
-      <ModalContent>
-        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
+    <DrawModalShell
+      isOpen={isOpen}
+      onClose={handleClose}
+      size="4xl"
+      eyebrow="Major draw · new"
+      title="Create major draw"
+      primaryLabel="Create draw"
+      onPrimary={() => void handleSubmit()}
+      isSubmitting={isSubmitting}
+      submittingLabel="Creating…"
+      // Field errors only — `submit` is a request failure shown as a banner.
+      errorCount={Object.keys(errors).filter((k) => k !== "submit").length}
+    >
+        <div className="space-y-3 sm:space-y-6">
           <BasicInfoSection
             name={formData.name}
             description={formData.description}
@@ -374,14 +378,11 @@ const AdminMajorDrawModal: React.FC<AdminMajorDrawModalProps> = ({ isOpen, onClo
             onRemoveTerm={removeTerm}
           />
 
-          <SubmitFooter
-            isSubmitting={isSubmitting}
-            submitError={errors.submit}
-            onCancel={handleClose}
-          />
-        </form>
-      </ModalContent>
-    </ModalContainer>
+          {/* Cancel/Create moved into the shell footer; this now only surfaces
+              a failed submit. */}
+          <SubmitFooter submitError={errors.submit} />
+        </div>
+    </DrawModalShell>
   );
 };
 

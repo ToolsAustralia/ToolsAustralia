@@ -1,3 +1,9 @@
+/* Scoped design tokens for the four admin draws pages. Must sit above the
+   @tailwind directives — CSS @import has to precede all other statements.
+   Everything inside is scoped to .admin-draws, so it is inert on every other
+   page; see src/components/admin/draws/tokens.css for why it is not on :root. */
+@import "../components/admin/draws/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

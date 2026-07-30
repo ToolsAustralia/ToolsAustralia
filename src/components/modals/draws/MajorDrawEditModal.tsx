@@ -1,18 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Edit, Save, AlertCircle, Calendar, DollarSign, Package, Link2 } from "lucide-react";
-import {
-  ModalContainer,
-  ModalHeader,
-  ModalContent,
-  Input,
-  Button,
-  Select,
-  DateTimePicker,
-  ImageUpload,
-} from "./ui";
+import { Edit, AlertCircle, Calendar, DollarSign, Package, Link2 } from "lucide-react";
+import { Input, Select, DateTimePicker, ImageUpload } from "../ui";
 import RichTextEditor from "@/components/ui/RichTextEditor";
+import DrawModalShell from "./DrawModalShell";
 
 // Types
 interface MajorDrawData {
@@ -206,9 +198,8 @@ export default function MajorDrawEditModal({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  // Invoked by DrawModalShell's primary, which sits outside the <form>.
+  const handleSubmit = async () => {
     if (!validateForm()) {
       return;
     }
@@ -291,12 +282,19 @@ export default function MajorDrawEditModal({
 
   return (
     <>
-      <ModalContainer isOpen={isOpen} onClose={onCloseAction} size="4xl" height="fixed">
-        {/* Header */}
-        <ModalHeader title="Edit Major Draw" subtitle={`Editing: ${majorDraw.name}`} onClose={onCloseAction} />
-
-        {/* Content */}
-        <ModalContent>
+      <DrawModalShell
+        isOpen={isOpen}
+        onClose={onCloseAction}
+        size="4xl"
+        eyebrow={`Major draw · ${majorDraw.status}`}
+        title="Edit draw"
+        primaryLabel="Save draw"
+        onPrimary={() => void handleSubmit()}
+        isSubmitting={isSubmitting || isLoading}
+        submittingLabel="Saving…"
+        // Field errors only — `submit` is a request failure shown as a banner.
+        errorCount={Object.keys(errors).filter((k) => k !== "submit").length}
+      >
           {errors.submit && (
             <div className="mb-4 p-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-center gap-2">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
@@ -329,7 +327,7 @@ export default function MajorDrawEditModal({
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-6">
             {/* Basic Information */}
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
@@ -541,18 +539,8 @@ export default function MajorDrawEditModal({
               </div>
             </div>
 
-            {/* Submit Button */}
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={onCloseAction} disabled={isSubmitting}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting || isLoading} loading={isSubmitting} icon={Save}>
-                {isSubmitting ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </form>
-        </ModalContent>
-      </ModalContainer>
+          </div>
+      </DrawModalShell>
     </>
   );
 }
