@@ -316,6 +316,16 @@ export interface IUser extends Document {
     stripePaymentIntentId?: string; // For refund tracking
   }>;
 
+  // Partner-portal (MyRewards) data-sharing consent.
+  // The legal record that this member agreed to the fields the SSO hand-off sends.
+  // `scopeVersion` pins WHICH field set they saw — a bump re-prompts everyone.
+  // See utils/partner-discounts/partner-consent.ts.
+  partnerDiscountConsent?: {
+    scopeVersion: number;
+    acceptedAt: Date;
+    fields: string[];
+  };
+
   // Staff RBAC (see docs/auth/roles.md)
   roleId?: mongoose.Types.ObjectId | null; // null = customer
   userType: "customer" | "staff" | "admin"; // default "customer"
@@ -1199,6 +1209,30 @@ const UserSchema = new Schema<IUser>(
         },
       ],
       default: [],
+    },
+
+    // Partner-portal (MyRewards) data-sharing consent — the legal record.
+    // `_id: false` because this is a single embedded record, not a collection item.
+    // No default: ABSENT means "never consented", which is the fail-closed state
+    // `hasValidPartnerConsent` relies on.
+    partnerDiscountConsent: {
+      type: {
+        scopeVersion: {
+          type: Number,
+          required: true,
+        },
+        acceptedAt: {
+          type: Date,
+          required: true,
+        },
+        // The field keys the member actually saw when they agreed.
+        fields: {
+          type: [String],
+          required: true,
+        },
+      },
+      _id: false,
+      required: false,
     },
   },
   {

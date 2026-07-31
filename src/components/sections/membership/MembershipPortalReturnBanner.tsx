@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import { ArrowRight, ExternalLink, Store } from "lucide-react";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useMemberships } from "@/hooks/useMemberships";
-import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
+import { usePortalHandoff } from "@/components/sections/rewards/PortalHandoff";
 import { partnerDiscountSsoEnabled } from "@/config/featureFlags";
 import { resolveUnlockPackagesForLevel } from "@/utils/partner-discounts/unlock-packages";
 import {
@@ -90,7 +90,7 @@ export default function MembershipPortalReturnBanner({
   const { status: sessionStatus } = useSession();
   const { acct, partnerAccessPct, isLoading, pausedUntil } = useDashboardState();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
-  const sso = usePartnerDiscountSso();
+  const sso = usePortalHandoff();
   const ssoEnabled = partnerDiscountSsoEnabled();
 
   const requiredPct = portalReturn?.requiredPct ?? null;
@@ -176,7 +176,7 @@ export default function MembershipPortalReturnBanner({
   });
 
   const total = fmt(PARTNER_CATALOG_TOTAL);
-  const ssoErrorMessage = view.cta?.kind === "sso" && sso.error ? sso.error.message : null;
+  const ssoErrorMessage = view.cta?.kind === "sso" ? sso.error : null;
 
   /** Unlock CTA (F-005): an ACTIVE subscriber "unlocking" via a subscription is an
    *  UPGRADE — cta.onSelect would bounce them to the bare dashboard, so route
@@ -250,15 +250,16 @@ export default function MembershipPortalReturnBanner({
           {view.cta?.kind === "sso" && (
             <button
               type="button"
-              onClick={() => sso.mutate()}
-              disabled={sso.isPending}
+              onClick={sso.start}
+              disabled={sso.busy}
               className={`${CTA_CLASS} disabled:opacity-60`}
             >
               <Store className="h-4 w-4" />
-              {sso.isPending ? "Opening…" : "Open partner portal"}
+              {sso.busy ? "Opening…" : "Open partner portal"}
               <ExternalLink className="h-4 w-4" />
             </button>
           )}
+          {view.cta?.kind === "sso" && sso.overlay}
 
           {view.cta?.kind === "manage" && (
             <Link

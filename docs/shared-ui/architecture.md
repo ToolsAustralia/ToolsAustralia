@@ -80,3 +80,14 @@ See [patterns.md](./patterns.md#site-wide-interaction-smoothness--phase-1-2026-0
 - Take data via props; don't fetch
 - Use Tailwind classes for styling
 - Honour theme context (light/dark)
+
+## 2026-07-31 — Portal hand-off components + `taPt*` CSS
+
+Three components landed under `src/components/sections/rewards/` (`PortalHandoff`, `PortalTransit`, `PortalConsent`) for the partner-portal SSO hand-off, plus a `.ta-pt-*` block in [globals.css](../../src/app/globals.css).
+
+Two conventions worth copying:
+
+- **Reuse loader keyframes, don't redeclare them.** `PortalTransit`'s medallion drives the *existing* `DashboardLoader` keyframes (`taSeat` / `taBoltStep` / `taWrench` / `taSpark` / `taWarm` / `taSpin`); only genuinely new motion is declared, namespaced `taPt*`. Two loaders sharing a rig must not be able to drift in cadence.
+- **Overlays return `null` when idle.** `usePortalHandoff()` hands back an `overlay` node that is `null` until first use and `createPortal`s to `<body>` — so an unclicked page pays nothing, and a call site's placement doesn't affect layout. Same spirit as the `LazyMembershipModal` gate-on-first-open rule.
+
+Full behaviour: [docs/partner/frontend.md](../partner/frontend.md).

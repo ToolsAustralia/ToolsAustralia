@@ -81,3 +81,7 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## 2026-07-31 — Purchase-success portal CTA uses the shared hand-off
+
+[PurchaseSuccessClient.tsx](../../src/app/(site)/purchase-success/components/PurchaseSuccessClient.tsx)'s "Open partner portal" button now goes through `usePortalHandoff()` (consent sheet → transit takeover → redirect) rather than the bare SSO mutation, so a member who just bought a pack gets the same flow as on the Rewards page. Still gated on `status?.processed === true && partnerDiscountSsoEnabled()`. See [docs/partner/frontend.md](../partner/frontend.md).

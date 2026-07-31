@@ -1990,6 +1990,102 @@
   .ta-loader-root .ta-loader-tape-fill { width: 72% !important; }
 }
 
+/* ── PortalTransit — the MyRewards SSO hand-off takeover ────────────────────────
+   Full-viewport transit screen shown while the SSO exchange runs. Shares the
+   DashboardLoader's rig KEYFRAMES (taSeat / taBoltStep / taWrench / taSpark /
+   taWarm / taSpin) rather than redeclaring them — the rig is the same asset, just
+   scaled down to clear the gold rewards ring at r=55. Only genuinely new motion is
+   declared here, namespaced `taPt*`. Vars are `--pt-*` and scoped to the takeover. */
+.ta-pt-root {
+  --pt-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --pt-ink: #15181f;
+  --pt-soft: #5b6573;
+  --pt-faint: #8a93a1;
+  --pt-hair: rgba(15, 23, 42, 0.12);
+  --pt-wire: rgba(15, 23, 42, 0.26);
+  --pt-trough: rgba(15, 23, 42, 0.05);
+  --pt-good: #0f9d6b;
+  --pt-halo-hi: 0.3;
+  --pt-halo-lo: 0.08;
+  --pt-cancel-bg: rgba(255, 255, 255, 0.85);
+  --pt-ambient: rgba(238, 0, 0, 0.12);
+  --pt-grid: rgba(15, 23, 42, 0.045);
+  --pt-tick: rgba(15, 23, 42, 0.14);
+  --pt-tape-glow: 0.7;
+  background: radial-gradient(110% 80% at 50% -10%, #ffffff 0%, #e9ebf0 64%);
+  animation: taPtIn 0.36s var(--pt-ease) both;
+}
+.dark .ta-pt-root {
+  --pt-ink: #ffffff;
+  --pt-soft: rgba(255, 255, 255, 0.55);
+  --pt-faint: rgba(255, 255, 255, 0.38);
+  --pt-hair: rgba(255, 255, 255, 0.12);
+  --pt-wire: rgba(255, 255, 255, 0.34);
+  --pt-trough: rgba(255, 255, 255, 0.07);
+  --pt-good: #34d399;
+  --pt-halo-hi: 0.36;
+  --pt-halo-lo: 0.12;
+  --pt-cancel-bg: rgba(255, 255, 255, 0.06);
+  --pt-ambient: rgba(238, 0, 0, 0.2);
+  --pt-grid: rgba(255, 255, 255, 0.03);
+  --pt-tick: rgba(255, 255, 255, 0.16);
+  --pt-tape-glow: 0.55;
+  background: radial-gradient(110% 80% at 50% -10%, #17171d 0%, #08080a 62%);
+}
+
+@keyframes taPtIn { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: scale(1); } }
+@keyframes taPtUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes taPtFlow { to { background-position: -28px 0; } }
+@keyframes taPtTravel { 0% { left: -8%; opacity: 0; } 14% { opacity: 1; } 86% { opacity: 1; } 100% { left: 104%; opacity: 0; } }
+@keyframes taPtHalo { 0%, 100% { transform: scale(1); opacity: var(--pt-halo-hi); } 50% { transform: scale(1.09); opacity: var(--pt-halo-lo); } }
+@keyframes taPtPop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes taPtBreathe { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.9; } }
+
+.ta-pt-ambient { position: absolute; left: 50%; top: -150px; width: 640px; height: 430px; transform: translateX(-50%); pointer-events: none; background: radial-gradient(closest-side, var(--pt-ambient), transparent); animation: taPtBreathe 3.4s ease-in-out infinite; }
+.ta-pt-grid { position: absolute; inset: 0; pointer-events: none; background-size: 34px 34px; -webkit-mask-image: radial-gradient(72% 62% at 50% 46%, #000, transparent); mask-image: radial-gradient(72% 62% at 50% 46%, #000, transparent); background-image: linear-gradient(var(--pt-grid) 1px, transparent 1px), linear-gradient(90deg, var(--pt-grid) 1px, transparent 1px); }
+
+.ta-pt-rise { animation: taPtUp 0.5s var(--pt-ease) both; }
+.ta-pt-wire { position: relative; height: 2px; border-radius: 2px; flex: none; background-size: 14px 2px; background-image: linear-gradient(90deg, var(--pt-wire) 0 8px, transparent 8px 14px); animation: taPtFlow 0.7s linear infinite; }
+.ta-pt-packet { position: absolute; top: -2px; width: 6px; height: 6px; border-radius: 50%; animation: taPtTravel 1.4s linear infinite; }
+
+.ta-pt-disc { fill: url(#ptDiscL); }
+.dark .ta-pt-disc { fill: url(#ptDiscD); }
+.ta-pt-gloss { opacity: 0.5; }
+.dark .ta-pt-gloss { opacity: 0.1; }
+.ta-pt-rim { stroke: rgba(15, 23, 42, 0.12); }
+.dark .ta-pt-rim { stroke: rgba(255, 255, 255, 0.09); }
+.ta-pt-track { stroke: rgba(212, 175, 55, 0.2); }
+.dark .ta-pt-track { stroke: rgba(212, 175, 55, 0.13); }
+.ta-pt-check-halo { fill: rgba(15, 157, 107, 0.13); }
+.dark .ta-pt-check-halo { fill: rgba(52, 211, 153, 0.14); }
+.ta-pt-check { stroke: #ffffff; }
+.dark .ta-pt-check { stroke: #052e21; }
+
+.ta-pt-halo { transform-box: view-box; transform-origin: 69px 69px; animation: taPtHalo 2.4s var(--pt-ease) infinite; }
+.ta-pt-warm { --w0: 0.14; --w1: 0.34; opacity: var(--w0); transform-box: view-box; transform-origin: 69px 69px; animation: taWarm 1.2s ease-out infinite; }
+.dark .ta-pt-warm { --w0: 0.24; --w1: 0.6; }
+.ta-pt-spin { transform-box: view-box; transform-origin: 69px 69px; animation: taSpin 9s linear infinite; }
+.ta-pt-rig { transform-box: view-box; transform-origin: 69px 69px; animation: taSeat 1.2s cubic-bezier(0.7, 0, 0.3, 1) infinite; }
+.ta-pt-wrench { transform-box: view-box; transform-origin: 69px 69px; animation: taWrench 1.2s cubic-bezier(0.7, 0, 0.3, 1) infinite; }
+.ta-pt-bolt { transform-box: view-box; transform-origin: 69px 69px; animation: taBoltStep 1.2s cubic-bezier(0.7, 0, 0.3, 1) infinite; }
+.ta-pt-spark { transform-box: view-box; animation: taSpark 1.2s ease-out infinite; }
+.ta-pt-ring { transition: stroke-dashoffset 0.55s var(--pt-ease); filter: drop-shadow(0 0 6px rgba(212, 175, 55, 0.5)); }
+.ta-pt-success { transform-box: view-box; transform-origin: 69px 69px; animation: taPtPop 0.5s var(--pt-ease) both; }
+
+.ta-pt-dot-active { border: 2px solid rgba(15, 23, 42, 0.14); border-top-color: #c99a1e; animation: taSpin 0.7s linear infinite; }
+.dark .ta-pt-dot-active { border-color: rgba(255, 255, 255, 0.18); border-top-color: #f7d768; }
+.ta-pt-dot-pending { border: 1.5px solid rgba(15, 23, 42, 0.14); }
+.dark .ta-pt-dot-pending { border-color: rgba(255, 255, 255, 0.14); }
+
+.ta-pt-tape { position: relative; border-radius: 99px; overflow: hidden; background: var(--pt-trough); border: 1px solid var(--pt-hair); }
+.ta-pt-tape-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #f7d768, #d4af37); transition: width 0.55s var(--pt-ease); box-shadow: 0 0 14px rgba(212, 175, 55, var(--pt-tape-glow)); }
+.ta-pt-tape-ticks { position: absolute; inset: 0; pointer-events: none; background-image: repeating-linear-gradient(90deg, transparent 0 32px, var(--pt-tick) 32px 33px); }
+
+/* Progress must survive without motion — the step list and tape still read. */
+@media (prefers-reduced-motion: reduce) {
+  .ta-pt-root, .ta-pt-root * { animation: none !important; }
+}
+
 /* SheetShell entrance — bottom sheet slides up (mobile), soft pop (desktop). */
 @keyframes ta-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes ta-sheet-pop { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: translateY(0) scale(1); } }

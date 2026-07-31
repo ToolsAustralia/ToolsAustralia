@@ -38,7 +38,7 @@ import { useDashboardLandingOrchestration } from "@/hooks/useDashboardLandingOrc
 import { useMemberships } from "@/hooks/useMemberships";
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
-import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
+import { usePortalHandoff } from "@/components/sections/rewards/PortalHandoff";
 import { useRedeemablesWallet } from "@/hooks/queries/useRedeemablesQueries";
 import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
 
@@ -80,10 +80,15 @@ export default function MyAccountPage() {
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const searchParams = useSearchParams();
   const { showToast } = useToast();
-  const partnerSso = usePartnerDiscountSso();
+  const partnerSso = usePortalHandoff({
+    memberName: accountData?.user?.firstName ?? null,
+    tierLabel: dash.subscriptionTierLabel,
+    accessPct: dash.partnerAccessPct,
+  });
   // The SSO route's error bodies are customer copy; the hero chip has nowhere inline to
   // render them, so surface them as a toast rather than swallowing them (panel F-033).
-  const partnerSsoError = partnerSso.error?.message;
+  // Once the takeover is up it shows failures itself, so this only covers the first leg.
+  const partnerSsoError = partnerSso.error;
   useEffect(() => {
     if (!partnerSsoError) return;
     showToast({ type: "error", title: "Partner portal", message: partnerSsoError });
@@ -323,11 +328,15 @@ export default function MyAccountPage() {
         partnerAccessExpiryLabel={dash.partnerAccessExpiryLabel}
         profileComplete={Boolean(user.profileSetupCompleted && user.birthdate)}
         onOpenSettings={() => router.push("/my-account/settings")}
-        onPartnerPortal={partnerDiscountSsoEnabled() ? () => partnerSso.mutate() : undefined}
+        onPartnerPortal={partnerDiscountSsoEnabled() ? partnerSso.start : undefined}
         onBecomeMember={() => router.push("/my-account/membership")}
         onUpdatePayment={onResolvePayment}
         onCompleteProfile={() => requestModal("user-setup", true)}
       />
+
+      {/* Consent sheet / transit takeover for the partner-portal hand-off. Portals to
+          <body>, so its position here is irrelevant to layout — it just needs a mount. */}
+      {partnerSso.overlay}
 
       {streakCelebration.justHit && (
         <StreakCelebrationToast

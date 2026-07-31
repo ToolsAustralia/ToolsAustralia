@@ -86,6 +86,7 @@
     "test:member-level": "tsx src/utils/partner-discounts/__tests__/member-level.test.ts",
     "test:member-status": "tsx src/utils/partner-discounts/__tests__/member-status.test.ts",
     "test:sso-access": "tsx src/utils/partner-discounts/__tests__/sso-access.test.ts",
+    "test:partner-consent": "tsx src/utils/partner-discounts/__tests__/partner-consent.test.ts",
     "test:electric-scheme": "tsx src/utils/package-colors/__tests__/electricPackageScheme.test.ts",
     "test:variant-config-membership-theme": "tsx src/services/ab-testing/__tests__/variantConfigService.membershipTheme.test.ts",
     "test:experiment-metrics": "tsx src/utils/ab-testing/__tests__/experiment-metrics-core.test.ts",
