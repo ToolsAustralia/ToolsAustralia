@@ -10,6 +10,9 @@ import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata"
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 
 /**
  * POST /api/stripe/create-payment-intent
@@ -131,6 +134,17 @@ export async function POST(request: NextRequest) {
 
     const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
 
+    // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
+    // Store in payment metadata so webhook can use it for improved match quality
+    // Carries every provider's match signals: Meta's fbc/fbp and TikTok's ttclid/ttp.
+    // Both get stashed in Stripe metadata (capi_*) because Purchase fires from the
+    // webhook, which has no cookies to read them back from.
+    const requestContext = { ...extractRequestContext(request), ...extractTikTokContext(request) };
+    const capiEventSourceUrl = safeEventSourceUrl(
+      request.headers.get("referer") ??
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/shop` : undefined)
+    );
+
     // Create PaymentIntent for one-time purchases only
     // This ensures wallet payments show the correct amount
     // ✅ FIX: Only include customer if it exists (authenticated users)
@@ -150,6 +164,14 @@ export async function POST(request: NextRequest) {
         packageType: "one-time", // Only one-time purchases use this endpoint
         ...(validatedData.packageId && { packageId: validatedData.packageId }),
         ...(validatedData.packageName && { packageName: validatedData.packageName }),
+        // Store request context for Facebook CAPI (webhook will extract and use)
+        ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+        ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+        ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+        ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        ...(requestContext.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
+        ...(requestContext.ttp ? { capi_ttp: requestContext.ttp } : {}),
+        ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
         ...buildAttributionMetadata(validatedData.attribution),
         ...resolvedAttr,
       },

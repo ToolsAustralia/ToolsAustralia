@@ -4,6 +4,10 @@
 import type { CanonicalEvent, ConversionProvider, RequestContext } from "../types";
 import { getAllowedHostnames } from "../hostname-gate";
 import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
+// Name-only import from an edge/client-safe module (no next/headers, no node crypto).
+import { ANON_ID_PUBLIC_COOKIE_NAME } from "@/lib/ab-testing/anon-id-cookie";
+// Client-safe by construction (no crypto, no node: imports) — see its header comment.
+import { readBrowserCookie } from "@/utils/tracking/tiktok-helpers";
 // NO static import of "@/lib/tiktok" — this provider is isomorphic and its pixel half
 // runs in the BROWSER, while `@/lib/tiktok` reaches the server-only outbound transport
 // (undici → `node:net`). A static import pulls that into the client bundle and the page
@@ -66,6 +70,24 @@ function envEnabled(): { pixel: boolean; capi: boolean } {
     pixel: !!process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID,
     capi: !!process.env.TIKTOK_ACCESS_TOKEN,
   };
+}
+
+/**
+ * Read the browser-readable anonymous-id mirror (`ta_anon_id_pub`) from `document.cookie`.
+ * Deliberately total: a malformed cookie header, or a document-less render, returns undefined
+ * instead of throwing — this runs inside pixel bootstrap and must never be able to abort it.
+ *
+ * The parse itself is `readBrowserCookie` from tiktok-helpers (one concept, one implementation).
+ * The value needs no decoding: `ta_anon_id_pub` holds an `anon_<uuidv4>`, which is already
+ * percent-encoding-clean, and middleware writes it through `ResponseCookies.set`.
+ */
+function readAnonIdPublicCookie(): string | undefined {
+  try {
+    return readBrowserCookie(ANON_ID_PUBLIC_COOKIE_NAME);
+  } catch {
+    // best-effort — an unreadable cookie header is not a reason to skip the pixel.
+    return undefined;
+  }
 }
 
 function loadPixel(): void {
@@ -141,6 +163,38 @@ function loadPixel(): void {
   };
 
   (ttq.load as (id: string, options?: Record<string, unknown>) => void)(pixelId);
+
+  // Anonymous `external_id` on the pixel, BEFORE the first page().
+  //
+  // Why here and not in ConversionPixelsAdvancedMatching: that component's `ttq.identify` runs
+  // for AUTHENTICATED users only (it early-returns otherwise) and, even for members, runs long
+  // after this bootstrap already fired page(). So browser Pageview reached TikTok with ~3%
+  // External ID coverage. The deferred proxies installed above are FIFO — every call is pushed
+  // onto one array and the SDK drains it in order on load — so an identify queued *here* is
+  // applied before the page() below, and the page view carries the id.
+  //
+  // The value is passed RAW (plaintext), never pre-hashed: the SDK normalizes and SHA-256s
+  // identity in the browser, and the server hashes the SAME raw string via `hashPII`
+  // (mapCanonicalToTikTokEvent → user.external_id; /api/tracking/conversion already falls back
+  // to this anonymous id as `externalId` for guests). Both sides therefore land on the identical
+  // hash — that match is the entire point. Pre-hashing would double-hash and match nothing.
+  //
+  // `ta_anon_id_pub` is NOT httpOnly by design; `ta_anon_id` — the authoritative A/B assignment
+  // identity — stays httpOnly and is never read here. Same value, one visitor; see
+  // src/lib/ab-testing/anon-id-cookie.ts.
+  //
+  // Members are NOT fully unaffected, and the trade is deliberate. ConversionPixelsAdvancedMatching
+  // early-returns until `isAuthenticated && userData._id` resolves, which is strictly after this
+  // runs — so a member's FIRST browser page view now carries `external_id = anon_<uuid>` where it
+  // previously carried none, and only later events get the real User._id. That is the better of
+  // the two: an anonymous-but-stable id is a real match key (it is the same id the server sends
+  // for that visitor's guest events), whereas the status quo was no external_id at all. The
+  // /api/ab-testing/merge-user bridge links the two ids, so the identities do not fragment.
+  const anonymousId = readAnonIdPublicCookie();
+  if (anonymousId) {
+    (ttq.identify as (user: Record<string, unknown>) => void)({ external_id: anonymousId });
+  }
+
   if (firePagePing) (ttq.page as () => void)();
   window._ttqInit = true;
 }

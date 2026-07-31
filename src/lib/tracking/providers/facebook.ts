@@ -189,8 +189,11 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
     ...((u.birthdate && toYYYYMMDD(u.birthdate)) && {
       db: hashPII(toYYYYMMDD(u.birthdate)!),
     }),
-    ...(u.fbc && { fbc: u.fbc }),
-    ...(u.fbp && { fbp: u.fbp }),
+    // userData-then-ctx, same precedence as client_ip_address / client_user_agent below.
+    // Callers that build their context from `extractRequestContext(request)` already carry
+    // fbc/fbp on `ctx`; reading them only from userData quietly dropped those.
+    ...((u.fbc ?? ctx.fbc) && { fbc: u.fbc ?? ctx.fbc }),
+    ...((u.fbp ?? ctx.fbp) && { fbp: u.fbp ?? ctx.fbp }),
     ...((u.clientIpAddress ?? ctx.clientIpAddress) && {
       client_ip_address: u.clientIpAddress ?? ctx.clientIpAddress,
     }),

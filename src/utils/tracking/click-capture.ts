@@ -9,7 +9,7 @@ import { persistSyntheticFbcFromUrl, parseFbcCapturedAt, extractFBCFromRequest }
 /** CLIENT: capture every platform's click id on mount. No-op when no param present. */
 export function captureClickIds(): void {
   persistSyntheticFbcFromUrl(); // Meta: synthesize _fbc so it survives without the SDK
-  captureTikTokClickId();       // TikTok: ttclid + ttclid_ts
+  captureTikTokClickId();       // TikTok: ta_ttclid + ta_ttclid_ts (middleware writes these too)
   captureSnapClickId();         // Snapchat: ScCid -> _sc_click + _sc_click_ts
 }
 

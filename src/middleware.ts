@@ -6,9 +6,20 @@ import { buildSecurityHeaders } from "@/utils/security/csp";
 import {
   ANON_ID_COOKIE_NAME,
   ANON_ID_MAX_AGE,
+  ANON_ID_PUBLIC_COOKIE_NAME,
   generateAnonymousId,
   isValidAnonymousId,
 } from "@/lib/ab-testing/anon-id-cookie";
+// Cookie contract lives with the reader (extractTikTokContext) so the names/TTL can never
+// drift between writer and reader. That module is edge-safe by construction — no node:
+// imports, no crypto, `document`/`window` only behind typeof guards (verified).
+import {
+  TTCLID_COOKIE,
+  TTCLID_TS_COOKIE,
+  TTCLID_MAX_AGE_SECONDS,
+  TTCLID_COOKIE_DOMAIN,
+  isPlausibleTtclid,
+} from "@/utils/tracking/tiktok-helpers";
 
 // Internal users = staff/admin userType, or the legacy role:"admin" bridge
 // (kept until the Phase-5 migration drops the legacy field). Single definition so
@@ -118,17 +129,67 @@ export default withAuth(
     // otherwise generates its own `anon_<uuid>` and Set-Cookies it (last write
     // wins), which produces two legal VariantAssignment rows — the unique index
     // is (experimentId, anonymousId) — and counts one visitor as two exposures.
+    //
+    // `ta_anon_id_pub` is a browser-READABLE mirror of the SAME value: `ta_anon_id` stays
+    // httpOnly (assignment identity must not be forgeable from page JS), but client-side
+    // pixels need a stable anonymous id they can read to send as TikTok `external_id`.
+    // Both are written from one value on one request so they can never diverge.
+    const anonIdCookieOptions = {
+      sameSite: "lax" as const,
+      secure: isProduction,
+      maxAge: ANON_ID_MAX_AGE,
+      path: "/",
+    };
     const existingAnonId = req.cookies.get(ANON_ID_COOKIE_NAME)?.value;
+    const existingPublicAnonId = req.cookies.get(ANON_ID_PUBLIC_COOKIE_NAME)?.value;
     if (!existingAnonId || !isValidAnonymousId(existingAnonId)) {
+      const anonId = generateAnonymousId();
+      response.cookies.set({ name: ANON_ID_COOKIE_NAME, value: anonId, httpOnly: true, ...anonIdCookieOptions });
+      response.cookies.set({ name: ANON_ID_PUBLIC_COOKIE_NAME, value: anonId, httpOnly: false, ...anonIdCookieOptions });
+    } else if (existingPublicAnonId !== existingAnonId) {
+      // Existing visitor whose mirror is missing (minted before it existed) or has drifted
+      // (cleared/tampered). Backfill it from the authoritative httpOnly cookie; never the
+      // other way round, and never re-mint `ta_anon_id` — that would split their assignments.
       response.cookies.set({
-        name: ANON_ID_COOKIE_NAME,
-        value: generateAnonymousId(),
-        httpOnly: true,
-        sameSite: "lax",
-        secure: isProduction,
-        maxAge: ANON_ID_MAX_AGE,
-        path: "/",
+        name: ANON_ID_PUBLIC_COOKIE_NAME,
+        value: existingAnonId,
+        httpOnly: false,
+        ...anonIdCookieOptions,
       });
+    }
+
+    // TikTok click id, minted SERVER-SIDE on the landing document request.
+    //
+    // The client capture (captureClickIds -> captureTikTokClickId) runs in a POST-HYDRATION
+    // effect, so every visitor who bounced, blocked JS, or converted before hydration
+    // produced requests with no ttclid cookie at all — which is why TikTok's Events Manager
+    // reported 0% Click ID coverage on the server events while the browser pixel reported
+    // 82%. Writing it here removes the JS dependency entirely: the very first document
+    // request on an ad landing sets the cookie.
+    //
+    // httpOnly:false is deliberate — both the browser pixel path and captureTikTokClickId
+    // read this cookie from document.cookie.
+    //
+    // The value is passed RAW. `ResponseCookies.set` percent-encodes it on the way out and
+    // `RequestCookies` decodes it on the way back in (verified against the installed
+    // next@15.5.9 @edge-runtime/cookies) — hand-encoding here would DOUBLE-encode, and the
+    // client writer, which must encode because `document.cookie` is raw, would then be putting
+    // a different wire form under the same cookie name. `domain` matches the client writer for
+    // the same reason: a host-scoped and a Domain-scoped cookie of one name are two different
+    // cookies, and `cookies.get()` would pick between them non-deterministically.
+    const ttclidFromUrl = req.nextUrl.searchParams.get("ttclid");
+    if (ttclidFromUrl && isPlausibleTtclid(ttclidFromUrl)) {
+      // Overwrite unconditionally: a fresh click must beat a stale stored one.
+      const ttclidCookieOptions = {
+        httpOnly: false,
+        sameSite: "lax" as const,
+        secure: isProduction,
+        maxAge: TTCLID_MAX_AGE_SECONDS,
+        path: "/",
+        ...(TTCLID_COOKIE_DOMAIN && { domain: TTCLID_COOKIE_DOMAIN }),
+      };
+      response.cookies.set({ name: TTCLID_COOKIE, value: ttclidFromUrl, ...ttclidCookieOptions });
+      response.cookies.set({ name: TTCLID_TS_COOKIE, value: String(Date.now()), ...ttclidCookieOptions });
     }
 
     // In production, set CSP with nonce and attach nonce to request headers
