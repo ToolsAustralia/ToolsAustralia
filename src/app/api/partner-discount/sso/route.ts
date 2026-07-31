@@ -4,6 +4,11 @@ import { createDistributedRateLimiter, getClientIdentifier } from "@/utils/secur
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
 import { reconcilePartnerDiscountAccess, PARTNER_SSO_ERRORS } from "@/utils/partner-discounts/sso-access";
 import { generatePortalSso, logSsoIssuance } from "@/utils/partner-discounts/sso-flow";
+import {
+  buildPartnerSsoSharedFields,
+  hasValidPartnerConsent,
+  PARTNER_SSO_SCOPE_VERSION,
+} from "@/utils/partner-discounts/partner-consent";
 
 /**
  * POST /api/partner-discount/sso
@@ -72,6 +77,28 @@ export async function POST(request: NextRequest) {
           error: PARTNER_SSO_ERRORS.noAccess,
         },
         { status: 403 }
+      );
+    }
+
+    // 🔒 CONSENT GATE — before ANY member data crosses to the partner.
+    // Placed AFTER the access gate (no point disclosing to someone who can't go through)
+    // and BEFORE `generatePortalSso` (which is the call that actually transmits PII).
+    // 409 carries the disclosure list so the client renders exactly the fields this
+    // server will send — the sheet is never the client's own idea of the payload.
+    if (!hasValidPartnerConsent(user)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: PARTNER_SSO_ERRORS.consentRequired,
+          consentRequired: true,
+          data: {
+            fields: buildPartnerSsoSharedFields(user, {
+              tierLabel: decision.memberLevel ? `${decision.memberLevel.percent}% catalogue` : null,
+            }),
+            scopeVersion: PARTNER_SSO_SCOPE_VERSION,
+          },
+        },
+        { status: 409 }
       );
     }
 

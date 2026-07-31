@@ -88,6 +88,10 @@ export const PARTNER_SSO_ERRORS = {
    *  are already on, nor contradict a banner that just said "You're set". */
   noAccess:
     "Your partner access isn't active right now — it may have just expired. Refresh and try again, or contact us if it looks wrong.",
+  /** 409 — no valid consent for the current disclosed-field set. NOT an error the member
+   *  should ever read: the client intercepts `consentRequired` and opens the consent
+   *  sheet instead. This string is the fallback for a client that somehow renders it. */
+  consentRequired: "Please review what gets shared before opening the partner portal.",
   /** 502 — the vendor's /generatetoken refused or failed. */
   providerDown: "The partner portal is temporarily unavailable. Please try again shortly.",
   /** 500 — anything unhandled. */

@@ -6,7 +6,7 @@ import { cn } from "@/utils/cn";
 import AccessRing from "@/components/ui/AccessRing";
 import { inkOn, shade, PAST_DUE_AMBER } from "@/utils/membership/tier-visuals";
 import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
-import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
+import { usePortalHandoff } from "@/components/sections/rewards/PortalHandoff";
 import { partnerDiscountSsoEnabled } from "@/config/featureFlags";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
@@ -15,6 +15,9 @@ interface RewardsPartnerCardProps {
   partnerAccessPct: number;
   expiryLabel?: string | null;
   tierHex?: string | null;
+  /** Given name + tier, shown in the transit takeover's footer so the session reads as theirs. */
+  memberName?: string | null;
+  tierLabel?: string | null;
   onBecomeMember: () => void;
   onBuyPackage: () => void;
   onUpdatePayment: () => void;
@@ -26,11 +29,13 @@ export default function RewardsPartnerCard({
   partnerAccessPct,
   expiryLabel,
   tierHex,
+  memberName,
+  tierLabel,
   onBecomeMember,
   onBuyPackage,
   onUpdatePayment,
 }: RewardsPartnerCardProps) {
-  const sso = usePartnerDiscountSso();
+  const sso = usePortalHandoff({ memberName, tierLabel, accessPct: partnerAccessPct });
   const guest = acct === "none";
   const pastdue = acct === "pastdue";
   const onetime = acct === "onetime";
@@ -110,8 +115,8 @@ export default function RewardsPartnerCard({
           <>
           <button
             type="button"
-            onClick={() => sso.mutate()}
-            disabled={sso.isPending}
+            onClick={sso.start}
+            disabled={sso.busy}
             className="mt-3.5 flex w-full items-center gap-3 rounded-[10px] px-4 py-3 text-left disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
             /* The darkening is CONDITIONAL on which ink `inkOn()` picked, and must stay that way.
                White-ink tiers were failing badly — Tradie's cyan measured 2.07:1 against the old
@@ -135,7 +140,7 @@ export default function RewardsPartnerCard({
               <Store className="h-[17px] w-[17px]" />
             </span>
             <span className="min-w-0 flex-1">
-              <b className="block font-poppins text-[13px] font-extrabold">{sso.isPending ? "Opening…" : "Open partner portal"}</b>
+              <b className="block font-poppins text-[13px] font-extrabold">{sso.busy ? "Opening…" : "Open partner portal"}</b>
               {/* Solid ink, not a translucent one. At 10px this label was the worst contrast on the
                   card in BOTH branches — `rgba(255,255,255,.78)` gave 1.79:1 on the old cyan ramp,
                   and `rgba(0,0,0,.6)` still only reaches 4.45:1 on Foreman's yellow, just under AA.
@@ -146,12 +151,14 @@ export default function RewardsPartnerCard({
           </button>
           {/* The SSO route's error bodies are customer copy and this is the surface
               Cobber's FAQ points members at — swallowing them left the button flicking
-              "Opening…" and back with no explanation (panel F-033). */}
-          {sso.error?.message && (
+              "Opening…" and back with no explanation (panel F-033). Once the takeover is
+              up it owns error display, so `error` here is only the pre-takeover leg. */}
+          {sso.error && (
             <p className="mt-2 text-[11.5px] font-semibold text-[#c40d0d] dark:text-[#ff6b6b]" role="alert">
-              {sso.error.message}
+              {sso.error}
             </p>
           )}
+          {sso.overlay}
           </>
         ) : (
           // Partner portal (SSO) not shipped yet — see partnerDiscountSsoEnabled().

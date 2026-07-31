@@ -6,7 +6,7 @@ import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandle
 import { CheckCircle } from "lucide-react";
 import { SectionContainer } from "@/components/ui";
 import { usePaymentStatus } from "@/hooks/queries";
-import { usePartnerDiscountSso } from "@/hooks/queries/usePartnerDiscountSso";
+import { usePortalHandoff } from "@/components/sections/rewards/PortalHandoff";
 import { partnerDiscountSsoEnabled } from "@/config/featureFlags";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
@@ -22,7 +22,7 @@ interface PurchaseSuccessClientProps {
 export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessClientProps) {
   const paymentIntentId = searchParams.payment_intent;
   const { data: status } = usePaymentStatus(paymentIntentId, { enabled: !!paymentIntentId });
-  const sso = usePartnerDiscountSso();
+  const sso = usePortalHandoff();
   const firedRef = useRef(false);
 
   // Only offer the portal hand-off once the server confirms benefits were granted
@@ -123,17 +123,18 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
                 {showPartnerPortalCta && (
                   <button
                     type="button"
-                    onClick={() => sso.mutate()}
-                    disabled={sso.isPending}
+                    onClick={sso.start}
+                    disabled={sso.busy}
                     className="inline-flex items-center justify-center px-6 py-3 bg-gray-200 text-gray-900 font-medium rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {sso.isPending ? "Opening…" : "Open partner portal"}
+                    {sso.busy ? "Opening…" : "Open partner portal"}
                   </button>
                 )}
               </div>
-              {showPartnerPortalCta && sso.error?.message && (
-                <p className="text-sm text-red-600 text-center">{sso.error.message}</p>
+              {showPartnerPortalCta && sso.error && (
+                <p className="text-sm text-red-600 text-center">{sso.error}</p>
               )}
+              {showPartnerPortalCta && sso.overlay}
             </div>
           </PaymentSuccessHandler>
         </div>

@@ -359,3 +359,7 @@ Two boolean flags that gate the new cancellation-flow one-time retention offers.
 ## `User.upsellPurchases[].triggeringPaymentIntentId` — added to the schema (2026-07-10)
 
 The `upsellPurchases` array on `User` (upsell-domain data, but it lives on this model) declared `triggeringPaymentIntentId?` in the TS interface since inception, but the field was **missing from the Mongoose schema block** — under `strict: true` Mongoose silently stripped it on every write, so the `/api/upsell/purchase` "one purchase per appearance" dedup (which keys on `offerId + triggeringPaymentIntentId`) never matched. Fixed 2026-07-10 by adding the field to the schema. **Caveat:** rows written before the fix permanently lack the field, so the dedup only bites on upsell purchases made after it.
+
+## 2026-07-31 — `User.partnerDiscountConsent` added
+
+New optional embedded record on [User.ts](../../src/models/User.ts): `{ scopeVersion, acceptedAt, fields[] }` — the customer's agreement to share their details with the MyRewards partner portal. **No default**: absent means "never consented", the fail-closed state the SSO gate relies on. Owned by the **partner** domain — schema rationale and the re-consent/scope-version mechanism are in [docs/partner/models.md](../partner/models.md); the rules that keep it honest are [docs/partner/rules.md R4–R6](../partner/rules.md). No subscription behaviour changed.

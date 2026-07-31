@@ -150,7 +150,8 @@ function main() {
   // + ladder, continuity rules, where to see it).
   // Bumped 71 → 72 (2026-07-24): id 72 — partner-portal locked-offer explanation
   // (offers unlock at an access percentage set by tier / one-time pack).
-  assert.strictEqual(entries.length, 72, `Expected 72 FAQ entries, got ${entries.length}`);
+  // 74 since 2026-07-31: entries 73 + 74 cover the partner-portal consent screen.
+  assert.strictEqual(entries.length, 74, `Expected 74 FAQ entries, got ${entries.length}`);
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).

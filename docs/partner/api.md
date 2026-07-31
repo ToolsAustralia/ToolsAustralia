@@ -23,9 +23,39 @@ Mints a MyRewards/iGoDirect SSO token and returns the portal redirect URL. Ident
 > Rewards page, so it must not point anyone at the page they are already on, nor contradict a banner
 > that just said "You're set".
 
-Flow: `requireSameOrigin` → distributed rate-limit (`partner-discount-sso`, fail-open courtesy cap) → `requireAuthenticatedUserDoc` → **reconcile-then-read** (`reconcilePartnerDiscountAccess`) → **403 if no active access** → `generatePortalSso` signs + POSTs `/generatetoken` → best-effort `PartnerDiscountSsoIssuance` log → `{ success: true, data: { redirectUrl } }`.
+Flow: `requireSameOrigin` → distributed rate-limit (`partner-discount-sso`, fail-open courtesy cap) → `requireAuthenticatedUserDoc` → **reconcile-then-read** (`reconcilePartnerDiscountAccess`) → **403 if no active access** → **409 if no valid consent** → `generatePortalSso` signs + POSTs `/generatetoken` → best-effort `PartnerDiscountSsoIssuance` log → `{ success: true, data: { redirectUrl } }`.
 
-Statuses: 401 unauth · 403 no-access / cross-origin · 429 rate · 502 vendor unavailable · 500.
+Statuses: 401 unauth · 403 no-access / cross-origin · **409 consent required** · 429 rate · 502 vendor unavailable · 500.
+
+### 409 — consent gate (2026-07-31)
+
+Sits **after** the access gate (no point disclosing to someone who can't go through) and
+**before** `generatePortalSso` — the call that actually transmits PII. Body:
+
+```json
+{ "success": false, "error": "…", "consentRequired": true,
+  "data": { "fields": [{ "key": "name", "label": "Name", "value": "Marcus Thompson" }, …],
+            "scopeVersion": 1 } }
+```
+
+`fields` is built by `buildPartnerSsoSharedFields`, so **the consent sheet renders the
+server's idea of the payload, never its own**. The client (`usePartnerDiscountSso`)
+resolves this as `{ kind: "consent" }` rather than throwing — consent is a branch of the
+flow, not a failure, and throwing would light up every inline `error` renderer with a
+message the member should never read.
+
+## POST /api/partner-discount/consent — record data-sharing consent (2026-07-31)
+
+Writes the member's agreement to `User.partnerDiscountConsent`. **No request body**: the
+server re-derives the field list from `buildPartnerSsoSharedFields`, so a tampered client
+cannot record consent for a narrower set than the hand-off actually sends. Same go-live
+gate, same-origin check and rate limiter as the SSO route.
+
+Unlike the issuance log, this write is **not** best-effort — a consent write that silently
+failed would let the hand-off proceed with no record that permission was ever given, so a
+failure is a 500 and the member stays on the sheet.
+
+Statuses: 401 unauth · 403 cross-origin · 404 flag dark · 429 rate · 500.
 
 - **`member_level` is intentionally NOT sent yet** — gated on iGoDirect's encoding answer (implementation-plan §5a); the resolved tier is still recorded in the issuance log. One documented line at the `generatePortalSso` call flips it on.
 - **PII (owner-approved 2026-06-24):** sends `firstname` / `lastname` / `email` (so the member's portal profile pre-fills) plus the opaque `member_id`. Mobile is not in MyRewards' SSO payload. This makes a **member-deletion / anonymisation API + DPA** a firm vendor ask (implementation-plan §5 #7).

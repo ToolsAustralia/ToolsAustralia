@@ -63,7 +63,8 @@ function testErrorCopyIsCustomerFacing(): void {
     [/\bodds\b|lotter|raffle|sweepstake|gambl|\bwager\b/i, "rule-11 banned vocabulary"],
   ];
   const entries = Object.entries(PARTNER_SSO_ERRORS);
-  assert.equal(entries.length, 6, "all six failure paths must have copy");
+  // 7 since 2026-07-31: `consentRequired` (409) joined when the consent gate landed.
+  assert.equal(entries.length, 7, "all seven failure paths must have copy");
   for (const [key, msg] of entries) {
     for (const [rx, why] of BANNED) {
       assert.ok(!rx.test(msg), `PARTNER_SSO_ERRORS.${key} leaks ${why}: "${msg}"`);

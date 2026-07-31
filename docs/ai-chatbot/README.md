@@ -92,3 +92,7 @@ Enforced **structurally** (not just by prompt) — full detail in [implementatio
 - **No member account tools exist** — the shipped bot is FAQ-only; it has no access to membership status, entries, billing, or any per-user data. (Phase-2 member tools were **DROPPED**.)
 - **No cross-user data access** — per-user account tools were never implemented; the structural safeguard (server-side `userId` from session) was designed in but the tools themselves were removed.
 - **It never invents** prices, entry counts, draw dates (the 27th, 8:30 PM AEST/AEDT), or **winner outcomes** — and it states plainly that **Tools Australia does not pick winners** ([randomdraws.com.au](https://randomdraws.com.au) does). On low confidence or billing/refund/legal/winner topics it says "I'm not certain" and escalates to a human.
+
+## 2026-07-31 — Knowledge pack rebuilt for the partner-portal consent screen
+
+FAQ entries 73–74 describe what the portal hand-off shares and that agreeing is optional; `src/generated/chatKnowledgePack.ts` regenerated (8 sections, ~11.9k tokens). **Timing caveat (rule 5c):** the portal itself is still dark behind `PARTNER_DISCOUNT_SSO_ENABLED`, so these answers describe a flow customers cannot reach yet — they must go live in the same step as the flag. Their factual content is pinned to `buildPartnerSsoSharedFields`; if the shared-field set changes, fix the FAQ copy in the same change ([docs/partner/rules.md R4](../partner/rules.md)).
