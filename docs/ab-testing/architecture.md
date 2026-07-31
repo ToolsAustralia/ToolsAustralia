@@ -168,6 +168,34 @@ the two modules' cookie name/TTL/validation rule identical by hand — if they
 drift, assignments split across two ids for the same visitor again, which is
 exactly the bug this fixes.
 
+### `ta_anon_id_pub` — a read-only mirror for browser pixels (2026-07-31)
+
+`ta_anon_id` is `httpOnly`, deliberately: assignment identity must not be forgeable
+from page JS. But the browser conversion pixels need a stable anonymous id they can
+**read**, to send to TikTok as `external_id` — coverage on anonymous browser page
+views was 3%, and TikTok explicitly sanctions a first-party cookie id for this.
+
+So middleware also writes **`ta_anon_id_pub`**: the **same value**, same 90-day TTL,
+same `sameSite`/`secure`/`path`, but `httpOnly: false`. Its name constant lives beside
+the original in [`anon-id-cookie.ts`](../../src/lib/ab-testing/anon-id-cookie.ts).
+
+Three properties keep this from weakening anything, and they must stay true:
+
+1. **It is never authoritative.** It is written *from* `ta_anon_id`, never the reverse.
+   When a visitor already has a valid `ta_anon_id` but the mirror is missing or has
+   drifted, middleware backfills the mirror — it never re-mints `ta_anon_id`, because
+   that would split their assignments.
+2. **Nothing reads it server-side.** `AnonymousIdService.extractAnonymousId` reads
+   `ta_anon_id` only. A forged `ta_anon_id_pub` therefore cannot influence bucketing;
+   the worst it can do is send a junk `external_id` to an ad platform for that browser.
+3. **It is one concept, not two identities.** Do not introduce a second anonymous id.
+   If the two ever diverge in value, that is a bug in the mint/backfill branch.
+
+> Known drift: `/api/ab-testing/assign` re-sets `ta_anon_id` with a fresh 90-day
+> max-age on every call and does **not** touch the mirror, so the two expiries can
+> drift apart. Harmless today (the mirror is backfilled on the next page navigation,
+> and the value never changes), but worth knowing before adding another writer.
+
 ## Migrated from `docs/AB_TESTING_*.md`
 
 > _TODO: read all five root files and merge full content. Brief outline:_

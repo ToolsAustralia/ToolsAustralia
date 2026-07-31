@@ -102,6 +102,38 @@ Where a Stripe-mutating call uses a per-attempt UUID as the idempotency key (ins
 
 Reference implementation: [`createSubscriptionWithIdempotencyRetry`](../../src/utils/payment/stripe/createSubscriptionWithIdempotencyRetry.ts) — used by both `/api/stripe/create-subscription` and `/api/stripe/create-subscription-existing-user`. The retry is one-shot only — a second collision is rethrown so it surfaces in error reports rather than looping.
 
+## P11. Every route that can produce a Purchase must stamp the `capi_*` match signals
+
+`trackPixelPurchase` runs **only** from the Stripe webhook, with
+`actionSource: "system_generated"`. There is no live request there — no cookies, no headers — so
+the visitor's IP, user agent, Meta `fbc`/`fbp` and TikTok `ttclid`/`ttp` can reach the ad
+platforms **only** by riding through Stripe metadata:
+
+1. The payment-creating route reads them at request time —
+   `{ ...extractRequestContext(request), ...extractTikTokContext(request) }` — and writes
+   `capi_client_ip`, `capi_user_agent`, `capi_fbc`, `capi_fbp`, `capi_ttclid`, `capi_ttp`
+   into the PaymentIntent/Subscription metadata.
+2. The webhook's `extractRequestContextFromMetadata` reads them back into `requestContext`.
+3. `trackPixelPurchase` puts them on `userData`, where each provider reads only its own.
+
+**A new payment-creating route that omits this block silently degrades match quality** — no type
+error, no runtime error, just a Purchase with no IP, no user agent and no click id. That is
+exactly what happened: TikTok reported Purchase IP/UA coverage at **85%** while every other server
+event was 100%, traced (2026-07-31) to four routes that never stamped the keys —
+`renew-subscription` (its create-new branch mints a fresh subscription whose first invoice is
+`subscription_create`, so it *does* fire a Purchase), `create-payment-intent`,
+`upgrade-subscription-payment` and `downgrade-subscription`. All four now stamp them.
+
+Two constraints when adding it:
+- **Length.** Stripe rejects any metadata **value** over 500 characters and fails the whole API
+  call. `event_source_url` is already guarded for this; `?ttclid=` is now length-validated at the
+  cookie-mint boundary in middleware for the same reason.
+- **Idempotency.** On routes using a per-attempt idempotency key (see [P10](#p10-one-shot-idempotency-retry-on-key-collisions)), added metadata
+  applies to new objects only — a replayed key returns the original object with its original
+  metadata.
+
+Full write-up: [docs/tracking/TIKTOK_EVENTS_API_IMPLEMENTATION.md](../tracking/TIKTOK_EVENTS_API_IMPLEMENTATION.md).
+
 ## Cursor agent boundary
 
 The Cursor `.cursor/agents/stripe-billing.md` subagent owns this domain. Read its boundary description before non-trivial changes — the orchestrator rule (`.cursor/rules/orchestrator.mdc`) requires QA review for changes touching payments. Cursor-only; not invocable from Claude Code.

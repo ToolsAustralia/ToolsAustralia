@@ -35,7 +35,7 @@ Two server entry points:
 | `InitiateCheckout` | ✅ | ✅ (mirror) | ✅ | `trackInitiateCheckout` (MembershipModal) |
 | `AddPaymentInfo` | ✅ | ✅ (mirror) | ✅ | `trackAddPaymentInfo` |
 | `Lead` | ✅ | ✅ (mirror) | ✅ | `trackLead` |
-| `CompleteRegistration` | ✅ | — | browser-only | `trackCompleteRegistration` |
+| `CompleteRegistration` | ✅ | ✅ (register route) | ✅ (shared `pixelEventId`) | `trackCompleteRegistration` + [register route](../../src/app/api/auth/register/route.ts) |
 | `Subscribe` | ✅ (legacy helper) | — | browser-only | `trackPixelSubscription` |
 | `Search` / `Contact` | ✅ (legacy helper) | — | browser-only | `trackSearch` / `trackContact` |
 
@@ -61,14 +61,14 @@ Two server entry points:
 |---|---|---|---|
 | email | `user.email` | **SHA-256** (lowercase+trim) | server: `mapCanonicalToTikTokEvent`; browser: `ttq.identify` (SDK hashes) |
 | phone | `user.phone` ⚠️ **not** `phone_number` | **SHA-256** (E.164 first, via `normalizePhoneE164`) | server + `ttq.identify` (the pixel SDK *does* use `phone_number` — see the note below) |
-| user `_id` | `user.external_id` | **SHA-256** | server + `ttq.identify` |
+| user `_id`, else `ta_anon_id` | `user.external_id` | **SHA-256** | server + `ttq.identify`. Session `User._id` when authenticated; otherwise the **anonymous visitor id** `anon_<uuidv4>` from the `ta_anon_id` cookie — see the note below |
 | firstName | `user.first_name` | **SHA-256** (lowercase, all whitespace stripped) | server |
 | lastName | `user.last_name` | **SHA-256** (lowercase, all whitespace stripped) | server |
 | zipCode | `user.zip_code` | **SHA-256** (lowercase, all whitespace stripped) | server |
 | city | `user.city` | **plaintext** (lowercase, alphanumerics only) | server |
 | state | `user.state` | **plaintext** (lowercase, alphanumerics only) | server |
 | country | `user.country` | **plaintext** (ISO alpha-2, lowercased) | server |
-| ttclid | `user.ttclid` | **raw** | URL `?ttclid=` → cookie ([captureTikTokClickId](../../src/utils/tracking/tiktok-helpers.ts)); server reads cookie; pixel auto-attaches; webhook Purchase reads Stripe metadata `capi_ttclid` |
+| ttclid | `user.ttclid` | **raw** | URL `?ttclid=` → **`ta_ttclid` cookie, minted by [middleware](../../src/middleware.ts) on the landing request** (fallbacks: [captureTikTokClickId](../../src/utils/tracking/tiktok-helpers.ts) client-side, then legacy `ttclid` cookie, then `?ttclid=` off `request.url`). Pixel auto-attaches its own copy; webhook Purchase reads Stripe metadata `capi_ttclid`. Resolved by `extractTikTokContext`, which reads it from `userData` **or** `RequestContext` |
 | `_ttp` cookie | `user.ttp` | **raw** | server reads cookie (`extractTikTokContext`); pixel sets/uses it; webhook Purchase reads `capi_ttp` |
 | IP | `user.ip` | **raw** | server from request headers |
 | user-agent | `user.user_agent` | **raw** | server from request headers |
@@ -121,6 +121,18 @@ Two server entry points:
 | | Hashed (SHA-256, lowercase+trim) | Sent raw |
 |---|---|---|
 | **TikTok** | email, **phone** (E.164), external_id, first_name, last_name, zip_code | ttclid, ttp, ip, user_agent, **city, state, country** (plaintext, lowercased) |
+| | | |
+
+> **`external_id` for anonymous visitors (2026-07-31).** Guest-fired events used to carry no
+> `external_id` at all — InitiateCheckout sat at 1% coverage and AddPaymentInfo at 0%, because the
+> id was only ever `User._id` and neither event has a session. Both now fall back to the
+> **existing** `ta_anon_id` visitor id (`anon_<uuidv4>`, minted per visitor in middleware, 90-day
+> TTL) rather than minting a second identity. TikTok explicitly sanctions a first-party cookie id
+> here. Server and browser send the **same raw string** — the server hashes via `hashPII`, the
+> TikTok SDK hashes in-browser — so both land on the identical hash. The browser reads it from
+> `ta_anon_id_pub`, a readable mirror; `ta_anon_id` itself stays `httpOnly` because it is the
+> authoritative A/B assignment identity. A visitor's `external_id` therefore changes at signup
+> (`anon_<uuid>` → `User._id`); `/api/ab-testing/merge-user` already links the two.
 | **Meta** | em, ph, fn, ln, ct, st, zp, country, db, external_id | fbc, fbp, client_ip_address, client_user_agent |
 
 Same `hashPII` helper ([canonical-event.ts](../../src/lib/tracking/canonical-event.ts)) is used server-side for both, and the browser SDKs (`ttq.identify`, `fbq` AM) hash with identical normalization — so browser and server hashes match and the platforms can merge identity across surfaces. **Never pre-hash a field the SDK already hashes (double-hash = no match); never hash a raw field (breaks click/IP matching).**

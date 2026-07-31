@@ -476,7 +476,23 @@ On landing with marketing query params, the client persists **`utm_source`, `utm
 
 The landing URL's **`?packages=one-time`** marker is also captured (as `packages_focus`, only ever `"one-time"`) into the same session store and `_ta_attr` cookie, and stamped onto payments as `PaymentEvent.data.packagesFocus` — a seed for future revenue-by-landing-focus reporting. **Membership is the default and is stored by absence**: ads never carry `?packages=membership`, so organic and pre-feature traffic stores nothing.
 
-Paid **click IDs** are captured into separate cookies on mount: Meta `_fbc`/`_fbc_ts` (synthesized from `?fbclid=` so it survives without the Meta SDK), TikTok `ttclid`, Snapchat `_sc_click`; the Meta browser-ID `_fbp` is set by the Pixel. A **signup snapshot** is also persisted server-side in `User.signupAttribution` (§2h).
+Paid **click IDs** are captured into separate cookies on mount: Meta `_fbc`/`_fbc_ts` (synthesized from `?fbclid=` so it survives without the Meta SDK), TikTok `ta_ttclid`/`ta_ttclid_ts`, Snapchat `_sc_click`; the Meta browser-ID `_fbp` is set by the Pixel. A **signup snapshot** is also persisted server-side in `User.signupAttribution` (§2h).
+
+**TikTok click-id capture changed 2026-07-31.** The cookie is now written by **middleware on the
+landing request** rather than only by a post-hydration script, it is named `ta_ttclid` (it was the
+bare `ttclid`, which collided with a cookie TikTok's own pixel writes), and its **retention on the
+visitor's device rose from 7 days to 90 days** — matching the other first-party attribution cookies.
+This is the *same* single identifier held for longer, not a new one, and it is TikTok's own click
+id, meaningless outside TikTok. Internal attribution windows are unchanged: a TikTok click still
+only counts for 7 days ([platformPriority.ts](src/services/attribution/platformPriority.ts)); the
+longer cookie exists so the click id can still be *sent* to TikTok's Events API for match quality.
+
+**A browser-readable copy of the anonymous visitor id was added 2026-07-31.** `ta_anon_id` — the
+random `anon_<uuidv4>` already minted for every visitor (90 days, no personal data in it) — is
+`httpOnly`, so page scripts cannot read it. A mirror cookie **`ta_anon_id_pub`** now carries the
+same value in readable form, so the browser conversion pixels can send it as an anonymous
+`external_id` (§8d). It is the **same pseudonymous visitor id, not a new one and not an additional
+piece of personal information**; `ta_anon_id` stays `httpOnly` and remains the authoritative copy.
 
 **Promo-page build capture changed 2026-07-29.** On `/promotions/*`, the visit row
 (`PromoAnalyticsVisit`, keyed on the `ta_anon_id` cookie — not the `User` record) now records
@@ -523,9 +539,20 @@ Identity payload (`user_data`, [facebook-helpers.ts:200-275](src/utils/tracking/
 |---|---|---|
 | Email / phone / first / last name | `em` / `ph` / `fn` / `ln` | **SHA-256 hashed** |
 | City / state / zip / country / birthdate | `ct` / `st` / `zp` / `country` / `db` | **SHA-256 hashed** |
-| User `_id` | `external_id` | **SHA-256 hashed** |
+| User `_id`, **else the anonymous visitor id** | `external_id` | **SHA-256 hashed** |
 | Click ID / browser ID | `fbc` / `fbp` | **raw** |
 | IP address / user agent | `client_ip_address` / `client_user_agent` | **raw** |
+
+**Guest events now carry an anonymous `external_id` (2026-07-31).** Previously, events fired before
+a customer had an account — viewing a package, starting checkout, entering card details — reached
+Meta and TikTok with **no** user identifier at all. They now carry the visitor's existing
+`ta_anon_id` (`anon_<uuidv4>`, hashed like every other identifier), falling back to it only when
+there is no logged-in `User._id`. **What this does and does not mean:** it does not send any new
+*personal* information — the value is a random UUID minted on this device, tied to no name, email
+or phone, and it is an id the site already held. What it does do is let the ad platforms recognise
+that several events came from the same browser, which is the point: without it those events were
+unattributable. A visitor's `external_id` switches from the anonymous id to their `User._id` once
+they register.
 
 Hashing is plain SHA-256 of lowercased+trimmed input; **phones are first normalized to E.164 digits** (`"0412 345 678"` → `61412345678`) on every Meta surface via the shared `metaPhoneDigits` helper (2026-07 fix — previously Meta hashed the raw digit strip, wasting the `ph` match key), matching how TikTok already normalized. The same identity model applies to TikTok (`email`, `phone`, `external_id` hashed; `ttclid`, `ttp`, IP, UA raw) and Snapchat. As of 2026-07, TikTok's **server-side Events API** receives the same conversion set as Meta's CAPI — including `CompleteRegistration` (fired server-side on all four register branches) and custom `MembershipUpgrade`/`MembershipDowngrade` (dispatched server-side via `tiktokProvider.capiSend`), each sharing the Meta event's `event_id`. Previously TikTok received none of these (registration/upgrade/downgrade were Meta-only).
 
@@ -536,7 +563,8 @@ Hashing is plain SHA-256 of lowercased+trimmed input; **phones are first normali
 - **Public disclosure (2026-07-24, panel F-012):** the privacy policy's Cookies & Tracking section now names **TikTok** alongside Facebook (Marketing Cookies example + third-party providers list) and discloses the **server-side conversion sharing to Meta and TikTok with hashed identifiers** — previously it named Facebook Pixel only, understating the tracking footprint documented in §8d.
 - **No consent banner — deliberate (2026-07-24, panel F-019).** Tools Australia does **not** ask for cookie/pixel consent: the pixels load and the CAPIs fire for every visitor. `hasPixelConsent()` hard-returns `true` ("auto-accept mode"). The dead `PixelConsentModal` — unreachable (`isOpen={false}`) and with a Decline button that gated nothing — was deleted rather than left implying a control the visitor never had. Rationale + what a real consent gate would require: [docs/tracking/rules.md R9](docs/tracking/rules.md).
 - **`signupAttribution.clickPlatform` (2026-07-24)** records WHICH paid platform a signup came from, derived from a click-id cookie already present on the device. It stores the platform name only, not the click id — no new identifier, no third-party sharing; it is read solely by internal admin analytics.
-- **The first-touch `_ta_attr` cookie persists 90 days** and survives login/OAuth; it holds only campaign metadata, no direct PII.
+- **The first-touch `_ta_attr` cookie persists 90 days** and survives login/OAuth; it holds only campaign metadata, no direct PII. It does **not** hold click IDs — each platform's click ID lives in its own cookie (see §8a).
+- **Anonymous visitors are now identified to Meta/TikTok by a pseudonymous device id (2026-07-31).** Guest-fired events carry the `ta_anon_id` UUID as a hashed `external_id` (§8d), and the TikTok browser pixel sends it too, read from the `ta_anon_id_pub` mirror. No new personal data leaves — but it does mean pre-signup activity from one browser is now **linkable across events** by those platforms, where before it was not. Combined with the 7→90-day TikTok click-id retention, the honest summary is: **no new categories of customer data are shared, but existing anonymous activity is now more durably linkable.**
 - **Contentsquare session-replay capture is env-gated, prod-only** (`NEXT_PUBLIC_CONTENTSQUARE_ID`, blank ⇒ disabled — [docs/tracking/rules.md R8](docs/tracking/rules.md)): dev/e2e/staging never record a session unless the id is explicitly set.
 
 ---

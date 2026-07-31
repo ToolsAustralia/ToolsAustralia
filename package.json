@@ -265,6 +265,8 @@
     "test:capi-userdata": "tsx src/lib/tracking/__tests__/capi-userdata-enrichment.test.ts",
     "test:tiktok-capi": "tsx src/lib/tracking/__tests__/tiktok-capi.test.ts",
     "test:tiktok-capi-guards": "tsx src/lib/tracking/__tests__/tiktok-capi-guards.test.ts",
+    "test:tiktok-match-signals": "tsx src/lib/tracking/__tests__/tiktok-match-signals.test.ts",
+    "test:tiktok-pixel-events": "tsx src/lib/tracking/__tests__/tiktok-pixel-events.test.ts",
     "test:tiktok-sync-contract": "tsx src/services/admin/tiktok/__tests__/tiktokSyncContract.test.ts",
     "test:advanced-matching": "tsx src/lib/tracking/__tests__/advanced-matching.test.ts",
     "test:facebook-fbc-extract": "tsx src/utils/tracking/__tests__/extractFBCFromRequest.test.ts",

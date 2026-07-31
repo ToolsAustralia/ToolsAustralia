@@ -8,6 +8,50 @@
 2. **Protected route gating** — `/rewards`, `/my-account` require an authenticated session; unauthenticated visitors are redirected to `/login`.
 3. **Admin route gating** — `/admin`, `/api/admin` require an internal user. An internal user is any token where `userType === "staff"` (custom-role staff member) **or** `userType === "admin"` (seeded Admin super-role). The legacy `token.role === "admin"` bridge stays active until Phase 5 cleanup drops the `User.role` field. Anyone else hitting an admin route is redirected to `/`.
 4. **Staff route block** — see below.
+5. **First-party cookie minting** — see below.
+
+## First-party cookies minted here
+
+Middleware is the right place for these because it is the **only** code that runs on the landing
+document request itself, before any JavaScript. All are set on the single `NextResponse.next()`
+response, inside the same block, so the CSP flow below is untouched.
+
+| Cookie | httpOnly | TTL | Purpose |
+|---|---|---|---|
+| `ta_anon_id` | **yes** | 90d | A/B anonymous visitor id (`anon_<uuidv4>`). Authoritative assignment identity — see [ab-testing](../ab-testing/). |
+| `ta_anon_id_pub` | **no** | 90d | Browser-**readable mirror** of the exact same value. Added 2026-07-31. |
+| `ta_ttclid` | no | 90d | TikTok click id, from `?ttclid=` on the landing URL. |
+| `ta_ttclid_ts` | no | 90d | Capture timestamp for the above, so the attribution resolver can window it. |
+
+**Why `ta_anon_id_pub` exists, and why it is not a weakening.** The browser conversion pixels need
+a stable anonymous id they can read to send as TikTok `external_id` (coverage was 3%). `ta_anon_id`
+is `httpOnly` and stays that way — A/B assignment identity must not be forgeable from page JS —
+so the mirror carries the same value under a readable name. It is **never read server-side** and is
+never authoritative: it is written *from* `ta_anon_id`, never the reverse. Nothing that trusts the
+anonymous id reads the `_pub` copy. If they ever diverge, middleware backfills the mirror from the
+httpOnly original on the next page navigation.
+
+**Why `ta_ttclid` is minted here.** Its previous only writer was a post-hydration client effect, so
+every visitor who bounced, blocked JS, or converted before hydration produced requests with no
+click id — TikTok's Events Manager reported **0% click-id coverage on every server event** while
+the browser pixel reported 82%. Minting it on the landing request removes the JS dependency. See
+[tracking](../tracking/TIKTOK_EVENTS_API_IMPLEMENTATION.md).
+
+**The `?ttclid=` value is length-validated** (`isPlausibleTtclid`, 256 chars) before being
+persisted. It is attacker-controllable via the URL and flows onward into Stripe metadata as
+`capi_ttclid`; Stripe **fails the entire API call** on any metadata value over 500 characters, so an
+unbounded value here could brick a checkout.
+
+**Encoding invariant.** Next's `ResponseCookies.set` percent-**encodes** on write and
+`RequestCookies` **decodes** on parse. Middleware therefore passes cookie values **raw** — hand-
+encoding would double-encode. The client-side writer in `tiktok-helpers.ts` *must* encode, because
+`document.cookie` is raw. Both writers also share the same `domain` (`TTCLID_COOKIE_DOMAIN`): a
+host-scoped and a `Domain=`-scoped cookie of one name are two different cookies, and `cookies.get()`
+would pick between them non-deterministically.
+
+> **Known gap:** the staff-block, protected-route and admin redirects all `return` before this
+> block, so a landing that immediately redirects mints no cookies. Acceptable today — those are all
+> authenticated/internal paths, and ad traffic never lands on them.
 
 ## Staff route block
 

@@ -66,7 +66,22 @@ export interface TikTokEvent {
       quantity?: number;
       price?: number;
     }>;
+    /**
+     * The search term, sent under BOTH keys — TikTok's own v1.3 docs disagree with themselves:
+     * the Events API parameter table names it `search_string`, while the payload-helper prose
+     * names it `query`. We cannot tell from the outside which one the ingest actually reads,
+     * and the `phone_number` incident above proves a wrong key vanishes silently rather than
+     * erroring. So send both: guessing wrong costs the whole parameter.
+     *
+     * UNVERIFIED, and the reason this is scoped to Search only: we have confirmed v1.3 ignores
+     * unknown keys under `user` (that is what hid `phone_number`), but NOT under `properties`.
+     * If the ingest turns out to validate `properties` strictly, Search events would 400 —
+     * visible as `[TikTok CAPI] Failed` with a non-zero `code`. Search is low-volume and
+     * carries no revenue, so it is the safe place to take that bet. If it does fail, drop
+     * `search_string` here and in the emit below; nothing else depends on it.
+     */
     query?: string;
+    search_string?: string;
   };
   page?: { url?: string; referrer?: string };
 }
@@ -130,8 +145,13 @@ export function mapCanonicalToTikTokEvent(
     ...(city && { city }),
     ...(state && { state }),
     ...(country && { country }),
-    ...(u.ttclid && { ttclid: u.ttclid }),
-    ...(u.ttp && { ttp: u.ttp }),
+    // ttclid / ttp resolve userData-then-ctx, exactly like ip / user_agent below. Reading them
+    // ONLY from userData was a silent hole: the payment + checkout routes build their context as
+    // `{ ...extractRequestContext(request), ...extractTikTokContext(request) }`, so both values
+    // were sitting on `ctx` at runtime and getting dropped here — invisible to tsc, because
+    // RequestContext didn't declare them. userData still wins when a caller sets it explicitly.
+    ...((u.ttclid ?? ctx.ttclid) && { ttclid: u.ttclid ?? ctx.ttclid }),
+    ...((u.ttp ?? ctx.ttp) && { ttp: u.ttp ?? ctx.ttp }),
     ...((u.clientIpAddress ?? ctx.clientIpAddress) && {
       ip: u.clientIpAddress ?? ctx.clientIpAddress,
     }),
@@ -161,10 +181,16 @@ export function mapCanonicalToTikTokEvent(
     ...(cd.contentType && { content_type: cd.contentType }),
     ...(cd.orderId && { order_id: cd.orderId }),
     ...(contents && { contents }),
-    ...(cd.searchString && { query: cd.searchString }),
+    // Both spellings — see the `query` / `search_string` note on the interface.
+    ...(cd.searchString && { query: cd.searchString, search_string: cd.searchString }),
   };
 
   const pageUrl = event.eventSourceUrl ?? ctx.eventSourceUrl;
+  // `page.referrer` was declared on TikTokEvent but never emitted, so it was structurally
+  // unreachable. It comes from the request context only — there is no canonical-event slot
+  // for it and no caller supplies one yet, so it stays absent until a route passes a real
+  // `Referer`. Never derive it from pageUrl: a fabricated referrer is worse than none.
+  const pageReferrer = ctx.referrer;
 
   return {
     event: event.eventName,
@@ -172,7 +198,12 @@ export function mapCanonicalToTikTokEvent(
     event_id: event.eventId,
     user,
     properties,
-    ...(pageUrl && { page: { url: pageUrl } }),
+    ...((pageUrl || pageReferrer) && {
+      page: {
+        ...(pageUrl && { url: pageUrl }),
+        ...(pageReferrer && { referrer: pageReferrer }),
+      },
+    }),
   };
 }
 

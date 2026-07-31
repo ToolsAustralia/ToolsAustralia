@@ -9,6 +9,8 @@ import { authOptions } from "@/lib/auth";
 import Stripe from "stripe";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import { isStripeCardError } from "@/utils/payment/stripe/payment-error-detection";
 import { analyzeStripePayErrorForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
 import {
@@ -208,6 +210,20 @@ export async function POST(request: NextRequest) {
     // Format description for Stripe transactions tab: "Tradie to Foreman Upgrade"
     const upgradeDescription = `${currentPackage.name} to ${newPackage.name} Upgrade`;
 
+    // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
+    // Store in subscription metadata so webhook can use it for improved match quality
+    // Carries every provider's match signals: Meta's fbc/fbp and TikTok's ttclid/ttp.
+    // Both get stashed in Stripe metadata (capi_*) because Purchase fires from the
+    // webhook, which has no cookies to read them back from. A paid `subscription_update`
+    // proration invoice is NOT a renewal, so it does produce a Purchase.
+    const requestContext = { ...extractRequestContext(request), ...extractTikTokContext(request) };
+    // Upgrades run from StripePaymentModal on the account surface, not the shop, so the
+    // no-referer fallback points at /my-account rather than /shop.
+    const capiEventSourceUrl = safeEventSourceUrl(
+      request.headers.get("referer") ??
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/my-account` : undefined)
+    );
+
     const updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
       items: [
         {
@@ -235,6 +251,17 @@ export async function POST(request: NextRequest) {
         upgradeFromName: currentPackage.name,
         upgradeDate: new Date().toISOString(),
         upgradeType: "no_proration", // Track that this used NO proration
+        // Store request context for Facebook CAPI (webhook will extract and use).
+        // Stamped AFTER the currentSubscription.metadata spread on purpose: the carried-over
+        // capi_* keys are from the original signup (possibly months ago), so the live upgrade
+        // request's IP/UA/click ids are the ones that actually match this Purchase.
+        ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+        ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+        ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+        ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        ...(requestContext.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
+        ...(requestContext.ttp ? { capi_ttp: requestContext.ttp } : {}),
+        ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
         originalBillingDate: currentSubPeriodStart
           ? new Date(currentSubPeriodStart * 1000).toISOString()
           : new Date().toISOString(),
@@ -334,7 +361,8 @@ export async function POST(request: NextRequest) {
       // Track Meta CAPI Custom Event `MembershipUpgrade` (server-side — no live Pixel call).
       try {
         const { trackPixelSubscriptionUpgrade } = await import("@/utils/tracking/pixel-purchase-tracking");
-        const requestContext = extractRequestContext(request);
+        // Reuses the hoisted requestContext (Meta + TikTok signals) rather than re-deriving a
+        // Meta-only one, so MembershipUpgrade carries the same match signals as the Purchase.
         await trackPixelSubscriptionUpgrade({
           oldValue: currentPackage.price,
           newValue: newPackage.price,
