@@ -1,25 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  Calendar,
-  Edit,
-  Eye,
-  AlertCircle,
-  Users,
-  DollarSign,
-  Trophy,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-} from "lucide-react";
-import { Button, Input, Select } from "@/components/modals/ui";
-import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
-import MajorDrawEditModal from "@/components/modals/MajorDrawEditModal";
+import { useDebounce } from "@/hooks/useDebounce";
 import { formatDateInLocal } from "@/utils/common/timezone";
-import { AdminBadge, MajorDrawTableStatusBadge } from "@/components/admin/ui/AdminBadge";
+import { MajorDrawEditModal, AdminMajorDrawModal, DrawLockedModal } from "@/components/modals/draws";
+import { DrawsListPage, type DrawGroup, type DrawRow } from "@/components/admin/draws";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // Import the MajorDrawData type from the modal
 interface MajorDrawData {
@@ -82,6 +70,10 @@ interface UpcomingDraw {
     terms?: string[];
   };
   totalEntries: number;
+  /** Derived net revenue — see src/services/admin/drawRevenue.ts. */
+  revenue: number;
+  /** null (never Infinity/NaN) when the draw has no entries. */
+  revenuePerEntry: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -102,6 +94,7 @@ interface UpcomingDrawsResponse {
       totalDraws: number;
       totalEntries: number;
       totalPrizeValue: number;
+      totalRevenue: number;
       drawsWithWinners: number;
       drawsWithoutWinners: number;
       winnerSelectionRate: number;
@@ -109,34 +102,55 @@ interface UpcomingDrawsResponse {
   };
 }
 
-const STATUS_OPTIONS = [
-  { value: "", label: "All Statuses" },
-  { value: "queued", label: "Queued" },
-  { value: "active", label: "Active" },
-  { value: "queued,active", label: "Queued & Active" },
-  { value: "frozen", label: "Frozen" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
+const HISTORY_ENDPOINT = "/api/admin/major-draw/history";
+
+/**
+ * "Queued & Active" is the default view but the API's Zod schema takes a SINGLE
+ * status enum, so that option fans out into two parallel requests whose results
+ * and stats are merged. Load-bearing — do not collapse it into one request.
+ */
+const COMBINED_STATUS = "queued,active";
+
+const STATUS_OPTIONS: Array<{ label: string; value: string }> = [
+  { label: "All", value: COMBINED_STATUS },
+  { label: "Active", value: "active" },
+  { label: "Queued", value: "queued" },
+  { label: "Cancelled", value: "cancelled" },
 ];
 
-const CATEGORY_OPTIONS = [
-  { value: "", label: "All Categories" },
-  { value: "vehicle", label: "Vehicle" },
-  { value: "electronics", label: "Electronics" },
-  { value: "travel", label: "Travel" },
-  { value: "cash", label: "Cash" },
-  { value: "experience", label: "Experience" },
-  { value: "home", label: "Home & Garden" },
-  { value: "fashion", label: "Fashion" },
-  { value: "sports", label: "Sports" },
-  { value: "other", label: "Other" },
-];
+// No sort control. Upcoming is always soonest-draw-first — the only order a
+// schedule is read in — so a dropdown for it cost toolbar space without earning
+// it. The API still takes sortBy/sortOrder; they are just fixed here.
+const DEFAULT_SORT_BY = "drawDate";
+const DEFAULT_SORT_ORDER = "asc";
+
+const labelFor = (options: Array<{ label: string; value: string }>, value: string) =>
+  options.find((o) => o.value === value)?.label ?? options[0].label;
+const valueFor = (options: Array<{ label: string; value: string }>, label: string) =>
+  options.find((o) => o.label === label)?.value ?? "";
+
+const currency = (amount: number) =>
+  new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(amount);
+
+const currencyPrecise = (amount: number) =>
+  new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", minimumFractionDigits: 2 }).format(amount);
+
+const compactCurrency = (amount: number) =>
+  amount >= 1_000_000
+    ? `$${(amount / 1_000_000).toFixed(2)}M`
+    : amount >= 10_000
+      ? `$${Math.round(amount / 1000)}K`
+      : currency(amount);
 
 export default function UpcomingDraws() {
   const { showToast } = useToast();
+  const { has } = usePermissions();
+  const canEditMajor = has("majorDraw.edit");
+
   const [draws, setDraws] = useState<UpcomingDraw[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -149,6 +163,7 @@ export default function UpcomingDraws() {
     totalDraws: 0,
     totalEntries: 0,
     totalPrizeValue: 0,
+    totalRevenue: 0,
     drawsWithWinners: 0,
     drawsWithoutWinners: 0,
     winnerSelectionRate: 0,
@@ -156,116 +171,90 @@ export default function UpcomingDraws() {
 
   // Filters
   const [filters, setFilters] = useState({
-    status: "queued,active", // Default to show queued and active draws
-    category: "",
+    status: COMBINED_STATUS,
     search: "",
-    sortBy: "drawDate", // Use valid sort option
-    sortOrder: "asc",
   });
+  const debouncedSearch = useDebounce(filters.search, 300);
+  const [openFilterKey, setOpenFilterKey] = useState<string | null>(null);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   // Modals
   const [selectedDraw, setSelectedDraw] = useState<UpcomingDraw | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [lockedNoticeDraw, setLockedNoticeDraw] = useState<UpcomingDraw | null>(null);
 
   // Fetch draws
   const fetchDraws = useCallback(
     async (page: number = 1) => {
       setIsLoading(true);
       setError(null);
+      setErrorStatus(null);
+
+      const baseParams = (status?: string) =>
+        new URLSearchParams({
+          page: page.toString(),
+          limit: pagination.limit.toString(),
+          sortBy: DEFAULT_SORT_BY,
+          sortOrder: DEFAULT_SORT_ORDER,
+          ...(status && { status }),
+          ...(debouncedSearch && { search: debouncedSearch }),
+        });
 
       try {
-        // Handle combined status filter (queued,active)
-        if (filters.status === "queued,active") {
-          // Make two separate API calls and combine results
+        if (filters.status === COMBINED_STATUS) {
+          // Two calls because the API takes one status enum. Merged below.
           const [queuedResponse, activeResponse] = await Promise.all([
-            fetch(
-              `/api/admin/major-draw/history?${new URLSearchParams({
-                page: page.toString(),
-                limit: pagination.limit.toString(),
-                sortBy: filters.sortBy,
-                sortOrder: filters.sortOrder,
-                status: "queued",
-                ...(filters.category && { category: filters.category }),
-                ...(filters.search && { search: filters.search }),
-              })}`
-            ),
-            fetch(
-              `/api/admin/major-draw/history?${new URLSearchParams({
-                page: page.toString(),
-                limit: pagination.limit.toString(),
-                sortBy: filters.sortBy,
-                sortOrder: filters.sortOrder,
-                status: "active",
-                ...(filters.category && { category: filters.category }),
-                ...(filters.search && { search: filters.search }),
-              })}`
-            ),
+            fetch(`${HISTORY_ENDPOINT}?${baseParams("queued")}`),
+            fetch(`${HISTORY_ENDPOINT}?${baseParams("active")}`),
           ]);
 
           if (!queuedResponse.ok || !activeResponse.ok) {
+            setErrorStatus(queuedResponse.ok ? activeResponse.status : queuedResponse.status);
             throw new Error("Failed to fetch draws");
           }
 
-          const [queuedData, activeData] = await Promise.all([queuedResponse.json(), activeResponse.json()]);
+          const [queuedData, activeData] = (await Promise.all([queuedResponse.json(), activeResponse.json()])) as [
+            UpcomingDrawsResponse,
+            UpcomingDrawsResponse,
+          ];
 
-          if (queuedData.success && activeData.success) {
-            // Combine draws from both responses
-            const combinedDraws = [...queuedData.data.draws, ...activeData.data.draws];
+          if (!queuedData.success || !activeData.success) throw new Error("Failed to fetch draws");
 
-            // Combine stats
-            const combinedStats = {
-              totalDraws: queuedData.data.stats.totalDraws + activeData.data.stats.totalDraws,
-              totalEntries: queuedData.data.stats.totalEntries + activeData.data.stats.totalEntries,
-              totalPrizeValue: queuedData.data.stats.totalPrizeValue + activeData.data.stats.totalPrizeValue,
-              drawsWithWinners: queuedData.data.stats.drawsWithWinners + activeData.data.stats.drawsWithWinners,
-              drawsWithoutWinners:
-                queuedData.data.stats.drawsWithoutWinners + activeData.data.stats.drawsWithoutWinners,
-              winnerSelectionRate: 0, // Will be calculated below
-            };
+          const combinedDraws = [...queuedData.data.draws, ...activeData.data.draws];
+          const drawsWithWinners = queuedData.data.stats.drawsWithWinners + activeData.data.stats.drawsWithWinners;
+          const drawsWithoutWinners =
+            queuedData.data.stats.drawsWithoutWinners + activeData.data.stats.drawsWithoutWinners;
+          const totalWithOutcome = drawsWithWinners + drawsWithoutWinners;
 
-            // Calculate combined winner selection rate
-            const totalDrawsWithWinners = combinedStats.drawsWithWinners + combinedStats.drawsWithoutWinners;
-            if (totalDrawsWithWinners > 0) {
-              combinedStats.winnerSelectionRate = Math.round(
-                (combinedStats.drawsWithWinners / totalDrawsWithWinners) * 100
-              );
-            }
-
-            setDraws(combinedDraws);
-            setPagination(queuedData.data.pagination); // Use queued pagination as base
-            setStats(combinedStats);
-          } else {
-            throw new Error("Failed to fetch draws");
-          }
-        } else {
-          // Single status filter
-          const queryParams = new URLSearchParams({
-            page: page.toString(),
-            limit: pagination.limit.toString(),
-            sortBy: filters.sortBy,
-            sortOrder: filters.sortOrder,
-            ...(filters.status && filters.status !== "queued,active" && { status: filters.status }),
-            ...(filters.category && { category: filters.category }),
-            ...(filters.search && { search: filters.search }),
+          setDraws(combinedDraws);
+          setPagination(queuedData.data.pagination); // queued pagination as the base
+          setStats({
+            totalDraws: queuedData.data.stats.totalDraws + activeData.data.stats.totalDraws,
+            totalEntries: queuedData.data.stats.totalEntries + activeData.data.stats.totalEntries,
+            totalPrizeValue: queuedData.data.stats.totalPrizeValue + activeData.data.stats.totalPrizeValue,
+            // Revenue is filter-wide per response, so the two must be SUMMED —
+            // same as every other stat on this merge path.
+            totalRevenue: (queuedData.data.stats.totalRevenue ?? 0) + (activeData.data.stats.totalRevenue ?? 0),
+            drawsWithWinners,
+            drawsWithoutWinners,
+            winnerSelectionRate: totalWithOutcome > 0 ? Math.round((drawsWithWinners / totalWithOutcome) * 100) : 0,
           });
-
-          const response = await fetch(`/api/admin/major-draw/history?${queryParams}`);
-
+        } else {
+          const response = await fetch(`${HISTORY_ENDPOINT}?${baseParams(filters.status)}`);
           if (!response.ok) {
-            const errorData = await response.json();
+            setErrorStatus(response.status);
+            const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
           }
 
           const data: UpcomingDrawsResponse = await response.json();
+          if (!data.success) throw new Error("Failed to fetch draws");
 
-          if (data.success) {
-            setDraws(data.data.draws);
-            setPagination(data.data.pagination);
-            setStats(data.data.stats);
-          } else {
-            throw new Error("Failed to fetch draws");
-          }
+          setDraws(data.data.draws);
+          setPagination(data.data.pagination);
+          setStats(data.data.stats);
         }
       } catch (err) {
         console.error("Error fetching draws:", err);
@@ -274,23 +263,13 @@ export default function UpcomingDraws() {
         setIsLoading(false);
       }
     },
-    [filters, pagination.limit]
+    [filters.status, debouncedSearch, pagination.limit]
   );
 
-  // Initial load
   useEffect(() => {
     fetchDraws();
   }, [fetchDraws]);
 
-  // Handle filter changes
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
-
-  // Handle pagination
   const handlePageChange = (newPage: number) => {
     fetchDraws(newPage);
   };
@@ -312,11 +291,19 @@ export default function UpcomingDraws() {
     };
   };
 
-  // Handle edit draw
-  const handleEditDraw = (draw: UpcomingDraw) => {
+  /**
+   * THE single edit gate. Every entry point — inspector primary, row action and
+   * (on mobile) the sheet — routes through here, so a locked draw can never
+   * reach the form from any of them.
+   */
+  const openDrawEditor = useCallback((draw: UpcomingDraw) => {
+    if (draw.configurationLocked) {
+      setLockedNoticeDraw(draw);
+      return;
+    }
     setSelectedDraw(draw);
     setIsEditModalOpen(true);
-  };
+  }, []);
 
   // Handle save draw - accepts MajorDrawData format from modal
   const handleSaveDraw = async (data: Partial<MajorDrawData>) => {
@@ -324,15 +311,12 @@ export default function UpcomingDraws() {
 
     setIsSubmitting(true);
     try {
-      // Data is already in the correct format from the modal
-      const apiData = data;
-
       const response = await fetch(`/api/admin/major-draw/update?id=${selectedDraw._id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(apiData),
+        body: JSON.stringify(data),
       });
 
       if (!response.ok) {
@@ -340,12 +324,10 @@ export default function UpcomingDraws() {
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      // Refresh the draws list
       await fetchDraws(pagination.currentPage);
       setIsEditModalOpen(false);
       setSelectedDraw(null);
 
-      // Show success toast
       showToast({
         type: "success",
         title: "Draw Updated Successfully!",
@@ -355,7 +337,6 @@ export default function UpcomingDraws() {
     } catch (err) {
       console.error("Error updating draw:", err);
 
-      // Show error toast
       const errorMessage = err instanceof Error ? err.message : "Failed to update draw";
       showToast({
         type: "error",
@@ -370,247 +351,202 @@ export default function UpcomingDraws() {
     }
   };
 
-  // Format date for the current viewer's timezone
-  const formatDate = (date: Date | string) => {
-    return formatDateInLocal(new Date(date), "dd MMM yyyy, hh:mm a");
+  // Viewer's local timezone, matching this page's long-standing behaviour
+  // (Draw Results uses AEST — the two differ deliberately and always have).
+  const formatDate = (date: Date | string) => formatDateInLocal(new Date(date), "dd MMM yyyy, h:mm a");
+
+  // ── Presentation mapping ────────────────────────────────────────────────
+  const rows: DrawRow[] = useMemo(
+    () =>
+      draws.map((draw) => {
+        const isLive = draw.status === "active";
+        return {
+          id: draw._id,
+          name: draw.name,
+          kind: isLive ? "Live now" : "Major draw",
+          date: formatDate(draw.drawDate),
+          status: draw.status,
+          entries: draw.totalEntries,
+          entriesLabel: draw.totalEntries.toLocaleString(),
+          revenue: draw.revenue ?? 0,
+          revenueLabel: currency(draw.revenue ?? 0),
+          revenuePerEntryLabel:
+            draw.revenuePerEntry == null ? "—" : `${currencyPrecise(draw.revenuePerEntry)} / entry`,
+          prizeValueLabel: draw.prize?.value ? currency(draw.prize.value) : "TBC",
+          // Column 6 on Upcoming is the GATE, not a winner.
+          trailing: isLive ? "Entries open" : "Not activated",
+          trailingSub: draw.configurationLocked
+            ? "config locked"
+            : isLive
+              ? `freezes ${formatDate(draw.freezeEntriesAt)}`
+              : `activates ${formatDate(draw.activationDate)}`,
+          locked: !!draw.configurationLocked,
+          hasWinner: false,
+        };
+      }),
+    [draws]
+  );
+
+  const selectedRow = rows.find((row) => row.id === selectedRowId) ?? null;
+  const selectedUpcoming = draws.find((draw) => draw._id === selectedRowId) ?? null;
+  const searchTerm = filters.search.trim();
+
+  /** Upcoming groups by Live now / Scheduled (Results groups by year). */
+  const groups: DrawGroup[] = useMemo(() => {
+    if (searchTerm) {
+      return [
+        {
+          label: "Search results",
+          meta: `${rows.length} ${rows.length === 1 ? "draw matches" : "draws match"} “${searchTerm}”`,
+          rows,
+        },
+      ];
+    }
+
+    const statusOf = new Map(draws.map((d) => [d._id, d.status]));
+    const live = rows.filter((row) => statusOf.get(row.id) === "active");
+    const scheduled = rows.filter((row) => statusOf.get(row.id) !== "active");
+    const out: DrawGroup[] = [];
+
+    if (live.length > 0) {
+      const freezeSub = live[0]?.trailingSub ?? "";
+      out.push({
+        label: "Live now",
+        meta: `${live.length} ${live.length === 1 ? "draw" : "draws"} · entries open · ${freezeSub}`,
+        rows: live,
+      });
+    }
+    if (scheduled.length > 0) {
+      const missingPrize = scheduled.filter((row) => row.prizeValueLabel === "TBC").length;
+      const parts = [`${scheduled.length} ${scheduled.length === 1 ? "draw" : "draws"}`];
+      if (missingPrize > 0) parts.push(`${missingPrize} prize${missingPrize === 1 ? "" : "s"} still to set`);
+      out.push({ label: "Scheduled", meta: parts.join(" · "), rows: scheduled });
+    }
+    return out;
+  }, [rows, draws, searchTerm]);
+
+  const dataState = isLoading ? "loading" : error ? "error" : rows.length === 0 ? "empty" : "ready";
+
+  const emptyTitle = searchTerm ? `No draws match “${searchTerm}”` : "No draws match these filters";
+  const emptyBody = searchTerm
+    ? "Nothing scheduled matches that name or description. Clear the search to see every scheduled draw."
+    : "Nothing is queued under the status you picked. Clear the filters to see all scheduled draws.";
+
+  const clearFilters = () => {
+    setFilters({ status: COMBINED_STATUS, search: "" });
+    setOpenFilterKey(null);
   };
 
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(amount);
+  const onPickFilter = (key: string, label: string) => {
+    setOpenFilterKey(null);
+    if (key === "status") setFilters((prev) => ({ ...prev, status: valueFor(STATUS_OPTIONS, label) }));
   };
 
-  // Check if draw can be edited
-  const canEditDraw = (draw: UpcomingDraw) => {
-    // Allow editing of queued and active draws, but not if configuration is locked
-    return (draw.status === "queued" || draw.status === "active") && !draw.configurationLocked;
-  };
-
-  if (isLoading && draws.length === 0) {
-    return (
-      <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-row items-center justify-between gap-2 sm:gap-4">
-          <h2 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900 dark:text-white flex-1 min-w-0 truncate">
-            Upcoming Draws
-          </h2>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-3 sm:p-4 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded mb-2 w-1/2"></div>
-              <div className="h-8 bg-gray-200 rounded mb-2 w-3/4"></div>
-              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-            </div>
-          ))}
-        </div>
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6 animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="h-10 bg-gray-200 rounded w-full"></div>
-        </div>
-      </div>
-    );
-  }
+  const drawById = (id: string) => draws.find((draw) => draw._id === id);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      
-     
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <MetricCard
-          title="Total Draws"
-          value={stats.totalDraws}
-          icon={Calendar}
-          color="blue"
-        />
-        <MetricCard
-          title="Total Entries"
-          value={stats.totalEntries.toLocaleString()}
-          icon={Users}
-          color="emerald"
-        />
-        <MetricCard
-          title="Total Prize Value"
-          value={formatCurrency(stats.totalPrizeValue)}
-          icon={DollarSign}
-          color="yellow"
-        />
-        <MetricCard
-          title="Winner Rate"
-          value={`${stats.winnerSelectionRate}%`}
-          icon={Trophy}
-          color="purple"
-        />
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-        <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white mb-4">Filter & Search</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <Input
-              placeholder="Search draws..."
-              value={filters.search}
-              onChange={(e) => handleFilterChange("search", e.target.value)}
-            />
-            <Select
-              value={filters.status}
-              onChange={(e) => handleFilterChange("status", e.target.value)}
-              options={STATUS_OPTIONS}
-            />
-            <Select
-              value={filters.category}
-              onChange={(e) => handleFilterChange("category", e.target.value)}
-              options={CATEGORY_OPTIONS}
-            />
-            <Select
-              value={`${filters.sortBy}-${filters.sortOrder}`}
-              onChange={(e) => {
-                const [sortBy, sortOrder] = e.target.value.split("-");
-                setFilters((prev) => ({ ...prev, sortBy, sortOrder }));
-              }}
-              options={[
-                { value: "drawDate-asc", label: "Draw Date (Earliest)" },
-                { value: "drawDate-desc", label: "Draw Date (Latest)" },
-                { value: "createdAt-desc", label: "Created (Newest)" },
-                { value: "createdAt-asc", label: "Created (Oldest)" },
-                { value: "name-asc", label: "Name (A-Z)" },
-                { value: "name-desc", label: "Name (Z-A)" },
-                { value: "prize.value-desc", label: "Prize Value (Highest)" },
-                { value: "prize.value-asc", label: "Prize Value (Lowest)" },
-              ]}
-            />
-          </div>
-        </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-950/40 border-2 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl flex items-center gap-2">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Draws List */}
-      <div className="space-y-3 sm:space-y-4">
-        {draws.map((draw) => {
-          const canEdit = canEditDraw(draw);
-
-          return (
-            <div key={draw._id} className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{draw.name}</h3>
-                        <MajorDrawTableStatusBadge status={draw.status} />
-                        {draw.configurationLocked && (
-                          <AdminBadge variant="danger" icon={AlertCircle} iconClassName="text-red-600 dark:text-red-400">
-                            Locked
-                          </AdminBadge>
-                        )}
-                      </div>
-
-                      <div
-                        className="text-gray-600 dark:text-neutral-400 mb-3 [&_p]:my-0"
-                        dangerouslySetInnerHTML={{ __html: draw.description || "" }}
-                      />
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                          <Calendar className="w-4 h-4" />
-                          <span>Activation: {formatDate(draw.activationDate)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                          <Calendar className="w-4 h-4" />
-                          <span>Draw: {formatDate(draw.drawDate)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                          <Calendar className="w-4 h-4" />
-                          <span>Prize: {formatCurrency(draw.prize.value)}</span>
-                        </div>
-                      </div>
-
-                      {!canEdit && (draw.status === "queued" || draw.status === "active") && (
-                        <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-                          <div className="flex items-center gap-2">
-                            <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                            <span className="text-sm text-yellow-800 dark:text-yellow-200">
-                              This draw&apos;s configuration is locked and cannot be edited.
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                <div className="flex flex-wrap gap-2 sm:flex-col sm:flex-shrink-0">
-                  {canEdit && (
-                    <Button onClick={() => handleEditDraw(draw)} size="sm" icon={Edit}>
-                      Edit Draw
-                    </Button>
-                  )}
-                  <Button size="sm" variant="outline" icon={Eye}>
-                    Preview
-                  </Button>
-                </div>
+    <>
+      <DrawsListPage
+        variant="upcoming"
+        kpis={[
+          { label: "Scheduled draws", value: stats.totalDraws.toLocaleString() },
+          { label: "Entries in flight", value: stats.totalEntries.toLocaleString() },
+          { label: "Revenue in flight", value: compactCurrency(stats.totalRevenue ?? 0) },
+          { label: "Prize value queued", value: compactCurrency(stats.totalPrizeValue) },
+        ]}
+        searchValue={filters.search}
+        onSearchChange={(value) => setFilters((prev) => ({ ...prev, search: value }))}
+        searchPlaceholder="Search draws…"
+        filters={[
+          {
+            key: "status",
+            label: "Status",
+            value: labelFor(STATUS_OPTIONS, filters.status),
+            options: STATUS_OPTIONS.map((o) => o.label),
+          },
+        ]}
+        openFilterKey={openFilterKey}
+        onToggleFilter={setOpenFilterKey}
+        onPickFilter={onPickFilter}
+        // Task 7: the create flow already existed on Overview's quick actions —
+        // this is a second mount point, not a new capability. Overview keeps its.
+        actions={
+          canEditMajor
+            ? [{ label: "New major draw", icon: Plus, onClick: () => setIsCreateModalOpen(true) }]
+            : []
+        }
+        groups={groups}
+        dataState={dataState}
+        selectedRow={selectedRow}
+        onSelectRow={(row) => setSelectedRowId(row?.id ?? null)}
+        onClearFilters={clearFilters}
+        onRetry={() => fetchDraws(pagination.currentPage)}
+        emptyTitle={emptyTitle}
+        emptyBody={emptyBody}
+        errorEndpoint={`GET ${HISTORY_ENDPOINT}${errorStatus ? ` · ${errorStatus}` : ""}`}
+        verificationUrl={selectedUpcoming?.resultUrl ?? null}
+        // Both the primary and the secondary go through the same lock gate.
+        onInspectorPrimary={(row) => {
+          const draw = drawById(row.id);
+          if (draw) openDrawEditor(draw);
+        }}
+        onEditDraw={(row) => {
+          const draw = drawById(row.id);
+          if (draw) openDrawEditor(draw);
+        }}
+        onExport={(row) => {
+          // Upcoming draws have no participants export of their own; the pool
+          // export lives on Major Draw, so send the admin there rather than
+          // rendering a button that does nothing.
+          showToast({
+            type: "info",
+            title: "Export lives on Major Draw",
+            message: `Open the Major Draw tab to export the entry pool for ${row.name}.`,
+            duration: 6000,
+          });
+        }}
+        footer={
+          pagination.totalPages > 1 ? (
+            <div className="flex items-center justify-between gap-[10px] rounded-[var(--m-radius)] border border-[var(--line)] bg-[var(--panel)] px-[14px] py-[10px] shadow-[var(--shadow)]">
+              <div className="flex items-center gap-[6px]">
+                <PagerButton
+                  onClick={() => handlePageChange(1)}
+                  disabled={!pagination.hasPrevPage || isLoading}
+                  label="First page"
+                >
+                  <ChevronsLeft className="h-[15px] w-[15px]" />
+                </PagerButton>
+                <PagerButton
+                  onClick={() => handlePageChange(pagination.currentPage - 1)}
+                  disabled={!pagination.hasPrevPage || isLoading}
+                  label="Previous page"
+                >
+                  <ChevronLeft className="h-[15px] w-[15px]" />
+                </PagerButton>
+              </div>
+              <span data-figure className="text-[12px] font-medium text-[var(--text2)]">
+                Showing page {pagination.currentPage} of {pagination.totalPages}
+              </span>
+              <div className="flex items-center gap-[6px]">
+                <PagerButton
+                  onClick={() => handlePageChange(pagination.currentPage + 1)}
+                  disabled={!pagination.hasNextPage || isLoading}
+                  label="Next page"
+                >
+                  <ChevronRight className="h-[15px] w-[15px]" />
+                </PagerButton>
+                <PagerButton
+                  onClick={() => handlePageChange(pagination.totalPages)}
+                  disabled={!pagination.hasNextPage || isLoading}
+                  label="Last page"
+                >
+                  <ChevronsRight className="h-[15px] w-[15px]" />
+                </PagerButton>
               </div>
             </div>
-          );
-        })}
-      </div>
-
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 px-4 sm:px-6 py-3 sm:py-4">
-          <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-4">
-            <div className="flex items-center gap-1 sm:gap-2">
-              <button
-                type="button"
-                onClick={() => handlePageChange(1)}
-                disabled={!pagination.hasPrevPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                aria-label="First page"
-              >
-                <ChevronsLeft className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePageChange(pagination.currentPage - 1)}
-                disabled={!pagination.hasPrevPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                aria-label="Previous page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-            </div>
-            <span className="text-xs sm:text-sm text-gray-700 dark:text-neutral-200 font-medium">
-              Page {pagination.currentPage} of {pagination.totalPages}
-            </span>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <button
-                type="button"
-                onClick={() => handlePageChange(pagination.currentPage + 1)}
-                disabled={!pagination.hasNextPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                aria-label="Next page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePageChange(pagination.totalPages)}
-                disabled={!pagination.hasNextPage || isLoading}
-                className="p-1.5 sm:p-2 rounded-lg border-2 border-gray-300 text-gray-500 hover:text-gray-700 dark:hover:text-neutral-200 hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                aria-label="Last page"
-              >
-                <ChevronsRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          ) : null
+        }
+      />
 
       {/* Edit Modal */}
       {selectedDraw && (
@@ -625,6 +561,46 @@ export default function UpcomingDraws() {
           isLoading={isSubmitting}
         />
       )}
-    </div>
+
+      {/* Create Modal — same component Overview's quick actions mounts. */}
+      <AdminMajorDrawModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={() => {
+          setIsCreateModalOpen(false);
+          void fetchDraws(pagination.currentPage);
+        }}
+      />
+
+      <DrawLockedModal
+        isOpen={lockedNoticeDraw !== null}
+        onClose={() => setLockedNoticeDraw(null)}
+        drawName={lockedNoticeDraw?.name ?? ""}
+      />
+    </>
+  );
+}
+
+function PagerButton({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="flex h-[var(--m-icon)] w-[var(--m-icon)] items-center justify-center rounded-[7px] border border-[var(--line)] bg-[var(--panel)] text-[var(--text2)] hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {children}
+    </button>
   );
 }

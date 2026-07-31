@@ -9,12 +9,36 @@
 | [src/components/cta/](../../src/components/cta/) | Call-to-action buttons |
 | [src/components/layout/](../../src/components/layout/) | Page layout (header, footer, container) |
 | [src/components/loading/](../../src/components/loading/) | Loaders, skeletons |
-| [src/components/modals/](../../src/components/modals/) | Modal primitives |
+| [src/components/modals/](../../src/components/modals/) | Modal primitives + feature modals (see "Modal folder layout") |
 | [src/components/sections/](../../src/components/sections/) | Page section primitives |
 | [src/components/seo/](../../src/components/seo/) | SEO meta tags, JSON-LD |
 | [src/components/system/](../../src/components/system/) | System messages, banners |
 | [src/components/filters/](../../src/components/filters/) | Filter primitives |
 | [src/components/banners/](../../src/components/banners/) | Site-wide banners (also used by [promo](../promo/)) |
+
+## Modal folder layout
+
+`src/components/modals/` holds three different kinds of thing. Know which you are adding before you add it.
+
+| Location | What belongs there |
+|---|---|
+| [modals/ui/](../../src/components/modals/ui/) | **Shared primitives** — `ModalContainer`, `ModalHeader`, `ModalContent`, `ModalFooter`, `Button`, `Input`, `Select`, `Textarea`, `Checkbox`, `ImageUpload`, `DateTimePicker`, `FormSection`. Nothing feature-specific. |
+| `modals/<Feature>/` | A **feature group** — every modal reachable from one product surface, behind an `index.ts` barrel. Currently: [modals/draws/](../../src/components/modals/draws/). |
+| `modals/*.tsx`, `modals/<Name>/` | Everything else: a single modal, flat if one file, in its own folder if it decomposes. |
+
+### Feature groups
+
+A feature group exists when a set of modals is only ever reached from one surface and is large enough that finding them in the flat list is the hard part. `modals/` is 50+ top-level entries, so this matters.
+
+Rules for one:
+
+- **Name the folder after the domain it serves**, using the term already in the [Domain Manifest](../../CLAUDE.md) — `draws/`, not a synonym. One concept, one name.
+- **Export through `index.ts`.** Consumers import `@/components/modals/draws`, not a deep path.
+- **Do not pull shared primitives in.** `modals/ui/*` stays where it is; a feature group importing `../ui` is correct and expected.
+- **Do not pull in a modal with callers outside the feature.** `ConfirmationModal` stays at `modals/` — 20+ non-draws callers.
+- If you add a modal to a group, add it to the barrel in the same change, or it is invisible to everyone reading the barrel to find out what exists.
+
+`modals/draws/` holds the eight modals for the four admin draws pages. Two intentional non-merges live in it: `AdminMajorDrawModal` (create) and `MajorDrawEditModal` (edit) are separate components because create owns the scheduled-months restriction and the activation/freeze auto-derivation while edit owns `configurationLocked` gating — zero shared behaviour, so a `mode` prop would fork most of the component. They share **field sections**, not a mode flag. The barrel comment records this so it does not get "simplified" back.
 
 ## Utilities
 

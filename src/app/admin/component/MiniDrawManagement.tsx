@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -10,41 +10,25 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  rectSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
-  Plus,
-  Trophy,
-  CheckCircle,
-  XCircle,
-  FileText,
-  Trash2,
-  Loader2,
-  Move,
-  MessageSquare,
-} from "lucide-react";
-import { AdminBadge } from "@/components/admin/ui/AdminBadge";
+import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
+import { Plus, Move, Trophy, AlertTriangle } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
-import AdminMiniDrawModal from "@/components/modals/AdminMiniDrawModal";
-import WinnerSelectionModal, { type WinnerSelectionData } from "@/components/modals/WinnerSelectionModal";
-import WinnerEditModal from "@/components/modals/WinnerEditModal";
-import MiniDrawEditModal, {
+import {
+  AdminMiniDrawModal,
+  WinnerSelectionModal,
+  WinnerEditModal,
+  MiniDrawEditModal,
+  type WinnerSelectionData,
   type AdminMiniDrawSummary,
   type MiniDrawEditPayload,
-} from "@/components/modals/MiniDrawEditModal";
-import Image from "next/image";
-import { useSearchParams } from "next/navigation";
-import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
-import BrandLogoCard from "@/components/ui/BrandLogoCard";
+} from "@/components/modals/draws";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 import { cn } from "@/utils/cn";
 import { usePermissions } from "@/hooks/usePermissions";
+import { getBrandMeta } from "@/utils/brand-utils";
+import { DrawsPageShell, DrawsToolbar, MiniDrawCard } from "@/components/admin/draws";
 
 interface MiniDraw extends AdminMiniDrawSummary {
   totalEntries: number;
@@ -67,6 +51,23 @@ interface MiniDraw extends AdminMiniDrawSummary {
   };
 }
 
+/**
+ * "At capacity" is NOT a stored status — the MiniDraw enum is
+ * active | completed | cancelled. It is derived, and the same predicate drives
+ * the chip count and the amber notice strip. Do not add a status to the model.
+ */
+const isAtCapacity = (draw: MiniDraw) =>
+  draw.status === "active" && draw.minimumEntries > 0 && draw.totalEntries >= draw.minimumEntries;
+
+type StatusChip = "all" | "active" | "at-capacity" | "completed";
+
+const CHIP_LABEL: Record<StatusChip, string> = {
+  all: "All",
+  active: "Active",
+  "at-capacity": "At capacity",
+  completed: "Completed",
+};
+
 export default function MiniDrawManagement() {
   const { data: session } = useSession();
   const { showToast } = useToast();
@@ -84,7 +85,7 @@ export default function MiniDrawManagement() {
   const [selectedDraw, setSelectedDraw] = useState<MiniDraw | null>(null);
   const [editingDraw, setEditingDraw] = useState<MiniDraw | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<StatusChip>("all");
   // Pre-fill the search box from `?search=` (e.g. deep-link from the Overview
   // "Top mini draws" card). Read once on mount — the user can edit/clear after.
   const searchParams = useSearchParams();
@@ -104,14 +105,11 @@ export default function MiniDrawManagement() {
     imageUrl: string | null;
     drawResultUrl: string | null;
   } | null>(null);
+
   // Configure sensors for both mouse and touch input to support mobile devices
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 5 },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
   // Fetch mini draws
@@ -125,17 +123,11 @@ export default function MiniDrawManagement() {
         setMiniDraws(data.data.miniDraws || []);
         window.dispatchEvent(new Event("admin-mini-draws-updated"));
       } else {
-        showToast({
-          type: "error",
-          title: "Failed to load mini draws",
-        });
+        showToast({ type: "error", title: "Failed to load mini draws" });
       }
     } catch (error) {
       console.error("Error fetching mini draws:", error);
-      showToast({
-        type: "error",
-        title: "Failed to load mini draws",
-      });
+      showToast({ type: "error", title: "Failed to load mini draws" });
     } finally {
       setIsLoading(false);
     }
@@ -154,9 +146,7 @@ export default function MiniDrawManagement() {
       setMiniDraws((prev) => {
         const oldIndex = prev.findIndex((draw) => draw._id === active.id);
         const newIndex = prev.findIndex((draw) => draw._id === over.id);
-        if (oldIndex === -1 || newIndex === -1) {
-          return prev;
-        }
+        if (oldIndex === -1 || newIndex === -1) return prev;
         return arrayMove(prev, oldIndex, newIndex);
       });
       setIsOrderDirty(true);
@@ -165,23 +155,18 @@ export default function MiniDrawManagement() {
   );
 
   const handleSaveOrder = useCallback(async () => {
-    if (!isOrderDirty || isSavingOrder) {
-      return;
-    }
+    if (!isOrderDirty || isSavingOrder) return;
     try {
       setIsSavingOrder(true);
       const orderedIds = miniDraws.map((draw) => draw._id);
       const response = await fetch("/api/admin/mini-draw/order", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderedIds }),
       });
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || "Failed to save order");
-      }
+      if (!response.ok) throw new Error(data?.error || "Failed to save order");
+
       showToast({
         type: "success",
         title: "Mini draw order saved",
@@ -220,23 +205,14 @@ export default function MiniDrawManagement() {
     try {
       const response = await fetch("/api/admin/mini-draw/update", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const data = await response.json();
-      if (!response.ok) {
-        const message = data?.error || "Failed to update mini draw";
-        throw new Error(message);
-      }
+      if (!response.ok) throw new Error(data?.error || "Failed to update mini draw");
 
-      showToast({
-        type: "success",
-        title: "Mini draw updated",
-        message: "Your changes have been saved.",
-      });
+      showToast({ type: "success", title: "Mini draw updated", message: "Your changes have been saved." });
       await fetchMiniDraws();
       window.dispatchEvent(new Event("admin-mini-draws-updated"));
       setIsEditModalOpen(false);
@@ -255,19 +231,12 @@ export default function MiniDrawManagement() {
   };
 
   const confirmDelete = useCallback(async () => {
-    if (!deleteTarget) {
-      return;
-    }
+    if (!deleteTarget) return;
     setDeletingId(deleteTarget._id);
     try {
-      const response = await fetch(`/api/admin/mini-draw/${deleteTarget._id}`, {
-        method: "DELETE",
-      });
-
+      const response = await fetch(`/api/admin/mini-draw/${deleteTarget._id}`, { method: "DELETE" });
       const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || "Failed to delete mini draw");
-      }
+      if (!response.ok) throw new Error(data?.error || "Failed to delete mini draw");
 
       showToast({
         type: "success",
@@ -307,9 +276,8 @@ export default function MiniDrawManagement() {
     try {
       const res = await fetch(`/api/admin/winners/${wid}`);
       const data = await res.json();
-      if (!res.ok || !data.success || !data.winner) {
-        throw new Error(data.error || "Failed to load winner");
-      }
+      if (!res.ok || !data.success || !data.winner) throw new Error(data.error || "Failed to load winner");
+
       setMiniWinnerEdit({
         winnerId: data.winner.id,
         winnerName: `${data.winner.winnerFirstName} ${data.winner.winnerLastName}`.trim(),
@@ -327,13 +295,6 @@ export default function MiniDrawManagement() {
       });
     }
   };
-
-  // Filter mini draws by status
-  const filteredMiniDraws = miniDraws.filter((draw) => {
-    const matchesStatus = selectedStatus === "all" || draw.status === selectedStatus;
-    const matchesSearch = searchTerm.trim() ? draw.name.toLowerCase().includes(searchTerm.trim().toLowerCase()) : true;
-    return matchesStatus && matchesSearch;
-  });
 
   // Handle export
   const handleExport = async (miniDrawId: string, drawName: string, format: "csv" | "excel") => {
@@ -359,219 +320,219 @@ export default function MiniDrawManagement() {
           message: `Downloaded ${drawName} as ${format.toUpperCase()}`,
         });
       } else {
-        showToast({
-          type: "error",
-          title: "Export failed",
-        });
+        showToast({ type: "error", title: "Export failed" });
       }
     } catch (error) {
       console.error("Error exporting:", error);
-      showToast({
-        type: "error",
-        title: "Export failed",
-      });
+      showToast({ type: "error", title: "Export failed" });
     } finally {
       setIsExporting(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const label = status.charAt(0).toUpperCase() + status.slice(1);
-    switch (status) {
-      case "active":
-        return (
-          <AdminBadge variant="success" icon={CheckCircle} iconClassName="text-emerald-600 dark:text-emerald-400">
-            {label}
-          </AdminBadge>
-        );
-      case "completed":
-        return (
-          <AdminBadge variant="neutral" icon={Trophy}>
-            {label}
-          </AdminBadge>
-        );
-      case "cancelled":
-        return (
-          <AdminBadge variant="danger" icon={XCircle} iconClassName="text-red-600 dark:text-red-400">
-            {label}
-          </AdminBadge>
-        );
-      default:
-        return (
-          <AdminBadge variant="success" icon={CheckCircle}>
-            {label}
-          </AdminBadge>
-        );
-    }
-  };
+  // ── Filtering ───────────────────────────────────────────────────────────
+  // The design filters cards by product name, brand AND status; the old filter
+  // matched name only.
+  const query = searchTerm.trim().toLowerCase();
+  const filteredMiniDraws = useMemo(
+    () =>
+      miniDraws.filter((draw) => {
+        const matchesStatus =
+          selectedStatus === "all"
+            ? true
+            : selectedStatus === "at-capacity"
+              ? isAtCapacity(draw)
+              : draw.status === selectedStatus;
+        if (!matchesStatus) return false;
+        if (!query) return true;
+        const brandLabel = getBrandMeta(draw.brandId)?.name ?? "";
+        return `${draw.name} ${brandLabel} ${draw.status}`.toLowerCase().includes(query);
+      }),
+    [miniDraws, selectedStatus, query]
+  );
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600 dark:border-red-400"></div>
-      </div>
-    );
-  }
+  const counts = useMemo(
+    () => ({
+      all: miniDraws.length,
+      active: miniDraws.filter((d) => d.status === "active").length,
+      "at-capacity": miniDraws.filter(isAtCapacity).length,
+      completed: miniDraws.filter((d) => d.status === "completed").length,
+    }),
+    [miniDraws]
+  );
+
+  const atCapacityDraws = useMemo(() => miniDraws.filter(isAtCapacity), [miniDraws]);
 
   return (
-    <div className="min-h-screen-svh bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950">
-      <div className="w-full mx-auto space-y-8">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2 font-poppins">Mini Draw Management</h1>
-            <p className="text-lg text-gray-600 dark:text-neutral-400 font-poppins">
-              Create and manage mini draws — winner testimony and photos are edited on each card after a winner exists
+    <DrawsPageShell
+      notice={
+        atCapacityDraws.length > 0 && !isReorderMode ? (
+          <div className="flex flex-wrap items-center gap-[10px] rounded-[var(--m-radius)] border border-[var(--warn-line)] bg-[var(--warn-bg)] px-[14px] py-[10px]">
+            <AlertTriangle className="h-[16px] w-[16px] shrink-0 text-[var(--warn)]" aria-hidden />
+            <p className="min-w-0 flex-1 text-[12.5px] font-medium text-[var(--warn)]">
+              {atCapacityDraws.length} mini {atCapacityDraws.length === 1 ? "draw has" : "draws have"} hit the entry
+              threshold and {atCapacityDraws.length === 1 ? "is" : "are"} ready for a winner.
             </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {canEditMini && (
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all shadow-lg"
-              >
-                <Plus className="w-5 h-5" />
-                Create Mini Draw
-              </button>
-            )}
             <button
-              onClick={() => {
-                if (isReorderMode) {
-                  void handleCancelReorder();
-                } else {
-                  setIsReorderMode(true);
-                  setIsOrderDirty(false);
-                }
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all shadow dark:shadow-none ${
-                isReorderMode
-                  ? "bg-gray-100 text-gray-700 dark:text-neutral-200 hover:bg-gray-200 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
-                  : "bg-white text-gray-700 dark:text-neutral-200 border border-gray-200 hover:bg-gray-50 dark:bg-neutral-900 dark:text-neutral-200 dark:border-neutral-700 dark:hover:bg-neutral-800"
-              }`}
-              disabled={isSavingOrder}
+              type="button"
+              onClick={() => setSelectedStatus("at-capacity")}
+              className="flex h-[var(--m-btn-sm)] items-center rounded-[8px] border border-[var(--warn-line)] bg-[var(--panel)] px-[12px] text-[12px] font-semibold text-[var(--warn)]"
             >
-              <Move className="w-4 h-4" />
-              {isReorderMode ? "Cancel Reorder" : "Reorder Mini Draws"}
+              Review
+            </button>
+          </div>
+        ) : null
+      }
+    >
+      <DrawsToolbar
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        searchPlaceholder="Search by name, brand or status…"
+        openFilterKey={null}
+        onToggleFilter={() => {}}
+        onPickFilter={() => {}}
+        actions={[
+          ...(canEditMini
+            ? [{ label: "New mini draw", icon: Plus, onClick: () => setIsModalOpen(true) }]
+            : []),
+          {
+            label: isReorderMode ? "Cancel reorder" : "Reorder",
+            icon: Move,
+            variant: "secondary" as const,
+            onClick: () => {
+              if (isReorderMode) void handleCancelReorder();
+              else {
+                setIsReorderMode(true);
+                setIsOrderDirty(false);
+              }
+            },
+          },
+        ]}
+      >
+        {/* Status chips with live counts. Scrolls horizontally on mobile.
+            No negative margin — it pulled the first chip under the toolbar's own
+            padding and clipped the active one's label. */}
+        <div className="flex w-full max-w-full items-center gap-[6px] overflow-x-auto [scrollbar-width:none] draws:w-auto [&::-webkit-scrollbar]:hidden">
+          {(Object.keys(CHIP_LABEL) as StatusChip[]).map((chip) => {
+            const active = selectedStatus === chip;
+            return (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => setSelectedStatus(chip)}
+                aria-pressed={active}
+                className={cn(
+                  "flex h-[var(--m-btn-sm)] shrink-0 items-center gap-[6px] whitespace-nowrap rounded-[7px] border px-[10px] text-[12px] font-semibold",
+                  active
+                    ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "border-[var(--line)] bg-[var(--input-bg)] text-[var(--text2)] hover:text-[var(--text)]"
+                )}
+              >
+                {CHIP_LABEL[chip]}
+                <span data-figure className="text-[11px] opacity-70">
+                  {counts[chip]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </DrawsToolbar>
+
+      {isReorderMode && (
+        <div className="flex flex-wrap items-center justify-between gap-[10px] rounded-[var(--m-radius)] border border-[var(--warn-line)] bg-[var(--warn-bg)] px-[14px] py-[10px]">
+          <p className="text-[12.5px] text-[var(--warn)]">
+            Drag the cards to reorder them. Save when you&apos;re happy with the order.
+          </p>
+          <div className="flex flex-wrap gap-[8px]">
+            <button
+              type="button"
+              onClick={() => void handleSaveOrder()}
+              disabled={!isOrderDirty || isSavingOrder}
+              className="flex h-[var(--m-btn-sm)] items-center rounded-[8px] bg-[var(--accent)] px-[12px] text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSavingOrder ? "Saving…" : "Save order"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCancelReorder()}
+              disabled={isSavingOrder}
+              className="flex h-[var(--m-btn-sm)] items-center rounded-[8px] border border-[var(--warn-line)] bg-[var(--panel)] px-[12px] text-[12px] font-semibold text-[var(--warn)] disabled:opacity-50"
+            >
+              Discard changes
             </button>
           </div>
         </div>
+      )}
 
-        {isReorderMode && (
-          <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-amber-900 dark:text-amber-100">
-              Drag the cards to reorder them. Save when you&apos;re happy with the order.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => void handleSaveOrder()}
-                disabled={!isOrderDirty || isSavingOrder}
-                className="px-4 py-2 rounded-lg font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSavingOrder ? "Saving..." : "Save Order"}
-              </button>
-              <button
-                onClick={() => void handleCancelReorder()}
-                disabled={isSavingOrder}
-                className="px-4 py-2 rounded-lg font-semibold text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-700 bg-white dark:bg-neutral-900 hover:bg-amber-100 dark:hover:bg-amber-950/50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Discard Changes
-              </button>
+      {isLoading ? (
+        <div className="grid grid-cols-2 gap-[var(--m-gap)] draws:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div
+              key={i}
+              className="overflow-hidden rounded-[11px] border border-[var(--line)] bg-[var(--panel)]"
+              aria-busy="true"
+            >
+              <div className="admin-draws-skeleton aspect-[4/3] w-full" />
+              <div className="space-y-[8px] p-[10px]">
+                <div className="admin-draws-skeleton h-[13px] w-4/5 rounded-[5px]" />
+                <div className="admin-draws-skeleton h-[11px] w-1/2 rounded-[5px]" />
+                <div className="admin-draws-skeleton h-[5px] w-full rounded-full" />
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-2">
-            {["all", "active", "completed"].map((status) => (
-              <button
-                key={status}
-                onClick={() => setSelectedStatus(status)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  selectedStatus === status
-                    ? "bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg"
-                    : "bg-white text-gray-700 dark:text-neutral-200 hover:bg-gray-50 border border-gray-200 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800 dark:border-neutral-700"
-                }`}
-              >
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            ))}
-          </div>
-          <div className="relative max-w-md">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search mini draws by name..."
-              className="w-full rounded-lg border border-gray-200 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-4 py-2 pr-10 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:border-red-500 focus:ring-2 focus:ring-red-100 dark:focus:ring-red-900/40 transition-colors"
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm("")}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-neutral-300 dark:text-neutral-500 dark:hover:text-neutral-300"
-              >
-                <span className="text-xs font-semibold">Clear</span>
-              </button>
-            )}
-          </div>
+          ))}
         </div>
-
-        {!isReorderMode && (
-          <div className="rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/90 dark:bg-blue-950/35 px-4 py-3 text-sm text-blue-950 dark:text-blue-100">
-            <p className="font-semibold mb-1">Editing mini draw winners</p>
-            <p className="text-blue-900/90 dark:text-blue-200/95 leading-relaxed">
-              After you use <span className="font-medium">Winner</span> to record someone, that draw’s card shows{" "}
-              <span className="font-medium">Edit winner & testimony</span> — open it to update photo, rich-text testimony,
-              and the external draw result link. The <span className="font-medium">Draw Results</span> admin tab is for major
-              draws only.
-            </p>
+      ) : filteredMiniDraws.length === 0 ? (
+        <div className="flex flex-col items-center rounded-[var(--m-radius)] border border-[var(--line)] bg-[var(--panel)] px-[20px] py-[46px] text-center">
+          <Trophy className="h-[26px] w-[26px] text-[var(--text3)]" aria-hidden />
+          <div className="mt-[12px] font-poppins text-[14.5px] font-bold text-[var(--text)]">
+            {query ? `No mini draw matches “${searchTerm.trim()}”` : "No mini draws match this filter"}
           </div>
-        )}
-
-        {/* Mini Draws List - Always use compact grid layout */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
-          {filteredMiniDraws.length === 0 ? (
-            <div className="col-span-full bg-white dark:bg-neutral-900 rounded-xl shadow-lg dark:shadow-none border border-gray-100 dark:border-neutral-700 p-8 text-center">
-              <Trophy className="w-16 h-16 text-gray-400 dark:text-neutral-500 mx-auto mb-4" />
-              <p className="text-gray-600 dark:text-neutral-400">No mini draws found</p>
+          <p className="mt-[6px] max-w-[330px] text-[12.5px] leading-[1.6] text-[var(--text2)] text-pretty">
+            {query
+              ? "Nothing matches that product name, brand or status. Try a shorter term, or clear the search."
+              : "Nothing sits under the status you picked. Switch back to All to see every mini draw."}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchTerm("");
+              setSelectedStatus("all");
+            }}
+            className="mt-[15px] flex h-[var(--m-btn-h)] items-center rounded-[9px] border border-[var(--line)] bg-[var(--panel)] px-[15px] text-[12.5px] font-semibold text-[var(--text)] hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
+          >
+            {query ? "Clear search" : "Show all"}
+          </button>
+        </div>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={filteredMiniDraws.map((draw) => draw._id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 gap-[var(--m-gap)] draws:grid-cols-5">
+              {filteredMiniDraws.map((draw) => (
+                <MiniDrawCard
+                  key={draw._id}
+                  draw={draw}
+                  reorderMode={isReorderMode}
+                  onEdit={canEditMini ? () => openEditModal(draw) : undefined}
+                  onDelete={canDeleteMini ? () => openDeleteModal(draw) : undefined}
+                  onSelectWinner={
+                    canSelectMiniWinner
+                      ? () => {
+                          setSelectedDraw(draw);
+                          setIsWinnerModalOpen(true);
+                        }
+                      : undefined
+                  }
+                  onExportCsv={() => handleExport(draw._id, draw.name, "csv")}
+                  onEditLatestWinner={canEditMini ? () => void openMiniWinnerEdit(draw) : undefined}
+                  isSelectingWinner={isSelectingWinner}
+                  isExporting={isExporting}
+                  isDeleting={deletingId === draw._id}
+                />
+              ))}
             </div>
-          ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext
-                items={filteredMiniDraws.map((draw) => draw._id)}
-                strategy={rectSortingStrategy}
-              >
-                {filteredMiniDraws.map((draw) => (
-                  <MiniDrawCard
-                    key={draw._id}
-                    draw={draw}
-                    reorderMode={isReorderMode}
-                    statusBadge={getStatusBadge(draw.status)}
-                    onEdit={canEditMini ? () => openEditModal(draw) : undefined}
-                    onDelete={canDeleteMini ? () => openDeleteModal(draw) : undefined}
-                    onSelectWinner={
-                      canSelectMiniWinner
-                        ? () => {
-                            setSelectedDraw(draw);
-                            setIsWinnerModalOpen(true);
-                          }
-                        : undefined
-                    }
-                    onExportCsv={() => handleExport(draw._id, draw.name, "csv")}
-                    onEditLatestWinner={
-                      canEditMini ? () => void openMiniWinnerEdit(draw) : undefined
-                    }
-                    isSelectingWinner={isSelectingWinner}
-                    isExporting={isExporting}
-                    isDeleting={deletingId === draw._id}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-          )}
-        </div>
-      </div>
+          </SortableContext>
+        </DndContext>
+      )}
 
       {/* Create Modal */}
       <AdminMiniDrawModal
@@ -581,10 +542,7 @@ export default function MiniDrawManagement() {
           fetchMiniDraws();
           setIsModalOpen(false);
           window.dispatchEvent(new Event("admin-mini-draws-updated"));
-          showToast({
-            type: "success",
-            title: "Mini draw created successfully",
-          });
+          showToast({ type: "success", title: "Mini draw created successfully" });
         }}
       />
 
@@ -611,15 +569,9 @@ export default function MiniDrawManagement() {
             formData.append("winnerUserId", winnerData.winnerUserId);
             formData.append("selectedBy", session.user.id);
 
-            if (winnerData.imageUrl) {
-              formData.append("imageUrl", winnerData.imageUrl);
-            }
-            if (winnerData.testimony) {
-              formData.append("testimony", winnerData.testimony);
-            }
-            if (winnerData.drawResultUrl) {
-              formData.append("drawResultUrl", winnerData.drawResultUrl);
-            }
+            if (winnerData.imageUrl) formData.append("imageUrl", winnerData.imageUrl);
+            if (winnerData.testimony) formData.append("testimony", winnerData.testimony);
+            if (winnerData.drawResultUrl) formData.append("drawResultUrl", winnerData.drawResultUrl);
 
             const response = await fetch(`/api/admin/mini-draw/${winnerData.drawId}/select-winner`, {
               method: "POST",
@@ -627,9 +579,7 @@ export default function MiniDrawManagement() {
             });
 
             const data = await response.json();
-            if (!response.ok) {
-              throw new Error(data.error || "Failed to record winner");
-            }
+            if (!response.ok) throw new Error(data.error || "Failed to record winner");
 
             showToast({
               type: "success",
@@ -727,208 +677,15 @@ export default function MiniDrawManagement() {
         onConfirm={() => void confirmDelete()}
         type="cancel"
         title={deleteTarget ? `Delete ${deleteTarget.name}?` : "Delete mini draw"}
-        message="This will permanently remove the mini draw, including its configuration and history. This action cannot be undone."
+        message={
+          deleteTarget && deleteTarget.totalEntries > 0
+            ? `This permanently removes the mini draw, its configuration and its history. ${deleteTarget.totalEntries.toLocaleString()} entries have already been recorded against it. This action cannot be undone.`
+            : "This will permanently remove the mini draw, including its configuration and history. This action cannot be undone."
+        }
         confirmText="Delete mini draw"
-        cancelText="Keep mini draw"
+        cancelText="Keep it"
         isLoading={Boolean(deleteTarget && deletingId === deleteTarget._id)}
       />
-    </div>
-  );
-}
-
-interface MiniDrawCardProps {
-  draw: MiniDraw;
-  reorderMode: boolean;
-  statusBadge: React.ReactNode;
-  /** Undefined hides the corresponding action button (callers gate by permission). */
-  onEdit?: () => void;
-  onDelete?: () => void;
-  onSelectWinner?: () => void;
-  onExportCsv: () => void;
-  onEditLatestWinner?: () => void;
-  isSelectingWinner: boolean;
-  isExporting: boolean;
-  isDeleting: boolean;
-}
-
-function MiniDrawCard({
-  draw,
-  reorderMode,
-  statusBadge,
-  onEdit,
-  onDelete,
-  onSelectWinner,
-  onExportCsv,
-  onEditLatestWinner,
-  isSelectingWinner,
-  isExporting,
-  isDeleting,
-}: MiniDrawCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: draw._id,
-    disabled: !reorderMode,
-  });
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-  const brandMeta = getBrandMeta(draw.brandId) ?? null;
-  const overlayBrand = brandMeta ?? defaultBrandLogo;
-  const gradientOverride = brandMeta ? undefined : "bg-transparent";
-  const overlayScale = brandMeta?.overlayScale ?? brandMeta?.imageScale ?? defaultBrandLogo.overlayScale ?? 1;
-  const totalEntries = draw.totalEntries || 0;
-  const minimumEntries = draw.minimumEntries || 0;
-  const capacityPercentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
-  const previewImage = draw.prize.images?.[0] || "/images/placeholder.jpg";
-
-  const isAt100 = capacityPercentage >= 100 || draw.status === "completed";
-  const iconBtn =
-    "flex items-center gap-2 rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed text-2xs md:text-xs font-medium text-gray-800 dark:text-neutral-200";
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={isDragging ? "opacity-95 z-50" : undefined}
-      {...(reorderMode ? { ...attributes, ...listeners } : {})}
-    >
-      <div
-        role={reorderMode || !onEdit ? undefined : "button"}
-        tabIndex={reorderMode || !onEdit ? undefined : 0}
-        onClick={reorderMode || !onEdit ? undefined : onEdit}
-        onKeyDown={
-          reorderMode || !onEdit
-            ? undefined
-            : (e) => e.key === "Enter" && onEdit()
-        }
-        className={cn(
-          "relative rounded-lg bg-white dark:bg-neutral-900 shadow-md dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden group transition-all flex flex-col h-[290px] md:h-[340px]",
-          reorderMode
-            ? "cursor-grab active:cursor-grabbing touch-none"
-            : onEdit
-              ? "cursor-pointer hover:shadow-lg hover:border-red-200 dark:hover:border-red-800/60"
-              : ""
-        )}
-      >
-        <div className="relative w-full h-32 md:h-44 bg-gray-100 dark:bg-neutral-800">
-          <Image
-            src={previewImage}
-            alt={draw.prize.name}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 20vw, 20vw"
-            draggable={false}
-          />
-          <div className="absolute bottom-1.5 right-1.5 z-10">
-            <BrandLogoCard
-              brand={overlayBrand}
-              className="px-1 py-0.5"
-              widthClass="w-auto"
-              heightClass="h-auto"
-              overlayMode="overlay"
-              gradientOverride={gradientOverride}
-              scaleOverride={overlayScale * 0.6}
-            />
-          </div>
-          {isAt100 && (
-            <div
-              className="absolute top-1.5 left-1.5 z-10 px-2 py-0.5 rounded-full bg-amber-500 text-white text-2xs font-bold"
-              title="100% - select winner"
-            >
-              100%
-            </div>
-          )}
-          {!reorderMode && (
-            <div className="absolute top-1.5 right-1.5 z-10">{statusBadge}</div>
-          )}
-        </div>
-        <div className="px-2.5 pt-2.5 pb-2 md:px-4 md:pt-4 md:pb-3 md:space-y-3 space-y-2 flex-1 flex flex-col min-h-0">
-          <div className="min-h-[2.5em] md:min-h-[2.75em] flex items-start overflow-hidden">
-            <h3 className="text-xs md:text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight break-words">
-              {draw.name}
-            </h3>
-          </div>
-          <div className="space-y-1.5 shrink-0">
-            <div className="flex items-center justify-between text-2xs md:text-xs font-semibold text-gray-700 dark:text-neutral-300">
-              <span className="truncate">
-                {totalEntries.toLocaleString()}/{minimumEntries.toLocaleString()}
-              </span>
-              <span>{capacityPercentage}%</span>
-            </div>
-            <div className="w-full bg-gray-200 dark:bg-neutral-700 rounded-full h-1.5 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-300"
-                style={{ width: `${capacityPercentage}%` }}
-              />
-            </div>
-          </div>
-          {!reorderMode && draw.latestWinner && onEditLatestWinner && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEditLatestWinner();
-              }}
-              className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-lg border-2 border-amber-300/80 dark:border-amber-700/80 bg-amber-50 dark:bg-amber-950/45 px-2 py-2 text-2xs sm:text-xs font-semibold text-amber-950 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
-              title="Edit winner photo, testimony, and draw result link"
-            >
-              <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-amber-700 dark:text-amber-300" />
-              <span className="leading-tight text-center">Edit winner & testimony</span>
-            </button>
-          )}
-          {!reorderMode && (
-            <div
-              className="flex items-center justify-between gap-2 md:gap-4 pt-2 border-t border-gray-100 dark:border-neutral-700 shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {onSelectWinner && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectWinner();
-                  }}
-                  disabled={draw.totalEntries === 0 || isSelectingWinner}
-                  className={iconBtn}
-                  title={draw.totalEntries === 0 ? "No entries" : "Select winner"}
-                >
-                  <Trophy className="w-3.5 h-3.5 shrink-0 text-red-600" />
-                  <span className="hidden md:inline truncate">Winner</span>
-                </button>
-              )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onExportCsv();
-                }}
-                disabled={isExporting}
-                className={iconBtn}
-                title="Export CSV"
-              >
-                <FileText className="w-3.5 h-3.5 shrink-0 text-green-600" />
-                <span className="hidden md:inline truncate">CSV</span>
-              </button>
-              {onDelete && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  disabled={isDeleting}
-                  className={iconBtn}
-                  title="Delete"
-                >
-                  {isDeleting ? (
-                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-red-600" />
-                  ) : (
-                    <Trash2 className="w-3.5 h-3.5 shrink-0 text-red-600" />
-                  )}
-                  <span className="hidden md:inline truncate">Delete</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    </DrawsPageShell>
   );
 }

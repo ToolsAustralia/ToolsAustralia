@@ -18,6 +18,7 @@ import mongoose, { Types } from "mongoose";
 import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
 import MiniDraw from "@/models/MiniDraw";
 import User from "@/models/User";
+import { getRevenueByDraw } from "@/services/admin/drawRevenue";
 import Winner from "@/models/Winner";
 import { getCurrentMajorDrawForDisplay } from "@/utils/draws/major-draw-helpers";
 import { addDays } from "date-fns";
@@ -209,6 +210,14 @@ export interface MajorDrawHistoryItem {
     brand: string | null;
   } | null;
   totalEntries: number;
+  /**
+   * Net revenue (AUD dollars) attributable to this draw's entry window.
+   * DERIVED from PaymentEvent — MajorDraw has no revenue field. See
+   * src/services/admin/drawRevenue.ts and docs/draws/architecture.md.
+   */
+  revenue: number;
+  /** revenue / totalEntries; null (never Infinity/NaN) when the draw has no entries. */
+  revenuePerEntry: number | null;
   hasWinner: boolean;
   winner: {
     winnerId: string;
@@ -235,6 +244,8 @@ export interface MajorDrawHistoryResult {
     totalDraws: number;
     totalEntries: number;
     totalPrizeValue: number;
+    /** Net revenue (AUD dollars) across the whole FILTERED set, not just this page. */
+    totalRevenue: number;
     drawsWithWinners: number;
     drawsWithoutWinners: number;
     winnerSelectionRate: number; // percent integer 0–100
@@ -327,6 +338,35 @@ export async function getMajorDrawHistory(
     winnerMap.set(drawId, winnerDoc);
   }
 
+  // ── Per-draw net revenue ────────────────────────────────────────────────
+  // Scoped to the FILTER, not the page, so stats.totalRevenue is consistent with
+  // its sibling aggregates (totalDraws / totalEntries / totalPrizeValue) rather
+  // than contradicting them in the same KPI strip.
+  //
+  // Cost: a lean 3-field projection over the matching draws plus ONE PaymentEvent
+  // aggregation across the combined span — not a query per row. The window rule
+  // lives in src/services/admin/drawRevenue.ts.
+  //
+  // Never fatal: revenue is a supporting figure, the draws are the payload. A
+  // throw here would 500 the Norm endpoint via withNorm's responseSchema path.
+  let revenueByDraw = new Map<string, number>();
+  try {
+    const windowSource = await MajorDraw.find(filter)
+      .select("_id activationDate freezeEntriesAt drawDate")
+      .lean();
+    revenueByDraw = await getRevenueByDraw(
+      windowSource.map((d) => ({
+        _id: String(d._id),
+        activationDate: d.activationDate,
+        freezeEntriesAt: d.freezeEntriesAt,
+        drawDate: d.drawDate,
+      })),
+    );
+  } catch (revenueError) {
+    // console.error survives the production build; console.warn is stripped.
+    console.error("[MajorDrawService.getMajorDrawHistory] revenue aggregation failed, returning zeros:", revenueError);
+  }
+
   const items: MajorDrawHistoryItem[] = [];
   for (const draw of draws as unknown as MajorDrawHistoryLean[]) {
     const drawId = String(draw._id);
@@ -334,6 +374,9 @@ export async function getMajorDrawHistory(
 
     if (hasWinner === "true" && !winner) continue;
     if (hasWinner === "false" && winner) continue;
+
+    const revenue = revenueByDraw.get(drawId) ?? 0;
+    const totalEntriesForDraw = draw.totalEntries ?? 0;
 
     items.push({
       _id: drawId,
@@ -353,7 +396,9 @@ export async function getMajorDrawHistory(
             brand: draw.prize.brand ?? null,
           }
         : null,
-      totalEntries: draw.totalEntries ?? 0,
+      totalEntries: totalEntriesForDraw,
+      revenue,
+      revenuePerEntry: totalEntriesForDraw > 0 ? revenue / totalEntriesForDraw : null,
       hasWinner: !!winner,
       winner: winner
         ? {
@@ -406,6 +451,9 @@ export async function getMajorDrawHistory(
       totalDraws: drawStatsResult.totalDraws,
       totalEntries: drawStatsResult.totalEntries,
       totalPrizeValue: drawStatsResult.totalPrizeValue,
+      // Filter-wide, like its siblings. Pre-`hasWinner` (which is a post-query
+      // filter), exactly as totalDraws is — keep the three consistent.
+      totalRevenue: [...revenueByDraw.values()].reduce((sum, value) => sum + value, 0),
       drawsWithWinners: winnerCount,
       drawsWithoutWinners: drawStatsResult.totalDraws - winnerCount,
       winnerSelectionRate:

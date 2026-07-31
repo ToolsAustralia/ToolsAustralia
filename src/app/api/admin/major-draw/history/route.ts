@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import Winner from "@/models/Winner";
+import { getRevenueByDraw } from "@/services/admin/drawRevenue";
 import { z } from "zod";
 import mongoose, { Types } from "mongoose";
 
@@ -111,6 +112,18 @@ type ProcessedDraw = {
   } | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+/**
+ * A processed draw plus its derived net revenue.
+ *
+ * Revenue is NOT a MajorDraw field — see src/services/admin/drawRevenue.ts and
+ * docs/draws/architecture.md. `revenuePerEntry` is null (never Infinity/NaN) when
+ * the draw has no entries.
+ */
+type DrawWithRevenue = ProcessedDraw & {
+  revenue: number;
+  revenuePerEntry: number | null;
 };
 
 // Validation schema for query parameters
@@ -307,6 +320,51 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // ── Per-draw net revenue ──────────────────────────────────────────────
+    // Scoped to the FILTER, not the page. Every sibling stat below (totalDraws,
+    // totalEntries, totalPrizeValue) is a filter-wide aggregate, so a page-wide
+    // revenue figure would sit in the same KPI strip contradicting them.
+    //
+    // Cost: a lean 3-field projection over the matching draws (a few hundred docs
+    // at most) plus ONE PaymentEvent aggregation across the combined span — not a
+    // query per row. See src/services/admin/drawRevenue.ts for the window rule.
+    //
+    // Never fatal: revenue is a supporting figure, the draws are the payload.
+    let revenueByDraw = new Map<string, number>();
+    try {
+      const windowSource = await MajorDraw.find(filter)
+        .select("_id activationDate freezeEntriesAt drawDate")
+        .lean();
+      revenueByDraw = await getRevenueByDraw(
+        windowSource.map((draw) => ({
+          _id: String(draw._id),
+          activationDate: draw.activationDate,
+          freezeEntriesAt: draw.freezeEntriesAt,
+          drawDate: draw.drawDate,
+        }))
+      );
+    } catch (revenueError) {
+      // console.error survives the production build; console.warn is stripped.
+      console.error("[major-draw/history] revenue aggregation failed, returning zeros:", revenueError);
+    }
+
+    const drawsWithRevenue: DrawWithRevenue[] = processedDraws.map((draw) => {
+      const revenue = revenueByDraw.get(draw._id) ?? 0;
+      return {
+        ...draw,
+        revenue,
+        revenuePerEntry: draw.totalEntries > 0 ? revenue / draw.totalEntries : null,
+      };
+    });
+
+    // Filter-wide, matching how every other stat on this response is scoped.
+    //
+    // Note: the `hasWinner` filter is applied AFTER the Mongo query (inside the
+    // processedDraws loop), so windowSource — like summaryStats.totalDraws — is
+    // pre-hasWinner. totalRevenue is therefore consistent with its siblings. Do not
+    // "fix" one of these without the others.
+    const totalRevenue = [...revenueByDraw.values()].reduce((sum, value) => sum + value, 0);
+
     // Calculate pagination info
     const totalPages = Math.ceil(totalCount / limit);
 
@@ -351,7 +409,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        draws: processedDraws,
+        draws: drawsWithRevenue,
         pagination: {
           currentPage: page,
           totalPages,
@@ -373,6 +431,8 @@ export async function GET(request: NextRequest) {
           totalDraws: summaryStats.totalDraws,
           totalEntries: summaryStats.totalEntries,
           totalPrizeValue: summaryStats.totalPrizeValue,
+          // Derived, filter-wide. The UI labels this "Draw revenue".
+          totalRevenue,
           drawsWithWinners: summaryStats.drawsWithWinners,
           drawsWithoutWinners: summaryStats.drawsWithoutWinners,
           winnerSelectionRate:

@@ -27,6 +27,12 @@ const config: Config = {
         // queries we're porting off styled-jsx. Used as `max-xs:`/`xs:` variants.
         // Tailwind defaults sm=640px, so xs sits below that.
         xs: "540px",
+        // Admin draws revamp: the single breakpoint the design specifies.
+        // 280px sidebar + 320px inspector + a usable table = 900px. Named so no
+        // component hardcodes `min-[900px]:` — the same reason control heights
+        // are tokens. Kept in lockstep with the @media block in
+        // src/components/admin/draws/tokens.css.
+        draws: "900px",
       },
       colors: {
         primary: {

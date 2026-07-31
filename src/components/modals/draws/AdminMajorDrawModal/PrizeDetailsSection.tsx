@@ -2,7 +2,7 @@
 
 import React from "react";
 import { AlertTriangle, Trophy } from "lucide-react";
-import { FormSection, Input } from "../ui";
+import { FormSection, Input } from "../../ui";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import type { FieldChangeEvent } from "./types";
 

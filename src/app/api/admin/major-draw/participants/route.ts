@@ -97,6 +97,9 @@ export async function GET(request: NextRequest) {
           { firstName: searchRegex },
           { lastName: searchRegex },
           { email: searchRegex },
+          // Admins search by mobile (often pasted unspaced), so match the raw
+          // stored value. Matches the "name / email / mobile" the modal advertises.
+          { mobile: searchRegex },
           {
             $expr: {
               $regexMatch: {
@@ -122,6 +125,17 @@ export async function GET(request: NextRequest) {
         return matchingUserIds.has(userId);
       });
     }
+
+    // Sort by total entries (descending) BEFORE paginating.
+    //
+    // This used to happen after the slice, further down, on the already-paginated
+    // `participants` array — which sorted WITHIN the page instead of across the set.
+    // Page 1 was therefore "the first N entries in array insertion order, then
+    // sorted", not "the top N". The Major Draw "Entry pool" card reads ?limit=3 to
+    // show the top three entrants, which is only correct with the sort here.
+    entries = [...entries].sort(
+      (a: MajorDrawEntry, b: MajorDrawEntry) => (b.totalEntries || 0) - (a.totalEntries || 0)
+    );
 
     // Calculate pagination
     const totalCount = entries.length;
@@ -169,8 +183,8 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Sort participants by total entries (descending) for better UX
-    participants.sort((a, b) => b.totalEntries - a.totalEntries);
+    // (The sort that used to live here ran AFTER pagination, so it only ordered the
+    // current page. It now runs on `entries` before the slice — see above.)
 
     // Return response with pagination info
     return NextResponse.json({

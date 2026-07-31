@@ -85,3 +85,59 @@ Purchase cooldown: [src/lib/purchaseCooldown.ts](../../src/lib/purchaseCooldown.
 - `/mini-draws/[id]/` — a specific mini draw + countdown
 
 All read from the public-safe formatted data (no PII beyond first-name + last-initial).
+
+## Per-draw revenue is DERIVED, not stored (2026-07-30)
+
+`MajorDraw` has no revenue field and is not getting one. The admin draws pages show
+per-draw revenue in eight places (ribbon stat, both KPI strips, a table column, a
+per-entry sub-line, group meta lines, the inspector, a sort option); all of it comes from
+[`src/services/admin/drawRevenue.ts`](../../src/services/admin/drawRevenue.ts), computed
+from `PaymentEvent` at read time.
+
+### The window rule
+
+A draw's revenue must cover exactly the payments whose **entries** landed in that draw, or
+the money figure contradicts the entry count printed beside it. Entry routing is decided by
+[`getTargetMajorDraw`](../../src/utils/draws/major-draw-helpers.ts): a payment created
+*before* the active draw's `freezeEntriesAt` enters that draw; at or after it, the entry is
+deferred to the next queued draw. So the matching window is:
+
+```
+[ previousDraw.freezeEntriesAt , thisDraw.freezeEntriesAt )
+```
+
+**Chained off the previous freeze — not off this draw's own `activationDate`.** Between one
+draw freezing (say the 27th at 20:00) and the next activating (the 28th at 00:00) there is a
+**gap period**, and `getTargetMajorDraw` sends gap-period payments to the next queued draw.
+An activation-based window would drop that money on the floor. The chained window absorbs it,
+and the windows come out contiguous by construction.
+
+Boundary handling:
+
+| Case | Behaviour |
+|---|---|
+| Earliest draw in the set (no predecessor) | Falls back to its own `activationDate`; with neither, opens at the epoch |
+| `freezeEntriesAt` missing (legacy rows) | Falls back to `drawDate` |
+| No usable end boundary at all | The draw is **dropped**, not given an Invalid Date window |
+| `start >= end` | Degenerate — skipped |
+| End boundary | **Exclusive.** A payment at the freeze instant belongs to the next draw, mirroring `getTargetMajorDraw` |
+
+### Lockstep requirement
+
+**If the entry-routing rule in `getTargetMajorDraw` changes, this window must change with
+it.** Nothing enforces that — the two would silently diverge and the admin would see revenue
+that disagrees with the entry count. `npm run test:draw-revenue` pins the boundary semantics
+(20 assertions, pure, no DB), so at least the intended rule is executable.
+
+### Units and refunds
+
+`PaymentEvent.data.price` is in **dollars** (application convention). Refunds are netted by
+excluding the **whole** `BenefitsGranted` row when a `RefundProcessed` exists for the same
+`paymentIntentId` — done by `fetchNetBenefitsGrantedWithMatch`, which is also why
+`RefundProcessed.refundAmount` (in **cents**) never reaches a sum here.
+
+### Cost
+
+One aggregation per request, not one per draw. The windows are contiguous, so a single
+`[earliest.start, latest.end)` fetch covers the whole set and the bucketing is in-memory via
+binary search. Do not call `getRevenueByDraw` inside a row loop.

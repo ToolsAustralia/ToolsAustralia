@@ -1,0 +1,267 @@
+/* Design tokens for the four admin draws pages.
+ *
+ * Values read verbatim from design_handoff_admin_draws/tokens.json.
+ *
+ * SCOPED TO .admin-draws, NOT :root. These names are generic (--panel, --line,
+ * --accent, --text). On :root they would apply to the other 25 admin tabs and
+ * collide with any future global of the same name. Scoping keeps the blast
+ * radius to exactly the four draws pages. Mount DrawsPageShell (which carries
+ * the class) or the tokens resolve to nothing.
+ *
+ * Composition, per the handoff: light/dark share every LAYOUT token; desktop and
+ * mobile share every COLOUR token. So the base block is
+ * mobile-layout + light-colour, `.dark .admin-draws` overrides colour only, and
+ * the 900px media query overrides layout only.
+ *
+ * THE CONTROL-HEIGHT RULE: no interactive element in these pages hardcodes a
+ * height. Every one reads --m-btn-h / --m-btn-sm / --m-field / --m-icon /
+ * --m-cardBtn. All five resolve to 44px below 900px, which is what makes the
+ * mobile tap-target audit hold by construction instead of by review. If you add
+ * a control, give it a token, not a pixel value.
+ */
+
+.admin-draws {
+  /* ── colour · light ─────────────────────────────────────────── */
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel2: #f3f4f7;
+  --line: #e3e6eb;
+  --line2: #eef0f4;
+  --text: #101828;
+  --text2: #4b5565;
+  --text3: #6b7280;
+  --accent: #ee0000;
+  --accent-soft: #fef2f2;
+  --accent-line: #fecaca;
+  --ok: #067647;
+  --ok-bg: #ecfdf3;
+  --ok-line: #abefc6;
+  --warn: #b54708;
+  --warn-bg: #fffaeb;
+  --warn-line: #fedf89;
+  --info: #175cd3;
+  --info-bg: #eff8ff;
+  --info-line: #b2ddff;
+  --danger: #b42318;
+  --danger-bg: #fef3f2;
+  --danger-line: #fecdca;
+  --input-bg: #ffffff;
+  --hover: #f9fafb;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --avatarRing: #fee2e2;
+  --ribbon: #101828;
+  --ribbonLine: rgba(255, 255, 255, 0.13);
+  --ribbonText: #ffffff;
+  --ribbonSub: rgba(255, 255, 255, 0.62);
+
+  /* Ribbon internals are theme-independent: the ribbon is dark in both themes. */
+  --ribbon-divider: rgba(255, 255, 255, 0.08);
+  --ribbon-dot: #18a94d;
+  --ribbon-pos: #4ade80;
+  --ribbon-neg: #ff6b6b;
+  --ribbon-track: rgba(255, 255, 255, 0.12);
+  --ribbon-ghost-line: rgba(255, 255, 255, 0.18);
+
+  /* ── elevation ──────────────────────────────────────────────── */
+  --shadow-inspector: 0 12px 30px -18px rgba(16, 24, 40, 0.35);
+  --shadow-modal: 0 30px 70px -30px rgba(0, 0, 0, 0.45);
+  --shadow-dropdown: 0 14px 34px -18px rgba(16, 24, 40, 0.45);
+  --shadow-drawer: 14px 0 40px -20px rgba(0, 0, 0, 0.5);
+  --shadow-toast: 0 18px 40px -20px rgba(16, 24, 40, 0.5);
+
+  /* ── layout · mobile-first (the ≤899px values) ──────────────── */
+  --m-pad: 14px;
+  --m-gap: 12px;
+  --m-radius: 12px;
+  --m-h1: 17px;
+  --m-statcols: 2;
+  --m-listcols: 2;
+  --m-galCols: 2;
+  --m-majorCols: minmax(0, 1fr);
+  --m-splitCols: minmax(0, 1fr);
+  --m-modalCols: minmax(0, 1fr);
+  --m-tblCols: 1fr;
+  --m-poolCols: minmax(0, 1fr) 62px;
+  --m-cols2: minmax(0, 1fr);
+  --m-cols3: minmax(0, 1fr);
+  --m-photoCols: minmax(0, 1fr);
+  --m-prizeDir: column;
+  --m-prizeImgW: 100%;
+  --m-prizeImgH: 140px;
+  --m-searchMin: 100%;
+  --m-searchMax: none;
+  --m-ribbonBtnDir: column;
+  --m-ribbonBtnW: 100%;
+  --m-sheetAlign: flex-end;
+  --m-sheetW: 100%;
+  --m-sheetRadius: 18px 18px 0 0;
+  --m-scrimPad: 0px;
+
+  /* Sticky table-header height. The column-header row is `hidden draws:grid`,
+     so on mobile it occupies ZERO height — group headers must therefore stick at
+     0, not below a row that isn't rendered. Both the header's own height and the
+     group header's sticky offset read this one token so they cannot drift apart. */
+  --m-theadH: 0px;
+
+  /* ── control heights · all 44px on mobile ───────────────────── */
+  --m-btn-h: 44px;
+  --m-btn-sm: 44px;
+  --m-field: 44px;
+  --m-icon: 44px;
+  --m-cardBtn: 44px;
+  --m-slimH: 44px;
+}
+
+/* ── colour · dark ────────────────────────────────────────────── */
+.dark .admin-draws {
+  --bg: #0a0a0a;
+  --panel: #171717;
+  --panel2: #212124;
+  --line: #2c2c30;
+  --line2: #232326;
+  --text: #fafafa;
+  --text2: #a3a3ac;
+  --text3: #9a9aa3;
+  /* --accent is the ONLY colour that differs by theme: lifted off the brand
+     #ee0000 so it clears contrast on #0a0a0a. The brand red is still used raw
+     in the two gradients (logo tile, active nav item). */
+  --accent: #ff4444;
+  --accent-soft: rgba(255, 68, 68, 0.13);
+  --accent-line: rgba(255, 68, 68, 0.4);
+  --ok: #4ade80;
+  --ok-bg: rgba(6, 118, 71, 0.2);
+  --ok-line: rgba(74, 222, 128, 0.28);
+  --warn: #fbbf24;
+  --warn-bg: rgba(181, 71, 8, 0.22);
+  --warn-line: rgba(251, 191, 36, 0.28);
+  --info: #60a5fa;
+  --info-bg: rgba(23, 92, 211, 0.22);
+  --info-line: rgba(96, 165, 250, 0.28);
+  --danger: #f87171;
+  --danger-bg: rgba(180, 35, 24, 0.24);
+  --danger-line: rgba(248, 113, 113, 0.3);
+  --input-bg: #101012;
+  --hover: #1f1f22;
+  /* Dark has no shadow — depth comes from --line instead. */
+  --shadow: none;
+  --avatarRing: rgba(238, 0, 0, 0.45);
+  --ribbon: #000000;
+  --ribbonLine: rgba(255, 255, 255, 0.13);
+  --ribbonText: #fafafa;
+  --ribbonSub: rgba(255, 255, 255, 0.55);
+}
+
+/* ── desktop overrides · the single breakpoint ────────────────── */
+/* 900px = 280px sidebar + 320px inspector + a usable table. Keep this in
+   lockstep with the `draws` screen in tailwind.config.ts — components use the
+   Tailwind variant for element-level switches, this block for token values. */
+@media (min-width: 900px) {
+  .admin-draws {
+    --m-pad: 20px;
+    --m-gap: 14px;
+    --m-h1: 20px;
+    --m-statcols: 4;
+    --m-listcols: 5;
+    --m-galCols: 4;
+    --m-majorCols: minmax(0, 1.42fr) minmax(0, 1fr);
+    --m-splitCols: minmax(0, 1fr) 320px;
+    --m-modalCols: minmax(0, 1fr) minmax(0, 1fr);
+    --m-tblCols: minmax(0, 1.25fr) 104px 84px 88px 92px minmax(0, 1.2fr) 40px;
+    --m-poolCols: minmax(0, 1.5fr) minmax(0, 1.15fr) 74px;
+    --m-cols2: minmax(0, 1fr) minmax(0, 1fr);
+    --m-cols3: repeat(3, minmax(0, 1fr));
+    --m-photoCols: 120px minmax(0, 1fr);
+    --m-prizeDir: row;
+    --m-prizeImgW: 116px;
+    --m-prizeImgH: 116px;
+    --m-searchMin: 130px;
+    --m-searchMax: 280px;
+    --m-ribbonBtnDir: row;
+    --m-ribbonBtnW: auto;
+    --m-sheetAlign: center;
+    --m-sheetW: 640px;
+    --m-sheetRadius: 14px;
+    --m-scrimPad: 28px;
+
+    /* Column header renders above 900px: 10px text + 9px padding × 2 + 1px border. */
+    --m-theadH: 31px;
+
+    --m-btn-h: 36px;
+    --m-btn-sm: 31px;
+    --m-field: 38px;
+    --m-icon: 34px;
+    --m-cardBtn: 29px;
+    --m-slimH: 40px;
+  }
+}
+
+/* Every figure in these pages is tabular — mark the element with data-figure
+   rather than repeating a font-variant utility at 40 call sites. */
+.admin-draws [data-figure] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lift the SHARED form primitives to the mobile tap-target minimum.
+ *
+ * The draws forms reuse `src/components/modals/ui` Input/Select/DateTimePicker,
+ * which are used by 50+ other modals and render ~42px — 2px under. Editing those
+ * components would change every modal in the app, so the floor is applied HERE,
+ * scoped to .admin-draws, where it affects the draws surface only.
+ *
+ * Excludes type="search": the toolbar/participants search inputs are
+ * `align-self: stretch` inside an already-44px bordered row, so the tappable
+ * target is the row. Forcing a min-height on the input would push that row past
+ * 44px. (The handoff calls this exact case out.)
+ *
+ * NOT applied to <button>: the RichTextEditor's formatting toolbar is ~32px by
+ * design. A dense bold/italic/align toolbar is not the kind of control the 44px
+ * rule is about, and stretching it would wreck the editor.
+ */
+@media (max-width: 899px) {
+  .admin-draws input:not([type="search"]):not([type="checkbox"]):not([type="radio"]),
+  .admin-draws select,
+  .admin-draws textarea {
+    min-height: var(--m-field);
+  }
+}
+
+/* Focus is visible everywhere: 2px solid accent at 2px offset. */
+.admin-draws :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Loading skeletons: 1.15s shimmer on the real column grid. */
+@keyframes admin-draws-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.admin-draws-skeleton {
+  background: linear-gradient(90deg, var(--panel2) 25%, var(--hover) 50%, var(--panel2) 75%);
+  background-size: 200% 100%;
+  animation: admin-draws-shimmer 1.15s linear infinite;
+}
+
+/* Pending-state spinner on a submitting primary button. */
+@keyframes admin-draws-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.admin-draws-spinner {
+  animation: admin-draws-spin 0.7s linear infinite;
+}
+
+/* Always-on animation needs a reduced-motion gate (CLAUDE.md perf footgun 6). */
+@media (prefers-reduced-motion: reduce) {
+  .admin-draws-skeleton,
+  .admin-draws-spinner {
+    animation: none;
+  }
+}

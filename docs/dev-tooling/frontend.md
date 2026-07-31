@@ -36,6 +36,15 @@ No Stripe, no providers, no real purchase. Mock data sourced from `src/data/memb
 
 When a modal is moved from a monolith `.tsx` file to a folder structure (`/index.tsx`), update the `source` path in the `MODAL_SOURCES` map inside this file. When a modal is **deleted**, remove all four of its touch points here — the import, its `MODAL_SOURCES` entry, its `MODAL_LIST` entry, and its render — or the gallery fails to compile.
 
+**`MODAL_SOURCES` paths are strings, so nothing type-checks them.** Two entries had been silently wrong for months — `admin-major-draw-create` and `admin-winner-select` both pointed at `<Name>.tsx` files that were folders. Moving a modal only breaks the *import* loudly; the `source` string just keeps rendering a path that no longer exists. After any modal move, verify every mapped path resolves:
+
+```bash
+grep -oE '"src/components/modals/[^"]+"' src/components/dev/ModalsGalleryClient.tsx \
+  | tr -d '"' | sort -u | while read p; do [ -f "$p" ] || echo "MISSING $p"; done
+```
+
+Note (2026-07-30): the eight admin draws modals moved to `src/components/modals/draws/` (see [shared-ui architecture → Modal folder layout](../shared-ui/architecture.md)). Gallery imports and `MODAL_SOURCES` were updated, and the two stale folder paths above were fixed at the same time.
+
 Note (2026-07-24): the `pixel-consent` / `PixelConsentModal` entry was removed — the component was deleted (panel F-019, a permanently-unreachable consent modal whose Decline gated nothing). See [docs/tracking/rules.md R9](../tracking/rules.md) for the no-consent-banner posture.
 
 Note (2026-07-06): the gallery's `PackageSelectionModal` entry passes `onPlanSelect={close}` — the picker no

@@ -1,5 +1,13 @@
 # Tailwind Conventions
 
+> **Manifest note (2026-07-30):** [`tailwind.config.ts`](../../tailwind.config.ts) was an
+> **orphan** — matched by no domain in the Domain Manifest, so edits to it triggered no
+> doc-sync requirement at all. It is now mapped to **shared-ui**, beside
+> `src/app/globals.css`: the two are the halves of one styling layer, and an edit to the
+> config is almost always a design-system change (colour, screen, font) whose documentation
+> belongs in this file. Precedent for a root config living outside `infrastructure` is
+> `next.config.ts`, which the manifest assigns to `security-csp`.
+
 This doc captures the rules that the UI/Tailwind cleanup work locked in. Future code follows these.
 
 **Sibling docs:**
@@ -143,3 +151,80 @@ sitewide visual change** (headings, buttons, labels, form inputs, chart labels, 
   `font-normal`/`medium`/`semibold`/`bold`/`extrabold`(=800, prize builder + specs modal)/
   `black`(=900), plus the h1–h6 (900) and `.ta-loader-status` (700). Dropping any would
   misweight real content.
+
+## 11. Scoped design-token blocks for a self-contained surface (2026-07-30)
+
+Most surfaces style directly with Tailwind utilities and `dark:` pairs. That stops scaling
+when a surface arrives with a **complete external design system** — the admin draws revamp
+ships ~40 colour tokens and ~30 layout tokens that all switch at one breakpoint. Expressed
+as utilities, every element becomes `text-[#4b5565] dark:text-[#a3a3ac]` and the design's
+"change one token, change everywhere" property is lost.
+
+For that case only, define the tokens as CSS custom properties in a **scoped block** and
+consume them via arbitrary values.
+
+**Reference:** [`src/components/admin/draws/tokens.css`](../../src/components/admin/draws/tokens.css),
+imported once at the top of [`globals.css`](../../src/app/globals.css).
+
+### Rules
+
+1. **Scope to a class, never `:root`.** Token names from an external design system are
+   generic — `--panel`, `--line`, `--text`, `--accent`. On `:root` they apply to every page
+   and collide with any future global of the same name. `.admin-draws` keeps the blast
+   radius to the four draws pages. One component (`DrawsPageShell`) carries the class and is
+   the token scope boundary; nothing renders outside it.
+2. **The `@import` must be the first statement in `globals.css`**, above the `@tailwind`
+   directives. CSS requires `@import` to precede all other statements.
+3. **Compose along the two axes the design defines.** Light/dark share every *layout* token;
+   desktop/mobile share every *colour* token. So: base block = mobile layout + light colour,
+   `.dark .admin-draws` overrides colour only, `@media (min-width: 900px)` overrides layout
+   only. Do not duplicate a token into more than one block.
+4. **Named breakpoint, not a literal.** The design's single breakpoint is registered as the
+   `draws` screen in [`tailwind.config.ts`](../../tailwind.config.ts) so components write
+   `draws:grid-cols-2`, never `min-[900px]:grid-cols-2`. Keep the screen and the `@media`
+   block in the token file in lockstep — they are two expressions of one number.
+5. **Control heights are tokens, not literals.** Every interactive element reads
+   `--m-btn-h` / `--m-btn-sm` / `--m-field` / `--m-icon` / `--m-cardBtn`. All five resolve to
+   44px below the breakpoint, which makes the mobile tap-target minimum hold *by
+   construction* rather than by review. A control with a hardcoded height is the bug.
+6. **Gate any always-on animation.** The shimmer and spinner keyframes in the token file sit
+   behind `@media (prefers-reduced-motion: reduce)`.
+
+### When NOT to do this
+
+A handful of one-off colours, or a surface that already reads the app's palette. This
+pattern costs a second styling vocabulary living beside Tailwind's `dark:` classes — it only
+pays when an external design system defines the whole surface and the token count is high
+enough that utilities would bury it.
+
+### Verifying it compiles
+
+The token file is inert until an element carries the class, so a broken import fails
+silently in dev. Compile and assert the values landed:
+
+```bash
+npx tailwindcss -i ./src/app/globals.css -o /tmp/tw-check.css
+grep -c -e "--m-tblCols" /tmp/tw-check.css   # tokens present
+grep -E '\:grid-cols-2\b' /tmp/tw-check.css # the named-screen variant emits
+```
+## 12. Viewport-height utilities, and why one of them adds an overhang (2026-07-30)
+
+`globals.css` `@layer utilities` owns the `svh`/`dvh` helpers, each written as two
+declarations so browsers without `svh`/`dvh` still get a `vh` fallback: `.h-screen-svh`,
+`.min-h-screen-svh`, `.h-screen-dvh`, `.min-h-screen-dvh`. Use these rather than a bare
+Tailwind `min-h-screen` when the box must survive mobile browser-chrome changes — and note
+an arbitrary class like `min-h-[calc(100svh+96px)]` **cannot** carry the fallback, so an
+older browser drops the declaration entirely rather than degrading.
+
+`.min-h-screen-svh-newsletter` is the same reservation **plus the height `NewsletterSection`
+overhangs upward**. That component is `absolute top-0 -translate-y-1/2`, so it paints half
+its own height above the block it follows; a flat `100svh` leaves that half inside the
+viewport and it shifts away when content streams in. The overhang is responsive because the
+card is — measured 120 / 140 / 188px tall at `<640` / `640–1023` / `≥1024`, reserved via a
+`--ta-newsletter-overhang` custom property at 64 / 72 / 96px.
+
+**`pb-*` is not an alternative.** `min-height` resolves against the border box, so bottom
+padding is absorbed by the reservation instead of extending it — the box stays exactly
+100svh and the layout shift is unchanged. A commit that tried this was reverted after
+measurement. Full geometry and the before/after numbers:
+[docs/promo/gotchas.md](../promo/gotchas.md) → "A viewport of reservation is 92px too short".
