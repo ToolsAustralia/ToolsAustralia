@@ -170,6 +170,21 @@ The fallback behaviour the gap used to exercise still matters as a safety net:
 
 > _TODO: read root file and merge. Brief: each visit to a promo page writes a `PromoAnalyticsVisit` row with UTM, referrer, conversion linkage._
 
+The read side is documented in [backend.md](backend.md#page-analytics-repair--2026-07-31). Four
+structural facts worth knowing before touching it:
+
+- **Three collections, one window.** Visits (`PromoAnalyticsVisit`), signups
+  (`User.signupAttribution`) and conversions (`PaymentEvent.BenefitsGranted`) are joined only by
+  slug/channel keys and a shared date range. Only the first expires (90-day TTL), which is why the
+  range is clamped to that floor for all three.
+- **Channels, not `utm_source`.** Grouping is by the canonical `ConvertingPlatform`, generated once
+  and applied identically to all three collections — see
+  [docs/tracking/backend.md](../tracking/backend.md#normalizeplatform-is-now-a-generator-not-just-a-function-2026-07-31).
+- **Two beacons, one row.** The landing beacon inserts; the prize-build beacon only ever `$set`s an
+  existing row. Nothing else writes visits.
+- **Every visitor count is a unique-visitor dedupe**, never a row count — and a whole-scope total is
+  never the sum of its breakdown rows.
+
 ## Comeback promo
 
 (Migrated from `docs/CANCELLED_MEMBERSHIP_COMEBACK_PROMO.md`.)

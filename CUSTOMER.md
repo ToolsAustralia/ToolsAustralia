@@ -506,6 +506,24 @@ this is the same anonymous visit row, recorded for more visitors. The reason is 
 recorded the page's default build for people who never touched the reels, so counting builders and
 signups over different populations let the admin funnel display rates above 100%.
 
+**Promo-page visit attribution changed 2026-07-31 — and one field was dropped.** Two changes to the
+anonymous `PromoAnalyticsVisit` row written on `/promotions/*` (keyed on the `ta_anon_id` cookie,
+not the `User` record):
+
+- **UTM now comes from the first-touch `_ta_attr` cookie, not the landing URL.** The beacon reads
+  the same 90-day cookie signups and conversions already read, server-side, and falls back to the
+  URL's own `utm_*` params. **No new identifier is captured and nothing extra leaves to a third
+  party** — the same three UTM values are stored, sourced from a cookie this document already
+  describes in the table above rather than from the address bar. The reason is internal
+  consistency: visits were on a different basis from signups and conversions, so a visitor who
+  landed on a tagged page and registered on an untagged one produced a signup with no matching
+  visit. A new **`utmBasis`** field (`"first_touch"` / `"landing_url"`) records which source was
+  used, purely so an attribution shift after a deploy is auditable.
+- **`referrerSlug` is no longer captured.** It recorded which other promo landing page the visitor
+  came from via the "Explore other toolsets" carousel; that carousel was replaced on 2026-07-22, so
+  nothing had written the field since. The field, its index declaration and the beacon parameter
+  were all removed — **strictly less data held about the visitor**.
+
 ### 8b. The "converting platform" concept
 
 At purchase, `resolveAttributionAtEdge` reads the click cookies + `_ta_attr` + the last-touch `_ta_attr_last` ([resolveAtEdge.ts:19-27](src/services/attribution/resolveAtEdge.ts#L19)) and resolves a **single** converting platform via a priority+recency ladder ([resolveConvertingPlatform.ts:11-76](src/services/attribution/resolveConvertingPlatform.ts#L11)). Window durations are defined in `platformPriority.ts` (`windowDaysFor`) ([platformPriority.ts:25](src/services/attribution/platformPriority.ts#L25)):

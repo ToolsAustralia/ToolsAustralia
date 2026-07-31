@@ -15,8 +15,12 @@ export interface IPromoAnalyticsVisit extends Document {
   _id: mongoose.Types.ObjectId;
   pageType: PromoPageType;
   slug: string;
-  /** Toolset slug user was on before visiting this page (e.g. from Other Toolsets carousel) */
-  referrerSlug?: string;
+  /**
+   * Where this row's UTM values came from: the durable first-touch `_ta_attr` cookie, or the
+   * landing URL. Audit column — lets an attribution shift after a deploy be attributed to the
+   * precedence change rather than to a real traffic change. Absent on rows written before it.
+   */
+  utmBasis?: "first_touch" | "landing_url";
   /** Prize the visitor assembled in "Build your prize" (e.g. "makita-kincrome", "cash-prize"). */
   builtPrizeSlug?: string;
   /** How many times they changed the toolbox lane on this page. Counts REEL touches only. */
@@ -54,11 +58,10 @@ const PromoAnalyticsVisitSchema = new Schema<IPromoAnalyticsVisit>(
       trim: true,
       lowercase: true,
     },
-    referrerSlug: {
+    utmBasis: {
       type: String,
+      enum: ["first_touch", "landing_url"],
       required: false,
-      trim: true,
-      lowercase: true,
     },
     builtPrizeSlug: {
       type: String,
@@ -123,7 +126,10 @@ const PromoAnalyticsVisitSchema = new Schema<IPromoAnalyticsVisit>(
 
 // Indexes for efficient analytics queries
 PromoAnalyticsVisitSchema.index({ pageType: 1, slug: 1, timestamp: -1 });
-PromoAnalyticsVisitSchema.index({ referrerSlug: 1, slug: 1, timestamp: -1 });
+// `referrerSlug` and its index are gone: the field measured arrivals from the "Explore other
+// toolsets" carousel, which the in-place two-reel configurator replaced on 2026-07-22. Nothing
+// has written it since, so the metric was a structural zero. Dropping the declaration does NOT
+// drop the index in Mongo — scripts/migrations/2026-07-31-promo-analytics-cleanup.ts does that.
 PromoAnalyticsVisitSchema.index({ anonymousId: 1, timestamp: -1 });
 PromoAnalyticsVisitSchema.index({ userId: 1, timestamp: -1 });
 // PARTIAL, not plain (panel F-021). Every query that uses this index filters
@@ -145,11 +151,22 @@ PromoAnalyticsVisitSchema.index(
   { name: "builtPrizeSlug_ts_partial", partialFilterExpression: { builtPrizeSlug: { $exists: true } } }
 );
 
-// TTL index: auto-delete visits older than 90 days to manage growth
+/**
+ * How long a visit row survives.
+ *
+ * Exported because the read side MUST know it. `User` and `PaymentEvent` never expire, so a
+ * requested window that starts before this floor divides COMPLETE signups and revenue by
+ * TRUNCATED visits — "All Time" would render conversion rates in the hundreds of percent, and a
+ * page retired before the floor would show `visits 0 / revenue $12,000`. The analytics range
+ * resolver clamps to this so every number on the tab comes from one population.
+ */
+export const PROMO_VISIT_RETENTION_DAYS = 90;
+
+// TTL index: auto-delete visits older than PROMO_VISIT_RETENTION_DAYS to manage growth
 PromoAnalyticsVisitSchema.index(
   { timestamp: 1 },
   {
-    expireAfterSeconds: 90 * 24 * 60 * 60,
+    expireAfterSeconds: PROMO_VISIT_RETENTION_DAYS * 24 * 60 * 60,
     name: "promo_analytics_visits_ttl",
   }
 );

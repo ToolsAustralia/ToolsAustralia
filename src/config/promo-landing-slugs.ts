@@ -101,6 +101,46 @@ export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSl
   return milwaukee;
 }
 
+/**
+ * The toolbox lane of each prize slug, in the fixed order `TOOLSET_TO_PRIZE_SLUGS` declares.
+ *
+ * Derived from that registry rather than re-listed, so adding a brand stays a one-line change
+ * and the two can never fork. Server-safe by design: the equivalent client helper
+ * (`fromPrizeSlug` in components/sections/promo/prize-selection) lives under `src/components`,
+ * which the repository layer must not import.
+ *
+ * `cash-prize` is deliberately absent — it has no toolbox lane, so it is excluded from
+ * toolbox rollups rather than bucketed somewhere misleading.
+ */
+const TOOLBOX_LANE_ORDER = ["sidchrome", "kincrome", "milwaukee", "gearwrench"] as const;
+export type ToolboxLaneId = (typeof TOOLBOX_LANE_ORDER)[number];
+
+export const PRIZE_LANE_SLUGS: ReadonlyArray<{
+  slug: PrizeSlug;
+  toolset: ToolsetLandingSlug;
+  toolbox: ToolboxLaneId;
+}> = Object.entries(TOOLSET_TO_PRIZE_SLUGS).flatMap(([toolset, slugs]) =>
+  slugs.map((slug, i) => ({
+    slug,
+    toolset: toolset as ToolsetLandingSlug,
+    toolbox: TOOLBOX_LANE_ORDER[i],
+  }))
+);
+
+/**
+ * The combination a landing page shows on FIRST PAINT, before the visitor touches anything.
+ *
+ * Toolset landing pages resolve through `getDefaultPrizeForToolsetSlug`; an evergreen page's own
+ * slug already IS the prize slug. `PrizeShowcase` seeds its state from exactly this value, so
+ * this is the real on-screen default, not an approximation of it.
+ *
+ * Lives here rather than in the admin component because the server needs it too — the per-page
+ * build breakdown marks the default row and must agree with what visitors actually saw.
+ */
+export function getPageDefaultPrizeSlug(slug: string): string {
+  return isToolsetLandingSlug(slug) ? getDefaultPrizeForToolsetSlug(slug) : slug;
+}
+
 const CASH_PRIZE_SLUG = "cash-prize";
 
 /**

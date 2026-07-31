@@ -27,26 +27,38 @@ export const GET = withNorm(
     }
     let range;
     try {
-      range = resolvePromoAnalyticsRange(parsed.data);
+      // Mapped field-by-field on purpose — see the admin summary route for why.
+      range = resolvePromoAnalyticsRange({
+        dateRange: parsed.data.dateRange,
+        startDate: parsed.data.startDate,
+        endDate: parsed.data.endDate,
+      });
     } catch (e) {
       return ctx.error(400, "bad_query", (e as Error).message);
     }
 
-    const [summary, utmSummary, builtPrizeSummary] = await Promise.all([
+    const [summary, channelSummary, builtPrizeSummary, toolboxSummary] = await Promise.all([
       PromoAnalyticsService.getAggregatedMetrics(range.start, range.end),
-      PromoAnalyticsService.getAggregatedByUTMSource(range.start, range.end),
+      PromoAnalyticsService.getAggregatedByChannel(range.start, range.end),
       PromoAnalyticsService.getAggregatedByBuiltPrize(range.start, range.end),
+      PromoAnalyticsService.getAggregatedByToolbox(range.start, range.end),
     ]);
 
     return ctx.ok({
-      dateRange: { start: range.start.toISOString(), end: range.end.toISOString() },
+      dateRange: {
+        start: range.start.toISOString(),
+        end: range.end.toISOString(),
+        visitsRetainedFrom: range.visitsRetainedFrom.toISOString(),
+        clampedToRetention: range.clampedToRetention,
+      },
       totalVisits: summary.totalVisits,
       totalSignups: summary.totalSignups,
       totalConversions: summary.totalConversions,
       totalRevenue: summary.totalRevenue,
       byPage: summary.byPage,
-      byUTMSource: utmSummary.byUTMSource,
+      byChannel: channelSummary.byChannel,
       byBuiltPrize: builtPrizeSummary.byBuiltPrize,
+      byToolbox: toolboxSummary.byToolbox,
     });
   },
 );

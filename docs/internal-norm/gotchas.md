@@ -59,6 +59,27 @@ The Norm User row has `serviceAccount: true`. The admin user list and Settings �
 
 Per the security checklist: a `NormCallLog` write failure logs `console.error` and does NOT fail the request. This protects Norm from an audit-collection outage taking it offline, but means "missing audit row" is not the same as "request didn't happen". Cross-reference with server logs (the `requestId` ULID appears in both) when investigating.
 
+## G9. `norm:smoke` could never fail — it exited 0 on a 500 (fixed 2026-07-31)
+
+`scripts/internal-norm-smoke.ts` printed the status line and the body, then returned normally
+whatever the status was. So the one failure mode the script exists to catch — a `responseSchema` ↔
+handler-output mismatch, which surfaces as a **runtime 500 inside `withNorm`** and is invisible to
+both `tsc` and `next build` — produced a green exit code. Anyone chaining it with `&&`, or reading
+the exit code instead of the output, got a false pass.
+
+It now `console.error`s and `process.exit(1)` on any non-2xx. Two consequences:
+
+- A schema change **must** be re-smoked before you claim it works, and the exit code is now
+  meaningful evidence.
+- Composite scripts are safe to `&&`-chain. `npm run norm:smoke:promo-analytics` does exactly that
+  across the summary, page-detail and channel-detail routes.
+
+The underlying trap is unchanged and worth restating: **a required field declared in a
+`responseSchema` that the handler does not return is a 500 on every call**, and the type-checker
+cannot see it because the handler's return type and the Zod schema are independent declarations.
+The 2026-07-31 promo-analytics rewrite would have shipped exactly that (`crossVisits` required,
+repository no longer returning it) if the schema had not moved in lockstep.
+
 ## eslint/rules/index.js now hosts non-Norm rules too (2026-07-19)
 
 The local ESLint plugin registered as `internal-norm` gained `no-eager-stripe` (a payment-perf guardrail — see docs/payment/gotchas.md). The plugin NAMESPACE no longer implies Norm-only content; if more general rules accumulate, renaming the namespace (e.g. `local-rules`) is a sanctioned future cleanup — coordinate with every `eslint.config.mjs` reference when doing so.

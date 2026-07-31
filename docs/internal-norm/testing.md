@@ -31,6 +31,12 @@ npm run norm:smoke -- POST /api/internal/norm/v1/some/write '{"key":"value"}'
 
 Set `NORM_SMOKE_BASE=http://localhost:3000` (default) or a deployed URL to hit prod / staging. The dev server must be running for localhost.
 
+**It exits non-zero on a non-2xx (since 2026-07-31).** Before that it printed a 500 and exited 0, so the script could never fail a chain or a CI step — see [gotchas G9](gotchas.md#g9-normsmoke-could-never-fail--it-exited-0-on-a-500-fixed-2026-07-31). That makes `&&`-chaining safe, which is how the per-domain composite scripts are built:
+
+```
+npm run norm:smoke:promo-analytics   # summary + page-detail + channel-detail, in one command
+```
+
 When debugging a 401, copy the smoke client's signing-string assembly into your own client — most "bad signature" failures are a missing `\n` or an unsorted query.
 
 ## tsx test suite

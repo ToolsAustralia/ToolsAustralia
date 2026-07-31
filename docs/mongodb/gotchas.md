@@ -20,6 +20,13 @@ If you modify a schema and the model is already registered, Mongoose uses the OL
 
 Indexes survive across deploys. If you remove an index from the schema, the existing one stays in Atlas. Use the migration scripts to drop unused indexes explicitly.
 
+**Worked example (2026-07-31):** `PromoAnalyticsVisit.referrerSlug` and its
+`{ referrerSlug: 1, slug: 1, timestamp: -1 }` declaration were removed from the schema; the index
+itself is dropped by `scripts/migrations/2026-07-31-promo-analytics-cleanup.ts`
+(`npm run migrate:promo-analytics-cleanup[:dry]`, dry-run by default, `IndexNotFound` treated as a
+no-op). Until that runs against an environment, the index is still live there and still paying
+write amplification on the highest-write collection in the app.
+
 ## Aggregation cost
 
 Heavy aggregations on hot-path requests can starve the pool. Consider:
@@ -93,6 +100,29 @@ returns **code 86** — _"An existing index has the same name as the requested i
 is widely cited as `IndexOptionsConflict` (85); 86 (`IndexKeySpecsConflict`) is what MongoDB
 actually returned. Either way the create fails and `autoIndex` swallows it, so match on the
 behaviour ("a same-name re-declaration silently never builds"), not on the number.
+
+## `signupTouchWindowMatch` returns a top-level `$or` — combine with `$and`, not a spread
+
+A `$match` helper that returns a top-level operator key is a landmine for the spread idiom this
+codebase uses everywhere (`{ ...sourceMatch(field), timestamp: {...} }`). Two helpers each
+contributing an `$or` into one object literal means **the second silently overwrites the first** —
+no error, no warning, just a query missing half its predicate. In
+`PromoAnalyticsRepository.getChannelDetail` that would have dropped the date window entirely and
+returned all-time numbers under a "today" label.
+
+```ts
+// WRONG — if either helper ever returns $or, one of them vanishes
+{ ...signupTouchWindowMatch(start, end), ...signupWhere }
+
+// RIGHT
+{ "signupAttribution.promotionSlug": { $exists: true, $ne: "" },
+  $and: [signupTouchWindowMatch(start, end), signupWhere] }
+```
+
+`channelMatch` returns a top-level `$expr` (safe to spread beside an `$or` today), but the call
+sites use `$and` for both anyway — explicit combination survives either helper later gaining an
+`$or`. General rule: **a helper that may return a top-level logical operator must be combined, not
+spread.**
 
 ## Renaming an index is a TWO-step change, and only one half is automatic
 

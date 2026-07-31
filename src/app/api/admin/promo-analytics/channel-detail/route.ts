@@ -4,9 +4,10 @@ import PromoAnalyticsService, {
   resolvePromoAnalyticsRange,
 } from "@/services/promo-analytics/PromoAnalyticsService";
 import { z } from "zod";
+import { CHANNEL_KEYS } from "@/config/attribution-channels";
 
 const querySchema = z.object({
-  utmSource: z.string().min(1),
+  channel: z.enum(CHANNEL_KEYS),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });
@@ -20,12 +21,12 @@ const querySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const _guard = await requirePermission("promos.view");
+    const _guard = await requirePermission("pageAnalytics.view");
     if (_guard instanceof NextResponse) return _guard;
 
     const searchParams = request.nextUrl.searchParams;
     const parsed = querySchema.safeParse({
-      utmSource: searchParams.get("utmSource"),
+      channel: searchParams.get("channel"),
       startDate: searchParams.get("startDate") || undefined,
       endDate: searchParams.get("endDate") || undefined,
     });
@@ -37,12 +38,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { utmSource, startDate, endDate } = parsed.data;
+    const { channel, startDate, endDate } = parsed.data;
     const hasCustom = !!(startDate && endDate);
     let range;
     try {
       range = resolvePromoAnalyticsRange({
-        range: hasCustom ? "custom" : "today",
+        dateRange: hasCustom ? "custom" : "today",
         startDate,
         endDate,
       });
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await PromoAnalyticsService.getChannelDetailMetrics(
-      utmSource,
+      channel,
       range.start,
       range.end
     );

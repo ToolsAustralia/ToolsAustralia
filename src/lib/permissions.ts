@@ -18,7 +18,6 @@ export const AREA_ACTIONS = {
   promos: ["view", "edit", "end", "delete"],
   facebookAds: ["view", "edit"],
   pageAnalytics: ["view"],
-  promoAnalytics: ["view"],
   submissions: ["view", "edit", "delete"],
   miniDraws: ["view", "edit", "selectWinner", "delete"],
   majorDraw: ["view", "edit", "selectWinner"],
