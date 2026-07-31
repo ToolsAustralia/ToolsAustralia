@@ -133,7 +133,8 @@ async function main() {
   const ratio = row.visits > 0 ? row.signups / row.visits : null;
   console.log(`  Unique visitors (this page):  ${row.visits}`);
   console.log(`  New registrations (accounts):   ${row.signups}`);
-  console.log(`  Cross-visits (from toolsets):   ${row.crossVisits}`);
+  console.log(`  Saw a prize combination:        ${row.buildVisitors}`);
+  console.log(`  ...and changed it:              ${row.builds} (${row.buildChangeRate.toFixed(1)}%)`);
   console.log(`  V→S %:                          ${row.visitToSignupRate.toFixed(1)}%`);
   if (ratio !== null) {
     console.log(`  Registrations / visitor:        ${ratio.toFixed(2)}`);

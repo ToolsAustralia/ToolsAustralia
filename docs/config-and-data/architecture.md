@@ -12,6 +12,7 @@
 
 | File | Role |
 |---|---|
+| [src/config/attribution-channels.ts](../../src/config/attribution-channels.ts) | Display metadata for the canonical acquisition channels (`ConvertingPlatform`) — see below |
 | [src/config/brand-theme.ts](../../src/config/brand-theme.ts) | Brand color tokens |
 | [src/config/featureFlags.ts](../../src/config/featureFlags.ts) | Feature-flag values (currently env / static) |
 | [src/config/prizes.ts](../../src/config/prizes.ts) | FULL prize catalog — deep spec sheets; server/lazy-chunk only (see Prize catalog split below) |
@@ -26,6 +27,36 @@
 > muted "Coming soon" in its place). `DASHBOARD_FEATURES` gained **`loyaltyStreak: false`** (the home
 > `LoyaltyStreak` card is hidden until the 6-month milestone-reward figures are confirmed and it's
 > re-flagged in a later session — same convention as the other coming-soon switches).
+
+### `attribution-channels.ts` — display metadata for `ConvertingPlatform` (2026-07-31)
+
+`CHANNEL_DISPLAY: Record<ConvertingPlatform, ChannelDisplay>` — one row per channel, each
+`{ key, label, kind, order }` — plus helpers `channelLabel` / `channelKind` / `channelOrder` and a
+`CHANNEL_KEYS` tuple typed `[ConvertingPlatform, ...ConvertingPlatform[]]` so it can feed
+`z.enum(...)` directly.
+
+**Why it is config and not derived.** Channel labels used to be produced inside
+`PromoAnalyticsRepository`, three separate times, as
+`src.charAt(0).toUpperCase() + src.slice(1)`. That is presentation logic in a repository, tripled,
+and on the values production actually carries it rendered `Tiktok`, `Ig`, `Chatgpt.com` and
+`Facebook.com-WebsiteKeyInfo`. It also puts a vendor's name where the house rule wants it — in
+config, not in domain logic.
+
+- **`kind`** (`paid` / `owned` / `unattributed` / `unknown`) exists so the UI can style a chip
+  without pattern-matching the label text. The admin campaign table previously branched on the
+  literal string `"Direct"` and silently stopped working the moment the label moved here.
+- **`order`** gives a stable table sort: paid spend first, then owned, then the two catch-alls.
+- **`meta` is labelled "Facebook / Instagram", not "Meta"** — Instagram is a placement, and
+  `MetaAdInsightsDaily` reports one spend figure across both, so splitting revenue while spend
+  stays merged would make ROAS uncomputable for either half.
+- **`CHANNEL_KEYS` closes the drill-down enum**, which is what removed a
+  `new RegExp("^" + visitorSuppliedValue + "$")` built from an unvalidated `utm_source`.
+
+**Adding a platform** is three edits and nothing else: the `ConvertingPlatform` union
+(`src/types/attribution.ts`), its `utm_source` forms in `SOURCE_ALIASES`
+(`src/services/attribution/normalizePlatform.ts`), and one row here. The Mongo `$switch`, the
+drill-down predicate and the route enum are all generated from those. A missing row is a **compile
+error** (`Record<ConvertingPlatform, …>`) and is also asserted by `npm run test:normalize-platform`.
 
 ### Prize catalog split — prizes.ts vs prize-summaries.ts (2026-07-20)
 

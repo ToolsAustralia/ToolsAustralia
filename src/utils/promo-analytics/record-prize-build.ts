@@ -25,10 +25,15 @@ export interface PrizeBuildCapture {
   toolsetSwitches: number;
   /**
    * Did the visitor touch the builder at all on this page? NOT derivable from the counters —
-   * cash is a toggle, not a reel card, so a cash-only visitor sits at 0/0 and still engaged.
-   * Absent means engaged, matching the route's optional field and how pre-flag rows count.
+   * cash is a toggle, not a reel card, so a cash-only visitor sits at 0/0 and still engaged,
+   * and a `?toolbox=`/`?toolset=` URL arrival re-hydrates a previously-switched build at 0/0 too.
+   *
+   * Required, and resolved exactly ONCE — at the route, from the wire schema's optional field.
+   * Every layer below used to re-apply its own `!== false` default (here, the service, and the
+   * repository), so when the route dropped the field on the way through, three separate
+   * fallbacks all quietly agreed on `true` and nothing failed. One default, at the boundary.
    */
-  interacted?: boolean;
+  interacted: boolean;
   anonymousId?: string;
 }
 
@@ -40,7 +45,7 @@ export interface PrizeBuildDeps {
     builtPrizeSlug: string;
     toolboxSwitches: number;
     toolsetSwitches: number;
-    interacted?: boolean;
+    interacted: boolean;
   }) => Promise<boolean>;
 }
 
@@ -72,7 +77,7 @@ export async function recordPrizeBuild(
       builtPrizeSlug,
       toolboxSwitches: clamp(capture.toolboxSwitches),
       toolsetSwitches: clamp(capture.toolsetSwitches),
-      interacted: capture.interacted !== false,
+      interacted: capture.interacted,
     });
     return updated ? { recorded: true } : { recorded: false, reason: "no_visit_row" };
   } catch (error) {

@@ -1,13 +1,14 @@
 "use client";
 
 import React from "react";
-import { BarChart3, Users, UserCheck, DollarSign } from "lucide-react";
+import { BarChart3, Users, UserCheck, DollarSign, Layers } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
-import { formatNumber, formatCurrency } from "@/utils/metrics/formatters";
+import { formatNumber, formatCurrency, formatPercentage } from "@/utils/metrics/formatters";
 import { getPrizeLabel } from "@/config/prize-summaries";
 import { usePromoPageDetail } from "@/hooks/queries/usePromoPageDetail";
 import UTMCampaignBreakdownTable from "@/components/admin/promo-analytics/UTMCampaignBreakdownTable";
+import PrizeBuildBreakdownTable from "@/components/admin/promo-analytics/PrizeBuildBreakdownTable";
 
 interface PromoPageDetailModalProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ export default function PromoPageDetailModal({
   );
 
   const summary = data?.summary ?? summaryFromParent;
+  const builds = data?.buildBreakdown;
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl" height="fixed">
@@ -55,29 +57,6 @@ export default function PromoPageDetailModal({
         {error && (
           <div className="bg-red-50 dark:bg-red-950/25 border border-red-200 dark:border-red-900/45 rounded-lg p-4 text-red-700 dark:text-red-300">
             {(error as Error).message}
-          </div>
-        )}
-
-        {/* Visits from other toolset pages */}
-        {data?.visitsFrom && data.visitsFrom.length > 0 && (
-          <div className="bg-indigo-50 dark:bg-indigo-950/25 rounded-xl p-4 border border-indigo-100 dark:border-indigo-900/40">
-            <h4 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200 mb-2">
-              Visits from other landing pages
-            </h4>
-            <p className="text-xs text-indigo-700 dark:text-indigo-300 mb-3">
-              Unique visitors who landed on another promo page first, then navigated here via the &quot;Explore other toolsets&quot; carousel.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {data.visitsFrom.map(({ referrerSlug, visits }) => (
-                <span
-                  key={referrerSlug}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-neutral-900 border border-indigo-200 dark:border-indigo-800/60 text-sm font-medium text-indigo-900 dark:text-indigo-200"
-                >
-                  <span>{getPrizeLabel(referrerSlug) ?? referrerSlug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}</span>
-                  <span className="text-indigo-600 dark:text-indigo-400">({formatNumber(visits)})</span>
-                </span>
-              ))}
-            </div>
           </div>
         )}
 
@@ -114,6 +93,55 @@ export default function PromoPageDetailModal({
             />
           </div>
         )}
+
+        {/* Prize builds — what visitors actually assembled on this page */}
+        <div className="bg-white dark:bg-neutral-900/70 rounded-xl shadow-lg border-2 border-indigo-100 dark:border-indigo-900/35 overflow-hidden">
+          <div className="p-4 border-b border-gray-200 dark:border-neutral-700">
+            <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-neutral-100">
+              <Layers className="w-5 h-5 text-indigo-500" />
+              Prize builds
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-neutral-400 mt-1">
+              The combination each visitor ended on in &quot;Build your prize&quot;, and whether they
+              changed it from what the page loads with. A visitor who landed more than once can
+              appear under two combinations, so the chips below — which count people once for the
+              whole page — are deliberately not the column totals.
+            </p>
+            {builds && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 text-sm">
+                  <span className="text-gray-500 dark:text-neutral-400">Saw a combination</span>
+                  <span className="font-semibold text-gray-900 dark:text-white tabular-nums">
+                    {formatNumber(builds.buildVisitors)}
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 text-sm">
+                  <span className="text-gray-500 dark:text-neutral-400">Changed it</span>
+                  <span className="font-semibold text-gray-900 dark:text-white tabular-nums">
+                    {formatNumber(builds.builds)}
+                    {builds.buildVisitors > 0 && (
+                      <span className="text-gray-500 dark:text-neutral-400 font-normal">
+                        {" · "}
+                        {formatPercentage(builds.buildChangeRate)}
+                      </span>
+                    )}
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/50 text-sm">
+                  <span className="text-indigo-700 dark:text-indigo-300">Page default</span>
+                  <span className="font-semibold text-indigo-900 dark:text-indigo-200">
+                    {getPrizeLabel(builds.defaultBuiltPrizeSlug) ?? builds.defaultBuiltPrizeSlug}
+                  </span>
+                </span>
+              </div>
+            )}
+          </div>
+          <PrizeBuildBreakdownTable
+            rows={builds?.byBuild ?? []}
+            loading={isLoading}
+            emptyMessage="No prize builds recorded for this page in the selected period."
+          />
+        </div>
 
         {/* Campaign breakdown table */}
         <div className="bg-white dark:bg-neutral-900/70 rounded-xl shadow-lg border-2 border-red-100 dark:border-red-900/35 overflow-hidden">

@@ -2,7 +2,50 @@
 
 ## Promo-visit recording is a dep-injected functional core
 
-`recordPromoVisit` (`src/utils/promo-analytics/record-promo-visit.ts`) holds the visit-recording orchestration: dedup (when an anonymousId is present) → resolve UTM/referrer attribution → persist. Its side effects (`hasRecentVisit`, `recordVisit`) are **injected** by the caller — the `/api/tracking/promo-page-visit` route wires the real Mongo-backed deps inside `after()` (the injected `hasRecentVisit` calls `connectDB()` first — mongoose never auto-connects, and on a cold instance a bare query would buffer ~10s and lose the visit). This keeps the route thin and makes the logic unit-testable with no DB (`npm run test:promo-visit`). Dedup **fails open**: if the dedup read throws (timeout / connection error), the visit is recorded anyway — at worst one duplicate row inside the 60s window beats a silently dropped visit. UTM resolution order is: explicit body value → URL `utm_*` → (utmCampaign only) `fb_<campaign_id>` fallback for Facebook ads that omit `utm_campaign`. The raw slug is passed to `recordVisit` (which lowercases on write); the dedup query uses the normalized slug. See [docs/tracking/gotchas.md](../tracking/gotchas.md) for why it runs in `after()`.
+`recordPromoVisit` (`src/utils/promo-analytics/record-promo-visit.ts`) holds the visit-recording orchestration: dedup (when an anonymousId is present) → resolve UTM/referrer attribution → persist. Its side effects (`hasRecentVisit`, `recordVisit`) are **injected** by the caller — the `/api/tracking/promo-page-visit` route wires the real Mongo-backed deps inside `after()` (the injected `hasRecentVisit` calls `connectDB()` first — mongoose never auto-connects, and on a cold instance a bare query would buffer ~10s and lose the visit). This keeps the route thin and makes the logic unit-testable with no DB (`npm run test:promo-visit`). Dedup **fails open**: if the dedup read throws (timeout / connection error), the visit is recorded anyway — at worst one duplicate row inside the 60s window beats a silently dropped visit. UTM resolution order is (since 2026-07-31): **first-touch `_ta_attr` cookie** → explicit body value → URL `utm_*` → (utmCampaign only) `fb_<campaign_id>` fallback for Facebook ads that omit `utm_campaign`. The raw slug is passed to `recordVisit` (which lowercases on write); the dedup query uses the normalized slug. See [docs/tracking/gotchas.md](../tracking/gotchas.md) for why it runs in `after()`.
+
+**The cookie is read in the ROUTE, not in the recorder or the client.** `request` cannot be touched once `after()` has been scheduled, and a client-side read would race the write — the hook that WRITES `_ta_attr` mounts above the one that fires this beacon, and React runs child effects first, so on a first landing the beacon could read before the cookie exists. The route passes `firstTouchUtm{Source,Medium,Campaign}` into `PromoVisitCapture`; the recorder stamps `utmBasis` from whether the first-touch source was present.
+
+## A resolver parameter that does not match its callers' key is invisible to `tsc`
+
+`resolvePromoAnalyticsRange` took `{ range }` while all six callers passed `{ dateRange }`, so
+**every** date selection on the Page Analytics tab silently returned AEST today — for months, on
+both the admin route and the Norm mirror. The type-checker could not see it: the field was
+optional, and the argument was a variable rather than an object literal, so excess-property
+checking never applied.
+
+Two habits close this class of bug, and the fix applies both:
+
+1. **Name the parameter exactly what the caller's key is.** A rename then becomes a compile error.
+2. **Never forward a Zod `parsed.data` wholesale into a function with optional fields.** Map it
+   field by field at the call site. The wholesale spread is what let the names drift.
+
+Guard: `npm run test:promo-analytics-range` asserts every range key is reachable and that none
+collapses to today.
+
+## Visits expire at 90 days; signups and revenue do not
+
+`PromoAnalyticsVisit` has a TTL; `User` and `PaymentEvent` do not. Any ratio on this tab whose
+denominator is visits is meaningless outside the retention window — an unclamped "All Time" renders
+visit→signup rates in the hundreds of percent, and a page retired before the floor reads
+`visits 0 / signups 400 / revenue $12,000`.
+
+`resolvePromoAnalyticsRange` clamps the **whole** window (not just the visits query) to
+`PROMO_VISIT_RETENTION_DAYS` and reports `visitsRetainedFrom` + `clampedToRetention` so the UI can
+say why. If you add a new metric here that joins a non-expiring collection to visits, it inherits
+this constraint — do not re-derive the floor locally, read it from the model export.
+
+## Page-level uniques are NOT the column sums of a per-combination breakdown
+
+`buildVisitors` / `builds` dedupe a visitor **once per page**; `byBuild[].builders` dedupes **per
+combination**. A visitor who lands twice and settles on a different combination each time is 1 in
+the first and 2 in the second, so `Σ builders ≥ buildVisitors` always. Summing a distribution for a
+numerator while dividing by a page-level count is exactly what shipped a literal **250%** column
+(F-013). Never render the page-level figures as a footer total under the breakdown table.
+
+The same shape applies to the channel drill-down's `rawSources`: they are **per-source** uniques
+(one visitor can arrive via `ig` and later `facebook.com`), so they MAY sum above `summary.visits`.
+They exist to audit what folded into a channel — never as an addend.
 
 ## Banner behaviour
 

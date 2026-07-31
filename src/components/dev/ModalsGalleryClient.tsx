@@ -1242,7 +1242,8 @@ export default function ModalsGalleryClient() {
       <ChannelDetailModal
         isOpen={isOpen("admin-channel-detail")}
         onClose={close}
-        utmSource="google"
+        channel="google"
+        channelLabel="Google"
         startDate="2026-01-01"
         endDate="2026-03-31"
         summaryFromParent={{ visits: 1200, signups: 40, conversions: 12, revenue: 3500 }}

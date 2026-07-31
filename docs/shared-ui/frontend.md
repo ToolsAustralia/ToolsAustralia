@@ -957,6 +957,33 @@ registry directly. See [promo/frontend.md](../promo/frontend.md) for the reel th
 
 [`src/components/modals/AdSpendFocusModal.tsx`](../../src/components/modals/AdSpendFocusModal.tsx) — drill-down for the admin Overview's Ad Spend / ROAS KPI tiles: membership vs one-time landing-URL split with a campaign → ad-set → ad tree per bucket. Built on `ModalContainer` (`size="4xl" height="fixed" className="!max-w-[1100px]"`), query gated on `isOpen`, state reset on close, Meta/TikTok platform chips (TikTok = dashed awaiting box until its URL mapping ships). Each `SummaryTile` shows its bucket's **share of total ad spend** (a `{n.n}%` badge beside the spend figure, 2026-07-20) — computed from `spendCents` across all three buckets to avoid float drift, one decimal so tiny buckets don't round to 0%. The tree itself is the admin-domain `CampaignTreeTable` (see `docs/admin/frontend.md` — "Packages-focus drill-downs"). `PrizePerformanceAdsModal` (same folder) was upgraded the same day to reuse that tree with focus chips — documented alongside it in `docs/admin/frontend.md`.
 
+### ChannelDetailModal / PromoPageDetailModal (admin Page Analytics, 2026-07-31)
+
+The two drill-downs behind the admin `promo-analytics` tab. Both changed shape when the tab was
+rebuilt — see [docs/admin/frontend.md](../admin/frontend.md#page-analytics-rebuild-2026-07-31) for
+the tab side and [docs/promo/backend.md](../promo/backend.md#page-analytics-repair--2026-07-31) for
+the API side.
+
+[`ChannelDetailModal`](../../src/components/modals/ChannelDetailModal.tsx) takes **two** props where
+it used to take one string: `channel` (a `ConvertingPlatform` — the canonical key the API filters
+on) and `channelLabel` (the human string). The split is load-bearing: the route's query param is a
+closed `z.enum`, so passing the label would 400. Every user-visible string — title, subtitle, the
+Visits card subtitle — uses `channelLabel`; the query uses `channel`. It also renders a new
+**"Traffic sources"** chip strip from `data.rawSources` (raw `utm_source` + visit count, `(none)`
+for absent), with inline copy stating those are per-source uniques that may sum above the visit
+total — they exist to audit what folded into e.g. Facebook / Instagram, not as an addend.
+
+[`PromoPageDetailModal`](../../src/components/modals/PromoPageDetailModal.tsx) dropped its
+"Visits from other landing pages" panel (`visitsFrom` no longer exists — its writer, the "Explore
+other toolsets" carousel, was deleted 2026-07-22) and gained a **"Prize builds"** card: three chips
+(Saw a combination / Changed it / Page default) above the admin-domain
+[`PrizeBuildBreakdownTable`](../../src/components/admin/promo-analytics/PrizeBuildBreakdownTable.tsx).
+The card's own copy states the chips are deliberately **not** the table's column totals, because a
+visitor who landed more than once can appear under two combinations.
+
+Both are listed in `ModalsGalleryClient` (`/dev` modal gallery); the `ChannelDetailModal` fixture
+passes `channel="google"` + `channelLabel="Google"`.
+
 ### PrizeSpecificationsModal
 
 [`src/components/modals/PrizeSpecificationsModal/`](../../src/components/modals/PrizeSpecificationsModal/) shows the full spec breakdown for a prize (`prize?: PrizeCatalogEntry`). Built on `ModalContainer` (`size="4xl" height="auto" mobileFullBleed`).

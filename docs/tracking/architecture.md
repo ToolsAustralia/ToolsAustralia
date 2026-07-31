@@ -123,6 +123,18 @@ Each click ID has its **own** first-party cookie. [`captureClickIds()`](../../sr
 
 Klaviyo attribution is identified via the UTM tuple `utm_source=klaviyo` + `utm_medium=email|sms` — NOT via `_kx` (see [KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) attribution section).
 
+> **`_ta_attr` gained a third server-side reader on 2026-07-31: the promo visit beacon.**
+> `POST /api/tracking/promo-page-visit` now calls `readAttributionCookieFromRequest` and prefers
+> the first-touch tuple over the landing URL when writing `PromoAnalyticsVisit.utmSource/Medium/Campaign`
+> (recording which it used in a new `utmBasis` column). Signups and conversions already read this
+> cookie; visits read only the landing URL, so the visits and signups columns of the admin Page
+> Analytics channel table sat on two different bases — a visitor who arrived on a UTM-tagged page,
+> browsed to an untagged promo page and registered there gave the paid channel a signup with **no
+> visit** and Direct a visit with no signup. Read server-side, not in the hook: the hook that
+> WRITES this cookie mounts above the one that fires the beacon and React runs child effects first,
+> so a client read could beat the write on a first landing. See
+> [docs/promo/backend.md](../promo/backend.md#visits-now-read-first-touch-attribution-2026-07-31).
+
 ### Attribution resolver — unified recency race + fallbacks
 
 The resolver lives at `src/services/attribution/`. At the `create-*` route edge (subscription creation, one-time purchase, etc.), it reads the cookie / request body and resolves exactly **one** `convertingPlatform` per payment.

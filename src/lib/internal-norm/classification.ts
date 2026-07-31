@@ -1130,26 +1130,29 @@ export const NORM_ENDPOINTS = {
   // ─── Promo analytics (wired) ──────────────────────────────────────────
   "promo-analytics.summary": {
     tier: "read",
-    requiredPermission: "promos.view",
+    requiredPermission: "pageAnalytics.view",
     path: "/v1/promo-analytics",
     method: "GET",
-    summary: "Promo analytics summary: per-page + per-UTM-source visits, signups, conversions, revenue",
+    summary:
+      "Promo analytics summary: per-page, per-CHANNEL (meta/tiktok/klaviyo_email/klaviyo_sms/google/direct/other), per-built-prize and per-toolbox visits, signups, conversions, revenue",
     responseSchema: NormPromoAnalyticsSummarySchema,
   },
   "promo-analytics.channel-detail": {
     tier: "read",
-    requiredPermission: "promos.view",
+    requiredPermission: "pageAnalytics.view",
     path: "/v1/promo-analytics/channel-detail",
     method: "GET",
-    summary: "Promo analytics for a single utmSource: pages and campaigns it drove",
+    summary:
+      "Promo analytics for a single CHANNEL (param `channel`, not utmSource): pages and campaigns it drove, plus the raw utm_source values that folded into it",
     responseSchema: NormPromoAnalyticsChannelDetailSchema,
   },
   "promo-analytics.page-detail": {
     tier: "read",
-    requiredPermission: "promos.view",
+    requiredPermission: "pageAnalytics.view",
     path: "/v1/promo-analytics/page-detail",
     method: "GET",
-    summary: "Promo analytics for a single page: per-UTM-campaign attribution + visits-from",
+    summary:
+      "Promo analytics for a single page: per-campaign attribution + the prize-build breakdown (which combination visitors ended on, and whether they changed it)",
     responseSchema: NormPromoAnalyticsPageDetailSchema,
   },
 

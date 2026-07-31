@@ -16,7 +16,17 @@ A Role is a named bundle of permissions stored in MongoDB. The admin Settings �
 Created by `scripts/migrate-seed-staff-roles.ts`:
 
 - **Admin** — every permission, `isSystem: true`. Backfill links existing `role: "admin"` users here.
-- **Ads Manager** — `facebookAds.{view,edit}`, `pageAnalytics.view`, `promoAnalytics.view`, `abTesting.view`, `overview.view`. `isSystem: false` (deletable; serves as a starter template).
+- **Ads Manager** — `facebookAds.{view,edit}`, `pageAnalytics.view`, `abTesting.view`, `overview.view`. `isSystem: false` (deletable; serves as a starter template).
+
+> **Seeded ≠ live.** Production holds **Admin, Manager and Customer Support** — there is **no Ads
+> Manager role in production**; it exists only as this seed template. Worth knowing before
+> reasoning about who a permission change affects: the 2026-07-31 move of the Page Analytics routes
+> from `promos.view` → `pageAnalytics.view` was latent rather than breaking precisely because
+> Admin and Manager both held `promos.view`.
+>
+> `promoAnalytics.view` was **removed from this bundle and from the catalog** on 2026-07-31 after
+> the migration stripped it from stored roles in both clusters — it granted nothing. See
+> [permissions-catalog.md](permissions-catalog.md#promoanalyticsview-was-retired-2026-07-31).
 
 ## Last-admin protection
 

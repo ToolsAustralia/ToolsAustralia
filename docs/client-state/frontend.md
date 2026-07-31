@@ -75,3 +75,26 @@ Don't mix. Common mistake: mirroring server-state into Zustand. Don't.
 (default-exports `domMax`). This code-splits framer-motion features out of the shared chunk
 into a post-hydration async chunk (landing routes −~16 kB First Load JS). Pattern + rules:
 docs/shared-ui/patterns.md P7.
+
+## 2026-07-31 — Page Analytics channel drill-down keys on a channel, not a `utm_source`
+
+`src/hooks/queries/useChannelDetail.ts` — first argument renamed `utmSource: string` →
+**`channel: ConvertingPlatform | null`**, sent as `?channel=`. The drill-down route now takes a
+**closed enum** (`CHANNEL_KEYS` from `src/config/attribution-channels.ts`) rather than a free
+string, which is what structurally removed the `new RegExp("^" + visitorSuppliedValue + "$")`
+the server used to build from it.
+
+`src/lib/queryKeys.ts` — `queryKeys.admin.promoChannelDetail`'s first parameter was renamed
+`utmSource` → `channel` to match. It was only a parameter *name* (a channel key is structurally
+a string, so keys stayed unique either way), but leaving it would have forked the vocabulary:
+callers reading `row.channel` would be passing it to something called `utmSource`, and the two
+mean different things now — `meta` is a channel, `facebook.com` is a utm_source that folds into
+it. One concept, one name.
+
+**Caller rule:** pass `row.channel` (the KEY), never `row.channelLabel` (the display string).
+`ChannelDetailModal` takes both — the key for fetching, the label for the title — so it is easy
+to hand the wrong one to the hook. The key is typed `ConvertingPlatform`, so a label reaches the
+hook as a type error rather than as an empty result set.
+
+The hook is `enabled` only when `channel` and both dates are set, matching the sibling
+`usePromoPageDetail`.
