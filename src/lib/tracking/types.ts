@@ -73,6 +73,29 @@ export interface RequestContext {
   clientIpAddress?: string;
   clientUserAgent?: string;
   eventSourceUrl?: string;
+  /**
+   * Document referrer for the page the event happened on (TikTok `page.referrer`).
+   * NOTHING populates it today — no call site carries the `Referer` header this far — so it
+   * stays absent rather than fabricated. A route that has the header can start passing it and
+   * the TikTok mapper will emit it; never synthesize one from `eventSourceUrl`.
+   */
+  referrer?: string;
+  /**
+   * Provider-specific match signals derived from the same-origin request; each is read only
+   * by its matching provider.
+   *
+   * These are NOT new plumbing — every purchase/checkout route already builds its context as
+   * `{ ...extractRequestContext(request), ...extractTikTokContext(request) }`, so the click ids
+   * were present on this object at RUNTIME and then silently discarded, because the providers
+   * only ever looked at `event.userData`. Declaring them here is what makes that reachable
+   * (and type-checkable). `userData` still wins where both are set — same precedence as
+   * `clientIpAddress` / `clientUserAgent`.
+   */
+  fbc?: string;
+  fbp?: string;
+  ttclid?: string;
+  ttp?: string;
+  scid?: string;
 }
 
 export interface ConversionProvider {

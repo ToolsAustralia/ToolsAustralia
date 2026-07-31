@@ -33,6 +33,22 @@ Each promo landing page has a unique `PromoLink` slug. Visiting writes a `PromoA
 
 [src/constants/z-index.ts](../../src/constants/z-index.ts) defines z-index constants. Banners use a specific value to layer above page content but below modals.
 
+## P6. Redirects on ad-reachable paths must forward the query string
+
+[`src/app/(site)/promotion/page.tsx`](../../src/app/(site)/promotion/page.tsx) redirects to
+`/promotions/<DEFAULT_PRIZE_SLUG>`. It used to redirect to a **bare pathname**, which silently
+discarded the entire query string — so any ad landing there lost `?ttclid=`, `?fbclid=`, `?ScCid=`
+and every `utm_*` **before a single line of tracking code ran**. Nothing downstream can recover
+that: click ids have no redundancy in `_ta_attr` (see
+[tracking/architecture.md](../tracking/architecture.md)), and even middleware's `?ttclid=` cookie
+mint fires on the *pre*-redirect request only.
+
+It now rebuilds the incoming params with `URLSearchParams` and appends them, emitting the bare
+path unchanged when there are none. `searchParams` is a Promise in Next.js 15 and must be awaited.
+
+**Any redirect on a path an ad can point at must do the same.** When adding one, ask whether a
+paid click could ever land there — if yes, forward the query string.
+
 ## Cursor agent
 
 `.cursor/agents/growth-integrations.md` covers this domain plus tracking and rewards-redeemables.

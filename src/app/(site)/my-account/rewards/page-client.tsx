@@ -112,6 +112,7 @@ export default function RewardsPage() {
           partnerAccessPct={dash.partnerAccessPct}
           expiryLabel={dash.partnerAccessExpiryLabel}
           tierHex={dash.tierHex}
+          tierLabel={dash.subscriptionTierLabel}
           onBecomeMember={onBecomeMember}
           onBuyPackage={onBuyPackage}
           onUpdatePayment={onUpdatePayment}

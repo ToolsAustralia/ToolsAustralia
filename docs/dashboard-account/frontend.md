@@ -760,3 +760,7 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## 2026-07-31 — Partner-portal hand-off on the dashboard + Rewards page
+
+[my-account/page-client.tsx](../../src/app/(site)/my-account/page-client.tsx) and [my-account/rewards/page-client.tsx](../../src/app/(site)/my-account/rewards/page-client.tsx) now drive the portal CTA through `usePortalHandoff()` instead of calling the SSO mutation directly, so the hero chip and the Rewards card share one flow (consent sheet → transit takeover → redirect) with the other two call sites. Both pass the member's given name / tier / access-% so the takeover footer reads as their session. The dashboard keeps its toast for the *pre-takeover* leg only — once the takeover is up it shows failures itself. Details: [docs/partner/frontend.md](../partner/frontend.md).

@@ -570,5 +570,21 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "Each offer in the partner catalogue unlocks at a set access percentage, and your access comes from your membership tier or an active one-time pack — the Tradie membership unlocks 50% of the catalogue, Foreman 75%, and Boss 100%, while one-time packs open their own share for a set number of days and Mini Packs include a smaller time-limited slice. If an offer shows as locked in the partner portal, your partner access doesn't reach it yet. Upgrading your membership or grabbing a one-time pack on the [membership page](/membership) unlocks it straight away — then head back to the portal to redeem it.",
       category: "REWARDS",
     },
+
+    // ── PARTNER PORTAL — WHAT GETS SHARED ────────────────────────────────────
+    {
+      id: "73",
+      question: "What details do you share with the partner rewards portal?",
+      answer:
+        "The rewards catalogue runs on a partner platform, so the first time you open it we show you exactly what gets shared and ask you to agree before anything leaves us. We send three things: your name, your email address, and an internal account reference so your redemptions link back to your membership. Your card and payment details, your billing address and your draw entry history never leave Tools Australia. You'll only be asked once — but if we ever change what's shared, we'll ask again before that change applies. You can read the details on the consent screen itself when you open the portal from [My Account → Rewards](/my-account/rewards).",
+      category: "REWARDS",
+    },
+    {
+      id: "74",
+      question: "Do I have to agree to open the partner portal?",
+      answer:
+        "Opening the partner portal is optional — you can choose \"Not now\" on the consent screen and nothing is shared and nothing changes on your account. You just won't be able to browse or redeem partner offers until you continue, because the portal can't create your account there without your name and email. Everything else in your membership is unaffected: your free entries, the monthly prize draws and the rest of your account all work exactly the same either way.",
+      category: "REWARDS",
+    },
   ];
 }

@@ -69,3 +69,30 @@ measured conversions and ROAS to drop when it lands — that is the cost of the 
 and it should be a planned, communicated change rather than a side effect.
 
 The privacy policy discloses the tracking that actually happens (see R4's corollary).
+
+## R10. A TikTok page view goes through `ttq.page()` — never `ttq.track("PageView")`
+
+TikTok's standard page-view event is the SDK method **`ttq.page()`**, whose event code is
+**`Pageview`** (capital P, lowercase v). `ttq.track(name, …)` passes an unrecognised `name`
+through verbatim and registers a **custom** event of that name.
+
+This is not hypothetical. `ConversionPixels` dispatches a canonical event literally named
+`"PageView"` on SPA route changes; before the provider learned to translate it, it fell through
+to the generic `ttq.track(event.eventName, …)` tail and created a **custom `PageView` event
+sitting alongside the standard `Pageview`** — 3,748 events on a separate Events Manager row.
+The translation now lives in [`providers/tiktok.ts`](../../src/lib/tracking/providers/tiktok.ts)
+(`eventName === "PageView"` → `window.ttq.page()` → early return) so `ConversionPixels` stays
+provider-agnostic, and it is pinned by a test.
+
+Consequences worth knowing, because they are not symmetrical:
+- Custom events **cannot** be used for campaign optimization, so this did not poison delivery.
+- Custom events **can** be used for **audience building** — so a stray one can silently back an
+  audience rule aimed at the wrong population.
+- Dedup can never merge the two rows: it keys on identical event **name** + `event_id`.
+- TikTok publishes no way to **delete** a custom event that has already been received. It ages
+  out. Do not expect to clean it up in the dashboard.
+
+Corollary: **never** add manual `ttq.track` calls for `LandingPageView` or `EngagedSession`.
+Those are emitted by the SDK's own LPV plugin, which piggybacks on `Pageview`; a manual copy
+would double-count *and* create two more custom events.
+

@@ -98,3 +98,7 @@ so fixing prose in the builder is as load-bearing as fixing it in the corpus.
 ## Cobber partner-portal locked-offer FAQ (2026-07-24)
 
 `src/data/supportChatFaqs.ts` id **72** (REWARDS, "PARTNER PORTAL — LOCKED OFFERS" section): why an offer in the partner portal shows as locked — each offer unlocks at an access percentage from the member's membership tier or active one-time pack (Tradie 50 / Foreman 75 / Boss 100); upgrading or grabbing a pack on `/membership` unlocks it straight away. Added with the rewards-return funnel (see `docs/partner/igodirect-integration-playbook.md` §10); rule-11 safe (no entries mention). The corpus-size assertion in `src/data/__tests__/faqs.test.ts` is now pinned at **72** — bump it deliberately when adding entries (CLAUDE.md rule 5c).
+
+## 2026-07-31 — FAQ corpus 72 → 74
+
+[supportChatFaqs.ts](../../src/data/supportChatFaqs.ts) gained entries **73** ("What details do you share with the partner rewards portal?") and **74** ("Do I have to agree to open the partner portal?"), covering the new consent screen. The count assertion in [faqs.test.ts](../../src/data/__tests__/faqs.test.ts) was bumped deliberately; `npm run build:chat-knowledge-pack` re-run. Copy is grounded in what the hand-off actually sends — keep it in step with `buildPartnerSsoSharedFields` ([docs/partner/rules.md R4](../partner/rules.md)).

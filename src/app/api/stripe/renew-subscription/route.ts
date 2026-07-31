@@ -26,6 +26,9 @@ import { prepareRecoveredCycleInvoice } from "@/services/subscription/prepareRec
 import { mintCurrentCycleInvoice } from "@/services/subscription/mintCurrentCycleInvoice";
 import { acquireRecoveryClaim, releaseRecoveryClaim } from "@/utils/payment/recovery/recovery-claim";
 import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
+import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 
 const renewSubscriptionSchema = z.object({
   packageId: z.string().optional(), // Optional: renew with same or different package
@@ -600,12 +603,33 @@ export async function POST(request: NextRequest) {
     // a conversion, not a renewal), so without this the win-back conversion carried no
     // attr_platform and the webhook stamped it `direct`. Never throws.
     const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
+
+    // Extract request context for Facebook CAPI (IP, user agent, fbc, fbp)
+    // Store in subscription metadata so webhook can use it for improved match quality
+    // Carries every provider's match signals: Meta's fbc/fbp and TikTok's ttclid/ttp.
+    // Both get stashed in Stripe metadata (capi_*) because Purchase fires from the
+    // webhook, which has no cookies to read them back from.
+    const requestContext = { ...extractRequestContext(request), ...extractTikTokContext(request) };
+    // Win-back renewals are driven from StripePaymentModal on the account surface, not
+    // the shop, so the no-referer fallback points at /my-account rather than /shop.
+    const capiEventSourceUrl = safeEventSourceUrl(
+      request.headers.get("referer") ??
+      (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/my-account` : undefined)
+    );
+
     const baseMetadata = {
       packageId: targetPackage._id,
       packageName: targetPackage.name,
       userEmail: user.email,
       userId: user._id.toString(),
       renewalType: "new_subscription",
+      ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+      ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+      ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+      ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+      ...(requestContext.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
+      ...(requestContext.ttp ? { capi_ttp: requestContext.ttp } : {}),
+      ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
       ...(typeof anchorMetadata === "object" && anchorMetadata !== null ? anchorMetadata : {}),
       ...resolvedAttr,
     };

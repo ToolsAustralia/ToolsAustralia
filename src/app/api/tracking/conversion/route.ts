@@ -10,6 +10,7 @@ import { normalizeEpochToUnixSeconds, resolveEventTime } from "@/lib/tracking/ca
 import { mirrorEventNameSchema } from "@/utils/tracking/mirror-event-names";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
+import AnonymousIdService from "@/services/ab-testing/AnonymousIdService";
 
 const userDataSchema = z
   .object({
@@ -21,14 +22,23 @@ const userDataSchema = z
     state: z.string().optional(),
     zipCode: z.string().optional(),
     country: z.string().optional(),
-    externalId: z.string().optional(),
     birthdate: z.union([z.string(), z.date()]).optional(),
     clientIpAddress: z.string().optional(),
     clientUserAgent: z.string().optional(),
-    fbc: z.string().optional(),
-    fbp: z.string().optional(),
-    ttclid: z.string().optional(),
-    scid: z.string().optional(),
+    // externalId / fbc / fbp / ttclid / ttp / scid are DELIBERATELY absent — do not add
+    // them back. This endpoint is unauthenticated, so every key the schema accepts is
+    // caller-controllable, and `...parsed.userData` is spread LAST when building `userData`
+    // below — a body-supplied value silently beats the server-derived one.
+    //
+    // For the click ids that means a caller could attribute events to any ad click; they
+    // are same-origin cookies the server reads itself (`extractRequestContext` /
+    // `extractTikTokContext`), so a browser caller has no legitimate reason to send them.
+    //
+    // `externalId` is the same class and matters more now: the server resolves it below to
+    // the session's `User._id`, else the `ta_anon_id` visitor id. Accepting it from the body
+    // would let any caller overwrite BOTH — spoofing another member's identity into Meta's
+    // and TikTok's user graphs, and defeating the anonymous-id fallback this route relies on
+    // for its external-id coverage.
   })
   .optional();
 
@@ -87,9 +97,11 @@ export async function POST(request: NextRequest) {
   }
 
   // Enrich userData from the authenticated session so the browser doesn't have
-  // to ship raw PII. Server-injected fields (email/phone/firstName/lastName/state/
-  // country/externalId/birthdate) take priority over client-supplied values; the
-  // client retains authority for browser-only signals (fbc/fbp/clientUserAgent).
+  // to ship raw PII. Session-derived PII (email/phone/firstName/lastName/state/
+  // country/externalId/birthdate) is the trustworthy source, but the client may
+  // still override it below — the card form legitimately sends the billing details
+  // a shopper just typed, which can be better than a stale profile. Click/browser
+  // ids are NOT client-overridable (see the schema note above).
   // Without this enrichment, funnel CAPI events would arrive with low EMQ when
   // the user is logged in but the browser snippet doesn't have the profile data.
   const sessionUserData: NonNullable<CanonicalEvent["userData"]> = {};
@@ -128,6 +140,31 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // external_id fallback for guests. The block above only sets `externalId` when a
+  // session resolves to a User, so the guest-dominated events reached TikTok with
+  // ~0-1% External ID coverage: the membership modal fires InitiateCheckout *before*
+  // registration logs anyone in, and AddPaymentInfo fires from the Stripe card form,
+  // which has no user id at all.
+  //
+  // TikTok explicitly sanctions a first-party cookie id as `external_id`, so we reuse
+  // the anonymous id that already exists — `ta_anon_id` (`anon_<uuidv4>`, minted per
+  // visitor in middleware, 90-day TTL) — rather than minting a second visitor identity.
+  //
+  // User._id stays preferred whenever a session exists: that is what holds
+  // CompleteRegistration at 100% / Purchase at 96%, and it is how the rest of the
+  // codebase identifies a known user. The consequence is that one visitor's external_id
+  // DOES change at signup, `anon_<uuid>` → `User._id`. That is accepted, because the
+  // existing /api/ab-testing/merge-user bridge already links those two ids server-side,
+  // and TikTok merges identity-graph signals — the pre- and post-signup events still
+  // resolve to one person rather than fragmenting.
+  //
+  // Sitting here (not per-event) this one fallback covers every event this endpoint
+  // mirrors: ViewContent, AddToCart, InitiateCheckout, AddPaymentInfo, Lead, Search.
+  if (!sessionUserData.externalId) {
+    const anonymousId = AnonymousIdService.extractAnonymousId(request);
+    if (anonymousId) sessionUserData.externalId = anonymousId;
+  }
+
   // Extract fbc/fbp from request cookies and IP/UA from headers — without this,
   // funnel CAPI mirror events arrive with empty fbc/fbp and EMQ tanks. The browser
   // mirror deliberately omits these from the POST body (they're same-origin cookies
@@ -140,15 +177,25 @@ export async function POST(request: NextRequest) {
 
   const userData: CanonicalEvent["userData"] = {
     ...sessionUserData,
-    // Server-derived browser identifiers (fbc/fbp/ttclid/ttp/IP/UA) are authoritative — they
-    // come from the same-origin request the client cannot tamper with as easily.
+    // Server-derived browser identifiers, read from same-origin cookies/headers the client
+    // cannot tamper with as easily. The click ids and externalId are now genuinely
+    // unoverridable — `userDataSchema` does not accept them at all, so the client spread
+    // below cannot reach them.
+    //
+    // IP/UA are the deliberate exception: they REMAIN client-overridable (the schema still
+    // declares them and `ctx` below explicitly prefers the supplied value), because the
+    // browser mirror is the only caller and a value it captured at event time is closer to
+    // the truth than this request's headers. Do not read this block as "nothing here can be
+    // spoofed" — only as "identity and attribution cannot".
     ...(reqCtx.fbc && { fbc: reqCtx.fbc }),
     ...(reqCtx.fbp && { fbp: reqCtx.fbp }),
     ...(ttCtx.ttclid && { ttclid: ttCtx.ttclid }),
     ...(ttCtx.ttp && { ttp: ttCtx.ttp }),
     ...(reqCtx.client_ip_address && { clientIpAddress: reqCtx.client_ip_address }),
     ...(reqCtx.client_user_agent && { clientUserAgent: reqCtx.client_user_agent }),
-    ...parsed.userData, // client-supplied overrides last (e.g. a deliberate override in tests)
+    // Client-supplied PII last — it can only reach the PII/IP/UA keys the schema still
+    // declares, and a fresher just-typed value (billing details) beats a stale profile.
+    ...parsed.userData,
   };
 
   const event: CanonicalEvent = {
@@ -169,6 +216,11 @@ export async function POST(request: NextRequest) {
     clientIpAddress: parsed.userData?.clientIpAddress ?? ipFromHeaders(request),
     clientUserAgent: parsed.userData?.clientUserAgent ?? request.headers.get("user-agent") ?? undefined,
     eventSourceUrl: parsed.eventSourceUrl ?? request.headers.get("referer") ?? undefined,
+    // TikTok `page.referrer`. Only ever the real `Referer` header — never derived from
+    // eventSourceUrl, because a fabricated referrer is worse than none. Note this is the
+    // referrer of the MIRROR POST, which for the browser mirror is the page the event
+    // happened on, so it is the right value rather than a proxy for it.
+    referrer: request.headers.get("referer") ?? undefined,
   };
 
   const results = await sendConversion(event, ctx);

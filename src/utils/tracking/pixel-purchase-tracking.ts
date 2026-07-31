@@ -137,6 +137,13 @@ async function sendTikTokServerCustomEvent(params: {
   requestContext?: {
     client_ip_address?: string;
     client_user_agent?: string;
+    /**
+     * TikTok click id / first-party browser id — same channel and same names Purchase uses
+     * (see `PixelPurchaseParams.requestContext`). Without them this event was 0% click-id by
+     * construction: the shape simply had nowhere to put them.
+     */
+    ttclid?: string;
+    ttp?: string;
     event_source_url?: string;
   };
 }): Promise<void> {
@@ -161,6 +168,9 @@ async function sendTikTokServerCustomEvent(params: {
         ...(params.user.externalId && { externalId: params.user.externalId }),
         ...(requestContext?.client_ip_address && { clientIpAddress: requestContext.client_ip_address }),
         ...(requestContext?.client_user_agent && { clientUserAgent: requestContext.client_user_agent }),
+        // Read by the TikTok provider only — same idiom trackPixelPurchase uses below.
+        ttclid: requestContext?.ttclid,
+        ttp: requestContext?.ttp,
       },
       customData: {
         contentIds: [params.packageId],
@@ -590,6 +600,15 @@ export async function trackPixelSubscriptionUpgrade(params: {
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    /**
+     * TikTok's click id / first-party browser id, forwarded to `sendTikTokServerCustomEvent`.
+     * The route supplies these only if it builds its context as
+     * `{ ...extractRequestContext(request), ...extractTikTokContext(request) }` — the Meta-only
+     * `extractRequestContext` carries fbc/fbp and nothing else. Optional so a route that hasn't
+     * been wired yet still type-checks; it just sends the upgrade with no TikTok click id.
+     */
+    ttclid?: string;
+    ttp?: string;
     event_source_url?: string;
   };
 }): Promise<void> {
@@ -738,6 +757,9 @@ export async function trackPixelSubscriptionDowngrade(params: {
     client_user_agent?: string;
     fbc?: string;
     fbp?: string;
+    /** See the matching note on `trackPixelSubscriptionUpgrade` — same route-side gap. */
+    ttclid?: string;
+    ttp?: string;
     event_source_url?: string;
   };
 }): Promise<void> {

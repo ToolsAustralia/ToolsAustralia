@@ -7,6 +7,7 @@ import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import Stripe from "stripe";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 
 export async function POST(request: NextRequest) {
@@ -253,7 +254,10 @@ export async function POST(request: NextRequest) {
     // Track Meta CAPI Custom Event `MembershipDowngrade` (server-side — no live Pixel call).
     try {
       const { trackPixelSubscriptionDowngrade } = await import("@/utils/tracking/pixel-purchase-tracking");
-      const requestContext = extractRequestContext(request);
+      // Carries every provider's match signals: Meta's fbc/fbp and TikTok's ttclid/ttp.
+      // `extractRequestContext` is Meta-only, so on its own the TikTok click id never
+      // reached the downgrade event — mirrors the upgrade route.
+      const requestContext = { ...extractRequestContext(request), ...extractTikTokContext(request) };
       await trackPixelSubscriptionDowngrade({
         oldValue: currentPackage.price,
         newValue: newPackage.price,

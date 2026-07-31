@@ -85,22 +85,24 @@ The CAPI fan-out (dispatching a purchase event to Meta, TikTok, Snap simultaneou
 
 ### Durable first-party attribution cookie `_ta_attr`
 
-On landing, the client writes a `_ta_attr` cookie (JSON) to `sessionStorage` with a **90-day** effective TTL (replacing the old 30-minute sessionStorage-only window). The cookie is SameSite=Lax and first-party. It stores the first detected click ID and the UTM tuple captured at landing:
+On landing, the client writes a `_ta_attr` cookie (JSON) with a **90-day** effective TTL (replacing the old 30-minute sessionStorage-only window). The cookie is SameSite=Lax and first-party. It stores the **UTM / campaign tuple only** — the exact field list is `FIELDS` in [attribution-cookie.ts](../../src/utils/tracking/attribution-cookie.ts):
 
 ```json
 {
-  "fbclid": "...",       // or null
-  "ttclid": "...",       // or null
-  "ScCid": "...",        // or null
-  "_fbc": "...",         // Meta-format click reference
   "utm_source": "...",
   "utm_medium": "...",
   "utm_campaign": "...",
-  "captured_at": 1748736000000
+  "utm_content": "...",
+  "utm_term": "...",
+  "campaign_id": "...",
+  "adset_id": "...",
+  "ad_id": "...",
+  "packages_focus": "one-time",
+  "capturedAt": 1748736000000
 }
 ```
 
-The capture registry at `src/lib/tracking/` reads `fbclid` / `_fbc`, `ttclid`, `ScCid` from the landing URL and persists them into `_ta_attr` client-side. Server-side routes read the cookie (and also accept click IDs from the request body for cases where the cookie isn't yet written).
+> **`_ta_attr` does NOT carry click IDs.** (Corrected 2026-07-31 — this doc previously claimed it stored `fbclid` / `ttclid` / `ScCid` / `_fbc`, and that was never true of `FIELDS`.) Each platform's click ID lives in its **own dedicated cookie**, listed in the registry table below. That matters operationally: a click ID has **no redundancy** in `_ta_attr` to fall back on, so if its own cookie is missing, it is simply gone — which is precisely how TikTok's click-id coverage sat at 0% server-side until middleware started minting `ta_ttclid` on the landing request.
 
 #### Last-touch companion cookie `_ta_attr_last`
 
@@ -108,12 +110,16 @@ The capture registry at `src/lib/tracking/` reads `fbclid` / `_fbc`, `ttclid`, `
 
 ### Click ID capture registry
 
-| Signal | Cookie / param | Platform |
-|---|---|---|
-| `fbclid` URL param → stored as `_fbc` format | `_ta_attr._fbc` | Meta |
-| `ttclid` URL param | `_ta_attr.ttclid` | TikTok |
-| `ScCid` URL param | `_ta_attr.ScCid` | Snapchat |
-| UTM tuple | `_ta_attr.utm_*` | Klaviyo email / SMS (see note) |
+Each click ID has its **own** first-party cookie. [`captureClickIds()`](../../src/utils/tracking/click-capture.ts) writes them all on mount; [`extractClickIdsFromRequest()`](../../src/utils/tracking/click-capture.ts) reads them all server-side.
+
+| Signal | Cookie(s) written | Written by | Platform |
+|---|---|---|---|
+| `fbclid` URL param → stored in `_fbc` format | `_fbc` | Meta's SDK, plus our synthetic persist; **also** a server-side `?fbc=`/`?fbclid=` fallback off `request.url` | Meta |
+| `ttclid` URL param | `ta_ttclid` + `ta_ttclid_ts` (90d) | **[middleware](../../src/middleware.ts) on the landing document request** (primary), `captureTikTokClickId` (fallback), plus a `?ttclid=` fallback off `request.url` | TikTok |
+| `ScCid` URL param | `_sc_click` + `_sc_click_ts` | `captureSnapClickId` | Snapchat |
+| UTM tuple | `_ta_attr` (first-touch, 90d) + `_ta_attr_last` (last-touch, 7d) | `useUTMPersistence` | Klaviyo email / SMS (see note) |
+
+> **TikTok cookie naming (2026-07-31).** Ours is `ta_ttclid`, not the bare `ttclid`: TikTok's own pixel SDK writes a first-party cookie **also** named `ttclid` at host scope, and two same-named cookies at different scopes make `cookies.get()` non-deterministic. The bare name is still **read** as a fallback (it covers both in-flight pre-rename cookies and the SDK's own copy). Because Next percent-decodes cookies on parse, the server read does **not** decode again; only `document.cookie` readers do.
 
 Klaviyo attribution is identified via the UTM tuple `utm_source=klaviyo` + `utm_medium=email|sms` — NOT via `_kx` (see [KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md) attribution section).
 
