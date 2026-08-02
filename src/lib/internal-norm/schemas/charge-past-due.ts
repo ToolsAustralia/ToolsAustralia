@@ -51,6 +51,21 @@ const InvoiceChargeRowSchema = z.object({
   errorCode: z.string().optional(),
   declineCode: z.string().optional(),
   errorMessage: z.string().optional(),
+  recovery: z
+    .object({
+      bulk: z.boolean().optional(),
+      step: z.string().optional(),
+      newInvoiceId: z.string().optional(),
+    })
+    .optional()
+    .describe(
+      "Recovery provenance. `step` = machinery audit row (void/finalize/create), not a card outcome. " +
+        "`bulk` = the run's single summary row for a recovered member. When `bulk` is set WITH " +
+        "`newInvoiceId`, a separate coded row exists on that new invoice and carries the real decline — " +
+        "count that one, not this. When `bulk` is set WITHOUT `newInvoiceId`, the recovery re-billed a " +
+        "freshly minted cycle that did not settle and THIS row is the only record of the decline " +
+        "(errorCode `rebill_not_settled`). Do not count both halves as two declines."
+    ),
 });
 
 const ManualRetryRowSchema = InvoiceChargeRowSchema.extend({

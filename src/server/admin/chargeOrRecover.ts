@@ -65,8 +65,13 @@ export async function chargeOrRecover(params: {
     // Per-user admin action holds no RecoveryClaim, so the mint's own claim is conflict-free.
     // A deliberate admin "Charge" on a no_held_draft stranded member force-collects the current
     // cycle now (mint) instead of dead-ending — the member's card is charged and their renewal
-    // resets ~1 month out. The bulk run does NOT enable this (it holds a claim + would reset
-    // hundreds of anchors unattended).
+    // resets ~1 month out.
+    //
+    // NOTE: the bulk run enables this too (chargePastDueJob.ts, `mintCurrentCycleIfNoDraft: true`),
+    // passing `callerHoldsRecoveryClaim` so the mint reuses the claim it already holds. This
+    // comment previously claimed the opposite ("the bulk run does NOT enable this") — that was
+    // true only before 2026-07-21 and is corrected here; the anchor-reset trade it warned about
+    // is real and accepted, and is documented in BUSINESS.md §9e.
     mintCurrentCycleIfNoDraft: true,
   });
 

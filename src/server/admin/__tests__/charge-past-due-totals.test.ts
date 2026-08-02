@@ -3,6 +3,7 @@ import {
   ORPHAN_RUN_THRESHOLD_MS,
   aggregateRunTotals,
   isOrphanRun,
+  normalizeRunTotals,
   type ChargeLogRowForAggregation,
 } from "../charge-past-due-totals";
 
@@ -114,7 +115,70 @@ function testIsOrphanRunNotOrphanIfFinished() {
   assert.equal(isOrphanRun({ status: "aborted", startedAt }, now), false);
 }
 
+// ─── normalizeRunTotals (legacy persisted runs) ──────────────────────────────
+//
+// Runs finalized before `noHeldDraft` / `awaitingRetry` existed (2026-07-20) have no
+// such keys. The Norm mirror validates its response against a Zod schema where those
+// are REQUIRED, so one legacy run on the page made /v1/charge-past-due/runs return a
+// 500 `response_schema_invalid` (caught by `npm run norm:smoke`, invisible to tsc).
+
+function testNormalizeBackfillsLegacySkipBuckets() {
+  // Exactly the shape of a real pre-2026-07-20 run.
+  const legacy = {
+    eligibleCount: 8,
+    attempted: 3,
+    succeeded: 0,
+    failed: 3,
+    revenueCents: 0,
+    skipped: {
+      total: 5,
+      recentlyAttempted: 0,
+      noLongerPastDue: 0,
+      alreadyPaid: 0,
+      missingPaymentMethod: 0,
+      other: 5,
+    },
+  };
+  const out = normalizeRunTotals(legacy as never);
+  assert.equal(out.skipped.noHeldDraft, 0, "missing bucket must back-fill to 0");
+  assert.equal(out.skipped.awaitingRetry, 0, "missing bucket must back-fill to 0");
+  // Real values must survive untouched.
+  assert.equal(out.skipped.total, 5);
+  assert.equal(out.skipped.other, 5);
+  assert.equal(out.eligibleCount, 8);
+  assert.equal(out.attempted, 3);
+  assert.equal(out.failed, 3);
+  // Every key the Norm schema requires must now be a number.
+  for (const [k, v] of Object.entries(out.skipped)) {
+    assert.equal(typeof v, "number", `skipped.${k} must be a number`);
+  }
+  for (const k of ["eligibleCount", "attempted", "succeeded", "failed", "revenueCents"] as const) {
+    assert.equal(typeof out[k], "number", `${k} must be a number`);
+  }
+}
+
+function testNormalizeHandlesNullAndPreservesRealValues() {
+  // A run with no totals at all (or an absent skipped subdoc) must not throw.
+  for (const input of [null, undefined, {}, { eligibleCount: 4 }]) {
+    const out = normalizeRunTotals(input as never);
+    assert.equal(typeof out.skipped.noHeldDraft, "number");
+    assert.equal(typeof out.revenueCents, "number");
+  }
+  assert.equal(normalizeRunTotals({ eligibleCount: 4 } as never).eligibleCount, 4);
+  // A modern, complete totals object must round-trip unchanged.
+  const modern = aggregateRunTotals(
+    [
+      { status: "success", amount: 2000 },
+      { status: "skipped", amount: 0, skipReason: "no_held_draft" },
+    ],
+    2
+  );
+  assert.deepEqual(normalizeRunTotals(modern), modern);
+}
+
 function run() {
+  testNormalizeBackfillsLegacySkipBuckets();
+  testNormalizeHandlesNullAndPreservesRealValues();
   testEmptyRowsZeroes();
   testSucceededAndRevenueSum();
   testFailedExcludedFromRevenue();

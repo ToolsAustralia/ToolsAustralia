@@ -9,6 +9,7 @@
 import type Stripe from "stripe";
 import { isOriginalInvoiceEligibleForRecovery } from "./recoverStrandedPastDuePolicy";
 import type { RecoverStrandedResult } from "./recoverStrandedPastDue";
+import { RECOVERY_DECLINE_CODES } from "@/utils/admin/chargeDeclineReasons";
 
 export type ChargeActionDecision =
   | { kind: "recover" }
@@ -69,7 +70,17 @@ export interface BulkRecoverySummary {
   errorMessage: string;
   /** Cents, for the log row (revenue totals count it only on success). */
   amount: number;
+  /**
+   * Present ONLY when a separate, CODED pay row exists on that new invoice. Both
+   * admin decline views key on this to avoid double-counting the member — see
+   * `src/utils/admin/chargeDeclineReasons.ts`. Never set it speculatively.
+   */
   newInvoiceId?: string;
+  /**
+   * Synthetic decline code persisted so a codeless recovery outcome buckets as itself
+   * instead of `unknown`. Only set where NO coded twin row exists.
+   */
+  errorCode?: string;
 }
 
 /** Recovery refusals that happened MID-FLIGHT (Stripe state may have changed) → "failed". */
@@ -125,10 +136,17 @@ export function summarizeBulkRecoveryOutcome(
   }
 
   if (MID_FLIGHT_RECOVERY_FAILURES.has(result.reason)) {
+    // No `newInvoiceId` here — and that is load-bearing, not an oversight. This branch
+    // covers the mint / re-bill cohort (`no_held_draft` → `unpauseAndAnchorNow`), where
+    // no separate coded pay row is ever written, so THIS row is the member's only
+    // record of the decline. Stamp a synthetic code so both admin decline views can
+    // bucket it instead of dropping it (it was hidden entirely) or showing it as
+    // `unknown` (237 real declines over 28–31 Jul 2026).
     return {
       status: "failed",
       amount: fallbackAmountCents,
       errorMessage: `Recovery ${result.reason}: ${result.message}`,
+      errorCode: RECOVERY_DECLINE_CODES.rebillNotSettled,
     };
   }
 

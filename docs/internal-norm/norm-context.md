@@ -1171,7 +1171,11 @@ null | {
 {
   totalFailed: number,                       // total failed InvoiceChargeLog rows in window
   topCodes: Array<{
-    code: string,                            // declineCode → errorCode → "unknown" → "other" (collapsed tail)
+    code: string,                            // declineCode → errorCode → "unknown" → "other" (collapsed tail).
+                                             //   May be a synthetic recovery code:
+                                             //   `rebill_not_settled` = a re-billed minted cycle
+                                             //   that didn't settle (a REAL decline Stripe gives
+                                             //   no code for); `recovery_error` = machinery fault.
     count: number,                           // failed-attempt count for this code
     pct: number                              // whole-number percent of totalFailed (0–100)
   }>
@@ -1267,13 +1271,28 @@ When `totalFailed` is `0`, `topCodes` is an empty array. Percentages are rounded
     status: "success" | "failed" | "skipped",
     amount: number,                          // Stripe cents
     attemptedAt: ISO8601,
-    errorCode?: string,                      // Stripe error code (failed only)
+    errorCode?: string,                      // Stripe error code (failed only); may be a
+                                             //   synthetic recovery code — see below
     declineCode?: string,                    // Stripe decline_code (failed cards)
-    errorMessage?: string                    // human-readable error
+    errorMessage?: string,                   // human-readable error
+    recovery?: {                             // recovery provenance — read before counting
+      bulk?: boolean,                        //   the run's single summary row for a member
+      step?: string,                         //   machinery audit (void/finalize/create)
+      newInvoiceId?: string                  //   set ⇒ a separate CODED row exists there
+    }
   }>
 }
 ```
 Rows are sorted ascending by `attemptedAt`. `404 not_found` if the runId is unknown.
+
+**Counting declines from these rows — important.** Not every `failed` row is a distinct declined member:
+
+- `recovery.step` set → a machinery audit row (void / finalize / create). **Never a card outcome; never count it.**
+- `recovery.bulk` set **with** `newInvoiceId` → the summary row for a member whose real, coded decline is a **separate row on that new invoice**. Count the coded one, not this. Counting both double-counts one member.
+- `recovery.bulk` set **without** `newInvoiceId` → the recovery re-billed a freshly minted cycle that did not settle. **No coded row exists anywhere**, so this row IS the decline; it carries the synthetic `errorCode` `rebill_not_settled`.
+- `errorCode: "recovery_error"` → an unexpected fault inside the recovery flow, not a card decline.
+
+`/v1/charge-past-due/decline-summary` already applies exactly these rules server-side, so its buckets are authoritative; use it rather than re-aggregating run rows when you only need the totals. Prior to 2026-07-31 the summary excluded *all* `recovery.bulk` rows, which hid genuine re-bill declines — historical comparisons across that date are not like-for-like.
 
 **Inputs**: `runId` as path segment. No query params.
 

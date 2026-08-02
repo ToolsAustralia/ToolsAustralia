@@ -39,6 +39,10 @@ export const GET = withNorm(
         errorCode: r.errorCode,
         declineCode: r.declineCode,
         errorMessage: r.errorMessage,
+        // Lets Norm tell a recovery SUMMARY row from a real charge attempt — without it
+        // it double-counts one recovered member as two declines and reads the codeless
+        // half as "unknown" (the bug fixed in the admin drawer).
+        recovery: r.recovery,
       })),
     });
   }
