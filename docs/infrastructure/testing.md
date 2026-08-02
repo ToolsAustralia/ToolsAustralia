@@ -218,19 +218,35 @@ npm run migrate:affiliate-commission-pi-index -- --prod       # PROD: drop legac
 ## `reconcile:stale-active` — repair members stuck on a stale `active`
 
 ```bash
-npm run reconcile:stale-active:dry     # report only (safe; no writes)
+npm run reconcile:stale-active:dry     # report only (safe; no writes) — .env.local
 npm run reconcile:stale-active         # apply
 npm run reconcile:stale-active:dry -- --limit=50 --email=someone@example.com
+npm run reconcile:stale-active:dry -- --env=../../.env.production   # target production
 ```
+
+`--env=PATH` selects the env file (relative to cwd, default `.env.local`). A real reconcile targets production, and passing the file explicitly beats exporting `MONGODB_URI` / `STRIPE_SECRET_KEY` into the shell, where they leak into history and process listings. From a worktree, production is `../../.env.production`.
 
 [`scripts/reconcile-stale-active-subscriptions.ts`](../../scripts/reconcile-stale-active-subscriptions.ts) compares Mongo `subscription.status` against the **live Stripe subscription** and mirrors Stripe's status when Mongo wrongly says `active`. It exists because a failed stranded-member re-bill used to notify the member without writing `past_due` back (see `docs/billing-stripe/gotchas.md`); the webhook gap is fixed, this repairs accounts that already drifted.
 
-Deliberately **targeted, not a standing sweep** — 2 affected accounts out of 864 `active` members with a real charge failure when measured on 2026-07-31. Notes for whoever runs it:
+It detects **two different shapes** that both look like "an `active` member who hasn't paid in months":
+
+| Shape | Condition | Handling |
+|---|---|---|
+| **A — status drift** | Mongo `active`, Stripe `past_due`/`unpaid`/`canceled`/… | **Repairable.** Writes `subscription.status` / `isActive` / `pastDueAt`. |
+| **B — stuck collection pause** | Stripe *and* Mongo both `active`, and the sub carries `pause_collection` with `resumes_at: null` | **Report only. Never auto-fixed.** |
+
+Shape B is deliberately not remediated: unpausing charges the card and moves the billing anchor (`docs/PAST_DUE_REANCHOR.md`, BUSINESS.md §9e). That is money movement and a policy decision, not a reconcile — act on the reported accounts via the admin Recover Stranded panel or per-user Charge. Stripe keeps a paused subscription `active` and simply stops billing it; `resumeAfterSuccessfulRenewalPayment` clears the pause on a successful payment, which for these members never arrived.
+
+**Production dry run, 2026-08-03:** 4,605 active members → 5 with no real payment in 45d → **0 shape A, 2 shape B**, $520 uncollected (one had 4 held drafts stacked since April). The first version of this script looked only for shape A and therefore reported nothing at all — a useful reminder that a clean run can mean the detector is asking the wrong question.
+
+Candidate selection is "`active` with no successful `PaymentEvent` in `--stale-days` (default 45)", **not** charge-job history — a member stuck on a paused subscription may never have produced an `InvoiceChargeLog` row. One aggregation resolves last-payment for all actives, so only the handful of real candidates cost a Stripe call (5 calls, not 4,605).
+
+Notes for whoever runs it:
 
 - **Stripe is the source of truth.** It never infers status from payment history; a member whose Stripe subscription is genuinely `active` is left alone regardless of what the ledger shows. It only ever writes `subscription.status` / `isActive` / `pastDueAt`, never charges or mutates Stripe.
-- Candidate selection excludes recovery **step-audit** rows — those carry `status: "failed"`/`"success"` but are machinery, not card outcomes. Counting them was what made an early draft of this analysis report 202 stale accounts instead of 2.
+- **Never treat `InvoiceChargeLog` rows as a payment signal.** `PaymentEvent` is the ledger. Recovery step-audit rows carry `status: "success"`/`"failed"` but are machinery (void/finalize), and ordinary Stripe auto-renewals never write to `InvoiceChargeLog` at all — conflating the two made an early draft of this analysis report 202 stale accounts instead of 2.
 - Appends `reconcile-stale-active-audit.csv` (gitignored via `*-audit.csv`) with a row per decision **including skips**, and exits `0` clean / `1` fatal / `2` completed-with-per-item-errors.
-- Loads `.env.local` per script convention — point it at production env explicitly for a real run, and dry-run first.
+- Dry-run first, always — and pass `--env` explicitly for production rather than exporting secrets into the shell.
 
 ## npm test scripts
 

@@ -22,7 +22,7 @@ Validated against production data for **1–2 August**, which the original analy
 | **F2** | **Premise corrected** — a real but *different* bug found | `incorrect_number` added to the permanent-issue set |
 | **F4** | Confirmed NOT a defect | Stale comment corrected; anchor trade documented |
 | **F6** | Confirmed NOT our bug; the suggested retry gate would do net harm | No gate — measured and documented |
-| **F7** | **Scope corrected** (2 accounts, not 1); root cause found | Webhook fix + `reconcile:stale-active` script |
+| **F7** | **Scope corrected** (2 accounts); **cause re-diagnosed after a live run** | Webhook fix (separate real defect) + `reconcile:stale-active` detector |
 | **F8** | **Premise corrected** — not a sync bug | No code change (TikTok-side attribution) |
 | — | **New:** live Norm 500 found by `norm:smoke` | `normalizeRunTotals` at the read boundary |
 
@@ -71,13 +71,43 @@ ordinary renewals never write to `InvoiceChargeLog` at all. Against the real `Pa
 the answer is **2**: `attardweston885@gmail.com` and `fl4no@hotmail.com` (both still stale as of
 2 Aug; neither self-heals).
 
-Root cause: `invoice.payment_failed` fires the dunning notification on `isRenewal || isRebill`, but
-wrote `past_due` on `isRenewal` **alone**. A minted re-bill is `billing_reason:
-"subscription_update"` → `isRebill`, so a failed re-bill emailed the member while leaving Mongo
-`active`. Combined with `unpauseAndAnchorNow` emitting a `customer.subscription.updated` carrying
-status `active` (which we mirror), that is the drift. Fixed with a dedicated `isRebill` branch —
-deliberately separate from `isRenewal` so it cannot trigger `pauseAfterRenewalFailure` and re-pause
-a member recovery just unpaused.
+**⚠ Cause re-diagnosed 2026-08-03 after running the detector against production. The first
+attribution below was wrong — recorded here rather than deleted, because the mistake is the
+lesson.**
+
+**What was claimed:** `invoice.payment_failed` fires the dunning notification on
+`isRenewal || isRebill` but wrote `past_due` on `isRenewal` **alone**, so a failed minted re-bill
+(`billing_reason: "subscription_update"` → `isRebill`) emailed the member while leaving Mongo
+`active` — and *that* was said to be how these two accounts drifted.
+
+**What the data actually shows.** A production dry run examined all 4,605 `active` members and
+found **zero** Mongo-vs-Stripe status drift. For both suspect accounts **Stripe also reports
+`active`**, and it is right to: they carry
+`pause_collection: { behavior: "keep_as_draft", resumes_at: null }`. Stripe keeps a paused
+subscription `active` and simply stops billing it. `resumeAfterSuccessfulRenewalPayment` clears
+the pause on a successful payment, which never arrived — so the pause persists indefinitely.
+
+```
+attardweston885@gmail.com   last real payment 2026-06-05 ( 58d)  0 held drafts  $320 uncollected
+fl4no@hotmail.com           last real payment 2026-03-26 (129d)  4 held drafts  $200 uncollected
+```
+
+This is a **collection** problem, not a status problem. See `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`.
+
+**The webhook fix still shipped, and is still correct** — the notification firing on
+`isRenewal || isRebill` while the status write fired on `isRenewal` alone is a genuine asymmetry,
+and a failed re-bill genuinely should return the member to `past_due`. It is kept, with a dedicated
+`isRebill` branch deliberately separate from `isRenewal` so it cannot trigger
+`pauseAfterRenewalFailure` and re-pause a member recovery just unpaused. It simply was **not** what
+happened to these two accounts.
+
+**Method note worth keeping.** The wrong attribution came from inferring a cause from the shape of
+the Mongo data without ever retrieving the Stripe subscription. Running the script is what exposed
+it. Before attributing an account to a webhook path, **read its Stripe subscription state.**
+
+`reconcile:stale-active` now detects both shapes: status drift (repairable) and indefinite
+collection pause (**report only** — unpausing charges the card and moves the billing anchor, which
+is a policy decision, not a reconcile).
 
 ### F8 — not a sync bug
 
