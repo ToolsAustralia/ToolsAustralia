@@ -15,6 +15,7 @@ import {
 } from "./past-due-charge-idempotency";
 import { selectCurrentSubscriptionChargeable as _selectCurrentSubscriptionChargeable } from "./chargePastDueSelectionPolicy";
 import {
+  classifyPayFailureRoute,
   decidePostPayAction,
   extractPaymentIntentId,
 } from "./chargePastDuePostPayPolicy";
@@ -59,6 +60,13 @@ function extractStripeErrorFields(err: Stripe.errors.StripeError): {
     errorMessage: err.message,
   };
 }
+
+/**
+ * Skip reason returned (WITHOUT writing a log row) when `deferUnpayableToCaller` is
+ * set and the invoice turns out not to be directly payable with no Stripe retry
+ * pending. The caller owns the outcome row — see `payOpenInvoiceAsPastDueAdmin`.
+ */
+export const SKIP_REASON_STRANDED_NEEDS_RECOVERY = "stranded_needs_recovery";
 
 export function sanitizeStripeResponse(response: unknown): Record<string, unknown> {
   if (!response || typeof response !== "object") {
@@ -302,6 +310,19 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
    * per-path 3-per-window budget; do not pass both).
    */
   bypassRecentAttemptLock?: boolean;
+  /**
+   * When true, an invoice that turns out NOT to be directly payable — and that has
+   * no Stripe retry pending (`next_payment_attempt == null`, i.e. Stripe has given
+   * up) — returns `skipReason: SKIP_REASON_STRANDED_NEEDS_RECOVERY` and writes NO
+   * InvoiceChargeLog row, so the caller can route it to the stranded-recovery flow
+   * and own the single outcome row.
+   *
+   * Only the bulk job sets this: it must write exactly ONE run-tagged row per
+   * worklist item (the chunk loop's `remaining` computation and the run totals both
+   * key on it), so the pay attempt and the follow-up recovery cannot both log.
+   * Every other caller leaves it unset and keeps the historical `failed` row.
+   */
+  deferUnpayableToCaller?: boolean;
 }): Promise<PastDueChargeResultRow> {
   const {
     invoice,
@@ -312,6 +333,7 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
     chargeRunId = null,
     idempotencyKey,
     attemptBudgetCheck,
+    deferUnpayableToCaller = false,
   } = params;
   const invoiceId = invoice.id;
   if (!invoiceId) {
@@ -669,18 +691,17 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
       };
     }
 
-    // "This invoice can no longer be paid" / payment_intent_unexpected_state WHILE Stripe
-    // still has a retry scheduled (`invoice.next_payment_attempt` set): this is NOT a card
-    // decline — no charge was attempted, and Stripe's own Smart Retry will re-attempt on
-    // its schedule. Record it as a SKIP with an accurate message instead of a scary
-    // "consider voiding / mark uncollectible" failure (which is Stripe's dev-facing text,
-    // not an admin-actionable one). Distinct from the retries-EXHAUSTED stranded case
-    // (next_payment_attempt == null), which the bulk job routes to recovery upstream.
-    const strandedRetryScheduled =
-      invoice.next_payment_attempt != null &&
-      (stripeError.message?.toLowerCase().includes("no longer be paid") === true ||
-        stripeError.code === "payment_intent_unexpected_state");
-    if (strandedRetryScheduled) {
+    const failureRoute = classifyPayFailureRoute(stripeError, invoice, {
+      deferToCaller: deferUnpayableToCaller,
+    });
+
+    // NOT directly payable, but Stripe still has a retry scheduled
+    // (`invoice.next_payment_attempt` set): this is NOT a card decline — no charge was
+    // attempted, and Stripe's own Smart Retry will re-attempt on its schedule. Record
+    // it as a SKIP with an accurate message instead of a scary "consider voiding /
+    // mark uncollectible" failure (which is Stripe's dev-facing text, not an
+    // admin-actionable one).
+    if (failureRoute === "awaiting_retry") {
       const retryAt = new Date((invoice.next_payment_attempt as number) * 1000);
       await InvoiceChargeLog.create({
         invoiceId,
@@ -701,6 +722,30 @@ export async function payOpenInvoiceAsPastDueAdmin(params: {
         userEmail,
         status: "skipped",
         skipReason: "awaiting_retry",
+        amount,
+      };
+    }
+
+    // NOT directly payable and Stripe has GIVEN UP (`next_payment_attempt == null`):
+    // the invoice is stranded and belongs in the recovery flow, not in the decline
+    // stats. Measured in production over 28–31 Jul 2026: every invoice that produced
+    // `payment_intent_unexpected_state` here was already recovery-ELIGIBLE, was held on
+    // this pay branch only because a stale `invoice_payment` still read `status: "open"`
+    // (`decideBulkChargeAction` gate 4), and was routed to recovery by the NEXT day's run
+    // — 5→5, 209→209, 14→14, an exact 1:1 across three consecutive days. The cancel that
+    // makes it recover-eligible is issued BY THIS VERY REQUEST (verified: the Stripe
+    // request id that returned our 400 also emitted `payment_intent.canceled`), so
+    // inspecting PaymentIntent status before the call cannot predict it — the state only
+    // exists after Stripe answers. Hand it back so the caller recovers it NOW instead of
+    // burning a member-day. See docs/CHARGE_PAST_DUE_CUSTOMERS.md.
+    if (failureRoute === "needs_recovery") {
+      return {
+        invoiceId,
+        customerId,
+        userId: userIdStr,
+        userEmail,
+        status: "skipped",
+        skipReason: SKIP_REASON_STRANDED_NEEDS_RECOVERY,
         amount,
       };
     }

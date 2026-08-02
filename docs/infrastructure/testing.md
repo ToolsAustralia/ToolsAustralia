@@ -219,12 +219,37 @@ npm run migrate:affiliate-commission-pi-index:dry -- --prod   # PROD: report
 npm run migrate:affiliate-commission-pi-index -- --prod       # PROD: drop legacy + rebuild partial
 ```
 
+## `reconcile:stale-active` — repair members stuck on a stale `active`
+
+```bash
+npm run reconcile:stale-active:dry     # report only (safe; no writes)
+npm run reconcile:stale-active         # apply
+npm run reconcile:stale-active:dry -- --limit=50 --email=someone@example.com
+```
+
+[`scripts/reconcile-stale-active-subscriptions.ts`](../../scripts/reconcile-stale-active-subscriptions.ts) compares Mongo `subscription.status` against the **live Stripe subscription** and mirrors Stripe's status when Mongo wrongly says `active`. It exists because a failed stranded-member re-bill used to notify the member without writing `past_due` back (see `docs/billing-stripe/gotchas.md`); the webhook gap is fixed, this repairs accounts that already drifted.
+
+Deliberately **targeted, not a standing sweep** — 2 affected accounts out of 864 `active` members with a real charge failure when measured on 2026-07-31. Notes for whoever runs it:
+
+- **Stripe is the source of truth.** It never infers status from payment history; a member whose Stripe subscription is genuinely `active` is left alone regardless of what the ledger shows. It only ever writes `subscription.status` / `isActive` / `pastDueAt`, never charges or mutates Stripe.
+- Candidate selection excludes recovery **step-audit** rows — those carry `status: "failed"`/`"success"` but are machinery, not card outcomes. Counting them was what made an early draft of this analysis report 202 stale accounts instead of 2.
+- Appends `reconcile-stale-active-audit.csv` (gitignored via `*-audit.csv`) with a row per decision **including skips**, and exits `0` clean / `1` fatal / `2` completed-with-per-item-errors.
+- Loads `.env.local` per script convention — point it at production env explicitly for a real run, and dry-run first.
+
 ## npm test scripts
 
 New test scripts added to `package.json` follow the `test:<scope>` convention and can be run independently:
 
 ```bash
-npm run test:past-due-history       # pure aggregation helpers (no env vars needed)
+npm run test:past-due-history       # pure aggregation helpers (no env vars needed) — chains 4 files:
+                                    #   charge-past-due-totals, chargePastDueHistory, chargeSkipReasons,
+                                    #   chargeDeclineReasons (added 2026-07-31: asserts the admin drawer's
+                                    #   client-side decline bucketing and the server's Mongo $match encode
+                                    #   the SAME rule — they had drifted, producing a bogus "unknown 206"
+                                    #   chip while the summary card hid 237 real declines)
+npm run test:charge-past-due-post-pay   # post-`invoices.pay` decisions, incl. classifyPayFailureRoute:
+                                    #   which thrown Stripe errors mean stand-down vs route-to-recovery
+                                    #   vs real card decline (the payment_intent_unexpected_state cohort)
 npm run test:past-due-idempotency-keys  # Stripe idempotency-key builders: bulk key differs across runs (the 2026-06-29 replay guard); one-off key dedupes concurrent submits within a 30s bucket
 npm run test:merge-ad-channels      # pure ad-channel merge — preserves prior spend on a failed/expired-token fetch (no DB)
 npm run test:cancellation-upsell    # smoke-renders CancellationUpsellModal in 12 prop combos

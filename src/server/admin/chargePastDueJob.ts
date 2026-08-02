@@ -20,6 +20,15 @@
  * mirroring the per-user chargeOrRecover composition. See
  * docs/CHARGE_PAST_DUE_CUSTOMERS.md § "Stranded invoices in the bulk run".
  *
+ * That up-front decision cannot be complete on its own: an exhausted invoice can
+ * still carry a stale `invoice_payment` reading `status: "open"`, which routes it to
+ * pay — and then `invoices.pay` cancels that PaymentIntent itself and rejects with
+ * `payment_intent_unexpected_state` without ever reaching the issuer. So the pay
+ * branch ALSO re-routes post-hoc: the primitive hands such an invoice back
+ * unlogged (`deferUnpayableToCaller`) and the item goes through
+ * `recoverWorklistItem` in the same run. Either way exactly one run-tagged row is
+ * written per worklist item.
+ *
  * Resumability/double-charge safety comes entirely from the existing per-invoice
  * primitive `payOpenInvoiceAsPastDueAdmin` (30s debounce, 6h recent-attempt lock,
  * late still-past-due re-check, already-paid catch, plus a RUN-SCOPED Stripe
@@ -44,6 +53,7 @@ import {
   type ReconcileSummary,
 } from "@/services/allowlist/reconcileAllowlistFromBlocked";
 import {
+  SKIP_REASON_STRANDED_NEEDS_RECOVERY,
   getCustomerDefaultPaymentMethodFromInvoice,
   payOpenInvoiceAsPastDueAdmin,
   resolveInvoicePaymentMethodId,
@@ -65,6 +75,7 @@ import {
   type ChargeLogRowForAggregation,
 } from "@/server/admin/charge-past-due-totals";
 import { classifySkipReasonFromMessage } from "@/utils/admin/chargeSkipReasons";
+import { RECOVERY_DECLINE_CODES } from "@/utils/admin/chargeDeclineReasons";
 
 const LOCK_ID = "charge-job-lock";
 const LOCK_WINDOW_MS = 30 * 60 * 1000; // 30 min — renewed each chunk.
@@ -309,6 +320,126 @@ export async function abortChargePastDueJob(params: { runId: string; adminId: st
   };
 }
 
+/**
+ * Route ONE worklist item through the stranded-recovery flow and write the single
+ * run-tagged summary row for it.
+ *
+ * Reached two ways: `decideBulkChargeAction` said "recover" up front, OR the pay
+ * attempt came back `stranded_needs_recovery` (Stripe refused the invoice as not
+ * directly payable with no retry pending — see `payOpenInvoiceAsPastDueAdmin`'s
+ * `deferUnpayableToCaller`). Both write exactly one row, so the chunk loop's
+ * `remaining` computation and the run totals stay correct either way.
+ */
+async function recoverWorklistItem(
+  item: { invoiceId: string; customerId: string; userId: mongoose.Types.ObjectId; amount: number },
+  invoice: Stripe.Invoice,
+  adminId: string,
+  runId: mongoose.Types.ObjectId
+): Promise<void> {
+  // Exactly ONE run-tagged row per item, keyed on the ORIGINAL worklist invoice
+  // id — the chunk loop's `remaining` computation and the (worklist-scoped) run
+  // totals key on it. The recovery's step-audit rows are untagged and its pay
+  // row on the NEW invoice id is run-tagged but outside the worklist, so
+  // neither double-counts the member.
+  const logRecoverySummary = async (summary: {
+    status: "success" | "failed" | "skipped";
+    errorMessage: string;
+    amount: number;
+    newInvoiceId?: string;
+    errorCode?: string;
+  }): Promise<void> => {
+    await InvoiceChargeLog.create({
+      invoiceId: item.invoiceId,
+      customerId: item.customerId,
+      userId: item.userId,
+      adminId: new mongoose.Types.ObjectId(adminId),
+      status: summary.status,
+      amount: summary.amount,
+      attemptedAt: new Date(),
+      errorMessage: summary.errorMessage,
+      // Synthetic code for outcomes Stripe gives us no decline code for, so the admin
+      // decline views bucket them instead of showing `unknown`. Only ever set where no
+      // coded twin row exists — see src/utils/admin/chargeDeclineReasons.ts.
+      ...(summary.errorCode ? { errorCode: summary.errorCode } : {}),
+      result: {
+        recovery: {
+          bulk: true,
+          originalInvoiceId: item.invoiceId,
+          ...(summary.newInvoiceId ? { newInvoiceId: summary.newInvoiceId } : {}),
+        },
+      },
+      chargeRunId: runId,
+    });
+  };
+
+  // Per-subscription RecoveryClaim — serializes against the member Pay-Now /
+  // renew / Force-Charge recovery flows AND against a concurrent chunk touching
+  // the same member, so two entries can never finalize+pay two DIFFERENT held
+  // drafts for one subscription (the double-charge the claim exists to prevent;
+  // same precedent as forceChargePastDue). Claim held → skip, retried next run.
+  const subscriptionId = resolveInvoiceSubId(
+    invoice as Stripe.Invoice & {
+      subscription?: string | Stripe.Subscription | null;
+      parent?: { subscription_details?: { subscription?: string | null } | null } | null;
+    }
+  );
+  if (!subscriptionId) {
+    await logRecoverySummary({
+      status: "skipped",
+      amount: invoice.amount_remaining || item.amount,
+      errorMessage: "Skipped: recovery has no resolvable subscription id on the invoice",
+    });
+    return;
+  }
+  const claimed = await acquireRecoveryClaim(subscriptionId, `bulk-charge:${String(runId)}`);
+  if (!claimed) {
+    await logRecoverySummary({
+      status: "skipped",
+      amount: invoice.amount_remaining || item.amount,
+      errorMessage:
+        "Skipped: another recovery for this subscription is in progress (recovery claim held)",
+    });
+    return;
+  }
+  try {
+    // bypassRecentRecoveryLock: FALSE — deliberately unlike the admin-click
+    // paths. The 6h hasRecentRecoveryAttempt guard on the ORIGINAL invoice
+    // stays active, so a crash-resumed chunk or a same-day re-run cannot start
+    // a SECOND recovery that would pick a sibling held draft with fresh
+    // idempotency keys (the double-charge path). The recovery's internal pay
+    // no longer self-blocks without the bypass because the pay primitive's 6h
+    // check excludes recovery step-audit rows. The deferred (post-pay) entry
+    // point is safe here too: the deferred pay attempt writes NO row at all,
+    // let alone a recovery-tagged one, so it cannot self-block this call.
+    const recovery = await recoverStrandedPastDueInvoice({
+      userId: String(item.userId),
+      originalInvoiceId: item.invoiceId,
+      adminId,
+      bypassRecentRecoveryLock: false,
+      chargeRunId: runId,
+      // Enable the no_held_draft re-bill in the BULK run so every stranded member is collected (or
+      // gets a notifying decline) instead of being skipped. The bulk already holds this sub's
+      // RecoveryClaim (above), so the mint reuses it (skipClaim) rather than self-deadlocking.
+      mintCurrentCycleIfNoDraft: true,
+      callerHoldsRecoveryClaim: true,
+    });
+    await logRecoverySummary(
+      summarizeBulkRecoveryOutcome(recovery, invoice.amount_remaining || item.amount)
+    );
+  } catch (err) {
+    await logRecoverySummary({
+      status: "failed",
+      amount: invoice.amount_remaining || item.amount,
+      errorMessage: `Unexpected error during recovery: ${err instanceof Error ? err.message : String(err)}`,
+      // Machinery fault, not a card outcome — but it IS the member's only row, so give
+      // it a named bucket rather than letting it read as an unexplained decline.
+      errorCode: RECOVERY_DECLINE_CODES.recoveryError,
+    });
+  } finally {
+    await releaseRecoveryClaim(subscriptionId).catch(() => {});
+  }
+}
+
 /** Charge a single worklist item: retrieve fresh invoice, resolve PM, delegate to the primitive. */
 async function chargeWorklistItem(
   item: { invoiceId: string; customerId: string; userId: mongoose.Types.ObjectId; amount: number },
@@ -347,98 +478,7 @@ async function chargeWorklistItem(
   // resolution because recovery resolves its own PM from the customer.
   const decision = decideBulkChargeAction(invoice);
   if (decision.kind === "recover") {
-    // Exactly ONE run-tagged row per item, keyed on the ORIGINAL worklist invoice
-    // id — the chunk loop's `remaining` computation and the (worklist-scoped) run
-    // totals key on it. The recovery's step-audit rows are untagged and its pay
-    // row on the NEW invoice id is run-tagged but outside the worklist, so
-    // neither double-counts the member.
-    const logRecoverySummary = async (summary: {
-      status: "success" | "failed" | "skipped";
-      errorMessage: string;
-      amount: number;
-      newInvoiceId?: string;
-    }): Promise<void> => {
-      await InvoiceChargeLog.create({
-        invoiceId: item.invoiceId,
-        customerId: item.customerId,
-        userId: item.userId,
-        adminId: new mongoose.Types.ObjectId(adminId),
-        status: summary.status,
-        amount: summary.amount,
-        attemptedAt: new Date(),
-        errorMessage: summary.errorMessage,
-        result: {
-          recovery: {
-            bulk: true,
-            originalInvoiceId: item.invoiceId,
-            ...(summary.newInvoiceId ? { newInvoiceId: summary.newInvoiceId } : {}),
-          },
-        },
-        chargeRunId: runId,
-      });
-    };
-
-    // Per-subscription RecoveryClaim — serializes against the member Pay-Now /
-    // renew / Force-Charge recovery flows AND against a concurrent chunk touching
-    // the same member, so two entries can never finalize+pay two DIFFERENT held
-    // drafts for one subscription (the double-charge the claim exists to prevent;
-    // same precedent as forceChargePastDue). Claim held → skip, retried next run.
-    const subscriptionId = resolveInvoiceSubId(
-      invoice as Stripe.Invoice & {
-        subscription?: string | Stripe.Subscription | null;
-        parent?: { subscription_details?: { subscription?: string | null } | null } | null;
-      }
-    );
-    if (!subscriptionId) {
-      await logRecoverySummary({
-        status: "skipped",
-        amount: invoice.amount_remaining || item.amount,
-        errorMessage: "Skipped: recovery has no resolvable subscription id on the invoice",
-      });
-      return;
-    }
-    const claimed = await acquireRecoveryClaim(subscriptionId, `bulk-charge:${String(runId)}`);
-    if (!claimed) {
-      await logRecoverySummary({
-        status: "skipped",
-        amount: invoice.amount_remaining || item.amount,
-        errorMessage:
-          "Skipped: another recovery for this subscription is in progress (recovery claim held)",
-      });
-      return;
-    }
-    try {
-      // bypassRecentRecoveryLock: FALSE — deliberately unlike the admin-click
-      // paths. The 6h hasRecentRecoveryAttempt guard on the ORIGINAL invoice
-      // stays active, so a crash-resumed chunk or a same-day re-run cannot start
-      // a SECOND recovery that would pick a sibling held draft with fresh
-      // idempotency keys (the double-charge path). The recovery's internal pay
-      // no longer self-blocks without the bypass because the pay primitive's 6h
-      // check excludes recovery step-audit rows.
-      const recovery = await recoverStrandedPastDueInvoice({
-        userId: String(item.userId),
-        originalInvoiceId: item.invoiceId,
-        adminId,
-        bypassRecentRecoveryLock: false,
-        chargeRunId: runId,
-        // Enable the no_held_draft re-bill in the BULK run so every stranded member is collected (or
-        // gets a notifying decline) instead of being skipped. The bulk already holds this sub's
-        // RecoveryClaim (above), so the mint reuses it (skipClaim) rather than self-deadlocking.
-        mintCurrentCycleIfNoDraft: true,
-        callerHoldsRecoveryClaim: true,
-      });
-      await logRecoverySummary(
-        summarizeBulkRecoveryOutcome(recovery, invoice.amount_remaining || item.amount)
-      );
-    } catch (err) {
-      await logRecoverySummary({
-        status: "failed",
-        amount: invoice.amount_remaining || item.amount,
-        errorMessage: `Unexpected error during recovery: ${err instanceof Error ? err.message : String(err)}`,
-      });
-    } finally {
-      await releaseRecoveryClaim(subscriptionId).catch(() => {});
-    }
+    await recoverWorklistItem(item, invoice, adminId, runId);
     return;
   }
 
@@ -463,7 +503,7 @@ async function chargeWorklistItem(
   // UNEXPECTED throw (non-Stripe, e.g. a transient DB error) still produces a row — otherwise
   // the item would stay in `remaining` forever and the client chunk loop could never finish.
   try {
-    await payOpenInvoiceAsPastDueAdmin({
+    const payResult = await payOpenInvoiceAsPastDueAdmin({
       invoice,
       paymentMethodId,
       customerId: item.customerId,
@@ -474,7 +514,21 @@ async function chargeWorklistItem(
       // invoice dedupes to one charge), fresh across runs so the NEXT daily run is a
       // real retry instead of a 24h Stripe replay of this run's decline.
       idempotencyKey: buildBulkChargeIdempotencyKey(item.invoiceId, String(runId)),
+      // Let the primitive hand back an unpayable-and-exhausted invoice WITHOUT logging,
+      // so we can recover it in this run rather than next run's. `decideBulkChargeAction`
+      // can only see the invoice BEFORE the call, and the state that makes it
+      // recover-eligible is created by the call itself — so this post-hoc reroute is the
+      // only place the two can agree. Population is unchanged (these reached recovery a
+      // day later regardless); the member just stops losing that day.
+      deferUnpayableToCaller: true,
     });
+    if (payResult.skipReason === SKIP_REASON_STRANDED_NEEDS_RECOVERY) {
+      // No row was written for the pay attempt, so the recovery summary remains the
+      // single run-tagged row for this worklist item. `invoice` is intentionally the
+      // pre-call object: recovery re-retrieves what it needs, and only the subscription
+      // id + amount are read from here — neither is changed by the failed call.
+      await recoverWorklistItem(item, invoice, adminId, runId);
+    }
   } catch (err) {
     await InvoiceChargeLog.create({
       invoiceId: item.invoiceId,

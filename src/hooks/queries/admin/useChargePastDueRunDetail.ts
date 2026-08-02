@@ -13,6 +13,15 @@ export interface RunDetailRowDTO {
   errorCode?: string;
   declineCode?: string;
   errorMessage?: string;
+  /**
+   * Recovery provenance, so the decline breakdown can skip run-tagged recovery SUMMARY
+   * rows whose coded twin is already counted. See utils/admin/chargeDeclineReasons.
+   */
+  recovery?: {
+    bulk?: boolean;
+    step?: string;
+    newInvoiceId?: string;
+  };
 }
 
 export interface RunDetailResponse {

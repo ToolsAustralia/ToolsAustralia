@@ -2,6 +2,45 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠ START HERE — this worktree has a scoped assignment
+
+**Branch `feature/past-due-recovery-fixes`.** Before doing anything else, read
+**[docs/tech-debt/past-due-recovery-findings.md](docs/tech-debt/past-due-recovery-findings.md)**.
+It is the complete starting context: seven findings from a read-only production analysis of
+28–31 Jul 2026, each with verified evidence, exact `file:line` call sites, an explicit split
+between what was **checked** and what is still a **hypothesis**, and the queries to reproduce
+every number.
+
+Priority order — the first two are confirmed bugs, the rest are diagnosed but not all defects:
+
+1. **F1 · `payment_intent_unexpected_state`** — 245 charge "failures" in four days (1,950
+   all-time) that never reached an issuer. Does **not** self-heal: 238 of 245 members still
+   `past_due`. Classification gap in `decideBulkChargeAction`; three candidate causes listed,
+   **none confirmed — investigate before fixing.**
+2. **F5 · the two admin decline views disagree, and both are wrong** — the run drawer buckets
+   237 real re-bill declines as `unknown` (this is the "unknown 206" chip), while the server
+   summary hides them entirely. Display bug, not a charging bug.
+3. **F2** dead-card cohort retried daily with no possible outcome · **F4** "Minted cycle invoice
+   did not settle" is a *real* decline, not a bug, but it moves the billing anchor without
+   collecting · **F6** `processing_error` is genuinely Stripe's, though the retry policy around
+   it is wrong · **F7** one account (`attardweston885`) has a genuinely stale `active` status —
+   but 77 of 78 similar accounts turned out to be correctly recovered, so **do not build a
+   reconciliation sweep before re-checking scope**.
+
+**F8 (TikTok zero-revenue) is out of domain — do it last or on its own branch.**
+
+Not in question: run **skips are legitimate.** Every skip across all four runs bucketed as
+`awaitingRetry` — Stripe was holding its own scheduled retry and the job correctly stood down.
+
+**Production access is available in this worktree.** `.env.production` is present and
+gitignored; a connection smoke test reaches `db: Production` with Stripe, Meta and TikTok tokens
+populated. **Reads only — never run a charge, void, finalize, refund or subscription mutation
+against production.** Use raw collection handles (`connection.collection(...)`), not Mongoose
+models, so a stray import can't trigger an index build. See "Reproducing the analysis" in the
+findings doc for the exact pattern.
+
+This block is branch-scoped scaffolding — **delete it before merging to main.**
+
 ## Hard rules — read this first
 
 These rules override any superpowers skill, sub-agent instruction, or default behavior. They are enforced by hooks but you are also expected to follow them on your own.
@@ -333,7 +372,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-07-31"
     },
     "payment": {
       "docs": "docs/payment/",

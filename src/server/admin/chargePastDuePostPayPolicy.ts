@@ -78,6 +78,58 @@ export function decidePostPayAction(
   }
 }
 
+/**
+ * Stripe's two ways of saying "this invoice cannot be paid through `invoices.pay`" —
+ * neither is a card decline, and neither reaches the issuer.
+ *
+ *  - "This invoice can no longer be paid" — every `invoice_payment`'s PaymentIntent was
+ *    already canceled before the call.
+ *  - `payment_intent_unexpected_state` — the invoice still carried an `open`
+ *    `invoice_payment`, but its PaymentIntent could not be reused. Stripe cancels that PI
+ *    *while processing our request* and then rejects the `payment_method` update on it
+ *    (HTTP 400, `stripe-should-retry: false`).
+ */
+export function isInvoiceNotDirectlyPayableError(err: {
+  code?: string | null;
+  message?: string | null;
+}): boolean {
+  return (
+    err.message?.toLowerCase().includes("no longer be paid") === true ||
+    err.code === "payment_intent_unexpected_state"
+  );
+}
+
+/** What a thrown `stripe.invoices.pay()` error means for the caller. */
+export type PayFailureRoute = "awaiting_retry" | "needs_recovery" | "decline";
+
+/**
+ * Classify a thrown `stripe.invoices.pay()` error into what should happen next.
+ *
+ * The fork turns on `next_payment_attempt`, because "not directly payable" means two
+ * very different things:
+ *
+ *  - retry SCHEDULED (`next_payment_attempt` set) → `awaiting_retry`. Stripe's own Smart
+ *    Retry owns the invoice; stand down and record a skip, not a scary failure.
+ *  - retry EXHAUSTED (`next_payment_attempt == null`) → `needs_recovery`. Stripe has given
+ *    up; the invoice belongs in the stranded-recovery flow. Verified in production over
+ *    28–31 Jul 2026: every invoice that threw `payment_intent_unexpected_state` here was
+ *    already recovery-ELIGIBLE and WAS routed to recovery by the next day's run (5→5,
+ *    209→209, 14→14 across three consecutive days) — one wasted member-day each time.
+ *    Only callers that can act on it (`deferToCaller`) get this; everyone else keeps the
+ *    historical `decline` row so no existing flow silently changes shape.
+ *
+ * Anything else is a real card decline.
+ */
+export function classifyPayFailureRoute(
+  err: { code?: string | null; message?: string | null },
+  invoice: { next_payment_attempt?: number | null },
+  opts: { deferToCaller: boolean }
+): PayFailureRoute {
+  if (!isInvoiceNotDirectlyPayableError(err)) return "decline";
+  if (invoice.next_payment_attempt != null) return "awaiting_retry";
+  return opts.deferToCaller ? "needs_recovery" : "decline";
+}
+
 /** Extract the PaymentIntent id from an invoice's `payment_intent` field. */
 export function extractPaymentIntentId(invoice: Stripe.Invoice): string | null {
   const inv = invoice as Stripe.Invoice & {
