@@ -54,7 +54,7 @@ membership-vs-one-time toggle — its inner `PackageSelectionModal` derives the 
 passed plan's `period` (`"mo"` → membership, else → one-time). By default a guest is handed the Tradie
 **subscription** (`getHeavyDutyPack()`), so the modal opens on membership packs.
 
-When the ad-landing param `?packages=one-time` is present (parsed by the shared
+When the `?packages=one-time` param is present (parsed by the shared
 [`parseMembershipPackagesTab`](../../src/utils/membership/packagesTabParam.ts)), `openEntryFlow` hands the
 modal a **one-time** plan (`getOneTimePlan()`) instead, so it opens on the One-Time tab — keeping the modal
 consistent with the on-page membership section and the `PromoBanner` badge on a one-time ad landing (see
@@ -63,6 +63,13 @@ Falls back to the subscription default if no one-time plan is resolvable yet. **
 additional-package access divert to the `special-packages` modal earlier in `openEntryFlow`, before plan
 selection, so they are unaffected. The param is read from `window.location.search` (not `useSearchParams`)
 because it runs inside a click handler.
+
+**As of 2026-08-03 the param no longer comes only from an ad landing.** `MembershipSection.selectTab`
+writes it on every manual toggle, and this handler reads the URL **live at click time**, so a guest who
+switches the on-page toggle to One-Time and then hits any "Enter Now" CTA now gets a one-time pack
+pre-selected — previously they always got the Tradie sub regardless of the tab in front of them. This is
+the one behavioural (non-cosmetic) consequence of that change; see
+[subscription/frontend.md](../subscription/frontend.md).
 
 ## Draw Results & Winners page (redesigned 2026-06-10)
 
