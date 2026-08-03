@@ -211,3 +211,69 @@ member's place in the catalogue.
 
 Related: `PORTAL_HANDOFF_KEY` is registered in `total-sign-out.ts` (global rule on auth
 boundaries) — a stale marker must not survive into the next account on a shared device.
+
+## R12. One tap to an offer — warm the session in a hidden iframe (2026-08-03)
+
+Opening a catalogue offer needs a live portal session, and the hand-off **cannot carry a
+destination** — `/verifytoken/{token}` silently drops `?redirect` / `?redirect_url` /
+`?return` / `?next` / `?url` and a path-append alike (all six measured; see
+[gotchas.md](./gotchas.md)). "Sign in AND land on the offer" cannot be one *navigation*.
+
+It can, however, be one *tap*, because the two halves do not have to happen in the same place:
+load the hand-off URL in a **hidden iframe** to establish the session, then send the already-
+opened tab straight to the offer.
+
+**This works only because the portal is a subdomain of `toolsaustralia.com.au`.** Its session
+cookie is `SameSite=Lax` (no attribute ⇒ Lax), so it is honoured in an iframe from our origin —
+same-site, not third-party. From any other origin it is cross-site and silently fails.
+
+Ranked by what the member loses, which is why this shape won:
+
+| shape | cost |
+|---|---|
+| deep-link a cold session | offer lost, bounced to `/my-account` — the reported bug |
+| hand-off in THIS tab | offer lost, **catalogue lost** (filters, scroll, place in 1,833 rows) |
+| hand-off in a NEW tab, then tap again | one extra tap |
+| **iframe warm-up, then the offer** | **nothing** |
+
+So the catalogue calls `startForOffer(href)`:
+
+- **cold tap** → tab opens (gesture) showing "Opening your offer…" → hidden iframe warms the
+  session → the tab goes to **the offer**. One tap.
+- **warm tap** → straight to the offer, no iframe needed.
+- **warm-up fails** → the tab lands on the portal home and the catalogue shows *"You're signed
+  in… tap an offer again"*. The two-tap shape survives as the fallback, which is why it was
+  worth building first.
+
+### The gate that makes the fallback honest
+
+`canWarmPartnerPortalSession()` refuses to even try unless our origin is same-site with the
+portal. This is **not** an optimisation — `iframe.onload` fires whether or not the cookie was
+accepted, so a cross-site attempt reports SUCCESS, we send the member to the offer, and they
+bounce: the exact dead end this exists to prevent. On `localhost` the whole mechanism is inert
+by design and the two-tap fallback runs instead.
+
+**Corollary: you cannot test this locally.** A local failure proves nothing about production.
+Test it on a `*.toolsaustralia.com.au` origin or not at all.
+
+Three things here are load-bearing:
+
+1. **The blank tab is opened SYNCHRONOUSLY in the click handler.** The redirect fires ~2.75s
+   later (two deliberate transit holds), by which point the user gesture is gone and every
+   browser blocks `window.open`. Opening `about:blank` during the gesture and re-pointing it
+   with `location.replace` is the only reliable way. `noopener` cannot be passed — it makes
+   `window.open` return null — so `tab.opener = null` is set by hand straight after.
+2. **It degrades to same-tab navigation** whenever that tab is missing (popup blocked, member
+   closed it, consent detour closed it). Arriving in the wrong tab is a nuisance; not arriving
+   is a bug.
+3. **The consent branch closes the blank tab and goes same-tab.** A blank tab parked behind a
+   read-and-decide sheet looks broken. That costs the catalogue tab exactly once per member,
+   on their first ever hand-off, and they are warm from then on.
+
+**The hint is not decoration.** After the first tap the member's attention is in the other tab;
+when they come back, our cards look identical to before and the state change is invisible.
+Without a line saying what happened and what to do, the second tap is a guess. It is inline
+(not a toast) precisely so it survives tab-switching, which is when it is needed.
+
+If the vendor ever ships ask 16, collapse this back to one tap — but keep the new-tab
+behaviour, which is worth having on its own.

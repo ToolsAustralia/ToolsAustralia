@@ -71,16 +71,30 @@ for an offer and got a page they were already past. That is worse than not linki
 Consequences, in order of importance:
 
 1. **The catalogue only deep-links a WARM session.** `markPartnerPortalHandoff()` writes a
-   `sessionStorage` marker just before the hand-off redirect; `hasPartnerPortalSession()` gates
-   the links. The heuristic is deliberately one-way — under-detecting costs a member nothing
-   (they use the portal button and still arrive), over-detecting is what dead-ends them, and
-   nothing but the hand-off writes that key. `sessionStorage`, not `localStorage`, because the
-   portal session is itself session-scoped and a longer-lived marker would start lying.
+   timestamped `sessionStorage` marker just before the hand-off redirect;
+   `hasPartnerPortalSession()` gates the links and trusts it for 20 minutes only (rules.md
+   **R11** — a marker standing in for a third party's session state must carry a TTL; the
+   original boolean version caused exactly this dead end, reported 2026-08-03). The heuristic
+   is deliberately one-way: under-detecting costs a member one extra hand-off, over-detecting
+   is what dead-ends them, and nothing but the hand-off writes that key.
 2. **The vendor's login bouncing to ours is otherwise good behaviour** — no second password
    prompt. Worth keeping if the vendor ever reworks it. What is missing is only the return-to.
-3. **This is the concrete case for vendor ask 16.** `/verifytoken/{token}` accepts no target,
-   so we cannot hand a member straight to an offer even through SSO. Ask 16 would let the
-   catalogue link *always* work and would also fix the post-upgrade return. Cite this trace.
+3. **Ask 16 is now MEASURED, not assumed (2026-08-03).** `/verifytoken/{token}` was tested with
+   a fresh token per attempt against `/products/view_smart/21190`:
+
+   | attempt | result |
+   |---|---|
+   | `?redirect=` · `?redirect_url=` · `?return=` · `?next=` · `?url=` | signed in → `/v8/home` |
+   | path-append `/verifytoken/{token}/products/view_smart/21190` | signed in → `/v8/home` |
+
+   Every form is silently ignored — the target is not rejected, it is dropped, so there is no
+   error to detect and nothing to work around client-side. **Do not re-probe this hoping for a
+   different answer; it needs a vendor change.** Cite this table in the ask: it converts "we
+   think it doesn't support a target" into "we tested six forms and none work".
+
+   Consequence for the UX: on a cold click we can sign the member in, but never onto the offer.
+   The best available shape without a vendor change is two clicks — the cold click warms the
+   session (and re-arms the marker), the next click deep-links correctly.
 
 ## Offer artwork — the path matters more than the percentage (2026-08-01)
 
@@ -217,3 +231,48 @@ It would supply artwork, terms and live pricing for every offer and remove both 
 hand-maintained CSV and this crawl. Track it with the redemption-feed ask — same credential
 conversation. Until then the harvest must be re-run when the CSV changes; it is a snapshot, and
 it will drift as the vendor edits merchants.
+
+## The iframe warm-up, and the two false negatives on the way to it (2026-08-03)
+
+An offer deep link needs a live portal session. Rather than making the member visit the portal
+first, we establish the session in a **hidden iframe** — so one tap opens the offer.
+
+Proven on production, cold start:
+
+```
+cold    view_smart/21190              -> bounced to /my-account
+iframe  verifytoken -> 302 -> /v8/home   (loaded off-screen, no navigation)
+then    view_smart/21190              -> view_smart/21190   ("Rockpool Cafe · 15% Discount")
+```
+
+### Two things that made this look impossible, and were not
+
+1. **"The vendor blocks framing."** They do not — no `X-Frame-Options`, no CSP
+   `frame-ancestors`. The first iframe attempt fired **zero network requests**, which reads
+   exactly like the vendor refusing. It was **our own** `frame-src` in
+   [`csp.ts`](../../src/utils/security/csp.ts). Always check whose policy blocked you before
+   concluding anything about theirs — a blocked frame and a refused frame look identical from
+   the outside.
+2. **"It does not set the cookie."** It does — but only from an origin that is **same-site**
+   with the portal. `myrewards.toolsaustralia.com.au` is a subdomain of ours, so a
+   `SameSite=Lax` cookie is honoured in our iframe. Test the same code from `localhost` and it
+   fails silently, because localhost is cross-site.
+
+### The trap this creates, and the gate that closes it
+
+`iframe.onload` fires **whether or not the cookie was accepted** — the frame is cross-origin,
+so its document, URL and cookies are all unreadable. A cross-site attempt therefore reports
+SUCCESS, and we would send the member to an offer that bounces them: the very dead end the
+warm-up exists to prevent, now with extra steps.
+
+`canWarmPartnerPortalSession()` refuses to attempt it unless `location.hostname` is same-site
+with `NEXT_PUBLIC_PARTNER_PORTAL_URL`. Do not "optimise" that check away, and do not relax it
+to make local dev nicer — on localhost the mechanism is **meant** to be inert, and the two-tap
+fallback runs instead.
+
+### If this ever stops working
+
+Suspect, in order: (1) our `frame-src` lost the portal host; (2) the vendor moved off a
+`toolsaustralia.com.au` subdomain, which breaks same-site and makes the gate correctly refuse;
+(3) a browser began partitioning same-site subdomain frames. Cases 1 and 2 are visible in
+config. Case 3 is not detectable from our side — the fallback exists for it.

@@ -31,7 +31,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Gift, Search, Lock, ArrowLeft, ExternalLink } from "lucide-react";
+import { Gift, Search, Lock, ArrowLeft, ExternalLink, Check } from "lucide-react";
 
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -86,21 +86,32 @@ export default function RewardsCataloguePage() {
   const accessPct = dash.partnerAccessPct ?? 0;
 
   /**
+   * TWO-CLICK FLOW (rules.md R12).
+   *
    * A cold `view_smart` link does NOT trigger SSO — it bounces to a login page and loses the
-   * offer (measured; see portal-offer-url.ts). So the row's ACTION depends on the session:
+   * offer. And the hand-off cannot carry a destination: `/verifytoken/{token}` silently drops
+   * `?redirect` / `?return` / `?next` / `?url` / a path-append alike (all six measured
+   * 2026-08-03), so signing in and landing on the offer cannot be one action. So the row's
+   * action depends on the session:
    *
-   *   warm (already handed off in this tab) → open the offer directly
-   *   cold                                  → run the hand-off, which signs them in
+   *   cold → hand-off in a NEW tab; this tab keeps the catalogue and flips to warm
+   *   warm → open the offer directly
    *
-   * Every open row stays clickable either way. An earlier attempt simply withheld the link
-   * when cold, which "fixed" the dead-end by making the row silently do nothing — a worse
-   * failure, because the member gets no feedback at all and no way to reach the offer.
+   * Two taps, but the member never loses the offer, their filters or their scroll position —
+   * which is what the one-tap version cost them. Every open row stays clickable in both
+   * states. An earlier attempt simply withheld the link when cold, which "fixed" the dead-end
+   * by making the row silently do nothing — a worse failure, because the member gets no
+   * feedback at all and no way to reach the offer.
    *
    * Read after mount, never during render: `sessionStorage` does not exist on the server and
    * reading it in the render body would hydrate-mismatch.
    */
   const [portalWarm, setPortalWarm] = React.useState(false);
   React.useEffect(() => setPortalWarm(hasPartnerPortalSession()), []);
+  /** Set only by a hand-off that happened on THIS page — drives the "now tap again" hint. */
+  const [justSignedIn, setJustSignedIn] = React.useState(false);
+  /** Which card is mid-open, so it can show a pending state instead of feeling dead. */
+  const [openingId, setOpeningId] = React.useState<string | null>(null);
 
   // At 0% the "only what I can use" default would render an empty page. Flip it once, after
   // the tier resolves, so a guest lands on the full browsable catalogue.
@@ -115,7 +126,21 @@ export default function RewardsCataloguePage() {
     memberName: dash.user?.firstName,
     tierLabel: dash.subscriptionTierLabel,
     accessPct,
+    // The catalogue is the ONE surface with something to lose — the offer they clicked, plus
+    // their filters and scroll. The other portal CTAs keep the simpler same-tab navigation.
+    openInNewTab: true,
+    onHandedOff: () => {
+      setPortalWarm(true);
+      setOpeningId(null);
+    },
   });
+
+  // Only explain a second tap when there IS one. On the happy path the member is already
+  // looking at their offer, so a "tap again" banner would be describing something that did
+  // not happen. `fellBackToPortalHome` is true only when the invisible warm-up failed.
+  React.useEffect(() => {
+    if (sso.fellBackToPortalHome) setJustSignedIn(true);
+  }, [sso.fellBackToPortalHome]);
 
   // Prepared once: lower-cased names for matching, display names for rendering.
   const prepared = React.useMemo(
@@ -249,6 +274,25 @@ export default function RewardsCataloguePage() {
               <CategoryChip key={c} active={category === i} onClick={() => setCategory(i)} label={c} />
             ))}
           </div>
+
+          {/* Without this the second tap is a guess. The member's first tap opened a portal tab
+              and then, from their side, "nothing happened" here — the cards look identical.
+              Say plainly that the state changed and what to do next. Not a toast: it must
+              survive them switching to the portal tab and back, which is exactly when they
+              need it. */}
+          {justSignedIn && (
+            <div
+              role="status"
+              className="mt-3 flex items-start gap-2 rounded-[10px] border border-emerald-600/30 bg-emerald-600/10 px-3 py-2.5"
+            >
+              <Check className="mt-[1px] h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
+              <p className="text-[11.5px] font-semibold leading-[1.45] text-primary-token dark:text-white">
+                You&apos;re signed in to the partner portal.{" "}
+                <span className="font-extrabold">Tap an offer again</span> and it will open
+                straight to that deal.
+              </p>
+            </div>
+          )}
         </section>
 
         <p className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted-token" aria-live="polite">
@@ -315,7 +359,13 @@ export default function RewardsCataloguePage() {
                   accessPct={accessPct}
                   offerId={o.id}
                   href={portalWarm ? o.href : null}
-                  onColdOpen={sso.start}
+                  // Cold: warm the session invisibly, then land on THIS offer — one tap.
+                  onColdOpen={() => {
+                    if (!o.href) return;
+                    setOpeningId(o.id);
+                    sso.startForOffer(o.href);
+                  }}
+                  opening={openingId === o.id && sso.warming}
                   imageSrc={o.imageSrc}
                 />
               ))}
@@ -440,6 +490,7 @@ function OfferRow({
   offerId,
   href,
   onColdOpen,
+  opening = false,
   imageSrc,
 }: {
   name: string;
@@ -450,6 +501,8 @@ function OfferRow({
   offerId: string;
   href: string | null;
   onColdOpen: () => void;
+  /** This card's cold open is in flight — the session is warming behind the scenes. */
+  opening?: boolean;
   imageSrc: string | null;
 }) {
   const open = pct <= accessPct;
@@ -544,10 +597,32 @@ function OfferRow({
           {inner}
         </a>
       ) : actionable ? (
-        // No portal session yet: run the hand-off rather than following a link that would
-        // bounce to a login page. The member lands in the portal signed in.
-        <button type="button" onClick={onColdOpen} className={cls} title={`${name} — opens the partner portal`}>
+        // No portal session yet. Rather than following a link that would bounce to a login
+        // page, warm the session invisibly and send the member straight to this offer.
+        // The pending state matters: the warm-up takes ~1–2s during which the new tab is
+        // already open in front of them, so the card they left behind must not look dead.
+        <button
+          type="button"
+          onClick={onColdOpen}
+          disabled={opening}
+          aria-busy={opening || undefined}
+          className={cn(cls, "relative", opening && "cursor-progress")}
+          title={`${name} — opens in the partner portal`}
+        >
           {inner}
+          {opening && (
+            <span className="absolute inset-0 grid place-items-center rounded-[14px] bg-surface/85 backdrop-blur-[1px]">
+              <span className="flex flex-col items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="h-6 w-6 rounded-full border-[3px] border-black/15 border-t-red-600 motion-safe:animate-spin dark:border-white/20 dark:border-t-red-500"
+                />
+                <span className="text-[10.5px] font-extrabold uppercase tracking-wide text-muted-token">
+                  Opening…
+                </span>
+              </span>
+            </span>
+          )}
         </button>
       ) : (
         // LOCKED → the upgrade funnel, carrying the offer id so /membership can name the
