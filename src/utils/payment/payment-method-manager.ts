@@ -18,7 +18,53 @@ import User from "@/models/User";
  * @param options - Optional configuration
  * @returns Object with success status and updated user
  */
-export async function savePaymentMethodToUser(
+/**
+ * Does this error mean "someone else wrote the document while we held it"?
+ *
+ * Mongoose applies `__v` optimistic concurrency automatically when you modify an array
+ * (no `optimisticConcurrency` schema option needed), so a positional write like
+ * `savedPaymentMethods.0.isDefault` throws `VersionError` if the doc moved underneath us.
+ * A `VersionError` has NO `.code` property — it is identified by `name`. That is precisely
+ * why the previous `if ("code" in saveError)` guard never caught it despite a comment
+ * claiming "save with retry on conflict": the error fell straight through to a re-throw and
+ * surfaced as a 500 on POST /api/stripe/payment-methods (6 occurrences / 5 users in the week
+ * to 2026-08-03, on saves that had in fact already succeeded via the competing writer).
+ */
+function isWriteConflictError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { name?: string; code?: number | string };
+  return e.name === "VersionError" || e.code === 11000;
+}
+
+/**
+ * Re-run a read-modify-save operation when it loses a write race.
+ *
+ * Every operation wrapped here MUST re-read the user document at its start — the retry is
+ * only meaningful because the next attempt observes the winner's write. Any Stripe calls
+ * inside must be idempotent, since a retry repeats them (`ensurePaymentMethodAttached` and
+ * `setDefaultPaymentMethod` both are: attach-if-absent and set-to-value respectively).
+ */
+async function withWriteConflictRetry<T>(
+  label: string,
+  operation: () => Promise<T>,
+  attempts = 3
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await operation();
+    } catch (err) {
+      lastError = err;
+      if (!isWriteConflictError(err) || attempt === attempts) throw err;
+      // Small jittered backoff so two racing writers don't retry in lockstep.
+      await new Promise((r) => setTimeout(r, 40 * attempt + Math.floor(Math.random() * 40)));
+      console.warn(`[${label}] write conflict on attempt ${attempt}/${attempts} — retrying`);
+    }
+  }
+  throw lastError;
+}
+
+async function savePaymentMethodToUserOnce(
   user: IUser,
   paymentMethodId: string,
   options: {
@@ -124,26 +170,24 @@ export async function savePaymentMethodToUser(
       }
     }
 
-    // ✅ CRITICAL: Save with retry on conflict
+    // Write conflicts are retried by `withWriteConflictRetry` around the whole operation
+    // (which re-reads the user), so this save only has to handle the case where the
+    // competing writer already added the very payment method we were adding.
     try {
       await user.save();
     } catch (saveError: unknown) {
-      // Handle MongoDB duplicate key errors or version conflicts
-      if (saveError && typeof saveError === "object" && "code" in saveError) {
-        if (saveError.code === 11000) {
-          // Duplicate key - payment method might have been added by another process
-          // Refresh and check again
-          const refreshedUser = await User.findById(user._id);
-          if (refreshedUser?.savedPaymentMethods?.some((pm) => pm.paymentMethodId === paymentMethodId)) {
-            return {
-              success: true,
-              user: refreshedUser,
-              wasNew: false,
-            };
-          }
+      if (isWriteConflictError(saveError)) {
+        const refreshedUser = await User.findById(user._id);
+        if (refreshedUser?.savedPaymentMethods?.some((pm) => pm.paymentMethodId === paymentMethodId)) {
+          // Someone else saved it first — that is a success, not a failure.
+          return {
+            success: true,
+            user: refreshedUser,
+            wasNew: false,
+          };
         }
       }
-      throw saveError; // Re-throw if not a duplicate
+      throw saveError; // Not ours to swallow — let the retry wrapper decide.
     }
 
     return {
@@ -152,7 +196,48 @@ export async function savePaymentMethodToUser(
       wasNew: true,
     };
   } catch (error) {
+    // Write conflicts must ESCAPE this catch so `withWriteConflictRetry` can re-run the
+    // whole operation against a freshly-read document. Swallowing them into
+    // `{ success: false }` here is what turned a retryable race into a user-facing 500.
+    if (isWriteConflictError(error)) throw error;
     console.error("Error saving payment method to user:", error);
+    return {
+      success: false,
+      user,
+      wasNew: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Public entry point: `savePaymentMethodToUserOnce` with automatic retry when another
+ * writer touches the user document mid-flight (Stripe webhooks such as
+ * `payment_method.attached` / `customer.updated` fire on our own attach + set-default calls
+ * and write the same document, which is the race that produced the production 500s).
+ *
+ * Preserves the original contract: a conflict that survives every retry is returned as
+ * `{ success: false }` rather than thrown, so existing callers are unaffected.
+ */
+export async function savePaymentMethodToUser(
+  user: IUser,
+  paymentMethodId: string,
+  options: {
+    setAsDefault?: boolean;
+    skipStripeUpdate?: boolean;
+  } = {}
+): Promise<{
+  success: boolean;
+  user: IUser;
+  wasNew: boolean;
+  error?: string;
+}> {
+  try {
+    return await withWriteConflictRetry("savePaymentMethodToUser", () =>
+      savePaymentMethodToUserOnce(user, paymentMethodId, options)
+    );
+  } catch (error) {
+    console.error("Error saving payment method to user (after retries):", error);
     return {
       success: false,
       user,
@@ -280,7 +365,7 @@ export type DetachPaymentMethodResult =
  * Detaches a payment method in Stripe and removes it from the user record,
  * keeping subscription and customer default_payment_method consistent when possible.
  */
-export async function detachAndRemoveSavedPaymentMethod(
+async function detachAndRemoveSavedPaymentMethodOnce(
   user: IUser,
   paymentMethodId: string,
   options: { confirmBillingRisk?: boolean } = {}
@@ -407,7 +492,36 @@ export async function detachAndRemoveSavedPaymentMethod(
 
     return { success: true, user };
   } catch (error) {
+    // Escape so the retry wrapper can re-run against a fresh document — same reasoning as
+    // savePaymentMethodToUser. This path re-reads the user at its start, so a retry is safe.
+    if (isWriteConflictError(error)) throw error;
     console.error("detachAndRemoveSavedPaymentMethod:", error);
+    return {
+      success: false,
+      user,
+      error: error instanceof Error ? error.message : "Failed to remove payment method",
+    };
+  }
+}
+
+/**
+ * Public entry point: detach with automatic retry on a lost write race.
+ *
+ * Matters more than it looks — removing a card issues Stripe calls (subscription default
+ * swap, customer default clear, detach) that each fire webhooks writing the same user
+ * document we are about to save.
+ */
+export async function detachAndRemoveSavedPaymentMethod(
+  user: IUser,
+  paymentMethodId: string,
+  options: { confirmBillingRisk?: boolean } = {}
+): Promise<DetachPaymentMethodResult> {
+  try {
+    return await withWriteConflictRetry("detachAndRemoveSavedPaymentMethod", () =>
+      detachAndRemoveSavedPaymentMethodOnce(user, paymentMethodId, options)
+    );
+  } catch (error) {
+    console.error("detachAndRemoveSavedPaymentMethod (after retries):", error);
     return {
       success: false,
       user,

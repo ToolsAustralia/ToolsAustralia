@@ -562,6 +562,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     // auto-opened again (skeleton payment view). The cancel is best-effort cleanup; nothing here
     // depends on its result.
     const intentToCancel = paymentIntentId;
+    // Captured BEFORE the state reset below: the cancel endpoint proves ownership with the
+    // intent's client_secret (it accepts no session, because guests legitimately hold
+    // PaymentIntents). Without this the cancel is rejected 403.
+    const intentSecretToCancel = paymentIntentClientSecret;
 
     setPaymentIntentClientSecret(null);
     setPaymentIntentId(null);
@@ -574,18 +578,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     setProcessingPackageType(undefined as unknown as "one-time" | "membership" | "upsell" | "mini-draw");
     onClose();
 
-    if (intentToCancel) {
+    if (intentToCancel && intentSecretToCancel) {
       void fetch("/api/stripe/cancel-payment-intent", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ paymentIntentId: intentToCancel }),
+        body: JSON.stringify({
+          paymentIntentId: intentToCancel,
+          clientSecret: intentSecretToCancel,
+        }),
       })
         .then(() => console.log("✅ Cancelled PaymentIntent on modal close:", intentToCancel))
         .catch((error) => console.error("❌ Failed to cancel PaymentIntent on modal close:", error));
     }
-  }, [onClose, paymentIntentId]);
+  }, [onClose, paymentIntentId, paymentIntentClientSecret]);
 
   useEffect(() => {
     if (!isOpen) return;

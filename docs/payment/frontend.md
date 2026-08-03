@@ -1,5 +1,16 @@
 # Payment — Frontend
 
+## Remove card is shown on EVERY saved card, including the default
+
+`SettingsRedesignPayment.tsx` used to render the Remove action only when `!isDefault`. A member whose **only** card is the default therefore had no way to remove it — there was no second row to reveal the action. Reported from production 2026-08-03.
+
+Remove is now always rendered. The safety lives where it belongs, in two independent places:
+
+- **The dialog** picks its warning from `getPaymentMethodDeleteFlowKind` ([`payment-method-delete-flow.ts`](../../src/utils/payment/payment-method-delete-flow.ts)): `simple` (not the billing card) → `billing-reassign` (billing card, others remain — the backend auto-promotes a replacement) → `billing-last` (billing card, nothing left → renewals stop; only this kind requires a consent checkbox).
+- **The API** independently refuses to drop a last billing card without `?confirmBillingRisk=1`, returning `409 REQUIRES_BILLING_RISK_CONFIRMATION`, which the tab re-prompts on. UI and API do not trust each other.
+
+**Copy rule:** these messages are capped at 130 characters and must carry no vendor/internal jargon — say what changes and what it costs, nothing more. Members dismiss walls of text, and the consequence *is* the point of the dialog. Guarded by `npm run test:payment-method-delete-flow`.
+
 ## Components
 
 | Component | Purpose |
