@@ -15,29 +15,19 @@ import {
 } from "@/utils/partner-discounts/portal-offer-url";
 
 /**
- * Painted into the pre-opened tab while the session warms.
+ * Our own interstitial, opened in the new tab while the session warms.
  *
- * The tab has to be opened during the click gesture (popup blockers), but the destination is
- * not known for another second or two. Without this the member stares at `about:blank`, which
- * reads as a broken pop-up. `about:blank` inherits our origin, so this is same-origin markup,
- * not the vendor's — and it is a fixed string with nothing interpolated into it.
+ * The tab must be opened inside the click gesture (popup blockers) but the destination is not
+ * known for another second or two, so something has to fill it. Pointing it at a REAL ROUTE —
+ * which renders the same `PortalTransit` takeover as every other hand-off — rather than
+ * writing markup into `about:blank`.
+ *
+ * The `document.write` version was a genuine mistake, twice over. It was a second loader
+ * implementation of a screen we already had, and it rendered badly on mobile: a written-into
+ * `about:blank` does not reliably honour the `viewport` meta, so Chrome laid it out at ~980px
+ * and scaled it down to unreadable text in the corner. A normal navigation has neither problem.
  */
-const OPENING_TAB_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Opening your offer…</title>
-<style>
-  :root{color-scheme:light dark}
-  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0c0f;color:#fff;
-       font:600 15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:center}
-  .w{max-width:22rem;padding:2rem}
-  .r{width:38px;height:38px;margin:0 auto 1.1rem;border-radius:50%;
-     border:3px solid rgba(255,255,255,.18);border-top-color:#ee0000;animation:s .9s linear infinite}
-  p{margin:.35rem 0;opacity:.72;font-size:13px;font-weight:500}
-  strong{font-size:16px;font-weight:800}
-  @keyframes s{to{transform:rotate(360deg)}}
-  @media (prefers-reduced-motion:reduce){.r{animation:none;border-top-color:#ee0000}}
-</style></head><body><div class="w">
-<div class="r"></div><strong>Opening your offer</strong>
-<p>Signing you in to the partner portal…</p></div></body></html>`;
+const PORTAL_TRANSIT_ROUTE = "/portal-transit";
 
 export interface PortalHandoffState {
   /** Start the hand-off. Wire this to the "Open partner portal" CTA. */
@@ -233,10 +223,11 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
     setFlow({ kind: "idle" });
     cancelled.current = false;
 
-    // MUST happen here, inside the click gesture — see `pendingTab`.
+    // MUST happen here, inside the click gesture — see `pendingTab`. Straight to our own
+    // interstitial rather than about:blank, for the same reasons as `startForOffer`.
     if (optionsRef.current.openInNewTab) {
       try {
-        pendingTab.current = window.open("", "_blank");
+        pendingTab.current = window.open(PORTAL_TRANSIT_ROUTE, "_blank");
       } catch {
         pendingTab.current = null;
       }
@@ -296,18 +287,9 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
       cancelled.current = false;
       setFellBack(false);
 
-      // MUST be inside the gesture. Paint immediately so the tab is never blank.
+      // MUST be inside the gesture, and straight to the interstitial so the tab is never blank.
       try {
-        const tab = window.open("", "_blank");
-        if (tab) {
-          try {
-            tab.document.write(OPENING_TAB_HTML);
-            tab.document.close();
-          } catch {
-            // Leaving it blank is survivable; failing the whole open is not.
-          }
-        }
-        pendingTab.current = tab;
+        pendingTab.current = window.open(PORTAL_TRANSIT_ROUTE, "_blank");
       } catch {
         pendingTab.current = null;
       }

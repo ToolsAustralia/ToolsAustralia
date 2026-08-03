@@ -276,3 +276,30 @@ Suspect, in order: (1) our `frame-src` lost the portal host; (2) the vendor move
 `toolsaustralia.com.au` subdomain, which breaks same-site and makes the gate correctly refuse;
 (3) a browser began partitioning same-site subdomain frames. Cases 1 and 2 are visible in
 config. Case 3 is not detectable from our side — the fallback exists for it.
+
+## Never paint a popup with `document.write` — open it at a route (2026-08-03)
+
+The tab we open for a hand-off has to be created inside the click gesture, but its destination
+is not known for another second or two. The first version filled that gap by writing a small
+HTML string into `about:blank`. Two things were wrong with it, and the second is the one worth
+remembering:
+
+1. **It was a second implementation of a screen we already had.** `PortalTransit` is the real
+   hand-off takeover — responsive, `role="status"`, escape hatch, brand rig. The hand-written
+   string was a worse copy that immediately drifted from it.
+2. **A written-into `about:blank` does not reliably honour the `viewport` meta.** Chrome on
+   Android laid it out at ~980px and scaled it down, so the member got unreadable text jammed
+   into the top-left corner. Reported as "looks bad in mobile", and that was exactly right.
+
+The fix is to open the tab straight at [`/portal-transit`](../../src/app/portal-transit/page.tsx),
+a real route that renders `PortalTransit` parked on `working`. A normal navigation gets the
+viewport meta, the stylesheet, and the component we already maintain.
+
+It parks on `working` and never advances to `done`: the opener re-points the tab once the
+session is warm, so this page cannot know it succeeded — claiming otherwise would be the same
+dishonesty PortalTransit's own step timer is careful to avoid. It carries **no member details**;
+putting a name or tier in a URL to reach a two-second tab would leak PII into history and the
+referrer for nothing.
+
+**Rule of thumb:** if you are about to write markup as a string for a surface a customer will
+see, you are probably duplicating a component. Open a route instead.
