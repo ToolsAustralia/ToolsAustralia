@@ -81,12 +81,28 @@ export function buildPartnerPortalOfferUrl(offerId: string): string | null {
  * so the correct extension is resolved once by `scripts/probe-partner-catalog-images.ts` and
  * committed; this builder just takes it.
  *
- * PATH HISTORY (worth keeping — it cost a wrong conclusion): an earlier version guessed
- * `big_image/{id}.png`, which resolves for only 64 of 1,833 offers. That produced a confident
- * "3% of the catalogue has artwork", which was **wrong** — it measured one folder, not
- * coverage. `product_image/` is where offer artwork actually lives, and it is effectively
- * complete. `big_image/` holds the home-page hero banners, which is why a handful of
- * merchandised ids happened to resolve there and made the guess look half-right.
+ * COVERAGE IS 948/1833 (52%), AND THE SHORTFALL IS STRUCTURAL, NOT RANDOM. Split by category:
+ * every category except one sits at 97–100%, and the single category "In-Store Offer" (877
+ * offers, 48% of the catalogue) sits at **0%**. So this builder resolves artwork for
+ * essentially all e-gift/online offers and none of the in-store ones.
+ *
+ * In-store offers DO have artwork in the portal — they are just not keyed by offer id.
+ * Read off the live portal 2026-08-03, offer 1068399 (pureBIO New Zealand) renders:
+ *     product_image/133414.jpeg      ← an internal media id, NOT 1068399
+ *     merchant_logo/1032063.jpeg     ← the merchant id
+ * Neither id appears anywhere in the CSV we are given, so there is no way to derive the URL
+ * from what we hold. Closing this needs the vendor's product endpoint (the `GET
+ * {portal}/api/v1/products/{id}` ask, currently 401) — see docs/partner/gotchas.md.
+ *
+ * PATH HISTORY (worth keeping — it cost two wrong conclusions):
+ *   1. An earlier version guessed `big_image/{id}.png`, which resolves for only 64 of 1,833.
+ *      That produced a confident "3% of the catalogue has artwork" — wrong; it measured one
+ *      folder, not coverage. `big_image/` holds home-page hero banners, which is why a few
+ *      merchandised ids resolved there and made the guess look half-right.
+ *   2. Then `product_image/{offerId}` was declared "effectively complete" — also wrong, for
+ *      the mirror-image reason: the sample that validated it contained no in-store offers.
+ * Both mistakes were guessing URLs. Both were settled in minutes by opening the vendor's own
+ * page with a live session and reading the `<img>` src. Do that first.
  *
  * Files are unoptimised and run to several hundred KB, so they must go through Next's image
  * optimiser (hence the host in `DEFAULT_IMAGE_HOSTS`) and be lazily loaded.
