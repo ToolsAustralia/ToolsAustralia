@@ -56,7 +56,6 @@ async function main() {
     "facebookAds.view",
     "facebookAds.edit",
     "pageAnalytics.view",
-    "promoAnalytics.view",
     "abTesting.view",
   ];
   const existingAds = await Role.findOne({ name: "Ads Manager" });

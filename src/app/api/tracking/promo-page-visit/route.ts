@@ -6,14 +6,25 @@ import PromoAnalyticsVisit from "@/models/PromoAnalyticsVisit";
 import connectDB from "@/lib/mongodb";
 import { recordPromoVisit } from "@/utils/promo-analytics/record-promo-visit";
 import { createRateLimiter, getClientIdentifier } from "@/utils/security/rateLimiter";
+import { readAttributionCookieFromRequest } from "@/utils/tracking/attribution-cookie";
+
+/** A UTM value from the public beacon: bounded, trimmed, no control characters. */
+const UTM_VALUE = z
+  .string()
+  .trim()
+  .max(200)
+  .regex(/^[^\u0000-\u001F\u007F]*$/, "must not contain control characters");
 
 const promoPageVisitSchema = z.object({
   pageType: z.enum(["evergreen", "toolset"]),
   slug: z.string().min(1).max(100),
-  referrerSlug: z.string().min(1).max(50).optional(),
-  utmSource: z.string().optional(),
-  utmMedium: z.string().optional(),
-  utmCampaign: z.string().optional(),
+  // Bounded and control-char-free. These arrive from an unauthenticated public beacon and are
+  // written straight to Mongo; the sibling `slug` fields have always carried a `.max()` while
+  // these did not, so a visitor could stuff an arbitrarily long utm_source into a stored field
+  // (and, before the channel key became a closed enum, into a `new RegExp` on the read side).
+  utmSource: UTM_VALUE.optional(),
+  utmMedium: UTM_VALUE.optional(),
+  utmCampaign: UTM_VALUE.optional(),
 });
 
 // Unauthenticated + keyed only on a format-checked cookie (same gap as the sibling
@@ -109,6 +120,13 @@ export async function POST(request: NextRequest) {
   const url =
     request.headers.get("x-forwarded-url") || request.headers.get("referer") || request.url || "";
 
+  // First-touch attribution, read from the SAME durable `_ta_attr` cookie that signups and
+  // conversions already resolve against. Read here, synchronously, for two reasons: `request`
+  // must not be touched inside `after()`, and doing it server-side sidesteps a client-side
+  // ordering hazard — the hook that WRITES this cookie mounts above the one that fires this
+  // beacon, and React runs child effects first, so a client read could beat the write.
+  const firstTouch = readAttributionCookieFromRequest(request);
+
   // Record the visit off the response path so DB latency can't 504 the beacon. The
   // orchestration (dedup -> attribution -> persist) lives in recordPromoVisit, which is
   // unit-testable because its side effects are injected here as deps.
@@ -118,13 +136,15 @@ export async function POST(request: NextRequest) {
         {
           pageType: validatedData.pageType,
           slug: validatedData.slug,
-          referrerSlug: validatedData.referrerSlug,
           anonymousId,
           referrerHeader,
           url,
           utmSource: validatedData.utmSource,
           utmMedium: validatedData.utmMedium,
           utmCampaign: validatedData.utmCampaign,
+          firstTouchUtmSource: firstTouch?.utm_source,
+          firstTouchUtmMedium: firstTouch?.utm_medium,
+          firstTouchUtmCampaign: firstTouch?.utm_campaign,
         },
         {
           // connectDB() first: nothing upstream of this read opens the Mongo

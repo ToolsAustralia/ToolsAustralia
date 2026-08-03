@@ -283,6 +283,8 @@ These exist on the same collection but are RBAC / service-account machinery ([Us
 ### 3b. Customer's-eye notes
 
 - **`trialing`** — late-month joiners (25th/26th/27th AEST) sit here until the 24th anchor. **Recovered past-due members are also `trialing`** when their recovery reanchors the renewal forward (any recovery channel; a re-bill collected on the 25th/26th/27th is clamped to the next 24th — see [BUSINESS.md §9b, §9e](BUSINESS.md)). In every case they've **paid full price** — this is a billing-anchor artifact, not a free trial.
+- **A failed re-bill returns the customer to `past_due` (2026-07-31)** — when a stranded customer's freshly minted cycle invoice declines, they now correctly go back to `past_due` rather than being left reading `active`. Previously they were emailed the renewal-failed notice while their account still showed active member state, so they never re-entered the recovery ladder and their delinquency was invisible on the account surface. Two customers had drifted this way (one for ~4 months). They are **not** re-paused by this — the recovery flow had just unpaused them.
+- **`past_due` recovery timing (2026-07-31)** — a stranded past-due member whose invoice Stripe has given up on is now recovered **within the same daily run** rather than on the following day. Previously the run's charge attempt could be rejected by Stripe before reaching the card (`payment_intent_unexpected_state`), which cost the member a day: they stayed `past_due` for another 24h, kept their benefits suspended that much longer, and their account showed a decline that was never actually a card problem. Affected **245 attempts across 28–31 Jul 2026**. The set of customers who get recovered (and therefore re-anchored — see the `trialing` note above) is **unchanged**; only how quickly it happens. Customers with a Stripe retry still pending are untouched, as before.
 - **`scheduled_cancel`** — the customer requested cancellation; benefits stay live until `subscription.endDate`. The raw `status` string is NOT rewritten to `scheduled_cancel` — that is an analytics label only.
 - **`paused`** — the customer accepted the 30-day `pause_30d` retention offer (§5.6). They keep the paid period they already bought, then **freeze** for ~30 days (`status="paused"`, `isActive=false`): no charge and no member access/perks/new entries while frozen, but their **already-earned entries are untouched and still count in draws**. The freeze auto-resumes at `pausedUntil` (= period end + 1 month, the next billing-cycle boundary), when Stripe bills the next cycle — a successful charge returns them to `active`, a failed one to `past_due`. The customer (or an admin) can also **resume early**. See [BUSINESS.md §10a](BUSINESS.md).
 - **Ghost states** — `previousSubscription` (downgrade: old tier's benefits live until cycle end) and `pendingChange` (upgrade: desired package parked while charge is in-flight). See [BUSINESS.md §10b](BUSINESS.md).
@@ -538,6 +540,24 @@ boolean, `buildInteracted`. No new identifier is captured and nothing extra leav
 this is the same anonymous visit row, recorded for more visitors. The reason is that signups already
 recorded the page's default build for people who never touched the reels, so counting builders and
 signups over different populations let the admin funnel display rates above 100%.
+
+**Promo-page visit attribution changed 2026-07-31 — and one field was dropped.** Two changes to the
+anonymous `PromoAnalyticsVisit` row written on `/promotions/*` (keyed on the `ta_anon_id` cookie,
+not the `User` record):
+
+- **UTM now comes from the first-touch `_ta_attr` cookie, not the landing URL.** The beacon reads
+  the same 90-day cookie signups and conversions already read, server-side, and falls back to the
+  URL's own `utm_*` params. **No new identifier is captured and nothing extra leaves to a third
+  party** — the same three UTM values are stored, sourced from a cookie this document already
+  describes in the table above rather than from the address bar. The reason is internal
+  consistency: visits were on a different basis from signups and conversions, so a visitor who
+  landed on a tagged page and registered on an untagged one produced a signup with no matching
+  visit. A new **`utmBasis`** field (`"first_touch"` / `"landing_url"`) records which source was
+  used, purely so an attribution shift after a deploy is auditable.
+- **`referrerSlug` is no longer captured.** It recorded which other promo landing page the visitor
+  came from via the "Explore other toolsets" carousel; that carousel was replaced on 2026-07-22, so
+  nothing had written the field since. The field, its index declaration and the beacon parameter
+  were all removed — **strictly less data held about the visitor**.
 
 ### 8b. The "converting platform" concept
 

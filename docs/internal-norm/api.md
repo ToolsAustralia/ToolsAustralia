@@ -117,25 +117,25 @@ Tier `read`; required permission `overview.view`.
 Response: `null` when no manual sync is running on the answering process, otherwise `{ isRunning, total, processed, synced, errors, currentUserEmail?, startTime? }`. Sourced from in-process state inside the draw-reset util (see G2 in [gotchas.md](./gotchas.md) for the multi-instance caveat — a different Lambda will see `null`).
 
 ### `GET /v1/promo-analytics`
-Tier `read`; required permission `promos.view`.
+Tier `read`; required permission `pageAnalytics.view` (was `promos.view` until 2026-07-31).
 
-Query: `dateRange=today|yesterday|custom` (default `today`); for `custom` also `startDate`, `endDate` (`YYYY-MM-DD`, AEST). Note this domain does NOT accept the draw-anchored ranges (`current-draw`, `last-draw`, `all-time`) — its admin counterpart never offered them.
+Query: `dateRange=today|yesterday|custom` (default `today`); for `custom` also `startDate`, `endDate` (`YYYY-MM-DD`, AEST). Note this domain does NOT accept the draw-anchored ranges (`current-draw`, `last-draw`, `all-time`) — its admin counterpart never offered them. The resolved window is additionally **clamped to the 90-day visit-retention floor**.
 
-Response: `{ dateRange, totalVisits, totalSignups, totalConversions, totalRevenue, byPage: PromoPageMetrics[], byUTMSource: UTMSourceMetrics[] }`. Backed by [`PromoAnalyticsService.getAggregatedMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts) + `getAggregatedByUTMSource`, both reading the joined `PromoAnalyticsVisit` + `User.signupAttribution` + `PaymentEvent.BenefitsGranted` view.
+Response: `{ dateRange, totalVisits, totalSignups, totalConversions, totalRevenue, byPage: PromoPageMetrics[], byChannel: ChannelMetrics[], byBuiltPrize: BuiltPrizeMetrics[] }`. `dateRange` carries `visitsRetainedFrom` + `clampedToRetention`. Backed by [`PromoAnalyticsService.getAggregatedMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts) + `getAggregatedByChannel` + `getAggregatedByBuiltPrize`, all reading the joined `PromoAnalyticsVisit` + `User.signupAttribution` + `PaymentEvent.BenefitsGranted` view.
 
 ### `GET /v1/promo-analytics/channel-detail`
-Tier `read`; required permission `promos.view`.
+Tier `read`; required permission `pageAnalytics.view` (was `promos.view` until 2026-07-31).
 
-Query: `utmSource` (required), optional `startDate`/`endDate` (both must be supplied to override the default AEST "today" window).
+Query: **`channel`** (required, `z.enum(CHANNEL_KEYS)` — a closed enum, not a free string; was `utmSource`), optional `startDate`/`endDate` (both must be supplied to override the default AEST "today" window).
 
-Response: `{ utmSource, summary, byPage: ChannelPageMetrics[], byCampaign: ChannelCampaignMetrics[] }` from [`PromoAnalyticsService.getChannelDetailMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts).
+Response: `{ channel, channelLabel, summary, byPage: ChannelPageMetrics[], byCampaign: ChannelCampaignMetrics[], rawSources: ChannelRawSource[] }` from [`PromoAnalyticsService.getChannelDetailMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts). `summary.visits` is a channel-wide dedupe and is deliberately **not** the sum of `byPage[].visits`; `rawSources` are per-source uniques that may sum above it.
 
 ### `GET /v1/promo-analytics/page-detail`
-Tier `read`; required permission `promos.view`.
+Tier `read`; required permission `pageAnalytics.view` (was `promos.view` until 2026-07-31).
 
 Query: `pageType=evergreen|toolset` + `slug` (both required), optional `startDate`/`endDate`.
 
-Response: `{ pageType, slug, pageLabel, summary, byCampaign: UTMCampaignMetrics[], visitsFrom?: VisitsFromMetric[] }` from [`PromoAnalyticsService.getPageDetailMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts). An invalid slug throws and surfaces as `500 handler_exception`.
+Response: `{ pageType, slug, pageLabel, summary, byCampaign: UTMCampaignMetrics[], buildBreakdown: PageBuildBreakdown }` from [`PromoAnalyticsService.getPageDetailMetrics`](../../src/services/promo-analytics/PromoAnalyticsService.ts). `visitsFrom` was removed on 2026-07-31. An invalid slug throws and surfaces as `500 handler_exception`.
 
 ### `GET /v1/metrics/users`
 Tier `read`; required permission `overview.view`.

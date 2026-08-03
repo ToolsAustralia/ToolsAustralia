@@ -27,27 +27,49 @@ Attaches the "build your prize" configurator's result (`builtPrizeSlug`, `toolbo
 `toolboxSwitches`, `toolsetSwitches`) plus an index on `{ builtPrizeSlug: 1, timestamp: -1 }`.
 All three are optional, so existing documents stay valid — no migration or backfill required.
 
-### `PromoAnalyticsRepository.getAggregatedByPage` — `builds` / `topBuiltPrize` aggregation (2026-07-28)
+### `PromoAnalyticsRepository.getAggregatedByPage` — build exposure + engagement aggregation
 
-A third per-page aggregation block (`1c`, alongside the existing `1` visits and `1b` cross-visits
-blocks) computes built-prize engagement from the same `PromoAnalyticsVisit` collection:
+_Introduced 2026-07-28 as a single `builds` number; split into two numbers 2026-07-31._
 
-- **`$match`** on the same `timestamp` date-range window plus `builtPrizeSlug: { $exists: true, $ne: "" }`
-  — visitors who never touched the "build your prize" reels have no `builtPrizeSlug`, so they are
-  excluded from the numerator by construction, not by a post-filter. Backed by the
-  `{ builtPrizeSlug: 1, timestamp: -1 }` index already added for `updateVisitBuild`.
-- **`$group`** by `{ pageType, slug, builtPrizeSlug }` with `visitorIds: { $addToSet: VISITOR_ID_EXPR }`
-  — the SAME dedupe expression the `visits` and `crossVisits` blocks use (userId if set, else
-  anonymousId, else a synthetic per-row id), so `builds` is directly comparable to `visits` as a
-  ratio (both are unique-visitor counts, never raw row counts).
-- In application code, the per-`{pageType, slug}` visitor-id sets from every `builtPrizeSlug`
-  bucket are unioned into `buildVisitorIds` (→ `builds = size of the union`).
-- Adds `builds: number` and `topBuiltPrize: string | null` to `PromoPageMetrics`, alongside
-  (not replacing) `crossVisits`. Does not touch the `visits` / `crossVisits` / `signups` /
-  `conversions` / `revenue` maps or the `totalVisits`/`totalSignups`/`totalConversions`/
-  `totalRevenue` accumulators — verified with a before/after `git stash` A/B run against the live
-  dev DB (identical totals both sides: `totalVisits: 84, totalSignups: 53, totalConversions: 64,
-  totalRevenue: 3249.89`).
+Two per-page aggregation blocks over `PromoAnalyticsVisit` compute the build funnel, from **one
+ungated `$match`** so the two figures can never be computed over different populations:
+
+```
+$match: { timestamp: { $gte, $lte }, builtPrizeSlug: { $exists: true, $ne: "" } }
+```
+
+Since F-018 the beacon records `builtPrizeSlug` for **every** visitor (what was on screen, touched
+or not), so the field's presence means *exposure*, not engagement. Engagement is summed via the
+`BUILD_INTERACTED_FLAG` expression instead of being filtered in the `$match` — which is what lets a
+single scan produce both numbers.
+
+| Block | Groups by | Produces |
+|---|---|---|
+| per (page, combination) | `{ pageType, slug, builtPrizeSlug }` | `builders`, `interactedBuilders` → `buildDistribution` + `topBuiltPrize` |
+| per page | `{ pageType, slug }` | `buildVisitors` (exposure), `builds` (engagement) |
+
+Both use the **two-stage distinct-count** shape (see
+[patterns.md P8](patterns.md#p8-count-distinct-values-with-two-group-stages-not-addtoset--size)) with
+`interacted: { $max: BUILD_INTERACTED_FLAG }` on the inner stage — `$max` makes engagement **sticky
+per visitor**, so someone who engaged on one landing and bounced on another is one engaged builder
+for that combination, not half of one.
+
+**INVARIANT: the per-page numbers are NOT the sums of the per-combination ones, and must never be
+derived from them.** A visitor who lands twice and settles on a different combination each time is
+1 in the per-page block and 2 in the per-combination block, so `Σ builders ≥ buildVisitors` always.
+Mixing those units — summing a distribution for a numerator while dividing by a page-level count —
+is what shipped a literal 250% column on this dashboard.
+
+`buildChangeRate = builds / buildVisitors * 100`. Both operands come from the same pipeline and the
+same dedupe, so it cannot exceed 100%.
+
+The pipelines pass **no `hint`** — see the F-020/F-021 entry in
+[gotchas.md](gotchas.md#do-not-hint-a-non-partial-index-for-an-exists-filter-2026-07-29-panel-f-020f-021).
+The index is PARTIAL (`builtPrizeSlug_ts_partial`) and the planner picks it unprompted: 8 keys / 8
+docs examined.
+
+**`crossVisits` and its aggregation block were removed 2026-07-31** — see
+[below](#crossvisits-removed-2026-07-31).
 
 #### `buildDistribution` + deterministic `topBuiltPrize` (2026-07-28 gap closure)
 
@@ -106,14 +128,20 @@ Modeled directly on `getAggregatedByPage`'s idioms, reused exactly:
   `builtPrizeSlug` values are toolbox×toolset *combinations* with no equivalent fixed enumeration
   in this repository, and a combination can have signups/conversions in the window with zero
   builder rows in that same window (built earlier, signed up later). So the merge follows
-  `getAggregatedByUTMSource`'s idiom instead: `new Set([...buildersMap.keys(), ...signupMap.keys(),
+  `getAggregatedByChannel`'s idiom instead: `new Set([...buildersMap.keys(), ...signupMap.keys(),
   ...conversionMap.keys()])`, one row per key in the union, missing values default to `0` (never
   `undefined`, never `NaN`/`Infinity` — every rate guards its denominator).
 - **Sort: `builders` descending, `builtPrizeSlug` ascending as a tie-break** — same deterministic
   pattern used for `buildDistribution` above.
-- Returns `{ byBuiltPrize: BuiltPrizeMetrics[] }`, mirroring the `{ byUTMSource: [...] }` wrapper
-  shape `getAggregatedByUTMSource` already returns. Zero-data range → `{ byBuiltPrize: [] }`,
+- Returns `{ byBuiltPrize: BuiltPrizeMetrics[] }`, mirroring the `{ byChannel: [...] }` wrapper
+  shape `getAggregatedByChannel` returns (it was `{ byUTMSource: [...] }` until 2026-07-31).
+  Zero-data range → `{ byBuiltPrize: [] }`,
   never `null` or a thrown error (verified against the real dev DB with a 2099 date range).
+
+> **Consistency note (2026-07-31):** this method’s signup leg dates on
+> `signupTouchWindowMatch` like every other signup query in this repository — it prefers
+> `signupAttribution.visitedAt`, because `createdAt` is the age of the ACCOUNT, not the date of
+> the signup event.
 
 **No new index added.** `PromoAnalyticsVisit` and `User` already carry the indexes this query
 needs (`{ builtPrizeSlug: 1, timestamp: -1 }` and `{ "signupAttribution.builtPrizeSlug": 1,
@@ -127,36 +155,122 @@ flagged for awareness, not fixed, since `src/models/**` is out of scope for this
 `PaymentEvent` volume ever makes that scan slow, `{ "data.promotionSlug": 1, timestamp: -1 }` and
 `{ "data.builtPrizeSlug": 1, timestamp: -1 }` would both need adding together.
 
-**Planner ignores the `{builtPrizeSlug:1, timestamp:-1}` index — `.hint()` added (F-003, 2026-07-28).**
-A live `.explain("queryPlanner")` against the dev DB showed the planner picking the TTL index
-(`{timestamp:1}`) for both build aggregations above, then FETCHing every document in the 90-day
-window and filtering `builtPrizeSlug` in-stage — at current volume (~730 rows, ~0.4% carrying a
-build) the cost estimate favours the TTL index over the purpose-built one. Forcing the intended
-index with `.hint()` proved it well-formed and usable; the planner simply doesn't choose it
-unprompted, and at 100× volume the unhinted plan would FETCH the whole window on every dashboard
-load. Both `buildAgg` calls (`getAggregatedByPage`'s `1c` block and `getAggregatedByBuiltPrize`'s
-builders block) now pass `{ hint: { builtPrizeSlug: 1, timestamp: -1 } }` as the aggregate options
-argument — not the `.hint(...)` chained-method form, because the existing test stub
-(`PromoAnalyticsRepository-aggregation.test.ts`) mocks `Model.aggregate` to return a bare
-`{ exec }` object with no `.hint` method; passing the hint as `Model.aggregate(pipeline, options)`
-is functionally identical (`Aggregate.prototype.hint` just sets `this.options.hint` under the
-hood) and doesn't require the stub to grow a `.hint()` no-op. No other `.aggregate()` call in this
-file was touched — the rest (visits, cross-visits, signups, conversions) have no selective
-predicate to hint, so they legitimately scan the window.
+**`.hint()` was added (F-003, 2026-07-28) and then REMOVED (F-020, 2026-07-29).** A live
+`.explain("queryPlanner")` showed the planner picking the TTL index (`{timestamp:1}`) for both
+build aggregations and FETCHing the whole 90-day window, so both calls were given
+`{ hint: { builtPrizeSlug: 1, timestamp: -1 } }`. Measurement then showed the hint changed
+**nothing** — 764 keys / 764 docs examined either way, because the index was non-sparse and
+`$exists: true` therefore spanned its entire key range. It only added a failure mode: MongoDB
+rejects a hint naming an absent index, 500-ing the whole admin promo route. Both hints are gone and
+the indexes are now PARTIAL, which the planner picks unprompted (8 keys / 8 docs). Full measurement
+table: [gotchas.md](gotchas.md#do-not-hint-a-non-partial-index-for-an-exists-filter-2026-07-29-panel-f-020f-021).
 
 **Mirrored to Norm (2026-07-28, follow-up task).** `byBuiltPrize` and `buildDistribution` are now
 both declared on `NormPromoAnalyticsSummarySchema`, and `/v1/promo-analytics` was wired to supply
 `byBuiltPrize` — verified live with `npm run norm:smoke`. Full details:
 [docs/internal-norm/norm-context.md](../internal-norm/norm-context.md#get-v1promo-analytics).
 
-**Cross-visits was NOT replaced.** An earlier draft of this feature assumed the `crossVisits`
-aggregation (keyed on `referrerSlug`) was dead because nothing has written a new `referrerSlug`
-since 2026-07-24. Live-DB re-verification found 174 of 712 visit rows (~24%) still carry
-`referrerSlug`, so the column still renders real historical numbers for June/July date ranges —
-removing it would have deleted a live view. `PromoAnalyticsVisit`'s 90-day TTL index means those
-rows age out on their own; the column will read all-zero once the last one expires (~late October
-2026), at which point dropping it is a one-line change. See
-[docs/admin/frontend.md](../admin/frontend.md#promo-analytics-table--builds-column-added-cross-visits-deliberately-kept-2026-07-28).
+#### `crossVisits` removed (2026-07-31)
+
+The `crossVisits` aggregation (keyed on `PromoAnalyticsVisit.referrerSlug`) is gone, along with the
+field and its index declaration. The 2026-07-28 decision to keep it rested on a live-DB count of
+174/712 rows still carrying `referrerSlug`; the **last** such row is dated **2026-07-22**, the day
+the "Explore other toolsets" carousel that wrote it was replaced by the in-place two-reel
+configurator (commit `87f18d78`). Inside the 90-day TTL that makes the metric a structural zero,
+not a decaying one.
+
+`PageDetailResult.visitsFrom` and its own `referrerSlug` aggregation went with it, replaced by the
+per-page prize-build breakdown (`getPageBuildBreakdown`). **Dropping the schema declaration does
+not drop the Mongo index** — see
+[gotchas.md](gotchas.md#renaming-an-index-is-a-two-step-change-and-only-one-half-is-automatic).
+`referrerSlug_1_slug_1_timestamp_-1` is dropped by
+[`scripts/migrations/2026-07-31-promo-analytics-cleanup.ts`](../../scripts/migrations/2026-07-31-promo-analytics-cleanup.ts)
+(`npm run migrate:promo-analytics-cleanup[:dry]` — dry-run by default; it reports the doc count and
+how many still carry the field before dropping, and treats `IndexNotFound` (27) as a no-op).
+
+### `signupTouchWindowMatch` — dating a signup by its attribution touch (2026-07-31)
+
+`PromoAnalyticsRepository.signupTouchWindowMatch(start, end)` is the `$match` fragment every signup
+aggregation on the promo-analytics tab now uses instead of a bare `createdAt` range:
+
+```ts
+{ $or: [
+  { "signupAttribution.visitedAt": { $gte: start, $lte: end } },
+  { "signupAttribution.visitedAt": { $exists: false }, createdAt: { $gte: start, $lte: end } },
+]}
+```
+
+Registration writes `signupAttribution` onto **pre-existing** plain accounts without touching
+`createdAt`, so `createdAt` is the age of the ACCOUNT, not the date of the signup event the
+dashboard counts. Same precedence as `resolveSignupTouchAtMs`
+([`src/utils/payment/payment-processing.ts`](../../src/utils/payment/payment-processing.ts)), which
+fixed the identical cohort for purchases in the 2026-07-19 audit — but deliberately expressed as an
+**indexable `$or`** rather than `$expr`/`$ifNull`, because `$expr` cannot use an index and would
+turn every signup aggregation on this tab into a full `users` collection scan.
+
+> ⚠️ **It returns a TOP-LEVEL `$or`.** Never spread it into the same object as another `$or` — the
+> second key silently overwrites the first and the date window disappears. Combine with
+> `$and: [signupTouchWindowMatch(...), channelMatch(...)]`. See
+> [gotchas.md](gotchas.md#signuptouchwindowmatch-returns-a-top-level-or--combine-with-and-not-a-spread).
+
+### Channel bucketing is a generated `$expr` — `channelKeyExpr` / `channelMatch` (2026-07-31)
+
+`PromoAnalyticsRepository` no longer groups by a raw `utm_source`. It imports two generators from
+[`src/services/attribution/normalizePlatform.ts`](../../src/services/attribution/normalizePlatform.ts)
+and applies them to three different collections:
+
+| Generator | Applied to | Purpose |
+|---|---|---|
+| `channelKeyExpr(sourcePath, mediumPath)` | `PromoAnalyticsVisit.utmSource`, `User.signupAttribution.utmSource`, `PaymentEvent.data.utmSource` | `$switch` twin of the JS `normalizeUtmToPlatform`, used as the `$group` `_id` |
+| `channelMatch(sourcePath, mediumPath, channel)` | the same three | `{ $expr: { $eq: [channelKeyExpr(...), channel] } }` — the drill-down predicate |
+
+**That identity IS the fix.** The three legs previously matched three different ways — `$toLower`
+grouping for the parent visits table, exact equality against a lowercased value for signups and
+conversions, and a case-insensitive `$regex` for the drill-down's visits — so a channel stored
+raw-cased matched on one leg and nothing on the others. Production carries `Klaviyo` (6,437 visits
+/ 868 signups) and `TIKTOK` (1,399 / 194); both rendered as real traffic with zero signups, zero
+conversions and $0 revenue.
+
+`channelMatch` is deliberately `$expr` over the **same** expression used to build the grouping key,
+not a hand-written `{ utmSource: { $in: [...] } }`. Two reasons:
+
+1. **Correctness.** An `$in` against the lowercase alias keys matches none of the raw-cased values
+   production actually stores.
+2. **Non-divergence.** A predicate that is merely *equivalent* to the grouping key can drift from
+   it. This one IS the grouping key, so a parent row and its drill-down cannot disagree — by
+   construction, not by test.
+
+**Trade-off, accepted and load-bearing: `$expr` is not index-usable.** Every caller therefore pairs
+it with a date-range `$match` **first**, which is index-served, and the visit collection is bounded
+by the 90-day TTL — so the expression only ever evaluates over one window's rows. This is not a
+regression: the code it replaces used `new RegExp("^" + src + "$", "i")`, which no index can serve
+either. There is deliberately **no fuzzy host-stripping fallback** — a fuzzy rule is expressible in
+`$switch` but not in an index-usable `$match`, so the two could disagree, which is the exact bug
+shape being fixed. One config line per dirty form instead.
+
+### `$facet` — one scan, several dedupes (2026-07-31)
+
+`getPageDetailByUTMCampaign` and `getChannelDetail` each run **one** `PromoAnalyticsVisit`
+aggregation whose `$facet` emits every dedupe the response needs, instead of one full scan per
+breakdown:
+
+| Method | Facets |
+|---|---|
+| `getPageDetailByUTMCampaign` | `pageTotal` (page-wide), `byCampaign` (per channel/medium/campaign) |
+| `getChannelDetail` | `total` (channel-wide), `byPage`, `byCampaign`, `rawSources` (top 20 raw `utm_source` values) |
+
+The motivating bug: `summary.visits` used to be the **sum of the per-page / per-campaign uniques**.
+A visitor who arrived once from an ad and again directly was counted twice, so the modal's Visits
+card read **171** against a parent row of **170** and visibly jumped upward on load (the modal
+prefers the server value over the row value it was seeded with). `summary.visits` now comes from
+the dedicated whole-scope facet and is **never** the sum of the breakdown rows.
+
+Signups, conversions and revenue **do** sum correctly across the breakdown rows — each account and
+each payment belongs to exactly one campaign. Only visits need the separate dedupe, because one
+visitor can appear under several.
+
+`rawSources` is per-source uniques and MAY sum above the channel total; it exists to audit what
+folded into a channel (`ig` + `facebook.com` → Facebook / Instagram), never as an addend.
 
 ### `PromoAnalyticsRepository` aggregation tests — F-002 closure (2026-07-28)
 

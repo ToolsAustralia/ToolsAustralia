@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import type Stripe from "stripe";
 import {
+  classifyPayFailureRoute,
   decidePostPayAction,
   extractPaymentIntentId,
+  isInvoiceNotDirectlyPayableError,
 } from "../chargePastDuePostPayPolicy";
 
 function testInvoicePaidIsSuccess() {
@@ -128,7 +130,88 @@ function testRequiresPaymentMethodPropagatesDeclineCode() {
   assert.equal(decision.errorMessage, "Your card was declined.");
 }
 
+// ─── classifyPayFailureRoute (thrown invoices.pay errors) ────────────────────
+//
+// Regression cover for the 245 `payment_intent_unexpected_state` "failures" measured
+// over 28–31 Jul 2026: charges that never reached an issuer because the invoice was
+// stranded but still carried a stale `open` invoice_payment. See docs/admin/.
+
+const PIUS = {
+  code: "payment_intent_unexpected_state",
+  message:
+    "This PaymentIntent's payment_method could not be updated because it has a status of canceled.",
+};
+const NO_LONGER_PAYABLE = { code: "invoice_payment_intent_requires_action", message: "This invoice can no longer be paid" };
+const REAL_DECLINE = { code: "card_declined", message: "Your card has insufficient funds." };
+
+function testUnpayableErrorDetection() {
+  assert.equal(isInvoiceNotDirectlyPayableError(PIUS), true);
+  assert.equal(isInvoiceNotDirectlyPayableError(NO_LONGER_PAYABLE), true);
+  // case-insensitive on the message form
+  assert.equal(isInvoiceNotDirectlyPayableError({ message: "This Invoice Can No Longer Be Paid" }), true);
+  assert.equal(isInvoiceNotDirectlyPayableError(REAL_DECLINE), false);
+  assert.equal(isInvoiceNotDirectlyPayableError({}), false);
+}
+
+function testRealDeclineIsAlwaysDecline() {
+  // A genuine card decline must never be re-routed, whatever the retry state.
+  for (const npa of [null, 1_700_000_000]) {
+    for (const deferToCaller of [true, false]) {
+      assert.equal(
+        classifyPayFailureRoute(REAL_DECLINE, { next_payment_attempt: npa }, { deferToCaller }),
+        "decline"
+      );
+    }
+  }
+}
+
+function testRetryScheduledStandsDownRegardlessOfDeferral() {
+  // Stripe still owns the invoice — skip, never recover (recovery would void an
+  // invoice Stripe is about to retry).
+  for (const deferToCaller of [true, false]) {
+    assert.equal(
+      classifyPayFailureRoute(PIUS, { next_payment_attempt: 1_700_000_000 }, { deferToCaller }),
+      "awaiting_retry"
+    );
+    assert.equal(
+      classifyPayFailureRoute(NO_LONGER_PAYABLE, { next_payment_attempt: 1_700_000_000 }, { deferToCaller }),
+      "awaiting_retry"
+    );
+  }
+}
+
+function testExhaustedAndDeferrableRoutesToRecovery() {
+  // THE BUG: exhausted (Stripe gave up) + not directly payable → recover in THIS run.
+  assert.equal(
+    classifyPayFailureRoute(PIUS, { next_payment_attempt: null }, { deferToCaller: true }),
+    "needs_recovery"
+  );
+  assert.equal(
+    classifyPayFailureRoute(NO_LONGER_PAYABLE, { next_payment_attempt: null }, { deferToCaller: true }),
+    "needs_recovery"
+  );
+  // `next_payment_attempt` absent entirely is the same as null.
+  assert.equal(
+    classifyPayFailureRoute(PIUS, {}, { deferToCaller: true }),
+    "needs_recovery"
+  );
+}
+
+function testExhaustedWithoutDeferralKeepsLegacyDeclineRow() {
+  // Callers that cannot act on the signal (per-user admin click, Force Charge,
+  // recovery's own pay) must keep their historical `failed` row.
+  assert.equal(
+    classifyPayFailureRoute(PIUS, { next_payment_attempt: null }, { deferToCaller: false }),
+    "decline"
+  );
+}
+
 function run() {
+  testUnpayableErrorDetection();
+  testRealDeclineIsAlwaysDecline();
+  testRetryScheduledStandsDownRegardlessOfDeferral();
+  testExhaustedAndDeferrableRoutesToRecovery();
+  testExhaustedWithoutDeferralKeepsLegacyDeclineRow();
   testInvoicePaidIsSuccess();
   testPiSucceededIsSuccess();
   testRequiresConfirmationNeedsConfirm();

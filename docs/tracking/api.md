@@ -27,6 +27,26 @@
   identical guard. See
   [`docs/tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md`](../tech-debt/panel-review-feature-drawn-tonight-tomorrow-july-assets.md)
   F-012.
+  - **Body (2026-07-31):** `{ pageType, slug, utmSource?, utmMedium?, utmCampaign? }`. The three
+    UTM fields are now **bounded** — `.trim().max(200)` plus a no-control-characters regex. They
+    arrive from an unauthenticated public beacon and are written straight to Mongo; the sibling
+    `slug` fields always carried a `.max()` while these did not, so a visitor could stuff an
+    arbitrarily long `utm_source` into a stored field (and, before the channel key became a closed
+    enum, into a `new RegExp` on the read side).
+  - **`referrerSlug` was REMOVED from the body** (2026-07-31). It recorded arrivals from the
+    "Explore other toolsets" carousel, replaced by the in-place two-reel configurator on
+    2026-07-22; nothing has written the `tools-aus:from-promo-slug` sessionStorage key it read
+    since. See [promo/backend.md](../promo/backend.md#crossvisits--visitsfrom-removed-2026-07-31).
+  - **UTM now resolves first-touch-first** (2026-07-31). The handler calls
+    `readAttributionCookieFromRequest` **synchronously, before scheduling `after()`**, and passes
+    `firstTouchUtm{Source,Medium,Campaign}` into `recordPromoVisit`; precedence is
+    first-touch `_ta_attr` cookie → body value → URL param. Read on the SERVER for two reasons:
+    `request` must not be touched inside `after()`, and a client read would race the write — the
+    hook that WRITES `_ta_attr` mounts above the one that fires this beacon, and React runs child
+    effects first. Signups and conversions already read this cookie; visits did not, which put the
+    visits and signups columns of the admin Channel table on two different bases. Every row records
+    which basis it used in `PromoAnalyticsVisit.utmBasis` (`"first_touch" | "landing_url"`), so a
+    post-deploy attribution shift is distinguishable from a real traffic change.
 - **`POST /api/tracking/promo-prize-build`** (added 2026-07-27) — attaches the prize a visitor
   assembled in "Build your prize" (`PrizeShowcase`, via the
   [`usePrizeBuildTracking`](../../src/hooks/usePrizeBuildTracking.ts) beacon — see
@@ -60,11 +80,26 @@
     sent. See the full note in
     [`promo-page-visit/route.ts`](../../src/app/api/tracking/promo-page-visit/route.ts).
   - Payload also carries **`interacted`** (optional boolean): did the visitor touch the builder at
-    all? Persisted as `PromoAnalyticsVisit.buildInteracted`. **Absent means engaged**, so an
-    in-flight older client or a queued `sendBeacon` from before a deploy is never miscounted.
+    all? Persisted as `PromoAnalyticsVisit.buildInteracted`. **Absent means engaged** *at the wire
+    boundary only*, so an in-flight older client or a queued `sendBeacon` from before a deploy is
+    never miscounted.
     Since F-018 the beacon fires for EVERY visitor (not only engaged ones), so the presence of
     `builtPrizeSlug` no longer distinguishes engagement — this flag does. It cannot be derived
-    from the two counters: cash is a toggle, not a reel card, so a cash-only visitor sits at 0/0.
+    from the two counters: cash is a toggle, not a reel card, so a cash-only visitor sits at 0/0,
+    and a `?toolbox=`/`?toolset=` URL arrival re-hydrates a previously-switched build at 0/0 too.
+    - **The default is resolved exactly ONCE, here in the route** (fixed 2026-07-31), as
+      `interacted: validatedData.interacted !== false`. Every layer below is now **required**:
+      `PrizeBuildCapture.interacted`, `PromoAnalyticsService.recordPrizeBuild`'s arg and
+      `PromoAnalyticsRepository.updateVisitBuild`'s arg are all non-optional, so a caller that
+      drops the field fails to compile. Previously all three re-applied their own `!== false`
+      fallback **and this route rebuilt the payload field-by-field without forwarding it** — so
+      the default fired on 100% of writes, `buildInteracted` was `true` on every row that has ever
+      existed, and the admin **Builds** column counted exposure while being labelled engagement.
+      Production measurement: 1,754 of 1,941 build rows carry zero reel switches. There is
+      deliberately no backfill (engagement is not retro-derivable); see
+      [promo/backend.md](../promo/backend.md#builds-was-exposure-not-engagement--buildvisitors--builds--buildchangerate-2026-07-31).
+      Covered by the `wiring guard: interacted survives service -> repository -> $set` case in
+      `npm run test:prize-build`.
   - **Rate limited: 60 requests / 5 minutes, keyed on the `ta_anon_id` visitor cookie** (IP only as
     a fallback — see the sibling above and F-024) (`createRateLimiter("promo-prize-build",
     …)` + `getClientIdentifier` from

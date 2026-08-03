@@ -3,26 +3,43 @@ import PromoAnalyticsVisit from "@/models/PromoAnalyticsVisit";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import { excludeRefundedBenefitsGrantedStages } from "@/utils/payment/payment-event-net-queries";
+import { channelKeyExpr, channelMatch } from "@/services/attribution/normalizePlatform";
+import { channelLabel, channelOrder } from "@/config/attribution-channels";
+import type { ConvertingPlatform } from "@/types/attribution";
 import { listPrizes, getPrizeLabel } from "@/config/prizes";
-import { TOOLSET_LANDING_SLUGS } from "@/config/promo-landing-slugs";
+import {
+  TOOLSET_LANDING_SLUGS,
+  PRIZE_LANE_SLUGS,
+  getPageDefaultPrizeSlug,
+} from "@/config/promo-landing-slugs";
 import { getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 import mongoose from "mongoose";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
 import type {
   UTMCampaignMetrics,
   PageDetailResult,
+  PageBuildBreakdown,
+  PrizeBuildMetrics,
   ChannelPageMetrics,
   ChannelCampaignMetrics,
   ChannelDetailResult,
+  ChannelRawSource,
 } from "@/types/promo-analytics";
 
 export interface PromoPageMetrics {
   pageType: PromoPageType;
   slug: string;
   visits: number;
-  crossVisits: number;
-  /** Unique visitors who assembled a prize on this page (touched at least one reel). */
+  /**
+   * Unique visitors who ended on SOME combination on this page (exposure).
+   * Effectively everyone who loaded the builder — the beacon records what was on screen
+   * regardless of interaction, so builders and signups count the same population (F-018).
+   */
+  buildVisitors: number;
+  /** Of `buildVisitors`, those who actually CHANGED the build (engagement). */
   builds: number;
+  /** `builds / buildVisitors` as a percentage. 0 when nobody saw a combination. */
+  buildChangeRate: number;
   /** The combination built by the most visitors on this page, or null if nobody built one. */
   topBuiltPrize: string | null;
   /** Every combination built on this page, most-built first. Empty when nobody built one. */
@@ -43,8 +60,11 @@ export interface PromoAnalyticsSummary {
   byPage: PromoPageMetrics[];
 }
 
-export interface UTMSourceMetrics {
-  utmSource: string;
+export interface ChannelMetrics {
+  /** Canonical acquisition channel. `facebook.com`/`ig`/`fb` all resolve to `meta`. */
+  channel: ConvertingPlatform;
+  /** Human label from config — never derived in this layer. */
+  channelLabel: string;
   visits: number;
   signups: number;
   conversions: number;
@@ -54,8 +74,8 @@ export interface UTMSourceMetrics {
   overallConversionRate: number;
 }
 
-export interface PromoAnalyticsByUTMSummary {
-  byUTMSource: UTMSourceMetrics[];
+export interface PromoAnalyticsByChannelSummary {
+  byChannel: ChannelMetrics[];
 }
 
 export interface BuiltPrizeMetrics {
@@ -73,27 +93,117 @@ export interface BuiltPrizeMetrics {
   overallConversionRate: number;
 }
 
+/** A toolbox lane (Kincrome, Milwaukee, ...) rolled up across every combination that uses it. */
+export interface ToolboxMetrics {
+  toolboxId: string;
+  /** Unique visitors who ended on ANY combination with this toolbox. Deduped in Mongo. */
+  builders: number;
+  /** Of those, the ones who changed the build. */
+  interactedBuilders: number;
+  signups: number;
+  conversions: number;
+  revenue: number;
+  builderToSignupRate: number;
+  signupToConversionRate: number;
+  overallConversionRate: number;
+}
+
 export interface PromoAnalyticsByBuiltPrizeSummary {
   byBuiltPrize: BuiltPrizeMetrics[];
 }
 
 /**
  * Visitor identity for dedup: userId if set, else anonymousId.
- * No-id visits get unique placeholder so each counts once (can't dedup unknown visitors).
+ * No-id visits get a unique placeholder so each counts once (can't dedup unknown visitors).
+ *
+ * The outer `$ifNull` is load-bearing, not defensive noise. Without it the inner expression can
+ * still resolve to null/missing for a malformed row (e.g. `$concat` returns null the moment any
+ * argument is null), and the two ways this codebase counts distinct visitors then DISAGREE:
+ *
+ *   `$addToSet` + `$size`  — silently drops a missing value
+ *   `$group: { _id: expr }` — collapses every such row into ONE null bucket
+ *
+ * Measured against production: a page read 1543 via the first shape and 1544 via the second, so
+ * a drill-down modal reported one more visitor than the row that opened it. Guaranteeing a
+ * non-null id makes both shapes agree by construction and honours the "each counts once" rule
+ * above, which neither variant did for those rows.
  */
 const VISITOR_ID_EXPR = {
-  $cond: [
-    { $and: [{ $ne: ["$userId", null] }, { $ne: [{ $type: "$userId" }, "missing"] }] },
-    { $toString: "$userId" },
+  $ifNull: [
     {
       $cond: [
-        { $and: [{ $ne: ["$anonymousId", null] }, { $ne: ["$anonymousId", ""] }] },
-        "$anonymousId",
-        { $concat: ["_noid:", { $toString: "$_id" }] },
+        { $and: [{ $ne: ["$userId", null] }, { $ne: [{ $type: "$userId" }, "missing"] }] },
+        { $toString: "$userId" },
+        {
+          $cond: [
+            { $and: [{ $ne: ["$anonymousId", null] }, { $ne: ["$anonymousId", ""] }] },
+            "$anonymousId",
+            { $concat: ["_noid:", { $toString: "$_id" }] },
+          ],
+        },
       ],
     },
+    { $concat: ["_noid:", { $toString: "$_id" }] },
   ],
 };
+
+/**
+ * `$match` fragment dating a SIGNUP to when its promo attribution was captured.
+ *
+ * NOT `createdAt`. Registration writes `signupAttribution` onto PRE-EXISTING plain accounts
+ * without touching `createdAt`, so `createdAt` is the age of the ACCOUNT, not the date of the
+ * signup event this dashboard counts. A visitor who made an account in June, then arrived via
+ * /promotions/dewalt in July and re-registered, was being counted against June — a day on which
+ * that page had no traffic at all — while July showed the conversion with no matching signup.
+ *
+ * Same precedence as `resolveSignupTouchAtMs` (src/utils/payment/payment-processing.ts), which
+ * fixed exactly this cohort for purchases in the 2026-07-19 audit, but expressed as an INDEXABLE
+ * `$or` rather than `$expr`/`$ifNull` — `$expr` cannot use an index and would turn every signup
+ * aggregation on this tab into a full `users` collection scan.
+ *
+ * ⚠️ Returns a TOP-LEVEL `$or`. Never spread it beside another `$or` in the same object (the
+ * channel predicate can produce one) — the second key silently overwrites the first and the date
+ * window disappears. Combine with `$and: [signupTouchWindowMatch(...), channelMatch(...)]`.
+ */
+export function signupTouchWindowMatch(start: Date, end: Date) {
+  return {
+    $or: [
+      { "signupAttribution.visitedAt": { $gte: start, $lte: end } },
+      { "signupAttribution.visitedAt": { $exists: false }, createdAt: { $gte: start, $lte: end } },
+    ],
+  };
+}
+
+/**
+ * "Did this visitor touch the builder?" as 0/1, for `$sum`/`$max`.
+ *
+ * `buildInteracted` is authoritative for every row a flag-carrying client wrote. The missing
+ * branch falls back to the reel counters rather than assuming engagement — assuming engagement
+ * is precisely what made the dropped-flag bug invisible for its whole life.
+ *
+ * The counters can never be the PRIMARY signal: the cash toggle is not a reel card, so a
+ * cash-only visitor sits at 0/0 and genuinely engaged; and a `?toolbox=`/`?toolset=` URL arrival
+ * re-hydrates a previously-switched build at 0/0 too. They are only a best-effort read of rows
+ * written before the flag worked, all of which age out with the 90-day TTL.
+ */
+export const BUILD_INTERACTED_FLAG = {
+  $cond: [
+    { $eq: [{ $type: "$buildInteracted" }, "missing"] },
+    {
+      $cond: [
+        {
+          $gt: [
+            { $add: [{ $ifNull: ["$toolboxSwitches", 0] }, { $ifNull: ["$toolsetSwitches", 0] }] },
+            0,
+          ],
+        },
+        1,
+        0,
+      ],
+    },
+    { $cond: ["$buildInteracted", 1, 0] },
+  ],
+} as const;
 
 /** All valid promotion slugs for aggregation (evergreen + toolset) */
 function getAllPromoSlugs(): { pageType: PromoPageType; slug: string }[] {
@@ -111,7 +221,6 @@ export class PromoAnalyticsRepository {
   async createVisit(data: {
     pageType: PromoPageType;
     slug: string;
-    referrerSlug?: string;
     anonymousId?: string;
     referrer?: string;
     utmSource?: string;
@@ -122,7 +231,6 @@ export class PromoAnalyticsRepository {
     await PromoAnalyticsVisit.create({
       pageType: data.pageType,
       slug: data.slug.toLowerCase().trim(),
-      referrerSlug: data.referrerSlug?.toLowerCase().trim(),
       anonymousId: data.anonymousId,
       referrer: data.referrer,
       utmSource: data.utmSource,
@@ -150,8 +258,16 @@ export class PromoAnalyticsRepository {
     builtPrizeSlug: string;
     toolboxSwitches: number;
     toolsetSwitches: number;
-    /** Absent means engaged — pre-flag callers and legacy rows are counted as engaged. */
-    interacted?: boolean;
+    /**
+     * Did the visitor touch either reel or the cash toggle this page-session?
+     *
+     * REQUIRED. This used to be optional with an "absent means engaged" default
+     * (`args.interacted !== false`), and the tracking route dropped it on the way through — so
+     * the default fired on 100% of writes and no row has ever carried `false`. Requiring it
+     * makes that a compile error. Rows written before this fix are indistinguishable and stay
+     * `true`; the read gate is `{ $ne: false }`, so they keep counting as engaged.
+     */
+    interacted: boolean;
   }): Promise<boolean> {
     await connectDB();
     const result = await PromoAnalyticsVisit.findOneAndUpdate(
@@ -165,7 +281,7 @@ export class PromoAnalyticsRepository {
           builtPrizeSlug: args.builtPrizeSlug.toLowerCase().trim(),
           toolboxSwitches: args.toolboxSwitches,
           toolsetSwitches: args.toolsetSwitches,
-          buildInteracted: args.interacted !== false,
+          buildInteracted: args.interacted,
         },
       },
       { sort: { timestamp: -1 }, new: false, upsert: false }
@@ -204,76 +320,102 @@ export class PromoAnalyticsRepository {
       visitMap.set(`${r._id.pageType}:${r._id.slug}`, r.visits);
     }
 
-    // 1b. Aggregate cross-visits - unique visitors who came from another toolset
-    const crossVisitAgg = await PromoAnalyticsVisit.aggregate<
-      { _id: { pageType: string; slug: string }; crossVisits: number }
-    >([
-      {
-        $match: {
-          timestamp: { $gte: startDate, $lte: endDate },
-          referrerSlug: { $exists: true, $ne: "" },
-        },
-      },
-      {
-        $group: {
-          _id: { pageType: "$pageType", slug: "$slug" },
-          visitorIds: { $addToSet: VISITOR_ID_EXPR },
-        },
-      },
-      { $project: { _id: 1, crossVisits: { $size: "$visitorIds" } } },
-    ]).exec();
-
-    const crossVisitMap = new Map<string, number>();
-    for (const r of crossVisitAgg) {
-      crossVisitMap.set(`${r._id.pageType}:${r._id.slug}`, r.crossVisits);
-    }
-
-    // 1c. Built-prize engagement - unique visitors who actually ENGAGED with the builder, plus
-    // the most-built combination per landing page.
+    // 1b. Prize builds, per page. TWO numbers, deliberately:
     //
-    // Gated on `buildInteracted`, not on the presence of `builtPrizeSlug`: every visitor now
-    // carries a `builtPrizeSlug` (it records what was on screen, which is what makes the
-    // built-prize funnel's builders and signups countable on the same population — F-018), so
-    // the field's presence no longer distinguishes "engaged" from "just landed". Rows written
-    // before that change have no `buildInteracted` and were only ever written for engaged
-    // visitors, so treating a missing flag as engaged keeps historic pages comparable.
+    //   buildVisitors — unique visitors who ended on SOME combination (exposure). Every visitor
+    //                   to a builder page has one, because the beacon records what was on screen
+    //                   whether or not they touched it (F-018) — that is what keeps `builders`
+    //                   and `signups` counted over the same population.
+    //   builds        — of those, the ones who actually CHANGED something (engagement).
+    //
+    // The old single `builds` number claimed to be engagement and was gated on
+    // `buildInteracted: { $ne: false }`, but the tracking route never forwarded the flag, so no
+    // row in production has ever carried `false` and the gate matched everyone. It reported
+    // exposure while being labelled, documented and tooltipped as engagement.
+    //
+    // Both come from ONE ungated `$match` so the two can never be computed over different
+    // populations. Engagement is summed via BUILD_INTERACTED_FLAG instead of being filtered in
+    // the `$match`, which is what lets a single scan produce both.
+    //
     // No `hint` (F-020). One was added believing it avoided a full-window FETCH; measured, it
     // changed nothing — 764 keys / 764 docs examined either way — because the index was
     // non-sparse and `$exists: true` therefore spanned its whole key range. It only added a
     // failure mode, since MongoDB rejects a hint naming an absent index and 500s the route.
-    // The index is now PARTIAL (`builtPrizeSlug_ts_partial`, F-021) and the planner picks it
+    // The index is PARTIAL (`builtPrizeSlug_ts_partial`, F-021) and the planner picks it
     // unprompted: 8 keys / 8 docs examined, so no hint is needed or wanted here.
-    const buildAgg = await PromoAnalyticsVisit.aggregate<
-      { _id: { pageType: string; slug: string; builtPrizeSlug: string }; visitorIds: string[] }
-    >(
-      [
-        {
-          $match: {
-            timestamp: { $gte: startDate, $lte: endDate },
-            builtPrizeSlug: { $exists: true, $ne: "" },
-            // `$ne: false` (not `true`) so legacy rows, which predate the flag, still count.
-            buildInteracted: { $ne: false },
-          },
-        },
-        {
-          $group: {
-            _id: { pageType: "$pageType", slug: "$slug", builtPrizeSlug: "$builtPrizeSlug" },
-            visitorIds: { $addToSet: VISITOR_ID_EXPR },
-          },
-        },
-      ]
-    ).exec();
+    const buildMatch = {
+      timestamp: { $gte: startDate, $lte: endDate },
+      builtPrizeSlug: { $exists: true, $ne: "" },
+    };
 
-    const buildVisitorIds = new Map<string, Set<string>>();
+    // Per (page, combination) — feeds buildDistribution and topBuiltPrize.
+    // `$max` makes engagement STICKY per visitor: someone who engaged on one landing and
+    // bounced on another is an engaged builder for that combination, not half of one.
+    const buildByComboAgg = await PromoAnalyticsVisit.aggregate<{
+      _id: { pageType: string; slug: string; builtPrizeSlug: string };
+      builders: number;
+      interactedBuilders: number;
+    }>([
+      { $match: buildMatch },
+      {
+        $group: {
+          _id: {
+            k: { pageType: "$pageType", slug: "$slug", builtPrizeSlug: "$builtPrizeSlug" },
+            v: VISITOR_ID_EXPR,
+          },
+          interacted: { $max: BUILD_INTERACTED_FLAG },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.k",
+          builders: { $sum: 1 },
+          interactedBuilders: { $sum: "$interacted" },
+        },
+      },
+    ]).exec();
+
+    // Per page — dedupes a visitor ONCE across the whole page.
+    //
+    // INVARIANT: this is NOT the sum of the per-combination counts above, and must never be
+    // derived from them. A visitor who lands twice and settles on a different combination each
+    // time is 1 here and 2 there, so `Σ builders ≥ buildVisitors` always. Mixing those two units
+    // — summing a distribution for the numerator while dividing by the page-level count — is
+    // what once shipped a literal 250% column on this dashboard.
+    const buildByPageAgg = await PromoAnalyticsVisit.aggregate<{
+      _id: { pageType: string; slug: string };
+      buildVisitors: number;
+      builds: number;
+    }>([
+      { $match: buildMatch },
+      {
+        $group: {
+          _id: { k: { pageType: "$pageType", slug: "$slug" }, v: VISITOR_ID_EXPR },
+          interacted: { $max: BUILD_INTERACTED_FLAG },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.k",
+          buildVisitors: { $sum: 1 },
+          builds: { $sum: "$interacted" },
+        },
+      },
+    ]).exec();
+
+    const buildPageMap = new Map<string, { buildVisitors: number; builds: number }>();
+    for (const r of buildByPageAgg) {
+      buildPageMap.set(`${r._id.pageType}:${r._id.slug}`, {
+        buildVisitors: r.buildVisitors,
+        builds: r.builds,
+      });
+    }
+
     const buildDistributionMap = new Map<string, Array<{ builtPrizeSlug: string; visitors: number }>>();
-    for (const r of buildAgg) {
+    for (const r of buildByComboAgg) {
       const key = `${r._id.pageType}:${r._id.slug}`;
-      const ids = buildVisitorIds.get(key) ?? new Set<string>();
-      for (const id of r.visitorIds) ids.add(id);
-      buildVisitorIds.set(key, ids);
-
       const distribution = buildDistributionMap.get(key) ?? [];
-      distribution.push({ builtPrizeSlug: r._id.builtPrizeSlug, visitors: r.visitorIds.length });
+      distribution.push({ builtPrizeSlug: r._id.builtPrizeSlug, visitors: r.builders });
       buildDistributionMap.set(key, distribution);
     }
     // Deterministic order: visitors descending, builtPrizeSlug ascending as a tie-break.
@@ -285,14 +427,14 @@ export class PromoAnalyticsRepository {
       );
     }
 
-    // 2. Aggregate signups from User (signupAttribution.promotionSlug + createdAt)
+    // 2. Aggregate signups from User (signupAttribution.promotionSlug, dated by attribution touch)
     const signupAgg = await User.aggregate<
       { _id: { promotionSlug: string; promotionPageType: string }; signups: number }
     >([
       {
         $match: {
           "signupAttribution.promotionSlug": { $exists: true, $ne: "" },
-          createdAt: { $gte: startDate, $lte: endDate },
+          ...signupTouchWindowMatch(startDate, endDate),
         },
       },
       {
@@ -360,8 +502,9 @@ export class PromoAnalyticsRepository {
     for (const { pageType, slug } of allPages) {
       const key = `${pageType}:${slug}`;
       const visits = visitMap.get(key) ?? 0;
-      const crossVisits = crossVisitMap.get(key) ?? 0;
-      const builds = buildVisitorIds.get(key)?.size ?? 0;
+      const build = buildPageMap.get(key);
+      const buildVisitors = build?.buildVisitors ?? 0;
+      const builds = build?.builds ?? 0;
       const buildDistribution = buildDistributionMap.get(key) ?? [];
       const topBuiltPrize = buildDistribution[0]?.builtPrizeSlug ?? null;
       const signups = signupMap.get(key) ?? 0;
@@ -377,13 +520,17 @@ export class PromoAnalyticsRepository {
       const visitToSignupRate = visits > 0 ? (signups / visits) * 100 : 0;
       const signupToConversionRate = signups > 0 ? (conversions / signups) * 100 : 0;
       const overallConversionRate = visits > 0 ? (conversions / visits) * 100 : 0;
+      // Share of visitors who saw a combination and changed it. Both operands are page-level
+      // uniques from the SAME pipeline, so this cannot exceed 100%.
+      const buildChangeRate = buildVisitors > 0 ? (builds / buildVisitors) * 100 : 0;
 
       byPage.push({
         pageType,
         slug,
         visits,
-        crossVisits,
+        buildVisitors,
         builds,
+        buildChangeRate,
         topBuiltPrize,
         buildDistribution,
         signups,
@@ -426,76 +573,57 @@ export class PromoAnalyticsRepository {
    * Aggregate metrics by UTM source (e.g. klaviyo, facebook) for channel attribution.
    * Visits from PromoAnalyticsVisit, signups from User, conversions from PaymentEvent.
    */
-  async getAggregatedByUTMSource(startDate: Date, endDate: Date): Promise<PromoAnalyticsByUTMSummary> {
+  /**
+   * Aggregate metrics by acquisition CHANNEL.
+   *
+   * All three collections are bucketed by the SAME generated `channelKeyExpr`, which is the
+   * whole point. They previously used three different rules — `$toLower` grouping for visits
+   * here, exact equality against a lowercased value for signups and conversions in the
+   * drill-down, and a case-insensitive `$regex` for the drill-down's visits — so a channel
+   * stored raw-cased reported traffic with no signups and no revenue. Production carries
+   * `Klaviyo` (6,437 visits / 868 signups) and `TIKTOK` (1,399 / 194); both read as zero.
+   *
+   * The key is a canonical `ConvertingPlatform`, not a raw `utm_source`. That merges the
+   * `facebook.com` / `ig` / `fb` forms into one Meta row (matching how ad spend is reported, so
+   * ROAS is computable) and splits Klaviyo into Email and SMS by `utm_medium`.
+   */
+  async getAggregatedByChannel(startDate: Date, endDate: Date): Promise<PromoAnalyticsByChannelSummary> {
     await connectDB();
 
-    // 1. Visits by utmSource (PromoAnalyticsVisit) - empty/null -> "direct"
-    const visitAgg = await PromoAnalyticsVisit.aggregate<
-      { _id: string; visits: number }
-    >([
+    const CH_VISIT = channelKeyExpr("$utmSource", "$utmMedium");
+    const CH_SIGNUP = channelKeyExpr("$signupAttribution.utmSource", "$signupAttribution.utmMedium");
+    const CH_CONV = channelKeyExpr("$data.utmSource", "$data.utmMedium");
+
+    // 1. Visits by channel — unique visitors, deduped ONCE channel-wide.
+    const visitAgg = await PromoAnalyticsVisit.aggregate<{ _id: ConvertingPlatform; visits: number }>([
       { $match: { timestamp: { $gte: startDate, $lte: endDate } } },
-      {
-        $addFields: {
-          _utmKey: {
-            $cond: {
-              if: { $or: [{ $eq: ["$utmSource", null] }, { $eq: ["$utmSource", ""] }] },
-              then: "direct",
-              else: { $toLower: { $ifNull: ["$utmSource", ""] } },
-            },
-          },
-        },
-      },
-      { $match: { _utmKey: { $ne: "" } } },
-      { $group: { _id: "$_utmKey", visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
-      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
+      { $group: { _id: { k: CH_VISIT, v: VISITOR_ID_EXPR } } },
+      { $group: { _id: "$_id.k", visits: { $sum: 1 } } },
     ]).exec();
 
     const visitMap = new Map<string, number>();
-    for (const r of visitAgg) {
-      const key = r._id || "direct";
-      visitMap.set(key, r.visits);
-    }
+    for (const r of visitAgg) visitMap.set(r._id, r.visits);
 
-    // 2. Signups by utmSource (User.signupAttribution.utmSource)
-    const signupAgg = await User.aggregate<
-      { _id: string; signups: number }
-    >([
+    // 2. Signups by channel, dated by attribution touch rather than account age.
+    const signupAgg = await User.aggregate<{ _id: ConvertingPlatform; signups: number }>([
       {
         $match: {
           "signupAttribution.promotionSlug": { $exists: true, $ne: "" },
-          createdAt: { $gte: startDate, $lte: endDate },
+          ...signupTouchWindowMatch(startDate, endDate),
         },
       },
-      {
-        $addFields: {
-          _utmKey: {
-            $cond: {
-              if: {
-                $or: [
-                  { $eq: ["$signupAttribution.utmSource", null] },
-                  { $eq: ["$signupAttribution.utmSource", ""] },
-                ],
-              },
-              then: "direct",
-              else: { $toLower: { $ifNull: ["$signupAttribution.utmSource", ""] } },
-            },
-          },
-        },
-      },
-      { $match: { _utmKey: { $ne: "" } } },
-      { $group: { _id: "$_utmKey", signups: { $sum: 1 } } },
+      { $group: { _id: CH_SIGNUP, signups: { $sum: 1 } } },
     ]).exec();
 
     const signupMap = new Map<string, number>();
-    for (const r of signupAgg) {
-      const key = r._id || "direct";
-      signupMap.set(key, r.signups);
-    }
+    for (const r of signupAgg) signupMap.set(r._id, r.signups);
 
-    // 3. Conversions and revenue by utmSource (PaymentEvent.data.utmSource)
-    const conversionAgg = await PaymentEvent.aggregate<
-      { _id: string; conversions: number; revenue: number }
-    >([
+    // 3. Conversions and revenue by channel.
+    const conversionAgg = await PaymentEvent.aggregate<{
+      _id: ConvertingPlatform;
+      conversions: number;
+      revenue: number;
+    }>([
       {
         $match: {
           eventType: "BenefitsGranted",
@@ -506,20 +634,8 @@ export class PromoAnalyticsRepository {
       },
       ...excludeRefundedBenefitsGrantedStages(),
       {
-        $addFields: {
-          _utmKey: {
-            $cond: {
-              if: { $or: [{ $eq: ["$data.utmSource", null] }, { $eq: ["$data.utmSource", ""] }] },
-              then: "direct",
-              else: { $toLower: { $ifNull: ["$data.utmSource", ""] } },
-            },
-          },
-        },
-      },
-      { $match: { _utmKey: { $ne: "" } } },
-      {
         $group: {
-          _id: "$_utmKey",
+          _id: CH_CONV,
           conversions: { $sum: 1 },
           revenue: { $sum: { $ifNull: ["$data.price", 0] } },
         },
@@ -528,48 +644,44 @@ export class PromoAnalyticsRepository {
 
     const conversionMap = new Map<string, { conversions: number; revenue: number }>();
     for (const r of conversionAgg) {
-      const key = r._id || "direct";
-      conversionMap.set(key, {
-        conversions: r.conversions ?? 0,
-        revenue: r.revenue ?? 0,
-      });
+      conversionMap.set(r._id, { conversions: r.conversions ?? 0, revenue: r.revenue ?? 0 });
     }
 
-    // Collect all UTM sources
-    const allSources = new Set<string>([
+    const allChannels = new Set<string>([
       ...visitMap.keys(),
       ...signupMap.keys(),
       ...conversionMap.keys(),
     ]);
 
-    const byUTMSource: UTMSourceMetrics[] = [];
-    for (const source of allSources) {
-      const visits = visitMap.get(source) ?? 0;
-      const signups = signupMap.get(source) ?? 0;
-      const conv = conversionMap.get(source);
+    const byChannel: ChannelMetrics[] = [];
+    for (const key of allChannels) {
+      const channel = key as ConvertingPlatform;
+      const visits = visitMap.get(key) ?? 0;
+      const signups = signupMap.get(key) ?? 0;
+      const conv = conversionMap.get(key);
       const conversions = conv?.conversions ?? 0;
       const revenue = conv?.revenue ?? 0;
 
-      const visitToSignupRate = visits > 0 ? (signups / visits) * 100 : 0;
-      const signupToConversionRate = signups > 0 ? (conversions / signups) * 100 : 0;
-      const overallConversionRate = visits > 0 ? (conversions / visits) * 100 : 0;
-
-      byUTMSource.push({
-        utmSource: source === "direct" ? "Direct" : source.charAt(0).toUpperCase() + source.slice(1),
+      byChannel.push({
+        channel,
+        channelLabel: channelLabel(channel),
         visits,
         signups,
         conversions,
         revenue,
-        visitToSignupRate,
-        signupToConversionRate,
-        overallConversionRate,
+        visitToSignupRate: visits > 0 ? (signups / visits) * 100 : 0,
+        signupToConversionRate: signups > 0 ? (conversions / signups) * 100 : 0,
+        overallConversionRate: visits > 0 ? (conversions / visits) * 100 : 0,
       });
     }
 
-    // Sort by signups descending (most impactful channels first)
-    byUTMSource.sort((a, b) => b.signups - a.signups);
+    // Paid channels first (they have spend behind them), then owned, then the catch-alls;
+    // signups descending within a tier. Stable regardless of which channels have data.
+    byChannel.sort(
+      (a, b) => channelOrder(a.channel) - channelOrder(b.channel) || b.signups - a.signups
+    );
 
-    return { byUTMSource };
+    return { byChannel };
   }
 
   /**
@@ -614,7 +726,7 @@ export class PromoAnalyticsRepository {
       {
         $match: {
           "signupAttribution.builtPrizeSlug": { $exists: true, $ne: "" },
-          createdAt: { $gte: startDate, $lte: endDate },
+          ...signupTouchWindowMatch(startDate, endDate),
         },
       },
       { $group: { _id: "$signupAttribution.builtPrizeSlug", signups: { $sum: 1 } } },
@@ -696,24 +808,57 @@ export class PromoAnalyticsRepository {
 
     const normalizedSlug = slug.toLowerCase().trim();
 
-    // 1. Visits by (utmSource, utmMedium, utmCampaign) - unique visitors
-    const visitAgg = await PromoAnalyticsVisit.aggregate<{
-      _id: { src: string; med: string; cmp: string };
-      visits: number;
+    const visitMatch = {
+      pageType,
+      slug: normalizedSlug,
+      timestamp: { $gte: startDate, $lte: endDate },
+    };
+
+    // 1. Visits, in ONE scan producing two different dedupes.
+    //
+    //   pageTotal — visitors deduped ONCE across the whole page. This is `summary.visits`.
+    //   byCampaign — visitors deduped per (channel, medium, campaign).
+    //
+    // These are different numbers and the summary card MUST use the first. It previously
+    // summed the per-campaign counts, so a visitor who arrived once from an ad and again
+    // directly was counted twice — the modal's "Visits" card read 171 against a parent row of
+    // 170 and visibly jumped upward on load, because the modal prefers the server value over
+    // the row value it was seeded with.
+    const [visitFacet] = await PromoAnalyticsVisit.aggregate<{
+      pageTotal: Array<{ visits: number }>;
+      byCampaign: Array<{ _id: { ch: ConvertingPlatform; med: string; cmp: string }; visits: number }>;
     }>([
-      { $match: { pageType, slug: normalizedSlug, timestamp: { $gte: startDate, $lte: endDate } } },
+      { $match: visitMatch },
       {
-        $group: {
-          _id: {
-            src: { $toLower: { $ifNull: ["$utmSource", ""] } },
-            med: { $toLower: { $ifNull: ["$utmMedium", ""] } },
-            cmp: { $toLower: { $ifNull: ["$utmCampaign", ""] } },
-          },
-          visitorIds: { $addToSet: VISITOR_ID_EXPR },
+        $facet: {
+          pageTotal: [
+            { $group: { _id: VISITOR_ID_EXPR } },
+            { $count: "visits" },
+          ],
+          byCampaign: [
+            {
+              $group: {
+                _id: {
+                  k: {
+                    ch: channelKeyExpr("$utmSource", "$utmMedium"),
+                    med: { $toLower: { $ifNull: ["$utmMedium", ""] } },
+                    cmp: { $toLower: { $ifNull: ["$utmCampaign", ""] } },
+                  },
+                  v: VISITOR_ID_EXPR,
+                },
+              },
+            },
+            { $group: { _id: "$_id.k", visits: { $sum: 1 } } },
+          ],
         },
       },
-      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
     ]).exec();
+
+    const visitAgg = (visitFacet?.byCampaign ?? []).map((r) => ({
+      _id: { src: r._id.ch as string, med: r._id.med, cmp: r._id.cmp },
+      visits: r.visits,
+    }));
+    const pageVisitTotal = visitFacet?.pageTotal?.[0]?.visits ?? 0;
 
     // 2. Signups by (utmSource, utmMedium, utmCampaign) from User.signupAttribution
     const signupAgg = await User.aggregate<{
@@ -724,13 +869,13 @@ export class PromoAnalyticsRepository {
         $match: {
           "signupAttribution.promotionSlug": normalizedSlug,
           "signupAttribution.promotionPageType": pageType,
-          createdAt: { $gte: startDate, $lte: endDate },
+          ...signupTouchWindowMatch(startDate, endDate),
         },
       },
       {
         $group: {
           _id: {
-            src: { $toLower: { $ifNull: ["$signupAttribution.utmSource", ""] } },
+            src: channelKeyExpr("$signupAttribution.utmSource", "$signupAttribution.utmMedium"),
             med: { $toLower: { $ifNull: ["$signupAttribution.utmMedium", ""] } },
             cmp: { $toLower: { $ifNull: ["$signupAttribution.utmCampaign", ""] } },
           },
@@ -758,7 +903,7 @@ export class PromoAnalyticsRepository {
       {
         $group: {
           _id: {
-            src: { $toLower: { $ifNull: ["$data.utmSource", ""] } },
+            src: channelKeyExpr("$data.utmSource", "$data.utmMedium"),
             med: { $toLower: { $ifNull: ["$data.utmMedium", ""] } },
             cmp: { $toLower: { $ifNull: ["$data.utmCampaign", ""] } },
           },
@@ -784,7 +929,9 @@ export class PromoAnalyticsRepository {
 
     const allKeys = new Set([...visitMap.keys(), ...signupMap.keys(), ...convMap.keys()]);
 
-    let totalVisits = 0;
+    // Signups, conversions and revenue DO sum correctly across campaign rows — each account and
+    // each payment belongs to exactly one campaign. Only visits need the separate page-level
+    // dedupe above, because one visitor can appear under several campaigns.
     let totalSignups = 0;
     let totalConversions = 0;
     let totalRevenue = 0;
@@ -801,15 +948,15 @@ export class PromoAnalyticsRepository {
       const conversions = conv?.conversions ?? 0;
       const revenue = conv?.revenue ?? 0;
 
-      totalVisits += visits;
       totalSignups += signups;
       totalConversions += conversions;
       totalRevenue += revenue;
 
-      const displaySource = src === "direct" ? "Direct" : src.charAt(0).toUpperCase() + src.slice(1);
+      const channel = src as ConvertingPlatform;
 
       byCampaign.push({
-        utmSource: displaySource,
+        channel,
+        channelLabel: channelLabel(channel),
         utmMedium: med,
         utmCampaign: cmp,
         visits,
@@ -824,40 +971,287 @@ export class PromoAnalyticsRepository {
 
     byCampaign.sort((a, b) => b.visits - a.visits);
 
-    // 4. Visits from other toolset pages (referrerSlug breakdown) - unique visitors per referrer
-    const visitsFromAgg = await PromoAnalyticsVisit.aggregate<
-      { _id: string; visits: number }
-    >([
-      {
-        $match: {
-          pageType,
-          slug: normalizedSlug,
-          timestamp: { $gte: startDate, $lte: endDate },
-          referrerSlug: { $exists: true, $ne: "" },
-        },
-      },
-      {
-        $group: {
-          _id: "$referrerSlug",
-          visitorIds: { $addToSet: VISITOR_ID_EXPR },
-        },
-      },
-      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
-      { $sort: { visits: -1 } },
-    ]).exec();
-
-    const visitsFrom = visitsFromAgg.map((r) => ({
-      referrerSlug: r._id,
-      visits: r.visits,
-    }));
+    // 4. Prize builds for this page. Composed here rather than by the service so the summary and
+    // the breakdown are guaranteed to come from one date window and one page filter.
+    const buildBreakdown = await this.getPageBuildBreakdown(pageType, normalizedSlug, startDate, endDate);
 
     return {
       pageType,
       slug: normalizedSlug,
       pageLabel: getPrizeLabel(normalizedSlug) ?? normalizedSlug,
-      summary: { visits: totalVisits, signups: totalSignups, conversions: totalConversions, revenue: totalRevenue },
+      summary: {
+        // Page-level dedupe, NOT the sum of byCampaign[].visits — see the $facet above.
+        visits: pageVisitTotal,
+        signups: totalSignups,
+        conversions: totalConversions,
+        revenue: totalRevenue,
+      },
       byCampaign,
-      visitsFrom,
+      buildBreakdown,
+    };
+  }
+
+  /**
+   * Aggregate by TOOLBOX lane, deduped in Mongo.
+   *
+   * This used to be computed in the browser by summing `byBuiltPrize[].builders` per toolbox.
+   * Those are uniques deduped PER COMBINATION, so a visitor who ended on `makita-kincrome` on
+   * one landing and `ryobi-kincrome` on another counted as two Kincrome builders — while the
+   * `signups` divided into that sum are globally unique. The result understated every toolbox
+   * rate, worst for the toolbox that is the default on the most pages. It is the same
+   * numerator/denominator unit mismatch that once shipped a literal 250% column here.
+   *
+   * Deduping on `(toolbox, visitor)` in the pipeline makes that impossible by construction.
+   */
+  async getAggregatedByToolbox(
+    startDate: Date,
+    endDate: Date
+  ): Promise<{ byToolbox: ToolboxMetrics[] }> {
+    await connectDB();
+
+    // `$switch` over the lane registry. Anything unrecognised — notably `cash-prize`, which has
+    // no toolbox lane — resolves to null and is dropped, never bucketed somewhere plausible.
+    const laneOf = (field: string) => ({
+      $switch: {
+        branches: PRIZE_LANE_SLUGS.map(({ slug, toolbox }) => ({
+          case: { $eq: [field, slug] },
+          then: toolbox,
+        })),
+        default: null,
+      },
+    });
+    const LANE_SLUGS = PRIZE_LANE_SLUGS.map((l) => l.slug);
+
+    const [builderAgg, signupAgg, convAgg] = await Promise.all([
+      PromoAnalyticsVisit.aggregate<{ _id: string; builders: number; interactedBuilders: number }>([
+        { $match: { timestamp: { $gte: startDate, $lte: endDate }, builtPrizeSlug: { $in: LANE_SLUGS } } },
+        { $addFields: { _toolbox: laneOf("$builtPrizeSlug") } },
+        {
+          $group: {
+            _id: { k: "$_toolbox", v: VISITOR_ID_EXPR },
+            interacted: { $max: BUILD_INTERACTED_FLAG },
+          },
+        },
+        {
+          $group: {
+            _id: "$_id.k",
+            builders: { $sum: 1 },
+            interactedBuilders: { $sum: "$interacted" },
+          },
+        },
+      ]).exec(),
+
+      User.aggregate<{ _id: string; signups: number }>([
+        {
+          $match: {
+            "signupAttribution.builtPrizeSlug": { $in: LANE_SLUGS },
+            ...signupTouchWindowMatch(startDate, endDate),
+          },
+        },
+        { $addFields: { _toolbox: laneOf("$signupAttribution.builtPrizeSlug") } },
+        { $group: { _id: "$_toolbox", signups: { $sum: 1 } } },
+      ]).exec(),
+
+      PaymentEvent.aggregate<{ _id: string; conversions: number; revenue: number }>([
+        {
+          $match: {
+            eventType: "BenefitsGranted",
+            timestamp: { $gte: startDate, $lte: endDate },
+            "data.builtPrizeSlug": { $in: LANE_SLUGS },
+            $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
+          },
+        },
+        ...excludeRefundedBenefitsGrantedStages(),
+        { $addFields: { _toolbox: laneOf("$data.builtPrizeSlug") } },
+        {
+          $group: {
+            _id: "$_toolbox",
+            conversions: { $sum: 1 },
+            revenue: { $sum: { $ifNull: ["$data.price", 0] } },
+          },
+        },
+      ]).exec(),
+    ]);
+
+    const builderMap = new Map(builderAgg.filter((r) => r._id).map((r) => [r._id, r]));
+    const signupMap = new Map(signupAgg.filter((r) => r._id).map((r) => [r._id, r.signups]));
+    const convMap = new Map(convAgg.filter((r) => r._id).map((r) => [r._id, r]));
+
+    const byToolbox: ToolboxMetrics[] = [];
+    for (const toolboxId of new Set([...builderMap.keys(), ...signupMap.keys(), ...convMap.keys()])) {
+      const b = builderMap.get(toolboxId);
+      const builders = b?.builders ?? 0;
+      const signups = signupMap.get(toolboxId) ?? 0;
+      const c = convMap.get(toolboxId);
+      const conversions = c?.conversions ?? 0;
+      byToolbox.push({
+        toolboxId,
+        builders,
+        interactedBuilders: b?.interactedBuilders ?? 0,
+        signups,
+        conversions,
+        revenue: c?.revenue ?? 0,
+        // Recomputed from the SUMMED totals, never averaged from per-combination rates — an
+        // average would weight a 1-builder combination the same as a 100-builder one.
+        builderToSignupRate: builders > 0 ? (signups / builders) * 100 : 0,
+        signupToConversionRate: signups > 0 ? (conversions / signups) * 100 : 0,
+        overallConversionRate: builders > 0 ? (conversions / builders) * 100 : 0,
+      });
+    }
+
+    byToolbox.sort((a, b) => b.builders - a.builders || a.toolboxId.localeCompare(b.toolboxId));
+    return { byToolbox };
+  }
+
+  /**
+   * Per-page prize-build breakdown: which combination each visitor ended on, how many changed
+   * it, and how each combination converted.
+   *
+   * Page-scoped twin of `getAggregatedByBuiltPrize`, using the SAME pipeline shape as the
+   * per-page rollup in `getAggregatedByPage`, so the modal and the table row cannot disagree.
+   */
+  async getPageBuildBreakdown(
+    pageType: PromoPageType,
+    slug: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<PageBuildBreakdown> {
+    await connectDB();
+
+    const normalizedSlug = slug.toLowerCase().trim();
+    const defaultBuiltPrizeSlug = getPageDefaultPrizeSlug(normalizedSlug);
+
+    const buildMatch = {
+      pageType,
+      slug: normalizedSlug,
+      timestamp: { $gte: startDate, $lte: endDate },
+      builtPrizeSlug: { $exists: true, $ne: "" },
+    };
+
+    const [byComboAgg, pageAgg, signupAgg, convAgg] = await Promise.all([
+      PromoAnalyticsVisit.aggregate<{
+        _id: string;
+        builders: number;
+        interactedBuilders: number;
+      }>([
+        { $match: buildMatch },
+        {
+          $group: {
+            _id: { k: "$builtPrizeSlug", v: VISITOR_ID_EXPR },
+            interacted: { $max: BUILD_INTERACTED_FLAG },
+          },
+        },
+        {
+          $group: {
+            _id: "$_id.k",
+            builders: { $sum: 1 },
+            interactedBuilders: { $sum: "$interacted" },
+          },
+        },
+      ]).exec(),
+
+      PromoAnalyticsVisit.aggregate<{ _id: null; buildVisitors: number; builds: number }>([
+        { $match: buildMatch },
+        {
+          $group: {
+            _id: VISITOR_ID_EXPR,
+            interacted: { $max: BUILD_INTERACTED_FLAG },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            buildVisitors: { $sum: 1 },
+            builds: { $sum: "$interacted" },
+          },
+        },
+      ]).exec(),
+
+      User.aggregate<{ _id: string; signups: number }>([
+        {
+          $match: {
+            "signupAttribution.promotionSlug": normalizedSlug,
+            "signupAttribution.promotionPageType": pageType,
+            "signupAttribution.builtPrizeSlug": { $exists: true, $ne: "" },
+            ...signupTouchWindowMatch(startDate, endDate),
+          },
+        },
+        { $group: { _id: "$signupAttribution.builtPrizeSlug", signups: { $sum: 1 } } },
+      ]).exec(),
+
+      PaymentEvent.aggregate<{ _id: string; conversions: number; revenue: number }>([
+        {
+          $match: {
+            eventType: "BenefitsGranted",
+            timestamp: { $gte: startDate, $lte: endDate },
+            "data.promotionSlug": normalizedSlug,
+            "data.promotionPageType": pageType,
+            "data.builtPrizeSlug": { $exists: true, $ne: "" },
+            $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
+          },
+        },
+        ...excludeRefundedBenefitsGrantedStages(),
+        {
+          $group: {
+            _id: "$data.builtPrizeSlug",
+            conversions: { $sum: 1 },
+            revenue: { $sum: { $ifNull: ["$data.price", 0] } },
+          },
+        },
+      ]).exec(),
+    ]);
+
+    const builderMap = new Map(byComboAgg.map((r) => [r._id, r]));
+    const signupMap = new Map(signupAgg.map((r) => [r._id, r.signups]));
+    const convMap = new Map(convAgg.map((r) => [r._id, r]));
+
+    // Always include the page's own default, even at zero. "Nobody ended on the combination this
+    // page leads with" is the single most useful thing this table can say, and an absent row
+    // would silently read as "no data" instead.
+    const allSlugs = new Set<string>([
+      defaultBuiltPrizeSlug,
+      ...builderMap.keys(),
+      ...signupMap.keys(),
+      ...convMap.keys(),
+    ]);
+
+    const byBuild: PrizeBuildMetrics[] = [];
+    for (const builtPrizeSlug of allSlugs) {
+      const b = builderMap.get(builtPrizeSlug);
+      const builders = b?.builders ?? 0;
+      const interactedBuilders = b?.interactedBuilders ?? 0;
+      const signups = signupMap.get(builtPrizeSlug) ?? 0;
+      const c = convMap.get(builtPrizeSlug);
+      const conversions = c?.conversions ?? 0;
+      const revenue = c?.revenue ?? 0;
+
+      byBuild.push({
+        builtPrizeSlug,
+        builders,
+        interactedBuilders,
+        signups,
+        conversions,
+        revenue,
+        builderToSignupRate: builders > 0 ? (signups / builders) * 100 : 0,
+        signupToConversionRate: signups > 0 ? (conversions / signups) * 100 : 0,
+        overallConversionRate: builders > 0 ? (conversions / builders) * 100 : 0,
+        isPageDefault: builtPrizeSlug === defaultBuiltPrizeSlug,
+      });
+    }
+
+    byBuild.sort(
+      (a, b) => b.builders - a.builders || (a.builtPrizeSlug < b.builtPrizeSlug ? -1 : 1)
+    );
+
+    const buildVisitors = pageAgg[0]?.buildVisitors ?? 0;
+    const builds = pageAgg[0]?.builds ?? 0;
+
+    return {
+      defaultBuiltPrizeSlug,
+      buildVisitors,
+      builds,
+      buildChangeRate: buildVisitors > 0 ? (builds / buildVisitors) * 100 : 0,
+      byBuild,
     };
   }
 
@@ -866,37 +1260,80 @@ export class PromoAnalyticsRepository {
    * plus breakdown by campaign within that source.
    */
   async getChannelDetail(
-    utmSource: string,
+    channel: ConvertingPlatform,
     startDate: Date,
     endDate: Date
   ): Promise<ChannelDetailResult> {
     await connectDB();
 
-    const normalizedSource = utmSource.toLowerCase().trim();
-    const isDirect = normalizedSource === "direct";
+    // ONE generated predicate for all three collections. This replaces a hand-written
+    // `sourceMatch` that used exact equality against a lowercased value for signups and
+    // conversions while visits used a case-insensitive `new RegExp("^" + src + "$", "i")` —
+    // so a channel stored raw-cased (production carries `Klaviyo` and `TIKTOK`) matched on the
+    // visits leg and matched NOTHING on the other two, reporting real traffic with 0 signups,
+    // 0 conversions and $0 revenue. It also removes both RegExp constructions, which were built
+    // from a `utm_source` any visitor could put in the URL.
+    const visitWhere = channelMatch("$utmSource", "$utmMedium", channel);
+    const signupWhere = channelMatch(
+      "$signupAttribution.utmSource",
+      "$signupAttribution.utmMedium",
+      channel
+    );
+    const convWhere = channelMatch("$data.utmSource", "$data.utmMedium", channel);
 
-    // Helper to build $match condition for utmSource field
-    const sourceMatch = (field: string) =>
-      isDirect
-        ? { $or: [{ [field]: { $exists: false } }, { [field]: null }, { [field]: "" }] }
-        : { [field]: normalizedSource };
-
-    // ── By Page ──
-
-    const visitByPageAgg = await PromoAnalyticsVisit.aggregate<{
-      _id: { pageType: string; slug: string }; visits: number;
+    // ── Visits: one scan, four different dedupes ──
+    //
+    // `total` is the channel-wide dedupe and is what `summary.visits` must use. Summing
+    // `byPage` instead counted a visitor once per page they saw, so the modal's card read
+    // above the row that opened it (the owner's screenshot: row 170, card 171) and visibly
+    // jumped on load, because the modal prefers the server value over its seeded row value.
+    const [visitFacet] = await PromoAnalyticsVisit.aggregate<{
+      total: Array<{ visits: number }>;
+      byPage: Array<{ _id: { pageType: string; slug: string }; visits: number }>;
+      byCampaign: Array<{ _id: { cmp: string; med: string }; visits: number }>;
+      rawSources: Array<{ _id: string; visits: number }>;
     }>([
+      { $match: { timestamp: { $gte: startDate, $lte: endDate }, ...visitWhere } },
       {
-        $match: {
-          timestamp: { $gte: startDate, $lte: endDate },
-          ...(isDirect
-            ? { $or: [{ utmSource: { $exists: false } }, { utmSource: null }, { utmSource: "" }] }
-            : { utmSource: { $regex: new RegExp(`^${normalizedSource}$`, "i") } }),
+        $facet: {
+          total: [{ $group: { _id: VISITOR_ID_EXPR } }, { $count: "visits" }],
+          byPage: [
+            { $group: { _id: { k: { pageType: "$pageType", slug: "$slug" }, v: VISITOR_ID_EXPR } } },
+            { $group: { _id: "$_id.k", visits: { $sum: 1 } } },
+          ],
+          byCampaign: [
+            {
+              $group: {
+                _id: {
+                  k: {
+                    cmp: { $toLower: { $ifNull: ["$utmCampaign", ""] } },
+                    med: { $toLower: { $ifNull: ["$utmMedium", ""] } },
+                  },
+                  v: VISITOR_ID_EXPR,
+                },
+              },
+            },
+            { $group: { _id: "$_id.k", visits: { $sum: 1 } } },
+          ],
+          // Auditability for the fold — "what actually merged into Facebook / Instagram?".
+          // PER-SOURCE uniques: one visitor can arrive via `ig` and later `facebook.com`, so
+          // these MAY sum above `total`. Never render them as an addend.
+          rawSources: [
+            {
+              $group: {
+                _id: { k: { $toLower: { $ifNull: ["$utmSource", ""] } }, v: VISITOR_ID_EXPR },
+              },
+            },
+            { $group: { _id: "$_id.k", visits: { $sum: 1 } } },
+            { $sort: { visits: -1 } },
+            { $limit: 20 },
+          ],
         },
       },
-      { $group: { _id: { pageType: "$pageType", slug: "$slug" }, visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
-      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
     ]).exec();
+
+    const visitByPageAgg = visitFacet?.byPage ?? [];
+    const channelVisitTotal = visitFacet?.total?.[0]?.visits ?? 0;
 
     const signupByPageAgg = await User.aggregate<{
       _id: { pageType: string; slug: string }; signups: number;
@@ -904,8 +1341,10 @@ export class PromoAnalyticsRepository {
       {
         $match: {
           "signupAttribution.promotionSlug": { $exists: true, $ne: "" },
-          createdAt: { $gte: startDate, $lte: endDate },
-          ...sourceMatch("signupAttribution.utmSource"),
+          // $and, NOT a spread: signupTouchWindowMatch returns a top-level $or, and channelMatch
+          // returns a top-level $expr. Spreading both into one object is safe today, but $and
+          // makes the combination explicit and survives either helper gaining an $or.
+          $and: [signupTouchWindowMatch(startDate, endDate), signupWhere],
         },
       },
       {
@@ -928,7 +1367,7 @@ export class PromoAnalyticsRepository {
           timestamp: { $gte: startDate, $lte: endDate },
           "data.promotionSlug": { $exists: true, $ne: "" },
           $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
-          ...sourceMatch("data.utmSource"),
+          ...convWhere,
         },
       },
       ...excludeRefundedBenefitsGrantedStages(),
@@ -952,7 +1391,6 @@ export class PromoAnalyticsRepository {
 
     const allPageKeys = new Set([...pageVisitMap.keys(), ...pageSignupMap.keys(), ...pageConvMap.keys()]);
     const byPage: ChannelPageMetrics[] = [];
-    let totalVisits = 0;
     let totalSignups = 0;
     let totalConversions = 0;
     let totalRevenue = 0;
@@ -965,7 +1403,6 @@ export class PromoAnalyticsRepository {
       const conversions = conv?.conversions ?? 0;
       const revenue = conv?.revenue ?? 0;
 
-      totalVisits += visits;
       totalSignups += signups;
       totalConversions += conversions;
       totalRevenue += revenue;
@@ -988,28 +1425,9 @@ export class PromoAnalyticsRepository {
 
     // ── By Campaign ──
 
-    const visitByCampAgg = await PromoAnalyticsVisit.aggregate<{
-      _id: { cmp: string; med: string }; visits: number;
-    }>([
-      {
-        $match: {
-          timestamp: { $gte: startDate, $lte: endDate },
-          ...(isDirect
-            ? { $or: [{ utmSource: { $exists: false } }, { utmSource: null }, { utmSource: "" }] }
-            : { utmSource: { $regex: new RegExp(`^${normalizedSource}$`, "i") } }),
-        },
-      },
-      {
-        $group: {
-          _id: {
-            cmp: { $toLower: { $ifNull: ["$utmCampaign", ""] } },
-            med: { $toLower: { $ifNull: ["$utmMedium", ""] } },
-          },
-          visitorIds: { $addToSet: VISITOR_ID_EXPR },
-        },
-      },
-      { $project: { _id: 1, visits: { $size: "$visitorIds" } } },
-    ]).exec();
+    // Already computed by the single visit `$facet` above — this used to be a third full scan
+    // of the same rows with the same predicate.
+    const visitByCampAgg = visitFacet?.byCampaign ?? [];
 
     const signupByCampAgg = await User.aggregate<{
       _id: { cmp: string; med: string }; signups: number;
@@ -1017,8 +1435,7 @@ export class PromoAnalyticsRepository {
       {
         $match: {
           "signupAttribution.promotionSlug": { $exists: true, $ne: "" },
-          createdAt: { $gte: startDate, $lte: endDate },
-          ...sourceMatch("signupAttribution.utmSource"),
+          $and: [signupTouchWindowMatch(startDate, endDate), signupWhere],
         },
       },
       {
@@ -1041,7 +1458,7 @@ export class PromoAnalyticsRepository {
           timestamp: { $gte: startDate, $lte: endDate },
           "data.promotionSlug": { $exists: true, $ne: "" },
           $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
-          ...sourceMatch("data.utmSource"),
+          ...convWhere,
         },
       },
       ...excludeRefundedBenefitsGrantedStages(),
@@ -1097,13 +1514,24 @@ export class PromoAnalyticsRepository {
 
     byCampaign.sort((a, b) => b.visits - a.visits);
 
-    const displaySource = isDirect ? "Direct" : normalizedSource.charAt(0).toUpperCase() + normalizedSource.slice(1);
+    const rawSources: ChannelRawSource[] = (visitFacet?.rawSources ?? []).map((r) => ({
+      source: r._id === "" ? "(none)" : r._id,
+      visits: r.visits,
+    }));
 
     return {
-      utmSource: displaySource,
-      summary: { visits: totalVisits, signups: totalSignups, conversions: totalConversions, revenue: totalRevenue },
+      channel,
+      channelLabel: channelLabel(channel),
+      summary: {
+        // Channel-wide dedupe, NOT the sum of byPage[].visits — see the $facet above.
+        visits: channelVisitTotal,
+        signups: totalSignups,
+        conversions: totalConversions,
+        revenue: totalRevenue,
+      },
       byPage,
       byCampaign,
+      rawSources,
     };
   }
 }

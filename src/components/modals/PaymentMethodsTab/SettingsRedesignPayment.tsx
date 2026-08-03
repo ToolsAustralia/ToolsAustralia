@@ -214,16 +214,24 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
                         </p>
                       </div>
 
-                      {!isDefault && (
-                        <button
-                          type="button"
-                          onClick={() => onDelete(pm.paymentMethodId)}
-                          disabled={isDeleting}
-                          className="shrink-0 text-xs font-semibold text-red-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-60 dark:text-red-500"
-                        >
-                          {isDeleting ? "Removing…" : "Remove"}
-                        </button>
-                      )}
+                      {/*
+                        Shown on EVERY card, including the default one. Hiding it on the
+                        default made a member whose only card is the default unable to remove
+                        it at all — there was no other row to reveal the action. The
+                        consequences are handled by the confirmation dialog, which already
+                        distinguishes simple / billing-reassign / billing-last
+                        (`getPaymentMethodDeleteFlowKind`), and the API independently refuses
+                        to drop a last billing card without `confirmBillingRisk`.
+                      */}
+                      <button
+                        type="button"
+                        onClick={() => onDelete(pm.paymentMethodId)}
+                        disabled={isDeleting}
+                        aria-label={`Remove ${brandName(pm.card?.brand)} ending ${pm.card?.last4 ?? ""}`}
+                        className="shrink-0 text-xs font-semibold text-red-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 disabled:opacity-60 dark:text-red-500"
+                      >
+                        {isDeleting ? "Removing…" : "Remove"}
+                      </button>
                     </div>
                   );
                 })}

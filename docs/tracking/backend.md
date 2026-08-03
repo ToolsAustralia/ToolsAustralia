@@ -137,6 +137,45 @@ The attribution pipeline additionally captures which **landing-page packages var
 - **Webhook → ledger:** `extractAttributionFromMetadata` (stripe-webhook-handlers) reads it back; `processPaymentBenefits` persists `data.packagesFocus: "one-time"` in the PaymentEvent Mixed blob (camelCase per blob convention), independent of the session/signup merge gate.
 - **Analysis rule (for the future consumer):** missing value = membership-default for ad-attributed payments; rows with `attributionAdId` can also be classified retroactively via the ad's stored `MetaAdDestination` URL.
 
+## `normalizePlatform` is now a generator, not just a function (2026-07-31)
+
+[src/services/attribution/normalizePlatform.ts](../../src/services/attribution/normalizePlatform.ts)
+still exports `normalizeUtmToPlatform(utmSource, utmMedium)` unchanged, but the two lookup tables it
+reads are now **exported and used to generate MongoDB equivalents**, so a JS caller and an
+aggregation pipeline cannot disagree about what channel a dirty `utm_source` belongs to.
+
+| Export | What it is |
+|---|---|
+| `SOURCE_ALIASES` | Raw lowercase `utm_source` → `ConvertingPlatform`. Was module-private. |
+| `MEDIUM_SPLIT_SOURCES` | `Record<source, Record<medium, platform>>` for sources whose channel depends on `utm_medium` — today only `klaviyo` (`email` → `klaviyo_email`, `sms` → `klaviyo_sms`, anything else → `other`). Replaces an inline `if (src === "klaviyo")` branch, which a table cannot express and code cannot enumerate. |
+| `channelSourceValues(channel)` | The exact source strings that resolve to a channel. Empty for `direct`/`other`, which are defined by absence and by complement. |
+| `ALL_KNOWN_SOURCES` | Every modelled source; its complement is what defines `other`. |
+| `channelKeyExpr(sourcePath, mediumPath)` | A Mongo `$let`/`$switch` expression built from the two tables — the pipeline twin of `normalizeUtmToPlatform`. Medium-split sources branch FIRST so they cannot fall through to `SOURCE_ALIASES`. |
+| `channelMatch(sourcePath, mediumPath, channel)` | `{ $expr: { $eq: [channelKeyExpr(...), channel] } }` — a `$match` fragment that IS the grouping key. |
+
+One production dirty form was added to `SOURCE_ALIASES` at the same time:
+`facebook.com-websitekeyinfo` → `meta` (Meta appends its site-source-name on some placements;
+verified as 4 visit rows that were bucketing to `other`). `normalizeUtmToPlatform` also now treats a
+whitespace-only source as absence (`null`) rather than a value.
+
+Consumer + rationale (the case-sensitivity mismatch that reported `Klaviyo` and `TIKTOK` as
+zero-signup traffic): [docs/mongodb/backend.md](../mongodb/backend.md#channel-bucketing-is-a-generated-expr--channelkeyexpr--channelmatch-2026-07-31).
+Test: `npm run test:normalize-platform`, which now includes a four-way equivalence suite — it
+**interprets** the emitted `$switch` tree rather than re-deriving the answer, so a mistake in the
+generator (wrong branch order, a missing `$in`) is caught rather than mirrored.
+
+### Display metadata lives in config — `src/config/attribution-channels.ts`
+
+Channel **labels** are not derived in the data layer. `CHANNEL_DISPLAY` is a
+`Record<ConvertingPlatform, ChannelDisplay>` of `{ key, label, kind, order }`, with helpers
+`channelLabel` / `channelKind` / `channelOrder` and a `CHANNEL_KEYS` tuple typed for direct use in
+`z.enum(...)`. See [docs/config-and-data/architecture.md](../config-and-data/architecture.md#attribution-channelsts--display-metadata-for-convertingplatform-2026-07-31).
+
+`meta` is labelled **"Facebook / Instagram"**, not "Meta", and `ig` / `fb` / `instagram.com` /
+`facebook.com` all fold into it — `MetaAdInsightsDaily` reports ONE spend figure across both
+placements, so splitting the revenue while spend stays merged would make ROAS uncomputable for
+either half.
+
 ## Historical backfill derivation (`deriveBackfillAttribution`)
 
 [src/services/attribution/deriveBackfillAttribution.ts](../../src/services/attribution/deriveBackfillAttribution.ts) — pure function used by the PaymentEvent historical backfill to assign a `convertingPlatform` to rows that predate click-ID capture.

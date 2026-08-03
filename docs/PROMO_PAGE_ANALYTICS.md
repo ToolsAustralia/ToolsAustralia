@@ -1,5 +1,11 @@
 # Promo Page Analytics
 
+> **Current source of truth is [docs/promo/backend.md](promo/backend.md#page-analytics-repair--2026-07-31).**
+> This file is the original overview (still referenced by `PromoAnalyticsService`'s `@see`); the
+> 2026-07-31 rebuild changed the response shapes, the channel grouping, the signup date basis and
+> the permission gate. The sections below have been corrected where they asserted something now
+> false, but the domain doc carries the detail.
+
 ## Overview
 
 Promo Page Analytics tracks visits, signups, and conversions for promotion pages (`/promotions/[slug]`). It measures funnel performance: how many users visit a promo page, how many register after visiting, and how many convert to paying customers. Metrics are aggregated by promotion page (slug) and displayed in the Admin Dashboard.
@@ -56,8 +62,8 @@ PromoAnalyticsRepository.getAggregatedByPage()
 
 | Metric | Source | Filter |
 |--------|--------|--------|
-| **Visits** | `PromoAnalyticsVisit` | `timestamp` in date range |
-| **Signups** | `User` | `signupAttribution.promotionSlug` + `createdAt` in date range |
+| **Visits** | `PromoAnalyticsVisit` | `timestamp` in date range. **TTL-deleted after 90 days**, so the requested range is clamped to that floor — the other three sources never expire, and mixing them would divide complete numerators by a truncated denominator |
+| **Signups** | `User` | `signupAttribution.promotionSlug` + the **attribution touch** in date range (`signupAttribution.visitedAt`, falling back to `createdAt` only when absent — corrected 2026-07-31; `createdAt` is the age of the ACCOUNT, and registration writes attribution onto pre-existing accounts) |
 | **Conversions** | `PaymentEvent` | `eventType: BenefitsGranted`, `data.promotionSlug`, excludes subscription renewals |
 | **Revenue** | `PaymentEvent` | Sum of `data.price` for attributed conversions |
 
@@ -128,7 +134,7 @@ No auth. Uses `anonymousId` cookie for session attribution.
 
 **GET** `/api/admin/promo-analytics`
 
-Admin only. Query params:
+Gated by `requirePermission("pageAnalytics.view")` (was `promos.view` until 2026-07-31). Query params:
 
 | Param | Values | Description |
 |-------|--------|-------------|
@@ -159,10 +165,20 @@ Admin only. Query params:
         "overallConversionRate": 2.4
       }
     ],
-    "dateRange": { "start": "...", "end": "..." }
+    "dateRange": {
+      "start": "...",
+      "end": "...",
+      "visitsRetainedFrom": "...",
+      "clampedToRetention": false
+    }
   }
 }
 ```
+
+`byPage[]` rows also carry `buildVisitors` / `builds` / `buildChangeRate` / `topBuiltPrize` /
+`buildDistribution`. The response additionally carries `byChannel[]` (canonical acquisition
+channel — renamed from `byUTMSource` on 2026-07-31) and `byBuiltPrize[]`. Full shapes:
+[docs/promo/api.md](promo/api.md).
 
 ## Attribution Flow
 
@@ -195,9 +211,12 @@ Validation: `src/utils/promo-analytics/validate-promo-slug.ts` (`isValidPromoSlu
 
 **Features:**
 
-- Date range: Today, Yesterday, Custom, Current Draw, Last Draw, All Time
+- Date range: Today, Yesterday, Custom, Current Draw, Last Draw, All Time — **every one of these
+  silently resolved to "today" until 2026-07-31**, and the resolved window is now clamped to the
+  90-day visit-retention floor (with an amber banner when it clamps)
 - Summary cards: Visits, Signups, Conversions, Revenue
-- Sortable table by page (slug), visits, signups, conversions, revenue, V→S %, S→C %, Conv %
+- Sortable table by page (slug), visits, builds, signups, conversions, revenue; V→S %, S→C %,
+  Conv % and Changed % are static columns
 - Page labels resolved via `getPrizeLabel(slug)` from prize config
 
 ## Related

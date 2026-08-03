@@ -30,7 +30,7 @@ export const GET = withNorm(
     let range;
     try {
       range = resolvePromoAnalyticsRange({
-        range: hasCustom ? "custom" : "today",
+        dateRange: hasCustom ? "custom" : "today",
         startDate: parsed.data.startDate,
         endDate: parsed.data.endDate,
       });

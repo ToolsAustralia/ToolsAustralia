@@ -17,16 +17,18 @@ import {
   ArrowDown,
   Hash,
   HelpCircle,
+  Info,
   Layers,
   Package,
 } from "lucide-react";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
-import { formatNumber, formatPercentage } from "@/utils/metrics/formatters";
+import { formatNumber, formatPercentage, formatPercentageOrDash } from "@/utils/metrics/formatters";
 import { formatCurrency } from "@/utils/metrics/formatters";
 import { queryKeys } from "@/lib/queryKeys";
 import { getPrizeLabel } from "@/config/prize-summaries";
-import { isToolsetLandingSlug, getDefaultPrizeForToolsetSlug } from "@/config/promo-landing-slugs";
-import { fromPrizeSlug, getToolbox } from "@/components/sections/promo/prize-selection";
+import { channelKind } from "@/config/attribution-channels";
+import { CHANNEL_CHIP_CLASS } from "@/components/admin/promo-analytics/UTMCampaignBreakdownTable";
+import { getToolbox } from "@/components/sections/promo/prize-selection";
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
@@ -36,66 +38,21 @@ import { useCurrentAndLastDrawDates, useMajorDrawsForDateRange } from "@/hooks/q
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import PromoPageDetailModal from "@/components/modals/PromoPageDetailModal";
 import ChannelDetailModal from "@/components/modals/ChannelDetailModal";
+// Type-only (erased at build — see eslint/rules/no-models-in-client.js), so the data layer is
+// never bundled. Imported rather than re-declared: the local copies of these shapes silently
+// drifted from the API once already, which compiles fine and renders `undefined` as "0".
+import type {
+  PromoPageMetrics,
+  ChannelMetrics,
+  BuiltPrizeMetrics,  ToolboxMetrics,
+} from "@/repositories/PromoAnalyticsRepository";
+import type { ConvertingPlatform } from "@/types/attribution";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
-interface PromoPageMetrics {
-  pageType: "evergreen" | "toolset";
-  slug: string;
-  visits: number;
-  crossVisits: number;
-  /** Unique visitors who assembled a prize on this page (touched at least one reel). */
-  builds: number;
-  /** The combination built by the most visitors on this page, or null if nobody built one. */
-  topBuiltPrize: string | null;
-  /** Every combination built on this page, most-built first. Empty when nobody built one. */
-  buildDistribution: Array<{ builtPrizeSlug: string; visitors: number }>;
-  signups: number;
-  conversions: number;
-  revenue: number;
-  visitToSignupRate: number;
-  signupToConversionRate: number;
-  overallConversionRate: number;
-}
+/** Numeric columns of the page table — the only ones sorting may target. */
+type SortablePageColumn = "visits" | "builds" | "signups" | "conversions" | "revenue";
 
-/** Grouped by the BUILT combination itself, across every landing page (not per-page). */
-interface BuiltPrizeMetrics {
-  builtPrizeSlug: string;
-  builders: number;
-  signups: number;
-  conversions: number;
-  revenue: number;
-  builderToSignupRate: number;
-  signupToConversionRate: number;
-  overallConversionRate: number;
-}
-
-/**
- * `byBuiltPrize` rolled up to the TOOLBOX only (summed across every toolset variant),
- * derived client-side — see F-006. Rates are recomputed from the summed totals, never
- * averaged from the per-combination rates.
- */
-interface ToolboxRollupMetrics {
-  toolboxId: string;
-  builders: number;
-  signups: number;
-  conversions: number;
-  revenue: number;
-  builderToSignupRate: number;
-  signupToConversionRate: number;
-  overallConversionRate: number;
-}
-
-interface UTMSourceMetrics {
-  utmSource: string;
-  visits: number;
-  signups: number;
-  conversions: number;
-  revenue: number;
-  visitToSignupRate: number;
-  signupToConversionRate: number;
-  overallConversionRate: number;
-}
 
 interface PromoAnalyticsResponse {
   success: boolean;
@@ -105,56 +62,18 @@ interface PromoAnalyticsResponse {
     totalConversions: number;
     totalRevenue: number;
     byPage: PromoPageMetrics[];
-    byUTMSource?: UTMSourceMetrics[];
+    byChannel?: ChannelMetrics[];
     byBuiltPrize?: BuiltPrizeMetrics[];
-    dateRange: { start: string; end: string };
+    byToolbox?: ToolboxMetrics[];
+    dateRange: {
+      start: string;
+      end: string;
+      /** Oldest day visit rows still exist for — they are TTL-deleted after 90 days. */
+      visitsRetainedFrom: string;
+      /** True when the requested start was older than that and got pulled forward. */
+      clampedToRetention: boolean;
+    };
   };
-}
-
-/**
- * The page's OWN default combination — what a visitor sees if they never touch a reel.
- * Toolset landing slugs (ryobi/milwaukee/dewalt/makita/hikoki) resolve via
- * getDefaultPrizeForToolsetSlug; evergreen pages' `slug` already IS the prize slug.
- */
-function getPageDefaultPrizeSlug(slug: string): string {
-  return isToolsetLandingSlug(slug) ? getDefaultPrizeForToolsetSlug(slug) : slug;
-}
-
-/**
- * "Switched away" = recorded builds whose combination differs from the page's own default.
- *
- * **The denominator must come from `buildDistribution`, NOT from `row.builds`.** They count
- * different things, and mixing them produced a literal 250% on the dashboard:
- *
- *   `row.builds`        — unique VISITORS who built anything, deduped across the whole page
- *   `buildDistribution` — unique visitors PER COMBINATION
- *
- * A visitor gets one visit row per page load, and each row keeps its own final build. So one
- * person who lands four times and settles on a different combination each time contributes
- * 1 to `builds` but 4 to the distribution. Summing distribution entries for the numerator while
- * dividing by `builds` therefore lets the ratio exceed 100%.
- *
- * Found on staging with real traffic — every test missed it because they all used one row per
- * visitor, which is the one shape that cannot reproduce it.
- *
- * Dividing the distribution by its own total keeps both sides in the same unit, so this reads
- * "of the builds recorded on this page, what share were not the default". Returns null when
- * nothing was built, so the caller renders an em dash rather than a misleading "0%".
- */
-function getSwitchAwayRate(row: PromoPageMetrics): {
-  defaultSlug: string;
-  switchAwayCount: number;
-  switchAwayTotal: number;
-  switchAwayPct: number | null;
-} {
-  const defaultSlug = getPageDefaultPrizeSlug(row.slug);
-  const distribution = row.buildDistribution ?? [];
-  const switchAwayTotal = distribution.reduce((sum, d) => sum + d.visitors, 0);
-  const switchAwayCount = distribution
-    .filter((d) => d.builtPrizeSlug !== defaultSlug)
-    .reduce((sum, d) => sum + d.visitors, 0);
-  const switchAwayPct = switchAwayTotal > 0 ? (switchAwayCount / switchAwayTotal) * 100 : null;
-  return { defaultSlug, switchAwayCount, switchAwayTotal, switchAwayPct };
 }
 
 async function fetchPromoAnalytics(params: {
@@ -182,7 +101,7 @@ export default function PromoAnalyticsManagement() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
-  const [sortColumn, setSortColumn] = useState<keyof PromoPageMetrics>("visits");
+  const [sortColumn, setSortColumn] = useState<SortablePageColumn>("visits");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selectedPage, setSelectedPage] = useState<{
     pageType: "evergreen" | "toolset";
@@ -191,7 +110,8 @@ export default function PromoAnalyticsManagement() {
     summary: { visits: number; signups: number; conversions: number; revenue: number };
   } | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<{
-    utmSource: string;
+    channel: ConvertingPlatform;
+    channelLabel: string;
     summary: { visits: number; signups: number; conversions: number; revenue: number };
   } | null>(null);
 
@@ -354,8 +274,10 @@ export default function PromoAnalyticsManagement() {
     if (!data?.byPage) return [];
     const arr = [...data.byPage];
     arr.sort((a, b) => {
-      const aVal = a[sortColumn] as number;
-      const bVal = b[sortColumn] as number;
+      // No `as number` cast: SortablePageColumn only names numeric fields, so a non-numeric
+      // column can no longer be wired into a sort header by accident.
+      const aVal = a[sortColumn];
+      const bVal = b[sortColumn];
       if (sortOrder === "asc") return aVal - bVal;
       return bVal - aVal;
     });
@@ -363,45 +285,42 @@ export default function PromoAnalyticsManagement() {
   }, [data?.byPage, sortColumn, sortOrder]);
 
   /**
-   * `byBuiltPrize` rolled up to the toolbox only — F-006. `builtPrizeSlug` is
-   * `{toolset}-{toolbox}`; `fromPrizeSlug` splits it by matching both segments against the
-   * `TOOLSETS`/`TOOLBOXES` registries (not a positional split), so it stays correct even if a
-   * future brand id ever gained a hyphen. It also returns `null` for `cash-prize` (no toolbox
-   * lane) and any unrecognised slug, so both are excluded from this rollup rather than landing
-   * in a bogus bucket.
+   * Visits are TTL-deleted after 90 days while signups and revenue are not, so an older range
+   * silently returns fewer visitors than asked for. The API says when that happened; this is the
+   * day the surviving visit rows actually start, rendered in AEST (the range's own timezone).
    */
-  const toolboxRollup = React.useMemo((): ToolboxRollupMetrics[] => {
-    const rows = data?.byBuiltPrize ?? [];
-    const sums = new Map<string, { builders: number; signups: number; conversions: number; revenue: number }>();
-    for (const row of rows) {
-      const parsed = fromPrizeSlug(row.builtPrizeSlug);
-      if (!parsed) continue; // cash-prize or unrecognised slug — no toolbox lane
-      const acc = sums.get(parsed.toolbox) ?? { builders: 0, signups: 0, conversions: 0, revenue: 0 };
-      acc.builders += row.builders;
-      acc.signups += row.signups;
-      acc.conversions += row.conversions;
-      acc.revenue += row.revenue;
-      sums.set(parsed.toolbox, acc);
+  const visitsRetainedFromLabel = React.useMemo(() => {
+    const iso = data?.dateRange?.visitsRetainedFrom;
+    if (!iso) return null;
+    try {
+      return formatInTimeZone(new Date(iso), AEST_TIMEZONE, "d MMM yyyy");
+    } catch {
+      return null;
     }
-    const result: ToolboxRollupMetrics[] = Array.from(sums.entries()).map(([toolboxId, s]) => ({
-      toolboxId,
-      ...s,
-      // Recomputed from the SUMMED totals — averaging the per-combination rates would
-      // weight a 1-builder combo the same as a 100-builder one.
-      builderToSignupRate: s.builders > 0 ? (s.signups / s.builders) * 100 : 0,
-      signupToConversionRate: s.signups > 0 ? (s.conversions / s.signups) * 100 : 0,
-      overallConversionRate: s.builders > 0 ? (s.conversions / s.builders) * 100 : 0,
-    }));
-    result.sort((a, b) => {
+  }, [data?.dateRange?.visitsRetainedFrom]);
+
+  /**
+   * Toolbox lanes, as computed by the SERVER.
+   *
+   * This used to be rolled up here by summing `byBuiltPrize[].builders` per toolbox. Those are
+   * uniques deduped PER COMBINATION, so a visitor who ended on `makita-kincrome` on one landing
+   * and `ryobi-kincrome` on another was counted as two Kincrome builders — while the `signups`
+   * divided into that sum are globally unique. Every toolbox rate came out understated, worst
+   * for whichever toolbox is the default on the most pages. The repository now dedupes on
+   * (toolbox, visitor) in Mongo, which is the only place that can be done correctly.
+   */
+  const toolboxRollup = React.useMemo(() => {
+    const rows = [...(data?.byToolbox ?? [])];
+    rows.sort((a, b) => {
       if (b.builders !== a.builders) return b.builders - a.builders;
       const aName = getToolbox(a.toolboxId)?.brandName ?? a.toolboxId;
       const bName = getToolbox(b.toolboxId)?.brandName ?? b.toolboxId;
       return aName.localeCompare(bName);
     });
-    return result;
-  }, [data?.byBuiltPrize]);
+    return rows;
+  }, [data?.byToolbox]);
 
-  const handleSort = (col: keyof PromoPageMetrics) => {
+  const handleSort = (col: SortablePageColumn) => {
     if (sortColumn === col) {
       setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
     } else {
@@ -410,7 +329,7 @@ export default function PromoAnalyticsManagement() {
     }
   };
 
-  const getSortIcon = (col: keyof PromoPageMetrics) => {
+  const getSortIcon = (col: SortablePageColumn) => {
     if (sortColumn !== col)
       return <ArrowUpDown className="w-3.5 h-3.5 opacity-50 text-gray-500 dark:text-neutral-500" />;
     return sortOrder === "asc" ? (
@@ -524,6 +443,18 @@ export default function PromoAnalyticsManagement() {
         />
       </div>
 
+      {data?.dateRange?.clampedToRetention && visitsRetainedFromLabel && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+          <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden />
+          <p className="leading-relaxed">
+            Visit rows are only kept for 90 days, so every visitor number on this page starts at{" "}
+            <strong>{visitsRetainedFromLabel}</strong> even though a longer range is selected.
+            Registrations, conversions and revenue are not trimmed, so rates against visitors read
+            high for the clipped part of the period.
+          </p>
+        </div>
+      )}
+
       <p className="text-xs text-gray-600 dark:text-neutral-400 leading-relaxed max-w-4xl">
         Each table row compares <strong>unique visitors to that page</strong> with{" "}
         <strong>new accounts</strong> attributed to that page. V→S % can exceed 100% when several
@@ -531,37 +462,33 @@ export default function PromoAnalyticsManagement() {
         signup still carried the promo slug.
       </p>
 
-      {/* Channel Attribution (UTM Source: Klaviyo, Facebook, etc.) */}
+      {/* Channel Attribution — canonical channels, folded from raw utm_source values */}
       <div className="bg-white dark:bg-neutral-900 rounded-lg sm:rounded-xl shadow-sm dark:shadow-none border border-gray-200 dark:border-neutral-700 overflow-hidden">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white p-4 border-b border-gray-200 dark:border-neutral-700 flex items-center gap-2">
           <Hash className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
-          Channel Attribution (UTM Source)
+          Channel Attribution
         </h3>
         <p className="text-sm text-gray-500 dark:text-neutral-400 px-4 pt-2 pb-1">
-          Unique visitors, new registrations, and conversions by marketing channel (e.g. Klaviyo,
-          Facebook). Add{" "}
+          Unique visitors, new registrations, and conversions by acquisition channel. Every spelling
+          of a source folds into one row —{" "}
           <code className="bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 px-1 rounded">
-            utm_source=klaviyo
+            utm_source=ig
           </code>{" "}
-          or{" "}
+          and{" "}
           <code className="bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 px-1 rounded">
-            utm_source=facebook
+            facebook.com
           </code>{" "}
-          to campaign URLs.
+          both land in Facebook / Instagram. Click a row to see which raw values folded in.
         </p>
         <div className="overflow-x-auto">
           {isLoading ? (
             <div className="p-8 text-center text-gray-500 dark:text-neutral-400">Loading…</div>
           ) : (() => {
-            const rows = data?.byUTMSource ?? [];
+            const rows = data?.byChannel ?? [];
             if (rows.length === 0) {
               return (
                 <div className="p-8 text-center text-gray-500 dark:text-neutral-400">
-                  No channel data for this period. Campaign links need{" "}
-                  <code className="bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-neutral-200 px-1 rounded">
-                    utm_source
-                  </code>{" "}
-                  in the URL.
+                  No channel data for this period.
                 </div>
               );
             }
@@ -598,24 +525,22 @@ export default function PromoAnalyticsManagement() {
                 <tbody>
                   {rows.map((row) => (
                     <tr
-                      key={row.utmSource}
+                      key={row.channel}
                       className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 cursor-pointer transition-colors"
                       onClick={() =>
                         setSelectedChannel({
-                          utmSource: row.utmSource,
+                          // The KEY drives the drill-down query; the label is display only.
+                          channel: row.channel,
+                          channelLabel: row.channelLabel,
                           summary: { visits: row.visits, signups: row.signups, conversions: row.conversions, revenue: row.revenue },
                         })
                       }
                     >
                       <td className="p-3">
                         <span
-                          className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            row.utmSource === "Direct"
-                              ? "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600"
-                              : "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50"
-                          }`}
+                          className={`px-2 py-0.5 rounded text-xs font-medium ${CHANNEL_CHIP_CLASS[channelKind(row.channel)]}`}
                         >
-                          {row.utmSource}
+                          {row.channelLabel}
                         </span>
                       </td>
                       <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
@@ -630,9 +555,9 @@ export default function PromoAnalyticsManagement() {
                       <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
                         {formatCurrency(row.revenue)}
                       </td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.visitToSignupRate)}</td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.visitToSignupRate, row.visits)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.signupToConversionRate, row.signups)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.overallConversionRate, row.visits)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -672,18 +597,9 @@ export default function PromoAnalyticsManagement() {
                   </th>
                   <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
                     <button
-                      onClick={() => handleSort("crossVisits")}
-                      className="flex items-center justify-end gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
-                      title="Visits from other toolset landing pages"
-                    >
-                      Cross-visits {getSortIcon("crossVisits")}
-                    </button>
-                  </th>
-                  <th className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100">
-                    <button
                       onClick={() => handleSort("builds")}
                       className="flex items-center justify-end gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
-                      title="Visitors who assembled a prize in Build your prize"
+                      title="Visitors who CHANGED the build in Build your prize. The smaller line below each number is how many saw a combination at all — the builder records what is on screen whether or not it was touched."
                     >
                       Builds {getSortIcon("builds")}
                     </button>
@@ -726,16 +642,14 @@ export default function PromoAnalyticsManagement() {
                   </th>
                   <th
                     className="hidden md:table-cell text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
-                    title="Of the builds recorded on this page, the share that were a different combination than the page's own default. Counted per recorded build, not per visitor — one person landing several times contributes one build each time."
+                    title="Of the visitors who saw a combination on this page, the share who changed it rather than leaving what loaded. Both sides are page-level uniques, so this can never exceed 100%."
                   >
-                    Switched away % of builds
+                    Changed %
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {sortedPages.map((row) => {
-                  const { defaultSlug, switchAwayCount, switchAwayTotal, switchAwayPct } = getSwitchAwayRate(row);
-                  return (
+                {sortedPages.map((row) => (
                   <tr
                     key={`${row.pageType}-${row.slug}`}
                     className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60 cursor-pointer transition-colors"
@@ -769,24 +683,16 @@ export default function PromoAnalyticsManagement() {
                     </td>
                     <td
                       className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums"
-                      title="From other toolset pages"
-                    >
-                      {formatNumber(row.crossVisits ?? 0)}
-                    </td>
-                    <td
-                      className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums"
                       title={
                         row.topBuiltPrize
-                          ? `Most built here: ${getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize}`
-                          : "Nobody built a prize on this page in this period"
+                          ? `Visitors who changed the build, of those who saw a combination at all. Most-shown combination here: ${getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize}`
+                          : "Nobody saw a combination on this page in this period"
                       }
                     >
-                      {formatNumber(row.builds ?? 0)}
-                      {row.topBuiltPrize && (
-                        <span className="block truncate text-[10px] font-sans text-gray-500 dark:text-neutral-400 max-w-[110px] ml-auto">
-                          Top: {getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize}
-                        </span>
-                      )}
+                      {formatNumber(row.builds)}
+                      <span className="block truncate text-[10px] font-sans text-gray-500 dark:text-neutral-400 max-w-[110px] ml-auto">
+                        {row.buildVisitors === 0 ? "—" : `of ${formatNumber(row.buildVisitors)} shown`}
+                      </span>
                     </td>
                     <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
                       {formatNumber(row.signups)}
@@ -797,22 +703,21 @@ export default function PromoAnalyticsManagement() {
                     <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
                       {formatCurrency(row.revenue)}
                     </td>
-                    <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.visitToSignupRate)}</td>
-                    <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
-                    <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
+                    <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.visitToSignupRate, row.visits)}</td>
+                    <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.signupToConversionRate, row.signups)}</td>
+                    <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.overallConversionRate, row.visits)}</td>
                     <td
                       className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400"
                       title={
-                        switchAwayTotal > 0
-                          ? `${formatNumber(switchAwayCount)} of ${formatNumber(switchAwayTotal)} recorded builds were a different combination than this page's default (${getPrizeLabel(defaultSlug) ?? defaultSlug})`
-                          : "Nobody built a prize on this page in this period"
+                        row.buildVisitors > 0
+                          ? `${formatNumber(row.builds)} of ${formatNumber(row.buildVisitors)} visitors who saw a combination changed it`
+                          : "Nobody saw a combination on this page in this period"
                       }
                     >
-                      {switchAwayPct === null ? "—" : formatPercentage(switchAwayPct)}
+                      {row.buildVisitors === 0 ? "—" : formatPercentage(row.buildChangeRate)}
                     </td>
                   </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           )}
@@ -826,9 +731,10 @@ export default function PromoAnalyticsManagement() {
           By Built Prize
         </h3>
         <p className="text-sm text-gray-500 dark:text-neutral-400 px-4 pt-2 pb-1">
-          Builders, registrations, conversions and revenue grouped by the exact combination
-          assembled in Build your prize, across every landing page — do Kincrome-box builders
-          convert better than Milwaukee-box builders?
+          Registrations, conversions and revenue grouped by the combination each visitor ended on
+          in Build your prize, across every landing page — do Kincrome-box builders convert better
+          than Milwaukee-box builders? Builders here is exposure, not engagement: a visitor counts
+          whether or not they changed what the page loaded with.
         </p>
         <div className="overflow-x-auto">
           {isLoading ? (
@@ -849,7 +755,7 @@ export default function PromoAnalyticsManagement() {
                     <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">Built prize</th>
                     <th
                       className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
-                      title="Unique visitors who assembled this combination, on any landing page"
+                      title="Unique visitors who ended on this combination, on any landing page — including those who never changed it"
                     >
                       Builders
                     </th>
@@ -893,9 +799,9 @@ export default function PromoAnalyticsManagement() {
                       <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
                         {formatCurrency(row.revenue)}
                       </td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.builderToSignupRate)}</td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.builderToSignupRate, row.builders)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.signupToConversionRate, row.signups)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.overallConversionRate, row.builders)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -935,7 +841,7 @@ export default function PromoAnalyticsManagement() {
                     <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">Toolbox</th>
                     <th
                       className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
-                      title="Unique visitors who assembled any toolset with this toolbox, summed across combinations"
+                      title="Unique visitors who ended on any combination with this toolbox, summed across combinations"
                     >
                       Builders
                     </th>
@@ -979,9 +885,9 @@ export default function PromoAnalyticsManagement() {
                       <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
                         {formatCurrency(row.revenue)}
                       </td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.builderToSignupRate)}</td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.signupToConversionRate)}</td>
-                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentage(row.overallConversionRate)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.builderToSignupRate, row.builders)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.signupToConversionRate, row.signups)}</td>
+                      <td className="hidden md:table-cell p-3 text-right text-gray-600 dark:text-neutral-400">{formatPercentageOrDash(row.overallConversionRate, row.builders)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1010,7 +916,8 @@ export default function PromoAnalyticsManagement() {
         <ChannelDetailModal
           isOpen={true}
           onClose={() => setSelectedChannel(null)}
-          utmSource={selectedChannel.utmSource}
+          channel={selectedChannel.channel}
+          channelLabel={selectedChannel.channelLabel}
           startDate={startDate}
           endDate={endDate}
           summaryFromParent={selectedChannel.summary}

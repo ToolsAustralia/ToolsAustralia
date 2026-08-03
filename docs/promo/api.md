@@ -25,8 +25,19 @@ Under `/api/admin/**` (in [admin](../admin/)):
 - Analytics dashboards
 
 `GET /api/admin/promo-analytics` (route lives under the `admin` domain, see
-[docs/admin/api.md](../admin/api.md)) returns, as of 2026-07-28: `byPage` (each row now also
-carrying `buildDistribution`, the full built-prize distribution for that page — see
-[backend.md](backend.md#read-side-gap-closure--builddistribution--getaggregatedbybuiltprize-2026-07-28)),
-`byUTMSource`, and the new `byBuiltPrize` (cross-page, grouped by the combination actually built,
-not by landing page).
+[docs/admin/api.md](../admin/api.md)) returns, as of 2026-07-31:
+
+- `byPage` — each row carries `visits`, `buildVisitors` (build **exposure**), `builds` (build
+  **engagement**), `buildChangeRate`, `topBuiltPrize`, `buildDistribution`, signups, conversions,
+  revenue and three rates. `crossVisits` was **removed**.
+- `byChannel` — **renamed from `byUTMSource`**. Keyed on the canonical `ConvertingPlatform` rather
+  than a raw `utm_source`; rows carry `channel` + `channelLabel`.
+- `byBuiltPrize` — cross-page, grouped by the combination actually built, not by landing page.
+- `dateRange` — now `{ start, end, visitsRetainedFrom, clampedToRetention }`.
+
+`GET /api/admin/promo-analytics/channel-detail` takes **`channel`** (a closed enum of
+`CHANNEL_KEYS`), not `utmSource`, and returns `channel` / `channelLabel` / `summary` / `byPage` /
+`byCampaign` / `rawSources`. `GET /api/admin/promo-analytics/page-detail` returns
+`buildBreakdown` in place of the removed `visitsFrom`. All three now gate on `pageAnalytics.view`
+(was `promos.view`). Rationale for every one of these:
+[backend.md](backend.md#page-analytics-repair--2026-07-31).

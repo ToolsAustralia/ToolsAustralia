@@ -6,6 +6,8 @@ import ChargeJobRun, {
 } from "@/models/ChargeJobRun";
 import InvoiceChargeLog, { type IInvoiceChargeLog } from "@/models/InvoiceChargeLog";
 import User from "@/models/User";
+import { MONGO_DECLINE_MATCH } from "@/utils/admin/chargeDeclineReasons";
+import { normalizeRunTotals } from "@/server/admin/charge-past-due-totals";
 
 const ADMIN_TIMEZONE = "Australia/Sydney";
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -106,17 +108,17 @@ export interface DeclineSummaryFilterInput {
 export async function summariseDeclineCodes(
   input: DeclineSummaryFilterInput
 ): Promise<DeclineCodeSummary> {
-  // Excludes recovery machinery rows so each decline is counted exactly once:
-  // - step-audit rows (`result.recovery.step` — void/finalize audits, codeless) are
-  //   not card outcomes at all;
-  // - the bulk run's recovery SUMMARY row (`result.recovery.bulk` — keyed on the
-  //   original worklist invoice, codeless) duplicates the recovery pay row on the
-  //   NEW invoice, which carries the real declineCode and is the row we count.
-  const match: Record<string, unknown> = {
-    status: "failed",
-    "result.recovery.step": { $exists: false },
-    "result.recovery.bulk": { $exists: false },
-  };
+  // Excludes recovery machinery rows so each decline is counted exactly once — the
+  // predicates live in `MONGO_DECLINE_MATCH` so this aggregation and the admin run
+  // drawer cannot drift apart again (they did: the drawer showed "unknown 206" for
+  // rows this filter dropped entirely).
+  //
+  // NOTE: the bulk recovery SUMMARY row is excluded only when it carries a
+  // `newInvoiceId`, i.e. when a separate CODED pay row exists to count instead.
+  // Mint / re-bill recoveries write no such twin, so their summary row IS the decline
+  // and must be counted — excluding it wholesale hid 237 real declines over
+  // 28–31 Jul 2026. See src/utils/admin/chargeDeclineReasons.ts.
+  const match: Record<string, unknown> = { ...MONGO_DECLINE_MATCH };
   if (input.startDate || input.endDate) {
     const range: { $gte?: Date; $lt?: Date } = {};
     if (input.startDate) range.$gte = input.startDate;
@@ -261,7 +263,7 @@ export async function listChargeRuns(
       adminName: adminLabel(adminMap.get(String(r.adminId)) as AdminLookupRow | undefined),
       status: r.status,
       kind: r.kind ?? "charge",
-      totals: r.totals,
+      totals: normalizeRunTotals(r.totals),
     })),
     total,
   };
@@ -278,6 +280,16 @@ export interface RunDetailRow {
   errorCode?: string;
   declineCode?: string;
   errorMessage?: string;
+  /**
+   * Recovery provenance, projected so the drawer can tell a run-tagged recovery SUMMARY
+   * row from a real charge attempt. Without it the drawer counted both halves of one
+   * recovery as two declines and bucketed the codeless half as `unknown`.
+   */
+  recovery?: {
+    bulk?: boolean;
+    step?: string;
+    newInvoiceId?: string;
+  };
 }
 
 export interface RunDetail {
@@ -303,6 +315,11 @@ export async function getChargeRunDetail(runId: string): Promise<RunDetail | nul
         errorCode: 1,
         declineCode: 1,
         errorMessage: 1,
+        // Recovery provenance only — never the whole `result` blob (it holds the full
+        // sanitized Stripe error, which is large and not needed by the drawer).
+        "result.recovery.bulk": 1,
+        "result.recovery.step": 1,
+        "result.recovery.newInvoiceId": 1,
       })
       .lean(),
   ]);
@@ -323,7 +340,7 @@ export async function getChargeRunDetail(runId: string): Promise<RunDetail | nul
       adminName: adminLabel(admin as AdminLookupRow | null),
       status: run.status,
       kind: run.kind ?? "charge",
-      totals: run.totals,
+      totals: normalizeRunTotals(run.totals),
     },
     rows: logRows.map((r) => ({
       invoiceId: r.invoiceId,
@@ -336,8 +353,24 @@ export async function getChargeRunDetail(runId: string): Promise<RunDetail | nul
       errorCode: r.errorCode,
       declineCode: r.declineCode,
       errorMessage: r.errorMessage,
+      ...(extractRecoveryTag(r.result) ? { recovery: extractRecoveryTag(r.result)! } : {}),
     })),
   };
+}
+
+/** Narrow the projected `result.recovery` subdocument to the drawer's DTO shape. */
+function extractRecoveryTag(
+  result: unknown
+): { bulk?: boolean; step?: string; newInvoiceId?: string } | null {
+  if (!result || typeof result !== "object") return null;
+  const recovery = (result as { recovery?: unknown }).recovery;
+  if (!recovery || typeof recovery !== "object") return null;
+  const { bulk, step, newInvoiceId } = recovery as Record<string, unknown>;
+  const tag: { bulk?: boolean; step?: string; newInvoiceId?: string } = {};
+  if (typeof bulk === "boolean") tag.bulk = bulk;
+  if (typeof step === "string") tag.step = step;
+  if (typeof newInvoiceId === "string") tag.newInvoiceId = newInvoiceId;
+  return Object.keys(tag).length > 0 ? tag : null;
 }
 
 export interface ManualRetryRow extends RunDetailRow {

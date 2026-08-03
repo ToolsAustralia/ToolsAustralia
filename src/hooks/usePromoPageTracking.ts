@@ -6,7 +6,6 @@ import { isToolsetLandingSlug } from "@/config/promo-landing-slugs";
 import { isValidPromoSlug } from "@/utils/promo-analytics/validate-promo-slug";
 
 const PROMO_ATTRIBUTION_STORAGE_KEY = "tools-aus:promo-attribution";
-const FROM_PROMO_SLUG_KEY = "tools-aus:from-promo-slug";
 
 interface PromoAttribution {
   pageType: "evergreen" | "toolset";
@@ -56,25 +55,13 @@ export function usePromoPageTracking() {
     }
 
     const utmParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-    let referrerSlug: string | undefined;
-    try {
-      const fromSlug = sessionStorage.getItem(FROM_PROMO_SLUG_KEY);
-      if (fromSlug && isValidPromoSlug(fromSlug)) {
-        referrerSlug = fromSlug.toLowerCase().trim();
-      }
-    } catch {
-      // Ignore storage errors
-    } finally {
-      try {
-        sessionStorage.removeItem(FROM_PROMO_SLUG_KEY);
-      } catch {
-        // Ignore
-      }
-    }
+    // No `referrerSlug`. It measured "arrived here from another landing page via the Explore
+    // other toolsets carousel", and that carousel was replaced by the in-place two-reel
+    // configurator on 2026-07-22 — since then nothing has written the sessionStorage key it read,
+    // so every cross-visit figure has been a structural zero. Removed rather than left reading 0.
     const payload = {
       pageType,
       slug,
-      ...(referrerSlug && { referrerSlug }),
       ...(utmParams?.get("utm_source") && { utmSource: utmParams.get("utm_source") }),
       ...(utmParams?.get("utm_medium") && { utmMedium: utmParams.get("utm_medium") }),
       ...(utmParams?.get("utm_campaign") && { utmCampaign: utmParams.get("utm_campaign") }),

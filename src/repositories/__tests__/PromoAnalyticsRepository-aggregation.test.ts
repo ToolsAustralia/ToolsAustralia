@@ -62,7 +62,7 @@ type AggregateModel = { aggregate: (...args: unknown[]) => unknown };
  * Replaces `model.aggregate` with a stub that hands back the next array in `resultsByCall`,
  * consumed IN CALL ORDER — both repository methods under test call `.aggregate()` more than
  * once per model in a single run (e.g. `getAggregatedByPage` hits `PromoAnalyticsVisit` three
- * times in a row: visits, cross-visits, builds). Mirrors `.aggregate([...]).exec()`, the exact
+ * times in a row: visits, builds-by-combination, builds-by-page). Mirrors `.aggregate([...]).exec()`, the exact
  * call shape both methods use.
  *
  * Returns a restore function. Callers MUST call it in a `finally` — leaving a stub installed
@@ -101,17 +101,22 @@ async function main() {
     async () => {
       const restoreVisit = stubAggregate(PromoAnalyticsVisit, [
         [], // 1. visitAgg
-        [], // 2. crossVisitAgg
         [
-          // 3. buildAgg — two different combinations built on the same "milwaukee" toolset page
+          // 2. buildByComboAgg — two different combinations on the same "milwaukee" toolset page
           {
             _id: { pageType: "toolset", slug: "milwaukee", builtPrizeSlug: "milwaukee-kincrome" },
-            visitorIds: ["u1", "u2", "u3"],
+            builders: 3,
+            interactedBuilders: 3,
           },
           {
             _id: { pageType: "toolset", slug: "milwaukee", builtPrizeSlug: "milwaukee-sidchrome" },
-            visitorIds: ["u4", "u5"],
+            builders: 2,
+            interactedBuilders: 2,
           },
+        ],
+        [
+          // 3. buildByPageAgg — the SAME five visitors, deduped once across the page
+          { _id: { pageType: "toolset", slug: "milwaukee" }, buildVisitors: 5, builds: 5 },
         ],
       ]);
       const restoreUser = stubAggregate(User, [[]]);
@@ -135,7 +140,7 @@ async function main() {
           "each combination must keep its OWN visitor count — an overwrite bug (map.set instead of push/accumulate) would show only the last-seen combination and silently discard the first"
         );
         assert.equal(
-          page.builds,
+          page.buildVisitors,
           5,
           "builds must be the union of visitor ids across every combination on this page (3 + 2 = 5 distinct visitors) — this is the denominator 'Switched away %' divides by"
         );
@@ -152,11 +157,11 @@ async function main() {
     async () => {
       const restoreVisit = stubAggregate(PromoAnalyticsVisit, [
         [],
-        [],
         [
-          { _id: { pageType: "toolset", slug: "ryobi", builtPrizeSlug: "ryobi-sidchrome" }, visitorIds: ["u1", "u2"] },
-          { _id: { pageType: "toolset", slug: "ryobi", builtPrizeSlug: "ryobi-kincrome" }, visitorIds: ["u3", "u4"] },
+          { _id: { pageType: "toolset", slug: "ryobi", builtPrizeSlug: "ryobi-sidchrome" }, builders: 2, interactedBuilders: 2 },
+          { _id: { pageType: "toolset", slug: "ryobi", builtPrizeSlug: "ryobi-kincrome" }, builders: 2, interactedBuilders: 2 },
         ],
+        [{ _id: { pageType: "toolset", slug: "ryobi" }, buildVisitors: 4, builds: 4 }],
       ]);
       const restoreUser = stubAggregate(User, [[]]);
       const restorePayment = stubAggregate(PaymentEvent, [[]]);
@@ -183,11 +188,11 @@ async function main() {
     async () => {
       const restoreVisit = stubAggregate(PromoAnalyticsVisit, [
         [],
-        [],
         [
-          { _id: { pageType: "toolset", slug: "ryobi", builtPrizeSlug: "ryobi-sidchrome" }, visitorIds: ["u1", "u2"] },
-          { _id: { pageType: "toolset", slug: "ryobi", builtPrizeSlug: "ryobi-kincrome" }, visitorIds: ["u3", "u4"] },
+          { _id: { pageType: "toolset", slug: "ryobi", builtPrizeSlug: "ryobi-sidchrome" }, builders: 2, interactedBuilders: 2 },
+          { _id: { pageType: "toolset", slug: "ryobi", builtPrizeSlug: "ryobi-kincrome" }, builders: 2, interactedBuilders: 2 },
         ],
+        [{ _id: { pageType: "toolset", slug: "ryobi" }, buildVisitors: 4, builds: 4 }],
       ]);
       const restoreUser = stubAggregate(User, [[]]);
       const restorePayment = stubAggregate(PaymentEvent, [[]]);

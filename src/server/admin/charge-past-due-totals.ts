@@ -48,6 +48,32 @@ export function emptyTotals(eligibleCount: number = 0): ChargeJobRunTotals {
 }
 
 /**
+ * Back-fill any totals fields a PERSISTED `ChargeJobRun.totals` predates.
+ *
+ * Skip buckets have been added over time (`noHeldDraft` + `awaitingRetry` on 2026-07-20),
+ * and runs finalized before then have no such keys. Readers must not assume the stored
+ * document has today's shape: the Norm mirror validates its response against a Zod schema
+ * where those fields are REQUIRED, so a single legacy run on the page made
+ * `/v1/charge-past-due/runs` return a **500 `response_schema_invalid`** — invisible to
+ * `tsc`, and caught only by `npm run norm:smoke`. (The admin drawer never hit this because
+ * it recomputes its skip breakdown client-side from the run's rows.)
+ *
+ * Normalize at the read boundary rather than migrating the collection: old runs are
+ * immutable history, and a missing bucket genuinely means zero.
+ */
+export function normalizeRunTotals(
+  totals: Partial<ChargeJobRunTotals> | null | undefined
+): ChargeJobRunTotals {
+  const base = emptyTotals(totals?.eligibleCount ?? 0);
+  if (!totals) return base;
+  return {
+    ...base,
+    ...totals,
+    skipped: { ...base.skipped, ...(totals.skipped ?? {}) },
+  };
+}
+
+/**
  * Aggregate per-invoice attempt rows into ChargeJobRun totals.
  *
  * Rules:

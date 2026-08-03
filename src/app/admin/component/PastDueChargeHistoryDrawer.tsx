@@ -18,6 +18,11 @@ import {
   classifySkipBucketFromMessage,
   type SkipBucketKey,
 } from "@/utils/admin/chargeSkipReasons";
+import {
+  countsAsDecline,
+  declineCodeOf,
+  summariseDeclineRows,
+} from "@/utils/admin/chargeDeclineReasons";
 
 function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-AU", {
@@ -119,10 +124,10 @@ export default function PastDueChargeHistoryDrawer({
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  // Derive the canonical decline code for a failed attempt (same precedence as the
-  // Error cell + the server's summariseDeclineCodes).
-  const declineCodeOf = (r: { declineCode?: string; errorCode?: string }) =>
-    r.declineCode ?? r.errorCode ?? "unknown";
+  // Decline code precedence + which rows count now live in one shared, tested module
+  // (`utils/admin/chargeDeclineReasons`) that the server's `summariseDeclineCodes` uses
+  // too — this file previously reimplemented the precedence rule WITHOUT the server's
+  // exclusions, which is what produced the bogus "unknown 206" chip on the 30 Jul run.
 
   // Per-run SKIP BREAKDOWN, computed client-side from the run's rows so it is accurate
   // for EVERY run (including historical runs whose persisted totals predate the named
@@ -144,16 +149,10 @@ export default function PastDueChargeHistoryDrawer({
   }, [detailQuery.data]);
 
   // Per-run decline breakdown (failed attempts grouped by decline/error code), sorted desc.
-  const declineBreakdown = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of detailQuery.data?.rows ?? []) {
-      if (r.status === "failed") {
-        const code = declineCodeOf(r);
-        counts.set(code, (counts.get(code) ?? 0) + 1);
-      }
-    }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  }, [detailQuery.data]);
+  const declineBreakdown = useMemo(
+    () => summariseDeclineRows(detailQuery.data?.rows ?? []),
+    [detailQuery.data]
+  );
 
   // The drawer's per-row DTO has no `adminName` (one admin per run). Augment with the run's
   // admin so each row satisfies ChargeAttemptInput before grouping.
@@ -170,8 +169,10 @@ export default function PastDueChargeHistoryDrawer({
     const groups = groupChargeAttemptsByUser(filtered);
     let result = groups;
     if (declineFilter) {
+      // Same predicate the chips are counted with, so clicking a chip cannot surface
+      // rows that chip never counted.
       result = result.filter((g) =>
-        g.attempts.some((a) => a.status === "failed" && declineCodeOf(a) === declineFilter)
+        g.attempts.some((a) => countsAsDecline(a) && declineCodeOf(a) === declineFilter)
       );
     }
     // Status filter ("any matching attempt"): keep a user if at least one of

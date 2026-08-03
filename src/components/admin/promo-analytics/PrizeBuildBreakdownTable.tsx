@@ -2,47 +2,48 @@
 
 import React, { useState, useMemo } from "react";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { formatNumber, formatPercentageOrDash, formatCurrency } from "@/utils/metrics/formatters";
-import { formatCampaignDisplay, formatMediumDisplay } from "@/utils/promo-analytics/display-formatters";
-import { channelKind, type ChannelKind } from "@/config/attribution-channels";
-import type { UTMCampaignMetrics } from "@/types/promo-analytics";
+import { formatNumber, formatPercentage, formatPercentageOrDash, formatCurrency } from "@/utils/metrics/formatters";
+import { getPrizeLabel } from "@/config/prize-summaries";
+import type { PrizeBuildMetrics } from "@/types/promo-analytics";
 import { cn } from "@/utils/cn";
 
 /**
- * Channel chip styling, keyed by `ChannelKind` rather than by the label text.
+ * Per-combination prize-build breakdown for ONE landing page.
  *
- * Branching on the literal string `"Direct"` is what silently stopped working the moment the
- * labels moved into config — every channel rendered as paid-indigo. Exported so the channel
- * table in PromoAnalyticsManagement paints the same chip from the same source.
+ * ⚠️ Do NOT render a totals/footer row summing `builders`. These are per-combination uniques:
+ * a visitor who landed twice and settled on two different combinations is counted in BOTH rows,
+ * so the column deliberately sums ABOVE the page-level visitor count shown in the section
+ * header. A footer total would read as a contradiction. (The page-level numbers are rendered by
+ * the parent modal as chips, from `PageBuildBreakdown.buildVisitors` / `.builds`.)
  */
-export const CHANNEL_CHIP_CLASS: Record<ChannelKind, string> = {
-  paid: "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50",
-  owned: "bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/50",
-  unattributed:
-    "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600",
-  unknown:
-    "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600",
-};
 
-type SortableColumn = "visits" | "signups" | "conversions" | "revenue";
+type SortableColumn = "builders" | "interactedBuilders" | "signups" | "conversions" | "revenue";
 
-interface UTMCampaignBreakdownTableProps {
-  rows: UTMCampaignMetrics[];
+interface PrizeBuildBreakdownTableProps {
+  rows: PrizeBuildMetrics[];
   loading?: boolean;
   emptyMessage?: string;
-  showSourceColumn?: boolean;
 }
 
-export default function UTMCampaignBreakdownTable({
+/** Fallback display for a slug the prize catalog doesn't know: "makita-kincrome" → "Makita Kincrome". */
+function prettifySlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+export default function PrizeBuildBreakdownTable({
   rows,
   loading = false,
-  emptyMessage = "No campaign data for this period.",
-  showSourceColumn = true,
-}: UTMCampaignBreakdownTableProps) {
-  const [sortColumn, setSortColumn] = useState<SortableColumn>("visits");
+  emptyMessage = "No prize-build data for this period.",
+}: PrizeBuildBreakdownTableProps) {
+  const [sortColumn, setSortColumn] = useState<SortableColumn>("builders");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   const sortedRows = useMemo(() => {
+    // Copy first — never sort the props array in place.
     const arr = [...rows];
     arr.sort((a, b) => {
       const aVal = a[sortColumn];
@@ -87,31 +88,29 @@ export default function UTMCampaignBreakdownTable({
       <table className={cn("w-full min-w-[360px]", textSize)}>
         <thead className="bg-gray-50 dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700">
           <tr>
-            {showSourceColumn && (
-              <th
-                className={cn("text-left", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
-              >
-                Channel
-              </th>
-            )}
             <th
-              className={cn("text-left", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 min-w-[100px]")}
+              className={cn("text-left", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 min-w-[140px]")}
             >
-              Campaign
-            </th>
-            <th
-              className={cn("text-left", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
-            >
-              Medium
+              Combination
             </th>
             <th
               className={cn("text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
               <button
-                onClick={() => handleSort("visits")}
+                onClick={() => handleSort("builders")}
                 className="flex items-center justify-end gap-0.5 sm:gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
               >
-                Visits {getSortIcon("visits")}
+                Builders {getSortIcon("builders")}
+              </button>
+            </th>
+            <th
+              className={cn("text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
+            >
+              <button
+                onClick={() => handleSort("interactedBuilders")}
+                className="flex items-center justify-end gap-0.5 sm:gap-1 w-full hover:text-red-600 dark:hover:text-red-400"
+              >
+                Changed {getSortIcon("interactedBuilders")}
               </button>
             </th>
             <th
@@ -147,63 +146,51 @@ export default function UTMCampaignBreakdownTable({
             <th
               className={cn("hidden md:table-cell text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
-              V→S
+              B→S
             </th>
             <th
               className={cn("hidden md:table-cell text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
             >
-              S→C
-            </th>
-            <th
-              className={cn("hidden md:table-cell text-right", cellPad, "font-semibold text-gray-800 dark:text-neutral-100 whitespace-nowrap")}
-            >
-              Conv
+              Conv %
             </th>
           </tr>
         </thead>
         <tbody>
-          {sortedRows.map((row, i) => {
-            const key = `${row.channel}-${row.utmMedium}-${row.utmCampaign}-${i}`;
+          {sortedRows.map((row) => {
+            const label = getPrizeLabel(row.builtPrizeSlug) ?? prettifySlug(row.builtPrizeSlug);
+            // Never print "0.0%" off a zero denominator — an em dash says "not measurable".
+            const changedShare =
+              row.builders === 0
+                ? "—"
+                : formatPercentage((row.interactedBuilders / row.builders) * 100);
             return (
               <tr
-                key={key}
+                key={row.builtPrizeSlug}
                 className="border-t border-gray-100 dark:border-neutral-800 hover:bg-gray-50 dark:hover:bg-neutral-800/60"
               >
-                {showSourceColumn && (
-                  <td className={cellPad}>
-                    <span
-                      className={cn(
-                        "inline-block px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium whitespace-nowrap",
-                        CHANNEL_CHIP_CLASS[channelKind(row.channel)]
-                      )}
-                    >
-                      {row.channelLabel}
-                    </span>
-                  </td>
-                )}
                 <td
                   className={cn(cellPad, "font-medium text-gray-900 dark:text-white break-words")}
-                  title={formatCampaignDisplay(row.utmCampaign)}
+                  title={label}
                 >
-                  {formatCampaignDisplay(row.utmCampaign)}
-                </td>
-                <td className={cellPad}>
-                  <span
-                    className={`inline-block px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium whitespace-nowrap ${
-                      row.utmMedium?.toLowerCase() === "email"
-                        ? "bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/50"
-                        : row.utmMedium?.toLowerCase() === "sms"
-                          ? "bg-green-100 dark:bg-green-950/40 text-green-800 dark:text-green-300 border border-green-200/80 dark:border-green-800/50"
-                          : "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600"
-                    }`}
-                  >
-                    {formatMediumDisplay(row.utmMedium)}
-                  </span>
+                  <span className="align-middle">{label}</span>
+                  {row.isPageDefault && (
+                    <span className="ml-1.5 inline-block px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium whitespace-nowrap align-middle bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50">
+                      Page default
+                    </span>
+                  )}
                 </td>
                 <td
                   className={cn(cellPad, "text-right font-mono text-gray-900 dark:text-white tabular-nums")}
                 >
-                  {formatNumber(row.visits)}
+                  {formatNumber(row.builders)}
+                </td>
+                <td
+                  className={cn(cellPad, "text-right font-mono text-gray-900 dark:text-white tabular-nums")}
+                >
+                  <div>{formatNumber(row.interactedBuilders)}</div>
+                  <div className="text-2xs sm:text-xs font-normal text-gray-500 dark:text-neutral-400">
+                    {changedShare}
+                  </div>
                 </td>
                 <td
                   className={cn(cellPad, "text-right font-mono text-gray-900 dark:text-white tabular-nums")}
@@ -220,9 +207,8 @@ export default function UTMCampaignBreakdownTable({
                 >
                   {formatCurrency(row.revenue)}
                 </td>
-                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentageOrDash(row.visitToSignupRate, row.visits)}</td>
-                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentageOrDash(row.signupToConversionRate, row.signups)}</td>
-                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentageOrDash(row.overallConversionRate, row.visits)}</td>
+                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentageOrDash(row.builderToSignupRate, row.builders)}</td>
+                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentageOrDash(row.overallConversionRate, row.builders)}</td>
               </tr>
             );
           })}
