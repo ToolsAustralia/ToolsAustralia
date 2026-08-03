@@ -41,7 +41,10 @@ export default function PartnerPreview({ acct, partnerAccessPct, expiryLabel, ti
       ? `Access ends in ${expiryLabel} · from your pack`
       : locked
         ? "Paused — update payment to resume"
-        : "of the catalogue unlocked · top tool brands";
+        : // "top tool brands" does not survive the actual catalogue — the four brands TA
+          // advertises (Milwaukee, DeWalt, Makita, Ryobi) return zero partner offers
+          // (audit 2026-07-31). Say what the percent opens, not what we wish it opened.
+          "of the partner catalogue unlocked";
   // Accent-colored subline for the one-time + past-due-with-pack states (else muted).
   const accentSub = isOneTime || pastDueWithPack;
 

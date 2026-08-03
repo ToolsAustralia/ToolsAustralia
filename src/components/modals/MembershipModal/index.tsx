@@ -4502,9 +4502,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             label: "Manage Subscription",
             onClick: () => {
               // Open the Manage-membership bottom sheet on arrival (the ?open=subscription
-              // deep-link is handled in my-account/page.tsx), so the user lands straight on
-              // update-payment / change-tier / cancel — not just the dashboard home.
-              router.push("/my-account?open=subscription");
+              // deep-link is handled by my-account/membership/page-client.tsx), so the user
+              // lands straight on update-payment / change-tier / cancel — not a page they
+              // then have to navigate from.
+              router.push("/my-account/membership?open=subscription");
             },
           },
         });

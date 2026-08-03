@@ -75,6 +75,40 @@ marketing) is unaffected.
 
 The deprecated `domains` field is removed; `remotePatterns` covers all hosts including `localhost` for dev.
 
+### `remotePatterns` is an SSRF boundary, not a convenience list (updated 2026-07-31)
+
+The image optimiser fetches whatever URL it is handed and returns the bytes, so an unbounded
+allowlist turns `/_next/image?url=…` into a **server-side request forgery primitive** —
+anything reachable from the Vercel function, including internal endpoints, proxied through our
+own origin. `remotePatterns` is what stops that. Treat adding a host as a security change:
+only add one that is public, static media, and genuinely needed.
+
+The list is built in [`next.config.ts`](../../next.config.ts) from `DEFAULT_IMAGE_HOSTS` plus
+the comma-separated `NEXT_PUBLIC_IMAGE_HOSTS`:
+
+| Host | Why |
+|---|---|
+| `toolsaustralia.com.au`, `assets.toolsaustralia.com.au` | our own media |
+| `res.cloudinary.com` | uploads / transformations |
+| `s3-ap-southeast-2.amazonaws.com` | **added 2026-07-31** — partner-portal offer artwork on `/my-account/rewards/catalogue` |
+
+**On that last one.** It is a bucket-per-path host, so the pattern admits *any* bucket in that
+S3 region, not just the vendor's — broader than ideal, and the reason to keep it to media
+paths we actually construct ourselves. We build those URLs in exactly one adapter
+([`portal-offer-url.ts`](../../src/utils/partner-discounts/portal-offer-url.ts)) from a
+committed id list, never from user input, so nothing member-supplied reaches the optimiser.
+If Next ever supports a `pathname` constraint that fits, narrow it.
+
+Note the CSP itself did **not** change: `img-src` already allows `https:` broadly, so the
+optimiser allowlist — not CSP — is the control doing the work here.
+
+**Cost, not just safety.** 949 of 1,833 partner offers have artwork, and the file extension
+varies per offer — the bucket answers **403** for the wrong one. Guessing either the path or
+the extension fires doomed optimiser requests: every miss is a server fetch that ends in an
+error. The catalogue therefore builds image URLs only from a committed `id → extension` probe;
+see [partner/gotchas.md](../partner/gotchas.md), which also records how probing the wrong
+folder once produced a confidently wrong "3% have artwork".
+
 ## Route classes: nonce vs marketing (2026-07-19)
 
 The site serves two CSP classes, decided per-pathname in `src/middleware.ts` (`isStaticMarketingRoute`):

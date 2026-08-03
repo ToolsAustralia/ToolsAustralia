@@ -363,3 +363,31 @@ The public page ([`src/app/(site)/membership/components/MembershipPageClient.tsx
 Poppins-classed text now renders **real Poppins** instead of a browser fallback — an intended
 presentation-only change (no billing/subscription logic changed). Details:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## `useMembershipCardCta` — where an existing subscriber is sent (2026-07-31)
+
+`onSelect(plan)` does not always open the purchase modal. Two branches bounce instead, and
+**both used to land on the bare `/my-account` dashboard** — a page with no plan controls on it
+since the 2026-07 revamp moved management to `/my-account/membership`. So an existing
+subscriber tapping **Foreman** on `/membership` was silently dropped somewhere they could not
+upgrade from, while the rewards-return banner's "Unlock with Foreman" — the *same intent* —
+opened the manage sheet correctly. Reported by the owner 2026-07-31.
+
+Both branches now carry their destination sheet:
+
+| Member state | Tap | Goes to |
+|---|---|---|
+| Active subscriber, tier is an upgrade / downgrade / current | subscription tier | `/my-account/membership?open=subscription` → **Manage** sheet |
+| Past due, blocking sub | subscription tier | `/my-account/membership?open=payment` → **Payment** sheet |
+| Past due | one-time / Additional pack | purchase modal (unchanged — a standalone purchase, not a second subscription) |
+| Everyone else | any | purchase modal (unchanged) |
+
+The `?open=subscription\|payment` deep link is handled by
+[`my-account/membership/page-client.tsx`](../../src/app/(site)/my-account/membership/page-client.tsx),
+which mirrors the dashboard's existing handler and reuses its **exact** param vocabulary —
+there is no second spelling for this. It cleans the URL after opening.
+
+**Every "manage my plan" hand-off now shares that one destination**: this hook, the
+rewards-return banner, the header package-detail modal, and the payment-failure toast in
+MembershipModal. If you add a fifth, point it at `/my-account/membership`, not the dashboard.
+Full before/after table: [dashboard-account/frontend.md](../dashboard-account/frontend.md).

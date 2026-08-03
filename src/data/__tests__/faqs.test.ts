@@ -151,7 +151,12 @@ function main() {
   // Bumped 71 → 72 (2026-07-24): id 72 — partner-portal locked-offer explanation
   // (offers unlock at an access percentage set by tier / one-time pack).
   // 74 since 2026-07-31: entries 73 + 74 cover the partner-portal consent screen.
-  assert.strictEqual(entries.length, 74, `Expected 74 FAQ entries, got ${entries.length}`);
+  // Bumped 74 → 76 (2026-07-31): ids 75 + 76 — the portal's own UI surfaces, which are the
+  // vendor's and not ours: its points/savings wallet (a currency we do not operate, so it
+  // reads zero for everyone) and its editable profile copy (edits there never reach us).
+  // Both were live to members with no grounded answer, so Cobber's nearest matches were the
+  // TA rewards-points and TA profile entries — i.e. a confidently wrong answer.
+  assert.strictEqual(entries.length, 76, `Expected 76 FAQ entries, got ${entries.length}`);
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).

@@ -9,6 +9,7 @@ import {
   usePartnerDiscountConsent,
 } from "@/hooks/queries/usePartnerDiscountSso";
 import type { PartnerSsoSharedField } from "@/utils/partner-discounts/partner-consent";
+import { markPartnerPortalHandoff } from "@/utils/partner-discounts/portal-offer-url";
 
 export interface PortalHandoffState {
   /** Start the hand-off. Wire this to the "Open partner portal" CTA. */
@@ -83,7 +84,13 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
           setFlow({ kind: "transit", phase: "done", consent: viaConsent });
           timers.current.push(
             setTimeout(() => {
-              if (!cancelled.current) window.location.assign(outcome.redirectUrl);
+              if (!cancelled.current) {
+                // Record the hand-off so the catalogue can safely deep-link offers afterwards.
+                // A cold view_smart link does NOT trigger SSO — it dead-ends on a login page
+                // with the offer lost (measured; see portal-offer-url.ts).
+                markPartnerPortalHandoff();
+                window.location.assign(outcome.redirectUrl);
+              }
             }, 1100)
           );
         },
@@ -120,7 +127,13 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
             setFlow({ kind: "transit", phase: "done", consent: false });
             timers.current.push(
               setTimeout(() => {
-                if (!cancelled.current) window.location.assign(outcome.redirectUrl);
+                if (!cancelled.current) {
+                // Record the hand-off so the catalogue can safely deep-link offers afterwards.
+                // A cold view_smart link does NOT trigger SSO — it dead-ends on a login page
+                // with the offer lost (measured; see portal-offer-url.ts).
+                markPartnerPortalHandoff();
+                window.location.assign(outcome.redirectUrl);
+              }
               }, 1100)
             );
           }, 1650)

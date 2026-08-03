@@ -63,3 +63,121 @@ docs/shared-ui/tailwind-conventions.md §10.
 _Fix round 1 (2026-07-20):_ `PartnerHero` two `<h1>` hero titles used the fallback-suffixed
 `font-['[Poppins]',sans-serif]` literal (missed by the round-1 codemod) and rendered a
 fallback until converted to `font-poppins`. See docs/shared-ui/tailwind-conventions.md §10.
+
+## The browse catalogue — /my-account/rewards/catalogue (2026-07-31)
+
+The member-facing answer to "what does my tier actually open?", which the vendor's portal
+structurally cannot give: it renders locked and unlocked offers identically, never states
+the tier, and offers no "available to me" filter. We hold the per-offer threshold for all
+1,833 offers, so we answer it ourselves — no vendor dependency.
+
+**Shape.** `page.tsx` is the usual server shim carrying `dynamic = "force-dynamic"` (nonce-CSP
+route class); `page-client.tsx` does search, category filter, an "only what I can use" toggle
+(default **on**), and renders in pages of 60 with a "Show more".
+
+**Data.** `src/generated/partnerCatalogBrowse.ts` — a **third** generated view of the same
+CSV, client-safe, `[name, categoryIndex, pct]` rows (~72 KB raw, ~24 KB gzipped).
+
+- It is a **separate file from `partnerCatalogPreview.ts` on purpose.** Preview holds the tiny
+  aggregates the Rewards *card* imports; folding the rows in there would drag the whole
+  catalogue into the bundle of every surface that just wants a tier count. **Only the
+  catalogue route may import the browse file.**
+- It carries **no offer ids**: the portal has no per-offer deep link for an SSO-arriving
+  member (vendor ask 16), so a "go to this offer" button would dump them on the portal home
+  page. Names are the deliverable; redemption still happens in the portal.
+- Category strings are stored once and referenced by index — 11 strings, not 1,833 copies.
+
+**Guards** (`npm run test:partner-catalog-drift`): the browse rows must be the same multiset
+of `(name, category, pct)` as the server-only offers map, and filtering them by `pct <= tier`
+must reproduce `PARTNER_CATALOG_TIER_COUNTS` exactly. If it drifts, the page tells a member an
+offer is open when it is not — the precise failure this branch exists to fix, reintroduced on
+our own side.
+
+**Names** render through `formatPartnerOfferName()` (exported from `portal-return.ts`), so the
+329 double-space location suffixes read as "Cottonwood Motor Inn, Mildura, VIC" here and in
+the rewards-return banner. One formatter, both surfaces.
+
+**Locked rows** call `buildTierUpgradeCopy()` — the same module that generates the copy we
+hand the vendor for their own banner (`docs/partner/vendor-copy-contract.md`), so our wording
+and theirs cannot drift.
+
+> **Known limitation, deliberately shipped.** Browsing makes the catalogue's weakness legible:
+> at 50%, 438 of the 917 open offers are single-location in-store deals and the only
+> recognisable national name is Kogan. That is a merchandising problem (vendor ask 14), not a
+> reason to hide the list — but expect it to surface as member feedback.
+
+### Offer deep links (2026-07-31, revised)
+
+The browse rows **do** link per offer, reversing an earlier call in this same branch. The
+vendor serves every offer at a stable path — `{portal}/products/view_smart/{id}`, where
+`view_smart` is constant — so the id we already hold is enough. `PARTNER_CATALOG_BROWSE`
+therefore carries the vendor id as a fourth tuple slot (~99 KB raw, still ~24 KB gzipped).
+
+Two constraints shape it:
+
+- **Only OPEN offers are linked.** Sending a member to a page that will refuse them is the
+  portal's mistake; reproducing it on our side would be worse. Locked rows stay plain and
+  carry the upgrade line instead.
+- **The link needs a live portal session.** There is no way to carry a target offer through
+  the SSO hand-off (vendor ask 16), so this is a convenience for a member who has already
+  been through "Open partner portal", never the primary path. It opens in a new tab
+  (`rel="noopener noreferrer"`) so the catalogue stays put.
+
+The host lives in `NEXT_PUBLIC_PARTNER_PORTAL_URL` and is read only by
+[`portal-offer-url.ts`](../../src/utils/partner-discounts/portal-offer-url.ts) — one adapter,
+per the vendor-name rule. **Unset ⇒ no links at all**, a deliberate safe degrade rather than
+a broken href. Guarded by `npm run test:partner-catalog-drift`, which also pins every browse
+row to its own id in the offers map (a row with a neighbour's id would send a member to the
+wrong offer).
+
+### Offer cards — grid, badge, and the mixed-media problem (2026-08-01)
+
+The catalogue renders **2 cards per row on mobile, 4 on desktop** (`grid-cols-2 lg:grid-cols-4`),
+each card `h-full` inside a `flex` `<li>` so a row stays level whatever the name length.
+
+Three decisions worth not undoing:
+
+- **The badge shows an EXTRACTED value, not the vendor's sentence.** `highlight` is prose —
+  median 28 characters, up to 115 ("10% off all our goods including catering packages…").
+  Truncated into a badge that reads "10% off all our go…", which is worse than nothing.
+  `extractOfferValue()` pulls the number: **1,505 of 1,833 rows contain a `%`, 253 a `$`**, and
+  the remaining 84 are almost all "Buy 1 Get 1 Free" or "Member only offer" — hence the `BOGO`
+  and `FREE` labels rather than a silent gap. The full sentence still renders under the title,
+  because the badge carries the number and the line carries the meaning (Cashback vs Discount).
+- **`object-contain`, never `cover`.** Artwork is a mix of merchant logos (Lacoste's wordmark
+  is 64×24) and venue photography. `cover` crops a wordmark into nonsense. Contain letterboxes
+  some photos, which is the cheaper mistake. Fixed `aspect-[4/3]` keeps the grid even.
+- **The no-artwork state is a designed monogram panel**, not a broken-image slot — ~48% of the
+  catalogue has no image, so it is a normal state and has to look intentional.
+
+**Locked cards read differently at a glance**: greyscale + dimmed artwork, a dark lock badge
+carrying the required percent instead of the red value badge, muted text, no external-link
+affordance, and the upgrade line ("Foreman opens this, plus 458 more offers") replacing the
+discount. That contrast is the entire point of the page — it is what the vendor's portal
+refuses to do, so keep the two states visually unmistakable.
+
+### The catalogue is a conversion surface (2026-08-01)
+
+A locked card is the strongest upsell signal we get — the member has already told us *which*
+offer they want. So locked cards are not dead: the whole card links to
+
+```
+/membership?utm_source=rewards_catalogue&utm_medium=internal&utm_campaign=rewards-return&offer_id={id}
+```
+
+and an "Unlock this" CTA fades in over the artwork on hover/focus.
+
+**No new upsell logic exists for this.** `resolvePortalReturn` already treats an `offer_id` as a
+rewards-return and resolves it against our committed catalogue; `resolvePortalBannerView`
+already picks the cheapest covering plan and handles guest / past-due (with and without a live
+pack) / paused / active. Handing it the id reuses all of that, so the member lands on
+*"You're at 50% — JB HiFi Business needs 100%"* with the right plan preselected.
+
+`utm_source=rewards_catalogue` is the one deliberate difference from the vendor's own bounce-back.
+Keeping `utm_campaign=rewards-return` (which the resolver and existing reporting key on) while
+splitting the source makes a real question answerable: **how much upgrade intent does our
+catalogue create, versus the portal turning people away?** That is half of TA-side move 14.
+
+Guarded by `npm run test:partner-catalog-drift`, which builds the href and feeds it through the
+real `resolvePortalReturn` — a rename on either side would otherwise silently degrade every
+locked card to a generic pitch.

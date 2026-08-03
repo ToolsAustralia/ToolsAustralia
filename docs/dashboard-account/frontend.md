@@ -421,6 +421,82 @@ Both utility classes are wrapped in `@media (prefers-reduced-motion: no-preferen
 
 No new props, no new API, no service or model change — the nudge is purely a client-side presentational layer on top of the existing empty-state detection. Reference spec: `docs/superpowers/specs/2026-05-21-dashboard-tier-picker-polish-design.md` §4.
 
+### `.ta-nudge-attention` — the per-visit sibling (2026-08-03)
+
+A third member of the `ta-nudge-*` family, added for the partner-portal launch. It shares the
+vocabulary on purpose but has the **opposite lifetime**, and the difference is the whole design:
+
+| | `.ta-nudge-pulse` / `.ta-nudge-shimmer` | `.ta-nudge-attention` |
+|---|---|---|
+| Runs | `infinite` | **3 cycles (~3.4s), then stops** |
+| Points at | an **empty** card — a gap that persists until filled | a CTA that is **already there** |
+| Stops when | the member clicks (sessionStorage marker) | on its own; no marker, no JS |
+| Replays | new tab only | **every mount** — i.e. every visit to the page |
+
+The replay behaviour is free: a CSS animation restarts whenever the element is created, and the
+App Router remounts a page component on navigation. So leaving `/my-account/rewards` and coming
+back runs the pulse again, while *sitting* on the page does not leave a CTA throbbing. That is
+the behaviour the owner asked for ("if he re-visits /rewards those animations will reanimate
+again") and it needs no storage key, no hook, and nothing to clear at sign-out.
+
+Painted on `::after` rather than the element, because two of the three call sites already carry
+their own `boxShadow` inline — animating `box-shadow` on the element itself would blow the
+existing shadow away mid-run and snap it back. `border-radius: inherit` keeps the ring on the
+button's shape. Tone is per-instance via the `--ta-attention` custom property (defaults to brand
+red); pass it in the `style` object with an `as CSSProperties` cast, since `CSSProperties` has no
+index signature for custom properties.
+
+Applied to every entry point into the partner portal / catalogue / membership:
+
+- [`DashboardHero`](../../src/components/sections/dashboard/DashboardHero.tsx) — the gold
+  "Partner portal" chip (`active`), and "Become a member" (`onetime` + `none`).
+- [`RewardsPartnerCard`](../../src/components/sections/rewards/RewardsPartnerCard.tsx) —
+  "Open partner portal" and the "See what your N% opens" catalogue row (both tier-coloured,
+  `${tierHex}8c`), plus the guest "Become a member".
+- [`BottomNav`](../../src/app/(site)/my-account/components/BottomNav.tsx) +
+  [`DeskNav`](../../src/app/(site)/my-account/components/DeskNav.tsx) — a circular halo on the
+  Rewards tab icon (`rounded-full` so `border-radius: inherit` makes the ring circular).
+
+#### The navs need a key — pages don't
+
+This is the one place the mount-replay is **not** free, and it is easy to get wrong. Both navs
+live in the dashboard **layout**, which does not remount on navigation — so the animation would
+run once on first load and never again, which looks identical to "it isn't working".
+
+[`rewardsTabPulseKey(pathname)`](../../src/app/(site)/my-account/components/PartnerCatalogueSpotlight.tsx)
+returns the pathname (fed to the icon wrapper's `key`) so React remounts just that wrapper on
+each dashboard navigation, restarting the CSS animation. It returns **null while the member is
+already on `/my-account/rewards`** — pulsing the tab you are standing on is noise.
+
+#### Two cues on the Rewards tab, with different lifetimes — on purpose
+
+| | one-time dot + "New" pill | `.ta-nudge-attention` halo |
+|---|---|---|
+| Gate | `hasSeenPartnerCatalogueSpotlight(userId)` (localStorage, per account) | none |
+| Lifetime | retires permanently after the first catalogue visit | re-pulses on every dashboard navigation |
+| Says | "this is **new**" | "this is **worth opening**" |
+
+Do **not** gate the halo on the same marker. That is precisely the bug that made the whole nudge
+invisible: the owner had opened the catalogue while reviewing, which spent the marker, and the
+dot *and* the "New" pill *and* (had it been gated) the halo all vanished together — leaving no
+cue at all on an account that still had 25% partner access to spend. "New" is a claim with an
+expiry date; "worth opening" is not.
+
+Verified in Chromium across a five-step SPA walk on an account whose marker was already spent:
+`/my-account` → Membership → Rewards → Draws → Membership gave `running: 1` at each step except
+on Rewards itself, where the class is absent entirely. Note when testing this by hand that the
+full-screen `.ta-loader-root` overlay intercepts nav clicks for a moment after each transition —
+wait for the URL, not a fixed delay, or the clicks silently no-op.
+
+Ring colour is chosen against the surface it expands onto, not the button: the hero chips sit on
+a teal/coloured hero, so they use white; the gold chip uses gold (a red pulse on it reads as an
+error, not an invitation).
+
+Same reduced-motion guard as its siblings — under `prefers-reduced-motion: reduce` the `::after`
+is never generated at all (`content: none`), so there is no pseudo-element and no animation.
+Verified in Chromium via `emulateMedia`, and the replay verified by SPA-navigating away and back
+(`getAnimations()` → 1 running animation at `currentTime: 0`).
+
 ## Member-badge scoping fixes (2026-05-21)
 
 Two related fixes ensure the "Member" label is **subscription-only** — a user holding only a one-time pack is no longer surfaced as a Member.
@@ -764,3 +840,60 @@ docs/shared-ui/tailwind-conventions.md §10.
 ## 2026-07-31 — Partner-portal hand-off on the dashboard + Rewards page
 
 [my-account/page-client.tsx](../../src/app/(site)/my-account/page-client.tsx) and [my-account/rewards/page-client.tsx](../../src/app/(site)/my-account/rewards/page-client.tsx) now drive the portal CTA through `usePortalHandoff()` instead of calling the SSO mutation directly, so the hero chip and the Rewards card share one flow (consent sheet → transit takeover → redirect) with the other two call sites. Both pass the member's given name / tier / access-% so the takeover footer reads as their session. The dashboard keeps its toast for the *pre-takeover* leg only — once the takeover is up it shows failures itself. Details: [docs/partner/frontend.md](../partner/frontend.md).
+
+## "Manage my plan" has one destination (2026-07-31)
+
+Plan management moved to `/my-account/membership` in the 2026-07 revamp, but the hand-offs
+did not follow, and they had drifted apart:
+
+| Entry point | Went to | Result |
+|---|---|---|
+| Rewards-return banner "Unlock with Foreman" | `/my-account?open=subscription` | manage sheet opened |
+| `/membership` tier card (active subscriber) | `/my-account` | **bare dashboard, no sheet** |
+| Header package-detail modal | `/my-account?open=subscription` | manage sheet opened |
+| MembershipModal error toast | `/my-account?open=subscription` | manage sheet opened |
+
+So tapping **Foreman** on `/membership` dumped an existing subscriber on a page with no plan
+controls, while the banner's *identical intent* opened the sheet (owner report, 2026-07-31).
+
+All four now point at **`/my-account/membership?open=subscription`** (or `?open=payment`), and
+`membership/page-client.tsx` grew the same deep-link effect the dashboard already had —
+reusing its exact `open=subscription|payment` vocabulary rather than inventing a second one,
+and cleaning the URL after. The dashboard handler stays for any external/bookmarked links.
+
+`useMembershipCardCta`'s past-due branch moved too: it used to drop past-due members on the
+bare dashboard, and now opens the payment sheet where they can actually fix it.
+
+## Partner-catalogue discovery nudge (2026-08-01)
+
+`/my-account/rewards/catalogue` is a new surface reached from *inside* another page, so members
+who never open Rewards would never find it — and an unfound feature is an unbuilt one.
+
+`components/PartnerCatalogueSpotlight.tsx` provides:
+
+- `usePartnerCatalogueSpotlight()` → `{ show, pulsing, dismiss }`
+- `usePartnerCatalogueSpotlightSeen()` — called by the catalogue page to resolve it
+- `<SpotlightDot pulsing />` — the indicator itself
+
+Wired into **both** navs (they share `DASHBOARD_NAV`) plus a "New" chip on the Rewards card's
+catalogue row, so the trail doesn't go cold on a page with four other cards.
+
+Design constraints, each deliberate:
+
+- **Pulses ~3s, then settles to a static dot.** A permanent pulse is a permanent distraction;
+  a static dot is wayfinding. The pulse is `motion-safe:` only — `prefers-reduced-motion` gets
+  the dot and no motion (CLAUDE.md: new always-on animation needs a reduced-motion gate).
+- **Resolves on ARRIVAL, not on click.** The catalogue page marks it seen when it mounts, so
+  it survives a mis-click and disappears once the member has genuinely been there.
+- **Read after mount only.** `localStorage` does not exist on the server; reading it during
+  render would hydrate-mismatch. First paint never shows the dot — a late dot is harmless, a
+  flash of one on every load is not.
+- **Not a modal or coach-mark.** This competes with real member tasks (entries, billing). A dot
+  costs nobody anything.
+
+Storage lives beside the existing widget spotlight in
+`utils/rewards-widget-spotlight-storage.ts` under a **separate key**, so the two features retire
+independently — someone who dismissed the widget years ago should still be shown a surface that
+did not exist then. Both `partnerCatalogueSpotlightSeen_` and the portal's
+`ta.partnerPortal.handedOff` session marker are registered in `utils/auth/total-sign-out.ts`:
+per-user breadcrumbs must not follow the next person to sign in on a shared device.

@@ -38,3 +38,20 @@ partner access.
 - **Both themes, both widths**, plus `prefers-reduced-motion: reduce` — progress must still
   read from the step list and tape with all motion collapsed.
 - **Screen reader** — the active step is announced; focus is trapped on Cancel; `Esc` cancels.
+
+## partner-catalog-drift now guards three generated views (2026-07-31)
+
+`npm run test:partner-catalog-drift` covers the CSV, the server-only offers map, the
+client-safe aggregates **and** the browse catalogue, plus the member-facing copy built from
+them:
+
+- browse rows are the same multiset of `(name, category, pct)` as the offers map
+- filtering browse rows by `pct <= tier` reproduces `PARTNER_CATALOG_TIER_COUNTS`
+- `getPartnerCatalogUnlockedCount()` resolves every ladder percent, returns `null` off-ladder
+  (0% is the real case — guest / past-due with no pack) and ignores inherited keys
+- `resolveCoveringTier()` picks the cheapest covering tier; `buildTierUpgradeCopy()` states
+  the delta; `buildVendorLockedOfferCopy()` keeps the UTM; and every generated string is
+  checked against the rule-11 banned list, the word "entr(y|ies)", and US "catalog"
+
+A catalogue regeneration that changes counts fails here **before** it can tell a member an
+offer is open when it is not.

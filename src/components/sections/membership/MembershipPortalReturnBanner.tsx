@@ -179,13 +179,17 @@ export default function MembershipPortalReturnBanner({
   const ssoErrorMessage = view.cta?.kind === "sso" ? sso.error : null;
 
   /** Unlock CTA (F-005): an ACTIVE subscriber "unlocking" via a subscription is an
-   *  UPGRADE — cta.onSelect would bounce them to the bare dashboard, so route
-   *  straight to the manage-subscription sheet instead (its tier taps open the
-   *  upgrade/downgrade confirm). Everyone else opens the purchase modal. */
+   *  UPGRADE — so route straight to the manage-subscription sheet (its tier taps open the
+   *  upgrade/downgrade confirm). Everyone else opens the purchase modal.
+   *
+   *  Destination moved from /my-account to /my-account/membership (2026-07-31): plan
+   *  management lives there since the 2026-07 revamp, and the membership-page tier cards
+   *  now bounce to the same place, so "Unlock with Foreman" and tapping the Foreman card
+   *  finally land identically. */
   const handleUnlock = () => {
     if (!recommended) return;
     if (view.cta?.kind === "unlock" && view.cta.planIsSubscription && acct === "active") {
-      router.push("/my-account?open=subscription");
+      router.push("/my-account/membership?open=subscription");
       return;
     }
     onSelectPlan(recommended.plan);
@@ -263,7 +267,7 @@ export default function MembershipPortalReturnBanner({
 
           {view.cta?.kind === "manage" && (
             <Link
-              href="/my-account?open=subscription"
+              href="/my-account/membership?open=subscription"
               className="flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 py-3 text-[13.5px] font-extrabold text-white transition-colors hover:border-white/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
               {/* "Resume membership", not "Manage membership" (F-048): the sub tells them
@@ -275,7 +279,7 @@ export default function MembershipPortalReturnBanner({
 
           {view.cta?.kind === "payment" && (
             <Link
-              href="/my-account?open=payment"
+              href="/my-account/membership?open=payment"
               className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-[#fbbf24] to-[#d97706] px-5 py-3 text-[13.5px] font-extrabold text-[#241a02] transition-[filter] hover:brightness-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
               Update payment <ArrowRight className="h-4 w-4" />

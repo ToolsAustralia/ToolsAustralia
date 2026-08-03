@@ -57,8 +57,13 @@ const normName = (s: string): string =>
  *  double-space location suffixes ("World Heritage Cruises  Strahan  TAS") that
  *  collapse into an unpunctuated run-on in HTML — join them with commas for
  *  display ("World Heritage Cruises, Strahan, TAS"). The generated file stays
- *  vendor-faithful; only the rendered string changes. */
-const displayName = (s: string): string => s.replace(/\s{2,}/g, ", ");
+ *  vendor-faithful; only the rendered string changes.
+ *
+ *  EXPORTED because the browse catalogue renders the same vendor names and must not
+ *  invent a second rule for them — one formatter, both surfaces. Pure string work, so
+ *  the client bundle pays nothing beyond the function itself. */
+export const formatPartnerOfferName = (s: string): string => s.replace(/\s{2,}/g, ", ");
+const displayName = formatPartnerOfferName;
 
 /**
  * Per-map memo of the name→offer allowlist index (the offers map is a stable module

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { LayoutDashboard, Gift, Ticket, CreditCard, MessageCircle, type LucideIcon } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
+import { usePartnerCatalogueSpotlight, SpotlightDot, rewardsTabPulseKey } from "./PartnerCatalogueSpotlight";
 
 export interface DashboardNavItem {
   id: string;
@@ -35,6 +36,10 @@ export function isNavItemActive(pathname: string | null, href: string): boolean 
 export default function BottomNav() {
   const pathname = usePathname();
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
+  const spotlight = usePartnerCatalogueSpotlight();
+  // Changes on every dashboard navigation away from Rewards — remounts the icon wrapper so
+  // the CSS pulse replays. Null while on Rewards. See rewardsTabPulseKey.
+  const pulseKey = rewardsTabPulseKey(pathname);
 
   return (
     <nav
@@ -76,9 +81,23 @@ export default function BottomNav() {
             "flex min-h-16 flex-col items-center justify-center gap-1 py-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600",
             active ? "text-red-600 dark:text-red-500" : "text-muted-token hover:text-primary-token",
           );
+          // "Something new lives in here" — the partner catalogue is reached from inside
+          // Rewards, so without a cue on the tab most members never discover it. TWO cues,
+          // with different lifetimes on purpose: the dot is a one-time "NEW" marker that
+          // retires once the member has looked, while the halo re-pulses on every arrival
+          // because the tab stays worth pointing at long after it stops being new.
+          const isRewards = item.id === "rewards";
+          const showSpotlight = isRewards && spotlight.show;
+          const pulse = isRewards && pulseKey ? pulseKey : null;
           const itemInner = (
             <>
-              <Icon className="h-6 w-6" strokeWidth={active ? 2.2 : 1.9} />
+              <span
+                key={pulse ?? undefined}
+                className={cn("relative", pulse && "ta-nudge-attention rounded-full")}
+              >
+                <Icon className="h-6 w-6" strokeWidth={active ? 2.2 : 1.9} />
+                {showSpotlight && <SpotlightDot pulsing={spotlight.pulsing} className="pointer-events-none absolute -right-1 -top-0.5" />}
+              </span>
               <span className="text-[11px] font-medium">{item.label}</span>
             </>
           );

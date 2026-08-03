@@ -3,6 +3,7 @@ import type { UserData } from "@/hooks/queries/useUserQueries";
 import { getPackageById } from "@/data/membershipPackages";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
+import { PARTNER_CATALOG_TIER_COUNTS, PARTNER_CATALOG_TOTAL } from "@/generated/partnerCatalogPreview";
 
 type QueueItem = {
   packageId: string;
@@ -111,6 +112,29 @@ export function getPartnerCatalogAccessPercentForMembershipPackageId(packageId: 
 
 function partnerCatalogSummaryFromPercent(pct: number): string {
   return `${pct}% of partner offers`;
+}
+
+/**
+ * How many partner-catalogue offers a percent actually opens, and the catalogue total.
+ *
+ * WHY THIS EXISTS (rewards-portal audit, 2026-07-31): the member-facing surfaces stated
+ * the percent and nothing else, so "50%" had no denominator — and the portal we hand
+ * members into never restates their tier at all. A percent with a count behind it
+ * ("917 of 1,833") is the difference between a number and a promise the member can check.
+ *
+ * `count` is null when the percent is not on the ladder — callers fall back to the bare
+ * percent rather than printing a made-up figure. Reads the generated aggregates, which
+ * are client-safe by construction (the 1,833-row offers map is NOT — see
+ * `src/generated/partnerCatalogOffers.ts`).
+ */
+export function getPartnerCatalogUnlockedCount(pct: number): {
+  count: number | null;
+  total: number;
+} {
+  return {
+    count: Object.hasOwn(PARTNER_CATALOG_TIER_COUNTS, pct) ? PARTNER_CATALOG_TIER_COUNTS[pct] : null,
+    total: PARTNER_CATALOG_TOTAL,
+  };
 }
 
 /**

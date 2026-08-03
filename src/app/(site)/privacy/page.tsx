@@ -200,6 +200,32 @@ export default async function PrivacyPolicyPage() {
                 where Australian privacy laws may not apply. By using our services, you consent to overseas disclosure.
               </li>
             </ul>
+
+            {/* Named-processor disclosure for the partner-discount portal. The in-app consent
+                sheet already lists these exact fields before anything is transmitted; this is
+                the standing public statement of the same disclosure, so a member who wants to
+                know who holds their data can find it without opening the portal. Keep this list
+                in lockstep with buildPartnerSsoSharedFields() in
+                src/utils/partner-discounts/partner-consent.ts. */}
+            <h3 className="pt-2 text-xl font-semibold text-white">4.1 Partner Discount Portal</h3>
+            <p className="text-gray-300">
+              Our partner-discount catalogue is operated for us by <strong>iGoDirect Group</strong> (trading as
+              MyRewards), a third-party rewards platform. It is a separate service from Tools Australia, with its own
+              interface and its own terms.
+            </p>
+            <p className="text-gray-300">
+              When you choose to open the portal we single-sign you in, and only then do we send that provider your{" "}
+              <strong>first and last name</strong>, your <strong>email address</strong>, and an{" "}
+              <strong>internal account reference</strong> that links your redemptions back to your membership. We ask
+              for your agreement on-screen before this happens the first time, and we ask again if what we send ever
+              changes. We do <strong>not</strong> send your payment or card details, your billing address, your draw
+              entries or your purchase history.
+            </p>
+            <p className="text-gray-300">
+              Details you edit inside the portal are held by that provider and do not update your Tools Australia
+              account. If you would prefer we did not share these details, simply do not open the portal — the rest of
+              your membership is unaffected.
+            </p>
           </section>
 
           {/* 5. DATA SECURITY AND RETENTION */}
