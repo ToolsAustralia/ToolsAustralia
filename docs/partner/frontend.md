@@ -147,8 +147,16 @@ Three decisions worth not undoing:
 - **`object-contain`, never `cover`.** Artwork is a mix of merchant logos (Lacoste's wordmark
   is 64×24) and venue photography. `cover` crops a wordmark into nonsense. Contain letterboxes
   some photos, which is the cheaper mistake. Fixed `aspect-[4/3]` keeps the grid even.
-- **The no-artwork state is a designed monogram panel**, not a broken-image slot — ~48% of the
-  catalogue has no image, so it is a normal state and has to look intentional.
+- **The no-artwork state is a designed monogram panel**, not a broken-image slot. It now covers
+  only ~2% of the catalogue (was 48% before the in-store harvest — see
+  [gotchas.md](./gotchas.md)), but keep it: coverage is a snapshot of a third party's media
+  bucket, so it will drift back up the moment they add offers we have not re-harvested.
+- **A grid of identical images is worse than no image.** The first in-store harvest used the
+  vendor's `merchant_logo/`, which is the *brand* mark — eight "Explore" tours in a row all
+  rendered one blue logo, reading as a broken grid rather than eight offers. The fix was to
+  read each offer's own 640×480 hero from its detail page. When adding any new artwork source,
+  check what it looks like **repeated down a column of the same merchant**, not just on one
+  card in isolation.
 
 **Locked cards read differently at a glance**: greyscale + dimmed artwork, a dark lock badge
 carrying the required percent instead of the red value badge, muted text, no external-link

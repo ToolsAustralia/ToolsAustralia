@@ -172,12 +172,48 @@ nowhere in our CSV (which carries only ID, Category, Offer, Highlight, Supplier,
 so those URLs **cannot be derived from anything we hold** — they can only be read off each
 offer's HTML, which needs a live portal session.
 
-Scraping all ~885 was considered and deliberately not done: it needs an authenticated browser
-session, so it could never run in CI or from the probe script, and it would commit a mapping
-that silently rots as the vendor edits merchants. The cost/benefit lands the other way.
+### RESOLVED 2026-08-03 — we harvest them (coverage 52% → 98%)
 
-**The real fix is the products API** (`GET {portal}/api/v1/products/{id}`, currently 401). It
-would supply artwork, terms and live pricing for every offer and remove the hand-maintained CSV
-at the same time. Track it with the redemption-feed ask — same credential conversation.
+Scraping was originally judged not worth it. That was wrong, for a reason worth recording: the
+cost was estimated as ~885 **detail** pages, but the category's **listing** pages carry the same
+offer→image pairing 15 at a time, so phase 1 is ~60 loads, not 885. Re-costing the work changed
+the answer.
 
-Until then, ~48% of cards show the monogram panel, which is designed for exactly that.
+[`scripts/harvest-partner-instore-artwork.ts`](../../scripts/harvest-partner-instore-artwork.ts)
+(`npm run harvest:partner-instore-artwork`) signs in with a real member account, uses the normal
+SSO hand-off, and runs two phases:
+
+1. **Listing crawl** (~60 pages) — pairs every `view_smart/{offerId}` with its tile image.
+   Cheap, and covers the whole category.
+2. **Detail crawl** (~880 pages) — replaces each with the offer's OWN hero image.
+
+**Phase 2 is not optional, and the reason is the whole point.** Phase 1 yields
+`merchant_logo/`, which is the *brand* mark — so every offer from one merchant renders the same
+picture. Eight "Explore" tours in a row all showed one blue logo, which reads as a broken grid
+rather than eight offers. The detail page's 640×480 `product_image/{mediaId}` genuinely differs
+per offer (verified across six offers of one merchant: 131561 / 131566 / 131572 / 131578 /
+131584 / 131590). Phase 1's result is kept as a **fallback**, so a failed detail page leaves a
+logo rather than reverting to a letter tile.
+
+**The trap in phase 2:** detail pages also render a "Popular Offers" carousel whose thumbnails
+are `product_image/` too, with the *same four ids on every page*. Taking "any product_image"
+stamps the same picture across the entire catalogue. They are distinguished **structurally, not
+by size** — carousel images sit inside `a[href*="view_smart/"]`, the hero does not. Do not
+"simplify" that filter into a dimension check.
+
+Result: **1804/1833 (98%)**. The row's `imageExt` now carries either a bare extension (keyed by
+offer id, from the probe) or an explicit `"<m|p>:<mediaId>.<ext>"` reference (keyed by the
+vendor's internal id, from the harvest) — always build the URL via
+`buildPartnerPortalOfferImageUrl`, never by hand.
+
+Guarded by `npm run test:partner-catalog-drift`, which now asserts a **per-category** floor as
+well as an aggregate one. The aggregate alone was passing at 52% while one entire category sat
+at 0% — an average hid the hole for two days. If that per-category test fails, do not lower the
+floor: open one of the category's offers in the portal with a live session and read the
+`<img>` src.
+
+**The real fix is still the products API** (`GET {portal}/api/v1/products/{id}`, currently 401).
+It would supply artwork, terms and live pricing for every offer and remove both the
+hand-maintained CSV and this crawl. Track it with the redemption-feed ask — same credential
+conversation. Until then the harvest must be re-run when the CSV changes; it is a snapshot, and
+it will drift as the vendor edits merchants.

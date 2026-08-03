@@ -29,7 +29,10 @@ import {
   buildVendorLockedOfferCopy,
   buildLockedOfferUpgradeHref,
 } from "@/utils/partner-discounts/tier-upgrade-copy";
-import { buildPartnerPortalOfferUrl } from "@/utils/partner-discounts/portal-offer-url";
+import {
+  buildPartnerPortalOfferUrl,
+  buildPartnerPortalOfferImageUrl,
+} from "@/utils/partner-discounts/portal-offer-url";
 import { resolvePortalReturn } from "@/utils/partner-discounts/portal-return";
 import {
   PARTNER_CATALOG_LADDER_PCTS,
@@ -210,18 +213,102 @@ function testPortalOfferUrlBuildsFromTheVendorId(): void {
  * the probe. This floor turns that class of mistake into a failing test.
  */
 function testArtworkCoverageIsPlausible(): void {
-  const withArt = PARTNER_CATALOG_BROWSE.filter(([, , , , , ext]) => ext !== "");
+  const withArt = PARTNER_CATALOG_BROWSE.filter(([, , , , , ref]) => ref !== "");
   const pct = (withArt.length / PARTNER_CATALOG_BROWSE.length) * 100;
   assert.ok(
-    pct > 25,
-    `only ${pct.toFixed(1)}% of offers carry artwork — suspect the media PATH in ` +
-      `scripts/probe-partner-catalog-images.ts before believing this number (a wrong folder ` +
-      `degrades silently to letter tiles). Re-run \`npm run probe:partner-catalog-images\`.`
+    pct > 80,
+    `only ${pct.toFixed(1)}% of offers carry artwork — suspect a media PATH before believing ` +
+      `this number (a wrong folder degrades silently to letter tiles). Re-run ` +
+      `\`npm run probe:partner-catalog-images\` AND \`npm run harvest:partner-instore-artwork\`.`
   );
-  for (const [name, , , , , ext] of withArt) {
+  // Both wire forms — a bare extension (keyed by offer id) or an explicit "<m|p>:<id>.<ext>"
+  // reference (keyed by the vendor's merchant/media id). See PartnerCatalogBrowseRow.imageExt.
+  for (const [name, , , , , ref] of withArt) {
     assert.ok(
-      /^(png|jpg|jpeg|webp|gif)$/.test(ext),
-      `"${name}" has an implausible image extension ${JSON.stringify(ext)} — ${REGEN}`
+      /^(png|jpg|jpeg|webp|gif)$/.test(ref) || /^[mp]:\d+\.(png|jpg|jpeg|webp|gif)$/.test(ref),
+      `"${name}" has an implausible artwork reference ${JSON.stringify(ref)} — ${REGEN}`
+    );
+  }
+}
+
+/**
+ * The image-URL builder must honour BOTH artwork forms, and must never let the offer id leak
+ * into an explicit reference — that conflation is the original bug in miniature.
+ */
+function testPortalOfferImageUrlHandlesBothArtworkForms(): void {
+  const previous = process.env.NEXT_PUBLIC_PARTNER_MEDIA_URL;
+  try {
+    process.env.NEXT_PUBLIC_PARTNER_MEDIA_URL = "https://media.example.com/webroot/files/";
+
+    // FORM 1 — bare extension ⇒ keyed by the OFFER id.
+    assert.equal(
+      buildPartnerPortalOfferImageUrl("21190", "jpg"),
+      "https://media.example.com/webroot/files/product_image/21190.jpg",
+      "a bare extension must resolve against the offer id, with no doubled slash"
+    );
+
+    // FORM 2 — explicit reference ⇒ keyed by the vendor's merchant/media id. The offer id
+    // passed alongside must be ignored entirely.
+    assert.equal(
+      buildPartnerPortalOfferImageUrl("1068399", "m:1032063.jpeg"),
+      "https://media.example.com/webroot/files/merchant_logo/1032063.jpeg",
+      "an m: reference must use merchant_logo and the MERCHANT id, never the offer id"
+    );
+    assert.equal(
+      buildPartnerPortalOfferImageUrl("1068399", "p:133414.jpeg"),
+      "https://media.example.com/webroot/files/product_image/133414.jpeg",
+      "a p: reference must use product_image and the MEDIA id, never the offer id"
+    );
+
+    // Nothing malformed may become a URL — these all reach our own image optimiser.
+    for (const bad of ["", "exe", "m:abc.png", "m:123.exe", "x:123.png", "m:123", "../x.png", "m:1/2.png"]) {
+      assert.equal(
+        buildPartnerPortalOfferImageUrl("1068399", bad),
+        null,
+        `must not build an image URL from ${JSON.stringify(bad)}`
+      );
+    }
+    // A bare extension with a non-numeric offer id has nothing to key on.
+    assert.equal(buildPartnerPortalOfferImageUrl("not-an-id", "png"), null, "bare ext needs a numeric offer id");
+
+    process.env.NEXT_PUBLIC_PARTNER_MEDIA_URL = "";
+    assert.equal(buildPartnerPortalOfferImageUrl("21190", "jpg"), null, "unset media origin must yield no image");
+  } finally {
+    if (previous === undefined) delete process.env.NEXT_PUBLIC_PARTNER_MEDIA_URL;
+    else process.env.NEXT_PUBLIC_PARTNER_MEDIA_URL = previous;
+  }
+}
+
+/**
+ * PER-CATEGORY artwork floor.
+ *
+ * The aggregate floor above was already passing at 52% while ONE ENTIRE CATEGORY sat at 0%:
+ * all 877 "In-Store Offer" rows rendered a letter tile because their artwork is keyed by an
+ * internal merchant id that the offer-id probe structurally cannot reach. An average hid it.
+ *
+ * So assert the shape, not just the total: no category of any size may collapse to near-zero
+ * while the catalogue as a whole looks healthy. This is the check that would have caught the
+ * original hole on day one.
+ */
+function testNoCategoryIsStarvedOfArtwork(): void {
+  const byCategory = new Map<number, { total: number; withArt: number }>();
+  for (const [, catIndex, , , , ref] of PARTNER_CATALOG_BROWSE) {
+    const entry = byCategory.get(catIndex) ?? { total: 0, withArt: 0 };
+    entry.total += 1;
+    if (ref !== "") entry.withArt += 1;
+    byCategory.set(catIndex, entry);
+  }
+  for (const [catIndex, { total, withArt }] of byCategory) {
+    // Small categories can legitimately be all-or-nothing; 25+ rows at ~0% is a broken path.
+    if (total < 25) continue;
+    const pct = (withArt / total) * 100;
+    assert.ok(
+      pct > 50,
+      `category "${PARTNER_CATALOG_BROWSE_CATEGORIES[catIndex]}" has artwork for only ` +
+        `${withArt}/${total} (${pct.toFixed(1)}%) while the catalogue overall looks fine. ` +
+        `One starved category means a media path that does not apply to it — do NOT "fix" ` +
+        `this by lowering the floor. Open one of its offers in the portal with a live session ` +
+        `and read the <img> src.`
     );
   }
 }
@@ -302,6 +389,8 @@ for (const t of [
   testBrowseCatalogueReproducesTierCounts,
   testPortalOfferUrlBuildsFromTheVendorId,
   testArtworkCoverageIsPlausible,
+  testNoCategoryIsStarvedOfArtwork,
+  testPortalOfferImageUrlHandlesBothArtworkForms,
   testLockedOfferUpgradeHrefFeedsTheReturnResolver,
   testUpgradeCopyNamesTheCheapestCoveringTierAndStaysLegal,
 ]) {

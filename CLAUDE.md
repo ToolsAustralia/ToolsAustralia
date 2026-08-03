@@ -523,6 +523,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/partner/**",
         "src/data/partner-catalog/**",
         "scripts/build-partner-catalog-preview.ts",
+        "scripts/probe-partner-catalog-images.ts",
+        "scripts/harvest-partner-instore-artwork.ts",
         "src/generated/partnerCatalogPreview.ts",
         "src/generated/partnerCatalogBrowse.ts",
         "src/app/(site)/my-account/rewards/catalogue/**",

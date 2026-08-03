@@ -25,6 +25,7 @@ const OFFERS_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogO
 const PREVIEW_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogPreview.ts");
 const BROWSE_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogBrowse.ts");
 const ARTWORK_PATH = path.join(process.cwd(), "src", "data", "partner-catalog", "offers-with-artwork.json");
+const INSTORE_ARTWORK_PATH = path.join(process.cwd(), "src", "data", "partner-catalog", "instore-offer-artwork.json");
 
 const HEADER = ["ID", "Category", "Offer", "Highlight", "Product.terms_and_conditions", "Supplier", "AccessPercent"];
 /** Ascending ladder, derived from the single source (panel F-016) — also the emit order
@@ -244,12 +245,39 @@ ${tierEntries}
     );
   }
 
+  // SECOND artwork source, for the offers the probe structurally cannot reach. The probe
+  // derives `product_image/{offerId}.{ext}` and asks the bucket; that returns 0 of 877 for
+  // the "In-Store Offer" category, whose artwork is keyed by an internal MERCHANT id that
+  // appears nowhere in the CSV. `harvest-partner-instore-artwork.ts` reads those off the
+  // vendor's own listing pages. Values are already in the row's wire format
+  // ("m:1032063.jpeg" / "p:133414.jpeg") — see PartnerCatalogBrowseRow.imageExt.
+  let instoreArt: Readonly<Record<string, string>> = {};
+  try {
+    const raw = await fs.readFile(INSTORE_ARTWORK_PATH, "utf8");
+    instoreArt = (JSON.parse(raw) as { offers?: Record<string, string> }).offers ?? {};
+  } catch {
+    console.warn(
+      `⚠ no ${path.basename(INSTORE_ARTWORK_PATH)} — in-store offers will render without ` +
+        `artwork (that is ~48% of the catalogue). Run \`npm run harvest:partner-instore-artwork\`.`
+    );
+  }
+
+  // The harvested reference wins where present: it is what the portal ITSELF renders for that
+  // offer, whereas the probe's is derived. They do not overlap in practice (the probe finds
+  // nothing in-store), but stating the precedence beats relying on that staying true.
+  const artworkFor = (id: string): string => instoreArt[id] ?? artworkExt[id] ?? "";
+
   const browseRows = rows
     .map(
       (r) =>
-        `  [${JSON.stringify(r.offer)},${catIndex.get(r.category)},${r.pct},${JSON.stringify(r.id)},${JSON.stringify(r.highlight)},${JSON.stringify(artworkExt[r.id] ?? "")}],`
+        `  [${JSON.stringify(r.offer)},${catIndex.get(r.category)},${r.pct},${JSON.stringify(r.id)},${JSON.stringify(r.highlight)},${JSON.stringify(artworkFor(r.id))}],`
     )
     .join("\n");
+  const withArt = rows.filter((r) => artworkFor(r.id)).length;
+  console.log(
+    `  artwork: ${withArt}/${rows.length} rows (${Math.round((withArt / rows.length) * 100)}%) — ` +
+      `${rows.filter((r) => instoreArt[r.id]).length} harvested, ${rows.filter((r) => !instoreArt[r.id] && artworkExt[r.id]).length} probed`
+  );
   const browseFile = `${GENERATED_HEADER}
 
 /**
@@ -274,10 +302,19 @@ export type PartnerCatalogBrowseRow = readonly [
   /** Member-facing value line, from the vendor's Highlight column — e.g. "Get 4% Discount".
    *  Empty string when the vendor left it blank (3 of 1,833 rows). */
   highlight: string,
-  /** File extension of this offer's artwork ("png" | "jpg" | …), or "" when it has none.
-   *  949 of 1,833 have one and the extension varies per offer — see
-   *  scripts/probe-partner-catalog-images.ts. Callers must build an image URL ONLY from this
-   *  value; guessing the extension 403s through our own image optimiser. */
+  /** How to reach this offer's artwork, or "" when it has none. TWO forms, because the
+   *  vendor keys artwork two different ways and neither is derivable from the other:
+   *
+   *    "png" / "jpg" / …   bare extension ⇒ \`product_image/{id}.{ext}\`, i.e. keyed by the
+   *                        OFFER id. Derived + confirmed by probe-partner-catalog-images.ts.
+   *    "m:1032063.jpeg"    explicit \`merchant_logo/1032063.jpeg\`
+   *    "p:133414.jpeg"     explicit \`product_image/133414.jpeg\`
+   *                        ⇒ keyed by an internal MERCHANT/MEDIA id that appears nowhere in
+   *                        the CSV. Read off the portal by harvest-partner-instore-artwork.ts.
+   *
+   *  Always build the URL with buildPartnerPortalOfferImageUrl — do NOT concatenate by hand.
+   *  Guessing a path or extension 403s through our own image optimiser, and guessing is
+   *  exactly what produced two wrong coverage numbers before this field carried the answer. */
   imageExt: string,
 ];
 

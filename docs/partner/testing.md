@@ -55,3 +55,43 @@ them:
 
 A catalogue regeneration that changes counts fails here **before** it can tell a member an
 offer is open when it is not.
+
+## Artwork: two sources, two failure modes (2026-08-03)
+
+Offer artwork comes from **two** committed maps, because the vendor keys it two ways:
+
+| script | command | covers | keyed by |
+|---|---|---|---|
+| `probe-partner-catalog-images.ts` | `npm run probe:partner-catalog-images` | 948 offers | the **offer** id |
+| `harvest-partner-instore-artwork.ts` | `npm run harvest:partner-instore-artwork` | 856 in-store | the vendor's internal **merchant/media** id |
+
+After either, re-emit the generated files with `npm run build:partner-catalog` — it prints the
+combined coverage (`artwork: 1804/1833 rows (98%) — 856 harvested, 948 probed`), which is the
+quickest check that both maps were picked up.
+
+**The probe reporting ~52% is CORRECT, not a failure.** It can only find artwork keyed by the
+offer id, and one whole category ("In-Store Offer", 877 rows) is keyed differently. Do not
+"fix" that number.
+
+The harvest needs a live portal session, so it can never run in CI:
+
+```bash
+PARTNER_HARVEST_EMAIL=... PARTNER_HARVEST_PASSWORD=... npm run harvest:partner-instore-artwork -- --dry-run
+```
+
+`--dry-run` crawls and reports without writing. It exits **2** if coverage lands below 80% of
+the CSV's in-store rows — i.e. the crawl "succeeded" but found far less than exists, which is
+the silent-failure shape that produced two earlier wrong coverage numbers.
+
+### What the drift test now catches
+
+`npm run test:partner-catalog-drift` gained three assertions here:
+
+- **Aggregate floor** (>80%) — a wrong media path degrades silently to letter tiles.
+- **Per-category floor** (>50% for any category of 25+ rows) — this is the one that matters.
+  The aggregate alone passed at 52% for two days while one entire category sat at **0%**; an
+  average hid the hole. If this fails, do **not** lower the floor — open one of that category's
+  offers in the portal with a live session and read the `<img>` src.
+- **`buildPartnerPortalOfferImageUrl` handles both wire forms** — a bare extension resolves
+  against the offer id; an explicit `"<m|p>:<mediaId>.<ext>"` must use the media id and ignore
+  the offer id entirely. Conflating the two is the original bug in miniature.

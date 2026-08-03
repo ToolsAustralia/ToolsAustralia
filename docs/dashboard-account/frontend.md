@@ -428,7 +428,7 @@ vocabulary on purpose but has the **opposite lifetime**, and the difference is t
 
 | | `.ta-nudge-pulse` / `.ta-nudge-shimmer` | `.ta-nudge-attention` |
 |---|---|---|
-| Runs | `infinite` | **3 cycles (~3.4s), then stops** |
+| Runs | `infinite` | **4 cycles (~5.2s), then stops** |
 | Points at | an **empty** card — a gap that persists until filled | a CTA that is **already there** |
 | Stops when | the member clicks (sessionStorage marker) | on its own; no marker, no JS |
 | Replays | new tab only | **every mount** — i.e. every visit to the page |
@@ -880,7 +880,7 @@ catalogue row, so the trail doesn't go cold on a page with four other cards.
 
 Design constraints, each deliberate:
 
-- **Pulses ~3s, then settles to a static dot.** A permanent pulse is a permanent distraction;
+- **Pulses ~5s, then settles to a static dot.** A permanent pulse is a permanent distraction;
   a static dot is wayfinding. The pulse is `motion-safe:` only — `prefers-reduced-motion` gets
   the dot and no motion (CLAUDE.md: new always-on animation needs a reduced-motion gate).
 - **Resolves on ARRIVAL, not on click.** The catalogue page marks it seen when it mounts, so

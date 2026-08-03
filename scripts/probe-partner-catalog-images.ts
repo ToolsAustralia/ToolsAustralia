@@ -10,11 +10,24 @@
  * renders an image only where one exists, with the right extension, and never fires a request
  * that is going to 403 through our own image optimiser.
  *
- * PATH HISTORY — an earlier version of this script probed `big_image/{id}.png` and concluded
- * "64 of 1,833 offers have artwork (3%)". That was **wrong**: `big_image/` holds the portal's
- * home-page hero banners, so only a handful of merchandised ids resolved there and the number
- * looked plausible. `product_image/` is the real location and coverage is effectively total.
- * If this figure ever comes back low again, suspect the path before believing the percentage.
+ * WHAT THIS SCRIPT CANNOT SEE — read this before trusting its percentage.
+ * It only ever asks "does `product_image/{offerId}.{ext}` exist?", so it can only find artwork
+ * that is keyed by the OFFER id. It reports ~948/1833 (52%), and that shortfall is structural,
+ * not random: every category lands at 97-100% except "In-Store Offer" (877 rows) at **0%**.
+ * Those offers are not missing artwork — theirs is keyed by an internal MERCHANT id that
+ * appears nowhere in the CSV, so no derived URL can ever reach it. `harvest-partner-instore-
+ * artwork.ts` reads those off the vendor's own listing pages; between the two, real coverage
+ * is ~98%. A 52% result here is CORRECT and expected, not a failure.
+ *
+ * PATH HISTORY — two wrong conclusions, both from guessing URLs instead of reading the
+ * vendor's HTML:
+ *   1. An earlier version probed `big_image/{id}.png` and concluded "64 of 1,833 (3%)".
+ *      `big_image/` holds home-page hero banners; a handful of merchandised ids resolved
+ *      there and the number looked plausible.
+ *   2. Then `product_image/` was declared "effectively total" — the validating sample happened
+ *      to contain no in-store offers, so the 877-row hole was invisible.
+ * If a coverage figure here ever looks surprising, open one offer in the portal with a live
+ * session and read its `<img>` src before believing the percentage.
  *
  * NOT part of `prebuild`. It makes ~1,800 network calls, which would make every `npm run dev`
  * slow and non-deterministic. Run it by hand when the catalogue CSV changes:
