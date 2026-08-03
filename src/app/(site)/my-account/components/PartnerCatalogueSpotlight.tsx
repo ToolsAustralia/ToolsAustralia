@@ -11,7 +11,7 @@
  *
  * SHAPE OF THE NUDGE — deliberately small:
  *  - A dot on the Rewards nav item, in BOTH navs (they share `DASHBOARD_NAV`).
- *  - It pulses for ~3s on arrival to catch the eye, then settles to a static dot. A permanent
+ *  - It pulses for ~5s on arrival to catch the eye, then settles to a static dot. A permanent
  *    pulse is a permanent distraction; a static dot is wayfinding.
  *  - The pulse is `motion-safe:` only, so `prefers-reduced-motion` gets the dot and no motion
  *    at all (CLAUDE.md: new always-on animation needs a reduced-motion gate).
@@ -29,7 +29,9 @@ import {
   markPartnerCatalogueSpotlightSeen,
 } from "@/utils/rewards-widget-spotlight-storage";
 
-const PULSE_MS = 3000;
+/** Kept in step with `.ta-nudge-attention` in globals.css (4 x 1.3s), so the dot's ping and
+ *  the CTAs' halos start and stop together rather than one outlasting the other. */
+const PULSE_MS = 5200;
 
 /**
  * Whether to show the nudge for the signed-in member.

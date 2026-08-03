@@ -170,3 +170,44 @@ never on their tier. A one-time pack holder is a partner-catalogue user and gets
 
 When adding another entry point to the catalogue, ask which account states can reach it. If the
 answer is "active members", it is wrong.
+
+## R11. A hand-off marker is a TTL, never a boolean (2026-08-03)
+
+Deep-linking an offer (`{portal}/products/view_smart/{id}`) requires a **live portal session**.
+Without one the vendor dead-ends the member, measured end to end:
+
+```
+302  myrewards/products/view_smart/21190  →  myrewards/users/login
+302  myrewards/users/login                →  toolsaustralia.com.au/login
+     (already signed in)                  →  toolsaustralia.com.au/my-account
+```
+
+No return-to survives, so the offer is lost and the member lands somewhere they did not ask
+for. That redirect chain is the **vendor's**, not ours — but the decision to deep-link is ours,
+and that is the part we own.
+
+`hasPartnerPortalSession()` originally stored a bare `"1"` for the life of the tab. That
+conflated two different facts:
+
+- *"we handed off in this tab"* — true forever afterwards
+- *"the portal session is still valid"* — true only for a while
+
+The vendor expires its session server-side on its own schedule, so a member who handed off,
+browsed for an hour, then clicked an offer got exactly the dead-end the marker exists to
+prevent. It now stores a timestamp and is only trusted for `PORTAL_SESSION_TTL_MS` (20 min).
+
+**The two errors are not symmetrical, so bias short:**
+
+| | consequence |
+|---|---|
+| TTL too **long** | the dead-end above — offer lost, member dumped on `/my-account` |
+| TTL too **short** | one extra hand-off, which works and silently re-arms the marker |
+
+The general rule: any client-side marker standing in for a **third party's** session state must
+carry a TTL. We cannot read their cookie cross-origin, so every such marker is a guess with a
+half-life, and writing it as a boolean asserts a certainty we do not have. Deep links also open
+in a new tab (`target="_blank"`), so a mis-predicted click costs a stray tab rather than the
+member's place in the catalogue.
+
+Related: `PORTAL_HANDOFF_KEY` is registered in `total-sign-out.ts` (global rule on auth
+boundaries) — a stale marker must not survive into the next account on a shared device.

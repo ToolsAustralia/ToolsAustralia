@@ -112,7 +112,7 @@ export default function RewardsPartnerCard({
           <div className="mt-3.5 flex gap-2.5">
             {/* #e02424, not #ff5a5a — white on the lighter stop measured 3.06:1, below the
                 4.5:1 AA floor for 12.5px bold text (panel F-035). */}
-            {/* Pulses for ~3s on every arrival at Rewards (see .ta-nudge-attention). A guest
+            {/* Pulses for ~5s on every arrival at Rewards (see .ta-nudge-attention). A guest
                 landing here is looking at a locked ring — this is the move out of it. */}
             <button type="button" onClick={onBecomeMember} className="ta-nudge-attention flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#e02424] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
               Become a member

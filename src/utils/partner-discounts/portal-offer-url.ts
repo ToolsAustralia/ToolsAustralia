@@ -45,19 +45,53 @@ const OFFER_ID = /^\d+$/;
  */
 const PORTAL_HANDOFF_KEY = "ta.partnerPortal.handedOff";
 
+/**
+ * How long a hand-off is allowed to imply "the portal session is probably still alive".
+ *
+ * THIS TTL IS THE WHOLE POINT OF THE KEY, and its absence was a real bug (reported
+ * 2026-08-03). The first version stored a bare "1" for the life of the tab, which quietly
+ * conflated two different facts: "we handed off in this tab" (true forever after) and "the
+ * portal session is still valid" (true for a while). The vendor expires its session
+ * server-side on its own schedule, so a member who handed off, browsed for an hour, then
+ * clicked an offer got the dead-end this marker exists to prevent:
+ *
+ *   view_smart/{id} →302→ {portal}/users/login →302→ toolsaustralia.com.au/login
+ *                   → (already signed in) → /my-account
+ *
+ * — measured end to end, which is exactly the "it doesn't finish loading and reverts to
+ * my-account" symptom.
+ *
+ * The value is a deliberate under-estimate. We do not know the vendor's session length and
+ * cannot read their cookie cross-origin, so the two errors are not symmetrical:
+ *   • too LONG  → the dead-end above: the offer is lost and the member is dumped elsewhere.
+ *   • too SHORT → one extra hand-off, which works and silently re-arms this marker.
+ * Bias hard toward the recoverable error.
+ */
+const PORTAL_SESSION_TTL_MS = 20 * 60 * 1000;
+
 /** Call immediately before redirecting the member into the portal. */
 export function markPartnerPortalHandoff(): void {
   try {
-    sessionStorage.setItem(PORTAL_HANDOFF_KEY, "1");
+    sessionStorage.setItem(PORTAL_HANDOFF_KEY, String(Date.now()));
   } catch {
     // Private mode / storage disabled — degrade to "cold", which is the safe direction.
   }
 }
 
-/** True only when this tab has already been through the hand-off. */
+/** True only when this tab handed off recently enough that the portal session likely survives. */
 export function hasPartnerPortalSession(): boolean {
   try {
-    return sessionStorage.getItem(PORTAL_HANDOFF_KEY) === "1";
+    const raw = sessionStorage.getItem(PORTAL_HANDOFF_KEY);
+    if (!raw) return false;
+    // "1" is the pre-TTL format. Treat it as expired rather than as "now": a tab carrying the
+    // old value has by definition been open since before this shipped, so it is the LEAST
+    // likely to still hold a live portal session.
+    const at = Number(raw);
+    if (!Number.isFinite(at) || at <= 0) return false;
+    const age = Date.now() - at;
+    // A negative age means the clock moved backwards (DST, NTP correction, manual change).
+    // Treat that as untrustworthy rather than as "infinitely fresh".
+    return age >= 0 && age < PORTAL_SESSION_TTL_MS;
   } catch {
     return false;
   }
@@ -107,9 +141,21 @@ export function buildPartnerPortalOfferUrl(offerId: string): string | null {
  * Files are unoptimised and run to several hundred KB, so they must go through Next's image
  * optimiser (hence the host in `DEFAULT_IMAGE_HOSTS`) and be lazily loaded.
  */
-export function buildPartnerPortalOfferImageUrl(offerId: string, ext: string): string | null {
+export function buildPartnerPortalOfferImageUrl(offerId: string, ref: string): string | null {
   const base = process.env.NEXT_PUBLIC_PARTNER_MEDIA_URL?.trim();
-  if (!base || !OFFER_ID.test(offerId) || !/^(png|jpg|jpeg|webp|gif)$/.test(ext)) return null;
+  if (!base) return null;
   const origin = base.replace(/\/+$/, "");
-  return `${origin}/product_image/${offerId}.${ext}`;
+
+  // FORM 2 — an explicit, harvested reference: "m:1032063.jpeg" / "p:133414.jpeg". The id here
+  // is the vendor's MERCHANT/MEDIA id, deliberately NOT the offer id, so it is validated on its
+  // own and `offerId` is not consulted at all.
+  const explicit = ref.match(/^([mp]):(\d+)\.(png|jpg|jpeg|webp|gif)$/);
+  if (explicit) {
+    const folder = explicit[1] === "m" ? "merchant_logo" : "product_image";
+    return `${origin}/${folder}/${explicit[2]}.${explicit[3]}`;
+  }
+
+  // FORM 1 — a bare extension: artwork is keyed by the offer id itself.
+  if (!OFFER_ID.test(offerId) || !/^(png|jpg|jpeg|webp|gif)$/.test(ref)) return null;
+  return `${origin}/product_image/${offerId}.${ref}`;
 }

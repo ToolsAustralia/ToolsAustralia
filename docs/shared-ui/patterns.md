@@ -269,7 +269,7 @@ Pick by lifetime, not by looks:
 - **`.ta-nudge-pulse` / `.ta-nudge-shimmer`** — loop forever, for an **empty-state** card. The
   gap they point at persists until the member acts, so the animation should too. Cleared by a
   sessionStorage marker on click.
-- **`.ta-nudge-attention`** — runs **3 cycles (~3.4s) then stops**, and **restarts on every
+- **`.ta-nudge-attention`** — runs **4 cycles (~5.2s) then stops**, and **restarts on every
   mount**. For a CTA that already exists and just needs to be found. No marker, no hook, no
   sign-out cleanup: an App Router page remounts on navigation, so revisiting the page replays
   it, and staying on the page does not.

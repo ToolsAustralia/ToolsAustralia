@@ -3131,7 +3131,7 @@ html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
 
    .ta-nudge-pulse loops forever, because it marks an empty-state card — the gap
    it points at persists until the member fills it. This one runs a fixed 3
-   cycles (~3.4s) and stops, because it points at a CTA that is *already there*;
+   cycles (~5.2s) and stops, because it points at a CTA that is *already there*;
    a permanently throbbing button is noise, not wayfinding.
 
    It replays on MOUNT, which is the whole behaviour: leaving /my-account/rewards
@@ -3158,7 +3158,10 @@ html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
     inset: 0;
     border-radius: inherit;
     pointer-events: none;
-    animation: ta-nudge-attention 1.15s ease-out 3;
+    /* 4 x 1.3s = 5.2s. Was 3 x 1.15s (3.45s), which the owner found too short to notice
+       on arrival — the first cycle is often spent mid-hydration. Keep it a whole number of
+       cycles so it ends on the resting state rather than mid-expansion. */
+    animation: ta-nudge-attention 1.3s ease-out 4;
   }
 }
 

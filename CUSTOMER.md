@@ -449,7 +449,7 @@ Four customer-facing perk systems. For the full mechanics (tier-% ladders, refer
 
 **What the customer actually meets in the portal, and what we now tell them first (2026-07-31, LIVE).** The portal went live in production on 2026-07-31 and was walked end-to-end as a real Tradie (50%) member. Three facts about it are now customer-visible and shape our copy:
 
-1. **The portal shows every offer to everyone and marks none of them.** Locked and unlocked offers render identically in every grid, carousel and search result; entitlement is only revealed on the offer page, after a click. For a Tradie that is **68% of the home page** and 3 of the 4 hero slides. The portal also never states the customer's tier — the words "Tradie" and "50%" appear nowhere in it. So the Rewards card now carries the tier, the **real unlocked count** ("917 of 1,833 partner offers") and one expectation line: *"You'll see the whole catalogue in the portal. Offers above your level show an unlock prompt instead of a discount."* That sentence is what stops an unmarked lock reading as Tools Australia having oversold them; it stays until the vendor badges entitlement on the card.
+1. **The portal shows every offer to everyone and marks none of them.** Locked and unlocked offers render identically in every grid, carousel and search result; entitlement is only revealed on the offer page, after a click. For a Tradie that is **68% of the home page** and 3 of the 4 hero slides. The portal also never states the customer's tier — the words "Tradie" and "50%" appear nowhere in it. So the Rewards card carries the tier and the **real unlocked count** ("917 of 1,833 partner offers"). It also carried one expectation line — *"You'll see the whole catalogue in the portal. Offers above your level show an unlock prompt instead of a discount."* — which was **removed on 2026-08-03** once `/my-account/rewards/catalogue` (below) shipped: that page *shows* the customer which offers are theirs, which is a stronger answer than warning them in prose. If that catalogue is ever removed or gated, the sentence has to come back, because an unmarked lock in the portal otherwise reads as Tools Australia having oversold them.
 2. **Two partner programmes, one percentage.** Our own 7 direct brands ("Tools Australia partners · Deal direct · no portal") are **not** in the portal catalogue and are now labelled separately, so the access ring is not read as describing only them.
 3. **The portal has its own UI that is not ours.** It shows a **points/savings wallet we do not operate** (permanently `0` / `$0.00` for every member) and an **editable profile + password form** that is the vendor's own copy — edits there never reach Tools Australia, and its password is never needed because the portal is always opened already signed-in. Cobber has grounded answers for both (FAQ **75** + **76**) precisely because its nearest matches would otherwise have been our rewards-points and profile entries — a confident wrong answer.
 
@@ -467,13 +467,36 @@ reached from the Rewards card ("See what your 50% opens"). It lists the **real 1
 catalogue** with every offer marked against the customer's own access — open offers ticked,
 above-tier offers locked and labelled with the membership that opens them ("Foreman opens
 this, plus 458 more offers") — plus search, category filters and an "only show what I can
-use" toggle that is **on by default**. This is the question the portal cannot answer, and it
-answers it *before* the customer crosses the boundary. Offers the customer **can** use link
-straight to that offer in the portal (`/products/view_smart/{id}`, opened in a new tab); the
-link needs a live portal session, so it is a convenience after they have opened the portal
-once, not the primary path. **Locked offers are deliberately not linked** — sending someone to
-a page that will refuse them is the portal's mistake, not one to copy. Redemption still
-happens in the portal.
+use" toggle that is **on by default** (it flips **off** at 0% access, so a guest lands on the
+full browsable catalogue rather than an empty page). This is the question the portal cannot
+answer, and it answers it *before* the customer crosses the boundary. Redemption still happens
+in the portal.
+
+**Every card now carries the offer's real artwork (2026-08-03).** Coverage went 52% → **98%**.
+The gap was one whole category: all 877 **In-Store Offer** rows showed a letter tile, because
+their artwork is keyed by a vendor-internal merchant id that appears nowhere in the data we are
+given. Those are now read off the portal itself
+([harvest-partner-instore-artwork.ts](scripts/harvest-partner-instore-artwork.ts)). The customer
+sees each offer's **own** photo, not the merchant's logo — an early version used the brand mark
+and rendered eight tours from one merchant as eight identical tiles, which reads as a broken
+page. The designed monogram panel remains for the ~2% with no image; it is a normal state, and
+will grow again whenever the vendor adds offers we have not re-harvested.
+
+**Three link behaviours, so no card is a dead end.** An offer the customer **can** use links
+straight to it in the portal (`/products/view_smart/{id}`, **new tab**). A **locked** offer goes
+to `/membership` carrying its own `offer_id`, so the page can name the offer and preselect the
+cheapest plan that opens it — sending someone to a page that will refuse them is the portal's
+mistake, not one to copy.
+
+**The deep link needs a LIVE portal session, and we now stop assuming one (fixed 2026-08-03).**
+Opened without one, the vendor bounces the customer `view_smart/{id}` → its own login → our
+login → `/my-account`: the offer is lost and they land somewhere they did not ask for. We track
+"has this tab handed off?" client-side, but that flag used to last the whole tab while the
+vendor's session quietly expired server-side — so a customer who opened the portal, browsed for
+an hour, then clicked an offer hit exactly that dead end. The flag now expires after **20
+minutes**, after which a click re-runs the normal hand-off instead. The customer's worst case is
+one extra sign-in step, never a lost offer.
+
 *Known limitation:* browsing makes the catalogue's weakness legible — at 50%, 438 of the 917
 open offers are single-location in-store deals and the only recognisable national name is
 Kogan. That is a merchandising problem to solve with the vendor, not a reason to hide the list.
