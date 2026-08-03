@@ -71,16 +71,30 @@ for an offer and got a page they were already past. That is worse than not linki
 Consequences, in order of importance:
 
 1. **The catalogue only deep-links a WARM session.** `markPartnerPortalHandoff()` writes a
-   `sessionStorage` marker just before the hand-off redirect; `hasPartnerPortalSession()` gates
-   the links. The heuristic is deliberately one-way — under-detecting costs a member nothing
-   (they use the portal button and still arrive), over-detecting is what dead-ends them, and
-   nothing but the hand-off writes that key. `sessionStorage`, not `localStorage`, because the
-   portal session is itself session-scoped and a longer-lived marker would start lying.
+   timestamped `sessionStorage` marker just before the hand-off redirect;
+   `hasPartnerPortalSession()` gates the links and trusts it for 20 minutes only (rules.md
+   **R11** — a marker standing in for a third party's session state must carry a TTL; the
+   original boolean version caused exactly this dead end, reported 2026-08-03). The heuristic
+   is deliberately one-way: under-detecting costs a member one extra hand-off, over-detecting
+   is what dead-ends them, and nothing but the hand-off writes that key.
 2. **The vendor's login bouncing to ours is otherwise good behaviour** — no second password
    prompt. Worth keeping if the vendor ever reworks it. What is missing is only the return-to.
-3. **This is the concrete case for vendor ask 16.** `/verifytoken/{token}` accepts no target,
-   so we cannot hand a member straight to an offer even through SSO. Ask 16 would let the
-   catalogue link *always* work and would also fix the post-upgrade return. Cite this trace.
+3. **Ask 16 is now MEASURED, not assumed (2026-08-03).** `/verifytoken/{token}` was tested with
+   a fresh token per attempt against `/products/view_smart/21190`:
+
+   | attempt | result |
+   |---|---|
+   | `?redirect=` · `?redirect_url=` · `?return=` · `?next=` · `?url=` | signed in → `/v8/home` |
+   | path-append `/verifytoken/{token}/products/view_smart/21190` | signed in → `/v8/home` |
+
+   Every form is silently ignored — the target is not rejected, it is dropped, so there is no
+   error to detect and nothing to work around client-side. **Do not re-probe this hoping for a
+   different answer; it needs a vendor change.** Cite this table in the ask: it converts "we
+   think it doesn't support a target" into "we tested six forms and none work".
+
+   Consequence for the UX: on a cold click we can sign the member in, but never onto the offer.
+   The best available shape without a vendor change is two clicks — the cold click warms the
+   session (and re-arms the marker), the next click deep-links correctly.
 
 ## Offer artwork — the path matters more than the percentage (2026-08-01)
 
