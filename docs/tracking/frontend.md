@@ -45,6 +45,26 @@ Tracking/pixel components use `cn()` from `@/utils/cn` for conditional class com
 
 Pixel `<Script>` tags are tagged with `data-tracking-pixel="true"` (`GoogleTagManager`, `KlaviyoScriptLoader`, the Contentsquare loader in `app/layout.tsx`). The print stylesheet in [src/app/globals.css](../../src/app/globals.css) hides any `[data-tracking-pixel]` element so they don't leak into printed pages. When wiring a new pixel script, add the same attribute. See [shared-ui/patterns.md](../shared-ui/patterns.md#print-stylesheet) for the full set of print-hidden markers.
 
+## Contentsquare SPA pageviews + replay exclusion (2026-08-03)
+
+[`ContentsquarePageTracker`](../../src/components/tracking/ContentsquarePageTracker.tsx) is mounted from [`src/app/layout.tsx`](../../src/app/layout.tsx) behind `NEXT_PUBLIC_CONTENTSQUARE_ID`. Two commands, both pushed onto `window._uxa`:
+
+| Command | When | Argument |
+|---|---|---|
+| `["excludeURLforReplay", <regex string>]` | once, on mount | A **regex string** (not a path/glob). Stops session-replay capture on matching URLs. |
+| `["trackPageview", <path>]` | every `usePathname()` change except the first | **Path only** — no scheme, no domain, no hash, max 255 chars. The tag prepends the domain and appends the query string itself. |
+
+Facts verified against the live bundle (`t.contentsquare.net/uxa/<id>.js`) rather than the docs, because the vendor docs are thin here:
+
+- **Pushing before the tag loads is safe.** The tag does `window._uxa = window._uxa || []` on init and re-queues commands onto that array while its command service is still starting. This matters because the tag is `lazyOnload` — it initialises well after hydration, so every push from this component lands in the queue first.
+- **The first pageview must be skipped.** The tag emits its own "natural" pageview per document load; sending ours too double-counts every landing page.
+- **`excludeURLforReplay` takes one regex and replaces it on each set** (it is not additive). Default is `.^`, which matches nothing.
+- **Replay exclusion and pageview suppression are independent controls** in the tag — excluding a URL from replay does not stop it counting as a pageview. This component does both, driven off the same `EXCLUDED_TRACKING_PREFIXES` list in [`should-track-route.ts`](../../src/utils/tracking/should-track-route.ts) so they cannot drift.
+
+Why the exclusion list rather than just `/admin`: `/admin` renders a full customer-PII dossier (emails, names, subscription state) and `/affiliate` renders payout bank details. Neither has UX-research value, both are the highest-PII screens on the site, and replay quota is billed per pageview. Reusing the existing list keeps one source of truth for "surfaces that must not feed third-party tracking".
+
+**Note on the masking model:** the tag's built-in default already strips the `value` attribute of every `input:not([type=button]):not([type=submit])`, and applies no blanket text masking — so "input values hidden, everything else visible" is the out-of-the-box behaviour, governed further by the project's **Data Masking** setting in the Contentsquare dashboard. `<textarea>` content is **not** covered by that default (it lives in a text node, not `value`); add `data-cs-mask` to any textarea holding sensitive text.
+
 ## Poppins now loads weight 800 (2026-07-21)
 
 The `next/font/google` Poppins call in [src/app/layout.tsx](../../src/app/layout.tsx) added `"800"` to its `weight` array (now `400/500/600/700/800/900`) for the prize builder's `font-extrabold` type. No tracking behavior is affected; noted here only because `layout.tsx` is a tracking-domain file. Rationale + the "weight set is not trimmable" rule: [shared-ui/tailwind-conventions.md §10](../shared-ui/tailwind-conventions.md).

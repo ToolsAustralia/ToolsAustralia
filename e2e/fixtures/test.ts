@@ -36,12 +36,16 @@ export const test = base.extend<Fixtures>({
       // NEXT_PUBLIC_GTM_ID, NEXT_PUBLIC_GA_ID, NEXT_PUBLIC_ENABLE_GTM_TESTING, and
       // NEXT_PUBLIC_HOTJAR_ID in the server's env, so their loader components no-op for
       // every client (Playwright specs, e2e:env manual sessions, proof mode).
-      // Contentsquare has no such gate — its <Script> in src/app/layout.tsx:132-136 is
-      // HARDCODED with a fixed src and no env-conditional `disabled` prop, so the env
-      // overlay cannot neuter it; a browser-edge block is the only fix available at
-      // e2e scope. This third-party blocklist is belt-and-suspenders for Klaviyo/GTM/GA
-      // (already neutered upstream) and the ONLY fix for Contentsquare/Hotjar-by-
-      // Contentsquare: context-scoped (not page-scoped) so it also covers popups/
+      // Contentsquare is gated the SAME way as of 2026-07-22: its <Script> in
+      // src/app/layout.tsx is conditional on NEXT_PUBLIC_CONTENTSQUARE_ID, which
+      // e2e/lib/env.ts also blanks, and ContentsquarePageTracker is mounted behind the
+      // same check. (This comment previously claimed the tag was HARDCODED and that a
+      // browser-edge block was the only available fix — that has been false since the
+      // env gate landed; see docs/e2e/gotchas.md "Contentsquare has no env gate".)
+      // So this third-party blocklist is now belt-and-suspenders for ALL of them —
+      // it still earns its place because a stray .env.local with a real id set would
+      // otherwise leak live third-party traffic into a test run. It is
+      // context-scoped (not page-scoped) so it also covers popups/
       // page.context().newPage() opened from this same default context, fulfilled
       // empty-but-successful so a script tag or XHR "succeeds" silently rather than
       // erroring.

@@ -625,7 +625,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-03"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",

@@ -10,6 +10,7 @@ import { OrganizationJsonLd, WebSiteJsonLd } from "@/components/seo/StructuredDa
 import ConversionPixels from "@/components/tracking/ConversionPixels";
 import KlaviyoScriptLoader from "@/components/KlaviyoScriptLoader";
 import KlaviyoPageTracker from "@/components/KlaviyoPageTracker";
+import ContentsquarePageTracker from "@/components/tracking/ContentsquarePageTracker";
 import GoogleTagManager from "@/components/GoogleTagManager";
 import TopLoadingBar from "@/components/ui/TopLoadingBar";
 import { Analytics } from "@vercel/analytics/next";
@@ -160,6 +161,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_PIXEL_TESTING}
         />
         <KlaviyoPageTracker />
+        {/* Contentsquare virtual pageviews + session-replay exclusion for internal/staff
+            routes. Gated on the same id as the <Script> above (rules.md R8) so dev/e2e
+            never mount it; the tag itself has no SPA route detection, so without this the
+            whole visit collapses into the single natural pageview. */}
+        {contentsquareId ? <ContentsquarePageTracker /> : null}
         <Providers>{children}</Providers>
         <Analytics />
         <SpeedInsightsClient />
