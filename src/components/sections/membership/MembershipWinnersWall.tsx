@@ -18,7 +18,21 @@ function wonLabel(w: MajorDrawWinner): string {
   return d.toLocaleDateString("en-AU", { month: "short", year: "numeric" });
 }
 
-function WinnerCard({ w, accent }: { w: MajorDrawWinner; accent: string }) {
+/**
+ * The wall's own winner card — deliberately NOT the shared `components/cards/WinnerCard`.
+ *
+ * That one is a NAVIGATIONAL card: a `<Link>` to the promo / mini-draws page, promo-themed via
+ * `usePromoTheme()`, with a "1st Prize Winner" badge and an "Explore this promotion" CTA. This
+ * wall is a TRUST strip — static, accent-tinted, ending in "Verified draw". Folding the two
+ * together would mean four variant props (aspect, accent-vs-theme, link-vs-static,
+ * CTA-vs-verified-row) on a 130-line component, and they consume different types
+ * (`MajorDrawWinner` here vs `WinnerSummary` there). `cards/RecentWinnerCard` is separate for the
+ * same reason and says so in its own docblock.
+ *
+ * Named `MembershipWinnerCard`, not `WinnerCard`, so a grep for the shared component does not
+ * turn up three unrelated things called the same thing.
+ */
+function MembershipWinnerCard({ w, accent }: { w: MajorDrawWinner; accent: string }) {
   const ref = useTilt<HTMLDivElement>(5);
   const name = `${w.winnerFirstName} ${w.winnerLastName}`.trim();
   const prize = w.selectedPrize?.trim() || w.prize?.name || "Major draw prize";
@@ -29,7 +43,14 @@ function WinnerCard({ w, accent }: { w: MajorDrawWinner; accent: string }) {
         style={{ background: `linear-gradient(150deg, ${accent}, ${accent}99)` }}
       >
         {w.imageUrl ? (
-          <Image src={w.imageUrl} alt={`${name} — winner`} fill className="object-cover" sizes="(max-width:640px) 100vw, 360px" />
+          /*
+           * `object-top`, not the default centre crop: these are phone photos of people in a 4:3
+           * box, so a centred cover crop takes the top band first and cuts heads off. Pinning the
+           * top also moves faces clear of the bottom gradient + name overlay below. This is the
+           * only winner card on a 4:3 frame — the shared `cards/WinnerCard` is near-square
+           * (`4/4.1`) and the carousel card is portrait, so neither crops hard enough to need it.
+           */
+          <Image src={w.imageUrl} alt={`${name} — winner`} fill className="object-cover object-top" sizes="(max-width:640px) 100vw, 360px" />
         ) : (
           <div className="absolute inset-0 grid place-items-center">
             <span className="font-poppins text-5xl font-black text-white/85">{getInitials(w.winnerFirstName, w.winnerLastName)}</span>
@@ -89,7 +110,9 @@ export default function MembershipWinnersWall() {
             ? Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="h-[360px] animate-pulse rounded-3xl border border-token bg-black/5 dark:bg-white/5" />
               ))
-            : shown.map((w, i) => <WinnerCard key={w.id} w={w} accent={ACCENTS[i % ACCENTS.length]} />)}
+            : shown.map((w, i) => (
+                <MembershipWinnerCard key={w.id} w={w} accent={ACCENTS[i % ACCENTS.length]} />
+              ))}
         </div>
 
         <p className="mt-8 flex items-center justify-center gap-2 text-center text-sm text-muted-token">

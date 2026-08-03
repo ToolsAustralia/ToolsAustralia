@@ -307,9 +307,12 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         // A user who already holds a (blocking) subscription — active / past_due / etc. — CANNOT create a
         // second subscription, so pre-select a ONE-TIME pack (getOneTimePlan), never a membership sub
         // (getHeavyDutyPack) which would fail with EXISTING_SUBSCRIPTION. This takes precedence.
-        // Otherwise: ad landings with `?packages=one-time` also open the ONE-TIME flow (guests — members
-        // with additional access already diverted above), falling back to the subscription default if no
+        // Otherwise: a `?packages=one-time` URL also opens the ONE-TIME flow (guests — members with
+        // additional access already diverted above), falling back to the subscription default if no
         // one-time plan is resolvable yet; and plain non-subscribers get the Tradie sub as the default.
+        // That param comes from an ad landing OR from the visitor toggling the section's own tab
+        // (MembershipSection.selectTab writes it), so this CTA pre-selects the pack matching whatever
+        // tab they are actually looking at.
         const forcedOneTime =
           typeof window !== "undefined" &&
           parseMembershipPackagesTab(

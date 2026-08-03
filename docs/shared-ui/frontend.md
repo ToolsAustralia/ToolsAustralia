@@ -676,6 +676,27 @@ Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersMan
 - `showDrawLink` (default `true`) controls whether the bottom CTA strip ("Explore this promotion" / "View mini draws") is rendered. The card stays clickable either way; the strip is purely visual reinforcement on the `/winners` grid. The homepage hero passes `showDrawLink={false}` and relies on the card-level click.
 - Uses a named Tailwind group (`group/card`) on the outer Link so the inner image's unnamed `group-hover:scale` only fires on image hover, not on bottom-CTA hover.
 
+### Winner cards are deliberately three components (2026-08-03)
+
+There is no single "winner card", and that is intentional — but they are now **named** so a grep tells
+them apart:
+
+| Component | Surface | Shape |
+|---|---|---|
+| [`cards/WinnerCard`](../../src/components/cards/WinnerCard.tsx) | `/winners` (see the note above — currently unrendered) | `aspect-[4/4.1]`, promo-themed via `usePromoTheme()`, wrapped in a `<Link>`, "1st Prize Winner" badge + draw CTA |
+| [`cards/RecentWinnerCard`](../../src/components/cards/RecentWinnerCard.tsx) | homepage carousel | fixed `h-72/80/96`, full-bleed photo + name overlay, draw-type badge |
+| `MembershipWinnerCard` (local to [`sections/membership/MembershipWinnersWall`](../../src/components/sections/membership/MembershipWinnersWall.tsx)) | `/membership` "Past winners" wall | `aspect-[4/3]`, tilt, accent gradient, "Verified draw" row, **no link** |
+
+The wall's card was previously also called `WinnerCard`, so three unrelated things shared one name.
+**Do not merge them.** The shared card is a *navigational* element; the wall is a *trust* strip. Unifying
+would mean four variant props (aspect, accent-vs-theme, link-vs-static, CTA-vs-verified-row) on a 130-line
+component, and the three consume different types (`WinnerSummary` / `RecentWinner` / `MajorDrawWinner`).
+
+**`object-top` on the wall card only.** Its image is `fill` + `object-cover` in a 4:3 box, so a centred
+crop takes the top band first and cuts winners' heads off (flagged on the live page, 2026-08-03). Pinning
+the top also moves faces clear of the bottom gradient + name overlay. The other two do **not** need it —
+`WinnerCard` is near-square (`4/4.1`) and `RecentWinnerCard` is portrait, so neither crops hard enough.
+
 ## Sections
 
 ### `sections/LatestWinnerHero` — homepage "Latest Winners" (Winners Board, 2026-07-13)
@@ -732,13 +753,27 @@ for the parser contract. Consumers: `MembershipSection`, `PromoBanner`, and `use
 (which also parses the param via the shared helper).
 
 **`MembershipSection`:**
-- Reads the param via `useSearchParams()` and seeds the initial `activeTab` (`forcedPackagesTab ?? "membership"`).
+- Reads the param in a **mount effect** via `readForcedPackagesTab()` (`window.location.search`), NOT
+  `useSearchParams()` — that hook de-opts the whole prerendered marketing-class subtree to client-only
+  rendering and was the bulk of a measured CLS 0.4352 → 0.0566 on `/promotions/*`. See
+  [gotchas.md](./gotchas.md). The server always renders the `"membership"` default; the param applies
+  post-mount.
 - **Guards the user-state override effect:** when a valid param is present, the effect that re-derives the
   tab from `hasActiveSubscription`/`hasAccessToAdditionalPackages` early-returns, so a logged-in
-  non-subscriber landing on `?packages=one-time` still opens on One-Time (and a later `userData` change
-  can't fight a manual toggle). Absent/invalid param → byte-for-byte the previous behavior.
+  non-subscriber landing on `?packages=one-time` still opens on One-Time. Absent/invalid param →
+  byte-for-byte the previous behavior.
+- **Writes the param on every manual toggle (2026-08-03)** — `selectTab(tab)` is the single handler behind
+  both toggle buttons and does three things: `setActiveTab`, `history.replaceState` with
+  `buildMembershipPackagesHref(...)`, and the `membershipTabChanged` dispatch. Because the guard above
+  keys on the param being *present*, this is what actually makes "a later `userData` change can't fight a
+  manual toggle" true — before, that was only true for ad landings. `replaceState`, not `router.replace`
+  (scroll reset + RSC refetch); both values written explicitly, never deleted. Full rationale and the
+  downstream-reader audit: [subscription/frontend.md](../subscription/frontend.md).
+- Only manual selection writes — the mount seed and the user-state default effect deliberately don't, so a
+  URL stays clean until the visitor touches the toggle.
 
-The standalone `/membership` page (drawer, no toggle) does not read the param.
+The standalone `/membership` page does not render `MembershipSection` at all, so it neither reads nor
+writes the param.
 
 **Banner sync — `PromoBanner` is a second `activeTab` owner.** It reads the `?packages=` param in its **mount
 effect** (via `window.location.search` + the shared parser) and `setActiveTab` to the forced value, so the

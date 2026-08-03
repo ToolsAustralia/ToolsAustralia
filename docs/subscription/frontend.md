@@ -61,9 +61,14 @@ One-Time tab. The param is parsed by a single shared helper,
 [`src/utils/membership/packagesTabParam.ts`](../../src/utils/membership/packagesTabParam.ts):
 
 - `MEMBERSHIP_PACKAGES_QUERY_PARAM = "packages"` — the query key.
-- `parseMembershipPackagesTab(raw)` → `"membership" | "one-time" | null`. Invalid/absent → `null`, so the
+- `MembershipPackagesTab` — the canonical `"membership" | "one-time"` union, shared by the section,
+  `PromoBanner` and this param.
+- `parseMembershipPackagesTab(raw)` → `MembershipPackagesTab | null`. Invalid/absent → `null`, so the
   caller falls back to its normal (user-state) default. The default (`membership`) is expressed by
   **omitting** the param, keeping organic URLs clean (mirrors the `?toolbox=` convention).
+- `buildMembershipPackagesHref(pathname, currentSearchParams, tab)` → the same path with `packages` set,
+  every other param preserved (UTMs, `aff`, `toolbox`/`toolset`, `openMembership`). Mirrors
+  `buildPrizeSelectionHref`.
 
 On promotions pages the `activeTab` owner is **`MembershipSection`**, which reads the param and guards
 its override effect — documented in [shared-ui/frontend.md](../shared-ui/frontend.md). (During the 2026-07
@@ -72,7 +77,34 @@ could honour the param; the experiment concluded — control won — and the opt
 treatment. `/membership` (`MembershipPageClient`) never passed it, so it still seeds `activeTab` purely
 from user state.)
 
-The param only sets the **initial** tab — the visitor can still toggle manually afterwards.
+#### The toggle writes the param back (2026-08-03)
+
+The param used to be read-only: ad landings in, nothing out. `MembershipSection.selectTab` now mirrors a
+manual toggle back into the URL, so the two toggle buttons, the URL and `PromoBanner` cannot drift apart.
+
+- **Both values are written explicitly**, including the `membership` default — matching
+  `buildPrizeSelectionHref`, and for the same reason: the param's PRESENCE is what marks "this tab was
+  chosen". Deleting it on a toggle back to Membership would re-open the hole where a later `userData`
+  resolve/refetch overrides the visitor's choice, because the user-state default effect bails on
+  `readForcedPackagesTab()` being non-null. Omission still means "default" on the way IN; nothing writes
+  until the visitor actually clicks, so an untouched URL stays clean.
+- **`window.history.replaceState`, not `router.replace`** — the router resets scroll to the top even with
+  `{ scroll: false }` and refetches the RSC payload (measured 2026-07-27; same finding at
+  `PrizeShowcase.tsx:239-251`). `replaceState` adds no history entry, so Back leaves the page rather than
+  undoing one toggle at a time. It reads `window.location.search`, not a `useSearchParams()` snapshot,
+  because `replaceState` bypasses the Next router and successive toggles must build on the live URL.
+- **Downstream effect:** `useMajorDrawEntryCta.openEntryFlow` reads this param live at click time, so
+  after a toggle the hero / floating entry CTAs pre-select the pack matching the tab the visitor is
+  actually looking at (previously a guest always got the Tradie sub). See
+  [draws/frontend.md](../draws/frontend.md).
+- Verified as NOT affected: `derivePackagesFocusFromUrl` (classifies stored Meta/TikTok ad-destination
+  URLs, never visitor URLs), `usePromoPageTracking` (pathname-keyed + deduped),
+  `ContentsquarePageTracker` (pathname-keyed), `useUTMPersistence` (`useSearchParams()` is not
+  invalidated by a raw `replaceState`, and UTMs are preserved anyway).
+
+Applies everywhere `MembershipSection` renders — `/` , `/promotions/*`, `/shop*`, and
+`SubscriptionProtected` pages. `/membership` (`MembershipPageClient`) does not render the section at all,
+so it is unaffected.
 
 **Rewards-return arrival (2026-07-24):** `/membership` is the permanent redirect target for iGoDirect's
 MyRewards portal blocked-offer state (`?utm_source=partner_portal&utm_medium=referral&utm_campaign=rewards-return`,
