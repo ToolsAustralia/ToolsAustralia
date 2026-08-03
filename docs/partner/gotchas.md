@@ -231,3 +231,48 @@ It would supply artwork, terms and live pricing for every offer and remove both 
 hand-maintained CSV and this crawl. Track it with the redemption-feed ask — same credential
 conversation. Until then the harvest must be re-run when the CSV changes; it is a snapshot, and
 it will drift as the vendor edits merchants.
+
+## The iframe warm-up, and the two false negatives on the way to it (2026-08-03)
+
+An offer deep link needs a live portal session. Rather than making the member visit the portal
+first, we establish the session in a **hidden iframe** — so one tap opens the offer.
+
+Proven on production, cold start:
+
+```
+cold    view_smart/21190              -> bounced to /my-account
+iframe  verifytoken -> 302 -> /v8/home   (loaded off-screen, no navigation)
+then    view_smart/21190              -> view_smart/21190   ("Rockpool Cafe · 15% Discount")
+```
+
+### Two things that made this look impossible, and were not
+
+1. **"The vendor blocks framing."** They do not — no `X-Frame-Options`, no CSP
+   `frame-ancestors`. The first iframe attempt fired **zero network requests**, which reads
+   exactly like the vendor refusing. It was **our own** `frame-src` in
+   [`csp.ts`](../../src/utils/security/csp.ts). Always check whose policy blocked you before
+   concluding anything about theirs — a blocked frame and a refused frame look identical from
+   the outside.
+2. **"It does not set the cookie."** It does — but only from an origin that is **same-site**
+   with the portal. `myrewards.toolsaustralia.com.au` is a subdomain of ours, so a
+   `SameSite=Lax` cookie is honoured in our iframe. Test the same code from `localhost` and it
+   fails silently, because localhost is cross-site.
+
+### The trap this creates, and the gate that closes it
+
+`iframe.onload` fires **whether or not the cookie was accepted** — the frame is cross-origin,
+so its document, URL and cookies are all unreadable. A cross-site attempt therefore reports
+SUCCESS, and we would send the member to an offer that bounces them: the very dead end the
+warm-up exists to prevent, now with extra steps.
+
+`canWarmPartnerPortalSession()` refuses to attempt it unless `location.hostname` is same-site
+with `NEXT_PUBLIC_PARTNER_PORTAL_URL`. Do not "optimise" that check away, and do not relax it
+to make local dev nicer — on localhost the mechanism is **meant** to be inert, and the two-tap
+fallback runs instead.
+
+### If this ever stops working
+
+Suspect, in order: (1) our `frame-src` lost the portal host; (2) the vendor moved off a
+`toolsaustralia.com.au` subdomain, which breaks same-site and makes the gate correctly refuse;
+(3) a browser began partitioning same-site subdomain frames. Cases 1 and 2 are visible in
+config. Case 3 is not detectable from our side — the fallback exists for it.

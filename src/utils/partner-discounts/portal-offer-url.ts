@@ -97,6 +97,81 @@ export function hasPartnerPortalSession(): boolean {
   }
 }
 
+/**
+ * Establishes the portal session WITHOUT navigating, by loading the hand-off URL in a hidden
+ * iframe. Resolves true when the frame loaded (session almost certainly live), false on error
+ * or timeout.
+ *
+ * WHY THIS IS POSSIBLE AT ALL — and why it looks impossible if you test it wrong.
+ * The portal is a SUBDOMAIN of toolsaustralia.com.au, so the iframe is **same-site** and the
+ * vendor's `SameSite=Lax` session cookie is honoured inside it. From any other origin —
+ * including `localhost` — it is cross-site and silently fails. A failing local test says
+ * nothing about production. The vendor sends neither `X-Frame-Options` nor `frame-ancestors`;
+ * the only thing that ever blocked this was OUR own `frame-src` (now allowed for that one
+ * host — see utils/security/csp.ts).
+ *
+ * Verified on production: a cold `view_smart/{id}` bounces to `/my-account`; after this runs,
+ * the same URL loads the offer.
+ *
+ * `load` firing is the best signal available — the frame is cross-origin, so its document,
+ * URL and cookies are all unreadable. Treat the result as a strong hint, never a guarantee:
+ * every caller must still have a path that works when it returns false.
+ */
+export function canWarmPartnerPortalSession(): boolean {
+  if (typeof window === "undefined") return false;
+  const raw = process.env.NEXT_PUBLIC_PARTNER_PORTAL_URL?.trim();
+  if (!raw) return false;
+  try {
+    const portalHost = new URL(raw).hostname.toLowerCase();
+    // `www.` is a rendering detail, not a site boundary — strip it before comparing.
+    const here = window.location.hostname.toLowerCase().replace(/^www\./, "");
+    // Same host, or the portal is a subdomain of ours. Both are same-site, so the vendor's
+    // SameSite=Lax cookie is honoured inside our iframe.
+    return portalHost === here || portalHost.endsWith(`.${here}`);
+  } catch {
+    return false;
+  }
+}
+
+export function warmPartnerPortalSession(handoffUrl: string, timeoutMs = 9000): Promise<boolean> {
+  if (typeof document === "undefined") return Promise.resolve(false);
+  // Refuse on an origin where the cookie cannot be set. `load` fires regardless of whether the
+  // cookie was accepted, so without this gate a cross-site attempt reports SUCCESS and we send
+  // the member to an offer that then bounces them — the exact dead end this exists to prevent.
+  // localhost is the everyday case: the whole mechanism is inert in local dev, by design.
+  if (!canWarmPartnerPortalSession()) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    let settled = false;
+    const frame = document.createElement("iframe");
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      // Leave the DOM clean, but only after the session has had a moment to commit.
+      setTimeout(() => frame.remove(), 1500);
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+
+    frame.setAttribute("aria-hidden", "true");
+    frame.setAttribute("tabindex", "-1");
+    frame.title = "Partner portal sign-in";
+    // Off-screen rather than display:none — some browsers skip loading a hidden frame, and a
+    // frame that never loads would fail every warm-up.
+    frame.style.cssText =
+      "position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0;border:0;pointer-events:none";
+    // NOT sandboxed: the point is for the vendor's page to run its own script and set its
+    // session cookie. Sandboxing without allow-same-origin would defeat the entire mechanism.
+    frame.onload = () => {
+      // The vendor bounces verifytoken → /v8/home; give the final hop a beat to commit.
+      setTimeout(() => finish(true), 900);
+    };
+    frame.onerror = () => finish(false);
+    frame.src = handoffUrl;
+    document.body.appendChild(frame);
+  });
+}
+
 export function buildPartnerPortalOfferUrl(offerId: string): string | null {
   const base = process.env.NEXT_PUBLIC_PARTNER_PORTAL_URL?.trim();
   if (!base || !OFFER_ID.test(offerId)) return null;

@@ -110,6 +110,8 @@ export default function RewardsCataloguePage() {
   React.useEffect(() => setPortalWarm(hasPartnerPortalSession()), []);
   /** Set only by a hand-off that happened on THIS page — drives the "now tap again" hint. */
   const [justSignedIn, setJustSignedIn] = React.useState(false);
+  /** Which card is mid-open, so it can show a pending state instead of feeling dead. */
+  const [openingId, setOpeningId] = React.useState<string | null>(null);
 
   // At 0% the "only what I can use" default would render an empty page. Flip it once, after
   // the tier resolves, so a guest lands on the full browsable catalogue.
@@ -129,9 +131,16 @@ export default function RewardsCataloguePage() {
     openInNewTab: true,
     onHandedOff: () => {
       setPortalWarm(true);
-      setJustSignedIn(true);
+      setOpeningId(null);
     },
   });
+
+  // Only explain a second tap when there IS one. On the happy path the member is already
+  // looking at their offer, so a "tap again" banner would be describing something that did
+  // not happen. `fellBackToPortalHome` is true only when the invisible warm-up failed.
+  React.useEffect(() => {
+    if (sso.fellBackToPortalHome) setJustSignedIn(true);
+  }, [sso.fellBackToPortalHome]);
 
   // Prepared once: lower-cased names for matching, display names for rendering.
   const prepared = React.useMemo(
@@ -350,7 +359,13 @@ export default function RewardsCataloguePage() {
                   accessPct={accessPct}
                   offerId={o.id}
                   href={portalWarm ? o.href : null}
-                  onColdOpen={sso.start}
+                  // Cold: warm the session invisibly, then land on THIS offer — one tap.
+                  onColdOpen={() => {
+                    if (!o.href) return;
+                    setOpeningId(o.id);
+                    sso.startForOffer(o.href);
+                  }}
+                  opening={openingId === o.id && sso.warming}
                   imageSrc={o.imageSrc}
                 />
               ))}
@@ -475,6 +490,7 @@ function OfferRow({
   offerId,
   href,
   onColdOpen,
+  opening = false,
   imageSrc,
 }: {
   name: string;
@@ -485,6 +501,8 @@ function OfferRow({
   offerId: string;
   href: string | null;
   onColdOpen: () => void;
+  /** This card's cold open is in flight — the session is warming behind the scenes. */
+  opening?: boolean;
   imageSrc: string | null;
 }) {
   const open = pct <= accessPct;
@@ -579,10 +597,32 @@ function OfferRow({
           {inner}
         </a>
       ) : actionable ? (
-        // No portal session yet: run the hand-off rather than following a link that would
-        // bounce to a login page. The member lands in the portal signed in.
-        <button type="button" onClick={onColdOpen} className={cls} title={`${name} — opens the partner portal`}>
+        // No portal session yet. Rather than following a link that would bounce to a login
+        // page, warm the session invisibly and send the member straight to this offer.
+        // The pending state matters: the warm-up takes ~1–2s during which the new tab is
+        // already open in front of them, so the card they left behind must not look dead.
+        <button
+          type="button"
+          onClick={onColdOpen}
+          disabled={opening}
+          aria-busy={opening || undefined}
+          className={cn(cls, "relative", opening && "cursor-progress")}
+          title={`${name} — opens in the partner portal`}
+        >
           {inner}
+          {opening && (
+            <span className="absolute inset-0 grid place-items-center rounded-[14px] bg-surface/85 backdrop-blur-[1px]">
+              <span className="flex flex-col items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="h-6 w-6 rounded-full border-[3px] border-black/15 border-t-red-600 motion-safe:animate-spin dark:border-white/20 dark:border-t-red-500"
+                />
+                <span className="text-[10.5px] font-extrabold uppercase tracking-wide text-muted-token">
+                  Opening…
+                </span>
+              </span>
+            </span>
+          )}
         </button>
       ) : (
         // LOCKED → the upgrade funnel, carrying the offer id so /membership can name the

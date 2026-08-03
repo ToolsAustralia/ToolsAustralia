@@ -212,28 +212,49 @@ member's place in the catalogue.
 Related: `PORTAL_HANDOFF_KEY` is registered in `total-sign-out.ts` (global rule on auth
 boundaries) — a stale marker must not survive into the next account on a shared device.
 
-## R12. Two clicks to an offer, because one is impossible (2026-08-03)
+## R12. One tap to an offer — warm the session in a hidden iframe (2026-08-03)
 
 Opening a catalogue offer needs a live portal session, and the hand-off **cannot carry a
 destination** — `/verifytoken/{token}` silently drops `?redirect` / `?redirect_url` /
 `?return` / `?next` / `?url` and a path-append alike (all six measured; see
-[gotchas.md](./gotchas.md)). So "sign in AND land on the offer" is not one action, and no
-amount of client work makes it one.
+[gotchas.md](./gotchas.md)). "Sign in AND land on the offer" cannot be one *navigation*.
 
-Given that, the only choice is **what the member loses**. Ranked by what it costs them:
+It can, however, be one *tap*, because the two halves do not have to happen in the same place:
+load the hand-off URL in a **hidden iframe** to establish the session, then send the already-
+opened tab straight to the offer.
+
+**This works only because the portal is a subdomain of `toolsaustralia.com.au`.** Its session
+cookie is `SameSite=Lax` (no attribute ⇒ Lax), so it is honoured in an iframe from our origin —
+same-site, not third-party. From any other origin it is cross-site and silently fails.
+
+Ranked by what the member loses, which is why this shape won:
 
 | shape | cost |
 |---|---|
 | deep-link a cold session | offer lost, bounced to `/my-account` — the reported bug |
 | hand-off in THIS tab | offer lost, **catalogue lost** (filters, scroll, place in 1,833 rows) |
-| **hand-off in a NEW tab, then tap again** | one extra tap |
+| hand-off in a NEW tab, then tap again | one extra tap |
+| **iframe warm-up, then the offer** | **nothing** |
 
-So the catalogue passes `openInNewTab` to `usePortalHandoff`:
+So the catalogue calls `startForOffer(href)`:
 
-- **cold tap** → hand-off opens in a new tab; our tab keeps the catalogue, flips its cards
-  from buttons to real links, and shows *"You're signed in to the partner portal. Tap an offer
-  again and it will open straight to that deal."*
-- **warm tap** → straight to the offer.
+- **cold tap** → tab opens (gesture) showing "Opening your offer…" → hidden iframe warms the
+  session → the tab goes to **the offer**. One tap.
+- **warm tap** → straight to the offer, no iframe needed.
+- **warm-up fails** → the tab lands on the portal home and the catalogue shows *"You're signed
+  in… tap an offer again"*. The two-tap shape survives as the fallback, which is why it was
+  worth building first.
+
+### The gate that makes the fallback honest
+
+`canWarmPartnerPortalSession()` refuses to even try unless our origin is same-site with the
+portal. This is **not** an optimisation — `iframe.onload` fires whether or not the cookie was
+accepted, so a cross-site attempt reports SUCCESS, we send the member to the offer, and they
+bounce: the exact dead end this exists to prevent. On `localhost` the whole mechanism is inert
+by design and the two-tap fallback runs instead.
+
+**Corollary: you cannot test this locally.** A local failure proves nothing about production.
+Test it on a `*.toolsaustralia.com.au` origin or not at all.
 
 Three things here are load-bearing:
 

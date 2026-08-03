@@ -9,11 +9,55 @@ import {
   usePartnerDiscountConsent,
 } from "@/hooks/queries/usePartnerDiscountSso";
 import type { PartnerSsoSharedField } from "@/utils/partner-discounts/partner-consent";
-import { markPartnerPortalHandoff } from "@/utils/partner-discounts/portal-offer-url";
+import {
+  markPartnerPortalHandoff,
+  warmPartnerPortalSession,
+} from "@/utils/partner-discounts/portal-offer-url";
+
+/**
+ * Painted into the pre-opened tab while the session warms.
+ *
+ * The tab has to be opened during the click gesture (popup blockers), but the destination is
+ * not known for another second or two. Without this the member stares at `about:blank`, which
+ * reads as a broken pop-up. `about:blank` inherits our origin, so this is same-origin markup,
+ * not the vendor's — and it is a fixed string with nothing interpolated into it.
+ */
+const OPENING_TAB_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Opening your offer…</title>
+<style>
+  :root{color-scheme:light dark}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0c0f;color:#fff;
+       font:600 15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:center}
+  .w{max-width:22rem;padding:2rem}
+  .r{width:38px;height:38px;margin:0 auto 1.1rem;border-radius:50%;
+     border:3px solid rgba(255,255,255,.18);border-top-color:#ee0000;animation:s .9s linear infinite}
+  p{margin:.35rem 0;opacity:.72;font-size:13px;font-weight:500}
+  strong{font-size:16px;font-weight:800}
+  @keyframes s{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.r{animation:none;border-top-color:#ee0000}}
+</style></head><body><div class="w">
+<div class="r"></div><strong>Opening your offer</strong>
+<p>Signing you in to the partner portal…</p></div></body></html>`;
 
 export interface PortalHandoffState {
   /** Start the hand-off. Wire this to the "Open partner portal" CTA. */
   start: () => void;
+  /**
+   * Open a SPECIFIC offer, warming the portal session invisibly first.
+   *
+   * One tap: the session is established in a hidden iframe (no visible portal page), then the
+   * pre-opened tab goes straight to the offer. Falls back to landing on the portal home — the
+   * two-tap shape — when the iframe cannot warm the session.
+   */
+  startForOffer: (offerUrl: string) => void;
+  /** True while a `startForOffer` is warming, so the tapped card can show a pending state. */
+  warming: boolean;
+  /**
+   * The iframe warm-up failed and the member was dropped on the portal home instead, so the
+   * catalogue should tell them to tap again. False on the happy path — where there is nothing
+   * to explain, because they simply landed on the offer.
+   */
+  fellBackToPortalHome: boolean;
   /** True from the first click until the takeover unmounts — for the CTA's own pending state. */
   busy: boolean;
   /** Failure copy for surfaces that render an inline error next to the CTA. */
@@ -77,6 +121,8 @@ type Flow =
 export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalHandoffState {
   const [flow, setFlow] = useState<Flow>({ kind: "idle" });
   const [mounted, setMounted] = useState(false);
+  const [warming, setWarming] = useState(false);
+  const [fellBack, setFellBack] = useState(false);
   const sso = usePartnerDiscountSso();
   const consent = usePartnerDiscountConsent();
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -92,6 +138,13 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
    * after navigation.
    */
   const pendingTab = useRef<Window | null>(null);
+  /**
+   * Latest options, read at call time. Callers pass an object literal, so depending on
+   * `options` directly would rebuild every callback on every render of every CTA — and
+   * depending on nothing would capture a stale `onHandedOff`. A ref is the honest middle.
+   */
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   const closePendingTab = useCallback(() => {
     try {
@@ -130,7 +183,7 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
           tab.location.replace(redirectUrl);
           tab.opener = null;
           setFlow({ kind: "idle" });
-          options.onHandedOff?.();
+          optionsRef.current.onHandedOff?.();
           return;
         } catch {
           // Fall through to same-tab navigation below.
@@ -138,9 +191,7 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
       }
       window.location.assign(redirectUrl);
     },
-    // `onHandedOff` is read through the live `options` object, so it does not need to be a dep;
-    // adding it would re-create this callback on every render of every caller.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Reads `onHandedOff` through `optionsRef`, so it is genuinely dependency-free.
     []
   );
 
@@ -183,7 +234,7 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
     cancelled.current = false;
 
     // MUST happen here, inside the click gesture — see `pendingTab`.
-    if (options.openInNewTab) {
+    if (optionsRef.current.openInNewTab) {
       try {
         pendingTab.current = window.open("", "_blank");
       } catch {
@@ -222,10 +273,92 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
         setFlow({ kind: "transit", phase: "error", consent: false, error: err.message });
       },
     });
-    // `options` is read live for openInNewTab; including it would re-create `start` on every
-    // render of every caller and defeat the memoisation the CTAs rely on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `openInNewTab` is read through `optionsRef` — see the ref's comment.
   }, [sso, consent.isPending, closePendingTab, completeHandoff]);
+
+  /**
+   * ONE-TAP OFFER OPEN.
+   *
+   *   click ─┬─ open a tab NOW (gesture) and paint "Opening your offer…" into it
+   *          └─ POST /sso ─┬─ consent → close tab, show sheet (first-ever hand-off only)
+   *                        └─ token → hidden iframe warms the session
+   *                                     ├─ ok   → tab goes to the OFFER          (one tap)
+   *                                     └─ fail → tab goes to the portal home    (two taps)
+   *
+   * The fallback is not a nicety. The iframe only works because the portal is a subdomain of
+   * ours (same-site cookie); anything that breaks that — a browser blocking same-site frames,
+   * the vendor moving domain, a CSP regression — must still leave the member able to reach
+   * their offer, just with the extra tap.
+   */
+  const startForOffer = useCallback(
+    (offerUrl: string) => {
+      if (sso.isPending || consent.isPending || warming) return;
+      cancelled.current = false;
+      setFellBack(false);
+
+      // MUST be inside the gesture. Paint immediately so the tab is never blank.
+      try {
+        const tab = window.open("", "_blank");
+        if (tab) {
+          try {
+            tab.document.write(OPENING_TAB_HTML);
+            tab.document.close();
+          } catch {
+            // Leaving it blank is survivable; failing the whole open is not.
+          }
+        }
+        pendingTab.current = tab;
+      } catch {
+        pendingTab.current = null;
+      }
+
+      setWarming(true);
+      sso.mutate(undefined, {
+        onSuccess: async (outcome) => {
+          if (cancelled.current) return setWarming(false);
+          if (outcome.kind === "consent") {
+            // First-ever hand-off. Consent is a read-and-decide moment; a tab parked behind it
+            // looks broken, so close it and fall through to the normal (visible) flow.
+            closePendingTab();
+            setWarming(false);
+            setFlow({ kind: "consent", fields: outcome.fields });
+            return;
+          }
+
+          const warmed = await warmPartnerPortalSession(outcome.redirectUrl);
+          if (cancelled.current) return setWarming(false);
+
+          markPartnerPortalHandoff();
+          const tab = pendingTab.current;
+          pendingTab.current = null;
+          const destination = warmed ? offerUrl : outcome.redirectUrl;
+          if (!warmed) setFellBack(true);
+
+          if (tab && !tab.closed) {
+            try {
+              tab.location.replace(destination);
+              tab.opener = null;
+            } catch {
+              window.location.assign(destination);
+            }
+          } else {
+            // Popup blocked or closed: same-tab navigation. On the warmed path this still
+            // lands on the offer, so the member loses their place but not the offer.
+            window.location.assign(destination);
+          }
+          setWarming(false);
+          optionsRef.current.onHandedOff?.();
+        },
+        onError: (err) => {
+          if (cancelled.current) return;
+          closePendingTab();
+          setWarming(false);
+          setFlow({ kind: "transit", phase: "error", consent: false, error: err.message });
+        },
+      });
+    },
+    [sso, consent.isPending, warming, closePendingTab]
+  );
 
   const cancel = useCallback(() => {
     cancelled.current = true;
@@ -283,7 +416,10 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
 
   return {
     start,
-    busy: sso.isPending || flow.kind !== "idle",
+    startForOffer,
+    warming,
+    fellBackToPortalHome: fellBack,
+    busy: sso.isPending || warming || flow.kind !== "idle",
     // The takeover owns error display once it is up; only the pre-takeover leg reports inline.
     error: flow.kind === "idle" && sso.error ? sso.error.message : null,
     overlay,

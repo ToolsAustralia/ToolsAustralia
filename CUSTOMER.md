@@ -488,25 +488,29 @@ to `/membership` carrying its own `offer_id`, so the page can name the offer and
 cheapest plan that opens it — sending someone to a page that will refuse them is the portal's
 mistake, not one to copy.
 
-**Opening an offer takes two taps when the portal session has lapsed — by necessity, not by
-choice (2026-08-03).** The vendor's hand-off cannot carry a destination: `/verifytoken/{token}`
-silently drops every return-target form we tested (six of them), so "sign you in AND land you on
-the offer" is not something one tap can do. Previously the customer paid for that in the worst
-possible currency — clicking an offer without a live session bounced them `view_smart/{id}` →
-the vendor's login → ours → `/my-account`, losing the offer entirely.
+**Tapping an offer opens that offer — even with no portal session (2026-08-03).** Previously
+this was the sharpest edge on the whole surface: clicking an offer without a live portal session
+bounced the customer `view_smart/{id}` → the vendor's login → ours → `/my-account`, losing the
+offer entirely and dropping them on a page they were already past.
 
-Now:
+The vendor's hand-off cannot carry a destination — `/verifytoken/{token}` silently drops every
+return-target form we tested (six) — so signing in and landing on the offer cannot be one
+*navigation*. It can be one *tap*: we sign the customer in to the portal invisibly (a hidden
+iframe, no page they ever see) and then send the tab they already have open straight to the
+offer. What they experience is a tab opening on "Opening your offer…" for a moment, then the
+deal.
 
-- **First tap (session lapsed)** — the portal opens in a **new tab**, signed in. Their catalogue
-  tab is untouched: filters, scroll position and the offer are all still there. The page says
-  so — *"You're signed in to the partner portal. Tap an offer again and it will open straight to
-  that deal."*
-- **Second tap** — straight to the offer.
-- **While the session is fresh** (within 20 minutes of a hand-off) the first tap already goes
-  straight to the offer, so most customers never see the two-tap path at all.
+- **Normal case** — one tap, lands on the offer, no visible sign-in step at all.
+- **If the invisible sign-in cannot run** (the customer's browser blocks it, or we are not on a
+  `toolsaustralia.com.au` origin) they land on the portal home instead and the catalogue tells
+  them plainly: *"You're signed in to the partner portal. Tap an offer again and it will open
+  straight to that deal."* One extra tap, never a lost offer.
+- Their catalogue tab is never taken from them — filters, scroll position and place in 1,833
+  rows all survive.
 
-The customer's worst case is now one extra tap. It used to be a lost offer and a page they did
-not ask for.
+The only remaining exception is a customer's **first ever** hand-off, which still shows the
+consent screen (§ above) before anything is shared, and uses the same tab. After that they are
+on the one-tap path.
 
 *Known limitation:* browsing makes the catalogue's weakness legible — at 50%, 438 of the 917
 open offers are single-location in-store deals and the only recognisable national name is
