@@ -28,30 +28,29 @@ export function getPaymentMethodDeleteMessages(kind: PaymentMethodDeleteFlowKind
   confirmText: string;
   requireCheckbox?: { label: string };
 } {
+  // Copy is deliberately short: say what changes and what it costs, nothing else. Members
+  // dismiss walls of text, and the consequence here is the whole point of the dialog.
   switch (kind) {
     case "billing-last":
       return {
-        title: "Remove subscription payment method",
+        title: "Remove your only card?",
         message:
-          "This is the only saved card on your account and is used for membership renewals. Removing it will stop automatic renewals until you add a new payment method. One-off purchases may also require you to enter card details again.",
+          "Your membership won't renew until you add a new card, and one-tap checkout will be turned off.",
         confirmText: "Remove card",
         requireCheckbox: {
-          label:
-            "I understand automatic renewals may fail until I add a new payment method, and I want to remove this card.",
+          label: "I understand my membership won't renew until I add a new card.",
         },
       };
     case "billing-reassign":
       return {
-        title: "Remove card used for renewals",
-        message:
-          "This payment method is currently used for subscription renewals. After you remove it, renewals will charge another saved card on your account.",
+        title: "Remove card used for renewals?",
+        message: "Renewals will switch to another saved card on your account.",
         confirmText: "Remove card",
       };
     default:
       return {
-        title: "Remove payment method",
-        message:
-          "This card will be removed from your saved methods and detached from your Stripe customer record.",
+        title: "Remove this card?",
+        message: "You'll need to enter its details again next time you pay.",
         confirmText: "Remove",
       };
   }
