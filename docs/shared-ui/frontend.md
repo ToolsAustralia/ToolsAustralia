@@ -676,26 +676,35 @@ Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersMan
 - `showDrawLink` (default `true`) controls whether the bottom CTA strip ("Explore this promotion" / "View mini draws") is rendered. The card stays clickable either way; the strip is purely visual reinforcement on the `/winners` grid. The homepage hero passes `showDrawLink={false}` and relies on the card-level click.
 - Uses a named Tailwind group (`group/card`) on the outer Link so the inner image's unnamed `group-hover:scale` only fires on image hover, not on bottom-CTA hover.
 
-### Winner cards are deliberately three components (2026-08-03)
+### Winner cards — which one is actually on screen (2026-08-03)
 
-There is no single "winner card", and that is intentional — but they are now **named** so a grep tells
-them apart:
+Five components render a winner photo and two of them are dead, which has already caused one wrong edit.
+Check this table before touching "the winner card":
 
-| Component | Surface | Shape |
+| Component | Rendered on | Frame |
 |---|---|---|
-| [`cards/WinnerCard`](../../src/components/cards/WinnerCard.tsx) | `/winners` (see the note above — currently unrendered) | `aspect-[4/4.1]`, promo-themed via `usePromoTheme()`, wrapped in a `<Link>`, "1st Prize Winner" badge + draw CTA |
-| [`cards/RecentWinnerCard`](../../src/components/cards/RecentWinnerCard.tsx) | homepage carousel | fixed `h-72/80/96`, full-bleed photo + name overlay, draw-type badge |
-| `MembershipWinnerCard` (local to [`sections/membership/MembershipWinnersWall`](../../src/components/sections/membership/MembershipWinnersWall.tsx)) | `/membership` "Past winners" wall | `aspect-[4/3]`, tilt, accent gradient, "Verified draw" row, **no link** |
+| [`draw-results/WinnerBoardCard`](../../src/app/(site)/draw-results/components/WinnerBoardCard.tsx) | **homepage/promotions "Latest Winners", `/winners`, draw-results wall** — all three share it since 2026-07-13 | `.lw-photo` in [`draw-results.css`](../../src/app/(site)/draw-results/draw-results.css): `3/4` mobile → `4/3` ≥600px → `1/1` ≥920px |
+| `MembershipWinnerCard` (local to [`MembershipWinnersWall`](../../src/components/sections/membership/MembershipWinnersWall.tsx)) | `/membership` "Past winners" wall | `aspect-[4/3]`, tilt, accent gradient, "Verified draw" row, **no link** |
+| [`promo/WinnersShowcase`](../../src/components/sections/promo/WinnersShowcase.tsx) | promo pages (inline markup, no separate card file) | `aspect-square` |
+| [`cards/WinnerCard`](../../src/components/cards/WinnerCard.tsx) | **nothing** — superseded by `WinnerBoardCard` (see the note above) | `aspect-[4/4.1]` |
+| [`cards/RecentWinnerCard`](../../src/components/cards/RecentWinnerCard.tsx) | **nothing** — its only consumer `RecentWinnersCarousel` is itself unimported | fixed `h-72/80/96` |
 
-The wall's card was previously also called `WinnerCard`, so three unrelated things shared one name.
-**Do not merge them.** The shared card is a *navigational* element; the wall is a *trust* strip. Unifying
-would mean four variant props (aspect, accent-vs-theme, link-vs-static, CTA-vs-verified-row) on a 130-line
-component, and the three consume different types (`WinnerSummary` / `RecentWinner` / `MajorDrawWinner`).
+> Styling `WinnerBoardCard` lives in **CSS**, not Tailwind, so a `grep object-cover` over `.tsx` files
+> misses the most-rendered winner card on the site. That is exactly how it got skipped once.
 
-**`object-top` on the wall card only.** Its image is `fill` + `object-cover` in a 4:3 box, so a centred
-crop takes the top band first and cuts winners' heads off (flagged on the live page, 2026-08-03). Pinning
-the top also moves faces clear of the bottom gradient + name overlay. The other two do **not** need it —
-`WinnerCard` is near-square (`4/4.1`) and `RecentWinnerCard` is portrait, so neither crops hard enough.
+The wall's card was previously *also* called `WinnerCard`, so three unrelated things shared one name; it is
+now `MembershipWinnerCard`. **Do not merge these into one card.** `WinnerBoardCard` is a *navigational*
+element (optional `href`, month pill, draw-type sub-line); the wall is a static *trust* strip. Unifying
+would mean four variant props (aspect, accent-vs-theme, link-vs-static, CTA-vs-verified-row), and they
+consume different types (`WinnerSummary` vs `MajorDrawWinner`).
+
+**`object-position: top` on all three live surfaces.** A centred `cover` crop of a portrait phone photo
+takes the top band first and cuts winners' heads off — flagged on `/membership` 2026-08-03, then found to
+apply equally to `WinnerBoardCard` at ≥600px (4:3) and ≥920px (square), and to `WinnersShowcase`'s square.
+It also moves faces clear of the bottom scrim + nameplate. No-op on the `3/4` mobile frame, which barely
+crops a portrait source. The two dead cards were left alone deliberately — changing unrendered code is
+churn. Note `.lw-photo`'s portrait mobile frame was an *earlier* attempt at this same bug that only
+covered one breakpoint; `object-position` is the general fix and they compose safely.
 
 ## Sections
 

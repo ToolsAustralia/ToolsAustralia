@@ -94,11 +94,14 @@ export default function WinnersShowcase({
 
                   {/* Winner Image */}
                   <div className="relative w-full aspect-square bg-gradient-to-br from-slate-600 to-slate-700 overflow-hidden">
+                    {/* `object-top`: a centred crop of a portrait phone photo into this square
+                        frame trims head and feet evenly, clipping faces on tightly-framed shots.
+                        Matches WinnerBoardCard and MembershipWinnersWall. */}
                     <Image
                       src={displayImage}
                       alt={`${formattedName} - ${winner.prize.name}`}
                       fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="object-cover object-top group-hover:scale-105 transition-transform duration-300"
                       sizes="(max-width: 1024px) 50vw, 25vw"
                     />
                     {/* Gradient Overlay for Text Readability */}

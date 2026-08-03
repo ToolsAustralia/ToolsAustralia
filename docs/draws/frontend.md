@@ -95,6 +95,17 @@ the one behavioural (non-cosmetic) consequence of that change; see
 
 **Visual system:** page-scoped under a `.ta-results` root in [draw-results.css](../../src/app/(site)/draw-results/draw-results.css) — `lp-*` classes + a CSS-variable token set (light default, dark under the site's `.dark` class) + a scoped `:focus-visible` ring (`!important`, since globals.css strips outlines). Accent is brand red `#ee0000`. Archivo + Space Mono load per-route via `next/font`; body inherits Inter. Section backgrounds alternate `--bg` → `--surface` → `--bg` → `--surface` → `#08080a` finale. Mobile follows the project rule (keep the 375px layout across phone widths, scale down — see [[mobile-320-mirrors-390]]): no column collapse, smaller base headings/paddings; the **Winners Board** (`.lw-grid`) reflows 2 → 3 → 4 columns at 600px / 920px. **The `/winners` page reuses this same `.ta-results` scope + stylesheet + fonts** (cross-imports `draw-results.css`, `Reveal`, `format`, `ResultsCTA`), so the two pages stay visually aligned. The `/winners` testimony quotes use a per-route **Newsreader** serif (`.winners-serif`), and the page renders its own lp-* `WinnersTestimony` (NOT the shared cinematic section — that stays for the homepage).
 
+**Photo cropping — `object-position: top` (2026-08-03).** `.lw-photo img` pins its `object-fit: cover`
+crop to the top rather than the default centre. `.lw-photo` is `3/4` on mobile, **`4/3` from 600px** and
+**`1/1` from 920px**, and a centred crop of a portrait phone photo into either of the wider frames takes
+the top band first — cutting winners' heads off. It also moves faces clear of the `.lw-scrim` +
+`.lw-nameplate`. This fixes all three surfaces at once (Latest Winners, `/winners`, the draw-results wall)
+because they share `WinnerBoardCard`. The portrait mobile frame was an earlier, breakpoint-limited attempt
+at the same bug; the two compose safely (top-pinning is a no-op at `3/4`). Same fix shipped on
+`MembershipWinnersWall` and `WinnersShowcase` — see the card inventory in
+[shared-ui/frontend.md](../shared-ui/frontend.md), and check it before assuming which card a page renders:
+this one is styled in CSS, so it does not turn up in a Tailwind `object-cover` grep.
+
 **Real-data-only:** the mockup's placeholder permit numbers, entrant counts, **prize values**, "$ paid out" total, "watch replay", and reviews rating were all dropped (no backend source / per user request). Copy avoids "chance/odds"-style gambling language. Removed the old `CompletedDrawsSection`, `DrawResultCard`, `DrawResultsHero`, `UnifiedCompletedDrawCard`, the orphaned `CountdownHero`/`WinnerAnnouncement`, the static "How Winners Are Selected" tiles, the membership upsell, and the floating countdown banner.
 
 ## Client state
