@@ -1836,7 +1836,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
           accumulation={packageDetailModalData.accumulation}
           hasActiveSubscription={userData?.subscription?.isActive === true}
           hasAccessToAdditionalPackages={hasAdditionalPackageAccess(userData, userMajorDrawStats)}
-          onOpenSettingsSubscription={() => router.push("/my-account?open=subscription")}
+          onOpenSettingsSubscription={() => router.push("/my-account/membership?open=subscription")}
           onOpenMembershipModal={() => router.push("/membership")}
           onOpenSpecialPackages={() =>
             whenGatesOpenElseGateModal(() => requestModal("special-packages", true))

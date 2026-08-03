@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Image from "next/image";
 import { Settings, Crown, ShieldAlert, ArrowRight, Ticket, Gift, ChevronRight, AlertCircle } from "lucide-react";
 import AccessRing from "@/components/ui/AccessRing";
@@ -107,8 +108,10 @@ export default function DashboardHero({
       <button
         type="button"
         onClick={onPartnerPortal}
-        className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-[7px] text-[10px] font-extrabold shadow-[0_6px_14px_-8px_rgba(120,82,10,.7)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px"
-        style={{ background: "linear-gradient(135deg,#fbe9ad 0%,#e6c455 42%,#c99a2e 100%)", color: "#2a1e02", border: "1px solid rgba(120,82,10,.5)" }}
+        className="ta-nudge-attention inline-flex items-center gap-1.5 rounded-full px-[11px] py-[7px] text-[10px] font-extrabold shadow-[0_6px_14px_-8px_rgba(120,82,10,.7)] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-safe:active:translate-y-px"
+        /* Gold ring, not the default red — this chip is the gold rewards treatment and a
+           red pulse on it reads as an error. */
+        style={{ background: "linear-gradient(135deg,#fbe9ad 0%,#e6c455 42%,#c99a2e 100%)", color: "#2a1e02", border: "1px solid rgba(120,82,10,.5)", ["--ta-attention" as string]: "rgba(230,196,85,.75)" } as CSSProperties}
       >
         <Gift className="h-3 w-3" /> Partner portal <ChevronRight className="h-3 w-3" />
       </button>
@@ -120,12 +123,13 @@ export default function DashboardHero({
       </button>
     ) : acct === "onetime" && onBecomeMember ? (
       // Chip-sized — it stands alone now (the one-time-pack badge that used to sit
-      // beside it was removed), so it matches that badge's footprint.
-      <button type="button" onClick={onBecomeMember} className="inline-flex items-center gap-1.5 rounded-full bg-white px-[11px] py-[7px] text-[10px] font-extrabold" style={{ color: "#063d3d" }}>
+      // beside it was removed), so it matches that badge's footprint. White pulse ring,
+      // not the default red — this chip sits on the teal one-time hero.
+      <button type="button" onClick={onBecomeMember} className="ta-nudge-attention inline-flex items-center gap-1.5 rounded-full bg-white px-[11px] py-[7px] text-[10px] font-extrabold" style={{ color: "#063d3d", ["--ta-attention" as string]: "rgba(255,255,255,.7)" } as CSSProperties}>
         Become a member <ArrowRight className="h-3 w-3" />
       </button>
     ) : acct === "none" && onBecomeMember ? (
-      <button type="button" onClick={onBecomeMember} className="inline-flex items-center gap-2 rounded-full bg-white px-[18px] py-3 text-[12.5px] font-extrabold" style={{ color: "#ee0000" }}>
+      <button type="button" onClick={onBecomeMember} className="ta-nudge-attention inline-flex items-center gap-2 rounded-full bg-white px-[18px] py-3 text-[12.5px] font-extrabold" style={{ color: "#ee0000", ["--ta-attention" as string]: "rgba(255,255,255,.7)" } as CSSProperties}>
         Become a member <ArrowRight className="h-[15px] w-[15px]" />
       </button>
     ) : null;

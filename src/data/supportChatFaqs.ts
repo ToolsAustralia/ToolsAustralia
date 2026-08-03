@@ -586,5 +586,29 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "Opening the partner portal is optional — you can choose \"Not now\" on the consent screen and nothing is shared and nothing changes on your account. You just won't be able to browse or redeem partner offers until you continue, because the portal can't create your account there without your name and email. Everything else in your membership is unaffected: your free entries, the monthly prize draws and the rest of your account all work exactly the same either way.",
       category: "REWARDS",
     },
+
+    // ── PARTNER PORTAL — THE PLATFORM'S OWN UI ───────────────────────────────
+    // The portal is a white-labelled third-party platform, so it ships surfaces that are
+    // NOT part of Tools Australia's product: a points wallet we do not operate, and an
+    // editable profile that is the platform's copy rather than the TA account. Members
+    // WILL ask about both. Without these two entries Cobber's nearest neighbours are the
+    // TA rewards-points entry and the TA profile entry — i.e. it would confidently give
+    // the wrong answer. (Portal audit, 2026-07-31.)
+    {
+      id: "75",
+      question:
+        "The rewards portal shows \"Your Points: 0\" and \"$0.00 savings\" — how do I earn those points?",
+      answer:
+        "Those counters belong to the partner platform that runs the rewards catalogue, not to Tools Australia — we don't run a points currency there, so they stay at zero for every member and there's nothing you're missing out on. Your Tools Australia benefits are the free entries that come with your membership or pack, and the partner discounts themselves. Redeem an offer and you save at the merchant directly; the portal's own savings counter may not reflect it. If you're after your entries or your membership details, those live on [My Account](/my-account).",
+      category: "REWARDS",
+    },
+    {
+      id: "76",
+      question:
+        "If I change my name, email or password inside the rewards portal, does it update my Tools Australia account?",
+      answer:
+        "No — the partner platform keeps its own copy of your details, so anything you edit over there stays over there and won't reach Tools Australia. It also won't change how you sign in with us: you always reach the portal by opening it from [My Account → Rewards](/my-account/rewards), which signs you in automatically, so a password set inside the portal isn't one you need. To change the details we actually hold, use [My Account → Settings](/my-account/settings) — and if your portal details already look out of date, updating them with us is the change that matters.",
+      category: "REWARDS",
+    },
   ];
 }

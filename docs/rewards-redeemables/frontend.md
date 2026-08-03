@@ -76,3 +76,23 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## Spotlight storage now serves two features (2026-08-01)
+
+[`src/utils/rewards-widget-spotlight-storage.ts`](../../src/utils/rewards-widget-spotlight-storage.ts)
+started as one-time-per-account storage for the rewards floating widget. It now holds two
+independent pairs:
+
+| Feature | Key | Read by |
+|---|---|---|
+| Rewards floating widget | `rewardsWidgetSpotlightSeen_${userId}` | `RewardsFloatingWidget` |
+| Partner-catalogue nav dot | `partnerCatalogueSpotlightSeen_${userId}` | `my-account/components/PartnerCatalogueSpotlight` |
+
+**Separate keys on purpose.** A member who dismissed the widget long ago must still be shown the
+partner catalogue, which did not exist then — sharing one "seen" flag would silently suppress
+every future feature nudge for the longest-standing members, who are exactly the ones worth
+telling. Any third nudge should add its own pair rather than reuse either.
+
+Both prefixes are registered in [`utils/auth/total-sign-out.ts`](../../src/utils/auth/total-sign-out.ts);
+a per-user "seen" flag that survives sign-out hides the feature from the next member on a shared
+device. Behaviour and the reduced-motion gate: [dashboard-account/frontend.md](../dashboard-account/frontend.md).

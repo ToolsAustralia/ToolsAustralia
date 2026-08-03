@@ -23,6 +23,8 @@ import { PARTNER_CATALOG_LADDER_PCTS } from "@/utils/partner-discounts/partner-c
 const CSV_PATH = path.join(process.cwd(), "src", "data", "partner-catalog", "offers-list-breakdown.csv");
 const OFFERS_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogOffers.ts");
 const PREVIEW_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogPreview.ts");
+const BROWSE_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogBrowse.ts");
+const ARTWORK_PATH = path.join(process.cwd(), "src", "data", "partner-catalog", "offers-with-artwork.json");
 
 const HEADER = ["ID", "Category", "Offer", "Highlight", "Product.terms_and_conditions", "Supplier", "AccessPercent"];
 /** Ascending ladder, derived from the single source (panel F-016) — also the emit order
@@ -39,6 +41,9 @@ interface CsvRow {
   id: string;
   category: string;
   offer: string;
+  /** The CSV's `Highlight` column — the member-facing value line ("Get 4% Discount",
+   *  "$250 off a wrap"). Present on 1,830 of 1,833 rows; "" when the vendor left it blank. */
+  highlight: string;
   pct: number;
 }
 
@@ -113,7 +118,7 @@ async function main() {
     if (rec.length !== HEADER.length) {
       fail(`record ${n + 1} has ${rec.length} fields, expected ${HEADER.length}: ${JSON.stringify(rec)}`);
     }
-    const [id, category, offer, , , , pctRaw] = rec;
+    const [id, category, offer, highlight, , , pctRaw] = rec;
     if (!/^\d+$/.test(id)) fail(`record ${n + 1} has a non-numeric ID: ${JSON.stringify(id)}`);
     if (seenIds.has(id)) fail(`duplicate offer ID ${id} (record ${n + 1})`);
     seenIds.add(id);
@@ -121,7 +126,7 @@ async function main() {
     if (!ALLOWED_PERCENTS.includes(pct)) {
       fail(`record ${n + 1} (ID ${id}) has AccessPercent ${JSON.stringify(pctRaw)}, expected one of {${ALLOWED_PERCENTS.join(",")}}`);
     }
-    rows.push({ id, category, offer, pct });
+    rows.push({ id, category, offer, highlight: highlight.trim(), pct });
   }
 
   // Vendor names become OUR customer-facing headline verbatim ("{offer} unlocks at N%
@@ -208,9 +213,85 @@ ${tierEntries}
 };
 `;
 
+  // ── CLIENT-SAFE BROWSE CATALOGUE ────────────────────────────────────────────
+  // Powers /my-account/rewards/catalogue: the member-facing answer to "what does my
+  // tier actually open?", which the vendor's portal structurally cannot give (it
+  // renders locked and unlocked offers identically and never states the tier).
+  //
+  // SEPARATE FILE, deliberately. It cannot live in partnerCatalogPreview.ts: that
+  // module holds the tiny aggregates the Rewards CARD imports, so folding ~72 KB of
+  // rows into it would drag the whole catalogue into the bundle of every surface that
+  // just wants a tier count. Only the catalogue route imports this one.
+  //
+  // Names are stored category-INDEXED (an index into `categories`) rather than
+  // repeating 11 category strings across 1,833 rows — 96 KB naive → ~72 KB raw,
+  // ~24 KB over the wire.
+  const categories = [...new Set(rows.map((r) => r.category))].sort();
+  const catIndex = new Map(categories.map((c, i) => [c, i]));
+  // id → image extension, from the committed probe (scripts/probe-partner-catalog-images.ts).
+  // 949 of 1,833 offers have artwork and the extension varies per offer, so the row carries
+  // the extension rather than a boolean: the page cannot guess it, and asking for the wrong
+  // one 403s through our own image optimiser. Absent file ⇒ no artwork anywhere, a safe
+  // degrade to the letter tile.
+  let artworkExt: Readonly<Record<string, string>> = {};
+  try {
+    const raw = await fs.readFile(ARTWORK_PATH, "utf8");
+    artworkExt = JSON.parse(raw) as Record<string, string>;
+  } catch {
+    console.warn(
+      `⚠ no ${path.basename(ARTWORK_PATH)} — every offer will render without artwork. ` +
+        `Run \`npm run probe:partner-catalog-images\` to generate it.`
+    );
+  }
+
+  const browseRows = rows
+    .map(
+      (r) =>
+        `  [${JSON.stringify(r.offer)},${catIndex.get(r.category)},${r.pct},${JSON.stringify(r.id)},${JSON.stringify(r.highlight)},${JSON.stringify(artworkExt[r.id] ?? "")}],`
+    )
+    .join("\n");
+  const browseFile = `${GENERATED_HEADER}
+
+/**
+ * CLIENT-SAFE browse catalogue — every offer as \`[name, categoryIndex, pct, id]\`.
+ *
+ * Import ONLY from the catalogue route; it is ~88 KB. For a tier count use
+ * \`PARTNER_CATALOG_TIER_COUNTS\` from \`@/generated/partnerCatalogPreview\` instead.
+ * The full id → offer map (\`partnerCatalogOffers\`) stays server-only.
+ *
+ * \`pct\` is the access level that OPENS the offer, so an offer is available to a member
+ * when \`pct <= their partner access percent\`.
+ *
+ * \`id\` is the VENDOR's offer id, and it deep-links: the portal serves every offer at
+ * \`{portal}/products/view_smart/{id}\` (a stable path — \`view_smart\` does not vary).
+ * It requires a live portal session, which an SSO'd member has.
+ */
+export type PartnerCatalogBrowseRow = readonly [
+  name: string,
+  categoryIndex: number,
+  pct: number,
+  id: string,
+  /** Member-facing value line, from the vendor's Highlight column — e.g. "Get 4% Discount".
+   *  Empty string when the vendor left it blank (3 of 1,833 rows). */
+  highlight: string,
+  /** File extension of this offer's artwork ("png" | "jpg" | …), or "" when it has none.
+   *  949 of 1,833 have one and the extension varies per offer — see
+   *  scripts/probe-partner-catalog-images.ts. Callers must build an image URL ONLY from this
+   *  value; guessing the extension 403s through our own image optimiser. */
+  imageExt: string,
+];
+
+export const PARTNER_CATALOG_BROWSE_CATEGORIES: readonly string[] = ${JSON.stringify(categories)};
+
+export const PARTNER_CATALOG_BROWSE: readonly PartnerCatalogBrowseRow[] = [
+${browseRows}
+];
+`;
+
   await fs.mkdir(path.dirname(OFFERS_OUT), { recursive: true });
   await fs.writeFile(OFFERS_OUT, offersFile, "utf8");
   await fs.writeFile(PREVIEW_OUT, previewFile, "utf8");
+  await fs.writeFile(BROWSE_OUT, browseFile, "utf8");
 
   const tierSummary = ALLOWED_PERCENTS.map((p) => `${p}%→${cumulative.get(p)}`).join(" · ");
   console.log(`Wrote ${total} offers to ${path.relative(process.cwd(), OFFERS_OUT)} and aggregates to ${path.relative(process.cwd(), PREVIEW_OUT)}`);

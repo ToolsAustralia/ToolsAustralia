@@ -56,3 +56,42 @@ If the user reaches `/my-account` before the landing-page metric write completes
 ## `ManageSheet` fired `/api/stripe/payment-methods` on every dashboard load, closed or not (fixed 2026-07-21)
 
 The `/my-account` layout mounts `ManageSheet` unconditionally as a hidden overlay sibling (alongside `SupportSheet`/`PaymentSheet`) so it's ready the instant `useDashboardSheetStore`'s `sheet` flips to `"manage"`. But `ManageSheet` calls `useSavedPaymentMethods()` at the top of its component body — **above** the `sheet === "manage"` check that only gates `SheetShell`'s visible markup — so the hook (and its `/api/stripe/payment-methods` fetch) ran on every `/my-account` page load regardless of whether the sheet was ever opened. Same root cause as the `LazyMembershipModal` chunk-download footgun (see [shared-ui/gotchas.md](../shared-ui/gotchas.md)), just for a query instead of a chunk. Fixed with the identical pattern: [`LazyManageSheet`](../../src/app/(site)/my-account/components/sheets/LazyManageSheet.tsx) reads the (cheap, no-network) `sheet` selector, latches on the first time it equals `"manage"`, and only then `next/dynamic`-mounts the real `ManageSheet` — closed = zero requests, and the deep-link (`/my-account?open=subscription`) still works because the Zustand store value persists independent of whether a subscriber existed when it changed. The `/my-account/membership` page's "Manage" button reaches the same sheet (it's mounted once at the layout level, shared across all `/my-account/*` routes).
+
+## The sticky sidebar was killed by `overflow-x: hidden` on `body` (2026-07-31)
+
+**Symptom.** On desktop, `DeskNav` scrolled away with the page on any long dashboard route —
+its white panel simply ended mid-scroll, leaving bare page background beside the content. Most
+visible on `/my-account/rewards/catalogue`, which is thousands of pixels tall.
+
+**It was not the layout.** `DeskNav` is already `sticky top-0 h-screen-svh`, and
+`my-account/layout.tsx` already carries a comment warning not to put `overflow-x-hidden` on the
+flex parent for exactly this reason. The trap had simply moved up a level.
+
+**Cause — a CSS spec behaviour worth knowing.** `html` **and** `body` both set
+`overflow-x: hidden` in `globals.css` `@layer base`. Per spec, when one axis is not `visible`,
+**the other computes to `auto`**. So `body`'s `overflow-y` silently became `auto`, making body a
+scroll container — and a `position: sticky` element sticks to its nearest *scrolling* ancestor.
+With the window doing the real scrolling, the sidebar had nothing to stick to.
+
+Measured before the fix, at `scrollY: 1200`:
+
+```
+aside  position: sticky   top: 0px   height: 860px
+aside  rect.top: -1200    ← scrolled clean off the top; never stuck
+body   overflow: hidden / auto      ← the `auto` is computed, not authored
+```
+
+**Fix.** `overflow-x: clip` instead of `hidden`, scoped to `body[data-account-layout]` and
+`html:has(body[data-account-layout])`. `clip` still clips horizontal overflow — the reason the
+original rule exists — but does **not** create a scroll container and does **not** force the
+other axis to `auto`. After: `clip/visible`, and the aside reports `rect.top: 0` at scrollY 0 /
+600 / 1600 / 3000, with no horizontal scroll at 1440px or 390px.
+
+**Deliberately scoped, not global.** The same root cause almost certainly breaks
+`position: sticky` on other routes. Lifting the fix to the base `html`/`body` rule would fix
+those too, but it changes scroll behaviour on every page in the app — a call to make on
+purpose, not a side effect of a sidebar fix. The one behavioural difference to weigh if you do:
+`clip` forbids *programmatic* horizontal scrolling (`scrollLeft`), where `hidden` allows it.
+
+**If you ever see a sticky element not sticking**, check the computed `overflow` of every
+ancestor **including `body` and `html`** before touching the element itself.

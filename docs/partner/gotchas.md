@@ -55,3 +55,129 @@ This is **cosmetic and does not affect access.** Subscriber partner access is de
 ## Server-side partner-catalog tiering: hydrate the doc, fail closed (2026-06-24)
 
 `resolvePartnerCatalogPlanId` (partner-catalog-visibility.ts) reads `user.subscriptionPackageData` and `user.enrichedOneTimePackages` — fields that **do not exist on the stored Mongoose `IUser`**; they're constructed only inside `GET /api/users/[id]`. A server path (the MyRewards SSO/offers flow) that hands a raw or merely queue-reconciled doc straight to the resolver **mis-tiers a paying subscriber** (the fields are `undefined` → it falls through to `null`). Use [`buildPartnerCatalogContext` / `resolveMemberLevel`](../../src/utils/partner-discounts/member-level.ts), which hydrates via `getEffectiveBenefits` (downgrade-preservation aware — **never** the raw `subscription.packageId`, which is wrong during a downgrade window) and is **fail-closed**: an unresolved plan → `null`, never the `getPartnerCatalogAccessPercentForPlanId` 100-default. Test: `npm run test:member-level`. Background: [docs/auth/igodirect-sso-implementation-plan.md](../auth/igodirect-sso-implementation-plan.md) §3 (N1).
+
+## A cold `view_smart` link does NOT trigger SSO — it dead-ends (2026-07-31)
+
+Measured, not assumed. Requesting an offer page without a portal session:
+
+```
+/products/view_smart/{id}  →302→  {portal}/users/login  →302→  toolsaustralia.com.au/login
+```
+
+**No return-to parameter survives either hop**, so the offer is lost. And because it lands on
+*our* login, an already-signed-in member is bounced straight to their dashboard — they asked
+for an offer and got a page they were already past. That is worse than not linking at all.
+
+Consequences, in order of importance:
+
+1. **The catalogue only deep-links a WARM session.** `markPartnerPortalHandoff()` writes a
+   `sessionStorage` marker just before the hand-off redirect; `hasPartnerPortalSession()` gates
+   the links. The heuristic is deliberately one-way — under-detecting costs a member nothing
+   (they use the portal button and still arrive), over-detecting is what dead-ends them, and
+   nothing but the hand-off writes that key. `sessionStorage`, not `localStorage`, because the
+   portal session is itself session-scoped and a longer-lived marker would start lying.
+2. **The vendor's login bouncing to ours is otherwise good behaviour** — no second password
+   prompt. Worth keeping if the vendor ever reworks it. What is missing is only the return-to.
+3. **This is the concrete case for vendor ask 16.** `/verifytoken/{token}` accepts no target,
+   so we cannot hand a member straight to an offer even through SSO. Ask 16 would let the
+   catalogue link *always* work and would also fix the post-upgrade return. Cite this trace.
+
+## Offer artwork — the path matters more than the percentage (2026-08-01)
+
+Artwork is public (no portal session) and lives at:
+
+```
+{media}/product_image/{id}.{ext}      ext varies per offer — mostly png, jpg for some
+```
+
+**949 of 1,833 offers (52%) have one.** The bucket answers **403** for the wrong extension and
+nothing in the id predicts which, so `probe-partner-catalog-images.ts` resolves `id → ext` once
+and commits it; the build stamps it onto each browse row and the page builds a URL only from
+that value. Never guess an extension — a miss is a doomed request through our own optimiser.
+
+### The mistake worth remembering
+
+An earlier pass probed `big_image/{id}.png`, reported **"64 of 1,833 (3%)"**, and then designed
+around that figure — treating the letter tile as the normal case and calling artwork "a bonus
+on 64 rows".
+
+**Wrong by 16×.** `big_image/` holds the portal's home-page **hero banners**, so precisely the
+handful of merchandised ids resolved there and the number looked plausible. Two sampling errors
+compounded it: an 18-id sample suggesting "~50%" and a later 15-id sample suggesting "15/15"
+were *both* drawn from ids seen on the portal's home page — the merchandised set by definition
+— so neither measured the catalogue.
+
+Three lessons, in order of usefulness:
+
+1. **A wrong media path fails silently.** Every row renders a letter tile and the page still
+   "works", so nothing surfaces it. `npm run test:partner-catalog-drift` now fails when coverage
+   drops below 25%, with a message saying to suspect the path before believing the number.
+2. **Never sample ids you have already seen somewhere.** That is the merchandised set.
+3. **Read the vendor's own HTML rather than guessing URLs.** Fetching `view_smart/{id}` with a
+   live session and reading the `<img src>` gave the true path in a single request — after
+   several rounds of probing invented paths had produced a confidently wrong answer.
+
+Re-run after any catalogue change:
+
+```bash
+npm run probe:partner-catalog-images   # ~3 min, tries png/jpg/jpeg/webp per id, retries once
+npm run build:partner-catalog          # re-emit with the refreshed extensions
+```
+
+## Our committed catalogue is a SUBSET of what the portal shows (2026-08-01)
+
+`offers-list-breakdown.csv` is the curated allowlist, and it is **provably missing offers the
+portal merchandises on its own home page**. Sampling 11 live offer ids against the CSV:
+
+| Live in the portal | In our CSV |
+|---|---|
+| BOGOHO Rewards `1066778` | **missing** |
+| Supercheap Auto eGift `1065007` | **missing** |
+| CAT Workwear `1050770` | **missing** |
+| Choice eGift Card `1064986` | **missing** |
+| MyDriver Australia `1068657` | **missing** |
+| Greenwood Pharmacy, Dharma Bums, JB HiFi Business, The Good Guys, Coles eGift, Amazon eGift | present |
+
+**5 of 11 — and not obscure long-tail rows.** BOGOHO sits in the portal's "Popular Offers".
+
+Consequences, and why the copy had to change:
+
+- `/my-account/rewards/catalogue` must **never claim completeness.** It previously said
+  "Everything below is the real catalogue", which is false. A member who had just seen BOGOHO
+  in the portal searched for it here, got nothing, and was told it did not exist.
+- The empty state must not say "nothing at any membership level" either. It now says
+  *"Nothing in our list matches that"* and offers to search the portal instead.
+- The same gap silently degrades the **rewards-return banner**: `resolvePortalReturn` falls back
+  to the generic pitch for any `offer_id` outside the allowlist, so a member blocked on one of
+  these five gets a generic upsell instead of one naming the offer they wanted.
+
+**This is a data problem, not a UI one.** Either the CSV is stale or curation dropped live
+offers. Ask iGoDirect for a refreshed export — and note that the authenticated
+`GET {portal}/api/v1/products/{id}` endpoint (401 without credentials) would remove the need
+for a hand-maintained CSV entirely. Track it as a vendor ask alongside the redemption feed.
+
+## Artwork: ~885 offers use vendor-internal ids we do not hold (2026-08-01)
+
+`product_image/{offerId}.{ext}` resolves for **948** offers. The rest render artwork on the
+portal but are keyed differently:
+
+```
+1067617 → merchant_logo/1031913.png  +  product_image/130470.jpeg
+1067776 → merchant_logo/1032643.png  +  product_image/133695.jpeg
+1050799 → product_image/1050799.png          ← the derivable pattern
+```
+
+`1031913` / `130470` are the vendor's internal **merchant** and **product** ids. They appear
+nowhere in our CSV (which carries only ID, Category, Offer, Highlight, Supplier, AccessPercent),
+so those URLs **cannot be derived from anything we hold** — they can only be read off each
+offer's HTML, which needs a live portal session.
+
+Scraping all ~885 was considered and deliberately not done: it needs an authenticated browser
+session, so it could never run in CI or from the probe script, and it would commit a mapping
+that silently rots as the vendor edits merchants. The cost/benefit lands the other way.
+
+**The real fix is the products API** (`GET {portal}/api/v1/products/{id}`, currently 401). It
+would supply artwork, terms and live pricing for every offer and remove the hand-maintained CSV
+at the same time. Track it with the redemption-feed ask — same credential conversation.
+
+Until then, ~48% of cards show the monogram panel, which is designed for exactly that.

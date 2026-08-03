@@ -138,7 +138,10 @@ interface UnlockDiscountsProps {
 export default function UnlockDiscounts({
   showUnlockButton = true,
   title = "Unlock Partner Discounts",
-  description = "Get instant access to exclusive discounts from Australia's top tool brands",
+  // Was "from Australia's top tool brands" — the partner catalogue returns zero offers for
+  // Milwaukee, DeWalt, Makita and Ryobi (audit 2026-07-31), so that claim set an expectation
+  // the catalogue cannot meet. Breadth is the real, defensible sell.
+  description = "Get instant access to exclusive discounts from 1,800+ Australian brands",
   hasAccess = false, // Default to false for public pages
   packageTheme,
   className,

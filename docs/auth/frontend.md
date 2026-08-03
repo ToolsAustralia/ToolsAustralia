@@ -82,3 +82,28 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## Sign-out storage clear — partner-portal keys (2026-08-01)
+
+Two keys added to `total-sign-out.ts` with the partner-catalogue work. Both are per-user
+breadcrumbs, and one of them is a genuine cross-account hazard rather than a privacy nicety.
+
+**`ta.partnerPortal.handedOff`** → `USER_SESSION_KEYS`. Set immediately before the SSO redirect
+into the partner portal, and read by `/my-account/rewards/catalogue` to decide whether an offer
+may be **deep-linked** (`portal-offer-url.ts`). A cold `view_smart` link does not trigger SSO —
+it bounces to a login page and loses the offer — so the marker is what keeps the catalogue from
+dead-ending people.
+
+Left uncleared, the next person to sign in **in the same tab** inherits a "this browser holds a
+live portal session" flag that describes *someone else's* session, and every offer link sends
+them to a login page. `sessionStorage` narrows the window to one tab, it does not close it:
+sign-out and sign-in commonly happen in the same tab, which is exactly the shared-device case.
+
+**`partnerCatalogueSpotlightSeen_`** → `USER_LOCAL_PREFIXES`. The "you haven't seen the partner
+catalogue yet" nav dot. Left behind, the next member silently inherits "already seen" and is
+never shown a feature they have not seen. Deliberately a **separate prefix** from
+`rewardsWidgetSpotlightSeen_` so the two retire independently.
+
+The general rule still holds and is worth restating because this branch nearly broke it: **a new
+per-user client-storage key is not finished until it is in one of these lists.** The handoff
+marker shipped without it and had to be retro-fitted.

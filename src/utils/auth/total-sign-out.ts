@@ -33,6 +33,10 @@ const USER_LOCAL_KEYS = [
 const USER_LOCAL_PREFIXES = [
   "subscriptionExplainerSeen_",
   "rewardsWidgetSpotlightSeen_",
+  // "You haven't seen the partner catalogue yet" nav indicator, per user. Left behind, the
+  // next person to sign in on a shared device would silently inherit the previous member's
+  // "already seen" state and never be shown the feature.
+  "partnerCatalogueSpotlightSeen_",
   // Membership Streak celebration marker (last-celebrated streak level, per user —
   // useStreakCelebration). Must not leak the previous member's streak position to
   // the next sign-in on a shared device.
@@ -41,6 +45,11 @@ const USER_LOCAL_PREFIXES = [
 
 /** User-scoped sessionStorage keys (exact match). */
 const USER_SESSION_KEYS = [
+  // Marks that THIS person completed a partner-portal hand-off, which is what lets the
+  // catalogue deep-link offers directly (see utils/partner-discounts/portal-offer-url.ts).
+  // Left behind, the next sign-in inherits a "warm" flag for a portal session that belongs
+  // to someone else — and gets links that bounce them to a login page.
+  "ta.partnerPortal.handedOff",
   "dashboardPostPurchaseLanding",
   "dashboardLandingCooldownUntilMs",
   "dashboardDeferSubscriptionExplainerSession",

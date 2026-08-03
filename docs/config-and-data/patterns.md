@@ -148,3 +148,16 @@ export const membershipPackages: Record<string, MembershipPackage> = {
 Don't hardcode image paths in components — go through the map so renames are central.
 
 The `name` field is the human-readable label rendered as visible text in shop / mini-draw filters / partner sections (and as image `alt`). Use **Title Case** (e.g. `"Sidchrome"`, `"Milwaukee"`, `"Kincrome"`), not all-caps — capitalised wordmark styling, if needed, is achieved at render time with `uppercase` Tailwind classes, not by baking caps into the data. Several legacy entries (`DEWALT`, `KINCROME`) still use all-caps; normalise on touch.
+
+## supportChatFaqs — the corpus size is a deliberate assertion (2026-07-31)
+
+`src/data/__tests__/faqs.test.ts` pins `entries.length`. Adding an FAQ **fails the suite on
+purpose** — bump the number and leave a dated one-line note saying what the new ids cover,
+so the corpus cannot grow by accident.
+
+Entries 75 + 76 (2026-07-31) cover the partner portal's **own** UI, which is the vendor's
+and not ours: its points/savings wallet (a currency Tools Australia does not operate, so it
+reads zero for every member) and its editable profile copy (edits there never reach us).
+Both were live to members with no grounded answer, so Cobber's nearest matches were the TA
+rewards-points and TA profile entries — a confidently wrong answer rather than a gap.
+After editing, re-run `npm run build:chat-knowledge-pack` **and** `npm run test:chat-faqs`.

@@ -2952,6 +2952,34 @@ body[data-account-layout] .site-main-content {
   padding-bottom: 0 !important;
 }
 
+/* ── The dashboard sidebar must actually stick (2026-07-31) ──────────────────
+ * DeskNav is `sticky top-0 h-screen-svh`, but it scrolled away with the page:
+ * on a long dashboard page the sidebar's white panel simply ended mid-scroll,
+ * leaving bare background beside the content (owner report).
+ *
+ * CAUSE — CSS spec, not the layout. `html` and `body` both carry
+ * `overflow-x: hidden` (globals.css @layer base). When ONE axis is not
+ * `visible`, the other computes to `auto`: body's overflow-y silently became
+ * `auto`, which makes body a scroll container, and a `position: sticky` child
+ * sticks to its nearest scrolling ancestor. With the window doing the actual
+ * scrolling, the sidebar had nothing to stick to. Measured: at scrollY 1200 the
+ * aside's rect.top was -1200 — it never stuck at all.
+ *
+ * FIX — `clip` instead of `hidden`. `overflow-x: clip` still clips horizontal
+ * overflow (the reason the original rule exists) but does NOT create a scroll
+ * container and does NOT force the other axis to `auto`, so sticky keeps
+ * working. It also forbids programmatic horizontal scrolling, which nothing on
+ * the dashboard relies on.
+ *
+ * Scoped to the account layout deliberately. The same root cause almost
+ * certainly breaks `position: sticky` on other pages too, but lifting it to the
+ * global rule changes scroll behaviour on every route in the app — that is a
+ * call to make deliberately, not a side effect of a sidebar fix. */
+body[data-account-layout],
+html:has(body[data-account-layout]) {
+  overflow-x: clip;
+}
+
 /* Mobile dashboard has a fixed bottom nav. The viewport scrollbar belongs to
  * <html>, so it spans the full window height and visually runs *behind* the
  * fixed nav — harmless, but conspicuous here because the brand scrollbar is a
@@ -3096,6 +3124,42 @@ html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
 @keyframes ta-nudge-shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
+}
+
+/* ── Per-visit attention pulse ────────────────────────────────────────────────
+   Sibling of .ta-nudge-pulse with the OPPOSITE lifetime, deliberately:
+
+   .ta-nudge-pulse loops forever, because it marks an empty-state card — the gap
+   it points at persists until the member fills it. This one runs a fixed 3
+   cycles (~3.4s) and stops, because it points at a CTA that is *already there*;
+   a permanently throbbing button is noise, not wayfinding.
+
+   It replays on MOUNT, which is the whole behaviour: leaving /my-account/rewards
+   and coming back remounts the CTA, so the pulse runs again on the next visit —
+   while sitting on the page does not leave it pulsing at you. No JS, no marker;
+   a CSS animation restarts whenever the element is created.
+
+   Painted on ::after so it never collides with a button's own shadow — the
+   partner-portal CTA carries a tier-coloured `boxShadow` inline, and animating
+   box-shadow on the element itself would blow it away mid-run and snap it back.
+   `border-radius: inherit` keeps the ring on the button's shape. Set the tone
+   per instance with --ta-attention (defaults to brand red). */
+@keyframes ta-nudge-attention {
+  0%   { box-shadow: 0 0 0 0 var(--ta-attention, rgba(238, 0, 0, 0.55)); }
+  70%  { box-shadow: 0 0 0 11px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ta-nudge-attention { position: relative; }
+  .ta-nudge-attention::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: ta-nudge-attention 1.15s ease-out 3;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {

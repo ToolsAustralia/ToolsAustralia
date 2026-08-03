@@ -85,3 +85,88 @@ The tenant portal (`myrewards.toolsaustralia.com.au`) serves no usable policy pa
 To re-verify after a vendor change: fetch the URL **and a deliberately bogus path on the
 same host**, then compare `<title>` and body size. If they match, you are looking at a
 catch-all, not the document.
+
+## R8. Member-facing partner copy states counts, not adjectives (2026-07-31)
+
+A live audit of the iGoDirect portal as a Tradie (50%) member found the copy on **our**
+side was writing cheques the vendor's catalogue does not cash:
+
+| Surface | Was | Why it was wrong |
+|---|---|---|
+| `RewardsPartnerCard` CTA subline | "See every deal · signed in automatically" | The member *sees* every deal — but **68% of the portal home page is locked at 50%**, and the portal marks none of it. "See every deal" read as "use every deal". |
+| `RewardsPartnerCard` ring subline | "of Australia's top tool brands, on your account" | The catalogue returns **zero** offers for Milwaukee, DeWalt, Makita and Ryobi. |
+| `PartnerPreview`, `DashboardGuestPanel`, `UnlockDiscounts` | "top tool brands" | Same claim, same problem. |
+
+Rules that follow from it:
+
+- **Never claim tool brands we do not carry.** Sell **breadth** ("1,800+ Australian
+  brands") or the **count** — both are true and checkable. Re-add a tool-brand claim only
+  in the same change that lands tool-brand offers in the catalogue.
+- **A percent needs a denominator.** Use `getPartnerCatalogUnlockedCount(pct)`
+  (`partner-catalog-visibility.ts`) to render "917 of 1,833 partner offers" rather than a
+  bare "50%". It returns `count: null` for any **off-ladder** percent — 0% is the real one
+  that reaches production (guest / past-due with no live pack) — and callers **must** fall
+  back to the bare percent rather than printing an invented figure. Guarded by
+  `npm run test:partner-catalog-drift`.
+- **Set the expectation before the hand-off, not after.** The Rewards card carries a line
+  stating that the portal shows the whole catalogue and that offers above the member's
+  level show an unlock prompt. **Until the vendor badges locked offers on the card
+  (vendor ask 1), that sentence is the only thing between the member and the conclusion
+  that Tools Australia oversold them.** Do not remove it while the portal renders locked
+  and unlocked tiles identically.
+- **The two partner programmes are named separately.** The `PARTNER_BRAND_OFFERS` grid is
+  **Tools Australia's own** 7 mention-us-at-the-counter partners and is **not** in the
+  iGoDirect catalogue. It sits under its own "Tools Australia partners · Deal direct · no
+  portal" heading; unlabelled, the ring's percent read as if it described that grid.
+
+Full audit, evidence and the 16 vendor-side asks: `docs/partner/igodirect-portal-ux-audit.md`.
+
+## R9. One upgrade sentence, ours, shared with the vendor (2026-07-31)
+
+The portal's locked-offer banner is copy about **Tools Australia's packs**, rendered by a
+third party who has no reason to know CLAUDE.md rule 11. Their current wording is clean;
+nothing keeps it clean through their next content edit.
+
+So TA supplies the string. [`tier-upgrade-copy.ts`](../../src/utils/partner-discounts/tier-upgrade-copy.ts)
+is the single source for **both** sides:
+
+- `buildTierUpgradeCopy(requiredPct, currentPct)` — our surfaces. Names the cheapest covering
+  tier and **what it adds** ("Foreman opens this, plus 458 more offers"). The delta is the
+  reason to move; a total the member cannot act on is not.
+- `buildVendorLockedOfferCopy({ requiredPct, currentPct })` — the vendor's banner. Stands
+  alone inside a third-party UI and is written to be templated.
+
+Rules baked in and guarded by `npm run test:partner-catalog-drift`:
+
+- No `odds` / `chance(s)` / `lottery` / `lotto` / `raffle` / `sweepstake` / `gamble` / `bet`.
+- **The module never mentions entries at all.** Its subject is catalogue access — that is the
+  cleanest way to stay clear of "entries are never sold".
+- Australian English: `catalogue`, never `catalog`.
+
+The hand-over page is [`vendor-copy-contract.md`](vendor-copy-contract.md); the brand side is
+[`vendor-brand-spec.md`](vendor-brand-spec.md). **If the vendor edits the wording, it comes
+back to us first** — we carry the exposure, not them.
+
+## R10. The catalogue entry point is universal, not membership-gated (2026-08-01)
+
+The "See what your N% opens" row on the Rewards card sits **outside** the guest/past-due/SSO CTA
+branches, on purpose. It first shipped inside the SSO branch, which silently excluded two states:
+
+- **Past-due WITH a live one-time pack.** The card above reads *"Active from your pack · 25%"* —
+  access they paid for — and yet offered no way to see what that 25% opens. The worst kind of
+  gap: the UI asserts the benefit on one line and withholds it on the next.
+- **Guest / 0% access.** For them the catalogue is the single best conversion surface we have:
+  1,833 offers, each marked with the membership that opens it, **every card linking to
+  `/membership` with its own `offer_id`**. Hiding it was the opposite of what it is good at.
+
+**Entitlement belongs in the row's COPY, not in who may see the row.** At 0% it reads
+"See what a membership opens" and the page headline becomes *"1,833 partner offers — a
+membership or pack opens them"* rather than the technically-true, useless "0 of 1,833 open at
+your 0%". The "only show what I can use" filter also defaults **off** at 0%, since on would
+render an empty page and read as broken.
+
+The same universality applies to the discovery nudge: the nav dot keys on the signed-in member,
+never on their tier. A one-time pack holder is a partner-catalogue user and gets told about it.
+
+When adding another entry point to the catalogue, ask which account states can reach it. If the
+answer is "active members", it is wrong.

@@ -148,13 +148,19 @@ export function useMembershipCardCta(
       // but CAN still buy a ONE-TIME / Additional pack (it's a standalone purchase, not a second
       // subscription — the "Get more entries" flow already allows this). So only bounce subscription
       // taps; let one-time/Additional pack taps open the purchase modal.
+      // Both bounces below used to land on the BARE dashboard, which has no plan controls on
+      // it — the member tapped "Foreman", arrived at /my-account, and had to find Membership →
+      // Manage plan unaided. Meanwhile the rewards-return banner's "Unlock with Foreman" opened
+      // the manage sheet properly, so the same intent had two different outcomes (owner report,
+      // 2026-07-31). Plan management lives on /my-account/membership since the 2026-07 revamp,
+      // so both now land there with the right sheet already open.
       if (hasBlockingSub && isPastDue && isSubscriptionPlan(plan)) {
-        router.push("/my-account");
+        router.push("/my-account/membership?open=payment");
         return;
       }
-      // existing subscribers managing their plan → /my-account
+      // existing subscribers managing their plan → the membership page's manage sheet
       if (hasActiveSubscription && (h.isDowngrade || h.isUpgrade || h.isCurrent)) {
-        router.push("/my-account");
+        router.push("/my-account/membership?open=subscription");
         return;
       }
       // new subscription / one-time / guest → open the existing modal

@@ -9,7 +9,7 @@
 import React from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CreditCard } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -37,6 +37,7 @@ type SubMgmtUser = React.ComponentProps<typeof SubscriptionManagementModalType>[
 export default function AccountMembershipPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dash = useDashboardState();
   // Dashboard = the member's own account, so the one-time section shows their discounted
   // ADDITIONAL packs (subscription OR current-draw entries → additional-package access),
@@ -48,6 +49,23 @@ export default function AccountMembershipPage() {
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const { paymentMethods, subscriptionDefaultPaymentMethodId } = useSavedPaymentMethods();
+
+  // Deep-link: /my-account/membership?open=subscription|payment opens the matching sheet,
+  // then cleans the URL. Mirrors the identical handler on /my-account (page-client.tsx) and
+  // reuses its EXACT param vocabulary rather than inventing a second one.
+  //
+  // WHY IT HAD TO EXIST HERE (2026-07-31): plan management moved to THIS page in the 2026-07
+  // revamp, but every "manage your plan" hand-off still pointed at the dashboard — and the
+  // membership-page tier cards pointed at the bare dashboard with no sheet at all, so tapping
+  // Foreman on /membership silently dumped an existing subscriber on a page with no upgrade
+  // path, while the rewards-return banner's "Unlock with Foreman" opened the sheet correctly.
+  // Same intent, two different outcomes. Both now land here.
+  React.useEffect(() => {
+    const open = searchParams?.get("open");
+    if (open !== "subscription" && open !== "payment") return;
+    openSheet(open === "subscription" ? "manage" : "payment");
+    router.replace("/my-account/membership", { scroll: false });
+  }, [searchParams, openSheet, router]);
 
   const defaultCard =
     paymentMethods.find((m) => m.isDefault) ??

@@ -1,13 +1,17 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import Image from "next/image";
-import { Lock, ExternalLink, Store, ArrowRight } from "lucide-react";
+import Link from "next/link";
+import { Lock, ExternalLink, Store, ArrowRight, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import AccessRing from "@/components/ui/AccessRing";
 import { inkOn, shade, PAST_DUE_AMBER } from "@/utils/membership/tier-visuals";
 import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
+import { getPartnerCatalogUnlockedCount } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { usePortalHandoff } from "@/components/sections/rewards/PortalHandoff";
 import { partnerDiscountSsoEnabled } from "@/config/featureFlags";
+import { usePartnerCatalogueSpotlight } from "@/app/(site)/my-account/components/PartnerCatalogueSpotlight";
 import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-theme";
 
 interface RewardsPartnerCardProps {
@@ -23,6 +27,8 @@ interface RewardsPartnerCardProps {
   onUpdatePayment: () => void;
 }
 
+const fmtAu = (n: number): string => n.toLocaleString("en-AU");
+
 /** Leads the Rewards page — ported from the prototype `PartnerGrid`. */
 export default function RewardsPartnerCard({
   acct,
@@ -36,6 +42,7 @@ export default function RewardsPartnerCard({
   onUpdatePayment,
 }: RewardsPartnerCardProps) {
   const sso = usePortalHandoff({ memberName, tierLabel, accessPct: partnerAccessPct });
+  const catalogueIsNew = usePartnerCatalogueSpotlight().show;
   const guest = acct === "none";
   const pastdue = acct === "pastdue";
   const onetime = acct === "onetime";
@@ -54,6 +61,8 @@ export default function RewardsPartnerCard({
   const total = PARTNER_BRAND_OFFERS.length;
   const visibleCount = locked ? 4 : Math.min(total, Math.max(1, Math.ceil((partnerAccessPct / 100) * total)));
   const brands = PARTNER_BRAND_OFFERS.slice(0, visibleCount);
+  // Real numbers behind the ring's percent, so "50%" reads as a checkable promise.
+  const unlocked = getPartnerCatalogUnlockedCount(partnerAccessPct);
   const headline = guest
     ? "Locked"
     : pastDueWithPack
@@ -72,7 +81,13 @@ export default function RewardsPartnerCard({
         ? "Update payment to restore your discounts"
         : onetime
           ? `Ends in ${expiryLabel ?? "soon"} · from your pack`
-          : "of Australia's top tool brands, on your account";
+          : // Was "of Australia's top tool brands, on your account" — two problems (audit
+            // 2026-07-31): the percent had no denominator, and the tool-brand claim does not
+            // survive contact with the catalogue we actually hand members (Milwaukee, DeWalt,
+            // Makita and Ryobi all return zero offers in the portal). State the real count.
+            unlocked.count != null
+            ? `${fmtAu(unlocked.count)} of ${fmtAu(unlocked.total)} partner offers, on your account`
+            : "of the partner catalogue, on your account";
 
   return (
     <section>
@@ -97,7 +112,9 @@ export default function RewardsPartnerCard({
           <div className="mt-3.5 flex gap-2.5">
             {/* #e02424, not #ff5a5a — white on the lighter stop measured 3.06:1, below the
                 4.5:1 AA floor for 12.5px bold text (panel F-035). */}
-            <button type="button" onClick={onBecomeMember} className="flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#e02424] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
+            {/* Pulses for ~3s on every arrival at Rewards (see .ta-nudge-attention). A guest
+                landing here is looking at a locked ring — this is the move out of it. */}
+            <button type="button" onClick={onBecomeMember} className="ta-nudge-attention flex flex-1 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#e02424] to-[#c40d0d] px-3 py-3 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600">
               Become a member
             </button>
             <button type="button" onClick={onBuyPackage} className="flex flex-1 items-center justify-center gap-1.5 rounded-[10px] border border-token px-3 py-3 text-[12.5px] font-extrabold text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white">
@@ -117,7 +134,7 @@ export default function RewardsPartnerCard({
             type="button"
             onClick={sso.start}
             disabled={sso.busy}
-            className="mt-3.5 flex w-full items-center gap-3 rounded-[10px] px-4 py-3 text-left disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+            className="ta-nudge-attention mt-3.5 flex w-full items-center gap-3 rounded-[10px] px-4 py-3 text-left disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
             /* The darkening is CONDITIONAL on which ink `inkOn()` picked, and must stay that way.
                White-ink tiers were failing badly — Tradie's cyan measured 2.07:1 against the old
                `shade(c, 22) -> shade(c, -16)` ramp, under half the 4.5:1 AA minimum — so those get
@@ -134,7 +151,11 @@ export default function RewardsPartnerCard({
                   ? `linear-gradient(150deg, ${shade(c, -44)}, ${shade(c, -60)})`
                   : `linear-gradient(150deg, ${shade(c, 22)}, ${shade(c, -16)})`,
               boxShadow: `0 14px 30px -18px ${c}`,
-            }}
+              // Ring tone for .ta-nudge-attention — the member's own tier colour at ~55%,
+              // so the pulse reads as part of the card rather than a stray red alert.
+              // `c` is always a 6-digit hex here, so the 8-digit alpha form is safe.
+              ["--ta-attention" as string]: `${c}8c`,
+            } as CSSProperties}
           >
             <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[10px]" style={{ background: inkOn(c) === "#ffffff" ? "rgba(255,255,255,.18)" : "rgba(0,0,0,.14)" }}>
               <Store className="h-[17px] w-[17px]" />
@@ -145,7 +166,11 @@ export default function RewardsPartnerCard({
                   card in BOTH branches — `rgba(255,255,255,.78)` gave 1.79:1 on the old cyan ramp,
                   and `rgba(0,0,0,.6)` still only reaches 4.45:1 on Foreman's yellow, just under AA.
                   The 10px/13px size gap already carries the hierarchy without discounting opacity. */}
-              <span className="text-[10px] font-semibold" style={{ color: inkOn(c) }}>See every deal · signed in automatically</span>
+              {/* Was "See every deal · signed in automatically" — dropped the "see every deal"
+                  half (68% of the portal's home page is above a Tradie's level, so it read as
+                  "use every deal"). The entitlement itself is stated once, on the ring subline
+                  above; repeating the count here was redundant. */}
+              <span className="text-[10px] font-semibold" style={{ color: inkOn(c) }}>Signed in automatically</span>
             </span>
             <ExternalLink className="h-4 w-4" />
           </button>
@@ -174,11 +199,61 @@ export default function RewardsPartnerCard({
         )}
       </div>
 
+      {/* ── The catalogue link is UNIVERSAL, deliberately outside the CTA branches above ──
+          It used to live inside the SSO branch, which meant only active members and one-time
+          holders ever saw it. Two states were wrongly excluded:
+
+            • PAST-DUE WITH A LIVE PACK — the card above literally reads "Active from your
+              pack · 25%", then offered no way to see what that 25% opens. They paid for it.
+            • GUEST / 0% — for them the catalogue is the best conversion surface we have:
+              1,833 offers, every one marked with the membership that opens it, each card
+              linking to /membership. Hiding it is the opposite of what it is good at.
+
+          Entitlement is a property of the ROW's copy, not of who may see the row. */}
+      {/* Pulses on every arrival at Rewards, NOT just the first (see .ta-nudge-attention).
+          The "New" badge below is one-time by design — "new" stops being true — but the row
+          itself stays worth pointing at long after, so the two cues have different lifetimes.
+          Guests get the default red: their ring colour `c` is grey, and grey is the one tone
+          that cannot pull attention. */}
+      <Link
+        href="/my-account/rewards/catalogue"
+        className="ta-nudge-attention mt-2 flex items-center justify-between gap-2 rounded-[10px] border border-token px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+        style={locked ? undefined : ({ ["--ta-attention" as string]: `${c}8c` } as CSSProperties)}
+      >
+        <span className="min-w-0">
+          <b className="flex items-center gap-1.5 text-[11.5px] font-extrabold text-primary-token dark:text-white">
+            {partnerAccessPct > 0 ? `See what your ${partnerAccessPct}% opens` : "See what a membership opens"}
+            {/* The nav dot gets them to Rewards; this marks WHICH row is the new thing,
+                otherwise the trail goes cold on a page with four other cards. */}
+            {catalogueIsNew && (
+              <span className="rounded-full bg-red-600 px-1.5 py-[1px] text-[9px] font-black uppercase tracking-wide text-white">
+                New
+              </span>
+            )}
+          </b>
+          <span className="text-[10px] font-semibold text-muted-token">
+            Search and filter all {fmtAu(unlocked.total)} partner offers
+          </span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-token" />
+      </Link>
+
       {/* No partner-catalog access (guest / past-due with no live pack) → hide the brand grid
           entirely, no dimmed glimpse; the ring + CTA above already prompt to unlock. A past-due
           member WITH a live pack is not locked, so their accessible slice shows. */}
+      {/* These are Tools Australia's OWN partner brands — mention-us-at-the-counter deals that
+          are NOT in the iGoDirect portal catalogue at all. They previously sat unlabelled
+          directly under the portal button, so the ring's percent read as if it described THIS
+          grid (audit 2026-07-31, finding 13). Naming the programme separates the two. */}
       {!locked && (
-        <div className="mt-3 grid grid-cols-2 gap-[11px]">
+        <>
+        <div className="mt-4 flex items-baseline justify-between gap-3">
+          <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">
+            Tools Australia partners
+          </span>
+          <span className="text-[10px] font-semibold text-muted-token">Deal direct · no portal</span>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-[11px]">
         {brands.map((b) => {
           const bc = locked ? "#8a93a1" : c;
           const hasLink = !locked && Boolean(b.businessLink) && b.businessLink !== "#";
@@ -215,6 +290,7 @@ export default function RewardsPartnerCard({
           );
         })}
         </div>
+        </>
       )}
     </section>
   );

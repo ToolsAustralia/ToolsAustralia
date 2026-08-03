@@ -650,3 +650,20 @@ globals.css targets it to hide site chrome on `/my-account` routes.
 **Rule:** a Suspense fallback must reserve the height its real content will occupy in FLOW.
 For a `fixed`/`absolute` child that is **zero**, not the element's visual height. Reserving
 its visual height guarantees a shift in the opposite direction.
+
+## `overflow-x: hidden` on html/body silently disables `position: sticky` (2026-07-31)
+
+`globals.css` `@layer base` sets `overflow-x: hidden` on **both** `html` and `body`. Per CSS
+spec, when one axis is not `visible` the other **computes to `auto`** — so both elements are
+scroll containers, and any `position: sticky` descendant sticks to *them* rather than to the
+viewport. Since the window is what actually scrolls, such an element just scrolls away.
+
+This is what broke the dashboard's sticky sidebar (full write-up, with measurements:
+[dashboard-account/gotchas.md](../dashboard-account/gotchas.md)). It is fixed **only for the
+account layout** so far, via `overflow-x: clip` — which clips exactly the same way but creates
+no scroll container.
+
+**Before adding a `sticky` element anywhere else**, check it actually sticks; if not, this is
+almost certainly why, and the fix is `clip` on the offending ancestor rather than anything on
+the element. Changing the global base rule would fix every route at once — worth doing
+deliberately, weighing that `clip` also forbids programmatic horizontal scrolling.
