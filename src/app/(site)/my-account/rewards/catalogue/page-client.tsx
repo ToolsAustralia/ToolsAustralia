@@ -31,7 +31,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Gift, Search, Lock, ArrowLeft, ExternalLink } from "lucide-react";
+import { Gift, Search, Lock, ArrowLeft, ExternalLink, Check } from "lucide-react";
 
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -86,21 +86,30 @@ export default function RewardsCataloguePage() {
   const accessPct = dash.partnerAccessPct ?? 0;
 
   /**
+   * TWO-CLICK FLOW (rules.md R12).
+   *
    * A cold `view_smart` link does NOT trigger SSO — it bounces to a login page and loses the
-   * offer (measured; see portal-offer-url.ts). So the row's ACTION depends on the session:
+   * offer. And the hand-off cannot carry a destination: `/verifytoken/{token}` silently drops
+   * `?redirect` / `?return` / `?next` / `?url` / a path-append alike (all six measured
+   * 2026-08-03), so signing in and landing on the offer cannot be one action. So the row's
+   * action depends on the session:
    *
-   *   warm (already handed off in this tab) → open the offer directly
-   *   cold                                  → run the hand-off, which signs them in
+   *   cold → hand-off in a NEW tab; this tab keeps the catalogue and flips to warm
+   *   warm → open the offer directly
    *
-   * Every open row stays clickable either way. An earlier attempt simply withheld the link
-   * when cold, which "fixed" the dead-end by making the row silently do nothing — a worse
-   * failure, because the member gets no feedback at all and no way to reach the offer.
+   * Two taps, but the member never loses the offer, their filters or their scroll position —
+   * which is what the one-tap version cost them. Every open row stays clickable in both
+   * states. An earlier attempt simply withheld the link when cold, which "fixed" the dead-end
+   * by making the row silently do nothing — a worse failure, because the member gets no
+   * feedback at all and no way to reach the offer.
    *
    * Read after mount, never during render: `sessionStorage` does not exist on the server and
    * reading it in the render body would hydrate-mismatch.
    */
   const [portalWarm, setPortalWarm] = React.useState(false);
   React.useEffect(() => setPortalWarm(hasPartnerPortalSession()), []);
+  /** Set only by a hand-off that happened on THIS page — drives the "now tap again" hint. */
+  const [justSignedIn, setJustSignedIn] = React.useState(false);
 
   // At 0% the "only what I can use" default would render an empty page. Flip it once, after
   // the tier resolves, so a guest lands on the full browsable catalogue.
@@ -115,6 +124,13 @@ export default function RewardsCataloguePage() {
     memberName: dash.user?.firstName,
     tierLabel: dash.subscriptionTierLabel,
     accessPct,
+    // The catalogue is the ONE surface with something to lose — the offer they clicked, plus
+    // their filters and scroll. The other portal CTAs keep the simpler same-tab navigation.
+    openInNewTab: true,
+    onHandedOff: () => {
+      setPortalWarm(true);
+      setJustSignedIn(true);
+    },
   });
 
   // Prepared once: lower-cased names for matching, display names for rendering.
@@ -249,6 +265,25 @@ export default function RewardsCataloguePage() {
               <CategoryChip key={c} active={category === i} onClick={() => setCategory(i)} label={c} />
             ))}
           </div>
+
+          {/* Without this the second tap is a guess. The member's first tap opened a portal tab
+              and then, from their side, "nothing happened" here — the cards look identical.
+              Say plainly that the state changed and what to do next. Not a toast: it must
+              survive them switching to the portal tab and back, which is exactly when they
+              need it. */}
+          {justSignedIn && (
+            <div
+              role="status"
+              className="mt-3 flex items-start gap-2 rounded-[10px] border border-emerald-600/30 bg-emerald-600/10 px-3 py-2.5"
+            >
+              <Check className="mt-[1px] h-4 w-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
+              <p className="text-[11.5px] font-semibold leading-[1.45] text-primary-token dark:text-white">
+                You&apos;re signed in to the partner portal.{" "}
+                <span className="font-extrabold">Tap an offer again</span> and it will open
+                straight to that deal.
+              </p>
+            </div>
+          )}
         </section>
 
         <p className="text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted-token" aria-live="polite">

@@ -26,6 +26,24 @@ export interface UsePortalHandoffOptions {
   memberName?: string | null;
   tierLabel?: string | null;
   accessPct?: number | null;
+  /**
+   * Send the member to the portal in a NEW tab instead of navigating this one.
+   *
+   * Only the catalogue sets this, and only because of the two-click flow (rules.md R12): the
+   * vendor's `/verifytoken/{token}` silently drops every return target we tested, so a
+   * hand-off can sign a member in but never onto the offer they clicked. Keeping our tab
+   * alive means the catalogue — their filters, scroll position and the offer itself — is
+   * still there when they come back, and the second tap deep-links correctly.
+   *
+   * The other three CTAs ("open the portal") have no offer to preserve, so they keep the
+   * simpler same-tab navigation.
+   */
+  openInNewTab?: boolean;
+  /**
+   * Fired once the member is actually in the portal. The catalogue uses it to flip its cards
+   * from "sign in first" to real deep links without waiting for a remount.
+   */
+  onHandedOff?: () => void;
 }
 
 type Flow =
@@ -63,6 +81,26 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
   const consent = usePartnerDiscountConsent();
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const cancelled = useRef(false);
+  /**
+   * A tab opened SYNCHRONOUSLY on click, held until the token arrives.
+   *
+   * This cannot be deferred. The redirect fires ~2.75s after the click (two deliberate holds
+   * for the transit animation), by which point the user gesture is long gone and every browser
+   * blocks `window.open`. Opening a blank tab during the gesture and re-pointing it later is
+   * the only reliable way. `noopener` is NOT passed, because it makes `window.open` return
+   * null and we need the handle — so the opener link is severed by hand instead, immediately
+   * after navigation.
+   */
+  const pendingTab = useRef<Window | null>(null);
+
+  const closePendingTab = useCallback(() => {
+    try {
+      if (pendingTab.current && !pendingTab.current.closed) pendingTab.current.close();
+    } catch {
+      // Cross-origin or already gone — nothing to do.
+    }
+    pendingTab.current = null;
+  }, []);
 
   useEffect(() => setMounted(true), []);
   const clearTimers = useCallback(() => {
@@ -70,6 +108,41 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
     timers.current = [];
   }, []);
   useEffect(() => clearTimers, [clearTimers]);
+
+  /**
+   * The single place the member actually crosses into the portal.
+   *
+   * New-tab mode degrades to same-tab navigation whenever the blank tab is missing — popup
+   * blocked, opened and then closed by the member, or the consent detour closed it. That
+   * fallback matters: arriving in the wrong tab is a nuisance, not arriving at all is a bug.
+   */
+  const completeHandoff = useCallback(
+    (redirectUrl: string) => {
+      // Record the hand-off so the catalogue can safely deep-link offers afterwards. A cold
+      // view_smart link does NOT trigger SSO — it dead-ends on a login page with the offer
+      // lost (measured; see portal-offer-url.ts).
+      markPartnerPortalHandoff();
+
+      const tab = pendingTab.current;
+      pendingTab.current = null;
+      if (tab && !tab.closed) {
+        try {
+          tab.location.replace(redirectUrl);
+          tab.opener = null;
+          setFlow({ kind: "idle" });
+          options.onHandedOff?.();
+          return;
+        } catch {
+          // Fall through to same-tab navigation below.
+        }
+      }
+      window.location.assign(redirectUrl);
+    },
+    // `onHandedOff` is read through the live `options` object, so it does not need to be a dep;
+    // adding it would re-create this callback on every render of every caller.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   const runSso = useCallback(
     (viaConsent: boolean) => {
@@ -84,18 +157,13 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
           setFlow({ kind: "transit", phase: "done", consent: viaConsent });
           timers.current.push(
             setTimeout(() => {
-              if (!cancelled.current) {
-                // Record the hand-off so the catalogue can safely deep-link offers afterwards.
-                // A cold view_smart link does NOT trigger SSO — it dead-ends on a login page
-                // with the offer lost (measured; see portal-offer-url.ts).
-                markPartnerPortalHandoff();
-                window.location.assign(outcome.redirectUrl);
-              }
+              if (!cancelled.current) completeHandoff(outcome.redirectUrl);
             }, 1100)
           );
         },
         onError: (err) => {
           if (cancelled.current) return;
+          closePendingTab();
           // Keep the member inside the takeover with a way out, rather than dumping
           // them back to the page with a small red line they may not notice.
           setFlow({ kind: "transit", phase: "error", consent: viaConsent, error: err.message });
@@ -104,7 +172,7 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
       // Show the working takeover as soon as we know we are past the consent branch.
       if (viaConsent) setFlow({ kind: "transit", phase: "working", consent: true });
     },
-    [sso]
+    [sso, closePendingTab, completeHandoff]
   );
 
   // Direct (variant A): the first response either opens the sheet or starts the takeover.
@@ -113,10 +181,25 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
     if (sso.isPending || consent.isPending) return;
     setFlow({ kind: "idle" });
     cancelled.current = false;
+
+    // MUST happen here, inside the click gesture — see `pendingTab`.
+    if (options.openInNewTab) {
+      try {
+        pendingTab.current = window.open("", "_blank");
+      } catch {
+        pendingTab.current = null;
+      }
+    }
+
     sso.mutate(undefined, {
       onSuccess: (outcome) => {
         if (cancelled.current) return;
         if (outcome.kind === "consent") {
+          // First-ever hand-off. The consent sheet is a read-and-decide moment that can take
+          // as long as it takes, and a blank tab parked behind it looks broken — so close it
+          // and let the consent path finish with a normal same-tab navigation. This costs the
+          // catalogue tab exactly once per member, and they are warm from then on.
+          closePendingTab();
           setFlow({ kind: "consent", fields: outcome.fields });
           return;
         }
@@ -127,13 +210,7 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
             setFlow({ kind: "transit", phase: "done", consent: false });
             timers.current.push(
               setTimeout(() => {
-                if (!cancelled.current) {
-                // Record the hand-off so the catalogue can safely deep-link offers afterwards.
-                // A cold view_smart link does NOT trigger SSO — it dead-ends on a login page
-                // with the offer lost (measured; see portal-offer-url.ts).
-                markPartnerPortalHandoff();
-                window.location.assign(outcome.redirectUrl);
-              }
+                if (!cancelled.current) completeHandoff(outcome.redirectUrl);
               }, 1100)
             );
           }, 1650)
@@ -141,18 +218,25 @@ export function usePortalHandoff(options: UsePortalHandoffOptions = {}): PortalH
       },
       onError: (err) => {
         if (cancelled.current) return;
+        closePendingTab();
         setFlow({ kind: "transit", phase: "error", consent: false, error: err.message });
       },
     });
-  }, [sso, consent.isPending]);
+    // `options` is read live for openInNewTab; including it would re-create `start` on every
+    // render of every caller and defeat the memoisation the CTAs rely on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sso, consent.isPending, closePendingTab, completeHandoff]);
 
   const cancel = useCallback(() => {
     cancelled.current = true;
     clearTimers();
+    // A cancelled hand-off must not leave an orphaned blank tab behind, any more than it may
+    // fire a late redirect.
+    closePendingTab();
     sso.reset();
     consent.reset();
     setFlow({ kind: "idle" });
-  }, [clearTimers, sso, consent]);
+  }, [clearTimers, closePendingTab, sso, consent]);
 
   const agree = useCallback(() => {
     consent.mutate(undefined, {

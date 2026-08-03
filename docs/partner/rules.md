@@ -211,3 +211,48 @@ member's place in the catalogue.
 
 Related: `PORTAL_HANDOFF_KEY` is registered in `total-sign-out.ts` (global rule on auth
 boundaries) — a stale marker must not survive into the next account on a shared device.
+
+## R12. Two clicks to an offer, because one is impossible (2026-08-03)
+
+Opening a catalogue offer needs a live portal session, and the hand-off **cannot carry a
+destination** — `/verifytoken/{token}` silently drops `?redirect` / `?redirect_url` /
+`?return` / `?next` / `?url` and a path-append alike (all six measured; see
+[gotchas.md](./gotchas.md)). So "sign in AND land on the offer" is not one action, and no
+amount of client work makes it one.
+
+Given that, the only choice is **what the member loses**. Ranked by what it costs them:
+
+| shape | cost |
+|---|---|
+| deep-link a cold session | offer lost, bounced to `/my-account` — the reported bug |
+| hand-off in THIS tab | offer lost, **catalogue lost** (filters, scroll, place in 1,833 rows) |
+| **hand-off in a NEW tab, then tap again** | one extra tap |
+
+So the catalogue passes `openInNewTab` to `usePortalHandoff`:
+
+- **cold tap** → hand-off opens in a new tab; our tab keeps the catalogue, flips its cards
+  from buttons to real links, and shows *"You're signed in to the partner portal. Tap an offer
+  again and it will open straight to that deal."*
+- **warm tap** → straight to the offer.
+
+Three things here are load-bearing:
+
+1. **The blank tab is opened SYNCHRONOUSLY in the click handler.** The redirect fires ~2.75s
+   later (two deliberate transit holds), by which point the user gesture is gone and every
+   browser blocks `window.open`. Opening `about:blank` during the gesture and re-pointing it
+   with `location.replace` is the only reliable way. `noopener` cannot be passed — it makes
+   `window.open` return null — so `tab.opener = null` is set by hand straight after.
+2. **It degrades to same-tab navigation** whenever that tab is missing (popup blocked, member
+   closed it, consent detour closed it). Arriving in the wrong tab is a nuisance; not arriving
+   is a bug.
+3. **The consent branch closes the blank tab and goes same-tab.** A blank tab parked behind a
+   read-and-decide sheet looks broken. That costs the catalogue tab exactly once per member,
+   on their first ever hand-off, and they are warm from then on.
+
+**The hint is not decoration.** After the first tap the member's attention is in the other tab;
+when they come back, our cards look identical to before and the state change is invisible.
+Without a line saying what happened and what to do, the second tap is a guess. It is inline
+(not a toast) precisely so it survives tab-switching, which is when it is needed.
+
+If the vendor ever ships ask 16, collapse this back to one tap — but keep the new-tab
+behaviour, which is worth having on its own.
