@@ -640,6 +640,13 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Pin the crop to the TOP, not the default centre. The portrait mobile frame
+     above solves head-cropping at one breakpoint only — from 600px this frame is
+     4:3 and from 920px it is square, and a centred cover crop of a portrait phone
+     photo takes the top band first, cutting winners' heads off. Same fix, same
+     reason as MembershipWinnersWall's 4:3 card. No-op on mobile, where a 3:4
+     frame barely crops a portrait source at all. */
+  object-position: top;
 }
 /* Initials monogram fallback — used when a winner has no photo or prize art. */
 .ta-results .lw-monogram {
