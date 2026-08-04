@@ -85,3 +85,33 @@ docs/shared-ui/tailwind-conventions.md §10.
 ## 2026-07-31 — Purchase-success portal CTA uses the shared hand-off
 
 [PurchaseSuccessClient.tsx](../../src/app/(site)/purchase-success/components/PurchaseSuccessClient.tsx)'s "Open partner portal" button now goes through `usePortalHandoff()` (consent sheet → transit takeover → redirect) rather than the bare SSO mutation, so a member who just bought a pack gets the same flow as on the Rewards page. Still gated on `status?.processed === true && partnerDiscountSsoEnabled()`. See [docs/partner/frontend.md](../partner/frontend.md).
+
+## Purchase-success order receipt (2026-08-04)
+
+`PurchaseSuccessClient.tsx` renders an order summary of what was actually bought: the pack name,
+the amount paid, and the free entries granted, plus the PaymentIntent id as a reference.
+
+Everything comes from the `usePaymentStatus` response already on the page — `packageName`,
+`price`, `currency`, `entriesGranted` / `entries`. Before this the component fetched those fields
+and used them **only** to populate the Purchase pixel; the page itself said nothing beyond
+"Purchase Successful!". (An earlier line in this doc described the carry-over banner as sitting
+"above the standard receipt" — there was no receipt until now.)
+
+Two rules govern it:
+
+- **Gated on `status.processed === true`.** The payment-status route omits `price`/`currency`
+  until benefits are granted (see [payment/api.md](../payment/api.md)), so rendering earlier
+  produces a receipt full of blanks. No receipt beats an empty one.
+- **`entriesGranted` is preferred over `entries`.** The former is what the webhook actually wrote,
+  the latter is the package's advertised figure. If they ever diverge, the receipt agrees with the
+  member's wallet rather than the catalogue.
+
+**Copy is legally constrained — CLAUDE.md rule 11.** Entries are a FREE INCLUSION with the pack,
+never a purchased line item, so the layout deliberately separates them:
+
+- the priced line is the **pack** (`Boss Pack … $125.00`), and the total is the pack's price;
+- entries appear on their own line as *"Includes 150 free entries in this month's prize draw"*.
+
+Never render entries as a priced line item, a per-entry rate, or part of a subtotal that implies
+they were bought. If you add a tax breakdown, an emailed invoice, or a PDF later, the same split
+applies there.

@@ -388,6 +388,22 @@ Customer pays full package price immediately at signup via Stripe. There is **no
 
 **Which tier the customer is shown first (2026-08-04).** Any CTA that opens the join flow from a surface with no package cards on screen — the promotions hero "Enter Now", "Build your prize", "Enter to unlock discount", the major-draw CTAs, draw-results, and the dashboard "Become a member" — now opens **"Select Your Package"** as the first view, so the customer always picks. Behind that picker sits a default: **Foreman**, not Tradie. Backing out of the picker therefore leaves a real, payable package selected — a customer never lands on an empty "Billing Info" step. Tapping a specific tier card (the packages section, `/membership`, the account tier list) still goes straight to that tier: the tap already is the choice. Foreman is labelled **RECOMMENDED** on the package cards, in the picker, and on the "Selected Package" summary; Boss and the top one-time pack carry **Best Value**. Nothing is auto-purchased — every preselect is one "Change" tap away from another tier, and pricing/inclusions are unchanged ([BUSINESS.md §2](BUSINESS.md)).
 
+**When the bank asks for authentication (3-D Secure) — fixed 2026-08-04.** Some issuers require the
+cardholder to approve the charge before it can complete. That challenge is now presented and the
+purchase finishes normally. Previously it was never shown: the customer was told *"Purchase
+Complete! Your payment was successful"* while Stripe held the charge as **Incomplete** — no money
+taken, no entries granted, and no error anywhere. If the customer abandons or fails the challenge
+they are now told the payment did not go through and no charge was made, instead of being
+congratulated. Failures are recorded as `ErrorReport`s (`3ds_*` codes) so repeated struggles are
+visible internally. See [docs/payment/gotchas.md](docs/payment/gotchas.md).
+
+**What the customer sees after paying (2026-08-04).** `/purchase-success` shows an order summary:
+the pack they bought, the amount paid, the free entries granted, and a payment reference. It only
+appears once the server confirms the entries were granted, so the figures are always real. Per the
+free-entry model, the **pack** is the priced line and entries are listed separately as an inclusion
+("Includes 150 free entries…") — entries are never shown as a purchased line item or priced per
+unit.
+
 **Fields set on activation:** `subscription.isActive: true`, `subscription.status: "active"` (or `"trialing"`), `subscription.startDate`, `subscription.endDate`, `subscription.packageId`.
 
 ### 5.2 Renewal date — the 24th rule
