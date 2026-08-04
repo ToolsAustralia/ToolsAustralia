@@ -3572,8 +3572,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             "id" in miniDrawResult.paymentIntent
           ) {
             paymentIntentId = (miniDrawResult.paymentIntent as { id: string }).id || null;
-          } else if ("data" in miniDrawResult && miniDrawResult.data && "paymentIntent" in miniDrawResult.data) {
-            paymentIntentId = miniDrawResult.data.paymentIntent?.id || null;
+            // (removed a `data.paymentIntent` fallback here: the purchase routes return
+            // `paymentIntent` at the TOP level, so that branch could never match at runtime —
+            // the response type wrongly claimed otherwise, which is what hid the 3DS hole.)
           } else if ("paymentIntentId" in miniDrawResult && miniDrawResult.paymentIntentId) {
             paymentIntentId = miniDrawResult.paymentIntentId as string;
           }
@@ -3769,8 +3770,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           if ("paymentIntent" in result && result.paymentIntent) {
             paymentIntentId =
               typeof result.paymentIntent === "string" ? result.paymentIntent : result.paymentIntent.id || null;
-          } else if ("data" in result && result.data && "paymentIntent" in result.data) {
-            paymentIntentId = result.data.paymentIntent?.id || null;
+            // (removed a `data.paymentIntent` fallback — see the note above: the intent is
+            // returned at the TOP level, so that branch was unreachable at runtime.)
           } else if ("data" in result && result.data && "paymentIntentId" in result.data) {
             paymentIntentId = result.data.paymentIntentId as string;
           } else if ("paymentIntentId" in result && result.paymentIntentId) {
@@ -3824,8 +3825,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             if ("paymentIntent" in result && result.paymentIntent) {
               fallbackPaymentIntentId =
                 typeof result.paymentIntent === "string" ? result.paymentIntent : result.paymentIntent.id || null;
-            } else if ("data" in result && result.data && "paymentIntent" in result.data) {
-              fallbackPaymentIntentId = result.data.paymentIntent?.id || null;
+              // (removed a `data.paymentIntent` fallback — unreachable; the intent is returned
+              // at the TOP level. See the note further up.)
             } else if ("data" in result && result.data && "paymentIntentId" in result.data) {
               fallbackPaymentIntentId = result.data.paymentIntentId as string;
             } else if ("paymentIntentId" in result && result.paymentIntentId) {

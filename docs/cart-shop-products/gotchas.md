@@ -16,9 +16,9 @@ The cart/orders/mini-draws routes used to read `Authorization: Bearer <token>` a
 - Mutating cart routes (POST/PUT/DELETE) now call `requireSameOrigin(request)` for CSRF protection (cookie auth is auto-attached, so it needs an origin check).
 - **Two latent endpoint bugs fixed in the op queue** ([CartContext](../../src/contexts/CartContext.tsx)): single-item "remove" hit a non-existent `/api/cart/remove` (now `DELETE /api/cart` with a body), and "clear" hit `DELETE /api/cart` with no body (500) instead of the dedicated `DELETE /api/cart/clear`. `useCartQueries.useRemoveFromCart` was likewise pointed at the real `DELETE /api/cart`.
 
-## Cart desync between devices
+## The cart is server-side, not localStorage
 
-Cart is localStorage per-browser. Multi-device users see different carts. Acceptable — sync is more trouble than it's worth at current scale.
+`CartContext` touches no browser storage. The durable cart is `user.cart` in Mongo, loaded on mount via `GET /api/cart` and keyed to the NextAuth session user; the context holds an in-memory optimistic mirror plus a queue of pending operations that drains to the API. So a multi-device member sees the *same* cart, and anything that only fixes the client list (rather than the server) fixes nothing past a reload. Signed-out visitors have no `userId`, so nothing loads and nothing drains — their optimistic items live and die with the tab.
 
 ## Stale cart after purchase
 
@@ -54,20 +54,50 @@ Pair them with a local `useState` flag inside the button component to cover the 
 
 ## `processPendingOperations` must clear failed op ids too
 
-Historical bug: when a cart sync API call failed, the op was pushed onto `failedOperations` but **left in** `pendingOperations`. Because `processPendingOperations` is a `useCallback` whose deps include `cartState.pendingOperations`, and the auto-sync `useEffect` depends on `debouncedSync` (which depends on `processPendingOperations`), the effect re-fired on every state update, flickering global `isLoading` true forever and freezing every Add-to-cart button site-wide on `"Adding..."`.
+Historical bug: when a cart sync API call failed, the op was pushed onto `failedOperations` but **left in** `pendingOperations`, so the auto-sync effect re-fired on every state update, flickering global `isLoading` true forever and freezing every Add-to-cart button site-wide on `"Adding..."`.
 
-Fix lives in [src/contexts/CartContext.tsx](../../src/contexts/CartContext.tsx) — the post-loop `setCartState` filters `pendingOperations` by **both** the successful and failed id sets:
+Fix lives in [src/contexts/CartContext.tsx](../../src/contexts/CartContext.tsx) — the post-loop `setCartState` settles both id sets in one pass:
 
 ```ts
-const successfulIds = new Set(successfulOperations);
-const failedIds = new Set(failedOperations.map((op) => op.id));
-// ...
-pendingOperations: prev.pendingOperations.filter(
-  (op) => !successfulIds.has(op.id) && !failedIds.has(op.id)
-),
+const settledIds = new Set([...successfulOperations, ...failedOperations.map((op) => op.id)]);
+const remainingOperations = prev.pendingOperations.filter((op) => !settledIds.has(op.id));
 ```
 
+Note it filters `prev.pendingOperations`, not the `operations` array the drain attempted — anything queued *while* the drain was in flight has to survive.
+
 If you ever refactor the sync loop, preserve this invariant: an op in `pendingOperations` means "not yet attempted". Once attempted, it must move to either success (gone) or `failedOperations` (retryable), but never linger in `pendingOperations`.
+
+The mirror of that invariant lives on the retry paths: `retryFailedOperation` / `retryAllFailedOperations` must set `isDirty: true` when they move an op back onto `pendingOperations`. The auto-sync effect gates on `isDirty`, so a requeued op otherwise sat in the queue unsent until some unrelated cart action happened to dirty the state again.
+
+## A per-call debounce timer is not a debounce — the server quantity doubled (2026-08-03)
+
+`createDebouncedSync` looked like a textbook debouncer (`clearTimeout(timeoutId); timeoutId = setTimeout(...)`), but the factory was invoked *inside* `debouncedSync` on every call, so each call got a fresh closure with its own `timeoutId`. The `clearTimeout` only ever cleared that call's own — still unset — handle; the previous call's timer was never cancelled. Two cart actions inside the 1s window therefore left **two** live timers, both fired, and both drains read the same queue.
+
+That is a data bug, not a wasted request: `POST /api/cart` is **additive** (`user.cart[i].quantity += n` — see [src/app/api/cart/route.ts](../../src/app/api/cart/route.ts)), so re-sending an add doubles the stored quantity. Add product A then product B within a second and the server held A×2 — invisible on screen, because the UI was showing its own optimistic count, until the next reload.
+
+The fix is three parts, and all three are load-bearing:
+
+- **One `syncTimerRef`**, cleared before every reschedule and on unmount, so a second action genuinely cancels the first action's drain.
+- **An `isSyncingRef` in-flight guard** — the timer is not the only way in (retries, a fast second dirty), and a drain that starts while another owns the queue would re-send the same ops.
+- **The queue is read through `pendingOperationsRef`**, not captured at schedule time. A debounced callback fires long after the render that created it; a captured array replays operations that already went out.
+
+The same two-actions-in-a-second window also corrupted the *client* list: each action built its optimistic array from `cartState.items` as of its own render, then handed the finished array to `setCartState`. Both built on the same stale list, so the later one erased the earlier one's item. All three actions now derive from `prev.items` **inside** the updater and no longer take `cartState.items` as a dep.
+
+Transferable lesson: a debounce's timer handle must outlive the call that schedules it, and when the request being duplicated is additive rather than idempotent, "harmless duplicate" is silent data corruption.
+
+## The failed-op rollback was unreachable — reconcile from the server instead (2026-08-03)
+
+The post-loop rollback branch ran only when `failedOperations.length === operations.length`, and then searched *those same operations* for the last one whose id was in `successfulOperations` — a set that is empty by construction whenever that branch is entered. So the rollback never restored anything: `updatedItems` was always `prev.items`. A rejected add left its optimistic item sitting in the cart, and product UI that derives its added state from `items` stayed stuck there until a reload.
+
+Rather than repair the client-side reconstruction, the drain now re-reads `GET /api/cart` afterwards and adopts that snapshot. Only the server knows what actually landed — a rejected add, a partly-applied batch, a quantity it clamped against stock — and a per-op `optimisticState` snapshot cannot represent any of those. `optimisticState` was dropped from `PendingOperation` accordingly; nothing consumes a per-op snapshot now, so don't reintroduce one.
+
+One guard on that reconcile: the server snapshot is adopted **only when `remainingOperations.length === 0`**. An action taken while the drain was in flight exists only in the optimistic list — the server has not heard about it yet — so adopting the snapshot with a non-empty queue would flicker that item away and back.
+
+## `useCartQueries` is dead code — the live cart is `CartContext` (2026-08-03)
+
+[src/hooks/queries/useCartQueries.ts](../../src/hooks/queries/useCartQueries.ts) exports a complete TanStack cart layer (`useCart`, `useCartItems`, `useCartSummary`, `useAddToCart`, `useUpdateCartItem`, `useRemoveFromCart`, `useClearCart`, `useCartPrefetch`) and **no component imports any of it**. The only live import is the `CartSummary` *type* into `CartContext`; the rest is reachable only via the `src/hooks/queries/index.ts` barrel and `usePrefetching.ts`, which itself has no consumers. Every real cart mutation goes through `CartProvider`'s pending-op queue.
+
+The trap is the name collision: `useCart` is exported by both files, so a grep for cart behaviour lands in the query layer and reads like the implementation. It has already misled one audit. When reasoning about or fixing cart behaviour, confirm the import path is `@/contexts/CartContext` — and be aware that a fix applied to `useCartQueries` changes nothing a user can see.
 
 ## Success-page Purchase pixel must stay guarded by localStorage, not just `firedRef` (2026-07-08)
 

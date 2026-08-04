@@ -28,6 +28,13 @@ the recurring-vs-new split needs no separate request. See
 - `<MotionConfig reducedMotion="user">` — framer-motion respects OS `prefers-reduced-motion`.
 - Tracking trackers (Affiliate / Referral / PromoLink / Klaviyo identifier).
 
+The `QueryClient` it constructs carries **both** cache-level error handlers — `queryCache` and
+`mutationCache` — because a per-query/per-mutation `onError` replaces the `defaultOptions` one instead of
+running alongside it ([rules.md](./rules.md) R10). Directly inside `QueryClientProvider`, ahead of
+`ApiErrorBoundary`, sits the render-nothing `QueryCacheAuthBoundary`: it watches the NextAuth session and
+`queryClient.clear()`s whenever the observed identity leaves an authenticated user, so a second open tab
+does not carry a cache across a cross-tab sign-out ([gotchas.md](./gotchas.md)).
+
 The `transition-colors duration-200 ease-out` utility was removed from `<body>` to stop a global colour-transition repaint on every theme flip.
 
 The file's dead re-export block (Skeleton/Progress/Spinner loaders, ErrorRecovery variants, `useErrorRecovery` — zero importers ever used the `@/app/providers` path for them) was deleted in perf Tier-2 (2026-07-20); import those from their own modules (`@/components/loading/*`, `@/components/error/ErrorRecovery`, `@/hooks/useErrorRecovery`).

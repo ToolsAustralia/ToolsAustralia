@@ -34,7 +34,12 @@ export interface PaymentMethodsQueryResult {
   subscriptionDefaultPaymentMethodId: string | null;
 }
 
-function normalizePaymentMethodsCache(
+/**
+ * Exported for `useUpdateSubscriptionPaymentMethod` (useSubscriptionQueries.ts), which
+ * optimistically writes `subscriptionDefaultPaymentMethodId` into this same cache entry and
+ * must tolerate the legacy bare-array shape exactly as the writers in this file do.
+ */
+export function normalizePaymentMethodsCache(
   cached: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined
 ): PaymentMethodsQueryResult {
   if (cached === undefined) {
@@ -186,51 +191,17 @@ export const useAddPaymentMethod = () => {
       // API returns { success, paymentMethod, message } but we return just the paymentMethod
       return response.paymentMethod;
     },
-    onMutate: async ({ paymentMethodId, setAsDefault = false, userId }) => {
+    onMutate: async ({ userId }) => {
       const paymentMethodsKey = queryKeys.paymentMethods.all(userId);
       const defaultKey = queryKeys.paymentMethods.default(userId);
 
+      // No optimistic row here on purpose: the brand/last4/expiry only exist on Stripe, so
+      // an optimistic entry renders as a ghost "Card •••• " / "Expires --/--" card (and
+      // hijacks the hero card face) next to the still-open add form for the whole POST.
+      // The POST response carries the real card metadata, so onSuccess writes the row.
       await queryClient.cancelQueries({ queryKey: paymentMethodsKey });
 
-      const previousPaymentMethods = queryClient.getQueryData<PaymentMethodsQueryResult | SavedPaymentMethod[]>(
-        paymentMethodsKey
-      );
-      const previousDefault = queryClient.getQueryData<SavedPaymentMethod | null>(defaultKey);
-
-      const optimisticPaymentMethod: SavedPaymentMethod = {
-        paymentMethodId,
-        isDefault: setAsDefault,
-        createdAt: new Date(),
-      };
-
-      queryClient.setQueryData(paymentMethodsKey, (old: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined) => {
-        const { paymentMethods: prev, subscriptionDefaultPaymentMethodId } = normalizePaymentMethodsCache(old);
-        const base = setAsDefault ? prev.map((method) => ({ ...method, isDefault: false })) : [...prev];
-        const withoutCurrent = base.filter((method) => method.paymentMethodId !== paymentMethodId);
-        const nextList = setAsDefault
-          ? [optimisticPaymentMethod, ...withoutCurrent]
-          : [...withoutCurrent, optimisticPaymentMethod];
-        return {
-          paymentMethods: nextList,
-          subscriptionDefaultPaymentMethodId,
-        };
-      });
-
-      if (setAsDefault) {
-        queryClient.setQueryData(defaultKey, optimisticPaymentMethod);
-      }
-
-      return { previousPaymentMethods, previousDefault, paymentMethodsKey, defaultKey };
-    },
-    onError: (_err, _variables, context) => {
-      if (!context) return;
-      const { previousPaymentMethods, previousDefault, paymentMethodsKey, defaultKey } = context;
-      if (previousPaymentMethods) {
-        queryClient.setQueryData(paymentMethodsKey, previousPaymentMethods);
-      }
-      if (previousDefault) {
-        queryClient.setQueryData(defaultKey, previousDefault);
-      }
+      return { paymentMethodsKey, defaultKey };
     },
     onSuccess: (data, _variables, context) => {
       if (!context) return;
@@ -376,17 +347,26 @@ export const useSetDefaultPaymentMethod = () => {
       if (!context) return;
       const { paymentMethodsKey, defaultKey } = context;
 
+      // The PUT echoes the `User.savedPaymentMethods` row, which holds no card metadata —
+      // only the GET joins `stripe.paymentMethods.list`. Replacing the cached entry with the
+      // response would blank the row the member just acted on ("CARD •••• " / "Expires --/--")
+      // until the refetch lands, so merge over what's cached instead.
+      const cached = normalizePaymentMethodsCache(
+        queryClient.getQueryData<PaymentMethodsQueryResult | SavedPaymentMethod[]>(paymentMethodsKey)
+      ).paymentMethods.find((method) => method.paymentMethodId === data.paymentMethodId);
+      const merged: SavedPaymentMethod = { ...cached, ...data, card: data.card ?? cached?.card };
+
       queryClient.setQueryData(paymentMethodsKey, (old: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined) => {
         const { paymentMethods: prev, subscriptionDefaultPaymentMethodId } = normalizePaymentMethodsCache(old);
         const withoutCurrent = prev.filter((method) => method.paymentMethodId !== data.paymentMethodId);
         const reset = withoutCurrent.map((method) => ({ ...method, isDefault: false }));
         return {
-          paymentMethods: [data, ...reset],
+          paymentMethods: [merged, ...reset],
           subscriptionDefaultPaymentMethodId,
         };
       });
 
-      queryClient.setQueryData(defaultKey, data);
+      queryClient.setQueryData(defaultKey, merged);
     },
     onSettled: (_data, _error, _variables, context) => {
       if (!context) return;

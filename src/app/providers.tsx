@@ -7,8 +7,8 @@ if (typeof window !== "undefined") {
   });
 }
 
-import { SessionProvider } from "next-auth/react";
-import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
+import { SessionProvider, useSession } from "next-auth/react";
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache, useQueryClient } from "@tanstack/react-query";
 // import { DevTools } from "@/components/dev";
 import { SidebarProvider } from "@/contexts/SidebarContext";
 import { CartProvider } from "@/contexts/CartContext";
@@ -18,7 +18,7 @@ import { ErrorBoundary, ApiErrorBoundary } from "@/components/error";
 import { defaultQueryOptions, defaultMutationOptions, retryConfig } from "@/lib/queries";
 import UpgradeSuccessToast from "@/components/UpgradeSuccessToast";
 import { ToastProvider } from "@/components/ui/Toast";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LazyMotion, MotionConfig } from "framer-motion";
 
 // Async loader (module scope so it's stable across renders): code-splits the
@@ -35,6 +35,34 @@ import ConversionPixelsAdvancedMatching from "@/components/tracking/ConversionPi
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import ThemeMetaSync from "@/components/system/ThemeMetaSync";
 import MajorDrawTestControls from "@/components/dev/MajorDrawTestControls";
+
+/**
+ * The React Query cache holds per-user data (redeemables wallet, account payload, partner
+ * queue), so it belongs to the auth boundary exactly like the client storage cleared in
+ * utils/auth/total-sign-out.ts. `signOut()` does a full document navigation, which drops the
+ * cache in the tab that triggered it — but a SECOND open tab only learns via NextAuth's
+ * cross-tab broadcast, with no navigation, so its cache would otherwise survive into the next
+ * person's session on a shared device. Clearing whenever we LEAVE an authenticated identity
+ * (sign-out, session expiry, account switch) covers that; the very first settled session and
+ * the guest→member transition are skipped, since neither can be holding someone else's data.
+ */
+function QueryCacheAuthBoundary() {
+  const { data: session, status } = useSession();
+  const queryClient = useQueryClient();
+  // undefined = not yet observed; null = signed out.
+  const lastUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (status === "loading") return;
+    const userId = session?.user?.id ?? null;
+    const previous = lastUserIdRef.current;
+    lastUserIdRef.current = userId;
+    if (previous === undefined || previous === null || previous === userId) return;
+    queryClient.clear();
+  }, [status, session?.user?.id, queryClient]);
+
+  return null;
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -53,13 +81,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
           },
           mutations: {
             ...defaultMutationOptions,
-            // Global error handling for mutations
-            onError: (error) => {
-              console.error("Mutation error:", error);
-              // You can add global error handling here (e.g., toast notifications)
-            },
           },
         },
+        // Global error handling for mutations. This MUST live on the MutationCache, not on
+        // defaultOptions.mutations.onError: a per-mutation onError REPLACES the default one,
+        // and every optimistic mutation defines its own (to roll back), so the default handler
+        // never ran for exactly the mutations that can fail visibly. Cache-level handlers run
+        // IN ADDITION to the mutation's own, so rollback still happens and nothing fails
+        // silently. Per-call-site toasts stay the specific UX.
+        mutationCache: new MutationCache({
+          onError: (error) => {
+            console.error("Mutation error:", error);
+          },
+        }),
         // Global error handling
         queryCache: new QueryCache({
           onError: (error) => {
@@ -76,6 +110,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <ThemeMetaSync />
         <SessionProvider refetchOnWindowFocus={false} refetchInterval={15 * 60}>
           <QueryClientProvider client={queryClient}>
+            <QueryCacheAuthBoundary />
             <ApiErrorBoundary>
               <UserProvider>
                 <SidebarProvider>

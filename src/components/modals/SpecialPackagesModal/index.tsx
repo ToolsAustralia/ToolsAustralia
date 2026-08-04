@@ -42,6 +42,7 @@ import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import { resolveUpsellPromoMultiplierForDisplay } from "@/utils/payment/upsell-promo-multiplier";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
+import { clearDashboardEntryHold } from "@/utils/dashboard-entry-hold";
 import { PaymentProcessingScreen } from "@/components/loading";
 import { type PaymentStatusResponse } from "@/hooks/queries";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
@@ -441,8 +442,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       markPurchaseCompleted();
       hideLoading();
 
-      const resolvedPaymentIntentId =
-        (result as { paymentIntent?: { id: string } }).paymentIntent?.id || result.data?.paymentIntent?.id;
+      // The purchase route returns `paymentIntent` at the TOP level. A `result.data.paymentIntent`
+      // fallback used to sit here; it could never match at runtime — the response type wrongly
+      // declared it, which is part of how the 3-D Secure hole stayed invisible.
+      const resolvedPaymentIntentId = result.paymentIntent?.id;
       if (resolvedPaymentIntentId) {
         setPaymentIntentId(resolvedPaymentIntentId);
         setPurchasePaymentMethodId(paymentMethodIdToCharge);
@@ -681,15 +684,32 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     handleClose();
   };
 
+  // Both paths end the purchase flow WITHOUT the global success screen, so the dashboard's
+  // own release (success overlay closing) never runs — release the entry hold here or the
+  // wallet keeps rendering pre-purchase numbers after a charge that may well have succeeded.
   const handlePaymentError = (error: string) => {
     console.error("❌ Special package payment processing failed:", error);
     setShowPaymentProcessing(false);
-    // Could show error message to user here
+    clearDashboardEntryHold();
+    showToast({
+      type: "error",
+      title: "We couldn't confirm your purchase",
+      message:
+        "Your payment may still be going through. If it does, your free entries will appear in your account shortly — check your email for the receipt, or contact support if nothing arrives.",
+      duration: 8000,
+    });
   };
 
   const handlePaymentTimeout = () => {
     // console.warn("⏰ Special package payment processing timed out");
     setShowPaymentProcessing(false);
+    clearDashboardEntryHold();
+    showToast({
+      type: "info",
+      title: "Still processing",
+      message: "Your payment is taking longer than usual. Your free entries will appear in your account once it completes.",
+      duration: 8000,
+    });
   };
 
   /**

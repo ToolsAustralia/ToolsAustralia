@@ -34,6 +34,32 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
   const thisGrant = status?.data?.entriesGranted ?? 0;
   const previousAccum = Math.max(0, newAccum - thisGrant);
 
+  /**
+   * Receipt of what was actually bought. Only rendered once the server confirms the benefits
+   * were granted (`processed === true`) — before that the route omits price/currency entirely,
+   * and a receipt showing blanks reads worse than no receipt.
+   *
+   * COPY IS LEGALLY CONSTRAINED (CLAUDE.md rule 11). Entries are a FREE INCLUSION with the
+   * pack, never a purchased line item. So the paid line is the PACK and its price, and the
+   * entries appear separately as "Includes N free entries" — never "N entries · $X", never a
+   * per-entry price, and never a total that implies the entries were bought.
+   */
+  const receipt =
+    status?.processed === true
+      ? {
+          packageName: status.data.packageName,
+          price: typeof status.data.price === "number" ? status.data.price : null,
+          currency: status.data.currency ?? "AUD",
+          // `entriesGranted` is what the webhook actually wrote; `entries` is the package's
+          // advertised figure. Prefer the granted number so the receipt matches the wallet.
+          freeEntries: status.data.entriesGranted ?? status.data.entries ?? null,
+          paymentIntentId,
+        }
+      : null;
+
+  const formatMoney = (amount: number, currency: string) =>
+    new Intl.NumberFormat("en-AU", { style: "currency", currency }).format(amount);
+
   // Fire Purchase pixel once on mount when the server confirms benefits were granted.
   // eventId === paymentIntentId so it dedups with server-side CAPI which uses the same id.
   // The /api/payment-status/[id] route only includes price/currency when processed === true
@@ -105,6 +131,54 @@ export default function PurchaseSuccessClient({ searchParams }: PurchaseSuccessC
             </ul>
           </div>
         )}
+        {receipt && (
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-sm border border-gray-200 dark:border-neutral-800 p-6 mb-8">
+            <h2 className="text-xs font-mono uppercase tracking-[0.14em] text-gray-500 dark:text-neutral-400 mb-4">
+              Your order
+            </h2>
+
+            {/* The PAID line: the pack. Entries are listed separately below as a free
+                inclusion — they are never a priced line item (rule 11). */}
+            <div className="flex items-baseline justify-between gap-4 pb-3 border-b border-gray-200 dark:border-neutral-800">
+              <span className="text-gray-900 dark:text-white font-medium">
+                {receipt.packageName ?? "Your pack"}
+              </span>
+              {receipt.price != null && (
+                <span className="text-gray-900 dark:text-white font-semibold tabular-nums">
+                  {formatMoney(receipt.price, receipt.currency)}
+                </span>
+              )}
+            </div>
+
+            {receipt.price != null && (
+              <div className="flex items-baseline justify-between gap-4 py-3 border-b border-gray-200 dark:border-neutral-800">
+                <span className="text-gray-900 dark:text-white font-semibold">Total paid</span>
+                <span className="text-gray-900 dark:text-white font-bold tabular-nums">
+                  {formatMoney(receipt.price, receipt.currency)}
+                </span>
+              </div>
+            )}
+
+            {receipt.freeEntries != null && receipt.freeEntries > 0 && (
+              <div className="pt-3">
+                <p className="text-sm text-gray-700 dark:text-neutral-300">
+                  Includes{" "}
+                  <strong className="text-gray-900 dark:text-white">
+                    {receipt.freeEntries.toLocaleString()} free {receipt.freeEntries === 1 ? "entry" : "entries"}
+                  </strong>{" "}
+                  in this month&apos;s prize draw &mdash; already added to your account.
+                </p>
+              </div>
+            )}
+
+            {receipt.paymentIntentId && (
+              <p className="mt-4 pt-3 border-t border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-400 dark:text-neutral-500 break-all">
+                Reference: {receipt.paymentIntentId}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
           <PaymentSuccessHandler paymentType="one-time" successMessage="Your purchase was successful!">
             <div className="mt-4 space-y-4">

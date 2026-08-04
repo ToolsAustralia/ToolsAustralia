@@ -20,11 +20,35 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
  * has long since resolved) see no behavior change.
  */
 export function useMajorDrawPurchaseGate() {
-  const { data: currentMajorDraw, isLoading: isMajorDrawLoading } = useCurrentMajorDraw();
+  const { data: currentMajorDraw, isLoading: isMajorDrawLoading, isError, error } = useCurrentMajorDraw();
   const { data: nextDraw } = useNextDraw();
   const { requestModal } = useModalPriorityStore();
 
-  const gatesClosed = currentMajorDraw?.status !== "active";
+  // `gatesClosed` must mean "we KNOW the gates are shut" — never "we don't know yet".
+  // `data?.status !== "active"` alone is true in three different states: loaded-and-closed,
+  // still-loading, and failed-to-load, and only the first is a real closed gate.
+  //
+  // INDETERMINATE FAILURES ONLY. `/api/major-draw` answers 404 "No active major draw found"
+  // when there genuinely is no open draw — that is the server ANSWERING, and the gates really
+  // are shut, so a blanket `!isError` here wrongly let buyers through between draws (caught by
+  // e2e-audit-shots/gate-matrix.ts, which walks every closed state). Only a fault that leaves
+  // us unable to know — 5xx, a network drop (ApiError status 0), or an unrecognised throw —
+  // should fail open.
+  //
+  // Failing open on those is safe because this gate is a UX affordance, not the boundary: the
+  // server independently 403s a closed-gate purchase (`enforceMajorDrawOpenForNewPurchasesOr403`
+  // in create-payment-intent). So a wrong guess costs a clumsier error, while failing closed
+  // during our own outage costs the sale.
+  const errorStatus = (error as { status?: number } | null | undefined)?.status;
+  const failedIndeterminately =
+    isError && (errorStatus === undefined || errorStatus === 0 || errorStatus >= 500);
+
+  // `!isMajorDrawLoading` is also load-bearing: the deferral in `whenGatesOpenElseGateModal`
+  // only protects callers that go through it, but MembershipModal reads this flag directly in
+  // an effect that fires the moment it opens, so mid-flight it closed itself and raised the
+  // gate modal.
+  const gatesClosed =
+    !failedIndeterminately && !isMajorDrawLoading && currentMajorDraw?.status !== "active";
 
   // Held action: set when `whenGatesOpenElseGateModal` is called during the
   // initial query load. Replayed by the effect below once data resolves.

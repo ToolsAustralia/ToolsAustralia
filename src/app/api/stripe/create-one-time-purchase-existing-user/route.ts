@@ -554,15 +554,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // `requires_action` means the buyer's bank still has to authenticate the charge — Stripe
+    // holds it as Incomplete until they do. Saying "successful" / `paymentVerified: true` there
+    // was how a 3-D Secure purchase reached the customer as "Purchase Complete! Your payment was
+    // successful" while no money moved and no webhook ever fired. The client completes the
+    // challenge (utils/payment/stripe/complete-pending-authentication.ts); this response must
+    // not claim the payment is done before it is.
+    const awaitingAuthentication = paymentIntent.status === "requires_action";
+
     return NextResponse.json({
       success: true,
-      message: "One-time package purchase successful",
+      message: awaitingAuthentication
+        ? "Payment requires bank authentication"
+        : "One-time package purchase successful",
       data: {
         entriesAdded: membershipPackage.totalEntries,
         totalEntries: finalUser.accumulatedEntries || 0,
         packageName: membershipPackage.name,
         source: "one-time-package",
-        paymentVerified: true,
+        paymentVerified: !awaitingAuthentication,
       },
       paymentIntent: {
         id: paymentIntent.id,

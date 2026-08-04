@@ -676,36 +676,6 @@ Display-only `user.role` reads (e.g. the "Admin" badge on user rows in `UsersMan
 - `showDrawLink` (default `true`) controls whether the bottom CTA strip ("Explore this promotion" / "View mini draws") is rendered. The card stays clickable either way; the strip is purely visual reinforcement on the `/winners` grid. The homepage hero passes `showDrawLink={false}` and relies on the card-level click.
 - Uses a named Tailwind group (`group/card`) on the outer Link so the inner image's unnamed `group-hover:scale` only fires on image hover, not on bottom-CTA hover.
 
-### Winner cards — which one is actually on screen (2026-08-03)
-
-Five components render a winner photo and two of them are dead, which has already caused one wrong edit.
-Check this table before touching "the winner card":
-
-| Component | Rendered on | Frame |
-|---|---|---|
-| [`draw-results/WinnerBoardCard`](../../src/app/(site)/draw-results/components/WinnerBoardCard.tsx) | **homepage/promotions "Latest Winners", `/winners`, draw-results wall** — all three share it since 2026-07-13 | `.lw-photo` in [`draw-results.css`](../../src/app/(site)/draw-results/draw-results.css): `3/4` mobile → `4/3` ≥600px → `1/1` ≥920px |
-| `MembershipWinnerCard` (local to [`MembershipWinnersWall`](../../src/components/sections/membership/MembershipWinnersWall.tsx)) | `/membership` "Past winners" wall | `aspect-[4/3]`, tilt, accent gradient, "Verified draw" row, **no link** |
-| [`promo/WinnersShowcase`](../../src/components/sections/promo/WinnersShowcase.tsx) | promo pages (inline markup, no separate card file) | `aspect-square` |
-| [`cards/WinnerCard`](../../src/components/cards/WinnerCard.tsx) | **nothing** — superseded by `WinnerBoardCard` (see the note above) | `aspect-[4/4.1]` |
-| [`cards/RecentWinnerCard`](../../src/components/cards/RecentWinnerCard.tsx) | **nothing** — its only consumer `RecentWinnersCarousel` is itself unimported | fixed `h-72/80/96` |
-
-> Styling `WinnerBoardCard` lives in **CSS**, not Tailwind, so a `grep object-cover` over `.tsx` files
-> misses the most-rendered winner card on the site. That is exactly how it got skipped once.
-
-The wall's card was previously *also* called `WinnerCard`, so three unrelated things shared one name; it is
-now `MembershipWinnerCard`. **Do not merge these into one card.** `WinnerBoardCard` is a *navigational*
-element (optional `href`, month pill, draw-type sub-line); the wall is a static *trust* strip. Unifying
-would mean four variant props (aspect, accent-vs-theme, link-vs-static, CTA-vs-verified-row), and they
-consume different types (`WinnerSummary` vs `MajorDrawWinner`).
-
-**`object-position: top` on all three live surfaces.** A centred `cover` crop of a portrait phone photo
-takes the top band first and cuts winners' heads off — flagged on `/membership` 2026-08-03, then found to
-apply equally to `WinnerBoardCard` at ≥600px (4:3) and ≥920px (square), and to `WinnersShowcase`'s square.
-It also moves faces clear of the bottom scrim + nameplate. No-op on the `3/4` mobile frame, which barely
-crops a portrait source. The two dead cards were left alone deliberately — changing unrendered code is
-churn. Note `.lw-photo`'s portrait mobile frame was an *earlier* attempt at this same bug that only
-covered one breakpoint; `object-position` is the general fix and they compose safely.
-
 ## Sections
 
 ### `sections/LatestWinnerHero` — homepage "Latest Winners" (Winners Board, 2026-07-13)
@@ -752,26 +722,6 @@ global dark-mode schedule/toggle. That was the original intent.
 
 `MembershipSection` emits an A/B `click` `ExperimentEvent` with `{ element: "package_cta" }` on its CTA path, via `useExperimentTracking().trackEvent(...)`. The emission is **guarded** by `experimentId && variantId` — it no-ops on every page where no experiment is active (which, since the 2026-07 packages-design experiment concluded — control won — is currently all of them; the plumbing stays ready for the next promo-page experiment). This is **diagnostic only** — see [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md) for why the Bayesian panel (not this click event) was the winner metric.
 
-### Tier ribbons — `RECOMMENDED` (Foreman) and `BEST VALUE` (Boss / top one-time pack) (2026-08-04)
-
-Three surfaces render the same tier flags and must stay in lockstep:
-
-| Surface | Component | Foreman | Boss (membership) | Power / VIP (one-time) |
-| --- | --- | --- | --- | --- |
-| Promo packages grid | `MembershipSection.renderPlanCard` → `ElectricPackageCard` | `RECOMMENDED` ribbon | Best Value sash | Best Value sash |
-| Package picker | `PackageSelectionModal` → `PlanGrid`/`PlanCard` | `RECOMMENDED` ribbon + pre-selected while nothing is picked | Best Value sash | Best Value sash |
-| Selected-package card | `MembershipModal/PlanSummaryCard` | `Recommended` pill | `Best Value` pill | `Best Value` pill |
-
-- `RECOMMENDED` **replaces** the generic `MOST POPULAR` on the membership tab. `plan.isPopular` (set by
-  `useMemberships` for the Foreman package) still drives the ribbon on any other surface; Foreman's label
-  is decided by [`isForemanSubscriptionPlanId`](../../src/utils/membership/additional-package-mapping.ts),
-  not by the flag. `CURRENT` still wins over both for the user's own plan.
-- **Never compare a plan id literally.** `useMemberships` slugifies the package NAME into `plan.id`
-  ("Boss" → `boss`), so the catalog `_id` (`boss-subscription`) never reaches UI code — the old
-  `plan.id === "boss-subscription"` checks in both the grid and the picker silently never matched, which
-  is why the membership tab had no Best Value sash at all. Use `isBossSubscriptionPlanId` /
-  `isForemanSubscriptionPlanId` / `isOneTimeBestValuePlanId`, which accept both id forms.
-
 ### MembershipSection — `?packages=` tab pre-select (2026-07-03)
 
 Ad landings can open the packages section on a chosen tab via `?packages=one-time` (or `membership`).
@@ -782,27 +732,13 @@ for the parser contract. Consumers: `MembershipSection`, `PromoBanner`, and `use
 (which also parses the param via the shared helper).
 
 **`MembershipSection`:**
-- Reads the param in a **mount effect** via `readForcedPackagesTab()` (`window.location.search`), NOT
-  `useSearchParams()` — that hook de-opts the whole prerendered marketing-class subtree to client-only
-  rendering and was the bulk of a measured CLS 0.4352 → 0.0566 on `/promotions/*`. See
-  [gotchas.md](./gotchas.md). The server always renders the `"membership"` default; the param applies
-  post-mount.
+- Reads the param via `useSearchParams()` and seeds the initial `activeTab` (`forcedPackagesTab ?? "membership"`).
 - **Guards the user-state override effect:** when a valid param is present, the effect that re-derives the
   tab from `hasActiveSubscription`/`hasAccessToAdditionalPackages` early-returns, so a logged-in
-  non-subscriber landing on `?packages=one-time` still opens on One-Time. Absent/invalid param →
-  byte-for-byte the previous behavior.
-- **Writes the param on every manual toggle (2026-08-03)** — `selectTab(tab)` is the single handler behind
-  both toggle buttons and does three things: `setActiveTab`, `history.replaceState` with
-  `buildMembershipPackagesHref(...)`, and the `membershipTabChanged` dispatch. Because the guard above
-  keys on the param being *present*, this is what actually makes "a later `userData` change can't fight a
-  manual toggle" true — before, that was only true for ad landings. `replaceState`, not `router.replace`
-  (scroll reset + RSC refetch); both values written explicitly, never deleted. Full rationale and the
-  downstream-reader audit: [subscription/frontend.md](../subscription/frontend.md).
-- Only manual selection writes — the mount seed and the user-state default effect deliberately don't, so a
-  URL stays clean until the visitor touches the toggle.
+  non-subscriber landing on `?packages=one-time` still opens on One-Time (and a later `userData` change
+  can't fight a manual toggle). Absent/invalid param → byte-for-byte the previous behavior.
 
-The standalone `/membership` page does not render `MembershipSection` at all, so it neither reads nor
-writes the param.
+The standalone `/membership` page (drawer, no toggle) does not read the param.
 
 **Banner sync — `PromoBanner` is a second `activeTab` owner.** It reads the `?packages=` param in its **mount
 effect** (via `window.location.search` + the shared parser) and `setActiveTab` to the forced value, so the

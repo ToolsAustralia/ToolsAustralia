@@ -103,6 +103,10 @@ export const useRedeemableRedemption = (userId?: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
+    // A redemption BURNS a one-shot issuance server-side, so it is not idempotent: an
+    // auto-retry of a request that actually succeeded comes back 409/400 and would roll the
+    // granted entries straight back out of the UI. Never retry this one.
+    retry: 0,
     mutationFn: async (payload: { issuanceId?: string; code?: string; entriesAmount?: number }) => {
       const { issuanceId, code } = payload;
       return apiPost<{ success: boolean; data?: { entriesGranted?: number }; error?: string }>(
@@ -131,10 +135,10 @@ export const useRedeemableRedemption = (userId?: string) => {
 
       return { previousUserStats };
     },
-    onSuccess: async (data, _variables, context) => {
+    onSuccess: (data, variables) => {
       if (!userId) return;
       const granted = data?.data?.entriesGranted;
-      const optimisticAmount = _variables.entriesAmount;
+      const optimisticAmount = variables.entriesAmount;
 
       // If the server returned a different count than what we optimistically applied, correct it
       if (granted !== undefined && optimisticAmount !== undefined && granted !== optimisticAmount) {
@@ -163,20 +167,26 @@ export const useRedeemableRedemption = (userId?: string) => {
         });
       }
 
-      void context;
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["redeemables", userId, "wallet"] }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.redeemables.status(userId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) }),
-      ]);
-      // Refetch userStats in the background to sync with server truth
-      queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
+      // Fire-and-forget: React Query keeps the mutation `pending` until these callbacks
+      // settle, so AWAITING the refetches (incl. the heavy my-account payload) would hold
+      // the Claim button disabled and the success toast back for the exact round-trip the
+      // optimistic update exists to hide.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.users.account(userId) });
     },
     onError: (_error, _variables, context) => {
       if (!userId || !context) return;
       if (context.previousUserStats !== undefined) {
         queryClient.setQueryData(queryKeys.majorDraw.userStats(userId), context.previousUserStats);
       }
+    },
+    onSettled: () => {
+      if (!userId) return;
+      // Re-sync on BOTH outcomes. On failure the rolled-back snapshot can be stale in the
+      // way that matters most — a 409 means the server already burned the issuance, so the
+      // wallet must refetch or the item keeps rendering as claimable and the member taps on.
+      void queryClient.invalidateQueries({ queryKey: ["redeemables", userId, "wallet"] });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.redeemables.status(userId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.userStats(userId) });
     },
   });
 };

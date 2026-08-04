@@ -6,7 +6,13 @@ See [architecture.md](./architecture.md#hooks) — `useUserMetrics`, `useDailyUs
 
 ## Dashboard helpers
 
-- [src/utils/dashboard-entry-hold.ts](../../src/utils/dashboard-entry-hold.ts) — entry-hold UX state
+- [src/utils/dashboard-entry-hold.ts](../../src/utils/dashboard-entry-hold.ts) — entry-hold UX
+  state. A module-level snapshot of the major-draw buckets, armed from a purchase's `onMutate`
+  and read through `useSyncExternalStore`. Two contracts worth knowing before you call it: the
+  hold **self-expires after `HOLD_MAX_MS` (30s)**, and arming from an empty
+  `queryKeys.majorDraw.userStats` cache arms **nothing** rather than a zero snapshot. See
+  [gotchas.md](./gotchas.md#the-dashboard-entry-hold-has-to-expire-on-its-own) for why both
+  matter.
 - [src/utils/dashboard-landing-session.ts](../../src/utils/dashboard-landing-session.ts) — landing-session UX state
 
 ## Pages

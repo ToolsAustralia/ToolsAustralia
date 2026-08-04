@@ -549,7 +549,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/upsellImageManifest.ts",
         "scripts/build-upsell-image-manifest.ts"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-08-04"
     },
     "cart-shop-products": {
       "docs": "docs/cart-shop-products/",
