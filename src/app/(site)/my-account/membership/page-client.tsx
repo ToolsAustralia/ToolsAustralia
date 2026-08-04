@@ -27,6 +27,7 @@ import MembershipTierList from "@/components/sections/account-membership/Members
 import PastDueTierSwitchModal from "@/components/sections/account-membership/PastDueTierSwitchModal";
 import DashboardLoader from "@/components/loading/DashboardLoader";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { isForemanSubscriptionPlanId } from "@/utils/membership/additional-package-mapping";
 
 import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 // Heavy money-path flow — mounted only when a tier change is requested.
@@ -148,11 +149,11 @@ export default function AccountMembershipPage() {
           onManage={() => openSheet("manage")}
           onPayment={() => openSheet("payment")}
           onBecomeMember={() => {
-            // Open with the Tradie SUBSCRIPTION preselected — identical to tapping the Tradie tier
-            // card below (cta.onSelect handles the freeze gate + Started Checkout tracking).
-            // Fallback to the package picker if the catalog hasn't resolved yet.
-            const tradie = cta.membershipPlans.find((p) => p.name.trim().toLowerCase() === "tradie");
-            if (tradie) cta.onSelect(tradie);
+            // Open with the RECOMMENDED subscription (Foreman) preselected — identical to tapping
+            // the Foreman tier card below (cta.onSelect handles the freeze gate + Started Checkout
+            // tracking). Fallback to the package picker if the catalog hasn't resolved yet.
+            const recommended = cta.membershipPlans.find((p) => isForemanSubscriptionPlanId(p.id));
+            if (recommended) cta.onSelect(recommended);
             else cta.membershipModal.openModalWithPackageSelectionFirst();
           }}
           onBuyPackage={() => cta.membershipModal.openModalWithPackageSelectionFirst()}

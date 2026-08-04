@@ -18,6 +18,8 @@ import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import {
+  isBossSubscriptionPlanId,
+  isForemanSubscriptionPlanId,
   isOneTimeBestValuePlanId,
 } from "@/utils/membership/additional-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
@@ -137,7 +139,13 @@ function MembershipSection({
 
   // Open this section's modal when the hero / entry CTAs dispatch the global `openMembershipModal`
   // event; the major-draw purchase gate is applied inside the hook.
-  useOpenMembershipModalListener((plan) => {
+  useOpenMembershipModalListener((plan, options) => {
+    // Promotions-page CTAs ask for the "Select Your Package" picker rather than a pre-selected
+    // tier — open with the membership placeholder so MembershipModal shows selection first.
+    if (options?.packageSelectionFirst) {
+      membershipModal.openModalWithPackageSelectionFirst();
+      return;
+    }
     if (plan) {
       membershipModal.setSelectedPlan(plan);
     }
@@ -574,10 +582,20 @@ function MembershipSection({
       else if (hierarchy.isDowngrade) ctaLabel = `Downgrade to ${getPackageDisplayName(plan)}`;
       else if (hierarchy.isUpgrade) ctaLabel = `Upgrade to ${getPackageDisplayName(plan)}`;
     }
+    // `plan.id` for a subscription is the slugified package NAME ("boss"), not the catalog `_id`
+    // ("boss-subscription") — the old literal comparison never matched, so the top membership tier
+    // never showed the Best Value sash the one-time tab's top packs get.
     const showBestValueRibbon =
-      (activeTab === "membership" && plan.id === "boss-subscription") ||
+      (activeTab === "membership" && isBossSubscriptionPlanId(plan.id)) ||
       (activeTab === "one-time" && isOneTimeBestValuePlanId(plan.id));
-    const ribbon = plan.isPopular ? "MOST POPULAR" : null;
+    // Foreman is the steer: it reads RECOMMENDED here, in the package picker, and on the
+    // selected-package card — one label for one tier across every surface.
+    const ribbon =
+      activeTab === "membership" && isForemanSubscriptionPlanId(plan.id)
+        ? "RECOMMENDED"
+        : plan.isPopular
+          ? "MOST POPULAR"
+          : null;
     return (
       <div key={plan.id} className="overflow-visible px-1 pt-8 sm:pt-12">
         <ElectricPackageCard
@@ -731,7 +749,11 @@ function MembershipSection({
         onClose={membershipModal.closeModal}
         selectedPlan={membershipModal.selectedPlan}
         onPlanChange={membershipModal.selectPlan}
-        membershipModalConfig={contextVariantConfig?.membershipModal}
+        membershipModalConfig={
+          membershipModal.openWithPackageSelectionFirst
+            ? { showPackageSelectionFirst: true }
+            : contextVariantConfig?.membershipModal
+        }
       />
     </section>
   );

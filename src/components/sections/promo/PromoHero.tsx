@@ -64,7 +64,9 @@ export default function PromoHero({
         console.error("Error tracking CTA click:", error);
       });
     }
-    openEntryFlow({ openLocalModal: false });
+    // Selection-first: the hero CTA opens "Select Your Package" (Foreman recommended) rather
+    // than dropping the visitor onto a pre-selected tier they never chose.
+    openEntryFlow({ openLocalModal: false, packageSelectionFirst: true });
   };
 
   const themeMode = useThemeStore((s) => s.theme);

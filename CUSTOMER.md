@@ -380,6 +380,8 @@ Members manage their membership from **My Account → Membership → Manage plan
 
 Customer pays full package price immediately at signup via Stripe. There is **no free trial** — `trialing` is a billing-anchor artifact for 25th–27th joiners only (see [BUSINESS.md §9b](BUSINESS.md)).
 
+**Which tier the customer is shown first (2026-08-04).** On the **promotions landing pages** the "Enter Now" CTAs (hero and "Build your prize") now open **"Select Your Package"** as the first view rather than dropping the visitor onto a tier they never chose — the customer always picks. Everywhere a tier IS preselected for them (dashboard "Become a member", the rewards membership-coupon unlock, the shared entry CTA), the default is now **Foreman**, not Tradie. Foreman is labelled **RECOMMENDED** on the package cards, in the picker, and on the "Selected Package" summary; Boss and the top one-time pack carry **Best Value**. Nothing is auto-purchased — every preselect is still one "Change" tap away from another tier, and pricing/inclusions are unchanged ([BUSINESS.md §2](BUSINESS.md)).
+
 **Fields set on activation:** `subscription.isActive: true`, `subscription.status: "active"` (or `"trialing"`), `subscription.startDate`, `subscription.endDate`, `subscription.packageId`.
 
 ### 5.2 Renewal date — the 24th rule

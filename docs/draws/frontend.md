@@ -51,8 +51,22 @@ On `/my-account/draws` (Mini tab), tapping a `MiniDrawCard` **no longer navigate
 `openEntryFlow()` is the shared entry point behind every "Enter Now" CTA (promo hero, countdown, prize
 showcase, unlock-discounts, promo-welcome modal; also my-account). The `MembershipModal` has **no**
 membership-vs-one-time toggle — its inner `PackageSelectionModal` derives the active tab purely from the
-passed plan's `period` (`"mo"` → membership, else → one-time). By default a guest is handed the Tradie
-**subscription** (`getHeavyDutyPack()`), so the modal opens on membership packs.
+passed plan's `period` (`"mo"` → membership, else → one-time). By default a guest is handed the
+recommended **subscription** — Foreman since 2026-08-04 (`getHeavyDutyPack()` →
+`getRecommendedSubscriptionPlan()`) — so the modal opens on membership packs.
+
+### `openEntryFlow({ packageSelectionFirst: true })` — picker instead of a pre-selected tier (2026-08-04)
+
+The **promotions-page** CTAs (hero "ENTER NOW", "Build your prize" → "Enter now") pass
+`packageSelectionFirst: true`. `openEntryFlow` then dispatches `openMembershipModal` with
+`detail: { packageSelectionFirst: true }` and **no plan**, and the hosting `MembershipSection` opens the
+modal via `openModalWithPackageSelectionFirst()` + `membershipModalConfig={{ showPackageSelectionFirst: true }}`,
+so "Select Your Package" is the first thing the visitor sees (Foreman pre-highlighted + `RECOMMENDED`).
+
+The flag is honoured **only on the default membership path** — it is skipped for a blocking subscription
+(cannot buy a second subscription) and for `?packages=one-time` (the visitor is looking at the one-time
+tab), both of which keep pre-selecting the pack that matches their situation. Full chain + the
+picker/summary badge rules: [subscription/package-selection-first.md](../subscription/package-selection-first.md#promotions-page-ctas-are-explicitly-selection-first-2026-08-04).
 
 When the `?packages=one-time` param is present (parsed by the shared
 [`parseMembershipPackagesTab`](../../src/utils/membership/packagesTabParam.ts)), `openEntryFlow` hands the

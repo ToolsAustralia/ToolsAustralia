@@ -98,7 +98,7 @@ export default function MyAccountPage() {
   const { allowSecondaryModals } = useDashboardLandingOrchestration(
     status === "authenticated",
   );
-  const { openEntryFlow, openWithOneTimePlan, membershipModal, getTradieSubscriptionPlan } = useMajorDrawEntryCta();
+  const { openEntryFlow, openWithOneTimePlan, membershipModal, getRecommendedSubscriptionPlan } = useMajorDrawEntryCta();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   useMemberships();
@@ -308,7 +308,7 @@ export default function MyAccountPage() {
   // (owner decision): payment-ready with a "Change" button to swap tiers. Never a bare openModal()
   // (no plan renders the payment step with skeletons and no package).
   const onBecomeMember = () =>
-    whenGatesOpenElseGateModal(() => membershipModal.openModal(getTradieSubscriptionPlan()));
+    whenGatesOpenElseGateModal(() => membershipModal.openModal(getRecommendedSubscriptionPlan()));
   const onGetPackage = () => openEntryFlow();
   const onBuyPackage = () => openWithOneTimePlan();
 

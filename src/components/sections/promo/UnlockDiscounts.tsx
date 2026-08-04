@@ -293,7 +293,9 @@ export default function UnlockDiscounts({
             <button
               onClick={() => {
                 // Shared CTA hook ensures the correct modal flow is triggered every time.
-                openEntryFlow({ openLocalModal: false });
+                // Selection-first, same as the hero and prize-builder CTAs: open "Select Your
+                // Package" (Foreman recommended) rather than a tier the visitor never chose.
+                openEntryFlow({ openLocalModal: false, packageSelectionFirst: true });
               }}
               suppressHydrationWarning
               className={cn("relative", preferDark ? "text-black" : "text-white", "px-8 sm:px-10 lg:px-12 py-4 sm:py-5 lg:py-6 rounded-full font-bold text-base sm:text-lg lg:text-xl transition-all duration-300 hover:scale-105 hover:shadow-xl group")}

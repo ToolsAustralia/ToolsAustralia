@@ -34,7 +34,7 @@ export default function RewardsPage() {
   const dash = useDashboardState();
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
   const requestModal = useModalPriorityStore((s) => s.requestModal);
-  const { openWithOneTimePlan, membershipModal, getTradieSubscriptionPlan } = useMajorDrawEntryCta();
+  const { openWithOneTimePlan, membershipModal, getRecommendedSubscriptionPlan } = useMajorDrawEntryCta();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   React.useEffect(() => {
@@ -62,7 +62,7 @@ export default function RewardsPage() {
   // card (owner decision): payment-ready with a "Change" button to swap tiers. Never a bare
   // openModal() (no plan renders the payment step with skeletons and no package).
   const onBecomeMember = () =>
-    whenGatesOpenElseGateModal(() => membershipModal.openModal(getTradieSubscriptionPlan()));
+    whenGatesOpenElseGateModal(() => membershipModal.openModal(getRecommendedSubscriptionPlan()));
   const onBuyPackage = () => openWithOneTimePlan();
   const onUpdatePayment = () => openSheet("manage");
 
@@ -82,10 +82,9 @@ export default function RewardsPage() {
       const code = (item.campaignCode || item.code || "").trim().toUpperCase();
       if (item.purchaseRequirement === "membership") {
         if (code) window.dispatchEvent(new CustomEvent("openMembershipModal", { detail: { referralCode: code } }));
-        // Tradie subscription preselected (same as "Become a member" / the reference widget's
-        // openMembershipModalWithTradie) — payment-ready with "Change" to swap tiers; the
-        // auto-applied code rides the prefill event.
-        membershipModal.openModal(getTradieSubscriptionPlan());
+        // Recommended subscription (Foreman) preselected, same as "Become a member" —
+        // payment-ready with "Change" to swap tiers; the auto-applied code rides the prefill event.
+        membershipModal.openModal(getRecommendedSubscriptionPlan());
         return;
       }
       // "one-time" / "any" — route to one-time package entries.

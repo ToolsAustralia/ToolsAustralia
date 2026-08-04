@@ -86,3 +86,45 @@ abandoned-checkout deep-link are unaffected.
 **Rule going forward:** never re-arm `packageSelectionAutoOpenedRef` on an in-session condition, and
 keep every auto-open branch gated on `isPlaceholderPlan`. If you need the picker again after a
 selection, that is a user action (`handlePackageChange`), not an effect.
+
+## Promotions-page CTAs are explicitly selection-first (2026-08-04)
+
+The promotions landing CTAs — the hero "ENTER NOW"
+([`PromoHero`](../../src/components/sections/promo/PromoHero.tsx)) and the "Build your prize"
+"Enter now" ([`PrizeShowcase`](../../src/components/sections/promo/PrizeShowcase.tsx)) — no longer
+hand the modal a pre-selected tier. They call
+`openEntryFlow({ openLocalModal: false, packageSelectionFirst: true })`, which dispatches
+`openMembershipModal` with `detail: { packageSelectionFirst: true }` and **no plan**.
+
+The chain:
+
+| Step | Where | What happens |
+| --- | --- | --- |
+| 1 | [`useMajorDrawEntryCta`](../../src/hooks/useMajorDrawEntryCta.ts) | `packageSelectionFirst` is honoured **only** on the default membership path — a blocking subscription (can't buy a second sub) and `?packages=one-time` (visitor is on the one-time tab) keep their existing pre-selected pack. |
+| 2 | [`useOpenMembershipModalListener`](../../src/hooks/useOpenMembershipModalListener.ts) | forwards the flag as the second callback arg. |
+| 3 | [`MembershipSection`](../../src/components/sections/MembershipSection.tsx) | calls `membershipModal.openModalWithPackageSelectionFirst()` and passes `membershipModalConfig={{ showPackageSelectionFirst: true }}`. |
+| 4 | `MembershipModal` | config != null → `activePlan` is the **membership** placeholder (period `mo`), so the picker opens on the Membership tab, synchronously, once. |
+
+This uses the **config-driven** branch, not the implicit `/promotions` timer — so the invariant above
+is untouched: still placeholder-gated, still once per modal-open session. Because
+`configSelectionFirst` is now true on these opens, dismissing the picker with nothing chosen closes
+the whole modal instead of stranding the visitor on a placeholder payment step.
+
+### Foreman is the recommended tier
+
+One tier carries the steer across every surface, via
+[`isForemanSubscriptionPlanId`](../../src/utils/membership/additional-package-mapping.ts):
+
+- **Picker** — Foreman's corner ribbon reads `RECOMMENDED` (not the generic `MOST POPULAR`) and the
+  card renders pre-selected while the incoming plan is still a placeholder (`isSelectedPlan`).
+- **Selected-package card** — [`PlanSummaryCard`](../../src/components/modals/MembershipModal/PlanSummaryCard.tsx)
+  shows a `Recommended` pill next to the name (and `Best Value` for Boss / the top one-time packs).
+- **Pre-select** — `getRecommendedSubscriptionPlan()` (was `getTradieSubscriptionPlan`) returns
+  **Foreman**, so every "we picked one for you" CTA (dashboard "Become a member", rewards
+  membership-only coupon unlock, non-member `getHeavyDutyPack`) lands on Foreman, not Tradie.
+
+⚠️ **Plan-id caveat:** `useMemberships` slugifies the package **name** into `plan.id` ("Foreman" →
+`foreman`), so UI code never sees the catalog `_id` (`foreman-subscription`). Literal comparisons
+against the `_id` silently never match — that is why the Boss `Best Value` sash was missing from the
+membership tab. Use the `isForemanSubscriptionPlanId` / `isBossSubscriptionPlanId` predicates, which
+accept both forms.

@@ -19,13 +19,16 @@ import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters
  * opts in with ONE line and cannot forget the plumbing:
  *   - it subscribes/unsubscribes to the event for the component's lifetime,
  *   - it forwards the pre-selected plan from `event.detail.plan` (may be undefined),
+ *   - it forwards `event.detail.packageSelectionFirst` — the caller asked for the "Select Your
+ *     Package" picker instead of a pre-selected tier (promotions-page CTAs), in which case there
+ *     is no plan to forward,
  *   - and it applies the major-draw purchase gate automatically (matching the shared behavior),
  *     so callers only describe HOW to open their modal, never whether the gate allows it.
  *
  * `onOpen` is read through a ref, so the latest closure is always used without re-subscribing.
  */
 export function useOpenMembershipModalListener(
-  onOpen: (plan?: LocalMembershipPlan) => void,
+  onOpen: (plan?: LocalMembershipPlan, options?: { packageSelectionFirst?: boolean }) => void,
 ): void {
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
@@ -38,7 +41,8 @@ export function useOpenMembershipModalListener(
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail ?? {};
       const plan = detail.plan as LocalMembershipPlan | undefined;
-      gateRef.current(() => onOpenRef.current(plan));
+      const packageSelectionFirst = detail.packageSelectionFirst === true;
+      gateRef.current(() => onOpenRef.current(plan, { packageSelectionFirst }));
     };
     window.addEventListener("openMembershipModal", handler as EventListener);
     return () => window.removeEventListener("openMembershipModal", handler as EventListener);

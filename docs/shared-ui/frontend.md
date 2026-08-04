@@ -752,6 +752,26 @@ global dark-mode schedule/toggle. That was the original intent.
 
 `MembershipSection` emits an A/B `click` `ExperimentEvent` with `{ element: "package_cta" }` on its CTA path, via `useExperimentTracking().trackEvent(...)`. The emission is **guarded** by `experimentId && variantId` — it no-ops on every page where no experiment is active (which, since the 2026-07 packages-design experiment concluded — control won — is currently all of them; the plumbing stays ready for the next promo-page experiment). This is **diagnostic only** — see [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md) for why the Bayesian panel (not this click event) was the winner metric.
 
+### Tier ribbons — `RECOMMENDED` (Foreman) and `BEST VALUE` (Boss / top one-time pack) (2026-08-04)
+
+Three surfaces render the same tier flags and must stay in lockstep:
+
+| Surface | Component | Foreman | Boss (membership) | Power / VIP (one-time) |
+| --- | --- | --- | --- | --- |
+| Promo packages grid | `MembershipSection.renderPlanCard` → `ElectricPackageCard` | `RECOMMENDED` ribbon | Best Value sash | Best Value sash |
+| Package picker | `PackageSelectionModal` → `PlanGrid`/`PlanCard` | `RECOMMENDED` ribbon + pre-selected while nothing is picked | Best Value sash | Best Value sash |
+| Selected-package card | `MembershipModal/PlanSummaryCard` | `Recommended` pill | `Best Value` pill | `Best Value` pill |
+
+- `RECOMMENDED` **replaces** the generic `MOST POPULAR` on the membership tab. `plan.isPopular` (set by
+  `useMemberships` for the Foreman package) still drives the ribbon on any other surface; Foreman's label
+  is decided by [`isForemanSubscriptionPlanId`](../../src/utils/membership/additional-package-mapping.ts),
+  not by the flag. `CURRENT` still wins over both for the user's own plan.
+- **Never compare a plan id literally.** `useMemberships` slugifies the package NAME into `plan.id`
+  ("Boss" → `boss`), so the catalog `_id` (`boss-subscription`) never reaches UI code — the old
+  `plan.id === "boss-subscription"` checks in both the grid and the picker silently never matched, which
+  is why the membership tab had no Best Value sash at all. Use `isBossSubscriptionPlanId` /
+  `isForemanSubscriptionPlanId` / `isOneTimeBestValuePlanId`, which accept both id forms.
+
 ### MembershipSection — `?packages=` tab pre-select (2026-07-03)
 
 Ad landings can open the packages section on a chosen tab via `?packages=one-time` (or `membership`).
