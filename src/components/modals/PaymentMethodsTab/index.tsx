@@ -206,6 +206,37 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRed
     });
   };
 
+  /**
+   * Moving the wallet default and moving the Stripe subscription's billing card are two
+   * separate calls, and the second can fail on its own. When it does, the member must be
+   * told renewals did NOT move — a green "updated" toast here is exactly how a failed
+   * renewal goes unnoticed — and be able to retry just the subscription half.
+   */
+  const moveSubscriptionBillingCard = async (paymentMethodId: string): Promise<void> => {
+    try {
+      await updateSubscriptionPaymentMethod.mutateAsync(paymentMethodId);
+      showToast({
+        type: "success",
+        title: "Default payment method updated",
+        message: "Your default payment method has been updated and will be used for future subscription payments.",
+      });
+    } catch (subscriptionError) {
+      console.error("Error updating subscription payment method:", subscriptionError);
+      showToast({
+        type: "error",
+        title: "Renewals are still on your old card",
+        message:
+          "Your default card was changed, but we couldn't move your membership renewals onto it. Retry so future payments use the new card.",
+        // No auto-dismiss: the retry is the only way to finish the change the member started.
+        duration: 0,
+        action: {
+          label: "Retry",
+          onClick: () => void moveSubscriptionBillingCard(paymentMethodId),
+        },
+      });
+    }
+  };
+
   const handleSetDefault = async (paymentMethodId: string) => {
     // Prevent multiple simultaneous requests - disable all default buttons while processing
     if (settingDefaultId !== null) {
@@ -219,22 +250,7 @@ const PaymentMethodsTab: React.FC<PaymentMethodsTabProps> = ({ user, settingsRed
       if (success) {
         // If user has an active subscription, also update the subscription payment method
         if (hasActiveSubscription) {
-          try {
-            await updateSubscriptionPaymentMethod.mutateAsync(paymentMethodId);
-            showToast({
-              type: "success",
-              title: "Default payment method updated",
-              message: "Your default payment method has been updated and will be used for future subscription payments.",
-            });
-          } catch (subscriptionError) {
-            // Default was set successfully, but subscription update failed
-            console.error("Error updating subscription payment method:", subscriptionError);
-            showToast({
-              type: "success",
-              title: "Default payment method updated",
-              message: "Default payment method updated. However, failed to update subscription payment method. Please try again.",
-            });
-          }
+          await moveSubscriptionBillingCard(paymentMethodId);
         } else {
           showToast({
             type: "success",

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Gift, Bolt, Check, Clock, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import SheetShell, { SheetHead } from "@/components/ui/SheetShell";
+import { useToast } from "@/components/ui/Toast";
 import {
   useRedeemablesWallet,
   useRedeemableRedemption,
@@ -36,6 +37,31 @@ export default function RewardsClaimables({ userId, onUnlock }: RewardsClaimable
   const claimable = useRedeemablesWallet(userId, { status: "claimable", limit: 20 });
   const past = useRedeemablesWallet(userId, { status: "past", limit: 6 });
   const redeem = useRedeemableRedemption(userId);
+  const { showToast } = useToast();
+
+  // Claim outcome must be visible here, exactly as it is on the floating-widget mount: a
+  // rejection (409 already redeemed / 400 expired / 403 ineligible / network) otherwise
+  // failed in silence and the member just kept tapping. The mutation re-syncs the wallet
+  // on both outcomes, so a rejected item also stops rendering as claimable.
+  const onClaim = async (item: RedeemableWalletItem) => {
+    try {
+      const response = await redeem.mutateAsync({ issuanceId: item.issuanceId, entriesAmount: item.entriesAmount });
+      if (!response.success) {
+        throw new Error(response.error || "Redemption failed");
+      }
+      showToast({
+        type: "success",
+        title: "Reward claimed",
+        message: `${response.data?.entriesGranted ?? 0} free entries added to your account.`,
+      });
+    } catch (error) {
+      showToast({
+        type: "error",
+        title: "Unable to claim",
+        message: error instanceof Error ? error.message : "Please try again shortly.",
+      });
+    }
+  };
 
   // Rewards program paused (API 503s) → neutral unavailable state, never a crash.
   if (claimable.isError) {
@@ -147,7 +173,7 @@ export default function RewardsClaimables({ userId, onUnlock }: RewardsClaimable
                       disabled={(!canClaim && !unlockable) || redeem.isPending}
                       onClick={() => {
                         if (canClaim) {
-                          redeem.mutate({ issuanceId: item.issuanceId, entriesAmount: item.entriesAmount });
+                          void onClaim(item);
                         } else if (unlockable) {
                           setOpen(false); // close this sheet so the purchase modal isn't stacked under it
                           onUnlock?.(item);

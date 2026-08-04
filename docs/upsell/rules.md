@@ -33,3 +33,16 @@ The active promo factor is the one that applied to the **original trigger purcha
 Mini upsells have a fixed `1×` category multiplier (no admin knob), so the formula reduces to `activePromoMultiplier × baseEntries` for the mini category.
 
 Sub-1 / NaN / negative promo values are clamped to `1` by the calculator — never trust caller-provided inputs.
+
+## R6. Never resolve a hero to a file that might not exist
+
+Every `src` `resolveUpsellImage` returns must be manifest-gated, i.e. proven on disk. When nothing matches, return **`null`** — never a path to a "placeholder" asset.
+
+This rule exists because the opposite was tried and broke in production: the chain used to end at an un-gated `_fallback.webp` that did not exist, so every fall-through 404'd, the image optimizer answered `400`, and customers saw bare alt text at the moment they were being asked to buy. Restoring the asset would only hide it — artwork exists solely for the multipliers in use, so a global placeholder stands in for art that was never meant to exist.
+
+Two consequences to preserve:
+
+- `ResolvedUpsellImage["src"]` is `string | null`. Do not narrow it back to `string`.
+- Any consumer must handle `null` by rendering **no image** (`OfferHero` returns `null`). Do not substitute a spinner, a grey box, or a default asset.
+
+Guarded by `npm run test:upsell-images` (`testResolvedSrcAlwaysExists`), which asserts every non-null resolution names a file the manifest knows about.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/components/ui/Toast";
 import { usePaymentMethods } from "@/hooks/queries/usePaymentQueries";
@@ -15,6 +15,7 @@ import { getReceiptLabel } from "@/utils/membership/getReceiptLabel";
 import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
+import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
 import type { MiniDrawType } from "@/types/mini-draw";
 import { useAttribution } from "@/hooks/useAttribution";
 
@@ -42,6 +43,11 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
   const { showToast } = useToast();
   const { userData, isAuthenticated } = useUserContext();
   const attribution = useAttribution();
+  // Every user-scoped cache key MUST be built from the real session id — `queryKeys.users.account`
+  // and `miniDraws.userEntries` are keyed by it, so a placeholder id writes to a key no query reads
+  // and the dashboard keeps showing pre-purchase counts. `session.user.id` is the id every reader
+  // (UserContext, useMyAccountData, useUserMiniDrawEntries) uses.
+  const userId = session?.user?.id;
   const { data: paymentMethodsData } = usePaymentMethods(userData?._id);
   const paymentMethods = !paymentMethodsData
     ? undefined
@@ -49,6 +55,7 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
       ? paymentMethodsData
       : paymentMethodsData.paymentMethods;
   const queryClient = useQueryClient();
+  const invalidatePurchaseCaches = usePurchaseInvalidation();
 
   // Extract default payment method for automatic charging.
   const defaultPaymentMethod = paymentMethods?.find((pm) => pm.isDefault) || paymentMethods?.[0];
@@ -63,6 +70,16 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
   const [originalPurchaseContext, setOriginalPurchaseContext] = useState<OriginalPurchaseContext | null>(null);
   const [successToastShown, setSuccessToastShown] = useState(false); // Guard to prevent duplicate toasts
   const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // The optimistic snapshots have to OUTLIVE `handlePurchase`: once the payment overlay opens,
+  // the failure/timeout callbacks fire long after it has returned, so locals left them with
+  // nothing to restore — a visibly failed payment kept the inflated entry count and a stuck
+  // `isProcessing: true`.
+  const optimisticSnapshotRef = useRef<{
+    userId: string;
+    miniDraw: MiniDrawType | undefined;
+    userAccount: unknown;
+  } | null>(null);
 
   // Remaining capacity guard for client-side disablement.
   const entriesRemaining =
@@ -81,11 +98,27 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
     setUpsellTriggered(false);
     setOriginalPurchaseContext(null);
     setSuccessToastShown(false);
+    // Drop the snapshot with the state it belongs to — it is keyed to the previous draw.
+    optimisticSnapshotRef.current = null;
   }, [miniDrawId]);
 
+  /** Restore the pre-purchase caches (entry bump + `isProcessing`) after a failed/timed-out payment. */
+  const rollbackOptimisticPurchase = () => {
+    const snapshot = optimisticSnapshotRef.current;
+    if (!snapshot) return;
+    if (snapshot.miniDraw) {
+      queryClient.setQueryData(queryKeys.miniDraws.detail(miniDrawId), snapshot.miniDraw);
+    }
+    if (snapshot.userAccount) {
+      queryClient.setQueryData(queryKeys.users.account(snapshot.userId), snapshot.userAccount);
+    }
+    optimisticSnapshotRef.current = null;
+  };
+
   const handlePurchase = async (packageId: string) => {
-    // ✅ AUTHENTICATION-ONLY: Check if user is authenticated (not membership)
-    if (!session?.user) {
+    // ✅ AUTHENTICATION-ONLY: Check if user is authenticated (not membership).
+    // Also covers a session without an id — the user-scoped caches below cannot be keyed without it.
+    if (!userId) {
       setShowLoginModal(true);
       return;
     }
@@ -106,12 +139,15 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
     // Cancel any outgoing refetches to prevent race conditions
     await queryClient.cancelQueries({ queryKey: queryKeys.miniDraws.detail(miniDrawId) });
     await queryClient.cancelQueries({ queryKey: queryKeys.miniDraws.entries(miniDrawId) });
-    await queryClient.cancelQueries({ queryKey: queryKeys.miniDraws.userEntries("current-user") });
-    await queryClient.cancelQueries({ queryKey: queryKeys.users.account("current-user") });
+    await queryClient.cancelQueries({ queryKey: queryKeys.miniDraws.userEntries(userId) });
+    await queryClient.cancelQueries({ queryKey: queryKeys.users.account(userId) });
 
-    // Snapshot previous values for rollback
-    const previousMiniDraw = queryClient.getQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId));
-    const previousUserAccount = queryClient.getQueryData(queryKeys.users.account("current-user"));
+    // Snapshot previous values for rollback (held in a ref so the payment-overlay callbacks can reach them)
+    optimisticSnapshotRef.current = {
+      userId,
+      miniDraw: queryClient.getQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId)),
+      userAccount: queryClient.getQueryData(queryKeys.users.account(userId)),
+    };
 
     // Optimistically update minidraw cache
     queryClient.setQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId), (old) => {
@@ -129,7 +165,7 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
     });
 
     // Optimistically update user account cache
-    queryClient.setQueryData(queryKeys.users.account("current-user"), (old: unknown) => {
+    queryClient.setQueryData(queryKeys.users.account(userId), (old: unknown) => {
       if (!old || typeof old !== "object") return old;
       const oldData = old as Record<string, unknown>;
       const oldUser = oldData.user as Record<string, unknown>;
@@ -176,12 +212,7 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
 
       // 3D Secure or bank auth — do not start webhook polling; payment is not complete yet
       if (!data.success && data.requiresAction) {
-        if (previousMiniDraw) {
-          queryClient.setQueryData(queryKeys.miniDraws.detail(miniDrawId), previousMiniDraw);
-        }
-        if (previousUserAccount) {
-          queryClient.setQueryData(queryKeys.users.account("current-user"), previousUserAccount);
-        }
+        rollbackOptimisticPurchase();
         showToast({
           type: "info",
           title: "Complete authentication",
@@ -199,12 +230,7 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
 
       // Unconfirmed intent (no saved card): API returns a client_secret for future Elements flow; do not poll for BenefitsGranted
       if (data.requiresPayment) {
-        if (previousMiniDraw) {
-          queryClient.setQueryData(queryKeys.miniDraws.detail(miniDrawId), previousMiniDraw);
-        }
-        if (previousUserAccount) {
-          queryClient.setQueryData(queryKeys.users.account("current-user"), previousUserAccount);
-        }
+        rollbackOptimisticPurchase();
         showToast({
           type: "info",
           title: "Payment method required",
@@ -260,12 +286,7 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
       const errorMessage = error instanceof Error ? error.message : "Purchase failed";
 
       // Rollback optimistic updates on error
-      if (previousMiniDraw) {
-        queryClient.setQueryData(queryKeys.miniDraws.detail(miniDrawId), previousMiniDraw);
-      }
-      if (previousUserAccount) {
-        queryClient.setQueryData(queryKeys.users.account("current-user"), previousUserAccount);
-      }
+      rollbackOptimisticPurchase();
 
       // Close payment processing screen if it was open
       setShowPaymentProcessing(false);
@@ -322,6 +343,9 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
         );
       }
 
+      // Payment is confirmed — there is nothing left to roll back.
+      optimisticSnapshotRef.current = null;
+
       // Clear processing flags
       queryClient.setQueryData<MiniDrawType>(queryKeys.miniDraws.detail(miniDrawId), (old) => {
         if (!old) return old;
@@ -331,26 +355,30 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
         };
       });
 
-      queryClient.setQueryData(queryKeys.users.account("current-user"), (old: unknown) => {
-        if (!old || typeof old !== "object") return old;
-        const oldData = old as Record<string, unknown>;
-        return {
-          ...oldData,
-          user: {
-            ...(oldData.user as Record<string, unknown>),
-            isProcessing: false,
-          },
-        };
-      });
+      if (userId) {
+        queryClient.setQueryData(queryKeys.users.account(userId), (old: unknown) => {
+          if (!old || typeof old !== "object") return old;
+          const oldData = old as Record<string, unknown>;
+          return {
+            ...oldData,
+            user: {
+              ...(oldData.user as Record<string, unknown>),
+              isProcessing: false,
+            },
+          };
+        });
+      }
 
       // Invalidate queries to refetch fresh data after webhook processing.
       // Delay to allow webhook to complete processing.
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.detail(miniDrawId) });
-        queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.entries(miniDrawId) });
-        queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.userEntries("current-user") });
-        queryClient.invalidateQueries({ queryKey: queryKeys.users.account("current-user") });
-        queryClient.refetchQueries({ queryKey: queryKeys.miniDraws.detail(miniDrawId) });
+        // Namespace root — it prefix-matches detail/list/entries/activity/user-entries in one call.
+        // The card grid behind the sheet reads the LIST, so invalidating only the detail left its
+        // fill bar and the "top mini draws" ordering computed from pre-purchase totals.
+        queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.all });
+        // Same shared helper `useEnterMiniDraw`/`usePurchaseUpsell` use — covers the account,
+        // dashboard, major-draw, orders and rewards slices a granted pack moves.
+        if (userId) invalidatePurchaseCaches(userId);
       }, 2000); // Wait 2 seconds for webhook to complete
 
       // Show success message (only once)
@@ -375,7 +403,8 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
         }, 2000);
       }
     } else {
-      // Payment failed during processing
+      // Payment failed during processing — undo the optimistic bump and the `isProcessing` flag
+      rollbackOptimisticPurchase();
       showToast({
         type: "error",
         title: "Payment Processing Failed",
@@ -391,6 +420,10 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
     setShowPaymentProcessing(false);
     setPaymentIntentId(null);
 
+    // The webhook never confirmed the pack — restore the pre-purchase entry count and clear
+    // the optimistic `isProcessing`, which otherwise stayed stuck on for the rest of the session.
+    rollbackOptimisticPurchase();
+
     // Show error with clear message for retry
     showToast({
       type: "error",
@@ -403,6 +436,10 @@ export function useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries }
   // Handle payment processing timeout - payment may still be processing
   const handlePaymentProcessingTimeout = () => {
     setShowPaymentProcessing(false);
+
+    // Nothing is confirmed yet, so show the server-truth counts rather than an unconfirmed bump
+    // (and clear the stuck `isProcessing`); the toast tells the user to check back.
+    rollbackOptimisticPurchase();
 
     // Inform user that payment is being processed but may take longer
     showToast({

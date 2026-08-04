@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Star, ShoppingCart, Ticket, Check, Loader2, AlertCircle, RefreshCw } from "lucide-react";
@@ -86,7 +86,16 @@ export default function ProductCard({
   width: _width = "w-[295px]",
   viewMode = "grid",
 }: ProductCardProps) {
-  const { items, addToCart, isAddingToCart, isUpdatingCart, hasFailedOperations, retryAllFailedOperations } = useCart();
+  const {
+    items,
+    addToCart,
+    isAddingToCart,
+    isUpdatingCart,
+    failedOperations,
+    hasFailedOperations,
+    retryFailedOperation,
+    retryAllFailedOperations,
+  } = useCart();
   const { trackAddToCart } = usePixelTracking();
   const { trackAddToCart: trackKlaviyoAddToCart } = useKlaviyoTracking();
   const { userData, isAuthenticated } = useUserContext();
@@ -116,11 +125,6 @@ export default function ProductCard({
 
   // Subscribe to minidraw query updates for real-time UI updates
   const { data: miniDrawQueryData } = useMiniDraw(isMiniDraw ? product._id : undefined);
-
-  // Local state for immediate UI feedback
-  const [localAddedState, setLocalAddedState] = useState<Record<string, boolean>>({});
-  const [localLoadingState, setLocalLoadingState] = useState<Record<string, boolean>>({});
-  const [localErrorState, setLocalErrorState] = useState<Record<string, boolean>>({});
 
   /**
    * Calculate user's entry count for this specific minidraw.
@@ -268,48 +272,49 @@ export default function ProductCard({
   const productData = getProductData();
   const brandAccent = productData.brandAccent;
 
-  // Check if product is in cart (immediate local check)
-  const isInCart = items.some((item) => item.productId === productData.id) || localAddedState[productData.id];
-  const hasError = localErrorState[productData.id];
+  // The cart's own item list is the single source of truth for "added": addToCart writes it
+  // optimistically on click, and a failed sync reverts it from the server. A local "added"
+  // flag alongside it is what used to leave the button stuck green behind a rejected add.
+  const isInCart = items.some((item) => item.productId === productData.id);
 
-  // Optimistic add to cart handler with comprehensive error handling
+  // The add is queued and POSTed later by the provider, so a rejection surfaces here as a
+  // failed operation — never as a rejection from addToCart().
+  const failedAddOperation = failedOperations.find(
+    (operation) => operation.type === "add" && operation.data.productId === productData.id
+  );
+  const hasError = Boolean(failedAddOperation);
+
+  // Optimistic add to cart handler
   const handleAddToCart = useCallback(async () => {
-    // Clear any previous error state
-    setLocalErrorState((prev) => ({ ...prev, [productData.id]: false }));
-
-    // Immediate UI feedback - optimistic update
-    setLocalLoadingState((prev) => ({ ...prev, [productData.id]: true }));
-    setLocalAddedState((prev) => ({ ...prev, [productData.id]: true }));
+    // Optimistic cart update (UI updates immediately, API call happens in background)
+    await addToCart({
+      productId: isMiniDrawProduct(product) ? undefined : productData.id,
+      miniDrawId: isMiniDrawProduct(product) ? productData.id : undefined,
+      quantity: 1,
+      price: productData.price,
+      product: isMiniDrawProduct(product)
+        ? undefined
+        : {
+            _id: product._id,
+            name: product.name,
+            price: product.price,
+            images: product.images,
+            brand: product.brand,
+            stock: product.stock,
+          },
+      miniDraw: isMiniDrawProduct(product)
+        ? {
+            _id: product._id,
+            name: product.name,
+            ticketPrice: productData.price, // Use prize value as price for cart compatibility
+            totalTickets: product.minimumEntries || 0, // Use minimumEntries for cart compatibility
+            soldTickets: product.totalEntries || 0, // Use totalEntries for cart compatibility
+            prize: product.prize,
+          }
+        : undefined,
+    });
 
     try {
-      // Optimistic cart update (UI updates immediately, API call happens in background)
-      await addToCart({
-        productId: isMiniDrawProduct(product) ? undefined : productData.id,
-        miniDrawId: isMiniDrawProduct(product) ? productData.id : undefined,
-        quantity: 1,
-        price: productData.price,
-        product: isMiniDrawProduct(product)
-          ? undefined
-          : {
-              _id: product._id,
-              name: product.name,
-              price: product.price,
-              images: product.images,
-              brand: product.brand,
-              stock: product.stock,
-            },
-        miniDraw: isMiniDrawProduct(product)
-          ? {
-              _id: product._id,
-              name: product.name,
-              ticketPrice: productData.price, // Use prize value as price for cart compatibility
-              totalTickets: product.minimumEntries || 0, // Use minimumEntries for cart compatibility
-              soldTickets: product.totalEntries || 0, // Use totalEntries for cart compatibility
-              prize: product.prize,
-            }
-          : undefined,
-      });
-
       // Track pixel events for add to cart
       trackAddToCart({
         value: productData.price,
@@ -329,29 +334,24 @@ export default function ProductCard({
         product_name: productData.name,
         num_items: 1,
       });
-
-      // Call legacy callback if provided
-      if (onAddToCart) {
-        onAddToCart(product);
-      }
     } catch (error) {
-      // If optimistic update fails, show error state
-      setLocalErrorState((prev) => ({ ...prev, [productData.id]: true }));
-      setLocalAddedState((prev) => ({ ...prev, [productData.id]: false }));
-      console.error("Failed to add to cart:", error);
-    } finally {
-      // Clear loading state after a brief moment
-      setTimeout(() => {
-        setLocalLoadingState((prev) => ({ ...prev, [productData.id]: false }));
-      }, 300);
+      console.error("Error tracking AddToCart:", error);
+      // Don't throw - tracking should not break cart functionality
+    }
+
+    // Call legacy callback if provided
+    if (onAddToCart) {
+      onAddToCart(product);
     }
   }, [productData, addToCart, onAddToCart, product, trackAddToCart, trackKlaviyoAddToCart]);
 
-  // Retry failed operation
+  // Retry the operation that actually failed, so it leaves failedOperations and the card
+  // returns to its normal state. Re-running handleAddToCart would queue a second operation
+  // and leave the original stuck in the failed list forever.
   const handleRetry = useCallback(async () => {
-    setLocalErrorState((prev) => ({ ...prev, [productData.id]: false }));
-    await handleAddToCart();
-  }, [handleAddToCart, productData.id]);
+    if (!failedAddOperation) return;
+    await retryFailedOperation(failedAddOperation.id);
+  }, [failedAddOperation, retryFailedOperation]);
 
   // NOTE: ViewContent tracking removed from ProductCard component mount
   // ViewContent should only fire on product detail pages, not on card renders
@@ -385,9 +385,9 @@ export default function ProductCard({
   const isPrizeClosed =
     productData.isPrize && (miniDrawStatus === "completed" || (entriesRemaining !== null && entriesRemaining <= 0));
 
-  // Check loading states
-  const isCurrentlyLoading =
-    localLoadingState[productData.id] || isAddingToCart(productData.id) || isUpdatingCart(productData.id);
+  // Check loading states — the queued operation is the accurate signal; it exists from the
+  // click until the provider has drained it.
+  const isCurrentlyLoading = isAddingToCart(productData.id) || isUpdatingCart(productData.id);
 
   // Grid view
   if (viewMode === "grid") {

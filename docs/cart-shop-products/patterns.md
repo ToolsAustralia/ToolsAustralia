@@ -10,7 +10,7 @@ No behavioural changes; markup only.
 
 ## P1. Cart in Context, products in TanStack Query
 
-Server-state (products) goes through TanStack Query. Client-state (cart) goes through React Context with localStorage backing. Don't mix.
+Server-state (products) goes through TanStack Query. The cart goes through React Context — an optimistic list plus an operation queue that drains to `/api/cart`, which is where the cart actually lives. Don't mix: the parallel TanStack cart hooks in `useCartQueries` are unused, and adding a component that uses them would give the page a second, competing cart.
 
 ## P2. Webhook-authoritative order writes
 

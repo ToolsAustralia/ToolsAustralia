@@ -5,7 +5,13 @@ import { resolveUpsellImage } from "@/utils/upsell/upsell-image-selector";
 import { PROMO_MULTIPLIERS } from "@/types/promo-multiplier";
 
 const ROOT = "/images/upsells";
-const FALLBACK_SRC = `${ROOT}/_fallback.webp`;
+/**
+ * "No artwork" is now `src: null`, not a placeholder path. There is deliberately no
+ * `_fallback.webp` on disk: artwork exists only for the multipliers actually in use, and
+ * returning a path to a file that isn't there 404s (the optimizer then answers 400 and the
+ * modal renders bare alt text). Callers render no image instead.
+ */
+const NO_ARTWORK = null;
 
 function expectedTier(baseTemplatePackageId: string): string {
   if (/^mini-pack-[123]$/.test(baseTemplatePackageId)) return baseTemplatePackageId;
@@ -26,11 +32,11 @@ function testEveryPackageResolvesPredictably() {
     const stem = expectedStem(pkg.upsellCategory, tier);
     const expectedDefault = `${ROOT}/${pkg.upsellCategory}/${stem}.webp`;
 
-    if (r.src === FALLBACK_SRC) {
-      // Allowed when the default file isn't on disk yet.
+    if (r.src === NO_ARTWORK) {
+      // Allowed only when the default file genuinely isn't on disk.
       assert.ok(
         !UPSELL_IMAGE_MANIFEST.has(`${pkg.upsellCategory}/${stem}.webp`),
-        `${pkg.id} fell back to global placeholder but its default image IS on disk`
+        `${pkg.id} resolved to no artwork but its default image IS on disk`
       );
     } else {
       assert.equal(
@@ -64,8 +70,28 @@ function testPromoVariantPreferredWhenAvailable() {
 
 function testUnknownOfferFallsBack() {
   const r = resolveUpsellImage({ offerId: "does-not-exist" });
-  assert.equal(r.src, FALLBACK_SRC);
+  // An unknown offer yields NO artwork — never a path to a file that isn't there.
+  assert.equal(r.src, NO_ARTWORK);
   assert.equal(r.isPromoVariant, false);
+}
+
+/**
+ * Guard against the exact defect that shipped: a resolved `src` must always name a file the
+ * manifest knows about. A path to a missing asset 404s, Next's optimizer answers 400, and the
+ * modal renders bare alt text — so "points at nothing" must be `null`, never a string.
+ */
+function testResolvedSrcAlwaysExists() {
+  for (const pkg of upsellPackages) {
+    for (const m of [undefined, ...PROMO_MULTIPLIERS]) {
+      const r = resolveUpsellImage({ offerId: pkg.id, multiplier: m });
+      if (r.src === null) continue;
+      const key = r.src.replace(`${ROOT}/`, "");
+      assert.ok(
+        UPSELL_IMAGE_MANIFEST.has(key),
+        `${pkg.id} (multiplier ${String(m)}) resolved to "${r.src}", which is not on disk`
+      );
+    }
+  }
 }
 
 /**
@@ -88,6 +114,9 @@ function run() {
   testEveryPackageResolvesPredictably();
   testPromoVariantPreferredWhenAvailable();
   testUnknownOfferFallsBack();
+  testResolvedSrcAlwaysExists();
+  // Was defined but never called, so it had never actually run — registered 2026-08-04.
+  testEffectiveMultiplierOutsidePromoListResolves();
   console.log("upsell-image-selector tests passed");
 }
 

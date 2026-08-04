@@ -5,6 +5,7 @@
 | Method | Path | Purpose |
 |---|---|---|
 | _TODO_ | `/api/major-draw/**` | Major-draw read & entry-related routes |
+| GET | `/api/major-draw/completed` | All `status: "completed"` major draws, newest first, each joined to its `Winner` row (name, state, email, entry number, selection method/selector, `imageUrl`, `drawResultUrl`) plus `participantCount` from `entries.length`. Populates `Winner.userId` / `selectedBy`, so it must **side-effect import `@/models/User`** — see [gotchas.md](./gotchas.md#apimajor-drawcompleted-500d-on-missingschemaerror-model-user-2026-08-03). Not name-formatted — this route returns full names and emails, so keep it off public surfaces (contrast [patterns P5](./patterns.md#p5-public-formatted-vs-internal-data)). |
 | _TODO_ | `/api/mini-draw/**` | Mini-draw routes (parallel with major) |
 | GET | `/api/winners/all` | Public winners feed (major + mini, optional `?drawType=` filter, `?limit=` default 20). Edge-cached 5min via `Cache-Control: public, s-maxage=300, stale-while-revalidate=600` and `revalidate = 300` segment config. DB queries are pre-`.limit()`ed so cache misses still bound payload size. The major+mini merge lives in the shared loader [`getAllWinners()`](../../src/utils/draws/get-all-winners.ts) (the route is a thin wrapper); the `/draw-results` page calls the same loader for SSR. |
 | GET | `/api/winners/major-draws` | Major-draw winners only (already DB-limited; no edge cache). |

@@ -52,6 +52,7 @@ import { useUpsellMultipliersPublic } from "@/hooks/queries/useUpsellMultipliers
 import { resolveUpsellImage } from "@/utils/upsell/upsell-image-selector";
 import { getUpsellPackageById } from "@/data/upsellPackages";
 import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
+import { clearDashboardEntryHold } from "@/utils/dashboard-entry-hold";
 import {
   pickTriggeringPackageIdForUpsell,
   resolveUpsellPromoMultiplierForDisplay,
@@ -657,9 +658,34 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
   };
 
   // Handle payment processing error
+  //
+  // This and the dismiss handler below end the flow WITHOUT the global success screen, so the
+  // dashboard's own entry-hold release (success overlay closing) never runs — release it here
+  // or the wallet keeps showing pre-purchase numbers after a charge that may have succeeded.
   const handlePaymentError = (error: string) => {
     console.error("Upsell payment processing error:", error);
     setShowPaymentProcessing(false);
+    clearDashboardEntryHold();
+    showToast({
+      type: "error",
+      title: "We couldn't confirm your purchase",
+      message:
+        "Your payment may still be going through. If it does, your free entries will appear in your account shortly — check your email for the receipt, or contact support if nothing arrives.",
+      duration: 8000,
+    });
+  };
+
+  /** User dismissed the long-running "still processing" state (the only live path — the
+   *  screen's `onTimeout` prop is never invoked; see PaymentProcessingScreen). */
+  const handleProcessingDismiss = () => {
+    clearDashboardEntryHold();
+    showToast({
+      type: "info",
+      title: "Still processing",
+      message: "Your payment is taking longer than usual. Your free entries will appear in your account once it completes.",
+      duration: 8000,
+    });
+    handleClose();
   };
 
   const handleDecline = () => {
@@ -870,8 +896,8 @@ const UpsellModal: React.FC<UpsellModalProps> = ({
           isVisible={showPaymentProcessing}
           onSuccess={handlePaymentSuccess}
           onError={handlePaymentError}
-          onTimeout={handleClose}
-          onStillProcessingDismiss={handleClose}
+          onTimeout={handleProcessingDismiss}
+          onStillProcessingDismiss={handleProcessingDismiss}
         />
       )}
     </>

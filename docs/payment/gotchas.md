@@ -169,3 +169,46 @@ Enforced by `eslint/rules/no-eager-stripe.js` (registered as `internal-norm/no-e
 ## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).
+
+## Resolved — 3-D Secure was reported to the buyer as a completed purchase (2026-08-04)
+
+`/api/stripe/create-one-time-purchase-existing-user` answers **`success: true`** with
+`paymentIntent.status: "requires_action"` when the cardholder's bank wants authentication. The
+route comment said *"frontend will handle 3DS redirect via client_secret"* — **no caller ever
+did**. So the mutation resolved, the full success path ran, and the customer saw
+*"Purchase Complete! Your payment was successful"* while Stripe held the charge as
+**Incomplete**: no money taken, no `payment_intent.succeeded` webhook, no entries granted.
+
+Reproduced with Stripe test card `4000 0025 0000 3155` — two `$125.00` Incomplete intents in the
+dashboard against a success screen in the app.
+
+**Two things hid it.**
+
+1. **Nothing logged it.** No `ErrorReport` was written on this path, so the only trace was
+   per-customer in the Stripe dashboard. From inside the product it was completely invisible.
+2. **The response type lied.** `MembershipResponse` declared `data.paymentIntent` with a
+   snake_case `client_secret`, while the route returns `paymentIntent` at the **top level** with
+   `clientSecret`. Consumers reaching through the typed shape got `undefined` and type-checked
+   cleanly — so the `requires_action` status was not just unread but effectively unreadable.
+   Correcting the type surfaced three dead `data.paymentIntent` fallbacks in MembershipModal and
+   SpecialPackagesModal that could never have matched at runtime.
+
+**The fix.** `completePendingAuthentication()`
+([src/utils/payment/stripe/complete-pending-authentication.ts](../../src/utils/payment/stripe/complete-pending-authentication.ts))
+runs inside the purchase `mutationFn`, before it resolves:
+
+- Not `requires_action` → returns immediately (no behaviour change on the normal path).
+- `requires_action` → presents the challenge via `stripe.handleNextAction({ clientSecret })`.
+  `succeeded` or `processing` resolve normally and the webhook grants benefits exactly as usual.
+- Anything else — error, abandoned challenge, still-unauthenticated intent, missing client
+  secret, Stripe unavailable — **throws**, so the caller's existing `onError` rolls the optimistic
+  state back and the buyer is told the truth instead of congratulated.
+
+Every failing branch also writes an `ErrorReport` via `autoLogPaymentError` with an
+`errorCode` of `3ds_*` (`3ds_no_client_secret`, `3ds_stripe_unavailable`, `3ds_not_completed_*`,
+or Stripe's own code), so a run of abandoned challenges is visible in admin instead of silent.
+Reporting is best-effort and never masks the payment error. The route no longer claims
+`paymentVerified: true` or "purchase successful" while authentication is still outstanding.
+
+**If you add another purchase entry point, call this helper.** `success: true` from a purchase
+route does not mean the money moved.

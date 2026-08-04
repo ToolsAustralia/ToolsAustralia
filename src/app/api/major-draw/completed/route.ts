@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import MajorDraw from "@/models/MajorDraw";
 import Winner from "@/models/Winner";
+// Side-effect: Winner.userId/selectedBy are `ref: "User"`, and nothing else in this
+// route's import graph pulls in the User model — without this a cold serverless
+// instance throws MissingSchemaError on the populate below.
+import "@/models/User";
 import { Types } from "mongoose";
 
 type PopulatedUser = {

@@ -132,3 +132,108 @@ Both pages ran live Mongo queries per request for data that changes only when a 
 ## WinnersTestimony carousel: index-based, no scroll track (2026-07-23 redesign)
 
 **Superseded by the 2026-07-23 "speech bubble" redesign.** The mobile carousel no longer uses a horizontal scroll-snap track, so the old rAF-throttled `onScroll` + cached-offset active-dot tracking (`addRAFScrollListener` / `addThrottledResize`) is **gone**. The carousel is now purely **index-based**: `idx` state selects `stories[idx]`, prev/next wrap with `(idx ± 1 + n) % n`, dots jump to an index, and the single card is re-keyed by id so the CSS `wt-swap` entrance animation replays as the "swap" (no per-frame measurement to throttle). Desktop is an auto-fitting CSS grid (no carousel). If you reintroduce a scrollable track, restore the rAF-throttle pattern — don't read child geometry on every scroll event.
+
+## The purchase gate failed CLOSED on an API error (2026-08-03)
+
+`useMajorDrawPurchaseGate` computed:
+
+```ts
+const gatesClosed = currentMajorDraw?.status !== "active";
+```
+
+An **errored** `useCurrentMajorDraw` query leaves `currentMajorDraw` as `undefined`, and
+`undefined !== "active"` is `true` — so any `/api/major-draw` outage reported the gates shut to
+**every visitor**, opened `GateClosedModal`, and blocked all new entry purchases. A revenue path
+failing closed on our own infrastructure error.
+
+The 2026-05-29 fix documented in that file's header covered the **loading** race (it defers the
+action while `isMajorDrawLoading` and replays it once data resolves). It did not cover the
+**error** case, where `isLoading` is already `false` and `data` never arrives.
+
+Fix: `gatesClosed = !isError && !isMajorDrawLoading && currentMajorDraw?.status !== "active"`.
+
+**Both guards are needed, and the second was missed on the first pass.** The deferral in
+`whenGatesOpenElseGateModal` only protects callers that go THROUGH it. `MembershipModal` reads the
+raw `gatesClosed` flag in an effect that fires the moment the modal opens (`if (!gatesClosed …)
+return; handleClose(); openGateClosedModal();`), so while the query was still in flight it closed
+itself and raised the gate modal anyway. Verified live against a simulated outage: with `!isError`
+alone the gate modal still appeared; with both guards the purchase modal opens as it should.
+
+**Why failing OPEN is the correct default here, not a loosened guard.** The client gate is a UX
+affordance, not the security boundary: `/api/stripe/create-payment-intent` independently calls
+`enforceMajorDrawOpenForNewPurchasesOr403()` and rejects a closed-gate purchase with a 403. So
+when the client guesses wrong the worst outcome is a server rejection the user can act on —
+versus silently blocking every paying customer during an outage. A genuinely closed gate still
+reports closed, because a **successful** response carrying `null` (no active draw) or a
+non-active status keeps `gatesClosed` true, which is what shows the between-draws modal.
+
+**The transferable lesson:** `data?.field !== VALUE` conflates three distinct states — *loaded and
+not matching*, *still loading*, and *failed to load*. Any gate written that way fails closed on
+error by construction. When the guarded action is revenue- or access-critical, decide explicitly
+what an unknown state should do, and check whether the server already enforces the rule (if it
+does, the client should almost always fail open).
+
+Not to be confused with `FloatingCountdownBanner`, which reads the same field but gates its whole
+render on `isReady` (set only once `currentMajorDraw` exists) — so an outage *hides* that banner
+rather than showing "GATES CLOSED". Two components, same expression, opposite failure modes.
+
+## The mini-pack money path wrote optimistic state to a user id that does not exist (2026-08-03)
+
+`useMiniDrawPurchase` built every user-scoped cache key from the string literal `"current-user"`:
+
+```ts
+queryClient.setQueryData(queryKeys.users.account("current-user"), …)
+queryClient.invalidateQueries({ queryKey: queryKeys.miniDraws.userEntries("current-user") })
+```
+
+`queryKeys.users.account(userId)` and `miniDraws.userEntries(userId)` are keyed by the **real session
+id** — the one `UserContext`, `useMyAccountData` and `useUserMiniDrawEntries` read with. So every
+one of those calls created (or cancelled/invalidated) a key **no query subscribes to**: the
+optimistic entry bump never appeared, the `isProcessing` flag never showed, and the post-webhook
+invalidation never refetched. A no-op that looked like working code, because `setQueryData` on an
+unknown key silently succeeds. The keys are now built from `session.user.id`, and `handlePurchase`
+bails to the login modal when that id is absent — without it the user-scoped writes below it cannot
+be keyed at all.
+
+Two more failures were hiding behind the dead keys:
+
+**The rollback snapshots were function locals.** `previousMiniDraw` / `previousUserAccount` were
+`const`s inside `handlePurchase`, but the failure paths that need them —
+`handlePaymentProcessingError`, `handlePaymentProcessingTimeout`, and the failed branch of the
+polling callback — fire **after** `handlePurchase` has returned, once `PaymentProcessingScreen` is
+driving. They had nothing to restore, so a visibly failed or timed-out payment kept the inflated
+entry count and a stuck `isProcessing: true` for the rest of the session. The snapshot now lives in
+`optimisticSnapshotRef` (cleared on `miniDrawId` change so it can never restore another draw's
+state, and cleared on confirmed success so nothing can undo a granted pack), and a single
+`rollbackOptimisticPurchase()` serves every failure path.
+
+**Only the detail key was invalidated.** The card grid behind the sheet reads the mini-draw **list**,
+so refreshing `miniDraws.detail(id)` alone left the grid's fill bar and the "top mini draws"
+ordering computed from pre-purchase totals. The post-webhook invalidation now uses the namespace
+root `queryKeys.miniDraws.all` (`["mini-draws"]`), which prefix-matches detail/list/entries/activity/
+user-entries in one call, plus the shared `usePurchaseInvalidation(userId)` helper that
+`useEnterMiniDraw` and `usePurchaseUpsell` already use for the account/dashboard/major-draw/orders/
+rewards slices a granted pack moves.
+
+**The transferable lesson:** a placeholder id in a cache key is invisible — no type error, no
+runtime error, no failed request. If a hook writes to a user-scoped key, the id must come from the
+same source the *readers* use, and optimistic state that outlives the function that created it must
+be stored where the later callbacks can reach it (a ref), not in a closure local.
+
+## `/api/major-draw/completed` 500'd on `MissingSchemaError: model "User"` (2026-08-03)
+
+The route `.populate("userId", …)` / `.populate("selectedBy", …)` on `Winner`, whose schema declares
+those paths as `ref: "User"`. Mongoose resolves a `ref` by **name at populate time**, so the `User`
+model has to already be registered on the connection — but nothing in this route's import graph
+(`MajorDraw`, `Winner`, `connectDB`) pulls `src/models/User.ts` in. On a warm instance some other
+route had usually registered it first; on a **cold** serverless instance it had not, and the populate
+threw `MissingSchemaError: Schema hasn't been registered for model "User"`, which the handler's
+catch turned into a generic `500 Failed to fetch completed major draws`. Logged in production.
+
+Fix is the side-effect import `import "@/models/User";` — deliberately unused in the code, so keep
+the comment above it or a lint/format pass will read it as dead and remove it.
+
+**The transferable lesson:** a `ref:` string is a runtime lookup, not a compile-time dependency —
+`tsc` cannot see it, and the bug only reproduces on a cold start, so it will not show up in local
+dev. Any route that populates a ref must import every referenced model itself rather than relying on
+another route having loaded it.

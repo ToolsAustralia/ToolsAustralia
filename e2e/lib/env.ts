@@ -50,6 +50,13 @@ export function resolveE2eEnv(opts: { webhookSecret?: string } = {}): E2eEnv {
     NEXTAUTH_URL: baseUrl,
     // Client-side apiGet base (src/lib/queries.ts) — .env.local points it at the dev port, must follow the e2e port.
     NEXT_PUBLIC_API_URL: baseUrl,
+    // Server-side base for REDIRECT return URLs (src/utils/url/get-base-url.ts ->
+    // getReturnUrlForPaymentType). Baked into the PaymentIntent at creation, so a stale value
+    // is not visible until a payment actually redirects: a 3-D Secure purchase on the e2e
+    // server sent the buyer back to localhost:3000 (the dev port in .env.local) and the
+    // success page never loaded. Same class as NEXT_PUBLIC_API_URL above — it must follow the
+    // e2e port. Only surfaced once 3DS became testable; nothing had exercised a redirect flow.
+    NEXT_PUBLIC_APP_URL: baseUrl,
     // Third parties — all verified to no-op when disabled/blank:
     KLAVIYO_ENABLED: "false",
     SENDGRID_API_KEY: "",

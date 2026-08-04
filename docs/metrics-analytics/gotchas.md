@@ -18,6 +18,38 @@ The User Metrics view's "Active Memberships" card ([src/components/admin/metrics
 
 A user might convert hours after the daily aggregation runs. The dashboard for "today" might miss them until the next aggregation cycle. UX should communicate "data delay up to 24 hours."
 
+## The dashboard entry hold has to expire on its own
+
+[src/utils/dashboard-entry-hold.ts](../../src/utils/dashboard-entry-hold.ts) freezes the
+major-draw entry buckets from a purchase's `onMutate` so the wallet makes one animated jump
+after the success overlay closes rather than twitching mid-flow. The trap is that the hold is
+**module-level** global state, while its only success-side release lived in
+`useDashboardEntryDisplay` — a hook that exists only while `/my-account` is mounted. The
+purchase modals are mounted globally, so a purchase started from anywhere else armed a hold
+with nobody left to observe the overlay closing: the member's entry count stayed pinned at its
+pre-purchase value for the rest of the SPA session, healing only on a hard refresh.
+
+The fix is a hard ceiling on the hold's lifetime — `HOLD_MAX_MS = 30_000`, armed as a
+`setTimeout(clearDashboardEntryHold, …)` inside `armDashboardEntryHold` and cancelled by
+`clearDashboardEntryHold`, so re-arming restarts the timer instead of stacking timers. 30s is
+double the ~5–15s webhook grant window, so on the dashboard the real release still wins and the
+animation is unchanged; everywhere else the timer *is* the release.
+
+The transferable rule: predicted/optimistic state that lives at module scope must own its own
+lifetime. If the only thing that can clear it is a component effect, every path where that
+component never mounts leaves the UI asserting a stale number indefinitely.
+
+## Never arm the hold from a cold cache
+
+`armDashboardEntryHoldFromUserStatsCache` used to fabricate `{0, 0, 0}` when the cached
+`queryKeys.majorDraw.userStats` value was missing or not an object. Zero is not a neutral
+default here — the hold's entire job is to render the captured snapshot in place of live data,
+so a fabricated zero snapshot froze the wallet at "no entries" immediately after a **successful**
+purchase. It now returns without arming anything, because a cold cache and a user whose stats
+query legitimately resolves to `null` are indistinguishable at that call site, and with no hold
+`useDashboardEntryDisplay` falls through to the live values — which are at worst not yet updated,
+never wrong.
+
 ## Platform scoping is mandatory on `AdDestination` + `LandingPageMetricsDaily`
 
 Both collections now carry a `platform` discriminator (`"meta" | "tiktok"`). **Every** read and

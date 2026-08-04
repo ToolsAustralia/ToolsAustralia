@@ -1,5 +1,35 @@
 # Auth — Gotchas
 
+## The React Query cache is part of the auth boundary — and sign-out alone can't clear it (fixed 2026-08-03)
+
+`totalSignOut()` cleared every user-scoped `localStorage`/`sessionStorage` key and then called
+NextAuth `signOut()`. That *looked* complete because `signOut()` does a full document navigation,
+which throws away the in-memory `QueryClient` in the tab that triggered it — so single-tab testing
+showed a clean slate. A **second open tab** never navigates: it learns of the sign-out through
+NextAuth's cross-tab broadcast and keeps its React Query cache intact. On a shared device the next
+person to sign in in that tab could briefly render the previous member's cached payloads (account
+data, redeemables wallet, partner queue) before refetches replaced them.
+
+**Fix:** `QueryCacheAuthBoundary` in [`src/app/providers.tsx`](../../src/app/providers.tsx) watches
+the signed-in identity and calls `queryClient.clear()` whenever we **leave** an authenticated
+identity. Three things about that shape are deliberate:
+
+- It keys on **identity change, not the sign-out call**. A hook inside `totalSignOut()` would only
+  ever fire in the tab that navigates — the one case that was already safe. Watching `session.user.id`
+  is the only signal the passive tab receives, and it also covers session expiry and account switch.
+- **First settled session and `null → id` are skipped** (`previous === undefined || previous === null`).
+  Neither can be holding another user's data, and clearing on the guest→member transition would wipe
+  the cache mid-purchase.
+- The clear lives in `providers.tsx`, not `total-sign-out.ts`, because that module is a plain
+  non-React module with no `QueryClient` in scope. Its header comment cross-references the boundary
+  so the two halves stay discoverable together.
+
+**Transferable lesson:** "sign-out navigates, so state dies with the page" is a single-tab
+assumption. Any user-scoped state that survives without a navigation — in-memory caches, module
+singletons, service-worker state — needs its own clear driven by *observed identity*, not by the
+sign-out handler. And when a cache key isn't itself user-scoped, a stale entry doesn't just leak
+privately; it renders as the next user's data.
+
 ## `send-otp` must deliver the code to the STORED mobile, never a request-supplied one (fixed 2026-07-23)
 
 `POST /api/auth/send-otp` resolved the account by **email**, then sent the SMS login code to

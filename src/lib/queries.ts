@@ -377,7 +377,21 @@ export const defaultQueryOptions = {
 // Default mutation options
 
 export const defaultMutationOptions = {
-  retry: 1,
+  // Same "never retry a 4xx" guard the queries use above: a 409/400/403 is deterministic, so
+  // retrying it can't succeed — it only holds the mutation pending for another retryDelay
+  // before the optimistic UI rolls back and the user is told what happened.
+
+  retry: (failureCount: number, error: unknown) => {
+    if (error && typeof error === "object" && "status" in error) {
+      const status = (error as { status: number }).status;
+
+      if (status >= 400 && status < 500) {
+        return false;
+      }
+    }
+
+    return failureCount < 1;
+  },
 
   retryDelay: 1000,
 };

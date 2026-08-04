@@ -12,7 +12,8 @@
 
 | File | Role |
 |---|---|
-| [src/lib/queries.ts](../../src/lib/queries.ts) | Query client config |
+| [src/lib/queries.ts](../../src/lib/queries.ts) | Shared `apiRequest` fetch wrapper + the default option objects (`defaultQueryOptions`, `defaultMutationOptions`, `retryConfig`). Mutations use the same "never retry a 4xx" predicate as queries, then allow one retry — see [rules.md](./rules.md) R11. |
+| [src/app/providers.tsx](../../src/app/providers.tsx) | Where the `QueryClient` is actually constructed: the defaults above plus the `queryCache` / `mutationCache` error handlers ([rules.md](./rules.md) R10) and the `QueryCacheAuthBoundary` cache clear. |
 | [src/lib/queryKeys.ts](../../src/lib/queryKeys.ts) | Centralized query-key factory. Admin allowlist namespace exposes `blockedCards(filterKey)`, `actions(action, limit)`, and `stats()` — the latter (added 2026-05-07) drives the all-time "Total on allowlist" metric on `/admin/blocked-transactions`. Apply/reverse mutations invalidate the broad `["admin", "allowlist"]` prefix, which covers all three keys. |
 | [src/lib/requestDeduplication.ts](../../src/lib/requestDeduplication.ts) | Request dedup helpers |
 | [src/hooks/queries/](../../src/hooks/queries/) | Domain-specific query hooks |
