@@ -492,3 +492,27 @@ Two habits that prevent it:
 - **Reconcile the count.** `npx playwright test --grep @smoke --list` prints the true total
   (107 at time of writing). If `passed + flaky + failed + skipped` does not equal it, the log is
   truncated or tests did not run — the numbers you have are not the numbers that happened.
+
+## Resolved — a 3-D Secure payment redirected to the DEV port, not the e2e port (2026-08-04)
+
+Symptom: completing a 3-D Secure challenge against the e2e server (`E2E_PORT`, e.g. 3805) landed
+the buyer on `http://localhost:3000/purchase-success` — the normal dev port — so the success page
+never loaded and the flow looked broken.
+
+Cause: `NEXT_PUBLIC_APP_URL` was not in the env overlay. `.env.local` sets it to
+`http://localhost:3000`, and `getBaseUrl()` (`src/utils/url/get-base-url.ts`) reads it to build
+the redirect return URL in `getReturnUrlForPaymentType`. That URL is **baked into the
+PaymentIntent when it is created server-side**, so no amount of client-side correctness fixes it
+after the fact — and `getReturnUrlForPaymentTypeClient` (which uses `window.location.origin`, and
+is therefore always right) is not what a redirect flow uses.
+
+Fix: the overlay now sets `NEXT_PUBLIC_APP_URL: baseUrl`, exactly as it already did for
+`NEXTAUTH_URL` and `NEXT_PUBLIC_API_URL`.
+
+**Why it hid for so long:** a stale base URL is invisible until a payment actually *redirects*.
+Every purchase spec until now used cards that complete inline, so nothing exercised a return URL.
+The same is true of any future flow that leaves the app and comes back — bank redirects, wallet
+payments, external SSO.
+
+**Production is unaffected.** `getBaseUrl()` throws when `NEXT_PUBLIC_APP_URL` is unset in
+production, and it is set there to the real domain. This was purely a local-harness gap.
