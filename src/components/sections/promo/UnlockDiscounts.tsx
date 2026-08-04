@@ -9,6 +9,7 @@ import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import type { PromoLandingTheme } from "@/stores/usePromoThemeStore";
 import { useUserContext } from "@/contexts/UserContext";
 import { PARTNER_BRAND_OFFERS } from "@/data/partnerBrandOffers";
+import PartnerBrandWall from "@/components/sections/PartnerBrandWall";
 import {
   getPartnerCatalogVisibleSliceLength,
   resolvePartnerCatalogPlanId,
@@ -172,6 +173,19 @@ export default function UnlockDiscounts({
     // Stable id: FloatingGetEntriesButton's IntersectionObserver targets this section
     // (replaces the old per-scroll-frame textContent scan). Nothing anchors/styles it.
     <section id="unlock-partner-discounts" ref={discountsRef} className={clsx("py-8 sm:py-12 lg:py-16 mb-12 relative", className)}>
+      {/* Partner brand wall — the odometer + conveyor belts that carry the "how big is
+          this network" job. Shared with the /membership partner-discounts section so
+          there is one implementation. The member discount grid below is untouched: the
+          wall SELLS the network, the grid SERVES the codes a member is already paying
+          for, so members get both. */}
+      <PartnerBrandWall
+        onCtaClick={() => openEntryFlow({ openLocalModal: false })}
+        // Promo landings pin a beat via the promo theme; when one asks for a dark ground
+        // we honour it, otherwise the wall follows the site theme.
+        skin={preferDark ? "dark" : undefined}
+        className="mb-8 sm:mb-12"
+      />
+
       <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-8 sm:mb-12">

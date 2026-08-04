@@ -190,18 +190,20 @@ export function buildPartnerPortalOfferUrl(offerId: string): string | null {
  * so the correct extension is resolved once by `scripts/probe-partner-catalog-images.ts` and
  * committed; this builder just takes it.
  *
- * COVERAGE IS 948/1833 (52%), AND THE SHORTFALL IS STRUCTURAL, NOT RANDOM. Split by category:
- * every category except one sits at 97–100%, and the single category "In-Store Offer" (877
- * offers, 48% of the catalogue) sits at **0%**. So this builder resolves artwork for
- * essentially all e-gift/online offers and none of the in-store ones.
+ * COVERAGE IS NOW 1804/1833 (98%) — 948 probed here + 856 harvested. Re-measured 2026-08-04
+ * from the generator's own output (`npm run build:partner-catalog` prints it).
  *
- * In-store offers DO have artwork in the portal — they are just not keyed by offer id.
- * Read off the live portal 2026-08-03, offer 1068399 (pureBIO New Zealand) renders:
+ * It was 948/1833 (52%) when this note was first written, because THIS builder's derived
+ * `product_image/{offerId}` form returns 0 of 877 for the "In-Store Offer" category, whose
+ * artwork is keyed by an internal MERCHANT id that appears nowhere in the CSV. Read off the
+ * live portal 2026-08-03, offer 1068399 (pureBIO New Zealand) renders:
  *     product_image/133414.jpeg      ← an internal media id, NOT 1068399
  *     merchant_logo/1032063.jpeg     ← the merchant id
- * Neither id appears anywhere in the CSV we are given, so there is no way to derive the URL
- * from what we hold. Closing this needs the vendor's product endpoint (the `GET
- * {portal}/api/v1/products/{id}` ask, currently 401) — see docs/partner/gotchas.md.
+ * `harvest-partner-instore-artwork.ts` since read those off the vendor's listing pages and
+ * commits them as explicit `m:`/`p:` refs, which FORM 2 below resolves — closing the gap to
+ * 856/877 in-store without needing the vendor's (still-401) product endpoint.
+ *
+ * So: do not quote 52% from this file. The generator prints the live number on every build.
  *
  * PATH HISTORY (worth keeping — it cost two wrong conclusions):
  *   1. An earlier version guessed `big_image/{id}.png`, which resolves for only 64 of 1,833.

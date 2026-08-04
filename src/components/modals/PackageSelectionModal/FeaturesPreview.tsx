@@ -2,17 +2,16 @@
 
 import React from "react";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
-import type { getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
-
-type ColorScheme = ReturnType<typeof getPackageColorSchemeForPromo>;
+import type { PackageCardSurface } from "@/utils/package-colors/packageCardSurface";
 
 interface FeaturesPreviewProps {
   plan: LocalMembershipPlan;
-  colorScheme: ColorScheme;
+  /** Shared package-card chrome — same tokens the MembershipSection card renders. */
+  surface: PackageCardSurface;
   accentHex: string;
 }
 
-const FeaturesPreview: React.FC<FeaturesPreviewProps> = ({ plan, colorScheme, accentHex }) => {
+const FeaturesPreview: React.FC<FeaturesPreviewProps> = ({ plan, surface }) => {
   return (
     <>
       {/* Entries - Centered */}
@@ -32,37 +31,28 @@ const FeaturesPreview: React.FC<FeaturesPreviewProps> = ({ plan, colorScheme, ac
                 : parseInt(entriesNumber);
 
               return (
-                <div className={colorScheme.textGradientStyle ? "" : "text-white"}>
+                <div>
                   {isPromoActive ? (
                     <div className="flex items-center justify-center gap-1.5 sm:gap-2">
-                      <span className="text-sm sm:text-base font-bold line-through opacity-40 text-white/70">
+                      <span
+                        className="text-sm sm:text-base font-bold line-through"
+                        style={{ color: surface.inkFaint }}
+                      >
                         {originalEntries}
                       </span>
-                      <span
-                        className="text-sm sm:text-base font-bold"
-                        style={colorScheme.textGradientStyle ?? { color: "white" }}
-                      >
+                      <span className="text-sm sm:text-base font-bold" style={{ color: surface.ink }}>
                         →
                       </span>
-                      <span
-                        className="text-xl sm:text-2xl font-bold"
-                        style={colorScheme.textGradientStyle ?? { color: accentHex }}
-                      >
+                      <span className="text-xl sm:text-2xl font-bold" style={surface.bigNumber}>
                         {entriesNumber}
                       </span>
                     </div>
                   ) : (
-                    <span
-                      className="text-xl sm:text-2xl font-bold"
-                      style={colorScheme.textGradientStyle ?? { color: accentHex }}
-                    >
+                    <span className="text-xl sm:text-2xl font-bold" style={surface.bigNumber}>
                       {entriesNumber}
                     </span>
                   )}
-                  <div
-                    className="text-xs sm:text-sm"
-                    style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: accentHex }}
-                  >
+                  <div className="text-xs sm:text-sm" style={{ color: surface.inkMuted }}>
                     free entries Major Giveaway
                   </div>
                 </div>
@@ -78,7 +68,7 @@ const FeaturesPreview: React.FC<FeaturesPreviewProps> = ({ plan, colorScheme, ac
         .filter((feature) => !feature.text.includes("Entries") && !feature.text.includes("entries"))
         .slice(0, 1)
         .map((feature, index) => (
-          <p key={index} className="text-xs sm:text-sm text-white/80 mb-0">
+          <p key={index} className="text-xs sm:text-sm mb-0" style={{ color: surface.inkMuted }}>
             {feature.text}
           </p>
         ))}

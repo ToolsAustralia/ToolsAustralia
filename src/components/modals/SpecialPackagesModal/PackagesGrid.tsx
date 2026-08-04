@@ -8,9 +8,9 @@ import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
 import { type PackageColorsVariantConfig } from "@/utils/package-colors/packageColorScheme";
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
+import { getPackageCardSurface } from "@/utils/package-colors/packageCardSurface";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
 import { cn } from "@/utils/cn";
-import { hexToRgba } from "./utils";
 import BestValueBadge from "@/components/ui/BestValueBadge";
 import { isOneTimeBestValuePlanId } from "@/utils/membership/additional-package-mapping";
 
@@ -47,47 +47,39 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
         {packagesWithPromo.map((pkg) => {
           const colorScheme = getElectricPackageColorScheme(pkg._id || "");
           const isSelected = selectedPackage?._id === pkg._id;
-          const accentHex = colorScheme.accentHexLight ?? colorScheme.accentHex;
-          // Use solid accent color for card text - textGradientStyle with backgroundClip can make nested text invisible on dark cards
-          const cardTextStyle = { color: accentHex };
-          const cardInnerBg = `radial-gradient(120% 90% at 50% 0%, ${accentHex}33 0%, ${accentHex}12 30%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
-          const discount = getAdditionalPackDiscount(pkg._id || "");
-          // No selection → every card shows the VIP-style gradient rim at full strength.
-          // A selection exists → only the selected card keeps that rim; the rest dim.
-          const showStrong = selectedPackage == null || isSelected;
-          // Identical box model in BOTH states (2px transparent border + bg-clip
-          // rim) so selecting a card causes NO layout shift — only the rim
-          // gradient + glow change. Selected uses the same strong rim as the
-          // default (nothing-selected) state.
-          const rimStyle = (gradientCss: string): React.CSSProperties => ({
-            background: `${cardInnerBg}, ${gradientCss}`,
-            backgroundOrigin: "padding-box, border-box",
-            backgroundClip: "padding-box, border-box",
-            WebkitBackgroundClip: "padding-box, border-box",
-            backgroundRepeat: "no-repeat",
-            border: "2px solid transparent",
+          // Same chrome as the MembershipSection card (ElectricPackageCard) and the package
+          // picker, so all three surfaces agree tier-for-tier.
+          const surface = getPackageCardSurface(pkg._id || "", {
+            isMembershipTab: false,
+            colorScheme,
           });
-          const strongGradient =
-            colorScheme.cardBorderGradient ??
-            `linear-gradient(135deg, ${accentHex} 0%, ${hexToRgba(accentHex, 0.5)} 50%, ${accentHex} 100%)`;
-          const dimGradient = `linear-gradient(135deg, ${hexToRgba(accentHex, 0.18)} 0%, rgba(255,255,255,0.05) 50%, ${hexToRgba(accentHex, 0.18)} 100%)`;
+          /** Ink-contrast fill for pills/badges — an accent chip vanishes on a vivid body. */
+          const onInk = surface.blackText ? "#FFFFFF" : "#0A0A0A";
+          const discount = getAdditionalPackDiscount(pkg._id || "");
+          // No selection → every card reads at full strength. A selection exists → only the
+          // selected card keeps it; the rest recede.
+          const showStrong = selectedPackage == null || isSelected;
           return (
             <div
               key={pkg._id}
-              className="relative rounded-2xl p-2.5 sm:p-4 transition-all duration-300 cursor-pointer"
-              style={
-                showStrong
-                  ? {
-                      ...rimStyle(strongGradient),
-                      boxShadow: `0 0 0 1px ${hexToRgba(accentHex, 0.4)}, 0 0 26px ${hexToRgba(accentHex, 0.55)}, 0 10px 34px rgba(0,0,0,0.5)`,
-                    }
-                  : {
-                      ...rimStyle(dimGradient),
-                      boxShadow: "0 4px 16px rgba(0,0,0,0.45)",
-                    }
-              }
+              className={cn(
+                "relative rounded-2xl p-2.5 sm:p-4 transition-[opacity,box-shadow] duration-300 cursor-pointer",
+                !showStrong && "opacity-60"
+              )}
+              style={{
+                background: surface.body,
+                // Constant border in every state → selecting causes no layout shift.
+                border: surface.border,
+                boxShadow: isSelected ? surface.bloomSelected : surface.bloom,
+              }}
               onClick={() => onSelectPackage(pkg)}
             >
+              {/* Inner sheen — depth pass, matches the section card */}
+              <div
+                className="pointer-events-none absolute inset-0.5 rounded-[14px] z-0"
+                style={{ background: surface.sheen }}
+                aria-hidden
+              />
               {isOneTimeBestValuePlanId(pkg._id || "") && (
                 <BestValueBadge
                   position="top-left"
@@ -115,8 +107,8 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               {/* Selection Indicator */}
               {isSelected && (
                 <div
-                  className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 text-white rounded-full flex items-center justify-center shadow-lg"
-                  style={colorScheme.badgeStyle}
+                  className="absolute -top-1 -right-1 z-30 w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center shadow-lg"
+                  style={{ background: surface.ring, color: onInk }}
                 >
                   <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                 </div>
@@ -139,9 +131,9 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-[1fr_auto_1fr] grid-rows-1 items-center gap-2 sm:gap-3 pt-2 sm:pt-3">
+              <div className="relative z-10 grid grid-cols-[1fr_auto_1fr] grid-rows-1 items-center gap-2 sm:gap-3 pt-2 sm:pt-3">
                 {/* Package Name - Left, two rows (same row as entries & price) */}
-                <div className="min-w-0 text-xs sm:text-sm font-semibold leading-tight" style={cardTextStyle}>
+                <div className="min-w-0 text-xs sm:text-sm font-semibold leading-tight" style={surface.title}>
                   <span>
                     {getPackageDisplayName(pkg)
                       .split(" ")
@@ -157,25 +149,28 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
 
                 {/* Main Entries Display - Pinned to card center, aligns with icon (grid center column) */}
                 <div className="flex flex-col items-center justify-center min-w-[60px] sm:min-w-[72px]">
-                  <div
-                    className="relative text-base sm:text-lg font-extrabold"
-                    style={{ color: "#FFFFFF", textShadow: `0 0 10px ${accentHex}, 0 0 20px ${accentHex}80` }}
-                  >
+                  <div className="relative text-base sm:text-lg font-extrabold" style={surface.bigNumber}>
                     {pkg.totalEntries || 0}
                     {pkg.isPromoActive && typeof pkg.originalEntries === "number" && pkg.originalEntries !== (pkg.totalEntries || 0) && (
-                      <span className="absolute right-full top-0 mr-1 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
+                      <span
+                        className="absolute right-full top-0 mr-1 whitespace-nowrap text-[11px] font-bold leading-none line-through"
+                        style={{ color: surface.inkFaint }}
+                      >
                         {pkg.originalEntries}
                       </span>
                     )}
                   </div>
-                  <div className="text-[10px] font-bold tracking-wide opacity-90" style={cardTextStyle}>FREE ENTRIES</div>
+                  <div className="text-[10px] font-bold tracking-wide" style={{ color: surface.inkMuted }}>FREE ENTRIES</div>
                 </div>
 
                 {/* Right Side - Price (struck regular upper-right) + SELECT button */}
                 <div className="flex items-center justify-end gap-2">
-                  <span className="relative inline-block text-base sm:text-lg font-extrabold leading-none" style={cardTextStyle}>
+                  <span className="relative inline-block text-base sm:text-lg font-extrabold leading-none" style={surface.title}>
                     {discount && (
-                      <span className="absolute -top-3 right-0 whitespace-nowrap text-[11px] font-bold leading-none text-white/40 line-through">
+                      <span
+                        className="absolute -top-3 right-0 whitespace-nowrap text-[11px] font-bold leading-none line-through"
+                        style={{ color: surface.inkFaint }}
+                      >
                         ${discount.regularPrice}
                       </span>
                     )}
@@ -188,7 +183,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
                       onSelectPackage(pkg);
                     }}
                     className={cn("min-w-[38px] sm:min-w-[58px] px-1.5 py-0.5 sm:px-2.5 sm:py-1.5 text-[8px] sm:text-xs font-bold rounded-md sm:rounded-lg transition-colors flex-shrink-0 flex items-center justify-center hover:opacity-90", isSelected ? "shadow-md" : "")}
-                    style={{ backgroundColor: "#000000", border: `1.5px solid ${accentHex}`, color: accentHex, boxShadow: `0 0 12px ${hexToRgba(accentHex, 0.35)}` }}
+                    style={surface.cta}
                   >
                     {isSelected ? "✓" : "SELECT"}
                   </button>
