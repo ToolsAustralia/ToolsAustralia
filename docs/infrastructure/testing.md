@@ -2,6 +2,8 @@
 
 > `test:climb-series` (`tsx src/utils/membership/__tests__/climb-series.test.ts`) covers the `/membership` climb-chart accumulation math (`buildClimbSeries`).
 
+> `test:package-card-surface` (`tsx src/utils/package-colors/__tests__/packageCardSurface.test.ts`) covers the shared package-card chrome (`getPackageCardSurface`) that the membership section card and all three package modals render — most importantly the three cross-tier light-theme background remaps, which no colour scheme exposes. See [shared-ui/patterns.md](../shared-ui/patterns.md) "Package card surface".
+
 ## QA member-state seeds (real Stripe TEST objects)
 
 Two `tsx` seeds create a login-ready member in a specific state so you can eyeball the dashboard without waiting for real billing. Both **hard-refuse any non-`sk_test_` key**, tag their Stripe objects for cleanup, write the DB state **atomically** (`updateOne`, dodging the webhook `__v` race — see gotchas.md), and support `--dry-run` + `--cleanup`:

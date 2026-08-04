@@ -42,6 +42,7 @@ import {
   readGuestDetails,
 } from "@/utils/auth/guest-details-storage";
 import ExistingAccountModal from "../ExistingAccountModal";
+import SecureCheckoutBar from "@/components/ui/SecureCheckoutBar";
 import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useLoading } from "@/contexts/LoadingContext";
 import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
@@ -4972,23 +4973,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               />
             )}
 
-            {/* Security Section - Only visible in payment step (no border) */}
-            {currentStep === 2 && (
-              <div className="mt-4 sm:mt-6">
-                <div className="flex justify-center w-full">
-                  <div className="w-full max-w-full bg-[#ffffff] rounded-lg p-2">
-                    <Image
-                      src="/images/safe-checkout-stripe.webp"
-                      alt="Guaranteed safe & secure checkout powered by Stripe"
-                      width={600}
-                      height={160}
-                      className="w-full h-auto"
-                      sizes="(max-width: 768px) 100vw, 600px"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Security Section - Only visible in payment step (no border).
+                Inline-SVG marks (SecureCheckoutBar), not the flattened
+                /images/safe-checkout-stripe.webp — that raster could only be made legible
+                by forcing a `bg-[#ffffff]` plate behind it, which ignored dark mode and
+                punched a white slab into the dark modal. The SVG marks theme themselves
+                and cost no network request. */}
+            {currentStep === 2 && <SecureCheckoutBar className="mt-4 sm:mt-6" />}
 
             {/* Major draw winners: two per slide; tap opens FullscreenImageViewer (not a route) */}
             {currentStep !== 2 && (

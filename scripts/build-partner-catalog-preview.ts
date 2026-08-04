@@ -24,6 +24,7 @@ const CSV_PATH = path.join(process.cwd(), "src", "data", "partner-catalog", "off
 const OFFERS_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogOffers.ts");
 const PREVIEW_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogPreview.ts");
 const BROWSE_OUT = path.join(process.cwd(), "src", "generated", "partnerCatalogBrowse.ts");
+const WALL_OUT = path.join(process.cwd(), "src", "generated", "partnerWallTiles.ts");
 const ARTWORK_PATH = path.join(process.cwd(), "src", "data", "partner-catalog", "offers-with-artwork.json");
 const INSTORE_ARTWORK_PATH = path.join(process.cwd(), "src", "data", "partner-catalog", "instore-offer-artwork.json");
 
@@ -325,10 +326,69 @@ ${browseRows}
 ];
 `;
 
+  // ---------------------------------------------------------------------------
+  // Marketing wall tiles — the trade-relevant slice, for PartnerBrandWall.
+  // ---------------------------------------------------------------------------
+  // A FOURTH file, for the same reason browse is separate from preview: weight class.
+  // The wall renders on /membership and every /promotions/[slug], so it must not pull
+  // the 88 KB browse module; this slice is ~100 rows.
+  //
+  // WHY ONLY Automotive + Technology: the vendor catalogue is a GENERAL consumer rewards
+  // feed — 877 In-Store, 224 Home & Lifestyle, 181 Beauty, 178 Eat & Drink, 167 Fashion.
+  // Tools Australia sells to tradies, and a conveyor of cafes, salons and boutiques reads
+  // as a rewards club rather than a trade network. These two categories are the slice a
+  // tradie recognises (hydraulics, bearings, diesel, auto electrics, tyres, windscreens).
+  // The odometer still counts the WHOLE catalogue — breadth is the number's job, and the
+  // belt's job is recognition.
+  //
+  // Artwork is REQUIRED here (unlike the catalogue route, which degrades to a letter
+  // tile): a conveyor belt of blank tiles is worse than a shorter belt.
+  const WALL_CATEGORIES = new Set(["Automotive", "Technology"]);
+  const wallRows = rows.filter((r) => WALL_CATEGORIES.has(r.category) && artworkFor(r.id));
+  const wallTiles = wallRows
+    .map(
+      (r) =>
+        `  [${JSON.stringify(r.offer.replace(/\s+/g, " ").trim())},${JSON.stringify(r.id)},${JSON.stringify(artworkFor(r.id))},${JSON.stringify(r.highlight)}],`
+    )
+    .join("\n");
+  console.log(`  wall tiles: ${wallRows.length} (Automotive + Technology with artwork)`);
+  const wallFile = `${GENERATED_HEADER}
+
+/**
+ * CLIENT-SAFE marketing tiles for \`PartnerBrandWall\` — the trade-relevant slice of the
+ * partner catalogue (Automotive + Technology, artwork-bearing only): ${wallRows.length} rows.
+ *
+ * Separate from \`partnerCatalogBrowse\` on purpose. The wall ships on /membership and every
+ * /promotions/[slug]; browse is ~88 KB and belongs only to the catalogue route.
+ *
+ * \`name\` is the VENDOR's name field and does NOT always match its own artwork (offer 800575
+ * is named "GUNNEDAH HYDRAULICS" but its logo reads "AG-FIX HYDRAULICS"). The wall therefore
+ * renders portal tiles LOGO-ONLY and uses \`name\` only for the accessible label — do not put
+ * it beside the logo as visible text.
+ *
+ * Build the image URL with \`buildPartnerPortalOfferImageUrl(id, imageExt)\`; never
+ * concatenate a path by hand. The bucket is public (no portal session needed).
+ */
+export type PartnerWallTile = readonly [
+  /** Vendor name. Accessible label only — may disagree with the artwork. */
+  name: string,
+  id: string,
+  /** Pass to buildPartnerPortalOfferImageUrl. See PartnerCatalogBrowseRow.imageExt. */
+  imageExt: string,
+  /** Member-facing value line, e.g. "10% Discount". */
+  highlight: string,
+];
+
+export const PARTNER_WALL_TILES: readonly PartnerWallTile[] = [
+${wallTiles}
+];
+`;
+
   await fs.mkdir(path.dirname(OFFERS_OUT), { recursive: true });
   await fs.writeFile(OFFERS_OUT, offersFile, "utf8");
   await fs.writeFile(PREVIEW_OUT, previewFile, "utf8");
   await fs.writeFile(BROWSE_OUT, browseFile, "utf8");
+  await fs.writeFile(WALL_OUT, wallFile, "utf8");
 
   const tierSummary = ALLOWED_PERCENTS.map((p) => `${p}%→${cumulative.get(p)}`).join(" · ");
   console.log(`Wrote ${total} offers to ${path.relative(process.cwd(), OFFERS_OUT)} and aggregates to ${path.relative(process.cwd(), PREVIEW_OUT)}`);

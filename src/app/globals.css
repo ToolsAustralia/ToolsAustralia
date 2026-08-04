@@ -563,6 +563,232 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * Partner brand wall (PartnerBrandWall) — odometer + three conveyor belts
+ * ---------------------------------------------------------------------------
+ * Motion policy (CLAUDE.md perf footgun #6): every belt animation rides
+ * `--ta-marquee-state`, which is already `paused` under `html[data-save-data="true"]`
+ * and `prefers-reduced-motion` — same gate the existing `.marquee` uses. Only
+ * `transform` is animated; nothing animates background-position.
+ *
+ * The `-50%` loop is only seamless because each belt's tile list is rendered exactly
+ * twice. Keep that invariant if the data source changes.
+ */
+/* Skin. Driven by CSS, NOT a JS boolean: an `isDark` read from the DOM during render is
+   not reactive (the theme class lands after the render that read it, and nothing triggers
+   a second one), so a JS-skinned wall stays light inside a dark page. Variables also mean
+   no hydration mismatch and no re-render on theme change.
+   `[data-skin]` rules come last so an explicitly pinned skin beats `.dark`. */
+.ta-brand-wall {
+  --bw-bg: radial-gradient(860px 540px at 88% -14%, rgba(238, 0, 0, 0.07), transparent 60%),
+    radial-gradient(700px 500px at 4% 114%, rgba(212, 175, 55, 0.13), transparent 60%), #f4f5f7;
+  --bw-tape-opacity: 0.9;
+  --bw-eyebrow: #c40d0d;
+  --bw-pip: #ee0000;
+  --bw-sub: #8a93a1;
+  --bw-h2: #15181f;
+  --bw-plate-bg: linear-gradient(180deg, #ffffff, #e9ecf1);
+  --bw-plate-border: rgba(15, 23, 42, 0.14);
+  --bw-plate-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -2px 0 rgba(15, 23, 42, 0.06),
+    0 26px 50px -30px rgba(15, 23, 42, 0.5);
+  --bw-rivet: radial-gradient(circle at 35% 30%, #fff, #9aa1ad);
+  --bw-drum-bg: linear-gradient(180deg, #1b1f27, #0a0c11);
+  --bw-drum-shadow: inset 0 12px 16px -12px rgba(0, 0, 0, 0.95), inset 0 -12px 16px -12px rgba(0, 0, 0, 0.95),
+    0 0 0 1px rgba(15, 23, 42, 0.5);
+  --bw-digit: #fff;
+  --bw-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 32%, transparent 68%, rgba(0, 0, 0, 0.4));
+  --bw-comma: #15181f;
+  --bw-plus: linear-gradient(92deg, #ff3b3b, #ee0000 58%, #b40000);
+  --bw-deck-bg: linear-gradient(180deg, #e6e9ee, #dcdfe6);
+  --bw-deck-top: rgba(255, 255, 255, 0.7);
+  --bw-deck-bottom: rgba(15, 23, 42, 0.08);
+  --bw-deck-shadow: inset 0 3px 8px -6px rgba(15, 23, 42, 0.5);
+  --bw-tread: rgba(15, 23, 42, 0.055);
+  --bw-roller-bg: linear-gradient(180deg, #c9cdd5, #a9aeb9);
+  --bw-roller-dash: rgba(15, 23, 42, 0.26);
+  --bw-tile-bg: #fff;
+  --bw-tile-border: rgba(15, 23, 42, 0.09);
+  --bw-tile-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 14px 26px -20px rgba(15, 23, 42, 0.55);
+  --bw-tile-hover-border: rgba(238, 0, 0, 0.45);
+  --bw-tile-hover-shadow: 0 20px 34px -18px rgba(238, 0, 0, 0.45);
+  --bw-tile-name: #15181f;
+  --bw-chip-fg: #c40d0d;
+  --bw-chip-bg: rgba(238, 0, 0, 0.08);
+  --bw-cta-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 32px -14px rgba(238, 0, 0, 0.75);
+  /* Light tiles are white, so the logos sit on the ground they were drawn for. */
+  --bw-logo-plate: transparent;
+  --bw-logo-pad: 0px;
+  /* Seconds of travel PER TILE — the belts' speed. The component multiplies this by the
+     tiles in one cycle, so every belt moves at the same px/sec no matter how many tiles it
+     carries (7 on the partner belt, ~47 on each portal belt). */
+  --bw-tile-sec: 2.6s;
+}
+
+/* Mobile tiles are logo-only (~130px vs ~300px), so the same seconds-per-tile would crawl.
+   Shorter per-tile time keeps the belt moving at a comparable pixel speed. */
+@media (max-width: 639px) {
+  .ta-brand-wall {
+    --bw-tile-sec: 1.5s;
+  }
+}
+
+.dark .ta-brand-wall,
+.ta-brand-wall[data-skin="dark"] {
+  --bw-bg: radial-gradient(900px 560px at 12% -10%, rgba(238, 0, 0, 0.3), transparent 60%),
+    radial-gradient(760px 520px at 92% 112%, rgba(212, 175, 55, 0.2), transparent 60%),
+    linear-gradient(160deg, #130c10, #0a090c 55%, #15100d);
+  --bw-tape-opacity: 0.85;
+  --bw-eyebrow: #e6c349;
+  --bw-pip: #e6c349;
+  --bw-sub: rgba(255, 255, 255, 0.5);
+  --bw-h2: #fff;
+  --bw-plate-bg: linear-gradient(180deg, #2e2e36, #121215);
+  --bw-plate-border: rgba(255, 255, 255, 0.16);
+  --bw-plate-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), inset 0 -2px 0 rgba(0, 0, 0, 0.5),
+    0 30px 56px -30px rgba(0, 0, 0, 0.9);
+  --bw-rivet: radial-gradient(circle at 35% 30%, #e6e8ee, #5d6069);
+  --bw-drum-bg: linear-gradient(180deg, #0d0d10, #050506);
+  --bw-drum-shadow: inset 0 12px 16px -12px #000, inset 0 -12px 16px -12px #000, 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --bw-digit: #ffd94a;
+  --bw-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 32%, transparent 68%, rgba(0, 0, 0, 0.5));
+  --bw-comma: #ffd94a;
+  --bw-plus: linear-gradient(92deg, #ffe066, #ffb300 70%, #ff8a00);
+  --bw-deck-bg: linear-gradient(180deg, #1c1c21, #131317);
+  --bw-deck-top: rgba(255, 255, 255, 0.12);
+  --bw-deck-bottom: rgba(0, 0, 0, 0.6);
+  --bw-deck-shadow: inset 0 4px 10px -6px rgba(0, 0, 0, 0.9);
+  --bw-tread: rgba(255, 255, 255, 0.055);
+  --bw-roller-bg: linear-gradient(180deg, #3b3b44, #191920);
+  --bw-roller-dash: rgba(255, 255, 255, 0.24);
+  --bw-tile-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035));
+  --bw-tile-border: rgba(255, 255, 255, 0.13);
+  --bw-tile-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --bw-tile-hover-border: rgba(255, 216, 77, 0.6);
+  --bw-tile-hover-shadow: 0 20px 34px -18px rgba(255, 180, 0, 0.4);
+  --bw-tile-name: #fff;
+  --bw-chip-fg: #ffd94a;
+  --bw-chip-bg: rgba(255, 210, 0, 0.14);
+  --bw-cta-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 16px 34px -12px rgba(238, 0, 0, 0.9);
+  /* The partner logos are dark-ink wordmarks drawn for white grounds (Seal Motors,
+     Toolman Lane, ZJWRAPS, BAL all disappear on the glass tile). The handoff's dark skin
+     assumes logos designed for dark, which ours are not — so give them their white ground
+     back rather than shipping an unreadable belt. Tile height is fixed at 76px and the
+     plate is shorter than that, so this cannot reflow the track. */
+  --bw-logo-plate: rgba(255, 255, 255, 0.93);
+  --bw-logo-pad: 4px 8px;
+}
+
+/* Explicit light pin must beat `.dark` — equal specificity, so source order decides. */
+.ta-brand-wall[data-skin="light"] {
+  --bw-bg: radial-gradient(860px 540px at 88% -14%, rgba(238, 0, 0, 0.07), transparent 60%),
+    radial-gradient(700px 500px at 4% 114%, rgba(212, 175, 55, 0.13), transparent 60%), #f4f5f7;
+  --bw-tape-opacity: 0.9;
+  --bw-eyebrow: #c40d0d;
+  --bw-pip: #ee0000;
+  --bw-sub: #8a93a1;
+  --bw-h2: #15181f;
+  --bw-plate-bg: linear-gradient(180deg, #ffffff, #e9ecf1);
+  --bw-plate-border: rgba(15, 23, 42, 0.14);
+  --bw-rivet: radial-gradient(circle at 35% 30%, #fff, #9aa1ad);
+  --bw-drum-bg: linear-gradient(180deg, #1b1f27, #0a0c11);
+  --bw-digit: #fff;
+  --bw-comma: #15181f;
+  --bw-plus: linear-gradient(92deg, #ff3b3b, #ee0000 58%, #b40000);
+  --bw-deck-bg: linear-gradient(180deg, #e6e9ee, #dcdfe6);
+  --bw-tread: rgba(15, 23, 42, 0.055);
+  --bw-roller-bg: linear-gradient(180deg, #c9cdd5, #a9aeb9);
+  --bw-roller-dash: rgba(15, 23, 42, 0.26);
+  --bw-tile-bg: #fff;
+  --bw-tile-border: rgba(15, 23, 42, 0.09);
+  --bw-tile-name: #15181f;
+  --bw-chip-fg: #c40d0d;
+  --bw-chip-bg: rgba(238, 0, 0, 0.08);
+  --bw-logo-plate: transparent;
+  --bw-logo-pad: 0px;
+}
+
+.ta-brand-tile:hover,
+.ta-brand-tile:focus-visible {
+  border-color: var(--bw-tile-hover-border) !important;
+  box-shadow: var(--bw-tile-hover-shadow) !important;
+}
+
+@keyframes ta-belt-track {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+/* "live" eyebrow pip. motion-safe: in the markup keeps it off under reduced-motion. */
+@keyframes ta-pulse-dot {
+  0%,
+  100% { box-shadow: 0 0 0 0 rgba(238, 0, 0, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(238, 0, 0, 0); }
+}
+/* One tread period (26px) so the stripe loop is seamless. */
+@keyframes ta-belt-tread {
+  to { transform: translateX(-26px); }
+}
+/* One roller-dash period (14px). */
+@keyframes ta-belt-roller {
+  to { transform: translateX(-14px); }
+}
+
+.ta-brand-wall [data-belt-anim] {
+  animation-play-state: var(--ta-marquee-state);
+}
+
+/* Hovering anywhere on the belt STACK stops tracks, treads and rollers together.
+   Hovering the header or the CTA must not pause — hence the scope on the stack. */
+.ta-brand-wall-stack:hover [data-belt-anim] {
+  animation-play-state: paused;
+}
+
+/* The discount chip is hidden at rest but STAYS IN LAYOUT, so revealing it on hover
+   or keyboard focus causes no reflow inside the moving track. Never display:none it. */
+.ta-brand-tile [data-offer-chip] {
+  opacity: 0;
+  transform: translateY(5px);
+  transition:
+    opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ta-brand-tile:hover [data-offer-chip],
+.ta-brand-tile:focus-visible [data-offer-chip] {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Secure-checkout payment bar (SecureCheckoutBar) — theme-aware payment marks
+ * ---------------------------------------------------------------------------
+ * Scoped to the component's own root class so the bar themes correctly ANYWHERE
+ * (marketing sections, the membership modal, a promo card), not only inside
+ * `.prize-builder`. Values are carried over verbatim from the `--pbc-*` payment
+ * tokens above, so PrizeBuilderCta renders identically after adopting it.
+ *
+ * Only the ink that would vanish on the opposite surface is themed; fixed brand
+ * colours (Mastercard discs, the Google "G") are hardcoded in the SVGs.
+ */
+.ta-secure-checkout {
+  --sc-rule: rgba(0, 0, 0, 0.14);
+  /* Divider above the payment marks — softer than `--sc-rule`. */
+  --sc-pay-rule: rgba(0, 0, 0, 0.08);
+  --sc-heading: #1a1d22;
+  --sc-visa: #1434cb;
+  --sc-stripe: #635bff;
+  --sc-gpay: #5f6368;
+  --sc-ink-strong: #0b0b0b;
+}
+
+.dark .ta-secure-checkout {
+  --sc-rule: rgba(255, 255, 255, 0.16);
+  --sc-pay-rule: rgba(255, 255, 255, 0.1);
+  --sc-heading: rgba(255, 255, 255, 0.82);
+  --sc-visa: #ffffff;
+  --sc-stripe: #a9a4ff;
+  --sc-gpay: #e3e6ea;
+  --sc-ink-strong: #ffffff;
+}
+
+/* ---------------------------------------------------------------------------
  * Prize gallery ("Spotlight" showroom, /promotions) design tokens
  * ---------------------------------------------------------------------------
  * Same contract as the prize-builder block above: surface palette keyed off the

@@ -1,5 +1,169 @@
 # Shared UI — Patterns
 
+## PartnerBrandWall — odometer + conveyor belts — 2026-08-04
+
+`src/components/sections/PartnerBrandWall.tsx` is the partner-network section rendered by
+**both** `/membership` (via `MembershipBrandShowcase`, now a thin CTA-binding wrapper) and
+`/promotions/[slug]` (via `UnlockDiscounts`, which keeps its member discount grid below —
+the wall *sells* the network, the grid *serves* the codes a member already pays for).
+Recreated from the "Brand Wall 1K" design handoff in this codebase's idioms.
+
+### The count is OFFERS, and it comes from the generated constant (LEGAL — rule 11 adjacent)
+
+The odometer defaults to `PARTNER_CATALOG_TOTAL` (`src/generated/partnerCatalogPreview.ts`,
+currently 1833) and is labelled **"Partner offers · one card"**. It is deliberately **not**
+labelled "partner brands": `PARTNER_BRAND_OFFERS` — the list behind the CTA — holds **7**
+direct brands, and the handoff's own rule is *only claim a count you can back with the list
+behind the CTA*. The two programmes are distinct (BUSINESS.md §: 7 direct partners + the
+1,833-offer iGoDirect/MyRewards catalogue via portal SSO). Reading the generated constant
+also means the number tracks the catalogue instead of rotting inside a copy string. **If you
+relabel this to "brands" or hardcode a number, you have reintroduced an overclaim** — the
+same class of problem the 2026-07-31 audit fixed in `UnlockDiscounts`.
+
+### Invariants
+
+- **Skin is CSS, never a JS boolean.** Both skins live in `globals.css` under
+  `.ta-brand-wall` / `.dark .ta-brand-wall`, with `[data-skin]` rules last so an explicitly
+  pinned skin wins. An earlier pass derived `isDark` via `useHtmlDarkForUi()` and the wall
+  stayed light inside a dark page: reading the theme class *during render* is not reactive —
+  the class lands after the render that read it and nothing schedules a second one. That hook
+  is for portaled UIs (modals), not in-page sections. CSS variables also mean no hydration
+  mismatch and no re-render on theme change.
+- **Each belt renders an EVEN number of identical passes (`trackCopies`), not always two.**
+  `translateX(-50%)` is seamless only if the track is an even number of copies **and** half
+  the track is at least as wide as the belt. The handoff assumed ~48 tiles per belt and hard-
+  coded a plain double; belt 1 holds 7 partners, whose double is far narrower than a desktop
+  viewport — which showed as a large dead gap before it wrapped. `trackCopies` sizes the
+  repeat to clear `MIN_HALF_TRACK_PX`. Only the first pass is announced (`aria-hidden` +
+  `tabIndex={-1}` on the rest) so each partner is read and tabbed once.
+- **Never add `justify-center` to the track.** When the track is wider than the belt,
+  centering starts it at a negative offset and the `-50%` travel then runs off the right end
+  — reintroducing the exact gap `trackCopies` exists to prevent. (Tried and reverted
+  2026-08-04.)
+- **Speed is per-tile, not per-belt.** Duration is `--bw-tile-sec × tiles-per-cycle`, so every
+  belt moves at the same px/sec regardless of how many tiles it carries. The handoff's fixed
+  per-belt durations (52s/64s/46s) only work when all belts hold the same count; ours hold 7
+  vs ~47, which made the portal belts ~6× faster than the partner belt. Belts 2 and 3 differ
+  by ~2% in duration *because* belt 2 holds two more tiles — that is equal speed, not a bug.
+  `--bw-tile-sec` shortens under 640px, where tiles are logo-only (~130px vs ~300px).
+- **Belt 1 is our 7 direct partners; belts 2–3 are the portal slice** (`PARTNER_WALL_TILES`,
+  93 artwork-bearing Automotive/Technology offers — see
+  [docs/partner/frontend.md](../partner/frontend.md)). All tiles share one layout: fixed
+  120px logo box + a fixed 136px name column clamped to two lines. Both fixed sizes matter —
+  a height-capped logo let aspect ratio drive tile width (portal artwork is squarish, so
+  tiles came out 132px vs 208px), and single-line names drove belt 1 from 198px to 421px.
+  **Never pad with invented partner names** (the prototype's ~40 fake Australian businesses
+  are not shippable). If the portal slice is unavailable — `NEXT_PUBLIC_PARTNER_MEDIA_URL`
+  unset, so no image URL resolves — every belt falls back to the direct partners rather than
+  rendering an empty conveyor.
+- **Mobile is logo-only.** Below `sm` the name column is hidden: it is the widest part of the
+  tile, and the offer chip inside it only reveals on hover/`focus-visible`, neither of which a
+  touch user gets — so it was reserving width for something never shown. The name still
+  reaches screen readers via the tile's `aria-label`.
+- **Tiles are buttons, not outbound links.** A tile fires the same action as the CTA. The
+  section converts rather than sending visitors off-site pre-join, and it sidesteps the
+  catalogue's placeholder `"#"` links, which as anchors would be focusable routes to nowhere.
+- **The offer chip stays in layout.** Hidden via `opacity`/`transform` only — `display:none`
+  would reflow the moving track on hover. Revealed on `:hover` *and* `:focus-visible`, since
+  hover-only reveal is unreachable on touch and keyboard.
+- **Dark skin restores a white plate behind each logo** (`--bw-logo-plate`). The partner
+  wordmarks are dark ink drawn for white grounds (Seal Motors, Toolman Lane, ZJWRAPS, BAL all
+  vanish on the glass tile); the handoff assumed logos designed for dark, which ours are not.
+- **Motion rides `--ta-marquee-state`** (CLAUDE.md perf footgun #6) — already `paused` under
+  `html[data-save-data="true"]` and `prefers-reduced-motion`, same gate as the old `.marquee`.
+  Only `transform` animates. The odometer lands instantly under reduced motion.
+- **The odometer rolls on `IntersectionObserver`, not on mount.** The section sits well below
+  the fold on both hosts, so a mount-triggered roll always finished unseen. Its `roll`
+  callback depends on `count`, not the derived digits array, or the effect would tear down and
+  re-create the observer every render.
+- Drum cell height is read from the DOM, not hardcoded to 92px — the plate scales down below
+  `sm` and the roll maths (`-(10 + digit) × cellHeight`) depends on that height.
+
+## SecureCheckoutBar — theme-aware payment marks — 2026-08-04
+
+`src/components/ui/SecureCheckoutBar.tsx` renders the "INSTANT AND SECURE CHECKOUT WITH"
+rule plus the five payment marks (Visa, Google Pay, Mastercard, Stripe, Apple Pay) as
+**inline SVG**, themed through `--sc-*` variables declared on its own `.ta-secure-checkout`
+root class (`globals.css`: light defaults + a `.dark` override).
+
+**Why SVG and not the raster.** A flattened `/images/safe-checkout-stripe.webp` has baked-in
+dark ink, so the only way to keep it legible on a dark surface is to force a white plate
+behind it. `MembershipModal` did exactly that (`bg-[#ffffff] rounded-lg p-2`), punching a
+white slab into the dark modal in dark mode. The SVG marks flip only the ink that would
+disappear (Visa wordmark, the two "Pay" texts, the Stripe wordmark) and keep fixed brand
+colours hardcoded (Mastercard discs, the Google "G"). They also cost no network request and
+cannot shift layout.
+
+**Scope the variables to the component, not the host.** These tokens started life as
+`--pbc-*` scoped to `.prize-builder`, which is why the bar could not be reused anywhere
+else — outside that card the variables were undefined. The `.ta-secure-checkout` class
+carries its own values, so the bar themes correctly in any host. Values were carried over
+verbatim, so `PrizeBuilderCta` renders identically (verified: `npm run test:prize-builder-card`,
+22 assertions incl. all five `aria-label`s).
+
+Consumers: `PrizeBuilderCta` (was the original home — its local copy and the five mark
+components are deleted, 194 → 81 lines) and `MembershipModal` step 2.
+
+**Still on the raster:** `MajorDrawSection` has three remaining
+`/images/safe-checkout-stripe.webp` usages (~lines 1390, 1595, 1683) with the same
+white-plate problem. They were out of scope for this change; convert them when next
+touching that file.
+
+## Package card surface — one source of truth for card chrome — 2026-08-04
+
+`src/utils/package-colors/packageCardSurface.ts` owns the **chrome** of every package card, the
+way `packageColorScheme.ts` / `electricPackageScheme.ts` own the **colour**. One call —
+`getPackageCardSurface(planId, { isMembershipTab, theme = "light", colorScheme? })` — returns
+`body`, `border`, `sheen`, `inset`, `bloom`, `bloomSelected`, `ring`, `ink`, `inkMuted`,
+`inkFaint`, `divider`, `title`, `bigNumber`, `pricePanel`, `cta`, `accentHex`, `isPremium`,
+`blackText`, `theme`.
+
+**Why it exists.** That derivation used to live inline inside `ElectricPackageCard`, so the
+three modal package cards each hand-rolled an approximation and drifted into three different
+bodies: slate `#0f172a→#1e293b` (`PackageSelectionModal/PlanCard`,
+`MembershipModal/PlanSummaryCard`), electric-black `#0b0c0f→#060607`
+(`SpecialPackagesModal/PackagesGrid`), and the section's own vivid tier gradient. `PlanCard`
+also carried a `ring-4 ring-yellow-400 ring-offset-slate-900` selection ring — the same yellow
+on every tier regardless of accent — and shifted its border 2px→3px on select.
+
+**The part you cannot see from a colour scheme.** Light theme applies three deliberate
+**cross-tier background remaps** so no two adjacent cards in either tab repeat a colour:
+membership Tradie renders `foreman-pack`'s body, one-time Boss renders
+`foreman-subscription`'s, membership Boss renders `power-pack`'s. Any surface that builds a
+vivid body from `colorScheme.bgGradient` alone silently disagrees with the section on exactly
+those three tiers. This is the main reason to call the function rather than re-deriving.
+
+**Consumers** (all four now render the same chrome, light theme):
+`sections/membership/ElectricPackageCard` (passes its caller-resolved `colorScheme` through the
+optional override so its public prop contract is unchanged),
+`modals/PackageSelectionModal/{PlanCard,FeaturesPreview}`,
+`modals/SpecialPackagesModal/PackagesGrid`, `modals/MembershipModal/PlanSummaryCard`.
+`PlanSummaryCard` also dropped its `bg-gray-50 border-gray-200` wrapper so the card reads as one
+piece; its `isUpsellOffer` path is themed by `promoThemePrimary` (not a package tier) and keeps
+the original slate treatment — gated on `useTierSurface = isPackageCard && !isUpsellOffer`.
+
+**Rules when consuming:**
+- **Border is constant across states.** Selection swaps `bloom` → `bloomSelected` only, so
+  selecting never shifts layout. Do not thicken the border on select.
+- **Selected state needs ink contrast, not more accent.** Every neighbour on the vivid tier
+  bodies is a different vivid colour, so an accent-only glow does not read as "selected".
+  `bloomSelected` bakes in the `ring` (white on dark-ink tiers, black on lime/amber).
+- **Pills and check badges fill with `ink`, not `accentHex`** — an accent chip vanishes on a
+  body made of that same accent. The contrast pair is
+  `{ backgroundColor: surface.ink, color: surface.blackText ? "#FFFFFF" : "#0A0A0A" }`.
+- **Never hardcode `text-white/…` on a card body.** Lime and amber tiers use black ink; use
+  `ink` / `inkMuted` / `inkFaint`, whose polarity tracks `blackText`.
+- Render the `sheen` on an inset, `pointer-events-none`, `aria-hidden` layer beneath content
+  (`z-0` with the content at `z-10`) — it is the depth pass that stops the vivid body reading
+  as a flat swatch.
+
+Not yet converted (one-line consumers when they are next touched): `MiniDrawPackageModal`,
+`PackageInclusionsSlideUp`.
+
+Test: `npm run test:package-card-surface` (17 assertions, standalone tsx, no DB) — covers the
+three remaps, remap/tab keying, ink polarity per tier, ring contrast, the constant border, the
+VIP premium path, and the `colorScheme` override.
+
 ## Package display names — 2026-05-14
 
 Two helpers control how package names are shown to users. See `docs/subscription/patterns.md P0` for the full rule summary.
@@ -20,6 +184,11 @@ Do NOT apply `getReceiptLabel` to catalog cards, Stripe metadata, admin views, o
 
 ## MembershipModal + PackageSelectionModal electric scheme — 2026-05-18
 
+> **Card chrome superseded 2026-08-04** by "Package card surface" above — these three surfaces
+> now render the section's vivid light-theme body, not the slate
+> `#0f172a→#1e293b` gradient described below, and `PlanCard`'s yellow selection ring is gone.
+> The **colour resolution**, discount/struck-price layout and copy rules below still hold.
+
 `MembershipModal/PlanSummaryCard` ("Selected Package" card) and `PackageSelectionModal/PlanGrid` + `PlanCard` ("Select Your Package" popup) now inherit the **same colour resolution as `MembershipSection`'s `renderPlanCard`**: membership-tab plans → `getMembershipSectionColorScheme(plan.id, true)`, one-time / additional packs → `getElectricPackageColorScheme(plan.id)` (replacing `getPackageColorSchemeForPromo` + the `useVariantContext`/`contextVariantConfig` wiring, which was deleted through `PlanSummaryCard` → `PaymentStep` → `MembershipModal/index`). In `PlanSummaryCard` the package **name and price** use the `ElectricPackageCard` dark-mode title style (tier accent + `0 0 14px {accent}80` glow, or the VIP champagne-gold gradient with drop-shadow); the **benefit/entry lines** use "electric white" (`#FFFFFF` + `0 0 8px {accent}66` glow), matching the MembershipSection entries block. The upsell-offer path (`isUpsellOffer`) still uses `promoThemePrimary` and is visually unchanged. The `Nx Bonus entries have been applied` band was removed from `PlanSummaryCard`. The package name renders via `getPackageDisplayName` (strips the internal `"Additional "` prefix). For member additional packs (`getAdditionalPackDiscount` non-null) the struck regular price (same `text-xs sm:text-sm` size as the discounted price) and a tier-accent `{percentOff}% Off` pill sit in normal flow on the row directly above the discounted price (not absolute). The discounted price renders as `= ${price}` (the leading `=` only when a discount applies, plain `${price}` otherwise) in accent title style, above an uppercase muted `One Time Payment` / `Per Giveaway` label. `PlanGrid` passes a `discount` prop (`getAdditionalPackDiscount`). In `PlanCard` the struck regular price + tier-accent `{percentOff}% Off` pill are NOT in the vertical price stack — they sit in a single horizontal row absolutely positioned `left-full top-1/2 -translate-y-1/2 ml-1.5` (middle-upper-right of the `${plan.price}` number) so they never push the `One Time` label down. The prop is only non-null for `additional-{tier}-pack`, so this only appears when the modal is showing additional packages.
 
 ## ElectricPackageCard light theme — 2026-05-16
@@ -27,6 +196,10 @@ Do NOT apply `getReceiptLabel` to catalog cards, Stripe metadata, admin views, o
 `ElectricPackageCard` accepts an optional `theme?: "light" | "dark"` prop (default `"dark"`, keeping the existing electric design byte-for-byte unchanged); `"light"` is now the classic bright branded-tier card — the card body IS the vivid tier gradient (`colorScheme.bgGradient`), scheme-derived ink colours (`lightInk`: black for lime/amber tiers, white for all others), a solid bright CTA (`backgroundColor: accent`), keeping the new badge/struck-price/per-word-title structural elements; dark rendering is unaffected for all existing consumers.
 
 ## SpecialPackagesModal color scheme — 2026-05-15
+
+> **`PackagesGrid` body superseded 2026-08-04** by "Package card surface" above — it renders the
+> vivid light-theme tier body now, not the electric-dark `linear-gradient(180deg,#0b0c0f,#060607)`
+> described below. `BenefitsPanel` is unchanged. Everything else below still holds.
 
 `SpecialPackagesModal/PackagesGrid` and `SpecialPackagesModal/BenefitsPanel` now use `getElectricPackageColorScheme` (electric dark: `linear-gradient(180deg,#0b0c0f,#060607)` body, tier-accent radial glow, accent border) instead of `getPackageColorSchemeForPromo`. `PackagesGrid` renders a struck regular price via `getAdditionalPackDiscount` when the pack has a genuine member discount (the SAVE shield clip-path polygon was removed from `PackagesGrid` — struck price is kept; the shield remains only in `ElectricPackageCard`). `PackagesGrid` also shows a `BestValueBadge` (top-left ribbon) on packs where `isOneTimeBestValuePlanId` returns true. `BenefitsPanel` benefit text and heading now carry a subtle `textShadow` glow matching the tier accent. `ElectricPackageCard` gains a VIP premium intensity path (`isPremium = !!colorScheme.textGradientStyle`) that applies a stronger outer bloom, brighter body radial gradient, solid-gold border, larger glowing title, and enlarged entries number; all non-VIP (Boss and below) tiers are visually unchanged. The entries number on `ElectricPackageCard` now uses the same white+tier-accent-glow lightning style for all tiers including VIP (VIP title retains its gold gradient); the price panel is `w-fit mx-auto` (contained/centered, not full-width); `PackagesGrid` entries number is also white+glow with the label "FREE ENTRIES"; `BenefitsPanel` benefit text is white+glow while icons use the solid tier accent colour for contrast.
 

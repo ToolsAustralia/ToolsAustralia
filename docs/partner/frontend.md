@@ -87,6 +87,35 @@ CSV, client-safe, `[name, categoryIndex, pct]` rows (~72 KB raw, ~24 KB gzipped)
   page. Names are the deliverable; redemption still happens in the portal.
 - Category strings are stored once and referenced by index — 11 strings, not 1,833 copies.
 
+### `partnerWallTiles.ts` — the marketing slice (2026-08-04)
+
+A **fourth** generated file, for the same weight-class reason browse is separate from preview.
+`PartnerBrandWall` ships on `/membership` and every `/promotions/[slug]`, so it cannot pull the
+88 KB browse module; this one is ~93 rows.
+
+- **Contents:** `[name, id, imageExt, highlight]` for offers in **Automotive + Technology that
+  have artwork**. Both filters matter. The category filter is editorial — the vendor catalogue
+  is a general consumer feed (877 In-Store, 224 Home & Lifestyle, 181 Beauty, 178 Eat & Drink,
+  167 Fashion), and a conveyor of cafes and salons sells a rewards club, not a trade network.
+  The artwork filter is because a belt of blank tiles is worse than a shorter belt — note this
+  differs from the catalogue route, which deliberately degrades to a letter tile.
+- **`name` is imperfect display copy — know what you are shipping.** Two known defects, both
+  from the vendor feed and neither auto-detectable:
+  1. **Name ≠ artwork on some offers.** 800575 is named `GUNNEDAH HYDRAULICS` but its logo
+     reads **AG-FIX HYDRAULICS**.
+  2. **Some "names" are marketing sentences, not businesses** — e.g. `Get Commercial pricing
+     at The Good Guys`.
+
+  The wall shows the name anyway (product decision, 2026-08-04: a named tile is far more
+  legible than a bare logo) and relies on a two-line clamp to keep the long ones tidy. If a
+  surface needs a *trustworthy* brand name, do not take it from here.
+- **Artwork is squarish** (typically 435×330), unlike our direct partners' wide wordmarks, so
+  the wall gives logo-only tiles more height (56px vs 40px) or they float in the tile.
+- Regenerate with `npm run build:partner-catalog`; it prints the row count and live artwork
+  coverage on every run. **Read that number rather than quoting one from a comment** — the
+  52% figure in `portal-offer-url.ts` was stale for months after the in-store harvest closed
+  the gap to 98%.
+
 **Guards** (`npm run test:partner-catalog-drift`): the browse rows must be the same multiset
 of `(name, category, pct)` as the server-only offers map, and filtering them by `pct <= tier`
 must reproduce `PARTNER_CATALOG_TIER_COUNTS` exactly. If it drifts, the page tells a member an
