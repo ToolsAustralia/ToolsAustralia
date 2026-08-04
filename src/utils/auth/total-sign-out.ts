@@ -62,6 +62,10 @@ const USER_SESSION_KEYS = [
   "showReferFriendAfterSetup",
   "setupJustCompleted",
   "membership_subscription_checkout",
+  // Guest "Your Details" carry-over (name / email / mobile typed into the membership modal before
+  // registering). Real PII — the next person on this device must never inherit it.
+  // Key owner: utils/auth/guest-details-storage.ts (GUEST_DETAILS_STORAGE_KEY).
+  "ta.guestDetails",
 ];
 
 /** User-scoped sessionStorage key prefixes. */

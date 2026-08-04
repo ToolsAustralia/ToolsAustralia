@@ -51,8 +51,28 @@ On `/my-account/draws` (Mini tab), tapping a `MiniDrawCard` **no longer navigate
 `openEntryFlow()` is the shared entry point behind every "Enter Now" CTA (promo hero, countdown, prize
 showcase, unlock-discounts, promo-welcome modal; also my-account). The `MembershipModal` has **no**
 membership-vs-one-time toggle — its inner `PackageSelectionModal` derives the active tab purely from the
-passed plan's `period` (`"mo"` → membership, else → one-time). By default a guest is handed the Tradie
-**subscription** (`getHeavyDutyPack()`), so the modal opens on membership packs.
+passed plan's `period` (`"mo"` → membership, else → one-time). By default a guest is handed the
+recommended **subscription** — Foreman since 2026-08-04 (`getHeavyDutyPack()` →
+`getRecommendedSubscriptionPlan()`) — so the modal opens on membership packs.
+
+### `openEntryFlow` is selection-first by default (2026-08-04)
+
+`openEntryFlow()` now defaults to `packageSelectionFirst: true`, so **every** entry CTA behaves the
+same way: it dispatches `openMembershipModal` with
+`detail: { plan: <recommended tier>, packageSelectionFirst: true }`, and the hosting section opens the
+modal via `openModalWithPackageSelectionFirst(plan)` + `membershipModalConfig={{ showPackageSelectionFirst: true }}`
++ `planIsDefaultSelection`. The visitor sees "Select Your Package" first (Foreman sashed
+`RECOMMENDED` and pre-selected) **and** has Foreman behind it, so dismissing the picker lands on a
+real package rather than an empty payment step.
+
+Selection-first is skipped on the two paths where a membership tier is the wrong pre-select anyway: a
+blocking subscription (cannot buy a second subscription) and `?packages=one-time` (the visitor is
+looking at the one-time tab). Both keep pre-selecting the pack that matches their situation.
+
+Any host that listens for `openMembershipModal` **must** honour `detail.packageSelectionFirst`
+(`MembershipSection`, `MajorDrawSection`, and the my-account dashboard all do) — otherwise the same
+CTA behaves differently depending on which page it fired from. Full chain, the per-CTA table, and the
+`planIsDefaultSelection` contract: [subscription/package-selection-first.md](../subscription/package-selection-first.md#entry-ctas-picker-first-recommended-tier-behind-it-2026-08-04).
 
 When the `?packages=one-time` param is present (parsed by the shared
 [`parseMembershipPackagesTab`](../../src/utils/membership/packagesTabParam.ts)), `openEntryFlow` hands the

@@ -292,7 +292,8 @@ export default function UnlockDiscounts({
           <div className="text-center mt-8 sm:mt-12">
             <button
               onClick={() => {
-                // Shared CTA hook ensures the correct modal flow is triggered every time.
+                // Shared CTA hook ensures the correct modal flow is triggered every time —
+                // "Select Your Package" first, recommended tier (Foreman) behind it.
                 openEntryFlow({ openLocalModal: false });
               }}
               suppressHydrationWarning

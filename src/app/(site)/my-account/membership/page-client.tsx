@@ -27,6 +27,7 @@ import MembershipTierList from "@/components/sections/account-membership/Members
 import PastDueTierSwitchModal from "@/components/sections/account-membership/PastDueTierSwitchModal";
 import DashboardLoader from "@/components/loading/DashboardLoader";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { isForemanSubscriptionPlanId } from "@/utils/membership/additional-package-mapping";
 
 import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 // Heavy money-path flow — mounted only when a tier change is requested.
@@ -148,12 +149,12 @@ export default function AccountMembershipPage() {
           onManage={() => openSheet("manage")}
           onPayment={() => openSheet("payment")}
           onBecomeMember={() => {
-            // Open with the Tradie SUBSCRIPTION preselected — identical to tapping the Tradie tier
-            // card below (cta.onSelect handles the freeze gate + Started Checkout tracking).
-            // Fallback to the package picker if the catalog hasn't resolved yet.
-            const tradie = cta.membershipPlans.find((p) => p.name.trim().toLowerCase() === "tradie");
-            if (tradie) cta.onSelect(tradie);
-            else cta.membershipModal.openModalWithPackageSelectionFirst();
+            // Picker first with the RECOMMENDED subscription (Foreman) behind it — same as every
+            // other "become a member" CTA. Tapping a tier card below is the exception: that IS the
+            // choice, so it goes straight through (cta.onSelect handles the freeze gate + Started
+            // Checkout tracking). No default resolves only if the catalog hasn't loaded yet.
+            const recommended = cta.membershipPlans.find((p) => isForemanSubscriptionPlanId(p.id));
+            cta.membershipModal.openModalWithPackageSelectionFirst(recommended);
           }}
           onBuyPackage={() => cta.membershipModal.openModalWithPackageSelectionFirst()}
         />
@@ -181,6 +182,7 @@ export default function AccountMembershipPage() {
         membershipModalConfig={
           cta.membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
         }
+        planIsDefaultSelection={cta.membershipModal.openWithPackageSelectionFirst}
       />
 
       {dash.user && changeTierName !== null && (

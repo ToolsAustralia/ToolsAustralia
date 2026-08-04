@@ -5,8 +5,14 @@ interface UseMembershipModalReturn {
   isModalOpen: boolean;
   selectedPlan: LocalMembershipPlan | null;
   openModal: (plan?: LocalMembershipPlan) => void;
-  /** Open modal and show package selection first (same as Enter now on promotions page). Clears any pre-selected plan. */
-  openModalWithPackageSelectionFirst: () => void;
+  /**
+   * Open the modal with package selection shown first (the "Enter now" behaviour).
+   *
+   * `defaultPlan` is the tier we recommend FOR the user (Foreman) — it sits behind the picker so
+   * dismissing lands on a real, payable package instead of an empty payment step. Omit it to open
+   * on a placeholder, which is what the dashboard CTAs do.
+   */
+  openModalWithPackageSelectionFirst: (defaultPlan?: LocalMembershipPlan) => void;
   closeModal: () => void;
   selectPlan: (plan: LocalMembershipPlan) => void;
   setSelectedPlan: (plan: LocalMembershipPlan | null) => void;
@@ -38,11 +44,14 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
 
   /**
    * Open the membership modal with package selection shown first (same as Enter now on promotions page).
-   * Clears any pre-selected plan so the user sees all packages.
+   *
+   * `defaultPlan` is the recommended tier, pre-selected BEHIND the picker: the user still chooses,
+   * but backing out of the picker leaves them on a real package rather than a placeholder payment
+   * step. Called with no argument the behaviour is the original one (no plan at all).
    */
-  const openModalWithPackageSelectionFirst = useCallback(() => {
+  const openModalWithPackageSelectionFirst = useCallback((defaultPlan?: LocalMembershipPlan) => {
     console.log("🎯 Opening MembershipModal with package selection first");
-    setSelectedPlan(null);
+    setSelectedPlan(defaultPlan ?? null);
     setOpenWithPackageSelectionFirst(true);
     setIsModalOpen(true);
   }, []);

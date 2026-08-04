@@ -35,6 +35,12 @@ import Image from "next/image";
 import PackageSelectionModal from "../PackageSelectionModal";
 import { consumePendingOpenMembershipModalDetail } from "./LazyMembershipModal";
 import { formatNamePart } from "@/utils/display-name";
+import {
+  clearGuestDetails,
+  isGuestDetailField,
+  persistGuestDetails,
+  readGuestDetails,
+} from "@/utils/auth/guest-details-storage";
 import ExistingAccountModal from "../ExistingAccountModal";
 import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useLoading } from "@/contexts/LoadingContext";
@@ -155,6 +161,16 @@ export interface MembershipModalProps {
   membershipModalConfig?: {
     showPackageSelectionFirst?: boolean;
   };
+  /**
+   * True when `selectedPlan` was chosen FOR the user (the recommended tier an entry CTA carries),
+   * not BY them.
+   *
+   * The picker's auto-open is otherwise gated on "no plan selected", which exists so it can never
+   * pop over a tier the user actually clicked. A CTA default is not that: it is there so backing
+   * out of the picker lands on a real, payable package instead of the empty payment step. This flag
+   * is the only thing that distinguishes the two.
+   */
+  planIsDefaultSelection?: boolean;
 }
 
 const MembershipModal: React.FC<MembershipModalProps> = ({
@@ -163,6 +179,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   selectedPlan,
   onPlanChange,
   membershipModalConfig,
+  planIsDefaultSelection = false,
 }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -340,6 +357,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   }, [majorDrawWinners]);
 
   const packageSelectionAutoOpenedRef = useRef<boolean>(false);
+  /** Set the moment the user picks a tier in the picker. Belt-and-braces with the once-per-session
+   *  latch: even if that latch were somehow re-armed mid-session, the picker can never reopen over
+   *  a choice the user made. Cleared when a new modal-open session starts. */
+  const userPickedPlanRef = useRef<boolean>(false);
 
   const placeholderPlan = React.useMemo<LocalMembershipPlan>(
     () => ({
@@ -748,22 +769,111 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         expiryDate: prevFormData.expiryDate,
         cvv: prevFormData.cvv,
       }));
+      // Signing in is an auth boundary: the profile is now the source of truth, so the guest
+      // carry-over has nothing left to do and must not linger as PII on the device.
+      clearGuestDetails();
 
       setCurrentStep(2);
     } else if (!isAuthenticated && isOpen) {
+      // A guest always reopens on step 1 — with their details already filled in (the carry-over in
+      // guest-details-storage). They advance themselves via REGISTER or the step chip; we never
+      // skip them past their own details. The picker then auto-opens when step 2 is reached.
       setCurrentStep(1);
     }
   }, [isAuthenticated, userData, isOpen]);
 
+  /**
+   * Guest details carry-over. The modal is mounted per page, so its form state dies on every
+   * navigation — a visitor who typed their name on `/` used to face an empty form when they opened
+   * the modal on `/promotions/[slug]` or `/membership`. Refill from the tab-scoped store on open.
+   *
+   * Blanks only: anything already typed into THIS instance wins, so a hydration can never overwrite
+   * live input. Authenticated users are skipped entirely — their profile prefill above is the
+   * source of truth.
+   */
   useEffect(() => {
+    if (!isOpen || isAuthenticated) return;
+    const stored = readGuestDetails();
+    if (!stored) return;
+    setFormData((prev) => {
+      const merged = {
+        ...prev,
+        firstName: prev.firstName || stored.firstName,
+        lastName: prev.lastName || stored.lastName,
+        email: prev.email || stored.email,
+        phone: prev.phone || stored.phone,
+      };
+      const unchanged =
+        merged.firstName === prev.firstName &&
+        merged.lastName === prev.lastName &&
+        merged.email === prev.email &&
+        merged.phone === prev.phone;
+      return unchanged ? prev : merged;
+    });
+  }, [isOpen, isAuthenticated]);
+
+  /**
+   * Re-arm the picker's auto-open latch at the instant the modal opens.
+   *
+   * The latch also re-arms on any render with `isOpen === false` (see the effect below). This
+   * edge-reset is the belt to that suspenders: a close that never produced an observable closed
+   * render — e.g. a selection-first CTA re-tapped while the close was still settling — would
+   * otherwise leave the latch armed, and the next open lands on the placeholder payment step with
+   * no picker.
+   *
+   * This is NOT the in-session re-arm that caused the 2026-07-07 reopen loop. Within one open
+   * session `isOpen` stays `true`, so this runs exactly once, at the start, before the user has
+   * chosen anything — it can never fire after a pick.
+   */
+  const prevIsOpenRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (isOpen && !prevIsOpenRef.current) {
+      packageSelectionAutoOpenedRef.current = false;
+      userPickedPlanRef.current = false;
+    }
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  /** Own copy of "did `isOpen` just flip true", so this effect never depends on another effect's
+   *  ref-mutation order. Updated on every run of the auto-open effect below. */
+  const autoOpenPrevIsOpenRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    /**
+     * `currentStep` is component state that OUTLIVES a close — the modal stays mounted. On the
+     * commit where `isOpen` flips true it therefore still holds the PREVIOUS session's step, and the
+     * sibling effect above only resets it on the next render.
+     *
+     * That one stale render was the bug: a guest who reached step 2, picked a package, closed the
+     * modal and clicked the CTA again re-opened with `currentStep` still 2, so this effect fired
+     * immediately, spent the once-per-session latch, and (briefly) opened the picker over the
+     * details form. By the time they actually reached step 2 the latch was gone — no picker.
+     *
+     * So on that first commit, use the step this session will settle on rather than the stale one.
+     */
+    const justOpened = isOpen && !autoOpenPrevIsOpenRef.current;
+    autoOpenPrevIsOpenRef.current = isOpen;
+    const effectiveStep = justOpened ? (isAuthenticated ? 2 : 1) : currentStep;
+
     const isPromotionsPage = pathname?.match(/^\/promotions\/([^/?#]+)/) !== null;
     const shouldAutoOpen = finalMembershipModalConfig == null
       ? isPromotionsPage
       : (finalMembershipModalConfig.showPackageSelectionFirst !== false);
 
+    /**
+     * May the picker auto-open over the current selection?
+     *
+     * Yes when nothing is selected, and yes when the selection is the CTA's DEFAULT tier — that
+     * default exists so backing out of the picker lands on a payable package, not so the user
+     * skips choosing. No once the user has picked a tier themselves, in the picker or by tapping a
+     * package card: that is the case `isPlaceholderPlan` was guarding, and it stays guarded.
+     */
+    const canAutoOpenOverSelection =
+      (isPlaceholderPlan || planIsDefaultSelection) && !userPickedPlanRef.current;
+
     if (
       isOpen &&
-      currentStep === 2 &&
+      effectiveStep === 2 &&
       shouldAutoOpen &&
       !packageSelectionAutoOpenedRef.current &&
       !isPackageSelectionOpen
@@ -776,7 +886,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // overlay indefinitely. Gated on isPlaceholderPlan: a REAL selected plan means selection
       // already happened (a specific plan card was clicked) — don't override it with the picker.
       if (finalMembershipModalConfig != null) {
-        if (isPlaceholderPlan) {
+        if (canAutoOpenOverSelection) {
           setIsPackageSelectionOpen(true);
           packageSelectionAutoOpenedRef.current = true;
         }
@@ -788,7 +898,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // package, or a plan chosen earlier this session). Combined with the once-per-session latch
       // (which no longer re-arms mid-session), this makes an auto-reopen structurally impossible
       // after the user has a plan — the root of the 2026-07-07 conversion-killing reopen loop.
-      if (isPlaceholderPlan) {
+      if (canAutoOpenOverSelection) {
         const timer = setTimeout(() => {
           setIsPackageSelectionOpen(true);
           packageSelectionAutoOpenedRef.current = true;
@@ -814,7 +924,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     if (!isOpen) {
       packageSelectionAutoOpenedRef.current = false;
     }
-  }, [isOpen, currentStep, pathname, isPackageSelectionOpen, finalMembershipModalConfig, isPlaceholderPlan]);
+  }, [
+    isOpen,
+    currentStep,
+    pathname,
+    isPackageSelectionOpen,
+    finalMembershipModalConfig,
+    isPlaceholderPlan,
+    planIsDefaultSelection,
+    isAuthenticated,
+  ]);
 
   useEffect(() => {
     const handleEscapeKey = (event: KeyboardEvent) => {
@@ -1401,6 +1520,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
+    // Carry the details across pages so the same visitor never types them twice (the modal is
+    // mounted per page, so its state dies on navigation). Guests only — an authenticated user's
+    // fields come from their profile — and only the four identity fields, never card data.
+    if (!isAuthenticated && isGuestDetailField(field)) {
+      persistGuestDetails({ [field]: value });
+    }
+
     if (registrationErrors[field as keyof typeof registrationErrors]) {
       setRegistrationErrors((prev) => {
         const newErrors = { ...prev };
@@ -1566,7 +1692,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           type: "success",
           title: "Step 1 Completed!",
           message: `Welcome ${formatNamePart(formData.firstName)}! Now let's set up your payment method to complete your membership.`,
-          duration: 8000,
+          duration: 5000,
         });
 
         setCurrentStep(2);
@@ -1854,6 +1980,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       onPlanChange(newPlan);
     }
 
+    // From here on the selection is the USER's, not a CTA default — the picker must never
+    // auto-open over it again for the rest of this modal-open session.
+    userPickedPlanRef.current = true;
     setIsPackageSelectionOpen(false);
   };
 

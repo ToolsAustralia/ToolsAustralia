@@ -1,15 +1,23 @@
 # Dashboard-Account — Frontend
 
-> **"Become a member" preselects the Tradie subscription (2026-07-07, owner decision):** matching the tier-card
-> behavior ("clicking Tradie opens it with Tradie — why not Become a member too?"), every dashboard
-> "Become a member" CTA now opens the MembershipModal **payment-ready with the promo-boosted Tradie
-> subscription preselected** ("Change" swaps tiers): home + rewards use the new
-> `useMajorDrawEntryCta.getTradieSubscriptionPlan()` (extracted from `getHeavyDutyPack`'s non-member branch —
-> `getHeavyDutyPack` itself is access-dependent and returns a ONE-TIME pack for entry-holders, wrong for a
-> membership CTA); the membership page routes through `cta.onSelect(tradie)` for full tier-card parity (freeze
-> gate + Started Checkout tracking), falling back to the package picker until the catalog resolves. The
-> rewards unlock-coupon membership branch does the same (mirrors the reference widget's
-> `openMembershipModalWithTradie`). This also makes these CTAs independent of the picker-first orchestration.
+> **"Become a member" opens the picker with the RECOMMENDED subscription behind it (2026-08-04):** the
+> dashboard CTAs (home, rewards, rewards floating-widget coupon unlock, account-membership card) call
+> `membershipModal.openModalWithPackageSelectionFirst(getRecommendedSubscriptionPlan())`. The member
+> chooses in "Select Your Package", and because a real plan sits behind it, dismissing the picker lands
+> on Foreman rather than an empty payment step. `getRecommendedSubscriptionPlan()` (was
+> `getTradieSubscriptionPlan`) is extracted from `getHeavyDutyPack`'s non-member branch —
+> `getHeavyDutyPack` itself is access-dependent and returns a ONE-TIME pack for entry-holders, wrong for
+> a membership CTA. Each of these pages must also pass `planIsDefaultSelection` to `<MembershipModal>`,
+> or the picker will not open over that default. **Tapping a tier card in the account membership tier
+> list stays direct** (`cta.onSelect`) — that tap already IS the choice. Supersedes the 2026-07-07
+> "payment-ready preselect" behaviour.
+>
+> **The recommended tier is FOREMAN, not Tradie (2026-08-04).** It is the tier the package picker sashes
+> `RECOMMENDED` and `PlanSummaryCard` pills `Recommended`, so every "we picked one for you" surface agrees.
+> The tier is identified by [`isForemanSubscriptionPlanId`](../../src/utils/membership/additional-package-mapping.ts) —
+> never a literal id compare, because `useMemberships` slugifies the package NAME into `plan.id`
+> ("Foreman" → `foreman`), so the catalog `_id` (`foreman-subscription`) never appears in UI code.
+> See [subscription/package-selection-first.md](../subscription/package-selection-first.md#foreman-is-the-recommended-tier).
 
 > **Never bare-`openModal()` the MembershipModal (2026-07-06):** `useMembershipModal.openModal()` without a
 > plan (and no prior selection) renders the **payment step with no package** — a broken skeleton view. The
