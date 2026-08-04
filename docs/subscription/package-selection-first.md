@@ -168,6 +168,33 @@ backwards. Everything else routes through `openEntryFlow` (which defaults to
 and `userPickedPlanRef` reset when `isOpen` goes false → true, and the CTA supplies a fresh default,
 so every new open starts a new selection.
 
+### The stale-`currentStep` race — why the picker stopped appearing on reopen (2026-08-04)
+
+Reported flow: guest registers → picker appears → picks a package → closes the modal → clicks the
+CTA again → details are prefilled on step 1, but advancing to step 2 shows **no picker**.
+
+`currentStep` is component state and the modal stays **mounted** across a close, so it outlives the
+session. On the commit where `isOpen` flips true it still holds the previous session's value (2), and
+the effect that resets it for guests only lands on the *next* render. The auto-open effect ran on
+that one stale commit, saw `currentStep === 2`, and **spent the once-per-session latch** — briefly
+opening the picker over the details form. When the guest genuinely reached step 2, the latch was gone.
+
+The fix is in the auto-open effect: on the first commit of an open session it uses the step the
+session will settle on, not the stale one.
+
+```js
+const justOpened = isOpen && !autoOpenPrevIsOpenRef.current;
+autoOpenPrevIsOpenRef.current = isOpen;
+const effectiveStep = justOpened ? (isAuthenticated ? 2 : 1) : currentStep;
+```
+
+It keeps its **own** `prevIsOpen` ref rather than reading the latch effect's, so the two never depend
+on effect declaration order. Guests therefore open on step 1 with the latch intact and get the picker
+when they reach payment; authenticated users still get it immediately.
+
+> **If you add state that must not survive a close, reset it on the open EDGE — and remember that any
+> effect reading it in that same commit still sees the old value.**
+
 ### Supporting fixes (2026-08-04)
 
 - **Latch re-arms on the open edge too.** `packageSelectionAutoOpenedRef` still resets on any render

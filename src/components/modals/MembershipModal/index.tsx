@@ -834,7 +834,27 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     prevIsOpenRef.current = isOpen;
   }, [isOpen]);
 
+  /** Own copy of "did `isOpen` just flip true", so this effect never depends on another effect's
+   *  ref-mutation order. Updated on every run of the auto-open effect below. */
+  const autoOpenPrevIsOpenRef = useRef<boolean>(false);
+
   useEffect(() => {
+    /**
+     * `currentStep` is component state that OUTLIVES a close — the modal stays mounted. On the
+     * commit where `isOpen` flips true it therefore still holds the PREVIOUS session's step, and the
+     * sibling effect above only resets it on the next render.
+     *
+     * That one stale render was the bug: a guest who reached step 2, picked a package, closed the
+     * modal and clicked the CTA again re-opened with `currentStep` still 2, so this effect fired
+     * immediately, spent the once-per-session latch, and (briefly) opened the picker over the
+     * details form. By the time they actually reached step 2 the latch was gone — no picker.
+     *
+     * So on that first commit, use the step this session will settle on rather than the stale one.
+     */
+    const justOpened = isOpen && !autoOpenPrevIsOpenRef.current;
+    autoOpenPrevIsOpenRef.current = isOpen;
+    const effectiveStep = justOpened ? (isAuthenticated ? 2 : 1) : currentStep;
+
     const isPromotionsPage = pathname?.match(/^\/promotions\/([^/?#]+)/) !== null;
     const shouldAutoOpen = finalMembershipModalConfig == null
       ? isPromotionsPage
@@ -853,7 +873,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
     if (
       isOpen &&
-      currentStep === 2 &&
+      effectiveStep === 2 &&
       shouldAutoOpen &&
       !packageSelectionAutoOpenedRef.current &&
       !isPackageSelectionOpen
@@ -912,6 +932,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     finalMembershipModalConfig,
     isPlaceholderPlan,
     planIsDefaultSelection,
+    isAuthenticated,
   ]);
 
   useEffect(() => {
