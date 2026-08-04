@@ -20,6 +20,35 @@ The route also emits `[cancellation-upsell] …` `console.log` lines that are vi
 
 Brief: if you add an image but forget to run `npm run build:upsell-manifest`, the manifest is stale. `prebuild`/`predev` regenerate, so this only bites in non-standard run scripts.
 
+## Resolved — the hero fell back to an asset that never existed (2026-08-04)
+
+`resolveUpsellImage` used to end with `return { src: "/images/upsells/_fallback.webp" }`, and that
+file was **not in the repo** — `public/images/upsells/` shipped only a 0-byte `_fallback.gitkeep`,
+which is what a directory gets when it is created empty and the "real placeholder later" never
+happens. Unlike the variant and default rungs, that terminal rung was **not** manifest-gated: it was
+returned unconditionally, including on the early return for an unknown `offerId`.
+
+So any offer falling through both real rungs requested a 404, Next's image optimizer then answered
+`400` (*"…isn't a valid image… received null"*), and the customer got **bare alt text where the hero
+should be** — at the exact moment they were being asked to buy. Frame-verified in an e2e failure
+screenshot.
+
+**The fix is the code, not the asset.** Adding a real `_fallback.webp` was the first attempt and was
+rejected: artwork exists only for the multipliers actually in use (membership runs at 5x and 10x; the
+others are follow-ups), so a global placeholder stands in for art that was never meant to exist — it
+hides the gap rather than handling it.
+
+Instead the terminal rung returns **`null`**, `ResolvedUpsellImage["src"]` is `string | null`, and
+`OfferHero` returns `null` when there is no artwork. The offer renders with **no hero at all** rather
+than a broken one; blank is the intended outcome, and the title, price and CTA carry the layout.
+
+Guarded by `testResolvedSrcAlwaysExists` in `npm run test:upsell-images`, which asserts every
+non-null `src` names a file the manifest knows about — so a path to a missing asset cannot come back
+silently. While adding it, two tests in that suite turned out to be **defined but never called**
+(`testUnknownOfferFallsBack`'s sibling and the effective-multiplier case); both are registered now.
+
+See `rules.md` R6.
+
 ## Eligibility ↔ display drift
 
 Eligibility is server-side; if a deploy changes eligibility but a user has the old client cached, they may see / not see the offer briefly until the next page load. Acceptable — the server-side check at submit time prevents abuse.

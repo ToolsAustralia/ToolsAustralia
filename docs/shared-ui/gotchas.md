@@ -364,6 +364,14 @@ These legitimately diverge. The **legacy** view ([index.tsx](../../src/component
 
 **Current (single-star) rule** — keep it: with an active subscription **and** a known Stripe subscription default, star **only** that card; otherwise fall back to `pm.isDefault`. This guarantees exactly one star and that it reflects the truthfully-charged card. Do **not** reintroduce the `||`.
 
+## PaymentMethodsTab — a FAILED renewals move must not be a green toast (2026-08)
+
+Because those two defaults are separate, "Set default" is **two writes**: `setDefaultPaymentMethod` (the wallet flag), then — only when `hasActiveSubscription` — `updateSubscriptionPaymentMethod.mutateAsync` (the card Stripe actually charges). The second can reject on its own, and its `catch` used to fire `type: "success"` titled **"Default payment method updated"**, with the failure buried mid-message ("However, failed to update subscription payment method"). A member moving off a dying card therefore got an explicit green confirmation that renewals had moved when they had not — a silent failed-renewal set up weeks in advance, with the one UI signal that could have prevented it saying the opposite.
+
+The subscription half now lives in its own `moveSubscriptionBillingCard(paymentMethodId)` in [index.tsx](../../src/components/modals/PaymentMethodsTab/index.tsx). Its failure branch toasts `type: "error"` — "Renewals are still on your old card" — with `duration: 0` (no auto-dismiss; the retry is the only way to finish what the member started) and a **Retry** action that recurses into the same function. Retrying *only* the subscription half matters: the wallet write already succeeded, so re-running `handleSetDefault` would redo it.
+
+**Rule:** when one user action is two independent writes, the toast type must follow the outcome of the thing the member was actually trying to change. A `type: "success"` whose body contains "however … failed" reads as success — on a money path that is worse than no toast at all, because it stops the retry.
+
 ## Stripe PaymentElement must be `ready` before `elements.submit()` / `confirmPayment()`
 
 Stripe throws "We could not retrieve data from the specified Element…" if you call `elements.submit()`/`confirmPayment()` before the `<PaymentElement>` has emitted its `ready` event, and `confirmStripeIntent` returns "Stripe not loaded" if `useStripe()`/`useElements()` haven't resolved. The Purchase button must be gated on readiness, not just on a client secret. [`CardFormSection`](../../src/components/modals/PaymentMethodSelector/CardFormSection.tsx) tracks `ready` via `<PaymentElement onReady>` + a ref, short-circuits `confirmStripeIntent` through the pure guard in [`paymentReadiness.ts`](../../src/components/modals/PaymentMethodSelector/paymentReadiness.ts), and emits an `onElementReady` callback that threads up through PaymentMethodSelector → PaymentStep → [MembershipModal](../../src/components/modals/MembershipModal/index.tsx) `isFormValid()` to disable the button until ready. When wiring a new payment surface, thread `onElementReady` to **every** `<PaymentMethodSelector>`/`<CardFormSection>` mount (the guest mount was missed once, which would permanently disable guest checkout). This was a production conversion bug on `/promotions/*`.
@@ -667,3 +675,89 @@ no scroll container.
 almost certainly why, and the fix is `clip` on the offending ancestor rather than anything on
 the element. Changing the global base rule would fix every route at once — worth doing
 deliberately, weighing that `clip` also forbids programmatic horizontal scrolling.
+
+## The same mutation mounted three times must fail the same way three times (2026-08)
+
+[`RewardsClaimables`](../../src/components/sections/rewards/RewardsClaimables.tsx) called
+`redeem.mutate({ … })` fire-and-forget and read nothing back. Every rejection — 409 already
+redeemed, 400 expired, 403 ineligible, a dropped request — landed nowhere: no toast, no inline
+message, and since the button's only feedback was `redeem.isPending`, the reward stayed listed
+as claimable. The member's rational response to a Claim button that visibly does nothing is to
+press it again.
+
+The same `useRedeemableRedemption` mutation is mounted in two sibling surfaces
+([`RewardsFloatingWidget`](../../src/components/features/RewardsFloatingWidget.tsx),
+[`RedeemablesWallet`](../../src/components/features/RedeemablesWallet.tsx)) and **both** already
+awaited it and toasted the error. So the feedback a member got depended on which of three
+identical-looking Claim buttons they happened to press. `RewardsClaimables` now uses the same
+`await mutateAsync` → `if (!response.success) throw` → success/error toast shape.
+
+Two things this leans on, both worth carrying to any other consumer:
+
+- **A resolved promise is not a success.** `/api/redeemables/redeem` answers `200 { success:
+  false, error }` for business rejections, so `mutateAsync` resolving proves nothing — the
+  `!response.success` check is what converts it into the `catch`.
+- **The list self-corrects either way.** `useRedeemableRedemption`'s `onSettled` re-syncs the
+  wallet on both outcomes (a 409 means the server *did* burn the issuance, so the rolled-back
+  optimistic snapshot is the stale one), which is why a rejected item stops rendering as
+  claimable without the component doing anything.
+
+**Rule:** when the same mutation has more than one mount, error handling is part of the
+mutation's contract, not of one component's polish. Copy the handler, or the surfaces diverge
+silently.
+
+## ProductCard: a local mirror of cart state made its own error UI unreachable (2026-08)
+
+[`ProductCard`](../../src/components/ui/ProductCard.tsx) kept three per-product local maps —
+`localAddedState`, `localLoadingState`, `localErrorState` — beside the cart's own state, and
+drove the button off them. The cart is optimistic-with-queue: `addToCart` writes the item list
+immediately and **resolves right away**, and the provider POSTs the operation later, pushing
+rejections into `failedOperations`. So `await addToCart(...)` essentially never throws for a
+server rejection — which meant the `catch` that set `localErrorState` never ran, and the whole
+`AlertCircle` + `RefreshCw` error branch was dead code. What the member saw instead was
+`localAddedState` holding the button green ("Added") over an add the server had refused and the
+provider had since reverted out of `items`.
+
+All three maps are gone. `isInCart` reads `items` (the provider's optimistic list, reverted on
+failure) and `hasError` reads the matching entry in `failedOperations`, so the error UI is
+reachable from the state that actually records failure. Retry likewise had to change: it used
+to re-run `handleAddToCart`, which **queues a second operation** and leaves the original stuck
+in `failedOperations` forever (nothing else removes it) — it now calls
+`retryFailedOperation(failedAddOperation.id)`, which is what drains that entry.
+
+Known edge still open: the lookup matches `operation.data.productId`, and a mini-draw add is
+queued as `{ miniDrawId }` with no `productId`, so a failed mini-draw add does not light the
+error state.
+
+**Rule:** with an optimistic provider, the provider's own state *is* the feedback channel.
+A component-local copy of "added"/"loading"/"error" can only ever drift from it, and the drift
+always fails toward the reassuring answer.
+
+## A purchase flow that ends without the success screen must still say something (2026-08)
+
+[`SpecialPackagesModal`](../../src/components/modals/SpecialPackagesModal/index.tsx) and
+[`UpsellModal`](../../src/components/modals/UpsellModal/index.tsx) both hand off to
+[`PaymentProcessingScreen`](../../src/components/loading/PaymentProcessingScreen.tsx) after a
+charge. Its non-success exits — `onError`, and the member tapping "still processing" — used to
+`setShowPaymentProcessing(false)` / `handleClose()` and nothing else (`SpecialPackagesModal`'s
+error handler literally carried a `// Could show error message to user here`). The overlay just
+vanished, on a flow where money may well have moved.
+
+Both now toast on the way out: an `error` toast on the failed-confirmation path and an `info`
+"Still processing" on the dismiss path. The copy deliberately does **not** claim the payment
+failed — the confirmation failed, and the charge may still land — so it points at the emailed
+receipt and support, and says free entries will appear once it completes.
+
+Two wiring details:
+
+- These paths bypass the global success screen, so the dashboard's own entry-hold release
+  (which runs when that overlay closes) never fires. Each handler calls
+  `clearDashboardEntryHold()` itself, or the wallet keeps rendering pre-purchase numbers after
+  a charge that may have succeeded.
+- `PaymentProcessingScreen` destructures `onTimeout` as `_onTimeout` and **never invokes it** —
+  `onStillProcessingDismiss` is the only live exit. Wiring only `onTimeout` is wiring nothing;
+  `UpsellModal` points both props at the same `handleProcessingDismiss` so it can't rot back.
+
+The `purchaseComplete` latch documented above is still intentionally **not** cleared on either
+path — once `mutateAsync` returned a `paymentIntentId` the money is taken, and re-enabling the
+button would risk a second charge.

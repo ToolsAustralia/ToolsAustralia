@@ -199,13 +199,11 @@ export const usePurchaseMembership = () => {
       // cache. 10s bridges the typical worker window.
       freezeRefetchIntervals(queryClient, actualUserId, 10000);
 
-      const previousMajorDraw = queryClient.getQueryData(queryKeys.majorDraw.current);
-      const previousUserStats = queryClient.getQueryData(queryKeys.majorDraw.userStats(actualUserId));
-      const previousUserAccount = queryClient.getQueryData(queryKeys.users.account(actualUserId));
+      armDashboardEntryHoldFromUserStatsCache(
+        queryClient.getQueryData(queryKeys.majorDraw.userStats(actualUserId))
+      );
 
-      armDashboardEntryHoldFromUserStatsCache(previousUserStats);
-
-      return { previousMajorDraw, previousUserStats, previousUserAccount, actualUserId };
+      return { actualUserId };
     },
     onSuccess: (data, variables, context) => {
       const actualUserId = context?.actualUserId ?? variables.userId;
@@ -255,6 +253,14 @@ export const usePurchaseMembership = () => {
 
           if (majorDrawResponse.success) {
             queryClient.setQueryData(queryKeys.majorDraw.current, majorDrawResponse.data.majorDraw);
+            // The wallet reads `majorDraw.userStats`, a separate key that the same /api/major-draw
+            // payload already carries. Without this write the two passes never refresh the number
+            // the member is actually watching, so post-webhook entries only appear on the next
+            // mount/window-focus refetch.
+            queryClient.setQueryData(
+              queryKeys.majorDraw.userStats(actualUserId),
+              majorDrawResponse.data.userStats
+            );
           }
 
           if (userStatsResponse.success) {
@@ -271,21 +277,12 @@ export const usePurchaseMembership = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
       queryClient.setQueryData(queryKeys.memberships.user(actualUserId), data.data.membership);
     },
-    onError: (error, variables, context) => {
+    onError: (error) => {
       console.error("Failed to purchase membership:", error);
+      // Releasing the hold is the whole rollback: onMutate writes NO optimistic data, it only
+      // cancels + snapshots. Re-writing those snapshots here rolled nothing back and could
+      // overwrite genuinely fresher server data fetched while the charge was in flight.
       clearDashboardEntryHold();
-
-      const actualUserId = context?.actualUserId ?? variables.userId;
-
-      if (context?.previousMajorDraw !== undefined) {
-        queryClient.setQueryData(queryKeys.majorDraw.current, context.previousMajorDraw);
-      }
-      if (context?.previousUserStats !== undefined) {
-        queryClient.setQueryData(queryKeys.majorDraw.userStats(actualUserId), context.previousUserStats);
-      }
-      if (context?.previousUserAccount !== undefined) {
-        queryClient.setQueryData(queryKeys.users.account(actualUserId), context.previousUserAccount);
-      }
     },
   });
 };

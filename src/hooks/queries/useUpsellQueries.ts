@@ -246,6 +246,16 @@ export const usePurchaseUpsell = () => {
         ...(originalPurchaseContext && { originalPurchaseContext }),
         ...(attribution && { attribution }),
       });
+
+      // 3D Secure answers HTTP 200 with `{ success: false, requiresAction: true }`
+      // (src/app/api/upsell/purchase/route.ts) — the charge has NOT been taken. React Query
+      // decides success from the mutationFn, not the status code, so throw here: an abandoned
+      // 3DS payment must run onError (entry-hold release) instead of onSuccess, which would
+      // otherwise write "isProcessing: false, pendingEntries: 0" for a payment that never happened.
+      if (!response.success) {
+        throw new Error(response.message || "Upsell purchase failed");
+      }
+
       return response;
     },
     onMutate: async ({ userId }) => {
@@ -259,13 +269,11 @@ export const usePurchaseUpsell = () => {
       // ~5–15s after Stripe delivery. See useMembershipQueries for full rationale.
       freezeRefetchIntervals(queryClient, actualUserId, 10000);
 
-      const previousMajorDraw = queryClient.getQueryData(queryKeys.majorDraw.current);
-      const previousUserStats = queryClient.getQueryData(queryKeys.majorDraw.userStats(actualUserId));
-      const previousUserAccount = queryClient.getQueryData(queryKeys.users.account(actualUserId));
+      armDashboardEntryHoldFromUserStatsCache(
+        queryClient.getQueryData(queryKeys.majorDraw.userStats(actualUserId))
+      );
 
-      armDashboardEntryHoldFromUserStatsCache(previousUserStats);
-
-      return { previousMajorDraw, previousUserStats, previousUserAccount, actualUserId };
+      return { actualUserId };
     },
     onSuccess: (data, variables, context) => {
       const actualUserId = context?.actualUserId ?? variables.userId;
@@ -312,6 +320,12 @@ export const usePurchaseUpsell = () => {
 
           if (majorDrawResponse.success) {
             queryClient.setQueryData(queryKeys.majorDraw.current, majorDrawResponse.data.majorDraw);
+            // Same payload carries `userStats` — the key the dashboard wallet reads. See
+            // useMembershipQueries for why writing only majorDraw.current leaves it stale.
+            queryClient.setQueryData(
+              queryKeys.majorDraw.userStats(actualUserId),
+              majorDrawResponse.data.userStats
+            );
           }
 
           if (userStatsResponse.success) {
@@ -326,21 +340,11 @@ export const usePurchaseUpsell = () => {
 
       invalidatePurchaseCaches(actualUserId);
     },
-    onError: (error, variables, context) => {
+    onError: (error) => {
       console.error("Failed to purchase upsell:", error);
+      // Releasing the hold is the whole rollback — onMutate writes no optimistic data, so
+      // restoring its snapshots rolled nothing back and could clobber fresher server data.
       clearDashboardEntryHold();
-
-      const actualUserId = context?.actualUserId ?? variables.userId;
-
-      if (context?.previousMajorDraw !== undefined) {
-        queryClient.setQueryData(queryKeys.majorDraw.current, context.previousMajorDraw);
-      }
-      if (context?.previousUserStats !== undefined) {
-        queryClient.setQueryData(queryKeys.majorDraw.userStats(actualUserId), context.previousUserStats);
-      }
-      if (context?.previousUserAccount !== undefined) {
-        queryClient.setQueryData(queryKeys.users.account(actualUserId), context.previousUserAccount);
-      }
     },
   });
 };

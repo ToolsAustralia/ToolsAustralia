@@ -31,6 +31,20 @@ npm run build:upsell-manifest
 
 If you add/change files in the upsell image directories, the script must succeed before `dev` or `build` will start.
 
+## Hero image resolution chain
+
+`resolveUpsellImage({ offerId, multiplier })` walks three rungs, under `/images/upsells/`:
+
+| # | Path | Manifest-gated? |
+|---|---|---|
+| 1 | `{category}/{stem}-{N}x.webp` — variant for the **effective** multiplier (`activePromo × categoryMultiplier`) | yes |
+| 2 | `{category}/{stem}.webp` — default for this upsell | yes |
+| 3 | `null` — no artwork; the caller renders no image | n/a |
+
+Rungs 1–2 only return a path when `UPSELL_IMAGE_MANIFEST` proves the file exists on disk, which is why an unknown effective multiplier (e.g. `3 × 2 = 6`, outside `PROMO_MULTIPLIERS`) can be accepted optimistically and simply fall through.
+
+Rung 3 returns **`null`**, not a path. That is deliberate: artwork only exists for the multipliers actually in use (membership runs at 5x/10x; the rest are follow-ups), so there is nothing honest for a terminal rung to point at. A path to a file that is not on disk 404s, Next's image optimizer then answers `400`, and the modal renders bare alt text — which is exactly what shipped. `src` is therefore `string | null`, and **callers must render no image when it is null** (`OfferHero` returns `null`). An offer with no artwork is a normal state, not an error. See `rules.md` R6 and `gotchas.md`.
+
 ## Full mapping (22 records — canonical source: spec §3)
 
 ### Category counts

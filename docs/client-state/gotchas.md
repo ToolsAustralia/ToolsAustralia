@@ -105,3 +105,101 @@ Both the hook and the interface are deleted. Real per-draw revenue now lives in
    hooks, grep for the *exact* identifier with a word boundary; a substring grep for
    `MajorDrawStats` matches `userMajorDrawStats` at ~30 live call sites and an unrelated
    `src/components/sections/MajorDrawStats.tsx` component.
+
+## The global mutation error handler never ran (fixed 2026-08-03)
+
+`providers.tsx` carried an `onError` on `defaultOptions.mutations` — the only site-wide record that a
+mutation failed. It never fired for a single optimistic mutation. A mutation's own `onError`
+**replaces** the default rather than running alongside it, and every optimistic mutation defines one
+(that is where the rollback lives), so the default handler was reachable only for mutations that could
+not visibly fail. The failure mode was silent: the UI reverted with no console line and no toast, and
+the member saw a value flicker back with no explanation.
+
+The handler now lives on a `MutationCache` passed to the `QueryClient`. Cache-level handlers run **in
+addition to** the mutation's own, so rollback is unaffected. This is the same asymmetry the `QueryCache`
+`onError` already relied on — see [rules.md](./rules.md) R10.
+
+## `setQueryData` is exact-match; `cancelQueries` / `invalidateQueries` are prefix-match (fixed 2026-08-03)
+
+`useUpdateAutoRenew` predicted the toggle into `queryKeys.users.detail(id)` (`["users", id]`) and stopped
+there. `/my-account` — the only surface with a Resume/auto-renew control — reads
+`queryKeys.users.account(id)` (`["users", id, "account"]`). Prefix semantics made this look correct: the
+one `cancelQueries` on `users.detail` genuinely covers both keys, so the cancel half of the pattern was
+fine. `setQueryData` does not work that way. The prediction landed in a cache entry nothing on the page
+rendered, so the "Membership resumed" toast fired while the card still read "Ends <date>" — and the still-live
+Resume button could send a second billing PATCH. The mutation now mirrors the write into `users.account`
+and rolls both back.
+
+**Transferable:** when adding an optimistic write, don't ask "which key owns this data?" — ask "which key
+does the component I'm about to re-render actually subscribe to?" and write to each one.
+
+## A rollback that restores snapshots `onMutate` never wrote is a clobber, not a rollback (fixed 2026-08-03)
+
+`usePurchaseMembership` and `usePurchaseUpsell` snapshotted `majorDraw.current`, `majorDraw.userStats`
+and `users.account` in `onMutate` and restored all three in `onError` — but `onMutate` writes **no**
+optimistic data for these two (it cancels, freezes refetch intervals for the webhook window, and arms the
+dashboard entry hold). So the restore rolled nothing back; it re-wrote a pre-charge snapshot over
+whatever had legitimately landed during a payment that can run tens of seconds. Releasing the entry hold
+was always the entire rollback, and is now all `onError` does.
+
+Related, on the success side: both mutations wrote the `/api/major-draw` payload into
+`majorDraw.current` only. The dashboard wallet reads `majorDraw.userStats` — a separate key the *same*
+payload already carries — so post-webhook entries appeared only on the next mount or window-focus
+refetch. Both passes now write both keys.
+
+## HTTP 200 is not success — React Query reads the `mutationFn`, not the status code (fixed 2026-08-03)
+
+`POST /api/upsell/purchase` answers **200** with `{ success: false, requiresAction: true }` when the card
+needs 3D Secure; no charge has been taken. Because the fetch resolved, the mutation ran `onSuccess`, which
+wrote `isProcessing: false, pendingEntries: 0` — i.e. "your entries are here" — for a payment the member
+could then abandon. `usePurchaseUpsell`'s `mutationFn` now throws on `!response.success`, routing the 3DS
+and failure branches to `onError` (which releases the entry hold). Any route that reports a business-level
+failure inside a 200 body needs the same explicit throw.
+
+## Optimistic writes need data to write — payment methods had none (fixed 2026-08-03)
+
+`useAddPaymentMethod` inserted an optimistic row from the only field it had, the `paymentMethodId`. Brand,
+last4 and expiry exist only on Stripe (the GET joins `stripe.paymentMethods.list`), so the prediction
+rendered a ghost "Card •••• / Expires --/--" card — which also hijacked the hero card face — beside the
+still-open add form for the whole POST. There was nothing to predict, so `onMutate` no longer writes; the
+POST response carries the real card metadata and `onSuccess` writes the row.
+
+`useSetDefaultPaymentMethod` had the mirror-image problem on the way back: the PUT echoes the
+`User.savedPaymentMethods` row, which holds no card metadata, and `onSuccess` used it to **replace** the
+cached entry — blanking the card the member had just starred until the refetch landed. It now merges the
+response over the cached row (`{ ...cached, ...data, card: data.card ?? cached?.card }`).
+
+`normalizePaymentMethodsCache` is exported from `usePaymentQueries.ts` for this reason: the entry can still
+hold a legacy bare-array shape, so every writer — including `useUpdateSubscriptionPaymentMethod` in
+`useSubscriptionQueries.ts` — must normalize before writing.
+
+## `subscriptionDefaultPaymentMethodId` was predicted by nobody (fixed 2026-08-03)
+
+For subscribers the Payment sheet picks the starred/hero card off `subscriptionDefaultPaymentMethodId`,
+not `isDefault`. No mutation predicted it, so choosing a renewal card sat visibly dead through three
+sequential round-trips (PUT default → POST update-payment-method → refetched GET).
+`useUpdateSubscriptionPaymentMethod` now predicts it, leaving `paymentMethods` untouched (it moves which
+card *renews*, not the wallet default). It must not be predicted inside `useSetDefaultPaymentMethod`:
+`SavedPaymentMethodsModal` calls that one without any subscription update, where the prediction would be
+wrong and snap back.
+
+## Awaiting invalidations in `onSuccess` holds the mutation `pending` (fixed 2026-08-03)
+
+`useRedeemableRedemption` awaited three invalidations — including the heavy my-account payload — inside
+`onSuccess`. React Query keeps a mutation `pending` until its callbacks settle, so the Claim button stayed
+disabled and the success toast stayed back for exactly the round-trip the optimistic entry-count write
+exists to hide. The reconciliation moved to `onSettled` as fire-and-forget (`void`), which also fixes the
+failure path: it previously re-synced only on success, but a 409 means the server **already burned the
+issuance**, so a rolled-back wallet keeps rendering the item as claimable and the member taps it again.
+The same non-idempotency is why this mutation sets `retry: 0` ([rules.md](./rules.md) R11).
+
+## The React Query cache is per-user state and belongs to the auth boundary (fixed 2026-08-03)
+
+The cache holds the redeemables wallet, the my-account payload and the partner queue — the same class of
+data `clearUserScopedClientStorage()` wipes on sign-out. `signOut()` does a full document navigation,
+which drops the cache in the tab that triggered it, so this looked handled. A **second open tab** learns
+about the sign-out only through NextAuth's cross-tab broadcast, with no navigation — its cache would have
+survived into the next person's session on a shared device. `QueryCacheAuthBoundary` in
+[providers.tsx](../../src/app/providers.tsx) now calls `queryClient.clear()` whenever the observed
+identity **leaves** an authenticated user (sign-out, expiry, account switch). The first settled session
+and the guest→member transition are deliberately skipped — neither can be holding someone else's data.

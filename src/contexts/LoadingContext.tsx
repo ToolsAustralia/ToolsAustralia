@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import LoadingScreen from "@/components/loading/LoadingScreen";
 import SuccessScreen from "@/components/loading/SuccessScreen";
+import { clearDashboardEntryHold } from "@/utils/dashboard-entry-hold";
 
 interface Benefit {
   text: string;
@@ -88,6 +89,19 @@ export const LoadingProvider: React.FC<LoadingProviderProps> = ({ children }) =>
   };
 
   const hideSuccess = () => {
+    // Release the dashboard entry hold HERE, because this is the event it actually waits for.
+    //
+    // A purchase arms a module-level hold that freezes /my-account's entry buckets so the
+    // counter animates exactly once, after the celebration closes. Its only other release
+    // lives in `useDashboardEntryDisplay`, which exists ONLY while /my-account is mounted —
+    // and the purchase modals are globally mounted, so buying from the homepage, results or
+    // rewards left nobody to observe this transition and the wallet stayed frozen at its
+    // pre-purchase figure for the rest of the SPA session.
+    //
+    // This provider is mounted globally, so it observes the overlay closing on EVERY page.
+    // Releasing here fixes the leak at its real owner rather than capping it with a timeout,
+    // and it preserves the feature: the hold still lasts exactly as long as the celebration.
+    clearDashboardEntryHold();
     setSuccessState((prev) => ({
       ...prev,
       isVisible: false,

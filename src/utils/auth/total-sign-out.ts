@@ -12,6 +12,11 @@ import { clearSupportChatStorage } from "@/lib/support-chat/chatStorage";
  * (also localStorage) is cleared by delegating to the chat module's own
  * clearSupportChatStorage() — it owns its key list, so we never duplicate it here.
  *
+ * The in-memory React Query cache is ALSO user-scoped, but it can't be reached from
+ * this non-React module — it is cleared at the same boundary by QueryCacheAuthBoundary
+ * in src/app/providers.tsx, which watches the signed-in identity (that also covers the
+ * second open tab, which learns of a sign-out by broadcast and never navigates).
+ *
  * KEEP (never cleared here): device prefs (`ta-theme`, `ta-admin-theme`) and
  * pre-auth **attribution** (`tools-aus:*`, `affiliate_code`, `ab_*`,
  * `promoWelcomeShown_*`, admin UI layout, dev-only keys). Those are device- or
@@ -62,10 +67,6 @@ const USER_SESSION_KEYS = [
   "showReferFriendAfterSetup",
   "setupJustCompleted",
   "membership_subscription_checkout",
-  // Guest "Your Details" carry-over (name / email / mobile typed into the membership modal before
-  // registering). Real PII — the next person on this device must never inherit it.
-  // Key owner: utils/auth/guest-details-storage.ts (GUEST_DETAILS_STORAGE_KEY).
-  "ta.guestDetails",
 ];
 
 /** User-scoped sessionStorage key prefixes. */

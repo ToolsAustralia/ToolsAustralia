@@ -16,7 +16,7 @@
 
 ## Display
 
-- Upsell hero images from `src/generated/upsellImageManifest.ts` — DO NOT manually edit; regenerate via `npm run build:upsell-manifest`
+- Upsell hero images from `src/generated/upsellImageManifest.ts` — DO NOT manually edit; regenerate via `npm run build:upsell-manifest`. The manifest covers both real rungs (variant and default); when neither is on disk the resolver returns `src: null` and the hero renders nothing (see `architecture.md` → Hero image resolution chain)
 
 ## Admin panel — UpsellMultiplierPanel (2026-05-14)
 

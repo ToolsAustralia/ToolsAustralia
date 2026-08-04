@@ -60,3 +60,25 @@ interval (its optimistic-write ecosystem keeps it current; see draws/gotchas).
 (`cachedSessionPromise ??= …`). On first paint many hooks fire `apiRequest` at once; without the shared
 promise each would hit `/api/auth/session` in parallel. The promise clears on resolve; the value then
 serves from the TTL cache. `invalidateSessionCache()` clears both.
+
+## R10. Global mutation error handling goes on the `MutationCache`, never `defaultOptions.mutations.onError`
+
+A mutation's own `onError` **replaces** the default one — it does not run alongside it. Every optimistic
+mutation defines its own `onError` (that is where the rollback lives), so a handler parked on
+`defaultOptions.mutations.onError` is unreachable for exactly the mutations that can fail visibly.
+`MutationCache`'s `onError` runs **in addition to** the mutation's, so the QueryClient in
+[providers.tsx](../../src/app/providers.tsx) carries the global handler there — rollback still happens,
+and nothing fails silently. Same asymmetry applies to `QueryCache` vs `defaultOptions.queries`: put
+anything that must fire for *every* failure on the cache. Per-call-site toasts remain the specific UX;
+the cache handler is the floor, not the message.
+
+## R11. Mutations never retry a 4xx — and a non-idempotent one never retries at all
+
+`defaultMutationOptions` in [queries.ts](../../src/lib/queries.ts) applies the same "don't retry a 4xx"
+predicate the queries use (`retryConfig`), then allows one retry for everything else. A 400/403/409 is
+deterministic, so retrying it cannot succeed — it only holds the mutation `pending` for another
+`retryDelay` before the optimistic UI rolls back, delaying the message the user needs.
+
+Beyond that, any mutation that **consumes something server-side** must set `retry: 0` explicitly — e.g.
+`useRedeemableRedemption`, which burns a one-shot issuance. Retrying a request that actually succeeded
+comes back 409 and rolls the granted entries back out of the UI.

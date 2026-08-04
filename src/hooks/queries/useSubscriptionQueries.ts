@@ -16,6 +16,12 @@ import { queryKeys } from "@/lib/queryKeys";
 import { getPackageById } from "@/data/membershipPackages";
 import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
 import { useEntryRewardToast } from "@/hooks/useEntryRewardToast";
+import type { UserData, MyAccountData } from "@/hooks/queries/useUserQueries";
+import {
+  normalizePaymentMethodsCache,
+  type PaymentMethodsQueryResult,
+  type SavedPaymentMethod,
+} from "@/hooks/queries/usePaymentQueries";
 
 // ====================================
 // Types
@@ -369,35 +375,41 @@ export const useUpdateAutoRenew = () => {
       return response;
     },
     onMutate: async ({ autoRenew }) => {
-      if (!userId) return { previousUser: undefined };
-      const userQueryKey = queryKeys.users.detail(userId);
-      await queryClient.cancelQueries({ queryKey: userQueryKey });
+      if (!userId) return { previousDetail: undefined, previousAccount: undefined };
+      // users.detail is a PREFIX of users.account (["users", id] vs ["users", id, "account"]),
+      // so this one call cancels the in-flight reads behind both.
+      await queryClient.cancelQueries({ queryKey: queryKeys.users.detail(userId) });
 
-      const previousUser = queryClient.getQueryData(userQueryKey);
+      const previousDetail = queryClient.getQueryData<UserData>(queryKeys.users.detail(userId));
+      const previousAccount = queryClient.getQueryData<MyAccountData>(queryKeys.users.account(userId));
 
-      queryClient.setQueryData(userQueryKey, (old: unknown) => {
-        if (!old) return old;
-        const userData = old as { subscription?: { autoRenew?: boolean } };
-        return {
-          ...userData,
-          subscription: {
-            ...userData.subscription,
-            autoRenew,
-          },
-        };
+      queryClient.setQueryData(queryKeys.users.detail(userId), (old: UserData | undefined) =>
+        old?.subscription ? { ...old, subscription: { ...old.subscription, autoRenew } } : old
+      );
+      // setQueryData is EXACT-match, not prefix — and /my-account reads users.account. Without
+      // this mirror the prediction is invisible there: the "Membership resumed" toast fires while
+      // the card still says "Ends <date>" and the live Resume button can send a second billing PATCH.
+      queryClient.setQueryData(queryKeys.users.account(userId), (old: MyAccountData | undefined) => {
+        if (!old?.user.subscription) return old;
+        return { ...old, user: { ...old.user, subscription: { ...old.user.subscription, autoRenew } } };
       });
 
-      return { previousUser };
+      return { previousDetail, previousAccount };
     },
     onError: (err, variables, context) => {
-      if (userId && context?.previousUser) {
-        queryClient.setQueryData(queryKeys.users.detail(userId), context.previousUser);
+      if (!userId) return;
+      if (context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.users.detail(userId), context.previousDetail);
+      }
+      if (context?.previousAccount) {
+        queryClient.setQueryData(queryKeys.users.account(userId), context.previousAccount);
       }
     },
     onSettled: () => {
-      if (userId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
-      }
+      if (!userId) return;
+      // Returned so mutateAsync settles only once the reconciled refetch has landed — callers
+      // show the success toast on resolve, which must not beat the re-render it describes.
+      return queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
     },
   });
 };
@@ -420,6 +432,43 @@ export const useUpdateSubscriptionPaymentMethod = () => {
         }
       );
       return response;
+    },
+    // F-05: predict `subscriptionDefaultPaymentMethodId` HERE, in the mutation that owns it.
+    //
+    // The Payment sheet picks the starred/hero card off this field for subscribers
+    // (SettingsRedesignPayment.tsx: `subscriptionCardKnown ? pm.paymentMethodId === id : pm.isDefault`),
+    // and nothing predicted it — so choosing a renewal card sat visibly dead through THREE
+    // sequential round-trips (PUT default -> POST update-payment-method -> refetched GET).
+    //
+    // It must NOT be predicted inside `useSetDefaultPaymentMethod`: SavedPaymentMethodsModal
+    // calls that one WITHOUT this subscription update, so the prediction would be wrong there
+    // and visibly snap back. Only this mutation actually moves the renewal card.
+    onMutate: async (paymentMethodId: string) => {
+      if (!userId) return;
+      const paymentMethodsKey = queryKeys.paymentMethods.all(userId);
+      await queryClient.cancelQueries({ queryKey: paymentMethodsKey });
+      const previousPaymentMethods = queryClient.getQueryData<
+        PaymentMethodsQueryResult | SavedPaymentMethod[]
+      >(paymentMethodsKey);
+
+      queryClient.setQueryData(
+        paymentMethodsKey,
+        (old: PaymentMethodsQueryResult | SavedPaymentMethod[] | undefined) => {
+          // Normalised because this entry can still hold the legacy bare-array shape.
+          // `paymentMethods` is left untouched — this mutation moves only which card RENEWS,
+          // not which card is the wallet default (that is set-default's job).
+          const { paymentMethods } = normalizePaymentMethodsCache(old);
+          return { paymentMethods, subscriptionDefaultPaymentMethodId: paymentMethodId };
+        }
+      );
+
+      return { previousPaymentMethods, paymentMethodsKey };
+    },
+    onError: (_err, _paymentMethodId, context) => {
+      // Restore even when the snapshot was `undefined`: onMutate wrote into a possibly-empty
+      // entry, so skipping the restore would leave a fabricated row behind.
+      if (!context) return;
+      queryClient.setQueryData(context.paymentMethodsKey, context.previousPaymentMethods);
     },
     onSuccess: () => {
       if (!userId) return;

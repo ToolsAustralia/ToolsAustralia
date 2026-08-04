@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, ReactNode, useState, useCallback, useEffect, useMemo } from "react";
+import React, { createContext, useContext, ReactNode, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { CartSummary } from "@/hooks/queries/useCartQueries";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
@@ -50,7 +50,6 @@ export interface PendingOperation {
   type: "add" | "update" | "remove" | "clear";
   timestamp: number;
   data: Record<string, unknown>;
-  optimisticState: CartItem[];
 }
 
 export interface FailedOperation {
@@ -117,14 +116,8 @@ const calculateSummary = (items: CartItem[]): CartSummary => {
 // Generate unique operation ID
 const generateOperationId = () => `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-// Debounced sync function
-const createDebouncedSync = (syncFn: () => Promise<void>, delay: number = 1000) => {
-  let timeoutId: NodeJS.Timeout;
-  return () => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(syncFn, delay);
-  };
-};
+// How long a cart action waits before the queue is drained to the server.
+const SYNC_DEBOUNCE_MS = 1000;
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
@@ -153,6 +146,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The debounced drain fires long after the render that scheduled it, so it must read the
+  // queue through a ref — a captured copy would replay operations that were already sent.
+  const pendingOperationsRef = useRef<PendingOperation[]>(cartState.pendingOperations);
+  useEffect(() => {
+    pendingOperationsRef.current = cartState.pendingOperations;
+  }, [cartState.pendingOperations]);
+
+  // One shared timer, so a second cart action cancels the first action's scheduled drain
+  // instead of letting both fire.
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSyncingRef = useRef(false);
+
+  const fetchServerCartItems = useCallback(async (): Promise<CartItem[]> => {
+    const response = await fetch("/api/cart");
+    if (!response.ok) throw new Error("Failed to load cart");
+    const data: { cart?: CartItem[] } = await response.json();
+    return data.cart ?? [];
+  }, []);
+
   // Load initial cart data from server
   const loadCartFromServer = useCallback(async () => {
     if (!userId) return;
@@ -161,16 +173,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/cart");
-
-      if (!response.ok) throw new Error("Failed to load cart");
-
-      const data = await response.json();
+      const items = await fetchServerCartItems();
 
       setCartState((prev) => ({
         ...prev,
-        items: data.cart || [],
-        summary: calculateSummary(data.cart || []),
+        items,
+        summary: calculateSummary(items),
         isDirty: false,
         lastSyncTime: Date.now(),
         pendingOperations: [], // Clear pending operations on successful load
@@ -182,17 +190,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [userId]);
+  }, [userId, fetchServerCartItems]);
 
   // Process pending operations
   const processPendingOperations = useCallback(async () => {
-    if (cartState.pendingOperations.length === 0 || !userId) return;
+    // A drain already in flight owns the queue. Starting a second one would re-send the same
+    // operations, and POST /api/cart is additive (quantity += n), so the server total doubles.
+    if (!userId || isSyncingRef.current) return;
+
+    const operations = pendingOperationsRef.current;
+    if (operations.length === 0) return;
+
+    isSyncingRef.current = true;
 
     try {
       setIsLoading(true);
       setError(null);
 
-      const operations = [...cartState.pendingOperations];
       const successfulOperations: string[] = [];
       const failedOperations: FailedOperation[] = [];
 
@@ -262,37 +276,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      // The server is the only thing that knows what actually landed — a rejected add, a
+      // half-applied batch, a quantity it clamped — so reconcile from it instead of
+      // reconstructing the cart client-side. This is also what reverts the optimistic item
+      // behind a failed add, which the old client-side rollback never managed to do.
+      let serverItems: CartItem[] | null = null;
+      try {
+        serverItems = await fetchServerCartItems();
+      } catch (error) {
+        console.error("Failed to reconcile cart after sync:", error);
+      }
+
       // Update state based on results
       setCartState((prev) => {
-        let updatedItems = prev.items;
-
-        // If all operations failed, rollback to last known good state
-        if (failedOperations.length === operations.length) {
-          // Find the last successful operation's state
-          const lastSuccessfulOperation = operations
-            .filter((op) => successfulOperations.includes(op.id))
-            .sort((a, b) => b.timestamp - a.timestamp)[0];
-
-          if (lastSuccessfulOperation) {
-            updatedItems = lastSuccessfulOperation.optimisticState;
-          }
-        }
-
         // Both successful and failed ops must be cleared from pendingOperations,
         // otherwise the auto-sync useEffect re-fires forever and isLoading flickers
         // true on every retry, which keeps every "Add to cart" button stuck on "Adding..."
-        const successfulIds = new Set(successfulOperations);
-        const failedIds = new Set(failedOperations.map((op) => op.id));
+        const settledIds = new Set([...successfulOperations, ...failedOperations.map((op) => op.id)]);
+        const remainingOperations = prev.pendingOperations.filter((op) => !settledIds.has(op.id));
+
+        // Only adopt the server snapshot once the queue is empty: an action taken while this
+        // drain was in flight exists only in the optimistic list and would flicker away.
+        const updatedItems = serverItems && remainingOperations.length === 0 ? serverItems : prev.items;
 
         return {
           ...prev,
           items: updatedItems,
           summary: calculateSummary(updatedItems),
-          isDirty: failedOperations.length > 0,
+          isDirty: remainingOperations.length > 0 || failedOperations.length > 0,
           lastSyncTime: Date.now(),
-          pendingOperations: prev.pendingOperations.filter(
-            (op) => !successfulIds.has(op.id) && !failedIds.has(op.id)
-          ),
+          pendingOperations: remainingOperations,
           failedOperations: [...prev.failedOperations, ...failedOperations],
         };
       });
@@ -300,17 +313,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       console.error("Failed to process pending operations:", error);
       setError(error instanceof Error ? error.message : "Failed to sync operations");
     } finally {
+      isSyncingRef.current = false;
       setIsLoading(false);
     }
-  }, [cartState.pendingOperations, userId]);
-
-  // Debounced sync function
-  const debouncedSync = useCallback(() => {
-    const syncFn = async () => {
-      await processPendingOperations();
-    };
-    return createDebouncedSync(syncFn, 1000)();
-  }, [processPendingOperations]);
+  }, [userId, fetchServerCartItems]);
 
   // Load initial cart data
   useEffect(() => {
@@ -319,12 +325,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, loadCartFromServer]);
 
-  // Auto-sync when cart becomes dirty
+  // Auto-sync when cart becomes dirty. The timer lives in a ref and is cleared before every
+  // reschedule — the previous per-call timer was never cancelled, so a second action within
+  // the debounce window let the first timer fire too and re-send its operation.
   useEffect(() => {
-    if (cartState.isDirty && userId && cartState.pendingOperations.length > 0) {
-      debouncedSync();
-    }
-  }, [cartState.isDirty, cartState.pendingOperations.length, userId, debouncedSync]);
+    if (!userId || !cartState.isDirty || cartState.pendingOperations.length === 0) return;
+
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      syncTimerRef.current = null;
+      void processPendingOperations();
+    }, SYNC_DEBOUNCE_MS);
+  }, [cartState.isDirty, cartState.pendingOperations.length, userId, processPendingOperations]);
+
+  // Cancel a scheduled drain on unmount so it cannot fire against a torn-down provider.
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    };
+  }, []);
 
   // Optimistic cart actions
   const addToCart = useCallback(
@@ -342,64 +361,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // Determine if this is a product or ticket
       const isTicket = !!item.miniDrawId;
 
-      // Create optimistic state
-      const optimisticItems = (() => {
-        const existingItemIndex = cartState.items.findIndex((cartItem) =>
-          isTicket ? cartItem.miniDrawId === item.miniDrawId : cartItem.productId === item.productId
-        );
-
-        if (existingItemIndex >= 0) {
-          // Update existing item - preserve data
-          return cartState.items.map((cartItem, index) =>
-            index === existingItemIndex
-              ? {
-                  ...cartItem,
-                  quantity: cartItem.quantity + item.quantity,
-                  // Preserve existing data or use new data
-                  product: cartItem.product || item.product,
-                  miniDraw: cartItem.miniDraw || item.miniDraw,
-                }
-              : cartItem
-          );
-        } else {
-          // Add new item with full data
-          return [
-            ...cartState.items,
-            {
-              type: isTicket ? ("ticket" as const) : ("product" as const),
-              productId: isTicket ? undefined : item.productId,
-              miniDrawId: isTicket ? item.miniDrawId : undefined,
-              quantity: item.quantity,
-              price: item.price,
-              product: isTicket
-                ? undefined
-                : item.product || {
-                    _id: item.productId || "",
-                    name: "Loading...",
-                    price: item.price,
-                    images: [],
-                    brand: "Unknown",
-                    stock: 0,
-                  },
-              miniDraw: isTicket
-                ? item.miniDraw || {
-                    _id: item.miniDrawId!,
-                    name: "Loading...",
-                    ticketPrice: item.price,
-                    totalTickets: 0,
-                    soldTickets: 0,
-                    prize: {
-                      name: "Loading...",
-                      value: 0,
-                      images: [],
-                    },
-                  }
-                : undefined,
-            },
-          ];
-        }
-      })();
-
       // Prepare data for API call
       const apiData = isTicket
         ? {
@@ -413,25 +374,83 @@ export function CartProvider({ children }: { children: ReactNode }) {
             quantity: item.quantity,
           };
 
-      // Update UI immediately (optimistic update)
-      setCartState((prev) => ({
-        ...prev,
-        items: optimisticItems,
-        summary: calculateSummary(optimisticItems),
-        isDirty: true,
-        pendingOperations: [
-          ...prev.pendingOperations,
-          {
-            id: operationId,
-            type: "add",
-            timestamp,
-            data: apiData,
-            optimisticState: optimisticItems,
-          },
-        ],
-      }));
+      // Update UI immediately (optimistic update). The new list is derived from `prev` inside
+      // the updater rather than from this render's snapshot — two actions in quick succession
+      // would otherwise both build on the same stale list, and the later one would erase the
+      // earlier one's item.
+      setCartState((prev) => {
+        const existingItemIndex = prev.items.findIndex((cartItem) =>
+          isTicket ? cartItem.miniDrawId === item.miniDrawId : cartItem.productId === item.productId
+        );
+
+        const optimisticItems: CartItem[] =
+          existingItemIndex >= 0
+            ? // Update existing item - preserve data
+              prev.items.map((cartItem, index) =>
+                index === existingItemIndex
+                  ? {
+                      ...cartItem,
+                      quantity: cartItem.quantity + item.quantity,
+                      // Preserve existing data or use new data
+                      product: cartItem.product || item.product,
+                      miniDraw: cartItem.miniDraw || item.miniDraw,
+                    }
+                  : cartItem
+              )
+            : // Add new item with full data
+              [
+                ...prev.items,
+                {
+                  type: isTicket ? ("ticket" as const) : ("product" as const),
+                  productId: isTicket ? undefined : item.productId,
+                  miniDrawId: isTicket ? item.miniDrawId : undefined,
+                  quantity: item.quantity,
+                  price: item.price,
+                  product: isTicket
+                    ? undefined
+                    : item.product || {
+                        _id: item.productId || "",
+                        name: "Loading...",
+                        price: item.price,
+                        images: [],
+                        brand: "Unknown",
+                        stock: 0,
+                      },
+                  miniDraw: isTicket
+                    ? item.miniDraw || {
+                        _id: item.miniDrawId!,
+                        name: "Loading...",
+                        ticketPrice: item.price,
+                        totalTickets: 0,
+                        soldTickets: 0,
+                        prize: {
+                          name: "Loading...",
+                          value: 0,
+                          images: [],
+                        },
+                      }
+                    : undefined,
+                },
+              ];
+
+        return {
+          ...prev,
+          items: optimisticItems,
+          summary: calculateSummary(optimisticItems),
+          isDirty: true,
+          pendingOperations: [
+            ...prev.pendingOperations,
+            {
+              id: operationId,
+              type: "add",
+              timestamp,
+              data: apiData,
+            },
+          ],
+        };
+      });
     },
-    [cartState.items]
+    []
   );
 
   const updateCartItem = useCallback(
@@ -442,15 +461,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // Determine if this is a product or ticket
       const isTicket = !!item.miniDrawId;
 
-      // Create optimistic state
-      const optimisticItems = cartState.items
-        .map((cartItem) => {
-          const matches = isTicket ? cartItem.miniDrawId === item.miniDrawId : cartItem.productId === item.productId;
-
-          return matches ? { ...cartItem, quantity: item.quantity } : cartItem;
-        })
-        .filter((cartItem) => cartItem.quantity > 0);
-
       // Prepare data for API call
       const apiData = isTicket
         ? {
@@ -464,25 +474,35 @@ export function CartProvider({ children }: { children: ReactNode }) {
             quantity: item.quantity,
           };
 
-      // Update UI immediately (optimistic update)
-      setCartState((prev) => ({
-        ...prev,
-        items: optimisticItems,
-        summary: calculateSummary(optimisticItems),
-        isDirty: true,
-        pendingOperations: [
-          ...prev.pendingOperations,
-          {
-            id: operationId,
-            type: "update",
-            timestamp,
-            data: apiData,
-            optimisticState: optimisticItems,
-          },
-        ],
-      }));
+      // Update UI immediately (optimistic update), derived from `prev` so a quantity change
+      // does not resurrect items an earlier un-rendered action already removed.
+      setCartState((prev) => {
+        const optimisticItems = prev.items
+          .map((cartItem) => {
+            const matches = isTicket ? cartItem.miniDrawId === item.miniDrawId : cartItem.productId === item.productId;
+
+            return matches ? { ...cartItem, quantity: item.quantity } : cartItem;
+          })
+          .filter((cartItem) => cartItem.quantity > 0);
+
+        return {
+          ...prev,
+          items: optimisticItems,
+          summary: calculateSummary(optimisticItems),
+          isDirty: true,
+          pendingOperations: [
+            ...prev.pendingOperations,
+            {
+              id: operationId,
+              type: "update",
+              timestamp,
+              data: apiData,
+            },
+          ],
+        };
+      });
     },
-    [cartState.items]
+    []
   );
 
   const removeFromCart = useCallback(
@@ -499,15 +519,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
           return cartItem.productId === itemId;
         } else {
           return cartItem.miniDrawId === itemId;
-        }
-      });
-
-      // Create optimistic state
-      const optimisticItems = cartState.items.filter((cartItem) => {
-        if (type === "product") {
-          return cartItem.productId !== itemId;
-        } else {
-          return cartItem.miniDrawId !== itemId;
         }
       });
 
@@ -541,23 +552,33 @@ export function CartProvider({ children }: { children: ReactNode }) {
           ? { type: "product" as const, productId: itemId }
           : { type: "ticket" as const, miniDrawId: itemId };
 
-      // Update UI immediately (optimistic update)
-      setCartState((prev) => ({
-        ...prev,
-        items: optimisticItems,
-        summary: calculateSummary(optimisticItems),
-        isDirty: true,
-        pendingOperations: [
-          ...prev.pendingOperations,
-          {
-            id: operationId,
-            type: "remove",
-            timestamp,
-            data: apiData,
-            optimisticState: optimisticItems,
-          },
-        ],
-      }));
+      // Update UI immediately (optimistic update), filtering `prev` so a removal cannot
+      // reinstate items that another action removed in the same debounce window.
+      setCartState((prev) => {
+        const optimisticItems = prev.items.filter((cartItem) => {
+          if (type === "product") {
+            return cartItem.productId !== itemId;
+          } else {
+            return cartItem.miniDrawId !== itemId;
+          }
+        });
+
+        return {
+          ...prev,
+          items: optimisticItems,
+          summary: calculateSummary(optimisticItems),
+          isDirty: true,
+          pendingOperations: [
+            ...prev.pendingOperations,
+            {
+              id: operationId,
+              type: "remove",
+              timestamp,
+              data: apiData,
+            },
+          ],
+        };
+      });
     },
     [cartState.items, trackRemoveFromCart, trackKlaviyoRemoveFromCart]
   );
@@ -582,7 +603,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
           type: "clear",
           timestamp,
           data: {},
-          optimisticState: optimisticItems,
         },
       ],
     }));
@@ -594,9 +614,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       const failedOp = cartState.failedOperations.find((op) => op.id === operationId);
       if (!failedOp || failedOp.retryCount >= failedOp.maxRetries) return;
 
-      // Move from failed to pending
+      // Move from failed to pending. isDirty must be set explicitly — the auto-sync effect
+      // gates on it, so a requeued operation would otherwise sit unsent.
       setCartState((prev) => ({
         ...prev,
+        isDirty: true,
         failedOperations: prev.failedOperations.filter((op) => op.id !== operationId),
         pendingOperations: [
           ...prev.pendingOperations,
@@ -605,7 +627,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
             type: failedOp.type,
             timestamp: Date.now(),
             data: failedOp.data,
-            optimisticState: prev.items,
           },
         ],
       }));
@@ -618,6 +639,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     setCartState((prev) => ({
       ...prev,
+      isDirty: true,
       failedOperations: prev.failedOperations.filter((op) => op.retryCount >= op.maxRetries),
       pendingOperations: [
         ...prev.pendingOperations,
@@ -626,7 +648,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
           type: op.type,
           timestamp: Date.now(),
           data: op.data,
-          optimisticState: prev.items,
         })),
       ],
     }));

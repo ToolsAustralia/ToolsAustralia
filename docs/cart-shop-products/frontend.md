@@ -8,7 +8,7 @@
 
 ## Cart context
 
-[src/contexts/CartContext.tsx](../../src/contexts/CartContext.tsx) — primary state. Persists to localStorage.
+[src/contexts/CartContext.tsx](../../src/contexts/CartContext.tsx) — primary state. Optimistic mirror of the server cart (`user.cart`), synced through a pending-op queue; no browser storage. The TanStack `useCartQueries` layer exports an identically-named `useCart` and is **not** wired to anything — see [gotchas.md](./gotchas.md).
 
 ```ts
 interface CartContextValue {

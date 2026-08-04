@@ -78,10 +78,12 @@ export default function UpgradeSuccessToast() {
             },
           });
 
-          // Invalidate all relevant caches to fetch fresh data
+          // Invalidate all relevant caches to fetch fresh data. users.all is the ["users"]
+          // prefix, so it covers detail + account + dashboard. There is deliberately no
+          // benefits invalidation: SubscriptionManagementModal fetches /api/subscription/benefits
+          // straight into component state, so no query key exists to invalidate.
           queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
           queryClient.invalidateQueries({ queryKey: queryKeys.majorDraw.all });
-          queryClient.invalidateQueries({ queryKey: ["subscription-benefits"] });
 
           // Add delay to ensure webhook has finished processing before refetching
           // Webhook needs time to update majorDraw.entries aggregation
@@ -131,9 +133,8 @@ export default function UpgradeSuccessToast() {
             duration: 15000, // Show for 15 seconds for important info
           });
 
-          // Invalidate caches immediately
+          // Invalidate caches immediately (see the upgrade branch on why benefits aren't here).
           queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
-          queryClient.invalidateQueries({ queryKey: ["subscription-benefits"] });
 
           // Force refetch user data to show preserved benefits immediately
           setTimeout(() => {

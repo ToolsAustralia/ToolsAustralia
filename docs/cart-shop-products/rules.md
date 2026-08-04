@@ -16,6 +16,6 @@ Don't write `Order` rows from the client / route-handler. The webhook is authori
 
 There's no inventory tracking on `Product`. Products are assumed in-stock unless marked `isActive: false`. _TODO: confirm._
 
-## R5. Cart is per-browser-session via localStorage
+## R5. The server cart is the source of truth
 
-Cart state isn't synced across devices. Members on multiple devices see different carts.
+`user.cart` in Mongo is the cart; `CartContext` is an optimistic mirror of it. Reconcile a failed or partial sync by re-reading `GET /api/cart`, never by reconstructing the list client-side — and remember `POST /api/cart` is additive (`quantity += n`), so any retry path must be certain the op has not already landed.

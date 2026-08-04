@@ -125,6 +125,46 @@ Both back the **Chatbot Cost & Usage** admin panel ([`ChatbotCostManagement.tsx`
 
 `useDebounce`, `useMediaQuery`, `useIsLgUp` — each does ONE thing. Don't bundle multiple concerns into one hook.
 
-## P7. Repeat-purchase analytics hooks
+## P7. Optimistic mutation shape
+
+The optimistic mutations under `src/hooks/queries/` follow one shape. Each clause exists because its
+absence caused a shipped bug — see [gotchas.md](./gotchas.md).
+
+**`onMutate` — cancel, snapshot, write; and write to *every* key the UI reads.** `cancelQueries` and
+`invalidateQueries` match by **key prefix**; `setQueryData` matches **exactly**. So one
+`cancelQueries({ queryKey: queryKeys.users.detail(id) })` covers `users.account` / `users.dashboard` /
+`users.profile` too (all `["users", id, …]`), but a `setQueryData` on `users.detail` is invisible to
+every consumer reading `users.account`. Predict into each key that actually backs a rendered surface —
+`useUpdateAutoRenew` writes both `users.detail` and `users.account` because `/my-account` reads the
+latter.
+
+**Predict a field in the mutation that owns it, not in a neighbour that sometimes precedes it.**
+`useUpdateSubscriptionPaymentMethod` predicts `subscriptionDefaultPaymentMethodId` (the field the
+Payment sheet uses to pick the hero card for subscribers); `useSetDefaultPaymentMethod` deliberately
+does not, because `SavedPaymentMethodsModal` calls it *without* the subscription update and the
+prediction would visibly snap back there.
+
+**`onError` — restore exactly what `onMutate` wrote, and nothing else.** A snapshot-and-restore pair
+around a `onMutate` that only cancelled/snapshotted is not a rollback: it re-writes possibly-stale data
+over whatever landed while the request was in flight. Where `onMutate` wrote into a key that may not
+have existed, restore the `undefined` snapshot too — skipping it leaves the fabricated entry behind.
+
+**`onSettled` — reconcile on both outcomes.** Failure paths need the refetch as much as success ones (a
+409 on a redemption means the server *did* burn the issuance, so the rolled-back cache is the wrong one).
+Return the invalidation promise only when a caller's `mutateAsync` resolution must wait for the
+reconciled render — `useUpdateAutoRenew` does, because its call site shows the success toast on resolve
+and the toast must not beat the card it describes. Otherwise fire-and-forget (`void`): React Query holds
+the mutation `pending` until these callbacks settle, so awaiting a heavy refetch (the my-account payload)
+keeps the button disabled for exactly the round-trip the optimistic write exists to hide.
+
+**Merge server responses into the cached row, don't replace it.** A mutation response is often a thinner
+projection than the GET that populated the cache (the payment-methods `PUT` echoes the `User` row with no
+Stripe card metadata). Replacing blanks the fields the member is looking at until the refetch lands.
+
+**Only write optimistically what you actually have.** If the rendered fields only exist server-side
+(card brand/last4/expiry), there is nothing to predict — skip `onMutate` and write the row in `onSuccess`
+from the response.
+
+## P8. Repeat-purchase analytics hooks
 
 `src/hooks/queries/admin/useRepeatPurchaseAnalytics.ts` exposes `useRepeatPurchaseSummary(filter)` (`useQuery`) and `useRepeatPurchaseUsers(filter, options)` (`useInfiniteQuery`, 50/page) for the admin **Repeat Purchases** tab. Inline query keys `["admin","analytics","repeat-purchases","summary",filter]` / `["admin","analytics","repeat-purchases","users",{...filter,limit}]` (the dominant admin convention — see P1). Both unwrap the `{ success, data }` envelope and throw on `success === false`. The users hook returns a flattened facade `{ rows, totalCount, hasMore, fetchNextPage, isFetchingNextPage, isLoading, isError }` (the `useChargePastDueRuns` shape) for the "Load more" button. Summary `staleTime` 5 min; users list 2 min + `enabled` gating (draw presets need resolved dates). Backed by `/api/admin/analytics/repeat-purchases`, `…/users`, and `…/users/export` (see [admin/api.md](../admin/api.md)).

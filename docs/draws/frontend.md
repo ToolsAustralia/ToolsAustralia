@@ -28,9 +28,9 @@
 | Hook | Purpose | Source |
 |---|---|---|
 | `useMajorDrawEntryCta()` | CTA state for the major-draw "Get more entries" button. **`openEntryFlow` pre-selects a pack by state:** additional-access users → the special-packages modal; users with an **existing (blocking) subscription** (active / past_due) → a **one-time pack** (`getOneTimePlan`, never a membership sub — a 2nd subscription would 500 with `EXISTING_SUBSCRIPTION`); everyone else → the Tradie sub as the default. | [src/hooks/useMajorDrawEntryCta.ts](../../src/hooks/useMajorDrawEntryCta.ts) |
-| `useMajorDrawPurchaseGate()` | Gating logic — should the user be allowed to purchase right now? `gatesClosed = currentMajorDraw?.status !== "active"`, which is true during both the **30-min freeze (8:00–8:30 PM)** and the **3h 30min gap (8:30 PM → 12:00 AM)**. Surfaces [`GateClosedModal`](../../src/components/modals/GateClosedModal.tsx) with the next draw's name and activation date. Mirrors the server gate in [backend.md](./backend.md) `major-draw-gate-http.ts`. See [rules R3a](./rules.md#r3a-new-entry-purchases-require-status-active--the-blackout-covers-freeze-and-gap). | [src/hooks/useMajorDrawPurchaseGate.ts](../../src/hooks/useMajorDrawPurchaseGate.ts) |
+| `useMajorDrawPurchaseGate()` | Gating logic — should the user be allowed to purchase right now? `gatesClosed = !isError && !isMajorDrawLoading && currentMajorDraw?.status !== "active"`, true during both the **30-min freeze (8:00–8:30 PM)** and the **3h 30min gap (8:30 PM → 12:00 AM)**. The **`!isError` AND `!isMajorDrawLoading` guards are both load-bearing** — see [gotchas.md](./gotchas.md#the-purchase-gate-failed-closed-on-an-api-error-2026-08-03). Surfaces [`GateClosedModal`](../../src/components/modals/GateClosedModal.tsx) with the next draw's name and activation date. This is a **UX affordance only** — the authority is the server gate in [backend.md](./backend.md) `major-draw-gate-http.ts`, which 403s a closed-gate purchase regardless of what the client believes. See [rules R3a](./rules.md#r3a-new-entry-purchases-require-status-active--the-blackout-covers-freeze-and-gap). | [src/hooks/useMajorDrawPurchaseGate.ts](../../src/hooks/useMajorDrawPurchaseGate.ts) |
 | `useMiniDrawTrigger()` | Trigger / opening mini-draw modals or flows | [src/hooks/useMiniDrawTrigger.ts](../../src/hooks/useMiniDrawTrigger.ts) |
-| `useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries })` | **The single source of truth for the mini-draw entry-pack money path**, extracted from `MiniDrawPackages` so multiple surfaces share ONE orchestration (never a fork). Owns: optimistic cache bump → `POST /api/mini-draw/purchase` (webhook-only granting) → 3DS `requiresAction` / no-saved-card `requiresPayment` branches → `PaymentProcessingScreen` polling → success toast + invalidation + post-purchase upsell. Returns `{ purchase, purchasingPackageId, entriesRemaining, isSoldOut, isExceedsCapacity, paymentProcessing, loginModal }`; the consumer renders `PaymentProcessingScreen` + `LoginPromptModal` from that state. Consumed by both `MiniDrawPackages` (detail page) and `MiniDrawEntrySheet` (dashboard Draws tab). | [src/hooks/useMiniDrawPurchase.ts](../../src/hooks/useMiniDrawPurchase.ts) |
+| `useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries })` | **The single source of truth for the mini-draw entry-pack money path**, extracted from `MiniDrawPackages` so multiple surfaces share ONE orchestration (never a fork). Owns: optimistic cache bump → `POST /api/mini-draw/purchase` (webhook-only granting) → 3DS `requiresAction` / no-saved-card `requiresPayment` branches → `PaymentProcessingScreen` polling → success toast + invalidation + post-purchase upsell. **Its cache contract is load-bearing — see [cache contract](#useminidrawpurchase-cache-contract) below.** Returns `{ purchase, purchasingPackageId, entriesRemaining, isSoldOut, isExceedsCapacity, paymentProcessing, loginModal }`; the consumer renders `PaymentProcessingScreen` + `LoginPromptModal` from that state. Consumed by both `MiniDrawPackages` (detail page) and `MiniDrawEntrySheet` (dashboard Draws tab). | [src/hooks/useMiniDrawPurchase.ts](../../src/hooks/useMiniDrawPurchase.ts) |
 | `usePastDrawsData()` | Fetch list of past draws (used by `PastDrawsModal`; the `/draw-results` page no longer consumes it — it SSRs the unified winners feed instead) | [src/hooks/usePastDrawsData.ts](../../src/hooks/usePastDrawsData.ts) |
 
 ### Mini-draw entry sheet (dashboard Draws tab, 2026-07-02)
@@ -44,6 +44,29 @@ On `/my-account/draws` (Mini tab), tapping a `MiniDrawCard` **no longer navigate
 > the way back to the full `/mini-draws/[id]` detail page. The header sub was reworded ("Buy an entry pack
 > to join this draw") so "the moment it fills" is no longer duplicated with the footer line.
 
+### `useMiniDrawPurchase` cache contract
+
+Three things about this hook's optimistic layer are load-bearing; all three were once wrong (see
+[gotchas.md](./gotchas.md#the-mini-pack-money-path-wrote-optimistic-state-to-a-user-id-that-does-not-exist-2026-08-03)).
+
+- **Every user-scoped key is built from `session.user.id`** — the id `UserContext`,
+  `useMyAccountData` and `useUserMiniDrawEntries` read with. `queryKeys.users.account(...)` and
+  `miniDraws.userEntries(...)` are keyed by it, so any other value writes to a key nothing reads.
+  `handlePurchase` therefore treats a missing id the same as being signed out and opens the login
+  modal.
+- **The rollback snapshot lives in `optimisticSnapshotRef`, not in `handlePurchase`'s scope.** The
+  paths that undo the bump (`requiresAction`, `requiresPayment`, the thrown-error path, the failed
+  polling result, `handlePaymentProcessingError`, `handlePaymentProcessingTimeout`) mostly run after
+  `handlePurchase` has returned. The ref is cleared when `miniDrawId` changes and on confirmed
+  success, so a rollback can never restore another draw's state or undo a granted pack. All of them
+  call the one `rollbackOptimisticPurchase()`.
+- **Post-webhook invalidation is `queryKeys.miniDraws.all` + `usePurchaseInvalidation(userId)`,
+  2s after success.** The namespace root `["mini-draws"]` prefix-matches detail/list/entries/
+  activity/user-entries — the grid behind the sheet reads the **list**, so invalidating only the
+  detail leaves stale fill bars and "top mini draws" ordering. `usePurchaseInvalidation` is the same
+  shared helper `useEnterMiniDraw` / `usePurchaseUpsell` use ([client-state](../client-state/)),
+  covering the account, dashboard, major-draw, orders and rewards slices a granted pack moves.
+
 > _TODO: verify each hook's contract by reading source._
 
 ### `useMajorDrawEntryCta` — `?packages=one-time` opens the one-time flow (2026-07-03)
@@ -51,30 +74,10 @@ On `/my-account/draws` (Mini tab), tapping a `MiniDrawCard` **no longer navigate
 `openEntryFlow()` is the shared entry point behind every "Enter Now" CTA (promo hero, countdown, prize
 showcase, unlock-discounts, promo-welcome modal; also my-account). The `MembershipModal` has **no**
 membership-vs-one-time toggle — its inner `PackageSelectionModal` derives the active tab purely from the
-passed plan's `period` (`"mo"` → membership, else → one-time). By default a guest is handed the
-recommended **subscription** — Foreman since 2026-08-04 (`getHeavyDutyPack()` →
-`getRecommendedSubscriptionPlan()`) — so the modal opens on membership packs.
+passed plan's `period` (`"mo"` → membership, else → one-time). By default a guest is handed the Tradie
+**subscription** (`getHeavyDutyPack()`), so the modal opens on membership packs.
 
-### `openEntryFlow` is selection-first by default (2026-08-04)
-
-`openEntryFlow()` now defaults to `packageSelectionFirst: true`, so **every** entry CTA behaves the
-same way: it dispatches `openMembershipModal` with
-`detail: { plan: <recommended tier>, packageSelectionFirst: true }`, and the hosting section opens the
-modal via `openModalWithPackageSelectionFirst(plan)` + `membershipModalConfig={{ showPackageSelectionFirst: true }}`
-+ `planIsDefaultSelection`. The visitor sees "Select Your Package" first (Foreman sashed
-`RECOMMENDED` and pre-selected) **and** has Foreman behind it, so dismissing the picker lands on a
-real package rather than an empty payment step.
-
-Selection-first is skipped on the two paths where a membership tier is the wrong pre-select anyway: a
-blocking subscription (cannot buy a second subscription) and `?packages=one-time` (the visitor is
-looking at the one-time tab). Both keep pre-selecting the pack that matches their situation.
-
-Any host that listens for `openMembershipModal` **must** honour `detail.packageSelectionFirst`
-(`MembershipSection`, `MajorDrawSection`, and the my-account dashboard all do) — otherwise the same
-CTA behaves differently depending on which page it fired from. Full chain, the per-CTA table, and the
-`planIsDefaultSelection` contract: [subscription/package-selection-first.md](../subscription/package-selection-first.md#entry-ctas-picker-first-recommended-tier-behind-it-2026-08-04).
-
-When the `?packages=one-time` param is present (parsed by the shared
+When the ad-landing param `?packages=one-time` is present (parsed by the shared
 [`parseMembershipPackagesTab`](../../src/utils/membership/packagesTabParam.ts)), `openEntryFlow` hands the
 modal a **one-time** plan (`getOneTimePlan()`) instead, so it opens on the One-Time tab — keeping the modal
 consistent with the on-page membership section and the `PromoBanner` badge on a one-time ad landing (see
@@ -83,13 +86,6 @@ Falls back to the subscription default if no one-time plan is resolvable yet. **
 additional-package access divert to the `special-packages` modal earlier in `openEntryFlow`, before plan
 selection, so they are unaffected. The param is read from `window.location.search` (not `useSearchParams`)
 because it runs inside a click handler.
-
-**As of 2026-08-03 the param no longer comes only from an ad landing.** `MembershipSection.selectTab`
-writes it on every manual toggle, and this handler reads the URL **live at click time**, so a guest who
-switches the on-page toggle to One-Time and then hits any "Enter Now" CTA now gets a one-time pack
-pre-selected — previously they always got the Tradie sub regardless of the tab in front of them. This is
-the one behavioural (non-cosmetic) consequence of that change; see
-[subscription/frontend.md](../subscription/frontend.md).
 
 ## Draw Results & Winners page (redesigned 2026-06-10)
 
@@ -114,17 +110,6 @@ the one behavioural (non-cosmetic) consequence of that change; see
 **Data flow:** `page.tsx` (server) SSRs the hero counts and the unified winners feed via `getAllWinners({ limit: 60 })` ([src/utils/draws/get-all-winners.ts](../../src/utils/draws/get-all-winners.ts)), derives the featured latest major, and passes the array down as props. Only client islands are the register filter, the CTA modal, the winners-board grid (its "Show N more" paging), and the reveal wrappers. The register + the major-draw rich card use the **draw's own artwork** (`prize.images[0]`); the "wall" board and the `/winners` board (both `WinnerBoardCard`) prefer the **winner's photo** (`imageUrl`), falling back to artwork, then to an initials monogram.
 
 **Visual system:** page-scoped under a `.ta-results` root in [draw-results.css](../../src/app/(site)/draw-results/draw-results.css) — `lp-*` classes + a CSS-variable token set (light default, dark under the site's `.dark` class) + a scoped `:focus-visible` ring (`!important`, since globals.css strips outlines). Accent is brand red `#ee0000`. Archivo + Space Mono load per-route via `next/font`; body inherits Inter. Section backgrounds alternate `--bg` → `--surface` → `--bg` → `--surface` → `#08080a` finale. Mobile follows the project rule (keep the 375px layout across phone widths, scale down — see [[mobile-320-mirrors-390]]): no column collapse, smaller base headings/paddings; the **Winners Board** (`.lw-grid`) reflows 2 → 3 → 4 columns at 600px / 920px. **The `/winners` page reuses this same `.ta-results` scope + stylesheet + fonts** (cross-imports `draw-results.css`, `Reveal`, `format`, `ResultsCTA`), so the two pages stay visually aligned. The `/winners` testimony quotes use a per-route **Newsreader** serif (`.winners-serif`), and the page renders its own lp-* `WinnersTestimony` (NOT the shared cinematic section — that stays for the homepage).
-
-**Photo cropping — `object-position: top` (2026-08-03).** `.lw-photo img` pins its `object-fit: cover`
-crop to the top rather than the default centre. `.lw-photo` is `3/4` on mobile, **`4/3` from 600px** and
-**`1/1` from 920px**, and a centred crop of a portrait phone photo into either of the wider frames takes
-the top band first — cutting winners' heads off. It also moves faces clear of the `.lw-scrim` +
-`.lw-nameplate`. This fixes all three surfaces at once (Latest Winners, `/winners`, the draw-results wall)
-because they share `WinnerBoardCard`. The portrait mobile frame was an earlier, breakpoint-limited attempt
-at the same bug; the two compose safely (top-pinning is a no-op at `3/4`). Same fix shipped on
-`MembershipWinnersWall` and `WinnersShowcase` — see the card inventory in
-[shared-ui/frontend.md](../shared-ui/frontend.md), and check it before assuming which card a page renders:
-this one is styled in CSS, so it does not turn up in a Tailwind `object-cover` grep.
 
 **Real-data-only:** the mockup's placeholder permit numbers, entrant counts, **prize values**, "$ paid out" total, "watch replay", and reviews rating were all dropped (no backend source / per user request). Copy avoids "chance/odds"-style gambling language. Removed the old `CompletedDrawsSection`, `DrawResultCard`, `DrawResultsHero`, `UnifiedCompletedDrawCard`, the orphaned `CountdownHero`/`WinnerAnnouncement`, the static "How Winners Are Selected" tiles, the membership upsell, and the floating countdown banner.
 
