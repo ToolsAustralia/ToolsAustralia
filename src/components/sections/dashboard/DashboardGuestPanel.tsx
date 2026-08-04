@@ -22,7 +22,9 @@ interface DashboardGuestPanelProps {
 
 const MEMBER_BENEFITS = [
   { icon: Ticket, text: "Free entries into every major draw" },
-  { icon: Gift, text: "Partner discounts at top tool brands" },
+  // Not "at top tool brands" — the partner catalogue carries no Milwaukee/DeWalt/Makita/Ryobi
+  // offers (audit 2026-07-31), and a guest who joins on that promise finds cinemas and cruises.
+  { icon: Gift, text: "Partner discounts across 1,800+ Australian brands" },
   { icon: ShieldCheck, text: "Loyalty milestones & bonus entries" },
 ];
 

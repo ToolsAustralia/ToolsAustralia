@@ -231,3 +231,65 @@ Rules for animated components:
 - **Adding a new animated landing component?** Use `m.*` + the imports above. Adding one that
   genuinely needs a feature beyond `domMax`, or one that's route-isolated? `motion.*` is fine
   (non-strict allows it).
+
+## Partner-copy honesty pattern (2026-07-31)
+
+`RewardsPartnerCard`, `PartnerPreview`, `DashboardGuestPanel` and `UnlockDiscounts` all
+describe the same benefit, so they drift together. A portal audit found all four claiming
+"Australia's top tool brands" against a catalogue that returns **zero** offers for
+Milwaukee, DeWalt, Makita and Ryobi.
+
+When editing any of these four:
+
+- Sell **breadth or a count**, never a brand we do not carry. `getPartnerCatalogUnlockedCount(pct)`
+  gives the real numerator/denominator; it returns `count: null` off-ladder (0% = guest /
+  past-due with no pack) and callers fall back to the bare percent.
+- The job that expectation line used to do is now done by a **surface**, not a sentence.
+  The card originally carried "You'll see the whole catalogue in the portal. Offers above
+  your level show an unlock prompt instead of a discount." — necessary while the portal was
+  the only place to look, because it renders locked and unlocked offers identically. It was
+  removed on 2026-08-03 (owner call: redundant) once
+  [`/my-account/rewards/catalogue`](../../src/app/(site)/my-account/rewards/catalogue/page-client.tsx)
+  shipped, which *shows* entitlement per offer instead of warning about it in prose.
+  **If that catalogue is ever removed or gated, the sentence has to come back** — otherwise
+  an unmarked lock in the portal reads as a broken promise again.
+- The `PARTNER_BRAND_OFFERS` grid is Tools Australia's **own** partner programme, not the
+  iGoDirect catalogue. It keeps its own "Tools Australia partners" heading so the access
+  ring's percent is not read as describing it.
+
+Full audit: `docs/partner/igodirect-portal-ux-audit.md`; rules: `docs/partner/rules.md` R8.
+
+## Per-visit attention pulse — `.ta-nudge-attention` (2026-08-03)
+
+Third member of the `ta-nudge-*` family in [`globals.css`](../../src/app/globals.css). Reach for
+it when a CTA needs to be *noticed on arrival* — not when a card needs to be *fixed*.
+
+Pick by lifetime, not by looks:
+
+- **`.ta-nudge-pulse` / `.ta-nudge-shimmer`** — loop forever, for an **empty-state** card. The
+  gap they point at persists until the member acts, so the animation should too. Cleared by a
+  sessionStorage marker on click.
+- **`.ta-nudge-attention`** — runs **4 cycles (~5.2s) then stops**, and **restarts on every
+  mount**. For a CTA that already exists and just needs to be found. No marker, no hook, no
+  sign-out cleanup: an App Router page remounts on navigation, so revisiting the page replays
+  it, and staying on the page does not.
+
+Three rules when applying it:
+
+1. **Set `--ta-attention` to a tone that works against what the ring expands ONTO**, not the
+   button itself. The ring paints outside the button's box. A red pulse on the gold rewards chip
+   reads as an error; white on the teal hero reads as a highlight. Tier-owned CTAs should pass
+   the member's own `${tierHex}8c` — except when that colour is the guest grey, which cannot
+   pull attention; fall back to the default red there.
+2. **Don't move it onto the element's own `box-shadow`.** It lives on `::after` specifically so
+   it can coexist with the inline `boxShadow` several call sites already carry.
+3. **In a layout, not a page? You need a `key`.** The mount-replay is free for a page component
+   (the App Router remounts it) but a layout never remounts. See `rewardsTabPulseKey` and the
+   nav write-up in `docs/dashboard-account/frontend.md`.
+
+**Never gate it on the same marker as a "New" badge.** They answer different questions — "is this
+new?" expires, "is this worth opening?" doesn't — and sharing a gate means one visit silently
+kills every cue at once.
+
+Reduced motion kills the `::after` entirely (`content: none`) — the OS signal is the only guard,
+per the same policy as its siblings. Full write-up: `docs/dashboard-account/frontend.md`.

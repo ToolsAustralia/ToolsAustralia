@@ -12,17 +12,21 @@ import {
 } from "lucide-react";
 import { ModalContainer, ModalHeader, ModalContent } from "./ui";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
-import { formatNumber, formatPercentage, formatCurrency } from "@/utils/metrics/formatters";
+import { formatNumber, formatPercentageOrDash, formatCurrency } from "@/utils/metrics/formatters";
 import { useChannelDetail } from "@/hooks/queries/useChannelDetail";
 import UTMCampaignBreakdownTable from "@/components/admin/promo-analytics/UTMCampaignBreakdownTable";
-import type { ChannelPageMetrics } from "@/types/promo-analytics";
+import type { ChannelPageMetrics, UTMCampaignMetrics } from "@/types/promo-analytics";
+import type { ConvertingPlatform } from "@/types/attribution";
 
 type PageSortColumn = "visits" | "signups" | "conversions" | "revenue";
 
 interface ChannelDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  utmSource: string;
+  /** Canonical channel KEY — what the API filters on. Never the label. */
+  channel: ConvertingPlatform;
+  /** Human label for the same channel, for every string a human reads. */
+  channelLabel: string;
   startDate: string;
   endDate: string;
   summaryFromParent?: {
@@ -36,13 +40,14 @@ interface ChannelDetailModalProps {
 export default function ChannelDetailModal({
   isOpen,
   onClose,
-  utmSource,
+  channel,
+  channelLabel,
   startDate,
   endDate,
   summaryFromParent,
 }: ChannelDetailModalProps) {
   const { data, isLoading, error } = useChannelDetail(
-    isOpen ? utmSource : null,
+    isOpen ? channel : null,
     startDate,
     endDate
   );
@@ -77,26 +82,23 @@ export default function ChannelDetailModal({
     return pageSortOrder === "asc" ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />;
   };
 
-  const campaignRows = useMemo(() => {
+  // Every campaign in this drill-down belongs to the channel we opened, so the shared campaign
+  // table's `channel`/`channelLabel` come straight off the response. The Channel column is hidden
+  // here anyway (`showSourceColumn={false}`) — it would repeat the modal title on every row.
+  const campaignRows = useMemo((): UTMCampaignMetrics[] => {
     if (!data?.byCampaign) return [];
     return data.byCampaign.map((c) => ({
-      utmMedium: c.utmMedium,
-      utmCampaign: c.utmCampaign,
-      visits: c.visits,
-      signups: c.signups,
-      conversions: c.conversions,
-      revenue: c.revenue,
-      visitToSignupRate: c.visitToSignupRate,
-      signupToConversionRate: c.signupToConversionRate,
-      overallConversionRate: c.overallConversionRate,
+      channel: data.channel,
+      channelLabel: data.channelLabel,
+      ...c,
     }));
-  }, [data?.byCampaign]);
+  }, [data]);
 
   return (
     <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl" height="fixed">
       <ModalHeader
-        title={`${utmSource} — Channel Detail`}
-        subtitle="Pages receiving traffic from this channel and campaign breakdown"
+        title={`${channelLabel} — Channel Detail`}
+        subtitle={`Pages receiving traffic from ${channelLabel} and campaign breakdown`}
         onClose={onClose}
       />
       <ModalContent className="p-4 sm:p-6 space-y-6">
@@ -114,7 +116,7 @@ export default function ChannelDetailModal({
               value={formatNumber(summary.visits)}
               icon={BarChart3}
               color="blue"
-              subtitle={`From ${utmSource}`}
+              subtitle={`From ${channelLabel}`}
             />
             <MetricCard
               title="Signups"
@@ -137,6 +139,32 @@ export default function ChannelDetailModal({
               color="green"
               subtitle="Total revenue"
             />
+          </div>
+        )}
+
+        {/* Traffic sources — the raw utm_source values that folded into this channel */}
+        {data?.rawSources && data.rawSources.length > 0 && (
+          <div className="rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-900/50 p-3 sm:p-4">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
+              Traffic sources
+            </h4>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {data.rawSources.map((s) => (
+                <span
+                  key={s.source}
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-2xs sm:text-xs font-medium bg-white dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200 dark:border-neutral-600"
+                >
+                  <span className="break-all">{s.source}</span>
+                  <span className="font-mono tabular-nums text-gray-500 dark:text-neutral-400">
+                    {formatNumber(s.visits)}
+                  </span>
+                </span>
+              ))}
+            </div>
+            <p className="text-2xs sm:text-xs text-gray-500 dark:text-neutral-400 mt-2">
+              Raw utm_source values that folded into this channel. A visitor can appear under more
+              than one, so these may sum above the visit total.
+            </p>
           </div>
         )}
 
@@ -203,9 +231,9 @@ export default function ChannelDetailModal({
                       <td className="p-1.5 sm:p-2 md:p-3 text-right font-mono tabular-nums">{formatNumber(row.signups)}</td>
                       <td className="p-1.5 sm:p-2 md:p-3 text-right font-mono tabular-nums">{formatNumber(row.conversions)}</td>
                       <td className="p-1.5 sm:p-2 md:p-3 text-right font-mono tabular-nums">{formatCurrency(row.revenue)}</td>
-                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 dark:text-neutral-400 tabular-nums">{formatPercentage(row.visitToSignupRate)}</td>
-                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 dark:text-neutral-400 tabular-nums">{formatPercentage(row.signupToConversionRate)}</td>
-                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 dark:text-neutral-400 tabular-nums">{formatPercentage(row.overallConversionRate)}</td>
+                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 dark:text-neutral-400 tabular-nums">{formatPercentageOrDash(row.visitToSignupRate, row.visits)}</td>
+                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 dark:text-neutral-400 tabular-nums">{formatPercentageOrDash(row.signupToConversionRate, row.signups)}</td>
+                      <td className="hidden md:table-cell p-1.5 sm:p-2 md:p-3 text-right text-gray-600 dark:text-neutral-400 tabular-nums">{formatPercentageOrDash(row.overallConversionRate, row.visits)}</td>
                     </tr>
                   ))}
                 </tbody>

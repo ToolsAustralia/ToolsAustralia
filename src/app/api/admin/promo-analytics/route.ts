@@ -5,10 +5,12 @@ import PromoAnalyticsService, {
 } from "@/services/promo-analytics/PromoAnalyticsService";
 import { z } from "zod";
 
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+
 const querySchema = z.object({
   dateRange: z.enum(["today", "yesterday", "custom"]).optional().default("today"),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  startDate: z.string().regex(YMD).optional(),
+  endDate: z.string().regex(YMD).optional(),
 });
 
 /**
@@ -23,7 +25,7 @@ const querySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const _guard = await requirePermission("promos.view");
+    const _guard = await requirePermission("pageAnalytics.view");
     if (_guard instanceof NextResponse) return _guard;
 
     const searchParams = request.nextUrl.searchParams;
@@ -42,7 +44,14 @@ export async function GET(request: NextRequest) {
 
     let range;
     try {
-      range = resolvePromoAnalyticsRange(parsed.data);
+      // Mapped field-by-field on purpose. Passing `parsed.data` wholesale is what let the key
+      // name drift from `dateRange` to `range` unnoticed — every range silently resolved to
+      // today. An explicit mapping makes any future rename of the Zod key a compile error.
+      range = resolvePromoAnalyticsRange({
+        dateRange: parsed.data.dateRange,
+        startDate: parsed.data.startDate,
+        endDate: parsed.data.endDate,
+      });
     } catch (e) {
       return NextResponse.json(
         { success: false, error: (e as Error).message },
@@ -50,19 +59,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const [summary, utmSummary, builtPrizeSummary] = await Promise.all([
+    const [summary, channelSummary, builtPrizeSummary, toolboxSummary] = await Promise.all([
       PromoAnalyticsService.getAggregatedMetrics(range.start, range.end),
-      PromoAnalyticsService.getAggregatedByUTMSource(range.start, range.end),
+      PromoAnalyticsService.getAggregatedByChannel(range.start, range.end),
       PromoAnalyticsService.getAggregatedByBuiltPrize(range.start, range.end),
+      PromoAnalyticsService.getAggregatedByToolbox(range.start, range.end),
     ]);
 
     return NextResponse.json({
       success: true,
       data: {
         ...summary,
-        byUTMSource: utmSummary.byUTMSource,
+        byChannel: channelSummary.byChannel,
         byBuiltPrize: builtPrizeSummary.byBuiltPrize,
-        dateRange: { start: range.start.toISOString(), end: range.end.toISOString() },
+        byToolbox: toolboxSummary.byToolbox,
+        dateRange: {
+          start: range.start.toISOString(),
+          end: range.end.toISOString(),
+          // Surfaced so the UI can say WHY an older range returned less than asked for.
+          // Visit rows are TTL-deleted; signups and revenue are not.
+          visitsRetainedFrom: range.visitsRetainedFrom.toISOString(),
+          clampedToRetention: range.clampedToRetention,
+        },
       },
     });
   } catch (error) {

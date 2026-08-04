@@ -283,6 +283,8 @@ These exist on the same collection but are RBAC / service-account machinery ([Us
 ### 3b. Customer's-eye notes
 
 - **`trialing`** — late-month joiners (25th/26th/27th AEST) sit here until the 24th anchor. **Recovered past-due members are also `trialing`** when their recovery reanchors the renewal forward (any recovery channel; a re-bill collected on the 25th/26th/27th is clamped to the next 24th — see [BUSINESS.md §9b, §9e](BUSINESS.md)). In every case they've **paid full price** — this is a billing-anchor artifact, not a free trial.
+- **A failed re-bill returns the customer to `past_due` (2026-07-31)** — when a stranded customer's freshly minted cycle invoice declines, they now correctly go back to `past_due` rather than being left reading `active`. Previously they were emailed the renewal-failed notice while their account still showed active member state, so they never re-entered the recovery ladder and their delinquency was invisible on the account surface. Two customers had drifted this way (one for ~4 months). They are **not** re-paused by this — the recovery flow had just unpaused them.
+- **`past_due` recovery timing (2026-07-31)** — a stranded past-due member whose invoice Stripe has given up on is now recovered **within the same daily run** rather than on the following day. Previously the run's charge attempt could be rejected by Stripe before reaching the card (`payment_intent_unexpected_state`), which cost the member a day: they stayed `past_due` for another 24h, kept their benefits suspended that much longer, and their account showed a decline that was never actually a card problem. Affected **245 attempts across 28–31 Jul 2026**. The set of customers who get recovered (and therefore re-anchored — see the `trialing` note above) is **unchanged**; only how quickly it happens. Customers with a Stripe retry still pending are untouched, as before.
 - **`scheduled_cancel`** — the customer requested cancellation; benefits stay live until `subscription.endDate`. The raw `status` string is NOT rewritten to `scheduled_cancel` — that is an analytics label only.
 - **`paused`** — the customer accepted the 30-day `pause_30d` retention offer (§5.6). They keep the paid period they already bought, then **freeze** for ~30 days (`status="paused"`, `isActive=false`): no charge and no member access/perks/new entries while frozen, but their **already-earned entries are untouched and still count in draws**. The freeze auto-resumes at `pausedUntil` (= period end + 1 month, the next billing-cycle boundary), when Stripe bills the next cycle — a successful charge returns them to `active`, a failed one to `past_due`. The customer (or an admin) can also **resume early**. See [BUSINESS.md §10a](BUSINESS.md).
 - **Ghost states** — `previousSubscription` (downgrade: old tier's benefits live until cycle end) and `pendingChange` (upgrade: desired package parked while charge is in-flight). See [BUSINESS.md §10b](BUSINESS.md).
@@ -304,6 +306,12 @@ This is the most important and non-obvious behaviour. Registering in **step 1** 
 - The account becomes a real session **only after payment**: on payment success the modal POSTs `/api/auth/auto-login` with the `paymentIntentId` and then `signIn("auto-login", { token })` ([MembershipModal/index.tsx:2448-2477](src/components/modals/MembershipModal/index.tsx#L2448)). `/api/auth/auto-login` requires a Stripe `paymentIntentId` belonging to the user's Stripe customer **as proof of payment** before minting the bridge token ([auto-login/route.ts:64-102](src/app/api/auth/auto-login/route.ts#L64)).
 
 The register route even hard-codes `isAuthenticated: false` in its Klaviyo "Started Checkout" event "because this path runs at registration submit and the user is, by definition, a guest" ([register/route.ts:109-111](src/app/api/auth/register/route.ts#L109)). Documented at [docs/auth/gotchas.md:26-50](docs/auth/gotchas.md#L26).
+
+### 4a-ii. "Your Details" follows the visitor between pages (2026-08-04)
+
+Each page mounts its own copy of the `MembershipModal`, so anything typed into step 1 used to be lost the moment the visitor navigated — someone who started on `/` and then opened the modal on `/promotions/[slug]` or `/membership` faced an empty form again. The four identity fields (first name, last name, email, mobile) are now kept in **`sessionStorage`** (`ta.guestDetails`, owned by [guest-details-storage.ts](src/utils/auth/guest-details-storage.ts)) and refilled when the modal opens.
+
+What the customer can count on: it is **tab-scoped** — it survives navigation and reload but is gone when the tab closes; **card details are never stored** (an explicit four-field allowlist, so the card inputs in the same form object cannot leak in); it applies to **guests only** (a signed-in customer's fields come from their profile); and it is cleared the moment they authenticate, as well as on sign-out ([total-sign-out.ts](src/utils/auth/total-sign-out.ts)) so a shared device never hands the next person the previous visitor's contact details. Hydration fills blanks only — it can never overwrite something being typed.
 
 ### 4b. Registration internals (guest account creation)
 
@@ -378,6 +386,8 @@ Members manage their membership from **My Account → Membership → Manage plan
 
 Customer pays full package price immediately at signup via Stripe. There is **no free trial** — `trialing` is a billing-anchor artifact for 25th–27th joiners only (see [BUSINESS.md §9b](BUSINESS.md)).
 
+**Which tier the customer is shown first (2026-08-04).** Any CTA that opens the join flow from a surface with no package cards on screen — the promotions hero "Enter Now", "Build your prize", "Enter to unlock discount", the major-draw CTAs, draw-results, and the dashboard "Become a member" — now opens **"Select Your Package"** as the first view, so the customer always picks. Behind that picker sits a default: **Foreman**, not Tradie. Backing out of the picker therefore leaves a real, payable package selected — a customer never lands on an empty "Billing Info" step. Tapping a specific tier card (the packages section, `/membership`, the account tier list) still goes straight to that tier: the tap already is the choice. Foreman is labelled **RECOMMENDED** on the package cards, in the picker, and on the "Selected Package" summary; Boss and the top one-time pack carry **Best Value**. Nothing is auto-purchased — every preselect is one "Change" tap away from another tier, and pricing/inclusions are unchanged ([BUSINESS.md §2](BUSINESS.md)).
+
 **Fields set on activation:** `subscription.isActive: true`, `subscription.status: "active"` (or `"trialing"`), `subscription.startDate`, `subscription.endDate`, `subscription.packageId`.
 
 ### 5.2 Renewal date — the 24th rule
@@ -443,9 +453,80 @@ Four customer-facing perk systems. For the full mechanics (tier-% ladders, refer
 
 **What the rewards-portal vendor can read about a customer (2026-07-16, default-dark).** iGoDirect's MyRewards portal (the white-label rewards portal at `myrewards.toolsaustralia.com.au`) can query `GET /api/partner-discount/member-status` (bearer-authed; 503 in production until `IGODIRECT_MEMBER_STATUS_ENABLED=true`) at SSO sign-in, page load, and offer redemption. Per call, the vendor receives only `active` (boolean), `member_level` (catalog-visibility %), and `expires_at` — keyed by the opaque `member_id` (`User._id`) it already holds from the SSO hand-off. **No PII fields are in this response** (name/email leave only via the SSO payload itself, owner-approved 2026-06-24 — see [docs/partner/api.md](docs/partner/api.md)). Every answer is reconcile-then-read, so it reflects the customer's live entitlement, including packs promoted at read time.
 
-**Consent before anything is shared (2026-07-31, built — ships dark with the SSO flag).** The first time a customer opens the partner portal they now see a consent screen before any of their details leave Tools Australia. It lists exactly what the hand-off sends — **Name**, **Email**, and an **Account reference** (the trailing 6 characters of their opaque `User._id`) — and states plainly that payment details, billing address and draw entries never cross. The list is **generated from the same code that builds the SSO payload** ([partner-consent.ts](src/utils/partner-discounts/partner-consent.ts)), so the screen can neither hide a field we send nor claim one we don't: the membership-tier row is deliberately **absent today** because `member_level` is not currently transmitted. One required tick, nothing optional and nothing pre-ticked — no marketing opt-in and no "remember this device", so there is no bundled consent (invalid under the Privacy Act / APPs). Agreeing writes `User.partnerDiscountConsent` (§2g); the token route refuses to mint until it is there, and a change to the shared-field set re-prompts everyone. Returning customers skip straight past it. Between the click and the portal, a full-screen transit screen shows the exchange happening step by step, with a Cancel escape hatch and plain-English failure states instead of a hanging spinner. **Not yet promised anywhere:** there is no "Account → Connected services" withdrawal page, so no copy claims one.
+**Consent before anything is shared (2026-07-31, LIVE).** The first time a customer opens the partner portal they now see a consent screen before any of their details leave Tools Australia. It lists exactly what the hand-off sends — **Name**, **Email**, and an **Account reference** (the trailing 6 characters of their opaque `User._id`) — and states plainly that payment details, billing address and draw entries never cross. The list is **generated from the same code that builds the SSO payload** ([partner-consent.ts](src/utils/partner-discounts/partner-consent.ts)), so the screen can neither hide a field we send nor claim one we don't: the membership-tier row is deliberately **absent today** because `member_level` is not currently transmitted. One required tick, nothing optional and nothing pre-ticked — no marketing opt-in and no "remember this device", so there is no bundled consent (invalid under the Privacy Act / APPs). Agreeing writes `User.partnerDiscountConsent` (§2g); the token route refuses to mint until it is there, and a change to the shared-field set re-prompts everyone. Returning customers skip straight past it. Between the click and the portal, a full-screen transit screen shows the exchange happening step by step, with a Cancel escape hatch and plain-English failure states instead of a hanging spinner. **Not yet promised anywhere:** there is no "Account → Connected services" withdrawal page, so no copy claims one. **Standing public disclosure (2026-07-31):** the same three fields, the named processor (**iGoDirect Group, trading as MyRewards**) and the "edits in the portal do not update your Tools Australia account" fact are now stated in [/privacy §4.1](src/app/(site)/privacy/page.tsx), so a customer who wants to know who holds their data can find it without opening the portal. Keep that section in lockstep with `buildPartnerSsoSharedFields()`.
 
-**Rewards-return journey (2026-07-24, built; hardened + polished 2026-07-28 — not yet visible to customers, waiting on our two SSO env flags + a redeploy, vendor side settled 2026-07-28).** A customer blocked from redeeming a partner-portal offer above their access level is redirected by the portal to `/membership` (`utm_campaign=rewards-return`), where a personalised unlock banner names the offer and the cheapest package that covers it — resolved from our committed catalogue, never from raw URL params; even the `offer_name` fallback is allowlisted against the catalogue, so only real offer names ever render ([portal-return.ts](src/utils/partner-discounts/portal-return.ts) + [MembershipPortalReturnBanner](src/components/sections/membership/MembershipPortalReturnBanner.tsx)). Per lifecycle state: guests get the unlock pitch **plus an "Already a member? Log in" path** — shown only to genuinely signed-out visitors, since a logged-in customer without active benefits would be bounced back to `/my-account`; a **past-due** customer with **no** live access is steered to fix payment, while one whose paid one-time pack is **still running** is told so honestly ("Your pack access is still running") and, when that pack covers the offer they came for, is sent straight back to redeem it rather than being told their discounts are off; **paused** members see their resume date and a Manage-membership link (never an upsell — their access returns on resume); an **active** member whose covered offer just needs redeeming is sent back to the portal (or, while SSO is dark, pointed at their still-open portal tab). A purchase grants the higher access immediately (same webhook path as any purchase), and the portal re-checks live entitlement on return (member-status API / SSO) — so the customer can go straight back and redeem ("Open partner portal" on `/purchase-success`, SSO-flag-gated). Cobber's redemption FAQs (16/72) describe this portal model and ship/launch together with it, in one spelling ("catalogue") across the whole corpus. Every way the hand-off can fail now shows the customer a plain-English reason on **all four** portal buttons — including the Rewards card and dashboard chip, which previously failed silently — from a single set of strings held in `PARTNER_SSO_ERRORS`.
+**What the customer actually meets in the portal, and what we now tell them first (2026-07-31, LIVE).** The portal went live in production on 2026-07-31 and was walked end-to-end as a real Tradie (50%) member. Three facts about it are now customer-visible and shape our copy:
+
+1. **The portal shows every offer to everyone and marks none of them.** Locked and unlocked offers render identically in every grid, carousel and search result; entitlement is only revealed on the offer page, after a click. For a Tradie that is **68% of the home page** and 3 of the 4 hero slides. The portal also never states the customer's tier — the words "Tradie" and "50%" appear nowhere in it. So the Rewards card carries the tier and the **real unlocked count** ("917 of 1,833 partner offers"). It also carried one expectation line — *"You'll see the whole catalogue in the portal. Offers above your level show an unlock prompt instead of a discount."* — which was **removed on 2026-08-03** once `/my-account/rewards/catalogue` (below) shipped: that page *shows* the customer which offers are theirs, which is a stronger answer than warning them in prose. If that catalogue is ever removed or gated, the sentence has to come back, because an unmarked lock in the portal otherwise reads as Tools Australia having oversold them.
+2. **Two partner programmes, one percentage.** Our own 7 direct brands ("Tools Australia partners · Deal direct · no portal") are **not** in the portal catalogue and are now labelled separately, so the access ring is not read as describing only them.
+3. **The portal has its own UI that is not ours.** It shows a **points/savings wallet we do not operate** (permanently `0` / `$0.00` for every member) and an **editable profile + password form** that is the vendor's own copy — edits there never reach Tools Australia, and its password is never needed because the portal is always opened already signed-in. Cobber has grounded answers for both (FAQ **75** + **76**) precisely because its nearest matches would otherwise have been our rewards-points and profile entries — a confident wrong answer.
+
+**One destination for "manage my plan" (2026-07-31).** Every hand-off that means *change or
+fix my membership* now lands on **`/my-account/membership`** with the right sheet already
+open — the rewards-return banner's unlock CTA, the `/membership` tier cards, the header's
+package-detail modal, and the payment-failure toast. Previously the `/membership` tier cards
+dropped an existing subscriber on the bare dashboard with no plan controls, while the banner's
+identical intent opened the manage sheet. Past-due customers tapping a subscription tier now
+get the **payment** sheet rather than the dashboard.
+
+**The customer can now browse what their tier opens, on our side (2026-07-31).** New page
+**[/my-account/rewards/catalogue](src/app/(site)/my-account/rewards/catalogue/page-client.tsx)**,
+reached from the Rewards card ("See what your 50% opens"). It lists the **real 1,833-offer
+catalogue** with every offer marked against the customer's own access — open offers ticked,
+above-tier offers locked and labelled with the membership that opens them ("Foreman opens
+this, plus 458 more offers") — plus search, category filters and an "only show what I can
+use" toggle that is **on by default** (it flips **off** at 0% access, so a guest lands on the
+full browsable catalogue rather than an empty page). This is the question the portal cannot
+answer, and it answers it *before* the customer crosses the boundary. Redemption still happens
+in the portal.
+
+**Every card now carries the offer's real artwork (2026-08-03).** Coverage went 52% → **98%**.
+The gap was one whole category: all 877 **In-Store Offer** rows showed a letter tile, because
+their artwork is keyed by a vendor-internal merchant id that appears nowhere in the data we are
+given. Those are now read off the portal itself
+([harvest-partner-instore-artwork.ts](scripts/harvest-partner-instore-artwork.ts)). The customer
+sees each offer's **own** photo, not the merchant's logo — an early version used the brand mark
+and rendered eight tours from one merchant as eight identical tiles, which reads as a broken
+page. The designed monogram panel remains for the ~2% with no image; it is a normal state, and
+will grow again whenever the vendor adds offers we have not re-harvested.
+
+**Three link behaviours, so no card is a dead end.** An offer the customer **can** use links
+straight to it in the portal (`/products/view_smart/{id}`, **new tab**). A **locked** offer goes
+to `/membership` carrying its own `offer_id`, so the page can name the offer and preselect the
+cheapest plan that opens it — sending someone to a page that will refuse them is the portal's
+mistake, not one to copy.
+
+**Tapping an offer opens that offer — even with no portal session (2026-08-03).** Previously
+this was the sharpest edge on the whole surface: clicking an offer without a live portal session
+bounced the customer `view_smart/{id}` → the vendor's login → ours → `/my-account`, losing the
+offer entirely and dropping them on a page they were already past.
+
+The vendor's hand-off cannot carry a destination — `/verifytoken/{token}` silently drops every
+return-target form we tested (six) — so signing in and landing on the offer cannot be one
+*navigation*. It can be one *tap*: we sign the customer in to the portal invisibly (a hidden
+iframe, no page they ever see) and then send the tab they already have open straight to the
+offer. What they experience is a tab opening on "Opening your offer…" for a moment, then the
+deal.
+
+- **Normal case** — one tap, lands on the offer, no visible sign-in step at all.
+- **If the invisible sign-in cannot run** (the customer's browser blocks it, or we are not on a
+  `toolsaustralia.com.au` origin) they land on the portal home instead and the catalogue tells
+  them plainly: *"You're signed in to the partner portal. Tap an offer again and it will open
+  straight to that deal."* One extra tap, never a lost offer.
+- Their catalogue tab is never taken from them — filters, scroll position and place in 1,833
+  rows all survive.
+
+The only remaining exception is a customer's **first ever** hand-off, which still shows the
+consent screen (§ above) before anything is shared, and uses the same tab. After that they are
+on the one-tap path.
+
+*Known limitation:* browsing makes the catalogue's weakness legible — at 50%, 438 of the 917
+open offers are single-location in-store deals and the only recognisable national name is
+Kogan. That is a merchandising problem to solve with the vendor, not a reason to hide the list.
+
+We also no longer claim **"Australia's top tool brands"** anywhere: the catalogue returns **zero** offers for Milwaukee, DeWalt, Makita and Ryobi, so the four member-facing surfaces sell breadth ("1,800+ Australian brands") or the real count instead. Full audit + the 16 vendor-side asks: [docs/partner/igodirect-portal-ux-audit.md](docs/partner/igodirect-portal-ux-audit.md).
+
+**Rewards-return journey (2026-07-24, built; hardened + polished 2026-07-28; LIVE from 2026-07-31 with the SSO flags set — vendor side settled 2026-07-28).** A customer blocked from redeeming a partner-portal offer above their access level is redirected by the portal to `/membership` (`utm_campaign=rewards-return`), where a personalised unlock banner names the offer and the cheapest package that covers it — resolved from our committed catalogue, never from raw URL params; even the `offer_name` fallback is allowlisted against the catalogue, so only real offer names ever render ([portal-return.ts](src/utils/partner-discounts/portal-return.ts) + [MembershipPortalReturnBanner](src/components/sections/membership/MembershipPortalReturnBanner.tsx)). Per lifecycle state: guests get the unlock pitch **plus an "Already a member? Log in" path** — shown only to genuinely signed-out visitors, since a logged-in customer without active benefits would be bounced back to `/my-account`; a **past-due** customer with **no** live access is steered to fix payment, while one whose paid one-time pack is **still running** is told so honestly ("Your pack access is still running") and, when that pack covers the offer they came for, is sent straight back to redeem it rather than being told their discounts are off; **paused** members see their resume date and a Manage-membership link (never an upsell — their access returns on resume); an **active** member whose covered offer just needs redeeming is sent back to the portal (or, while SSO is dark, pointed at their still-open portal tab). A purchase grants the higher access immediately (same webhook path as any purchase), and the portal re-checks live entitlement on return (member-status API / SSO) — so the customer can go straight back and redeem ("Open partner portal" on `/purchase-success`, SSO-flag-gated). Cobber's redemption FAQs (16/72) describe this portal model and ship/launch together with it, in one spelling ("catalogue") across the whole corpus. Every way the hand-off can fail now shows the customer a plain-English reason on **all four** portal buttons — including the Rewards card and dashboard chip, which previously failed silently — from a single set of strings held in `PARTNER_SSO_ERRORS`.
 
 ### 7b. Referrals
 
@@ -505,6 +586,24 @@ boolean, `buildInteracted`. No new identifier is captured and nothing extra leav
 this is the same anonymous visit row, recorded for more visitors. The reason is that signups already
 recorded the page's default build for people who never touched the reels, so counting builders and
 signups over different populations let the admin funnel display rates above 100%.
+
+**Promo-page visit attribution changed 2026-07-31 — and one field was dropped.** Two changes to the
+anonymous `PromoAnalyticsVisit` row written on `/promotions/*` (keyed on the `ta_anon_id` cookie,
+not the `User` record):
+
+- **UTM now comes from the first-touch `_ta_attr` cookie, not the landing URL.** The beacon reads
+  the same 90-day cookie signups and conversions already read, server-side, and falls back to the
+  URL's own `utm_*` params. **No new identifier is captured and nothing extra leaves to a third
+  party** — the same three UTM values are stored, sourced from a cookie this document already
+  describes in the table above rather than from the address bar. The reason is internal
+  consistency: visits were on a different basis from signups and conversions, so a visitor who
+  landed on a tagged page and registered on an untagged one produced a signup with no matching
+  visit. A new **`utmBasis`** field (`"first_touch"` / `"landing_url"`) records which source was
+  used, purely so an attribution shift after a deploy is auditable.
+- **`referrerSlug` is no longer captured.** It recorded which other promo landing page the visitor
+  came from via the "Explore other toolsets" carousel; that carousel was replaced on 2026-07-22, so
+  nothing had written the field since. The field, its index declaration and the beacon parameter
+  were all removed — **strictly less data held about the visitor**.
 
 ### 8b. The "converting platform" concept
 

@@ -199,7 +199,56 @@ Stripe surfaces two related fields on a card decline:
 
 Most failed live attempts arrive with `errorCode === "card_declined"` and the actionable detail in `declineCode`. The `extractStripeErrorFields` helper in [`chargePastDueShared.ts`](../../src/server/admin/chargePastDueShared.ts) extracts both, and all four `InvoiceChargeLog.create` save sites in `payOpenInvoiceAsPastDueAdmin` persist them. The `PostPayDecision.failed` variant in [`chargePastDuePostPayPolicy.ts`](../../src/server/admin/chargePastDuePostPayPolicy.ts) also carries an optional `declineCode` (sourced from `paymentIntent.last_payment_error?.decline_code` in the `requires_payment_method` branch).
 
-**UI rule:** display `declineCode ?? errorCode ?? errorMessage`. Both `PastDueChargeHistory.tsx` and `PastDueChargeHistoryDrawer.tsx` follow this precedence; new admin views over `InvoiceChargeLog` should too.
+**UI rule:** display `declineCode ?? errorCode ?? errorMessage`. Both `PastDueChargeHistory.tsx` and `PastDueChargeHistoryDrawer.tsx` follow this precedence; new admin views over `InvoiceChargeLog` should too. For *counting* declines, do not re-implement the precedence — import `declineCodeOf` / `countsAsDecline` / `summariseDeclineRows` from [`src/utils/admin/chargeDeclineReasons.ts`](../../src/utils/admin/chargeDeclineReasons.ts) (see the next section for why).
+
+## Persisted `ChargeJobRun.totals` may predate today's skip buckets — normalize on read
+
+`noHeldDraft` and `awaitingRetry` were added to the skip breakdown on **2026-07-20**. Runs finalized before that have a `totals.skipped` subdocument with **no such keys**, and old runs are immutable history — they are never rewritten.
+
+That was a live **500** on the Norm mirror: `NormChargePastDueRunsListSchema` declares both buckets as required `z.number()`, so a single legacy run anywhere on the page made `GET /v1/charge-past-due/runs` return `response_schema_invalid`. `tsc` cannot see it (the Mongoose type says the fields exist), and the admin UI never hit it because the drawer recomputes its skip breakdown client-side from the run's rows. Found by `npm run norm:smoke` on 2026-07-31, against a run from 2026-05-07.
+
+**Rule: never hand a persisted `totals` straight to a consumer.** `listChargeRuns` and `getChargeRunDetail` both pass it through [`normalizeRunTotals`](../../src/server/admin/charge-past-due-totals.ts), which back-fills any missing field from `emptyTotals` (a missing bucket genuinely means zero). Normalizing at the read boundary beats migrating the collection. When you add a new bucket, add it to `emptyTotals` and `skipReasonToBucket` — `normalizeRunTotals` then covers every historical run for free. Regression-guarded by `npm run test:past-due-history`.
+
+**And run `npm run norm:smoke` after touching anything a Norm route returns** — this class of bug is invisible to `tsc`, lint, and the unit tests. It needs a live server (`npm run dev`) plus `NORM_BEARER_TOKEN` / `NORM_SIGNING_SECRET` in `.env.local`. In Git Bash, prefix with `MSYS_NO_PATHCONV=1` or the leading `/api/...` path argument gets rewritten to a Windows path and the request never reaches the server.
+
+## Counting declines: two views, one classifier, and the `newInvoiceId` discriminator
+
+The run drawer and the server-side decline summary once each implemented the decline-code precedence separately, and drifted. Measured on the 28–31 Jul 2026 runs: the drawer reported **`unknown 206`** as the single largest "decline reason" on the 30 Jul run, while the server summary reported those same rows as **nothing at all**. Neither number was real.
+
+The cause is that a bulk recovery writes **one run-tagged summary row** against the ORIGINAL worklist invoice id, carrying `result.recovery.bulk` and **no decline code**. Whether that row is the member's only record depends on the branch:
+
+| Recovery branch | Coded pay row elsewhere? | Summary row has `newInvoiceId`? | Must be counted? |
+|---|---|---|---|
+| Held draft → finalize → pay | **Yes**, on the NEW invoice | Yes | **No** — counting both double-counts one member |
+| `no_held_draft` → mint + re-bill | **No**, none exists anywhere | No | **Yes** — it IS the decline |
+
+So **presence of `result.recovery.newInvoiceId` is the exact "does a coded twin exist?" test.** The old server filter excluded *every* `result.recovery.bulk` row, which correctly de-duped the first case but silently hid **237 real re-bill declines** ($8,440 of invoices) in the second. Both views now share [`chargeDeclineReasons.ts`](../../src/utils/admin/chargeDeclineReasons.ts): `countsAsDecline` for the client, `MONGO_DECLINE_MATCH` for the aggregation, with a test asserting the two agree on every recovery shape (`npm run test:past-due-history`).
+
+Two consequences for anyone editing this area:
+
+- **Never bucket by parsing `errorMessage`.** Codeless recovery outcomes now carry a *synthetic* `errorCode` written at save time — `rebill_not_settled` (minted cycle didn't settle — a real card decline Stripe gives us no code for) and `recovery_error` (unexpected throw in the recovery flow). Add new ones to `RECOVERY_DECLINE_CODES` + `RECOVERY_DECLINE_LABELS`, never to a regex.
+- **Only set `newInvoiceId` on a summary row when a coded row genuinely exists on that invoice.** It is load-bearing for the count, not decoration — `summarizeBulkRecoveryOutcome`'s mid-flight branch deliberately omits it.
+
+**Lockstep:** `getChargeRunDetail` projects `result.recovery.{bulk,step,newInvoiceId}` (provenance only — never the whole `result` blob, which holds the full sanitized Stripe error). The Norm mirror `/v1/charge-past-due/runs/{runId}` exposes the same `recovery` object so Norm doesn't inherit the double-count; keep the Zod schema, the route mapping, and `docs/internal-norm/norm-context.md` in sync.
+
+## `payment_intent_unexpected_state` is a routing signal, not a card decline
+
+`stripe.invoices.pay(id, { payment_method })` can reject with `payment_intent_unexpected_state` (HTTP 400, `stripe-should-retry: false`). **No charge reaches the issuer.** Over 28–31 Jul 2026 this happened **245 times** (1,950 all-time) and did not self-heal — 238 of the 245 members were still `past_due` afterwards.
+
+What actually happens, verified against production Stripe:
+
+1. The invoice is stranded (`status: open`, `attempt_count ≥ 1`, `next_payment_attempt: null`) and **is** recovery-eligible.
+2. It is nonetheless routed to `pay`, because `decideBulkChargeAction` gate 4 sees a stale `invoice_payment` still reading `status: "open"` (its PaymentIntent had been sitting reusable for ~10 days).
+3. `invoices.pay` **cancels that PaymentIntent while processing our request** and then rejects the `payment_method` update on it. The Stripe request id that returns our 400 is the same request that emits `payment_intent.canceled` — confirmed 17/17 on the 31 Jul cohort.
+4. That cancellation flips the last `open` invoice_payment to `canceled`, so the **next day's** run finally routes the same invoice to `recover`. The correspondence was exact: **5→5, 209→209, 14→14** across three consecutive days.
+
+**Inspecting PaymentIntent status before the call cannot prevent this** — the PI is live at classify time; our own call kills it. So the fix is post-hoc: `payOpenInvoiceAsPastDueAdmin` accepts `deferUnpayableToCaller`, and on this error with `next_payment_attempt == null` it returns `skipReason: "stranded_needs_recovery"` **without writing a log row**, letting the bulk job run `recoverWorklistItem` in the same run. Classification lives in the pure `classifyPayFailureRoute` (`chargePastDuePostPayPolicy.ts`, tested by `npm run test:charge-past-due-post-pay`).
+
+Rules when touching this:
+
+- **Only the bulk job sets `deferUnpayableToCaller`.** It must write exactly ONE run-tagged row per worklist item (the chunk loop's `remaining` and the run totals both key on it), so the pay attempt and the follow-up recovery can never both log. Every other caller keeps the historical `failed` row.
+- **`next_payment_attempt != null` still means stand down**, not recover — Stripe owns the invoice and recovery would void one it is about to retry.
+- This changes **when**, not **who**: these members reached recovery a day later regardless, so the re-anchoring population is unchanged.
 
 ## A platform that SPENT money with zero return used to vanish from the Advertising card (fixed 2026-07-29)
 

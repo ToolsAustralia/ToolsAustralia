@@ -42,6 +42,41 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   const vercelToolbarScript = isVercelPreview ? " https://vercel.live" : "";
   const vercelToolbarConnect = isVercelPreview ? " https://vercel.live https://*.pusher.com wss://*.pusher.com" : "";
 
+  /**
+   * The partner rewards portal, allowed in `frame-src` ONLY.
+   *
+   * WHY IT IS FRAMED AT ALL. Opening an offer needs a live portal session, and the vendor's
+   * hand-off cannot carry a destination (`/verifytoken/{token}` silently drops every return
+   * target — six forms measured, see docs/partner/gotchas.md). Loading that URL in a hidden
+   * iframe establishes the session in place, so the member's next click lands on the offer
+   * instead of being bounced to a login page. Verified on production: cold `view_smart/{id}`
+   * bounces to `/my-account`; after the framed hand-off the same URL loads the offer.
+   *
+   * WHY IT WORKS AT ALL: the portal is a SUBDOMAIN of toolsaustralia.com.au, so the iframe is
+   * same-site and its `SameSite=Lax` session cookie is honoured. This would not work from any
+   * other origin — including `localhost`, where it is cross-site and silently fails. Do not
+   * conclude from a failing local test that the vendor blocks framing; they send neither
+   * `X-Frame-Options` nor `frame-ancestors`.
+   *
+   * SCOPE OF THE RELAXATION. One named host, `frame-src` only. It does NOT appear in
+   * `frame-ancestors` (they still cannot frame US), `script-src`, or `connect-src`. The host
+   * comes from env rather than a literal so the domain survives swapping providers
+   * (CLAUDE.md: a vendor's name belongs in config and one adapter). Unset ⇒ the directive is
+   * unchanged and the iframe path simply never runs — the visible hand-off still works.
+   */
+  const portalOrigin = (() => {
+    const raw = process.env.NEXT_PUBLIC_PARTNER_PORTAL_URL?.trim();
+    if (!raw) return null;
+    try {
+      const { protocol, origin } = new URL(raw);
+      // https only — a CSP entry is a trust grant, and http would let it be tampered with.
+      return protocol === "https:" ? origin : null;
+    } catch {
+      return null;
+    }
+  })();
+  const partnerPortalFrameSrc = portalOrigin ? ` ${portalOrigin}` : "";
+
   const scriptSrc = nonce
     ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net${vercelToolbarScript} 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk=' 'sha256-gArcobE6Y/czAZSkBLxA1CAGS1xvw6cghHIBwfNpkok=' 'sha256-yEQTk36ZkLbyTcwSVYFpl/2k0ZDTLfLcCaNGWE/vG98=' 'sha256-xaGf90svAEIA1mo6apEICfa+VIdlJdA72R2TvCgsBLY=' 'sha256-z/YgGrCJhp1RQPr9KSfm7P9DNBwUTwHa1UAaVdzzWQY='`
     : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net${vercelToolbarScript}`;
@@ -68,7 +103,8 @@ export function buildContentSecurityPolicy(nonce?: string): string {
     "form-action 'self' https://www.facebook.com",
     "frame-ancestors 'self' https://pay.google.com https://js.stripe.com",
     // Iframes: Stripe payment forms, Facebook widgets, hCaptcha fraud detection, Google Pay, Apple Pay, Klaviyo forms, GTM noscript
-    "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://pay.google.com https://*.google.com https://*.gstatic.com https://applepay.cdn-apple.com https://js.hcaptcha.com https://*.hcaptcha.com https://connect.facebook.net https://www.facebook.com https://static-forms.klaviyo.com https://vercel.live https://www.googletagmanager.com",
+    // + the partner rewards portal (see partnerPortalFrameSrc below).
+    `frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://pay.google.com https://*.google.com https://*.gstatic.com https://applepay.cdn-apple.com https://js.hcaptcha.com https://*.hcaptcha.com https://connect.facebook.net https://www.facebook.com https://static-forms.klaviyo.com https://vercel.live https://www.googletagmanager.com${partnerPortalFrameSrc}`,
 
     "img-src 'self' https: data: blob: https://q.stripe.com",
     "manifest-src 'self' https://pay.google.com",

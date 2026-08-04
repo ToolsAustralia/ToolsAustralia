@@ -60,6 +60,8 @@ Don't mix. Common mistake: mirroring server-state into Zustand. Don't.
 
 `src/hooks/queries/admin/useChargePastDueRuns.ts` — `ListedRunDTO` gained **`kind: "charge" | "recover"`** (2026-06-16). Past-Due Charge History now lists BOTH normal charge runs and stranded-invoice recovery runs in one "Bulk Runs" table (the `recover` runs were previously hidden); the UI badges Recovery vs Charge and folds recovery revenue into the same summary total. Mirrors `ListedRun` in `chargePastDueHistory.ts` and the Norm `/v1/charge-past-due/runs` schema.
 
+`src/hooks/queries/admin/useChargePastDueRunDetail.ts` — `RunDetailRowDTO` gained an optional **`recovery: { bulk?, step?, newInvoiceId? }`** (2026-07-31). The drawer needs it to count declines correctly: a bulk recovery writes one summary row per member, and only the rows *without* a `newInvoiceId` lack a separately-coded counterpart, so only those may be counted. Without the field the drawer double-counted recovered members and bucketed the codeless half as `unknown`. Bucketing logic is shared with the server via `src/utils/admin/chargeDeclineReasons.ts` — do not re-implement it in a component. Mirrors `RunDetailRow` in `chargePastDueHistory.ts` and the Norm `/v1/charge-past-due/runs/{runId}` schema.
+
 **Live-progress polling (2026-06-24):** `useChargePastDueRunDetail` and `useChargePastDueRuns` now set a conditional `refetchInterval` — they poll (3 s detail / 5 s list) **only while a run's `status === "running"`** and stop once it finalizes. This surfaces the chunked bulk-charge job's incremental totals in the dashboard history view as it drains (the charge now runs as client-driven `start → chunk → …` requests that update `ChargeJobRun.totals` after each chunk — see `docs/admin/`).
 
 ## Packages-focus additions (2026-07-17)
@@ -75,3 +77,26 @@ Don't mix. Common mistake: mirroring server-state into Zustand. Don't.
 (default-exports `domMax`). This code-splits framer-motion features out of the shared chunk
 into a post-hydration async chunk (landing routes −~16 kB First Load JS). Pattern + rules:
 docs/shared-ui/patterns.md P7.
+
+## 2026-07-31 — Page Analytics channel drill-down keys on a channel, not a `utm_source`
+
+`src/hooks/queries/useChannelDetail.ts` — first argument renamed `utmSource: string` →
+**`channel: ConvertingPlatform | null`**, sent as `?channel=`. The drill-down route now takes a
+**closed enum** (`CHANNEL_KEYS` from `src/config/attribution-channels.ts`) rather than a free
+string, which is what structurally removed the `new RegExp("^" + visitorSuppliedValue + "$")`
+the server used to build from it.
+
+`src/lib/queryKeys.ts` — `queryKeys.admin.promoChannelDetail`'s first parameter was renamed
+`utmSource` → `channel` to match. It was only a parameter *name* (a channel key is structurally
+a string, so keys stayed unique either way), but leaving it would have forked the vocabulary:
+callers reading `row.channel` would be passing it to something called `utmSource`, and the two
+mean different things now — `meta` is a channel, `facebook.com` is a utm_source that folds into
+it. One concept, one name.
+
+**Caller rule:** pass `row.channel` (the KEY), never `row.channelLabel` (the display string).
+`ChannelDetailModal` takes both — the key for fetching, the label for the title — so it is easy
+to hand the wrong one to the hook. The key is typed `ConvertingPlatform`, so a label reaches the
+hook as a type error rather than as an empty result set.
+
+The hook is `enabled` only when `channel` and both dates are set, matching the sibling
+`usePromoPageDetail`.

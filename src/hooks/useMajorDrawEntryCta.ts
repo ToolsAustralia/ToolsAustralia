@@ -7,6 +7,7 @@ import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
+import { isForemanSubscriptionPlanId } from "@/utils/membership/additional-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
 import {
   MEMBERSHIP_PACKAGES_QUERY_PARAM,
@@ -22,10 +23,10 @@ interface UseMajorDrawEntryCtaResult {
   membershipPromoMultiplier: number;
   oneTimePromoMultiplier: number;
   getHeavyDutyPack: () => LocalMembershipPlan;
-  /** Promo-boosted Tradie SUBSCRIPTION from the catalog — the canonical "Become a member" preselect. */
-  getTradieSubscriptionPlan: () => LocalMembershipPlan;
+  /** Promo-boosted RECOMMENDED subscription (Foreman) from the catalog — the canonical "Become a member" preselect. */
+  getRecommendedSubscriptionPlan: () => LocalMembershipPlan;
   getOneTimePlan: () => LocalMembershipPlan | null;
-  openEntryFlow: (options?: { openLocalModal?: boolean }) => void;
+  openEntryFlow: (options?: { openLocalModal?: boolean; packageSelectionFirst?: boolean }) => void;
   openWithOneTimePlan: () => void;
 }
 
@@ -54,26 +55,31 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
   const oneTimePromoMultiplier = resolvedOneTime ?? 1;
 
   /**
-   * The promo-boosted TRADIE SUBSCRIPTION plan from the real catalog — the canonical
-   * "Become a member" preselect (same object a Tradie tier-card tap uses), regardless of the
+   * The promo-boosted RECOMMENDED SUBSCRIPTION plan from the real catalog — the canonical
+   * "Become a member" preselect (same object a Foreman tier-card tap uses), regardless of the
    * user's additional-pack access. Contrast getHeavyDutyPack, which is access-dependent and
    * returns a ONE-TIME pack for entry-holders — wrong for a membership CTA.
+   *
+   * The recommended tier is FOREMAN — the same tier the package picker and the selected-package
+   * card flag as RECOMMENDED, so every "we picked one for you" surface agrees.
    */
-  const getTradieSubscriptionPlan = useCallback((): LocalMembershipPlan => {
+  const getRecommendedSubscriptionPlan = useCallback((): LocalMembershipPlan => {
     const promoMultiplier = membershipPromoMultiplier;
-    const targetPackageId = "tradie-subscription";
+    const targetPackageId = "foreman-subscription";
 
-    const packageData = safeSubscriptionPackages.find((pkg) => pkg.id === targetPackageId);
+    // `useMemberships` slugifies the package NAME into `plan.id` ("Foreman" → `foreman`), so the
+    // catalog `_id` is not what shows up here — match on either form.
+    const packageData = safeSubscriptionPackages.find((pkg) => isForemanSubscriptionPlanId(pkg.id));
 
     if (!packageData) {
       // Fallback if packages aren't loaded yet (or the id is missing from the catalog)
-      const baseEntries = 15; // Tradie subscription has 15 entries per month
+      const baseEntries = 40; // Foreman subscription has 40 entries per month
       const promoEntries = baseEntries * promoMultiplier;
 
       return {
         id: targetPackageId,
-        name: "Tradie",
-        price: 20,
+        name: "Foreman",
+        price: 40,
         period: "mo",
         features: [
           {
@@ -81,8 +87,8 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
               promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""
             }`,
           },
-          // { text: "5% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
-          { text: "50% Access to Partner Discounts" },
+          // { text: "10% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
+          { text: "75% Access to Partner Discounts" },
           { text: "Mini Draws" },
         ],
         buttonText: "Get Started",
@@ -228,13 +234,13 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         },
       };
     } else {
-      // Non-member path: the Tradie subscription (shared builder; handles catalog fallbacks + promo).
-      return getTradieSubscriptionPlan();
+      // Non-member path: the recommended subscription (shared builder; handles catalog fallbacks + promo).
+      return getRecommendedSubscriptionPlan();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- oneTimePromoMultiplier required for isMember path plan recalculation
   }, [
     safeOneTimePackages,
-    getTradieSubscriptionPlan,
+    getRecommendedSubscriptionPlan,
     membershipPromoMultiplier,
     oneTimePromoMultiplier,
     userData,
@@ -281,18 +287,21 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
 
   const openWithOneTimePlan = useCallback(() => {
     whenGatesOpenElseGateModal(() => {
-      const oneTimePlan = getOneTimePlan();
-      if (oneTimePlan) {
-        membershipModal.setSelectedPlan(oneTimePlan);
-        membershipModal.openModal();
-      } else {
-        membershipModal.openModalWithPackageSelectionFirst();
-      }
+      // Picker first here too — the visitor chooses — with the resolved one-time pack behind it, so
+      // the picker opens on the ONE-TIME tab (PackageSelectionModal derives the tab from the plan's
+      // period) and dismissing lands on a real pack. Falls back to the recommended subscription only
+      // when no one-time pack resolves, which still beats an empty payment step.
+      membershipModal.openModalWithPackageSelectionFirst(
+        getOneTimePlan() ?? getRecommendedSubscriptionPlan()
+      );
     });
-  }, [getOneTimePlan, membershipModal, whenGatesOpenElseGateModal]);
+  }, [getOneTimePlan, getRecommendedSubscriptionPlan, membershipModal, whenGatesOpenElseGateModal]);
 
   const openEntryFlow = useCallback(
-    ({ openLocalModal = true }: { openLocalModal?: boolean } = {}) => {
+    ({
+      openLocalModal = true,
+      packageSelectionFirst = true,
+    }: { openLocalModal?: boolean; packageSelectionFirst?: boolean } = {}) => {
       whenGatesOpenElseGateModal(() => {
         const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
         if (hasAccess) {
@@ -307,14 +316,41 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         // A user who already holds a (blocking) subscription — active / past_due / etc. — CANNOT create a
         // second subscription, so pre-select a ONE-TIME pack (getOneTimePlan), never a membership sub
         // (getHeavyDutyPack) which would fail with EXISTING_SUBSCRIPTION. This takes precedence.
-        // Otherwise: ad landings with `?packages=one-time` also open the ONE-TIME flow (guests — members
-        // with additional access already diverted above), falling back to the subscription default if no
+        // Otherwise: a `?packages=one-time` URL also opens the ONE-TIME flow (guests — members with
+        // additional access already diverted above), falling back to the subscription default if no
         // one-time plan is resolvable yet; and plain non-subscribers get the Tradie sub as the default.
+        // That param comes from an ad landing OR from the visitor toggling the section's own tab
+        // (MembershipSection.selectTab writes it), so this CTA pre-selects the pack matching whatever
+        // tab they are actually looking at.
         const forcedOneTime =
           typeof window !== "undefined" &&
           parseMembershipPackagesTab(
             new URLSearchParams(window.location.search).get(MEMBERSHIP_PACKAGES_QUERY_PARAM)
           ) === "one-time";
+        // DEFAULT BEHAVIOUR for every entry CTA: the "Select Your Package" picker is the first
+        // view, with the RECOMMENDED tier (Foreman) already selected behind it. The user chooses,
+        // and backing out of the picker still leaves them on a real, payable package — never the
+        // empty payment step. Opting out (`packageSelectionFirst: false`) is for callers that must
+        // land straight on a specific plan.
+        //
+        // Skipped on the two paths where a membership tier is the wrong pre-select anyway: a
+        // blocking subscription cannot buy a second subscription, and `?packages=one-time` means
+        // the visitor is looking at the one-time tab. Both keep pre-selecting the pack that
+        // matches their situation.
+        if (packageSelectionFirst && !hasBlockingSubscription(userData) && !forcedOneTime) {
+          const recommendedPlan = getRecommendedSubscriptionPlan();
+          if (openLocalModal) {
+            membershipModal.openModalWithPackageSelectionFirst(recommendedPlan);
+          } else if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("openMembershipModal", {
+                detail: { plan: recommendedPlan, packageSelectionFirst: true },
+              })
+            );
+          }
+          return;
+        }
+
         const correctPlan = hasBlockingSubscription(userData)
           ? getOneTimePlan()
           : forcedOneTime
@@ -326,8 +362,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
             membershipModal.setSelectedPlan(correctPlan);
             membershipModal.openModal();
           } else {
-            // No concrete one-time plan resolved yet → let the user pick a pack.
-            membershipModal.openModalWithPackageSelectionFirst();
+            // No concrete one-time plan resolved yet → let the user pick, with the recommended
+            // subscription behind the picker so there is never an empty payment step.
+            membershipModal.openModalWithPackageSelectionFirst(getRecommendedSubscriptionPlan());
           }
           return;
         }
@@ -345,6 +382,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       whenGatesOpenElseGateModal,
       clearModalFromSession,
       getHeavyDutyPack,
+      // Required: without it the callback keeps the first-render getter, and the default tier it
+      // pre-selects would carry stale entry counts (catalog / promo multiplier resolve later).
+      getRecommendedSubscriptionPlan,
       getOneTimePlan,
       userData,
       userMajorDrawStats,
@@ -361,7 +401,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       membershipPromoMultiplier,
       oneTimePromoMultiplier,
       getHeavyDutyPack,
-      getTradieSubscriptionPlan,
+      getRecommendedSubscriptionPlan,
       getOneTimePlan,
       openEntryFlow,
       openWithOneTimePlan,
@@ -373,7 +413,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       membershipPromoMultiplier,
       oneTimePromoMultiplier,
       getHeavyDutyPack,
-      getTradieSubscriptionPlan,
+      getRecommendedSubscriptionPlan,
       getOneTimePlan,
       openEntryFlow,
       openWithOneTimePlan,

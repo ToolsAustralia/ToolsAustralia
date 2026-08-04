@@ -126,9 +126,9 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/mini-draw/list` | GET | `miniDraws.view` |
 | `/api/admin/mini-draw/order` | POST | `miniDraws.edit` |
 | `/api/admin/mini-draw/update` | PUT | `miniDraws.edit` |
-| `/api/admin/promo-analytics` | GET | `promos.view` |
-| `/api/admin/promo-analytics/channel-detail` | GET | `promos.view` |
-| `/api/admin/promo-analytics/page-detail` | GET | `promos.view` |
+| `/api/admin/promo-analytics` | GET | `pageAnalytics.view` (was `promos.view` until 2026-07-31) |
+| `/api/admin/promo-analytics/channel-detail` | GET | `pageAnalytics.view` (was `promos.view` until 2026-07-31) |
+| `/api/admin/promo-analytics/page-detail` | GET | `pageAnalytics.view` (was `promos.view` until 2026-07-31) |
 | `/api/admin/stripe-webhook-queue` | GET | `errorReports.view` |
 | `/api/admin/stripe-webhook-queue` | POST | `errorReports.edit` |
 | `/api/admin/submissions/unviewed-count` | GET | `submissions.view` |

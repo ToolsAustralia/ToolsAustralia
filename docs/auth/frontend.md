@@ -19,6 +19,24 @@ LLM when `CHAT_ALLOW_GUEST_GENERATIVE` is on). Keep the two auth layouts in lock
 
 [src/components/auth/](../../src/components/auth/) — login form, signup form, password reset, OAuth buttons.
 
+## Guest "Your Details" carry-over (2026-08-04)
+
+[src/utils/auth/guest-details-storage.ts](../../src/utils/auth/guest-details-storage.ts) keeps the
+membership modal's **step-1** fields alive across page navigations, so a visitor who typed their name
+on `/` finds the form already filled when they open the modal on `/promotions/[slug]` or
+`/membership`. Without it every page mounts a fresh `MembershipModal` (via `MembershipSection`) and
+the form state dies on navigation — the visitor retypes everything, which is pure drop-off.
+
+| Decision | Why |
+| --- | --- |
+| `sessionStorage`, key `ta.guestDetails` | Real PII (name / email / mobile). It survives navigation + reload but dies with the tab, so a shared device keeps nothing. `localStorage` would outlive the visit for no extra benefit. |
+| Explicit 4-field allowlist | The modal's `formData` also holds `cardNumber` / `expiryDate` / `cvv`. The module never takes the object — it takes named fields — so card data cannot reach storage even if that shape changes. |
+| Guests only | An authenticated user's fields come from their profile (`userData`). The modal `clearGuestDetails()`s on the authenticated prefill — signing in is an auth boundary. |
+| Hydration fills blanks only | Anything already typed into the open modal wins; a hydration can never overwrite live input. |
+
+Cleared on: authentication (above) and sign-out — the key is registered in `USER_SESSION_KEYS` in
+`total-sign-out.ts`. **Keep those two in sync** when renaming the key.
+
 ## Total sign-out (2026-07-02)
 
 `totalSignOut()` / `clearUserScopedClientStorage()` in
@@ -82,3 +100,28 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## Sign-out storage clear — partner-portal keys (2026-08-01)
+
+Two keys added to `total-sign-out.ts` with the partner-catalogue work. Both are per-user
+breadcrumbs, and one of them is a genuine cross-account hazard rather than a privacy nicety.
+
+**`ta.partnerPortal.handedOff`** → `USER_SESSION_KEYS`. Set immediately before the SSO redirect
+into the partner portal, and read by `/my-account/rewards/catalogue` to decide whether an offer
+may be **deep-linked** (`portal-offer-url.ts`). A cold `view_smart` link does not trigger SSO —
+it bounces to a login page and loses the offer — so the marker is what keeps the catalogue from
+dead-ending people.
+
+Left uncleared, the next person to sign in **in the same tab** inherits a "this browser holds a
+live portal session" flag that describes *someone else's* session, and every offer link sends
+them to a login page. `sessionStorage` narrows the window to one tab, it does not close it:
+sign-out and sign-in commonly happen in the same tab, which is exactly the shared-device case.
+
+**`partnerCatalogueSpotlightSeen_`** → `USER_LOCAL_PREFIXES`. The "you haven't seen the partner
+catalogue yet" nav dot. Left behind, the next member silently inherits "already seen" and is
+never shown a feature they have not seen. Deliberately a **separate prefix** from
+`rewardsWidgetSpotlightSeen_` so the two retire independently.
+
+The general rule still holds and is worth restating because this branch nearly broke it: **a new
+per-user client-storage key is not finished until it is in one of these lists.** The handoff
+marker shipped without it and had to be retro-fitted.

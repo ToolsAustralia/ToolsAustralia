@@ -19,6 +19,48 @@ When in doubt, ask: "Want me to commit this?" — and wait.
 
 A `PreToolUse` Bash hook (`.claude/hooks/no-auto-commit.mjs`) enforces this. If you see `BLOCKED: User has set no-auto-commit`, ask the user to authorize.
 
+### 1b. Never push directly to `main` — always work on a branch
+
+**`main` auto-deploys to production.** A commit pushed to `main` goes straight to
+toolsaustralia.com.au with no preview build and no review gate in between. So even when
+commits are authorized (rule 1), the destination is **always a branch**, never `main`:
+
+```bash
+git checkout -b feature/<short-kebab-name>   # or fix/… , chore/… , docs/…
+git push -u origin feature/<short-kebab-name>
+gh pr create                                  # then merge the PR
+```
+
+This is already how the repo works — every merge on `main` is a PR merge (`Merge pull
+request #NNN from ToolsAustralia/feature/...`). Working on a branch buys three things a
+direct push cannot:
+
+1. **A Vercel preview build.** A broken build is caught on a preview URL instead of on the
+   live site.
+2. **A reviewable diff** before it reaches customers.
+3. **A cheap undo.** Reverting an unmerged branch costs nothing; reverting `main` is a new
+   production deploy.
+
+**Applies even when the user says "push".** "Commit and push" authorizes the *action*, not
+the *destination* — default to a branch and say which one you used. If the user explicitly
+names `main`, say in one line what they give up (no preview build, straight to production)
+and let them decide; don't refuse, and don't silently pick `main` on your own.
+
+**If you are already on `main` with uncommitted work**, branch first — `git checkout -b
+<name>` carries the working tree over, no stashing needed. If you have already *committed*
+to local `main`, move it: `git branch <name> && git reset --hard origin/main` (verify
+`git log` on the new branch first).
+
+**Never `--force` push a shared branch.** If a push is rejected as non-fast-forward, that is
+git protecting someone else's work: fetch, inspect what landed (`git log HEAD..origin/main`),
+rebase, re-run `type-check`, and push again. A rebase resolves *textual* conflicts only —
+it does not prove the merged result still compiles, so re-verify after every one.
+
+_(Added 2026-08-03 after a Contentsquare tracking fix was committed and pushed straight to
+`main` on request. The push itself was safe — git rejected the first attempt, the rebase
+preserved all 22 upstream commits, and it went in as a fast-forward — but it reached
+production with no preview build first.)_
+
 ### 2. Update docs when code changes
 
 If you edit files under `src/` or `scripts/`, you **must** also update the matching domain documentation under `docs/<domain>/` in the same task. The `Domain Manifest` (at the bottom of this file) is the file→domain map.
@@ -268,7 +310,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-07-31",
+  "lastModified": "2026-08-04",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -302,7 +344,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useOpenMembershipModalListener.ts",
         "src/app/(site)/membership/**"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-04"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -333,7 +375,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-07-31"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -382,7 +424,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-08-04"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
@@ -401,7 +443,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useEntryRewardToast.ts",
         "src/utils/rewards-widget-spotlight-storage.ts"
       ],
-      "lastVerified": "2026-07-19"
+      "lastVerified": "2026-08-03"
     },
     "promo": {
       "docs": "docs/promo/",
@@ -410,6 +452,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/services/promo-analytics/**",
         "src/utils/promo/**",
         "src/utils/promo-analytics/**",
+        "src/types/promo-analytics.ts",
         "src/utils/promo-banner/**",
         "src/models/Promo.ts",
         "src/models/PromoLink.ts",
@@ -432,6 +475,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/landingVideoManifest.ts",
         "scripts/build-landing-image-manifest.ts",
         "scripts/build-landing-video-manifest.ts",
+        "scripts/promo-analytics-compare.ts",
         "scripts/check-landing-hero-assets.mjs",
         "scripts/convert-drawn-tonight-tomorrow-to-webp.ts",
         "scripts/convert-drawn-tonight-tomorrow-videos.ts",
@@ -439,7 +483,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-draw9-landing-videos.ts",
         "src/docs/PROMOTION_ANALYTICS.md"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-07-31"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -480,12 +524,17 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/partner-applications/**",
         "src/app/api/partner-discount/**",
         "src/app/(site)/partner/**",
+        "src/app/portal-transit/**",
         "src/data/partner-catalog/**",
         "scripts/build-partner-catalog-preview.ts",
+        "scripts/probe-partner-catalog-images.ts",
+        "scripts/harvest-partner-instore-artwork.ts",
         "src/generated/partnerCatalogPreview.ts",
+        "src/generated/partnerCatalogBrowse.ts",
+        "src/app/(site)/my-account/rewards/catalogue/**",
         "src/generated/partnerCatalogOffers.ts"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-03"
     },
     "upsell": {
       "docs": "docs/upsell/",
@@ -557,7 +606,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/migrate-seed-staff-roles.ts",
         "src/contexts/UserContext.tsx"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-08-03"
     },
     "email": {
       "docs": "docs/email/",
@@ -618,7 +667,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-08-03"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -650,7 +699,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/dashboard-entry-hold.ts",
         "src/utils/dashboard-landing-session.ts"
       ],
-      "lastVerified": "2026-07-17"
+      "lastVerified": "2026-07-31"
     },
     "contact": {
       "docs": "docs/contact/",
@@ -715,7 +764,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-04"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -762,7 +811,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-07-30"
+      "lastVerified": "2026-07-31"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -791,7 +840,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-07-30"
+      "lastVerified": "2026-07-31"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -804,7 +853,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useStreakCelebration.ts",
         "src/utils/dashboard/**"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-04"
     },
     "security-csp": {
       "docs": "docs/security-csp/",
@@ -815,7 +864,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/RateLimit.ts",
         "next.config.ts"
       ],
-      "lastVerified": "2026-07-22"
+      "lastVerified": "2026-08-03"
     },
     "mongodb": {
       "docs": "docs/mongodb/",
@@ -828,7 +877,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/repositories/PromoAnalyticsRepository.ts",
         "src/repositories/__tests__/**"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-07-31"
     },
     "infrastructure": {
       "docs": "docs/infrastructure/",
@@ -869,7 +918,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/connect-ops-db.ts",
         "scripts/check-env.mjs"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-03"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",
@@ -887,7 +936,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/wt-*.sh",
         "scripts/codemods/**"
       ],
-      "lastVerified": "2026-07-28"
+      "lastVerified": "2026-07-31"
     },
     "config-and-data": {
       "docs": "docs/config-and-data/",
@@ -917,7 +966,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/eval-chat-goldenset.ts",
         "scripts/calibrate-chat-deflection.ts"
       ],
-      "lastVerified": "2026-07-10"
+      "lastVerified": "2026-07-31"
     },
     "e2e": {
       "docs": "docs/e2e/",

@@ -64,6 +64,8 @@ export default function PromoHero({
         console.error("Error tracking CTA click:", error);
       });
     }
+    // Opens "Select Your Package" with the recommended tier (Foreman) already behind it —
+    // selection-first is openEntryFlow's default for every entry CTA.
     openEntryFlow({ openLocalModal: false });
   };
 

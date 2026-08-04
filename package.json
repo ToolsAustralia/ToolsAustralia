@@ -298,7 +298,10 @@
     "test:force-charge-policy": "tsx src/server/admin/__tests__/forceChargePastDuePolicy.test.ts",
     "test:recover-stranded-past-due-policy": "tsx src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts",
     "test:charge-or-recover-policy": "tsx src/server/admin/__tests__/chargeOrRecoverPolicy.test.ts",
-    "test:past-due-history": "tsx src/server/admin/__tests__/charge-past-due-totals.test.ts && tsx src/services/admin/__tests__/chargePastDueHistory.test.ts && tsx src/utils/admin/__tests__/chargeSkipReasons.test.ts",
+    "test:past-due-history": "tsx src/server/admin/__tests__/charge-past-due-totals.test.ts && tsx src/services/admin/__tests__/chargePastDueHistory.test.ts && tsx src/utils/admin/__tests__/chargeSkipReasons.test.ts && tsx src/utils/admin/__tests__/chargeDeclineReasons.test.ts",
+    "test:payment-method-delete-flow": "tsx src/utils/payment/__tests__/payment-method-delete-flow.test.ts",
+    "reconcile:stale-active": "tsx scripts/reconcile-stale-active-subscriptions.ts",
+    "reconcile:stale-active:dry": "tsx scripts/reconcile-stale-active-subscriptions.ts --dry-run",
     "cleanup:membership-backfill": "tsx scripts/cleanup-membership-backfill-rows.ts --live",
     "cleanup:membership-backfill:dry": "tsx scripts/cleanup-membership-backfill-rows.ts",
     "cleanup:abandoned-incomplete": "tsx scripts/cleanup-abandoned-incomplete-subscriptions.ts --live",
@@ -405,7 +408,15 @@
     "sync:tiktok-destinations:dry": "tsx scripts/sync-tiktok-destinations.ts --dry-run",
     "sync:tiktok-spend-by-url": "tsx scripts/sync-tiktok-spend-by-url.ts",
     "sync:tiktok-spend-by-url:dry": "tsx scripts/sync-tiktok-spend-by-url.ts --dry-run",
-    "test:ab-sentinels": "tsx src/lib/ab-testing/__tests__/nonConversionSentinels.test.ts"
+    "test:ab-sentinels": "tsx src/lib/ab-testing/__tests__/nonConversionSentinels.test.ts",
+    "probe:partner-catalog-images": "tsx scripts/probe-partner-catalog-images.ts",
+    "norm:smoke:promo-analytics": "tsx scripts/internal-norm-smoke.ts GET /api/internal/norm/v1/promo-analytics && tsx scripts/internal-norm-smoke.ts GET \"/api/internal/norm/v1/promo-analytics/page-detail?pageType=toolset&slug=milwaukee\" && tsx scripts/internal-norm-smoke.ts GET \"/api/internal/norm/v1/promo-analytics/channel-detail?channel=klaviyo_email\"",
+    "test:promo-analytics-range": "tsx src/services/promo-analytics/__tests__/promo-analytics-range.test.ts",
+    "migrate:promo-analytics-cleanup:dry": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts",
+    "migrate:promo-analytics-cleanup": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --apply",
+    "migrate:promo-analytics-cleanup:prod:dry": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production",
+    "migrate:promo-analytics-cleanup:prod": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production --apply",
+    "harvest:partner-instore-artwork": "tsx scripts/harvest-partner-instore-artwork.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",

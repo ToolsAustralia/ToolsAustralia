@@ -2754,6 +2754,27 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
             user.subscription.status = "incomplete";
             user.subscription.isActive = false;
           }
+        } else if (isRebill && !isRenewal) {
+          // A stranded-member RE-BILL failed (mintCurrentCycleInvoice → billing_reason
+          // "subscription_update"). The member has NOT paid, so they are past_due again on
+          // the fresh cycle — but this branch deliberately does NOT fall into the isRenewal
+          // block, because that would trigger `pauseAfterRenewalFailure` and re-pause a
+          // member the recovery flow just unpaused (see the isRebill comment above).
+          //
+          // Without this, the status write was gated on `isRenewal` alone while the DUNNING
+          // notification fired on `isRenewal || isRebill` — so a failed re-bill emailed the
+          // member but left Mongo saying `active`. Combined with `unpauseAndAnchorNow`
+          // emitting a `customer.subscription.updated` with status "active" (mirrored at the
+          // top of this file), that is how an account ends up `active` while delinquent for
+          // weeks. Measured 2026-07-31: 2 such accounts in production, both with
+          // `autoRenew: true` and no billing-date fields. See docs/admin/gotchas.md.
+          webhookLog("info", `Re-bill payment failed - setting status to past_due (no re-pause)`);
+          const wasAlreadyPastDueOnRebill = user.subscription.status === "past_due";
+          user.subscription.status = "past_due";
+          user.subscription.isActive = false;
+          if (!wasAlreadyPastDueOnRebill) {
+            user.subscription.pastDueAt = new Date();
+          }
         } else if (isRenewal) {
           // Renewal payment failed - this IS a past_due situation
           // The subscription was active but payment for renewal failed

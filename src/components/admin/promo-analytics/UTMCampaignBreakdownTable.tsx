@@ -2,27 +2,32 @@
 
 import React, { useState, useMemo } from "react";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { formatNumber, formatPercentage, formatCurrency } from "@/utils/metrics/formatters";
+import { formatNumber, formatPercentageOrDash, formatCurrency } from "@/utils/metrics/formatters";
 import { formatCampaignDisplay, formatMediumDisplay } from "@/utils/promo-analytics/display-formatters";
+import { channelKind, type ChannelKind } from "@/config/attribution-channels";
+import type { UTMCampaignMetrics } from "@/types/promo-analytics";
 import { cn } from "@/utils/cn";
 
-interface CampaignRow {
-  utmSource?: string;
-  utmMedium: string;
-  utmCampaign: string;
-  visits: number;
-  signups: number;
-  conversions: number;
-  revenue: number;
-  visitToSignupRate: number;
-  signupToConversionRate: number;
-  overallConversionRate: number;
-}
+/**
+ * Channel chip styling, keyed by `ChannelKind` rather than by the label text.
+ *
+ * Branching on the literal string `"Direct"` is what silently stopped working the moment the
+ * labels moved into config — every channel rendered as paid-indigo. Exported so the channel
+ * table in PromoAnalyticsManagement paints the same chip from the same source.
+ */
+export const CHANNEL_CHIP_CLASS: Record<ChannelKind, string> = {
+  paid: "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50",
+  owned: "bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/50",
+  unattributed:
+    "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600",
+  unknown:
+    "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600",
+};
 
 type SortableColumn = "visits" | "signups" | "conversions" | "revenue";
 
 interface UTMCampaignBreakdownTableProps {
-  rows: CampaignRow[];
+  rows: UTMCampaignMetrics[];
   loading?: boolean;
   emptyMessage?: string;
   showSourceColumn?: boolean;
@@ -158,7 +163,7 @@ export default function UTMCampaignBreakdownTable({
         </thead>
         <tbody>
           {sortedRows.map((row, i) => {
-            const key = `${row.utmSource ?? ""}-${row.utmMedium}-${row.utmCampaign}-${i}`;
+            const key = `${row.channel}-${row.utmMedium}-${row.utmCampaign}-${i}`;
             return (
               <tr
                 key={key}
@@ -167,13 +172,12 @@ export default function UTMCampaignBreakdownTable({
                 {showSourceColumn && (
                   <td className={cellPad}>
                     <span
-                      className={`inline-block px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium whitespace-nowrap ${
-                        row.utmSource === "Direct"
-                          ? "bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-200 border border-gray-200/80 dark:border-neutral-600"
-                          : "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50"
-                      }`}
+                      className={cn(
+                        "inline-block px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium whitespace-nowrap",
+                        CHANNEL_CHIP_CLASS[channelKind(row.channel)]
+                      )}
                     >
-                      {row.utmSource}
+                      {row.channelLabel}
                     </span>
                   </td>
                 )}
@@ -216,9 +220,9 @@ export default function UTMCampaignBreakdownTable({
                 >
                   {formatCurrency(row.revenue)}
                 </td>
-                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentage(row.visitToSignupRate)}</td>
-                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentage(row.signupToConversionRate)}</td>
-                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentage(row.overallConversionRate)}</td>
+                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentageOrDash(row.visitToSignupRate, row.visits)}</td>
+                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentageOrDash(row.signupToConversionRate, row.signups)}</td>
+                <td className={cn("hidden md:table-cell", cellPad, "text-right text-gray-600 dark:text-neutral-400 tabular-nums")}>{formatPercentageOrDash(row.overallConversionRate, row.visits)}</td>
               </tr>
             );
           })}

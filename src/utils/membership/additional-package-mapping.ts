@@ -38,6 +38,24 @@ export function isBossTierPlanId(planId: string): boolean {
   return normalizeMembershipPlanId(planId).toLowerCase().includes("boss");
 }
 
+/**
+ * Foreman MONTHLY tier — never the one-time Foreman Pack.
+ *
+ * The catalog id is `foreman-subscription`, but `useMemberships` slugifies the package NAME
+ * for `plan.id` ("Foreman" → `foreman`), so UI code sees the short form. Both are accepted.
+ * This is the tier the package picker and the selected-package card flag as RECOMMENDED.
+ */
+export function isForemanSubscriptionPlanId(planId: string): boolean {
+  const n = normalizeMembershipPlanId(planId).toLowerCase();
+  return n === "foreman" || n === "foreman-subscription";
+}
+
+/** Boss MONTHLY tier — the top of the subscription ladder (Best Value). Same id caveat as above. */
+export function isBossSubscriptionPlanId(planId: string): boolean {
+  const n = normalizeMembershipPlanId(planId).toLowerCase();
+  return n === "boss" || n === "boss-subscription";
+}
+
 /** Boss subscription, or Power/VIP one-time (incl. additional * packs) — Best Value ribbon. */
 export function isOneTimeBestValuePlanId(planId: string): boolean {
   const n = normalizeMembershipPlanId(planId);

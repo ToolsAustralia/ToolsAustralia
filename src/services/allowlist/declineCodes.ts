@@ -27,6 +27,13 @@ export const PERMANENT_ISSUE_DECLINE_CODES = new Set<string>([
   "expired_card",
   "incorrect_cvc",
   "invalid_account",
+  // Stripe emits BOTH `incorrect_number` and `invalid_number`, and only the former ever
+  // occurs here: measured 2026-07-31 against production `InvoiceChargeLog`, all-time
+  // `incorrect_number` = 4,202 rows, `invalid_number` = 0. `incorrect_number` was the
+  // single largest dead-card decline in the 28-31 Jul window (300 of 999) and was being
+  // auto-allowlisted, which cannot help — a mistyped/reissued number keeps declining.
+  // Keep `invalid_number` too; it is a real Stripe code and costs nothing to cover.
+  "incorrect_number",
   "invalid_number",
   "invalid_expiry_year",
   "invalid_expiry_month",

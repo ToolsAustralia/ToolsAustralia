@@ -112,6 +112,13 @@ export async function POST(request: NextRequest) {
               builtPrizeSlug: payload.builtPrizeSlug,
               toolboxSwitches: payload.toolboxSwitches,
               toolsetSwitches: payload.toolsetSwitches,
+              // Must be forwarded. Omitting it made the repository's `interacted !== false`
+              // default fire for every write, so `buildInteracted` was true on 100% of rows and
+              // the read gate `{ $ne: false }` matched everyone — "Builds" counted every visitor
+              // who loaded the builder, not the ones who engaged. It cannot be reconstructed
+              // from the switch counters: the cash toggle leaves both at 0 (F-010), and a
+              // URL-param arrival re-hydrates a previously-switched build at 0/0 as well.
+              interacted: payload.interacted,
             });
             return result.success;
           },

@@ -98,7 +98,7 @@ export default function MyAccountPage() {
   const { allowSecondaryModals } = useDashboardLandingOrchestration(
     status === "authenticated",
   );
-  const { openEntryFlow, openWithOneTimePlan, membershipModal, getTradieSubscriptionPlan } = useMajorDrawEntryCta();
+  const { openEntryFlow, openWithOneTimePlan, membershipModal, getRecommendedSubscriptionPlan } = useMajorDrawEntryCta();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
   useMemberships();
@@ -238,17 +238,20 @@ export default function MyAccountPage() {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const handleOpenMembershipModal = (event: CustomEvent<{ plan?: LocalMembershipPlan }>) => {
+    const handleOpenMembershipModal = (
+      event: CustomEvent<{ plan?: LocalMembershipPlan; packageSelectionFirst?: boolean }>
+    ) => {
       const plan = event.detail?.plan;
       whenGatesOpenElseGateModal(() => {
-        if (plan) {
-          membershipModal.setSelectedPlan(plan);
-          membershipModal.openModal();
-        } else {
-          // Plan-less event → selection-first; a bare openModal() with no selected plan renders
-          // the payment step with no package (broken).
-          membershipModal.openModalWithPackageSelectionFirst();
+        // Entry CTAs ask for the picker first, carrying the recommended tier as the default behind
+        // it. A plan-less event also goes selection-first — with a default plan, because a bare
+        // openModal() with no selected plan renders the payment step with no package (broken).
+        if (event.detail?.packageSelectionFirst || !plan) {
+          membershipModal.openModalWithPackageSelectionFirst(plan ?? getRecommendedSubscriptionPlan());
+          return;
         }
+        membershipModal.setSelectedPlan(plan);
+        membershipModal.openModal();
       });
     };
 
@@ -256,7 +259,7 @@ export default function MyAccountPage() {
     return () => {
       window.removeEventListener("openMembershipModal", handleOpenMembershipModal as EventListener);
     };
-  }, [membershipModal, whenGatesOpenElseGateModal]);
+  }, [membershipModal, whenGatesOpenElseGateModal, getRecommendedSubscriptionPlan]);
 
   if (status === "loading" || loading || majorDrawStatsLoading || currentMajorDrawLoading) {
     return <DashboardLoader />;
@@ -307,8 +310,13 @@ export default function MyAccountPage() {
   // Open with the Tradie SUBSCRIPTION preselected — same behavior as tapping the Tradie tier card
   // (owner decision): payment-ready with a "Change" button to swap tiers. Never a bare openModal()
   // (no plan renders the payment step with skeletons and no package).
+  // Picker first, recommended tier (Foreman) selected behind it — same as every other CTA that
+  // opens the modal from a surface with no package cards on screen. Backing out of the picker
+  // leaves a real package selected, never an empty payment step.
   const onBecomeMember = () =>
-    whenGatesOpenElseGateModal(() => membershipModal.openModal(getTradieSubscriptionPlan()));
+    whenGatesOpenElseGateModal(() =>
+      membershipModal.openModalWithPackageSelectionFirst(getRecommendedSubscriptionPlan())
+    );
   const onGetPackage = () => openEntryFlow();
   const onBuyPackage = () => openWithOneTimePlan();
 
@@ -436,6 +444,7 @@ export default function MyAccountPage() {
         membershipModalConfig={
           membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
         }
+        planIsDefaultSelection={membershipModal.openWithPackageSelectionFirst}
       />
 
       <ReferFriendModal

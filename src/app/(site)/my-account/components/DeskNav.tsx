@@ -9,6 +9,7 @@ import { Monogram } from "@/components/ui/Monogram";
 import { formatDisplayName } from "@/utils/display-name";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { DASHBOARD_NAV, isNavItemActive } from "./BottomNav";
+import { usePartnerCatalogueSpotlight, SpotlightDot, rewardsTabPulseKey } from "./PartnerCatalogueSpotlight";
 
 interface DeskNavProps {
   firstName?: string | null;
@@ -22,6 +23,8 @@ interface DeskNavProps {
 export default function DeskNav({ firstName, lastName, email, tierHex }: DeskNavProps) {
   const pathname = usePathname();
   const openSheet = useDashboardSheetStore((s) => s.openSheet);
+  const spotlight = usePartnerCatalogueSpotlight();
+  const pulseKey = rewardsTabPulseKey(pathname);
 
   return (
     <aside className="sticky top-0 hidden h-screen-svh w-[236px] shrink-0 flex-col border-r border-token bg-surface lg:flex">
@@ -54,10 +57,26 @@ export default function DeskNav({ firstName, lastName, email, tierHex }: DeskNav
               ? "bg-red-600 text-white dark:bg-red-500"
               : "text-muted-token hover:bg-black/[.04] hover:text-primary-token dark:hover:bg-white/[.06]",
           );
+          // Matches BottomNav: a one-time dot + "New" pill until the member has seen the
+          // catalogue, plus a halo that re-pulses on every arrival and does not retire.
+          const isRewards = item.id === "rewards";
+          const showSpotlight = isRewards && spotlight.show;
+          const pulse = isRewards && pulseKey ? pulseKey : null;
           const inner = (
             <>
-              <Icon className="h-5 w-5" strokeWidth={active ? 2.2 : 1.9} />
+              <span
+                key={pulse ?? undefined}
+                className={cn("relative", pulse && "ta-nudge-attention rounded-full")}
+              >
+                <Icon className="h-5 w-5" strokeWidth={active ? 2.2 : 1.9} />
+                {showSpotlight && <SpotlightDot pulsing={spotlight.pulsing} className="pointer-events-none absolute -right-1 -top-1" />}
+              </span>
               {item.label}
+              {showSpotlight && (
+                <span className="ml-auto rounded-full bg-red-600 px-1.5 py-[1px] text-[9px] font-black uppercase tracking-wide text-white">
+                  New
+                </span>
+              )}
             </>
           );
           // Support opens an overlay sheet (prototype behavior), not a route.

@@ -1,5 +1,32 @@
 # Payment — Gotchas
 
+## `user.save()` on `savedPaymentMethods` loses write races — retry, don't swallow
+
+Mongoose applies `__v` optimistic concurrency **automatically** when you modify an array (no `optimisticConcurrency` schema option is set on `User`). So a positional write like `savedPaymentMethods.0.isDefault` throws **`VersionError`** if anything else wrote the user document between the read and the save.
+
+That is not hypothetical: `POST /api/stripe/payment-methods` returned **500 six times to five members in the week to 2026-08-03**, on saves that had *already succeeded* via the competing writer. Members saw a failure toast for a card that was in fact saved — verified in production, both accounts ended up with the correct card, correct default, no duplicates.
+
+The competing writer is usually **our own Stripe calls**: attaching a payment method and setting the customer default fire `payment_method.attached` / `customer.updated`, whose webhook handler writes the same user document while the request still holds a stale copy. (Tell-tale sign: `roleId` appears in `modifiedPaths` for a flow that never touches it.)
+
+**A `VersionError` has no `.code` property** — it is identified by `name`. The old guard was `if ("code" in saveError) { if (saveError.code === 11000) … }` under a comment claiming *"Save with retry on conflict"*, so version conflicts fell straight through to a re-throw. The comment described behaviour that did not exist.
+
+Rules now:
+
+- Detect with `isWriteConflictError` (`name === "VersionError" || code === 11000`), never by `.code` alone.
+- Wrap the whole read-modify-save in `withWriteConflictRetry` ([`payment-method-manager.ts`](../../src/utils/payment/payment-method-manager.ts)) — applied to `savePaymentMethodToUser` and `detachAndRemoveSavedPaymentMethod`. The operation **must re-read the user at its start**, or the retry re-applies the same stale version. Any Stripe call inside must be idempotent, because a retry repeats it (`ensurePaymentMethodAttached` and `setDefaultPaymentMethod` both are).
+- Conflicts must **escape** an inner `catch` that returns `{ success: false }` — swallowing them is what turned a retryable race into a user-facing 500.
+- `removePaymentMethodFromUser` and `deduplicatePaymentMethods` still save directly and are **not** yet wrapped; extend the same pattern if they start erroring.
+
+## `POST /api/stripe/cancel-payment-intent` is unauthenticated **by design** — client_secret is the gate
+
+This route deliberately takes **no session**. `create-payment-intent` gates on `if (session?.user?.id)` — a *conditional, not a requirement* — so guests legitimately hold PaymentIntents (registration does not auto-login here; a step-1 guest bridges to step 2 via `guestUserData`). Requiring a session would break abandoned-payment cleanup for exactly the users most likely to abandon.
+
+It previously accepted a bare `paymentIntentId` from an unauthenticated body and cancelled it. `pi_...` ids are exposed to the browser during checkout, so anyone holding one could cancel **another member's in-flight payment**.
+
+Authorization is now the intent's **`client_secret`** — Stripe's own capability token, only ever handed to the client that created the intent and not derivable from the id — compared with a length-safe constant-time check so the endpoint can't be used as a brute-force oracle. Layered with `requireSameOrigin` (CSRF) and a per-IP distributed rate limiter, mirroring [`POST /api/auth/auto-login`](../../src/app/api/auth/auto-login/route.ts), the repo's existing precedent for a state-changing Stripe route with no session.
+
+**Callers must send `clientSecret` alongside `paymentIntentId`** or they get a 403 — see `handleClose` in `MembershipModal`, which captures it *before* the state reset that nulls it.
+
 ## `subscription-period.ts` is the Basil-safe way to read period start/end
 
 [`getSubscriptionPeriodEnd` / `getSubscriptionPeriodStart`](../../src/utils/payment/stripe/subscription-period.ts) are the canonical helpers for "when does this subscription's current period start/end?". Under the Stripe Basil API those fields live on `subscription.items.data[i].current_period_*`, not the subscription root (which returns `undefined`); the helpers read the earliest value across items and fall back to the legacy root field for older shapes. `getSubscriptionPeriodStart` was added June 2026 alongside the existing end helper when the upgrade route needed the start for display. Always use these — reading `subscription.current_period_*` directly silently yields `undefined`/`Invalid Date`. See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md) for the incident that motivated this.

@@ -28,6 +28,27 @@ export function formatPercentage(value: number, decimals: number = 1): string {
 }
 
 /**
+ * A percentage that is UNDEFINED when its denominator is zero.
+ *
+ * Rates in this codebase are computed server-side as `denominator > 0 ? … : 0`, so a bucket with
+ * no denominator arrives as the number `0` and `formatPercentage` renders it "0.0%". That is a
+ * false statement, not a neutral one: a channel with traffic but no registrations rendered
+ * "S→C 0.0%" — asserting that none of its signups converted — while the adjacent Conversions
+ * cell showed a non-zero count. "No signups yet" and "signups that never converted" are
+ * different facts and must not share a rendering.
+ *
+ * Pass the denominator so the caller cannot forget the guard.
+ */
+export function formatPercentageOrDash(
+  value: number,
+  denominator: number,
+  decimals: number = 1
+): string {
+  if (!denominator || denominator <= 0) return "—";
+  return formatPercentage(value, decimals);
+}
+
+/**
  * Format number with commas
  * @param value - Number to format
  * @returns Formatted number string

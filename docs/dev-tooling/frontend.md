@@ -43,6 +43,22 @@ grep -oE '"src/components/modals/[^"]+"' src/components/dev/ModalsGalleryClient.
   | tr -d '"' | sort -u | while read p; do [ -f "$p" ] || echo "MISSING $p"; done
 ```
 
+Note (2026-07-31): `ChannelDetailModal`'s gallery entry changed props — `utmSource="google"` became
+`channel="google" channelLabel="Google"`, because the Page Analytics drill-down now takes a
+canonical channel KEY plus a separate display label instead of a raw `utm_source` (see
+[client-state frontend](../client-state/frontend.md)).
+
+**This is the gallery's recurring failure mode and it is worth naming.** The gallery is a real
+consumer of every modal's prop types, but it sits far from the feature being changed, so a prop
+rename elsewhere surfaces here as a `tsc` error *after* the feature itself already compiles
+cleanly. A sub-agent scoped to "the four Page Analytics component files" finished with a green
+lint and a green scoped type-check, and the only remaining repo-wide error was this file. When
+renaming or retyping a modal prop, grep the gallery in the same change:
+
+```bash
+grep -n "<TheModalName" src/components/dev/ModalsGalleryClient.tsx
+```
+
 Note (2026-07-30): the eight admin draws modals moved to `src/components/modals/draws/` (see [shared-ui architecture → Modal folder layout](../shared-ui/architecture.md)). Gallery imports and `MODAL_SOURCES` were updated, and the two stale folder paths above were fixed at the same time.
 
 Note (2026-07-24): the `pixel-consent` / `PixelConsentModal` entry was removed — the component was deleted (panel F-019, a permanently-unreachable consent modal whose Decline gated nothing). See [docs/tracking/rules.md R9](../tracking/rules.md) for the no-consent-banner posture.

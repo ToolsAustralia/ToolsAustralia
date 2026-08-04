@@ -50,8 +50,13 @@ without compensation. See `docs/promo/frontend.md` for the asset normalisation d
 
 ## Promo Analytics table — Builds column added; Cross-visits deliberately kept (2026-07-28)
 
+> **Superseded 2026-07-31** — Cross-visits was removed, and **Builds** changed meaning (it now
+> reads engagement, with exposure on the sub-label). Sorting no longer takes `keyof PromoPageMetrics`.
+> See [Page Analytics rebuild](#page-analytics-rebuild-2026-07-31). Kept for the history of why the
+> column was retained in July.
+
 [`PromoAnalyticsManagement`](../../src/components/admin/PromoAnalyticsManagement.tsx)'s per-page
-table gained a **Builds** column, inserted immediately after the existing **Cross-visits** column
+table gained a **Builds** column, inserted immediately after the then-existing **Cross-visits** column
 (same order in both the `<thead>` and each `<tbody>` row, so header and cell stay aligned). Cell
 shows `formatNumber(row.builds)` with a `Top: {label}` sub-label line rendering the top combination
 (`getPrizeLabel(row.topBuiltPrize) ?? row.topBuiltPrize`) when one exists — the `Top:` prefix makes
@@ -69,17 +74,25 @@ new `builds` / `topBuiltPrize` fields on `PromoPageMetrics` — see
 [docs/promo/backend.md](../promo/backend.md#prize-build-admin-surfacing--builds--topbuiltprize-2026-07-28)
 for the aggregation.
 
-**Cross-visits was NOT removed.** An earlier draft of this task assumed the column (reads
-`referrerSlug`) was structurally dead, since nothing has written a new `referrerSlug` since
+**Cross-visits was NOT removed *at the time*.** An earlier draft of this task assumed the column
+(reads `referrerSlug`) was structurally dead, since nothing has written a new `referrerSlug` since
 2026-07-24 (its only writer, the "Explore other toolsets" carousel, was removed when the prize
 builder's toolset reel took over that job). That premise was re-tested against the live DB and
-found false: 174 of 712 visit rows (~24%) still carry `referrerSlug`, spanning June–July, and
-remain inside the 90-day TTL — the column still renders real numbers for those date ranges. It
-will decay to all-zero on its own as those rows age out (~late October 2026), at which point
-dropping it becomes a safe one-line change. Until then it stays exactly as it was: same header,
-same cell, same `crossVisits` sort key, same `crossVisitMap` aggregation in the repository.
+found false at the time: 174 of 712 visit rows (~24%) still carried `referrerSlug`, spanning
+June–July, inside the 90-day TTL. **That window has since closed** — the last row carrying
+`referrerSlug` is dated 2026-07-22, so by 2026-07-31 the column was a structural zero for every
+reachable range and it was removed along with the field, the index declaration and the
+`visitsFrom` panel in `PromoPageDetailModal`.
 
 ## Promo Analytics — Switched-away % column + By Built Prize table (2026-07-28)
+
+> **Partly superseded 2026-07-31.** The "Switched away % of Builds" column and its
+> `getSwitchAwayRate` / `getPageDefaultPrizeSlug` client-side derivation are **gone**, replaced by
+> a server-computed **Changed %** (`buildChangeRate`) whose numerator and denominator are both
+> page-level uniques — so the unit mismatch that produced 250% is structurally impossible rather
+> than merely corrected. `getPageDefaultPrizeSlug` moved to `src/config/promo-landing-slugs.ts` so
+> the server can use it. The **By Built Prize** and **By Toolbox** tables below are unchanged. See
+> [Page Analytics rebuild](#page-analytics-rebuild-2026-07-31).
 
 Surfaces the two read-side additions from
 [docs/promo/backend.md](../promo/backend.md#read-side-gap-closure--builddistribution--getaggregatedbybuiltprize-2026-07-28)
@@ -113,7 +126,8 @@ the zero-builds cell's tooltip reads "Nobody built a prize on this page in this 
 the existing Builds-column tooltip idiom.
 
 **b) "By Built Prize" table** — new table rendered below the per-page table, from
-`data?.byBuiltPrize ?? []` (optional-chained the same way `data?.byUTMSource` already is in this
+`data?.byBuiltPrize ?? []` (optional-chained the same way `data?.byChannel` — then named
+`data?.byUTMSource` — already is in this
 file, even though the API always includes the key — matches existing sibling-field convention).
 Mirrors the Channel Attribution table's structure (static IIFE-computed `rows`, explicit
 empty-state div — "No builds recorded for this period." — never a bare header with an empty
@@ -201,6 +215,69 @@ response, mirroring the admin route's own already-verified wiring three lines ab
 without it, declaring `byBuiltPrize` as a required schema field while the route never returned it
 would have made `withNorm`'s `responseSchema` validation genuinely 500 on every call to this
 previously-working endpoint.
+
+## Page Analytics rebuild (2026-07-31)
+
+The `promo-analytics` tab ([`PromoAnalyticsManagement.tsx`](../../src/components/admin/PromoAnalyticsManagement.tsx)
+plus [`ChannelDetailModal`](../../src/components/modals/ChannelDetailModal.tsx) and
+[`PromoPageDetailModal`](../../src/components/modals/PromoPageDetailModal.tsx)) was rebuilt against
+a corrected API. Backend rationale for every item: [docs/promo/backend.md](../promo/backend.md#page-analytics-repair--2026-07-31).
+
+**Table counts after this change: 34 `<th>` / 34 `<td>`** — Channel Attribution 8/8, per-page
+**10/10** (was 11/11: `Cross-visits` removed, `Switched away % of Builds` replaced 1-for-1 by
+`Changed %`), By Built Prize 8/8, By Toolbox 8/8. The new
+[`PrizeBuildBreakdownTable`](../../src/components/admin/promo-analytics/PrizeBuildBreakdownTable.tsx)
+adds **8/8** inside `PromoPageDetailModal` — Combination · Builders · Changed · Signups · Conv ·
+Rev · B→S · Conv %, the first six sortable (`builders` descending by default), the last two
+`hidden md:table-cell` like every other rate column on this tab. `isPageDefault` is a badge inside
+the Combination cell, not a column of its own.
+
+**a) Local interface copies deleted.** `PromoPageMetrics`, `BuiltPrizeMetrics` and the local
+`UTMSourceMetrics` were re-declared inside the component; they are now **type-only imports** from
+`@/repositories/PromoAnalyticsRepository` (erased at build, so the data layer is never bundled —
+see `eslint/rules/no-models-in-client.js`). The local copies had already drifted from the API once,
+which compiles fine and renders `undefined` as `"0"`.
+
+**b) Sorting is a closed union, not `keyof`.** `sortColumn` / `handleSort` / `getSortIcon` take
+`SortablePageColumn = "visits" | "builds" | "signups" | "conversions" | "revenue"` instead of
+`keyof PromoPageMetrics`, which lets the `as number` cast in the comparator go away — a
+non-numeric column can no longer be wired into a sort header by accident.
+
+**c) Retention banner.** When `data.dateRange.clampedToRetention` is true, an amber `Info` callout
+above the tables states that visitor numbers start at `visitsRetainedFrom` (rendered in AEST via
+`formatInTimeZone`) even though a longer range is selected, and that registrations / conversions /
+revenue are not trimmed so rates against visitors read high for the clipped part of the period.
+
+**d) Channel Attribution table.** Renders `data.byChannel` keyed on `row.channel`, displaying
+`row.channelLabel`. The chip class comes from `CHANNEL_CHIP_CLASS[channelKind(row.channel)]`
+(exported from `UTMCampaignBreakdownTable` so both tables paint the same chip from one source) —
+the previous code branched on the literal string `"Direct"`, which silently stopped working the
+moment labels moved into config and painted every channel paid-indigo. The row click passes the
+**key** to `ChannelDetailModal`, never the label; the label rides along separately for display.
+
+**e) Builds column now shows engagement over exposure.** Cell renders `formatNumber(row.builds)`
+with an always-present sub-label `of {buildVisitors} shown` (em dash when `buildVisitors === 0`).
+The old `Top: {label}` sub-label moved into the cell `title`. The trailing rate column is
+**Changed %** = `row.buildChangeRate`, computed server-side from two page-level uniques, so unlike
+the `getSwitchAwayRate` it replaces it cannot exceed 100% (F-013's 250%).
+
+**f) `PromoPageDetailModal` — "Prize builds" section.** The `visitsFrom` panel is gone; in its
+place a bordered card with three chips (**Saw a combination** = `buildVisitors`, **Changed it** =
+`builds` + `buildChangeRate`, **Page default** = the default combination's label) above
+`PrizeBuildBreakdownTable`. The card's own copy states that the chips are deliberately **not** the
+column totals, because a visitor who landed more than once can appear under two combinations —
+`Σ builders ≥ buildVisitors` (see [promo/gotchas.md](../promo/gotchas.md#page-level-uniques-are-not-the-column-sums-of-a-per-combination-breakdown)).
+
+**g) `ChannelDetailModal` — `channel` + `channelLabel` props, and a "Traffic sources" strip.**
+`channel` (a `ConvertingPlatform`) is what the query filters on; `channelLabel` is every string a
+human reads. The new strip renders `data.rawSources` as chips (raw `utm_source` + visit count,
+`(none)` for absent) so an operator can audit what folded into e.g. Facebook / Instagram, with
+inline copy stating they may sum above the visit total. The campaign rows now spread
+`data.channel` / `data.channelLabel` onto each row rather than omitting the field — the Channel
+column stays hidden here (`showSourceColumn={false}`) since it would repeat the modal title.
+
+**h) `UTMCampaignBreakdownTable` takes the shared `UTMCampaignMetrics` type** from
+`@/types/promo-analytics` instead of a local `CampaignRow`, and keys rows on `row.channel`.
 
 ## Pages
 

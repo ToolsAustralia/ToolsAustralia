@@ -85,3 +85,195 @@ The tenant portal (`myrewards.toolsaustralia.com.au`) serves no usable policy pa
 To re-verify after a vendor change: fetch the URL **and a deliberately bogus path on the
 same host**, then compare `<title>` and body size. If they match, you are looking at a
 catch-all, not the document.
+
+## R8. Member-facing partner copy states counts, not adjectives (2026-07-31)
+
+A live audit of the iGoDirect portal as a Tradie (50%) member found the copy on **our**
+side was writing cheques the vendor's catalogue does not cash:
+
+| Surface | Was | Why it was wrong |
+|---|---|---|
+| `RewardsPartnerCard` CTA subline | "See every deal · signed in automatically" | The member *sees* every deal — but **68% of the portal home page is locked at 50%**, and the portal marks none of it. "See every deal" read as "use every deal". |
+| `RewardsPartnerCard` ring subline | "of Australia's top tool brands, on your account" | The catalogue returns **zero** offers for Milwaukee, DeWalt, Makita and Ryobi. |
+| `PartnerPreview`, `DashboardGuestPanel`, `UnlockDiscounts` | "top tool brands" | Same claim, same problem. |
+
+Rules that follow from it:
+
+- **Never claim tool brands we do not carry.** Sell **breadth** ("1,800+ Australian
+  brands") or the **count** — both are true and checkable. Re-add a tool-brand claim only
+  in the same change that lands tool-brand offers in the catalogue.
+- **A percent needs a denominator.** Use `getPartnerCatalogUnlockedCount(pct)`
+  (`partner-catalog-visibility.ts`) to render "917 of 1,833 partner offers" rather than a
+  bare "50%". It returns `count: null` for any **off-ladder** percent — 0% is the real one
+  that reaches production (guest / past-due with no live pack) — and callers **must** fall
+  back to the bare percent rather than printing an invented figure. Guarded by
+  `npm run test:partner-catalog-drift`.
+- **Set the expectation before the hand-off, not after.** The Rewards card carries a line
+  stating that the portal shows the whole catalogue and that offers above the member's
+  level show an unlock prompt. **Until the vendor badges locked offers on the card
+  (vendor ask 1), that sentence is the only thing between the member and the conclusion
+  that Tools Australia oversold them.** Do not remove it while the portal renders locked
+  and unlocked tiles identically.
+- **The two partner programmes are named separately.** The `PARTNER_BRAND_OFFERS` grid is
+  **Tools Australia's own** 7 mention-us-at-the-counter partners and is **not** in the
+  iGoDirect catalogue. It sits under its own "Tools Australia partners · Deal direct · no
+  portal" heading; unlabelled, the ring's percent read as if it described that grid.
+
+Full audit, evidence and the 16 vendor-side asks: `docs/partner/igodirect-portal-ux-audit.md`.
+
+## R9. One upgrade sentence, ours, shared with the vendor (2026-07-31)
+
+The portal's locked-offer banner is copy about **Tools Australia's packs**, rendered by a
+third party who has no reason to know CLAUDE.md rule 11. Their current wording is clean;
+nothing keeps it clean through their next content edit.
+
+So TA supplies the string. [`tier-upgrade-copy.ts`](../../src/utils/partner-discounts/tier-upgrade-copy.ts)
+is the single source for **both** sides:
+
+- `buildTierUpgradeCopy(requiredPct, currentPct)` — our surfaces. Names the cheapest covering
+  tier and **what it adds** ("Foreman opens this, plus 458 more offers"). The delta is the
+  reason to move; a total the member cannot act on is not.
+- `buildVendorLockedOfferCopy({ requiredPct, currentPct })` — the vendor's banner. Stands
+  alone inside a third-party UI and is written to be templated.
+
+Rules baked in and guarded by `npm run test:partner-catalog-drift`:
+
+- No `odds` / `chance(s)` / `lottery` / `lotto` / `raffle` / `sweepstake` / `gamble` / `bet`.
+- **The module never mentions entries at all.** Its subject is catalogue access — that is the
+  cleanest way to stay clear of "entries are never sold".
+- Australian English: `catalogue`, never `catalog`.
+
+The hand-over page is [`vendor-copy-contract.md`](vendor-copy-contract.md); the brand side is
+[`vendor-brand-spec.md`](vendor-brand-spec.md). **If the vendor edits the wording, it comes
+back to us first** — we carry the exposure, not them.
+
+## R10. The catalogue entry point is universal, not membership-gated (2026-08-01)
+
+The "See what your N% opens" row on the Rewards card sits **outside** the guest/past-due/SSO CTA
+branches, on purpose. It first shipped inside the SSO branch, which silently excluded two states:
+
+- **Past-due WITH a live one-time pack.** The card above reads *"Active from your pack · 25%"* —
+  access they paid for — and yet offered no way to see what that 25% opens. The worst kind of
+  gap: the UI asserts the benefit on one line and withholds it on the next.
+- **Guest / 0% access.** For them the catalogue is the single best conversion surface we have:
+  1,833 offers, each marked with the membership that opens it, **every card linking to
+  `/membership` with its own `offer_id`**. Hiding it was the opposite of what it is good at.
+
+**Entitlement belongs in the row's COPY, not in who may see the row.** At 0% it reads
+"See what a membership opens" and the page headline becomes *"1,833 partner offers — a
+membership or pack opens them"* rather than the technically-true, useless "0 of 1,833 open at
+your 0%". The "only show what I can use" filter also defaults **off** at 0%, since on would
+render an empty page and read as broken.
+
+The same universality applies to the discovery nudge: the nav dot keys on the signed-in member,
+never on their tier. A one-time pack holder is a partner-catalogue user and gets told about it.
+
+When adding another entry point to the catalogue, ask which account states can reach it. If the
+answer is "active members", it is wrong.
+
+## R11. A hand-off marker is a TTL, never a boolean (2026-08-03)
+
+Deep-linking an offer (`{portal}/products/view_smart/{id}`) requires a **live portal session**.
+Without one the vendor dead-ends the member, measured end to end:
+
+```
+302  myrewards/products/view_smart/21190  →  myrewards/users/login
+302  myrewards/users/login                →  toolsaustralia.com.au/login
+     (already signed in)                  →  toolsaustralia.com.au/my-account
+```
+
+No return-to survives, so the offer is lost and the member lands somewhere they did not ask
+for. That redirect chain is the **vendor's**, not ours — but the decision to deep-link is ours,
+and that is the part we own.
+
+`hasPartnerPortalSession()` originally stored a bare `"1"` for the life of the tab. That
+conflated two different facts:
+
+- *"we handed off in this tab"* — true forever afterwards
+- *"the portal session is still valid"* — true only for a while
+
+The vendor expires its session server-side on its own schedule, so a member who handed off,
+browsed for an hour, then clicked an offer got exactly the dead-end the marker exists to
+prevent. It now stores a timestamp and is only trusted for `PORTAL_SESSION_TTL_MS` (20 min).
+
+**The two errors are not symmetrical, so bias short:**
+
+| | consequence |
+|---|---|
+| TTL too **long** | the dead-end above — offer lost, member dumped on `/my-account` |
+| TTL too **short** | one extra hand-off, which works and silently re-arms the marker |
+
+The general rule: any client-side marker standing in for a **third party's** session state must
+carry a TTL. We cannot read their cookie cross-origin, so every such marker is a guess with a
+half-life, and writing it as a boolean asserts a certainty we do not have. Deep links also open
+in a new tab (`target="_blank"`), so a mis-predicted click costs a stray tab rather than the
+member's place in the catalogue.
+
+Related: `PORTAL_HANDOFF_KEY` is registered in `total-sign-out.ts` (global rule on auth
+boundaries) — a stale marker must not survive into the next account on a shared device.
+
+## R12. One tap to an offer — warm the session in a hidden iframe (2026-08-03)
+
+Opening a catalogue offer needs a live portal session, and the hand-off **cannot carry a
+destination** — `/verifytoken/{token}` silently drops `?redirect` / `?redirect_url` /
+`?return` / `?next` / `?url` and a path-append alike (all six measured; see
+[gotchas.md](./gotchas.md)). "Sign in AND land on the offer" cannot be one *navigation*.
+
+It can, however, be one *tap*, because the two halves do not have to happen in the same place:
+load the hand-off URL in a **hidden iframe** to establish the session, then send the already-
+opened tab straight to the offer.
+
+**This works only because the portal is a subdomain of `toolsaustralia.com.au`.** Its session
+cookie is `SameSite=Lax` (no attribute ⇒ Lax), so it is honoured in an iframe from our origin —
+same-site, not third-party. From any other origin it is cross-site and silently fails.
+
+Ranked by what the member loses, which is why this shape won:
+
+| shape | cost |
+|---|---|
+| deep-link a cold session | offer lost, bounced to `/my-account` — the reported bug |
+| hand-off in THIS tab | offer lost, **catalogue lost** (filters, scroll, place in 1,833 rows) |
+| hand-off in a NEW tab, then tap again | one extra tap |
+| **iframe warm-up, then the offer** | **nothing** |
+
+So the catalogue calls `startForOffer(href)`:
+
+- **cold tap** → tab opens (gesture) showing "Opening your offer…" → hidden iframe warms the
+  session → the tab goes to **the offer**. One tap.
+- **warm tap** → straight to the offer, no iframe needed.
+- **warm-up fails** → the tab lands on the portal home and the catalogue shows *"You're signed
+  in… tap an offer again"*. The two-tap shape survives as the fallback, which is why it was
+  worth building first.
+
+### The gate that makes the fallback honest
+
+`canWarmPartnerPortalSession()` refuses to even try unless our origin is same-site with the
+portal. This is **not** an optimisation — `iframe.onload` fires whether or not the cookie was
+accepted, so a cross-site attempt reports SUCCESS, we send the member to the offer, and they
+bounce: the exact dead end this exists to prevent. On `localhost` the whole mechanism is inert
+by design and the two-tap fallback runs instead.
+
+**Corollary: you cannot test this locally.** A local failure proves nothing about production.
+Test it on a `*.toolsaustralia.com.au` origin or not at all.
+
+Three things here are load-bearing:
+
+1. **The blank tab is opened SYNCHRONOUSLY in the click handler.** The redirect fires ~2.75s
+   later (two deliberate transit holds), by which point the user gesture is gone and every
+   browser blocks `window.open`. Opening `about:blank` during the gesture and re-pointing it
+   with `location.replace` is the only reliable way. `noopener` cannot be passed — it makes
+   `window.open` return null — so `tab.opener = null` is set by hand straight after.
+2. **It degrades to same-tab navigation** whenever that tab is missing (popup blocked, member
+   closed it, consent detour closed it). Arriving in the wrong tab is a nuisance; not arriving
+   is a bug.
+3. **The consent branch closes the blank tab and goes same-tab.** A blank tab parked behind a
+   read-and-decide sheet looks broken. That costs the catalogue tab exactly once per member,
+   on their first ever hand-off, and they are warm from then on.
+
+**The hint is not decoration.** After the first tap the member's attention is in the other tab;
+when they come back, our cards look identical to before and the state change is invisible.
+Without a line saying what happened and what to do, the second tap is a guess. It is inline
+(not a toast) precisely so it survives tab-switching, which is when it is needed.
+
+If the vendor ever ships ask 16, collapse this back to one tap — but keep the new-tab
+behaviour, which is worth having on its own.

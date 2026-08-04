@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useRedeemableRedemption, useRedeemablesWallet } from "@/hooks/queries";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
+import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useSidebar } from "@/contexts/SidebarContext";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import {
@@ -33,21 +34,25 @@ interface RewardsFloatingWidgetProps {
   suppressSpotlight?: boolean;
 }
 
-/** Default Tradie subscription plan for membership-only campaign unlocks */
-const DEFAULT_TRADIE_PLAN: LocalMembershipPlan = {
-  id: "tradie-subscription",
-  name: "Tradie",
-  price: 20,
+/**
+ * Fallback membership plan for membership-only campaign unlocks, used only if the catalog hasn't
+ * resolved. The live value comes from `getRecommendedSubscriptionPlan()` (promo-boosted) — this
+ * mirrors the RECOMMENDED tier so the widget can never disagree with the rest of the app.
+ */
+const FALLBACK_RECOMMENDED_PLAN: LocalMembershipPlan = {
+  id: "foreman-subscription",
+  name: "Foreman",
+  price: 40,
   period: "mo",
   features: [
-    { text: "15 Free Accumulated Entries" },
-    { text: "50% Access to Partner Discounts" },
+    { text: "40 Free Accumulated Entries" },
+    { text: "75% Access to Partner Discounts" },
     { text: "Mini Draws" },
   ],
   buttonText: "Get Started",
   buttonStyle: "secondary",
   isAdditional: false,
-  metadata: { entriesCount: 15 },
+  metadata: { entriesCount: 40 },
 };
 
 export default function RewardsFloatingWidget({
@@ -59,6 +64,7 @@ export default function RewardsFloatingWidget({
   const { isAnySidebarOpen } = useSidebar();
   const requestModal = useModalPriorityStore((state) => state.requestModal);
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
+  const { getRecommendedSubscriptionPlan } = useMajorDrawEntryCta();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"claimable" | "past">("claimable");
   const [claimablePage, setClaimablePage] = useState(1);
@@ -95,14 +101,17 @@ export default function RewardsFloatingWidget({
     });
   };
 
-  const openMembershipModalWithTradie = (code?: string) => {
+  const openMembershipModalWithRecommended = (code?: string) => {
     whenGatesOpenElseGateModal(() => {
       const normalizedCode = code?.trim().toUpperCase();
       window.dispatchEvent(
         new CustomEvent("openMembershipModal", {
           detail: {
             referralCode: normalizedCode || undefined,
-            plan: DEFAULT_TRADIE_PLAN,
+            // Picker first with the recommended tier behind it — same contract as every other CTA
+            // that opens the modal from a surface with no package cards on screen.
+            plan: getRecommendedSubscriptionPlan?.() ?? FALLBACK_RECOMMENDED_PLAN,
+            packageSelectionFirst: true,
           },
         })
       );
@@ -524,7 +533,7 @@ export default function RewardsFloatingWidget({
                               return (
                                 <button
                                   onClick={() =>
-                                    isMembershipOnly ? openMembershipModalWithTradie(code) : openSpecialPackagesModal(code)
+                                    isMembershipOnly ? openMembershipModalWithRecommended(code) : openSpecialPackagesModal(code)
                                   }
                                   className="shrink-0 inline-flex items-center justify-center gap-1 h-9 sm:h-11 min-w-[80px] sm:min-w-[100px] px-2.5 sm:px-4 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white text-2xs sm:text-sm font-bold shadow-md hover:shadow-lg hover:from-amber-600 hover:to-amber-700 transition-all duration-200 active:scale-95"
                                 >

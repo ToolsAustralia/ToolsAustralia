@@ -533,6 +533,13 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
       const plan = detail.plan;
 
       whenGatesOpenElseGateModal(() => {
+        // Entry CTAs ask for the "Select Your Package" picker as the first view, carrying the
+        // recommended tier as the default behind it. Mirrors MembershipSection's listener — if this
+        // one ignored the flag, the same CTA would behave differently on /major-draw.
+        if (detail.packageSelectionFirst) {
+          membershipModal.openModalWithPackageSelectionFirst(plan);
+          return;
+        }
         if (plan) {
           membershipModal.setSelectedPlan(plan);
         }
@@ -1700,6 +1707,10 @@ function MajorDrawSectionInner({ className = "" }: MajorDrawSectionProps) {
         onClose={membershipModal.closeModal}
         selectedPlan={membershipModal.selectedPlan || getHeavyDutyPack()}
         onPlanChange={membershipModal.selectPlan}
+        membershipModalConfig={
+          membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
+        }
+        planIsDefaultSelection={membershipModal.openWithPackageSelectionFirst}
       />
     </>
   );

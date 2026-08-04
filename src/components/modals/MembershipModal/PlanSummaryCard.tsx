@@ -18,6 +18,11 @@ import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageC
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
+import {
+  isBossSubscriptionPlanId,
+  isForemanSubscriptionPlanId,
+  isOneTimeBestValuePlanId,
+} from "@/utils/membership/additional-package-mapping";
 import { convertToAPIPlan } from "@/utils/membership/membership-adapters";
 import { getPackageById } from "@/data/membershipPackages";
 import {
@@ -79,6 +84,17 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
                 promoEnhancedPlan.id.includes("vip"))
           );
           const cardBorderColor = isPackageCard ? `${accentHex}${pkgScheme.cardBorderOpacity}` : undefined;
+          // Tier flag shown beside the package name — the SAME rule the package picker's
+          // ribbons use (PlanGrid), so the card the visitor lands on repeats the label that
+          // was on the tile they tapped. Upsell offers keep their own "Limited Offer" framing.
+          const tierFlag = isUpsellOffer
+            ? null
+            : isMembershipTab && isForemanSubscriptionPlanId(planId)
+              ? "Recommended"
+              : (isMembershipTab && isBossSubscriptionPlanId(planId)) ||
+                  (!isMembershipTab && isOneTimeBestValuePlanId(planId))
+                ? "Best Value"
+                : null;
           // Title style mirrors ElectricPackageCard dark mode: tier accent + glow,
           // or the VIP champagne-gold gradient. Used for the name AND the price.
           const gradientText = pkgScheme.textGradientStyle as React.CSSProperties | undefined;
@@ -145,12 +161,22 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex flex-col gap-0.5 min-w-0">
-                    <h4
-                      className="font-bold text-xs sm:text-sm leading-tight"
-                      style={isPackageCard ? titleStyle : undefined}
-                    >
-                      {promoEnhancedPlan?.name ? getPackageDisplayName(promoEnhancedPlan) : "No package selected"}
-                    </h4>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <h4
+                        className="font-bold text-xs sm:text-sm leading-tight"
+                        style={isPackageCard ? titleStyle : undefined}
+                      >
+                        {promoEnhancedPlan?.name ? getPackageDisplayName(promoEnhancedPlan) : "No package selected"}
+                      </h4>
+                      {tierFlag && (
+                        <span
+                          className="rounded-full px-1.5 py-0.5 text-3xs sm:text-2xs font-extrabold uppercase leading-none tracking-wide"
+                          style={{ backgroundColor: accentHex, color: "#0A0A0A" }}
+                        >
+                          {tierFlag}
+                        </span>
+                      )}
+                    </div>
                     <p
                       className={cn("text-xs sm:text-sm leading-tight", !isPackageCard ? "text-gray-600 dark:text-neutral-400" : "")}
                       style={isPackageCard ? electricWhiteStyle : undefined}

@@ -75,6 +75,40 @@ marketing) is unaffected.
 
 The deprecated `domains` field is removed; `remotePatterns` covers all hosts including `localhost` for dev.
 
+### `remotePatterns` is an SSRF boundary, not a convenience list (updated 2026-07-31)
+
+The image optimiser fetches whatever URL it is handed and returns the bytes, so an unbounded
+allowlist turns `/_next/image?url=…` into a **server-side request forgery primitive** —
+anything reachable from the Vercel function, including internal endpoints, proxied through our
+own origin. `remotePatterns` is what stops that. Treat adding a host as a security change:
+only add one that is public, static media, and genuinely needed.
+
+The list is built in [`next.config.ts`](../../next.config.ts) from `DEFAULT_IMAGE_HOSTS` plus
+the comma-separated `NEXT_PUBLIC_IMAGE_HOSTS`:
+
+| Host | Why |
+|---|---|
+| `toolsaustralia.com.au`, `assets.toolsaustralia.com.au` | our own media |
+| `res.cloudinary.com` | uploads / transformations |
+| `s3-ap-southeast-2.amazonaws.com` | **added 2026-07-31** — partner-portal offer artwork on `/my-account/rewards/catalogue` |
+
+**On that last one.** It is a bucket-per-path host, so the pattern admits *any* bucket in that
+S3 region, not just the vendor's — broader than ideal, and the reason to keep it to media
+paths we actually construct ourselves. We build those URLs in exactly one adapter
+([`portal-offer-url.ts`](../../src/utils/partner-discounts/portal-offer-url.ts)) from a
+committed id list, never from user input, so nothing member-supplied reaches the optimiser.
+If Next ever supports a `pathname` constraint that fits, narrow it.
+
+Note the CSP itself did **not** change: `img-src` already allows `https:` broadly, so the
+optimiser allowlist — not CSP — is the control doing the work here.
+
+**Cost, not just safety.** 949 of 1,833 partner offers have artwork, and the file extension
+varies per offer — the bucket answers **403** for the wrong one. Guessing either the path or
+the extension fires doomed optimiser requests: every miss is a server fetch that ends in an
+error. The catalogue therefore builds image URLs only from a committed `id → extension` probe;
+see [partner/gotchas.md](../partner/gotchas.md), which also records how probing the wrong
+folder once produced a confidently wrong "3% have artwork".
+
 ## Route classes: nonce vs marketing (2026-07-19)
 
 The site serves two CSP classes, decided per-pathname in `src/middleware.ts` (`isStaticMarketingRoute`):
@@ -104,3 +138,39 @@ The root layout is **nonce-free** (`getNonce()` = a `headers()` read = every aut
 | `KLAVIYO_QUEUE_SNIPPET` | `src/components/KlaviyoScriptLoader.tsx` | Klaviyo queue/Proxy stub (suite loads as a lazyOnload src-script) |
 
 Rules: a hash covers **exact bytes** — consumers must render the constant verbatim; editing a constant requires recomputing its hash in `csp.ts` (the mapping comment sits next to the tokens). The hashes live ONLY in the nonce variant — adding them to the fallback variant would make browsers ignore its `'unsafe-inline'` (CSP2) and break every other inline script there. Anything needing interpolation (pixel ids, route state) must be imperative provider code or a src-script — see [tracking/gotchas.md](../tracking/gotchas.md) "Pixel bootstraps are imperative provider code". Drift guard: `npm run test:csp-inline-hashes` ([inline-script-hashes.test.ts](../../src/utils/security/__tests__/inline-script-hashes.test.ts)) recomputes each hash against the built CSP in both variants. JSON-LD `<script type="application/ld+json">` blocks need neither nonce nor hash — CSP script-src doesn't gate non-executable data blocks.
+
+## `frame-src` carries the partner portal — a deliberate, narrow relaxation (2026-08-03)
+
+`buildCsp` appends `NEXT_PUBLIC_PARTNER_PORTAL_URL`'s **origin** to `frame-src`, and nowhere
+else. This is a real loosening of a boundary this repo otherwise holds tightly, so the reasoning
+belongs here rather than only in the partner docs.
+
+**Why.** Opening a partner offer requires a live session on the vendor's portal, and their
+hand-off cannot carry a destination (`/verifytoken/{token}` drops every return target — six
+forms measured). Loading that hand-off URL in a hidden iframe establishes the session in place,
+so a single tap lands the member on the offer instead of bouncing them to a login page. See
+`docs/partner/rules.md` R12.
+
+**Scope of the grant.**
+
+| directive | portal added? |
+|---|---|
+| `frame-src` | **yes** — one named origin |
+| `frame-ancestors` | no — they still cannot frame *us* |
+| `script-src` | no |
+| `connect-src` | no |
+
+So the vendor can be embedded by us; they gain no ability to run script in our origin, read our
+DOM (the frame is cross-origin), or be granted any fetch capability.
+
+**Three properties worth preserving if you touch this:**
+
+1. **It comes from env, not a literal.** A vendor's hostname belongs in config plus one adapter
+   (CLAUDE.md), so swapping providers does not mean editing the CSP.
+2. **https only.** The builder drops a non-`https:` origin. A CSP entry is a trust grant, and an
+   `http` one would be tamperable in transit.
+3. **Unset ⇒ directive unchanged.** No env, no entry, and the iframe path simply never runs —
+   the visible hand-off still works. The feature degrades; the policy never silently widens.
+
+**Do not add a wildcard here.** The same reasoning as the `connect-src` cloud-host decision
+above: one named host is auditable, `https://*.somevendor.com` is not.

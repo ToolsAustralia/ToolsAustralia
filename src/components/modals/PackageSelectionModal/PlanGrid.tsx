@@ -1,7 +1,11 @@
 "use client";
 
 import React from "react";
-import { isOneTimeBestValuePlanId } from "@/utils/membership/additional-package-mapping";
+import {
+  isBossSubscriptionPlanId,
+  isForemanSubscriptionPlanId,
+  isOneTimeBestValuePlanId,
+} from "@/utils/membership/additional-package-mapping";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
@@ -26,9 +30,15 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, isCurrentPlan, isSelectedPla
           : getElectricPackageColorScheme(plan.id);
         const accentHex = colorScheme.accentHex;
         const discount = isMembershipTab ? null : getAdditionalPackDiscount(plan.id);
+        // `plan.id` for a subscription is the slugified package NAME ("boss"), not the catalog
+        // `_id` ("boss-subscription") — the old literal comparison never matched, so the top
+        // membership tier silently lost its Best Value sash.
         const showBestValueRibbon =
-          (isMembershipTab && plan.id === "boss-subscription") ||
+          (isMembershipTab && isBossSubscriptionPlanId(plan.id)) ||
           (!isMembershipTab && isOneTimeBestValuePlanId(plan.id));
+        // Foreman is the tier we steer visitors to — its sash says RECOMMENDED rather than the
+        // generic MOST POPULAR that `plan.isPopular` would otherwise render.
+        const showRecommendedRibbon = isMembershipTab && isForemanSubscriptionPlanId(plan.id);
         const isCurrent = isCurrentPlan(plan);
         const isSelected = isSelectedPlan(plan);
 
@@ -42,6 +52,7 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, isCurrentPlan, isSelectedPla
             isCurrent={isCurrent}
             isSelected={isSelected}
             showBestValueRibbon={showBestValueRibbon}
+            showRecommendedRibbon={showRecommendedRibbon}
             onClick={() => !isCurrent && onSelect(plan)}
           />
         );

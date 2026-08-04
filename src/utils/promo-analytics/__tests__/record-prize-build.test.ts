@@ -63,6 +63,7 @@ const baseCapture = {
   builtPrizeSlug: "makita-kincrome",
   toolboxSwitches: 2,
   toolsetSwitches: 1,
+  interacted: true,
   anonymousId: "anon-1" as string | undefined,
 };
 
@@ -86,9 +87,11 @@ async function main() {
       builtPrizeSlug: "makita-kincrome",
       toolboxSwitches: 2,
       toolsetSwitches: 1,
-      // `baseCapture` omits `interacted`, and absent means ENGAGED — the same default the
-      // route and the repository apply, so a pre-flag client is never miscounted as a
-      // drive-by visitor.
+      // Passed straight through, NOT defaulted here. The "absent means engaged" fallback used
+      // to live in this core, in the service, and in the repository simultaneously; the route
+      // dropped the field and all three fallbacks independently agreed on `true`, so no layer
+      // failed and 100% of production rows were written as engaged. The default now exists in
+      // exactly one place — the route, resolving the wire schema's optional field.
       interacted: true,
     });
   });
@@ -240,6 +243,10 @@ async function main() {
           builtPrizeSlug: "makita-kincrome",
           toolboxSwitches: 2,
           toolsetSwitches: 1,
+          // Deliberately `false`: the repository used to write `args.interacted !== false`, so a
+          // dropped field defaulted to true. Asserting the `false` case is what proves the value
+          // is written through rather than re-defaulted.
+          interacted: false,
         });
         assert.equal(updated, true, "a matched row must report success");
 
@@ -257,6 +264,11 @@ async function main() {
 
         const update = captured.update as Record<string, unknown>;
         assert.ok(Object.prototype.hasOwnProperty.call(update, "$set"), "must write via $set with absolute totals");
+        assert.equal(
+          (update.$set as Record<string, unknown>)?.buildInteracted,
+          false,
+          "buildInteracted must be written from the argument, never re-defaulted: the old `args.interacted !== false` turned a dropped field into `true` on 100% of production rows and erased the only signal that separates an engaged builder from a drive-by visitor"
+        );
         assert.ok(
           !Object.prototype.hasOwnProperty.call(update, "$inc"),
           "$inc must never appear: the client sends CUMULATIVE totals, so $inc would double-count on a duplicate beacon flush (debounce landing + pagehide)"
@@ -289,12 +301,58 @@ async function main() {
           builtPrizeSlug: "makita-kincrome",
           toolboxSwitches: 2,
           toolsetSwitches: 1,
+          interacted: true,
         });
         assert.equal(
           updated,
           false,
           "no matching row (null result) must return false — treating null as success would hide a beacon that silently failed to attach, with nothing left to reveal it"
         );
+      } finally {
+        (PromoAnalyticsVisit as unknown as { findOneAndUpdate: unknown }).findOneAndUpdate = original;
+      }
+    }
+  );
+
+  // ---- Wiring guard: the gap that let the `interacted` drop ship.
+  //
+  // Every test above injects a fake `updateVisitBuild`, so they all passed while the REAL route
+  // dependency — which rebuilds the service payload field-by-field — silently omitted
+  // `interacted`. The core was correct, the repository was correct, and the seam between them
+  // was not. This exercises PromoAnalyticsService.recordPrizeBuild (the route's actual callee)
+  // against a stubbed model and asserts the flag survives the whole chain.
+  await run(
+    "wiring guard: interacted survives service -> repository -> $set (the seam that dropped it)",
+    async () => {
+      const PromoAnalyticsService = (await import("@/services/promo-analytics/PromoAnalyticsService"))
+        .default;
+      const original = PromoAnalyticsVisit.findOneAndUpdate;
+      let captured: Record<string, unknown> = {};
+      (
+        PromoAnalyticsVisit as unknown as {
+          findOneAndUpdate: (filter: unknown, update: unknown, options: unknown) => unknown;
+        }
+      ).findOneAndUpdate = (_filter, update) => {
+        captured = (update as Record<string, Record<string, unknown>>).$set;
+        return { maxTimeMS: () => ({ lean: async () => ({ _id: "fake-visit-id" }) }) };
+      };
+      try {
+        for (const interacted of [true, false]) {
+          const result = await PromoAnalyticsService.recordPrizeBuild({
+            anonymousId: "anon-1",
+            slug: "makita",
+            builtPrizeSlug: "makita-kincrome",
+            toolboxSwitches: 0,
+            toolsetSwitches: 0,
+            interacted,
+          });
+          assert.equal(result.success, true, `recordPrizeBuild({ interacted: ${interacted} }) must succeed`);
+          assert.equal(
+            captured.buildInteracted,
+            interacted,
+            `interacted: ${interacted} must reach $set.buildInteracted unchanged — a layer that re-defaults or drops it is exactly the bug this guards`
+          );
+        }
       } finally {
         (PromoAnalyticsVisit as unknown as { findOneAndUpdate: unknown }).findOneAndUpdate = original;
       }

@@ -191,7 +191,36 @@ The dashboard **Default Max Duration** project setting is **300s** — it applie
 
 `lib/environment.ts` validates and exposes env vars. Don't access `process.env.X` directly — go through this module so missing/invalid vars fail fast at boot.
 
-[`.env.example`](../../.env.example) is the checked-in scaffold — opt-in, not exhaustive. It documents the small set of env vars that have caused onboarding pain and aren't covered by `lib/environment.ts` boot validation (currently: `STRIPE_WORKER_INTERNAL_SECRET`, which gates the internal Stripe webhook worker route — see [billing-stripe/STRIPE_WEBHOOK_QUEUE.md](../billing-stripe/STRIPE_WEBHOOK_QUEUE.md)). `.gitignore` line 36 has a `!.env.example` negation against the blanket `.env*` rule so this single example file ships with the repo.
+[`.env.example`](../../.env.example) is the **registry: the single source of truth for WHICH
+env vars exist** — every var the app reads must be listed there with a comment and a *safe
+placeholder*, never a real secret. `.gitignore` line 36 has a `!.env.example` negation against
+the blanket `.env*` rule so it ships with the repo, which is what lets a completed registry
+propagate to every branch and worktree on merge.
+
+> **Corrected 2026-07-31.** This section previously described `.env.example` as "opt-in, not
+> exhaustive… currently `STRIPE_WORKER_INTERNAL_SECRET`". That has not been true for a long
+> time — it declares **97** vars today — and it contradicted CLAUDE.md §9, which is the rule
+> that actually governs. Believing the old text would mean adding a var and never registering
+> it, which is exactly the drift `npm run check:env` exists to catch.
+
+Values live in `.env.local`, which is gitignored and **never merges**: `wt-new.sh` copies it
+main → new worktree at creation, and there is no reverse. So a branch that adds a var must set
+the value in its own `.env.local`, in the **main folder's** `.env.local`, **and in Vercel**, at
+the time it is added — not at merge. Detect drift with `npm run check:env` (this folder) or
+`npm run check:env:all` (main + every worktree); it reports **MISSING** (declared but unset
+here) and **EXTRA** (set locally but unregistered). `PORT` and `E2E_*` are allowlisted as
+legitimately per-folder. A quiet `--warn` runs in `predev`, so drift surfaces on every
+`npm run dev`.
+
+`lib/environment.ts` validates and exposes the vars it knows about; the registry is broader
+than that module, so being absent from it is not a reason to skip registering a var.
+
+**Client-readable vars (`NEXT_PUBLIC_*`) are inlined at build time**, so changing one requires
+a **redeploy**, not just an env edit — and a `NEXT_PUBLIC_` twin of a server flag must be
+flipped together with it (the partner-SSO pair is the standing example). A recent addition,
+`NEXT_PUBLIC_PARTNER_PORTAL_URL`, follows the safe-degrade pattern worth copying: unset means
+the feature renders **no link at all** rather than a broken one — see
+[partner/frontend.md](../partner/frontend.md).
 
 ## Migrated from `src/docs/ENVIRONMENT_SETUP.md`
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHANNEL_KEYS } from "@/config/attribution-channels";
 import { withNorm } from "@/lib/internal-norm/withNorm";
 import { NormPromoAnalyticsChannelDetailSchema } from "@/lib/internal-norm/schemas/promo-analytics";
 import PromoAnalyticsService, {
@@ -8,7 +9,7 @@ import PromoAnalyticsService, {
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 const QuerySchema = z.object({
-  utmSource: z.string().min(1),
+  channel: z.enum(CHANNEL_KEYS),
   startDate: z.string().regex(YMD).optional(),
   endDate: z.string().regex(YMD).optional(),
 });
@@ -29,7 +30,7 @@ export const GET = withNorm(
     let range;
     try {
       range = resolvePromoAnalyticsRange({
-        range: hasCustom ? "custom" : "today",
+        dateRange: hasCustom ? "custom" : "today",
         startDate: parsed.data.startDate,
         endDate: parsed.data.endDate,
       });
@@ -37,7 +38,7 @@ export const GET = withNorm(
       return ctx.error(400, "bad_query", (e as Error).message);
     }
     const data = await PromoAnalyticsService.getChannelDetailMetrics(
-      parsed.data.utmSource,
+      parsed.data.channel,
       range.start,
       range.end,
     );

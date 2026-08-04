@@ -24,12 +24,36 @@ The actual dashboard pages live under [dashboard-account](../dashboard-account/)
 |---|---|---|
 | `formatCurrency` | `(amount, currency?)` | `$1,234.56` (AUD Intl) |
 | `formatPercentage` | `(value, decimals?)` | `12.3%` |
+| `formatPercentageOrDash` | `(value, denominator, decimals?)` | `12.3%`, or `—` when `denominator <= 0` |
 | `formatNumber` | `(value)` | `1,234` (en-AU Intl) |
 | `formatROAS` | `(roas, decimals?)` | `4.50x` |
 | `formatPercentageChange` | `(percentage, decimals?)` | `+5.2%` / `-3.1%` |
 | `fmtCompact` | `(value)` | `$4.22M`, `$214.8k`, `$820`, `-$1.5k` |
 
 `fmtCompact` is a compact AUD money formatter for chart axes and KPI totals. It handles negative values with a leading minus sign before the `$`. All formatters are re-exported from `useMetricsFormatting` for consistent display across components. Test: `npm run test:fmt-compact`.
+
+### `formatPercentageOrDash` — use it for any rate that can have no denominator (2026-07-31)
+
+Rates are computed server-side as `denominator > 0 ? (n / d) * 100 : 0`, so a bucket with **no**
+denominator reaches the UI as the number `0` and `formatPercentage` renders it `0.0%`. That is a
+false statement rather than a neutral one, and it shipped: a Page Analytics channel with traffic
+but zero registrations displayed `S→C 0.0%` — asserting that none of its signups converted —
+while the adjacent Conversions cell showed a non-zero count. "No signups yet" and "signups that
+never converted" are different facts and must not share a rendering.
+
+Pass the **denominator**, not a precomputed boolean, so a caller cannot forget the guard:
+
+```tsx
+formatPercentageOrDash(row.signupToConversionRate, row.signups)   // "—" when signups === 0
+formatPercentageOrDash(row.visitToSignupRate, row.visits)
+formatPercentageOrDash(row.builderToSignupRate, row.builders)     // build tables: builders, not visits
+```
+
+Watch the denominator when copying a cell between tables: the per-combination and per-toolbox
+build tables are denominated in `builders`, not `visits`, and a blanket find-and-replace across
+the Page Analytics tables initially got that wrong (caught by `tsc`, because the row types
+genuinely have no `visits` field). Em dash `—` is this repo's existing convention for an
+undefined rate.
 
 ## User breakdown components (admin)
 

@@ -21,7 +21,7 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - Upsell multiplier configuration (membership / one-time / additional)
 - Klaviyo post-draw profile-reset preview and progress
 - Past-due charge history (decline-reason summary, batch runs, manual retries)
-- Promo-page analytics (per-page, per-UTM-source, per-channel, per-page-with-campaign attribution)
+- Promo-page analytics (per-page, per-**channel**, per-page-with-campaign attribution, plus per-page prize-build breakdown)
 - Promo (currently-active toggle-system `Promo` rows; resolved effective multiplier per package type with its winning source from the priority chain `scheduled → toggle → alternating → derived-from-membership → none`; paged promo history). Plus per-sub-domain reads for the other promo-configuration collections: alternating multiplier configs, banner-text schedules + current active text, bonus-entry promos (list + currently-active by type), promo links (shareable bonus-entry codes), and scheduled promos (date-bounded multiplier phases). Overlaps the promo-analytics surface only at the slug/page-naming level — promo-analytics answers "how is each promo *page* performing in the funnel", while these endpoints answer "what *multiplier* / *bonus-entry* / *link* / *banner* is configured / in effect right now and across history". The two surfaces do NOT share underlying collections.
 - User metrics (aggregate signup/profession/state/age/membership/purchase rollup, major-draw-vs-major-draw comparison, internal debug snapshot)
 - Allowlist (audit feed of card-allowlist actions, list of currently-blocked cards, summary count of cards on the live allowlist)
@@ -135,7 +135,7 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 - **Upsell configuration**: `/v1/upsell-multipliers` returns the current membership / one-time / additional multiplier triple and the last-updated timestamp. Configuration state, not a metric.
 - **Klaviyo post-draw reset**: `/v1/klaviyo/draw-reset-preview` describes which users a reset *would* sync (counts + sample) without performing one; `/v1/klaviyo/draw-reset-progress` reports the in-flight progress of a manual reset on the answering process (or null when none is running). They describe the same operation at preview vs runtime.
 - **Past-due charge history**: `/v1/charge-past-due/decline-summary` returns a top-N decline-reason bucket aggregation of failed `InvoiceChargeLog` rows in a window. `/v1/charge-past-due/runs` lists `ChargeJobRun` batches (admin-triggered bulk past-due sweeps) with per-run totals. `/v1/charge-past-due/runs/{runId}` returns the per-invoice rows for one batch run. `/v1/charge-past-due/manual-retries` lists single-user retry attempts that were *not* part of a batch run (i.e. `chargeRunId == null`). These four describe the same `InvoiceChargeLog`/`ChargeJobRun` collections at different granularities: summary across all attempts, batch index, batch detail, and one-off attempts respectively.
-- **Promo analytics**: `/v1/promo-analytics` is the aggregate — per-page metrics (visits, signups, conversions, revenue, conversion rates) and a parallel per-`utmSource` breakdown for the same window. `/v1/promo-analytics/channel-detail` drills into one `utmSource`: which pages it drove traffic to, and which campaigns inside that source. `/v1/promo-analytics/page-detail` drills into one (`pageType`, `slug`) page: per-`(utmSource, utmMedium, utmCampaign)` rows plus a `visitsFrom` list of other toolset pages that referred visitors. Channel-detail and page-detail are orthogonal slices of the same `PromoAnalyticsVisit` + `User.signupAttribution` + `PaymentEvent.BenefitsGranted` joined dataset that summary aggregates.
+- **Promo analytics** (the admin **Page Analytics** tab): `/v1/promo-analytics` is the aggregate — per-page metrics (visits, build exposure/engagement, signups, conversions, revenue, conversion rates) and a parallel per-**channel** breakdown for the same window. `/v1/promo-analytics/channel-detail` drills into one channel key: which pages it drove traffic to, which campaigns inside it, and the raw `utm_source` values that folded into it. `/v1/promo-analytics/page-detail` drills into one (`pageType`, `slug`) page: per-`(channel, utmMedium, utmCampaign)` rows plus a prize-build breakdown of what visitors assembled there. Channel-detail and page-detail are orthogonal slices of the same `PromoAnalyticsVisit` + `User.signupAttribution` + `PaymentEvent.BenefitsGranted` joined dataset that summary aggregates. **All three were rebuilt on 2026-07-31** — the date filter was inert, channels bucketed by raw `utm_source` (so `Klaviyo` and `TIKTOK` reported zero signups), drill-down visit totals double-counted, `builds` measured exposure while labelled engagement, and ranges were not clamped to the 90-day visit-retention floor. Do not reuse figures pulled from these endpoints before that date.
 - **User metrics**: `/v1/metrics/users` returns a single aggregate over a date range — counts of users created in range bucketed by signup source / profession / state / age group, plus membership status (live or snapshot-derived depending on whether the window ends in the past), per-package membership breakdown, and purchase-history totals. `/v1/metrics/users/major-draw-comparison` answers a different question: pick two specific `MajorDraw` IDs (by `_id`) and the endpoint computes per-draw totals (totalUsers/newSignups/activeMemberships/purchases/revenue) plus a percent comparison between them, using each draw's `activationDate→drawDate` window. `/v1/metrics/debug` is an engineer-facing diagnostic — recent BenefitsGranted PaymentEvent count + small sample for a sliding window of days; shape may change without notice and the `paymentEvents.totalRevenue` field sums the sample only, not the full window. Some membership fields in `/v1/metrics/users` partially overlap with `/v1/dashboard/stats.users` — `dashboard/stats` is range-anchored for renewal/churn deltas and uses the central `DashboardStatsService` rollup; `metrics/users` is signup-cohort-anchored (users *created* in range) with demographic breakdowns the dashboard does not return.
 - **Allowlist**: `/v1/allowlist/actions` returns the audit feed of recent `AllowlistAction` rows — every "added", "skipped", and "removed" decision the system has logged, with the reason and source. `/v1/allowlist/blocked-cards` returns one cursor-paged page of `BlockedTransaction` rows (cards that failed Stripe and have not yet been allowlisted), each row joined with its server-side eligibility verdict. `/v1/allowlist/stats` returns a single integer — the count of card fingerprints currently on the live allowlist (most-recent action per fingerprint is `"added"`). All three are projections of the same `AllowlistAction` + `BlockedTransaction` collections — actions is the historical audit, blocked-cards is the current backlog, stats is a single roll-up.
 - **Error reports**: `/v1/error-reports` returns one paged page of `ErrorReport` rows plus rollup counters (total, by-status, last-24h, critical-unresolved). `/v1/error-reports/{id}` returns one row's PII-redacted detail projection. The list and detail projections share the same field set — they differ only in pagination and filtering. The list endpoint accepts a wide filter surface (status / category / severity / userId / userEmail / apiEndpoint / pageUrl / date range / search), and `userEmail` is a substring match against both the authenticated `userEmail` and the `guestEmail` field on the document. Both endpoints strip stack traces, console-error dumps, hashed-IP, browser fingerprint, referrer, and email PII — they are not on the Norm projection. Use `userId` as the opaque correlation key.
@@ -1171,7 +1171,11 @@ null | {
 {
   totalFailed: number,                       // total failed InvoiceChargeLog rows in window
   topCodes: Array<{
-    code: string,                            // declineCode → errorCode → "unknown" → "other" (collapsed tail)
+    code: string,                            // declineCode → errorCode → "unknown" → "other" (collapsed tail).
+                                             //   May be a synthetic recovery code:
+                                             //   `rebill_not_settled` = a re-billed minted cycle
+                                             //   that didn't settle (a REAL decline Stripe gives
+                                             //   no code for); `recovery_error` = machinery fault.
     count: number,                           // failed-attempt count for this code
     pct: number                              // whole-number percent of totalFailed (0–100)
   }>
@@ -1267,13 +1271,28 @@ When `totalFailed` is `0`, `topCodes` is an empty array. Percentages are rounded
     status: "success" | "failed" | "skipped",
     amount: number,                          // Stripe cents
     attemptedAt: ISO8601,
-    errorCode?: string,                      // Stripe error code (failed only)
+    errorCode?: string,                      // Stripe error code (failed only); may be a
+                                             //   synthetic recovery code — see below
     declineCode?: string,                    // Stripe decline_code (failed cards)
-    errorMessage?: string                    // human-readable error
+    errorMessage?: string,                   // human-readable error
+    recovery?: {                             // recovery provenance — read before counting
+      bulk?: boolean,                        //   the run's single summary row for a member
+      step?: string,                         //   machinery audit (void/finalize/create)
+      newInvoiceId?: string                  //   set ⇒ a separate CODED row exists there
+    }
   }>
 }
 ```
 Rows are sorted ascending by `attemptedAt`. `404 not_found` if the runId is unknown.
+
+**Counting declines from these rows — important.** Not every `failed` row is a distinct declined member:
+
+- `recovery.step` set → a machinery audit row (void / finalize / create). **Never a card outcome; never count it.**
+- `recovery.bulk` set **with** `newInvoiceId` → the summary row for a member whose real, coded decline is a **separate row on that new invoice**. Count the coded one, not this. Counting both double-counts one member.
+- `recovery.bulk` set **without** `newInvoiceId` → the recovery re-billed a freshly minted cycle that did not settle. **No coded row exists anywhere**, so this row IS the decline; it carries the synthetic `errorCode` `rebill_not_settled`.
+- `errorCode: "recovery_error"` → an unexpected fault inside the recovery flow, not a card decline.
+
+`/v1/charge-past-due/decline-summary` already applies exactly these rules server-side, so its buckets are authoritative; use it rather than re-aggregating run rows when you only need the totals. Prior to 2026-07-31 the summary excluded *all* `recovery.bulk` rows, which hid genuine re-bill declines — historical comparisons across that date are not like-for-like.
 
 **Inputs**: `runId` as path segment. No query params.
 
@@ -1326,10 +1345,15 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
 
 ### `GET /v1/promo-analytics`
 
-**Returns**: Promo-page analytics aggregate for the given window: per-page metrics plus a parallel per-`utmSource` channel breakdown over the same period.
+**Returns**: Promo-page analytics aggregate for the given window: per-page metrics plus a parallel per-**channel** breakdown over the same period.
 ```ts
 {
-  dateRange: { start: ISO8601, end: ISO8601 },
+  dateRange: {
+    start: ISO8601,
+    end: ISO8601,
+    visitsRetainedFrom: ISO8601,             // Visit rows are TTL-deleted after 90 days; User and PaymentEvent are not. The requested window is CLAMPED to this so every number comes from one population.
+    clampedToRetention: boolean              // true when the requested start predated that floor and was moved up to it
+  },
   totalVisits: number,                       // sum across all pages, unique-visitor deduped per (page, visitor)
   totalSignups: number,                      // users whose signupAttribution.promotionSlug matches a known page
   totalConversions: number,                  // BenefitsGranted PaymentEvents matched to a promotion slug
@@ -1338,8 +1362,9 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
     pageType: "evergreen" | "toolset",
     slug: string,
     visits: number,                          // unique visitors per page
-    crossVisits: number,                     // visitors who arrived via another toolset landing page
-    builds: number,                          // unique visitors who assembled a prize in Build your prize (same visitor dedup as `visits`, so the two are directly comparable)
+    buildVisitors: number,                   // unique visitors who ended on SOME prize combination on this page — EXPOSURE. Effectively everyone who loaded the builder: the beacon records what was on screen whether or not it was touched.
+    builds: number,                          // of buildVisitors, those who actually CHANGED the build — ENGAGEMENT
+    buildChangeRate: number,                 // percent (0-100), builds/buildVisitors; 0 when nobody saw a combination
     topBuiltPrize: string | null,            // slug of the combination built by the most visitors on this page; null if nobody built one in range
     buildDistribution: Array<{               // EVERY combination built on this page, most-built first (visitors desc, builtPrizeSlug asc tie-break). ALWAYS an array — [] when nobody built one. `topBuiltPrize` is derived from buildDistribution[0]?.builtPrizeSlug, so the two can never disagree on a tie.
       builtPrizeSlug: string,
@@ -1352,8 +1377,9 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
     signupToConversionRate: number,          // percent (0-100)
     overallConversionRate: number            // percent (0-100), conversions/visits
   }>,
-  byUTMSource: Array<{
-    utmSource: string,                       // lowercase; "direct" when source is empty/null
+  byChannel: Array<{                         // WAS `byUTMSource` before 2026-07-31
+    channel: "meta" | "tiktok" | "snapchat" | "google" | "klaviyo_email" | "klaviyo_sms" | "direct" | "other",
+    channelLabel: string,                    // e.g. "Facebook / Instagram", "Klaviyo Email"
     visits: number,
     signups: number,
     conversions: number,
@@ -1374,7 +1400,27 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
   }>
 }
 ```
-`byPage` covers every valid promo slug (evergreen prize landing pages + toolset landing pages) — pages with zero activity still appear with zero counters (`builds: 0, topBuiltPrize: null, buildDistribution: []`). `byPage` is sorted by `visits` descending. `byBuiltPrize` covers the union of every combination seen anywhere in the range via a builder row, a signup, or a conversion (a combination can appear with `builders: 0` if it was built before the window but converted inside it), sorted by `builders` descending with `builtPrizeSlug` ascending as a deterministic tie-break.
+`byPage` covers every valid promo slug (evergreen prize landing pages + toolset landing pages) — pages with zero activity still appear with zero counters (`buildVisitors: 0, builds: 0, buildChangeRate: 0, topBuiltPrize: null, buildDistribution: []`). `byPage` is sorted by `visits` descending. `byChannel` is sorted paid channels first, then owned, then `direct`/`other`, with signups descending inside each tier. `byBuiltPrize` covers the union of every combination seen anywhere in the range via a builder row, a signup, or a conversion (a combination can appear with `builders: 0` if it was built before the window but converted inside it), sorted by `builders` descending with `builtPrizeSlug` ascending as a deterministic tie-break.
+
+**Reporting this endpoint accurately — four things that are easy to get wrong:**
+
+1. **`builds` before 2026-07-31 measured EXPOSURE, not engagement.** The field existed and was
+   labelled "engagement", but the tracking route never forwarded the interaction flag, so the
+   repository's default wrote `true` on 100% of rows and the read gate matched everyone. Production
+   check: **1,754 of 1,941 build rows carry zero reel switches.** Treat any earlier "Builds" figure
+   as exposure. Engagement is not retro-derivable, so there is deliberately no backfill.
+2. **A clamped range is not a data gap.** When `clampedToRetention` is `true`, visit rows before
+   `visitsRetainedFrom` no longer exist, but the signups and revenue in that period do. Say so
+   rather than reporting a visitor collapse — and never compute a visit-denominated rate across the
+   clamp without flagging it.
+3. **`byChannel` folds raw sources.** `facebook.com` / `ig` / `fb` / `instagram.com` all report as
+   `meta` ("Facebook / Instagram"), because Meta reports ONE spend figure across both placements.
+   `klaviyo` splits by `utm_medium` into `klaviyo_email` / `klaviyo_sms`. To see what folded into a
+   channel, call `/v1/promo-analytics/channel-detail` and read `rawSources`.
+4. **Signups are dated by attribution touch**, `signupAttribution.visitedAt`, falling back to
+   `User.createdAt` only when that is absent — registration writes attribution onto pre-existing
+   accounts without touching `createdAt`. This applies to EVERY signup leg,
+   including `byBuiltPrize.signups`.
 
 **Inputs (query params)**:
 | Param | Required | Default | Notes |
@@ -1383,20 +1429,25 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
 | `startDate` | only if `dateRange=custom` | — | `YYYY-MM-DD`, AEST-anchored |
 | `endDate` | only if `dateRange=custom` | — | `YYYY-MM-DD`, AEST-anchored (inclusive end-of-day) |
 
-**Data source**: `PromoAnalyticsVisit` (visits + UTM source; `builtPrizeSlug` for `builds`/`topBuiltPrize`/`buildDistribution`/`byBuiltPrize.builders`), `User.signupAttribution.promotionSlug` / `.builtPrizeSlug` (signups), `PaymentEvent.eventType="BenefitsGranted"` filtered to non-refunded stages (conversions + revenue), matched by `PaymentEvent.data.builtPrizeSlug` for `byBuiltPrize`. Orchestrated by `PromoAnalyticsService.getAggregatedMetrics` + `getAggregatedByUTMSource` + `getAggregatedByBuiltPrize` in `src/services/promo-analytics/PromoAnalyticsService.ts`, backed by `PromoAnalyticsRepository`.
+> **Before 2026-07-31 every one of these silently returned AEST *today*.** The resolver's parameter
+> was named `range` while the route passed `dateRange`, so the default always won — on this Norm
+> route as well as the admin one. Any earlier answer given from a non-today range was wrong.
 
-**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. Note: the date range available is narrower than the dashboard endpoints — only `today | yesterday | custom`, no draw-anchored options.
+**Data source**: `PromoAnalyticsVisit` (visits + UTM; `builtPrizeSlug` for `buildVisitors`/`builds`/`topBuiltPrize`/`buildDistribution`/`byBuiltPrize.builders`), `User.signupAttribution.promotionSlug` / `.builtPrizeSlug` (signups), `PaymentEvent.eventType="BenefitsGranted"` filtered to non-refunded stages (conversions + revenue), matched by `PaymentEvent.data.builtPrizeSlug` for `byBuiltPrize`. Orchestrated by `PromoAnalyticsService.getAggregatedMetrics` + `getAggregatedByChannel` + `getAggregatedByBuiltPrize` in `src/services/promo-analytics/PromoAnalyticsService.ts`, backed by `PromoAnalyticsRepository`.
+
+**Constraints**: `read` tier. `requiredPermission: pageAnalytics.view` (was `promos.view` until 2026-07-31). Read-only. Note: the date range available is narrower than the dashboard endpoints — only `today | yesterday | custom`, no draw-anchored options, and it is additionally clamped to the 90-day visit-retention floor.
 
 ---
 
 ### `GET /v1/promo-analytics/channel-detail`
 
-**Returns**: One `utmSource` channel sliced into the pages it drove traffic to and the campaigns inside that channel.
+**Returns**: One acquisition **channel** sliced into the pages it drove traffic to and the campaigns inside that channel.
 ```ts
 {
-  utmSource: string,
+  channel: "meta" | "tiktok" | "snapchat" | "google" | "klaviyo_email" | "klaviyo_sms" | "direct" | "other",
+  channelLabel: string,                      // e.g. "Facebook / Instagram"
   summary: {
-    visits: number,
+    visits: number,                          // deduped ONCE channel-wide — deliberately NOT the sum of byPage[].visits (one visitor can appear on several pages)
     signups: number,
     conversions: number,
     revenue: number                          // AUD
@@ -1423,39 +1474,48 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
     visitToSignupRate: number,               // percent
     signupToConversionRate: number,          // percent
     overallConversionRate: number            // percent
+  }>,
+  rawSources: Array<{                        // the raw utm_source values that folded into this channel, most-visited first, top 20
+    source: string,                          // raw lowercase utm_source; "(none)" when absent
+    visits: number
   }>
 }
 ```
 
+> ⚠️ **`rawSources` are PER-SOURCE uniques and MAY sum above `summary.visits`.** One visitor can
+> arrive via `ig` and later via `facebook.com`. Use them to answer "what actually merged into
+> Facebook / Instagram?" — never as an addend, and never as a correction to the channel total.
+
 **Inputs (query params)**:
 | Param | Required | Default | Notes |
 |---|---|---|---|
-| `utmSource` | yes | — | The channel to drill into (e.g. `klaviyo`, `facebook`, `direct`) |
+| `channel` | yes | — | The channel key to drill into. **Closed enum**: `meta`, `tiktok`, `snapchat`, `google`, `klaviyo_email`, `klaviyo_sms`, `direct`, `other`. Anything else is a `400`. Was a free-string `utmSource` before 2026-07-31. |
 | `startDate` | no | today (AEST) | `YYYY-MM-DD`. If only one of `startDate`/`endDate` is supplied it is ignored. |
 | `endDate` | no | today (AEST) | `YYYY-MM-DD`, inclusive end-of-day. Both must be supplied to use a custom range. |
 
-**Data source**: same `PromoAnalyticsVisit` / `User.signupAttribution` / `PaymentEvent` joins as the summary endpoint, filtered to the supplied `utmSource`. Orchestrated by `PromoAnalyticsService.getChannelDetailMetrics`.
+**Data source**: same `PromoAnalyticsVisit` / `User.signupAttribution` / `PaymentEvent` joins as the summary endpoint, filtered to the supplied `channel` by the SAME generated expression that builds the summary's grouping key — so a parent row and this drill-down cannot disagree. Orchestrated by `PromoAnalyticsService.getChannelDetailMetrics`.
 
-**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. An unknown `utmSource` returns zeroes, not 404.
+**Constraints**: `read` tier. `requiredPermission: pageAnalytics.view` (was `promos.view` until 2026-07-31). Read-only. A channel with no traffic in range returns zeroes, not 404; an unrecognised channel key is a `400 bad_query`.
 
 ---
 
 ### `GET /v1/promo-analytics/page-detail`
 
-**Returns**: One promo page sliced into the UTM campaigns that drove visits and a `visitsFrom` referral roll-up of other toolset pages that referred visitors.
+**Returns**: One promo page sliced into the UTM campaigns that drove visits, plus a prize-build breakdown of what visitors assembled on it.
 ```ts
 {
   pageType: "evergreen" | "toolset",
   slug: string,
   pageLabel: string,                         // human-readable page name
   summary: {
-    visits: number,
+    visits: number,                          // deduped ONCE page-wide — deliberately NOT the sum of byCampaign[].visits (one visitor can arrive under several campaigns)
     signups: number,
     conversions: number,
     revenue: number                          // AUD
   },
   byCampaign: Array<{
-    utmSource: string,
+    channel: <channel key>,                  // canonical channel, NOT a raw utm_source (was `utmSource` before 2026-07-31)
+    channelLabel: string,
     utmMedium: string,
     utmCampaign: string,
     visits: number,
@@ -1466,12 +1526,31 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
     signupToConversionRate: number,          // percent
     overallConversionRate: number            // percent
   }>,
-  visitsFrom?: Array<{                       // toolset cross-referral counts; absent if none
-    referrerSlug: string,
-    visits: number
-  }>
+  buildBreakdown: {                          // replaced the removed `visitsFrom` on 2026-07-31
+    defaultBuiltPrizeSlug: string,           // the combination this page shows on first paint, before any interaction
+    buildVisitors: number,                   // page-level unique: saw SOME combination (exposure)
+    builds: number,                          // of those, changed it (engagement)
+    buildChangeRate: number,                 // percent (0-100)
+    byBuild: Array<{
+      builtPrizeSlug: string,
+      builders: number,                      // unique visitors whose final combination on THIS page was this one
+      interactedBuilders: number,            // of builders, those who changed rather than accepting what loaded
+      signups: number,
+      conversions: number,
+      revenue: number,                       // AUD
+      builderToSignupRate: number,           // percent
+      signupToConversionRate: number,        // percent
+      overallConversionRate: number,         // percent
+      isPageDefault: boolean                 // true for defaultBuiltPrizeSlug; that row is ALWAYS present, even at zero
+    }>
+  }
 }
 ```
+
+> ⚠️ **`buildVisitors` / `builds` are PAGE-LEVEL uniques and are NOT the column sums of `byBuild`.**
+> A visitor who landed twice on different combinations counts once above and twice below, so
+> `Σ builders ≥ buildVisitors` always. Never present them as a total of the breakdown — mixing
+> those two units is what once put a literal 250% figure on this dashboard.
 
 **Inputs (query params)**:
 | Param | Required | Default | Notes |
@@ -1483,7 +1562,7 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
 
 **Data source**: same `PromoAnalyticsVisit` / `User.signupAttribution` / `PaymentEvent` joins, filtered to the supplied `(pageType, slug)`. Orchestrated by `PromoAnalyticsService.getPageDetailMetrics`. An invalid slug throws server-side and surfaces as `500 handler_exception`.
 
-**Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only.
+**Constraints**: `read` tier. `requiredPermission: pageAnalytics.view` (was `promos.view` until 2026-07-31). Read-only.
 
 ---
 
@@ -4110,6 +4189,20 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-07-31` — **All three `/v1/promo-analytics*` endpoints rebuilt (no endpoint-count change; several BREAKING response-shape changes).** Seven defects, fixed together. **Treat every figure these endpoints returned before this date as suspect.**
+
+- **The date filter was inert.** `resolvePromoAnalyticsRange`'s parameter was named `range` while all six callers (three admin routes, three Norm routes) passed a `dateRange`-keyed object, so `input.range` was always `undefined`, the `?? "today"` default won, and **every** requested range silently returned AEST today. `tsc` could not see it (optional field + non-literal argument = no excess-property check). The parameter is now `dateRange` and every call site maps field-by-field. `yesterday` was separately DST-unsafe (`subDays` on a UTC instant = a fixed 24 h; two adjacent AEST midnights are 23 h or 25 h apart) and now uses calendar-date arithmetic. Guard: `npm run test:promo-analytics-range`.
+- **Ranges are clamped to the visit-retention floor.** Visit rows are TTL-deleted after 90 days; `User` and `PaymentEvent` are not, so an older window divided COMPLETE signups and revenue by TRUNCATED visits (unclamped "All Time" would render visit→signup rates in the hundreds of percent). `dateRange` gained **`visitsRetainedFrom`** + **`clampedToRetention`**. A window lying entirely before the floor collapses to an empty window rather than inverting. Trade-off: this surface's all-time revenue no longer includes pre-retention purchases — it is a funnel, not a revenue ledger; `/v1/dashboard/stats` remains the full-history revenue source.
+- **`byUTMSource` → `byChannel` (BREAKING).** Rows carry `channel` (a closed `ConvertingPlatform` enum) + `channelLabel`, not a raw `utmSource` string. **Why:** visits matched case-INsensitively while signups and conversions matched case-SENSITIVELY, so production's `Klaviyo` (6,437 visits / 868 signups) and `TIKTOK` (1,399 / 194) rendered as real traffic with **0 signups, 0 conversions, $0 revenue**. All three collections now bucket by one generated Mongo `$switch` (`channelKeyExpr`). Verified against production after the fix: **Klaviyo Email 500 signups / 240 conversions, Klaviyo SMS 358 / 236, TikTok 194 / 31.** `facebook.com` / `ig` / `fb` fold into one `meta` row labelled "Facebook / Instagram" (Meta reports one spend figure across both placements, so splitting revenue while spend stays merged makes ROAS uncomputable). `channel-detail`'s query param is likewise **`channel`** (closed enum) instead of `utmSource`, and it returns a new **`rawSources`** array so the fold is auditable — those are PER-SOURCE uniques and may sum above `summary.visits`, never an addend.
+- **Drill-down visit totals were wrong.** `summary.visits` summed the per-page / per-campaign uniques instead of deduping once, so a visitor who arrived from an ad and again directly was counted twice (reproduced in the owner's screenshot: parent row 170, modal card 171). Both drill-downs now compute a whole-scope dedupe in the same `$facet` as their breakdowns. `summary.visits` is **never** the sum of `byPage[]`/`byCampaign[]`; signups, conversions and revenue still are.
+- **`builds` measured EXPOSURE while labelled engagement.** The tracking route dropped the `interacted` flag, so the repository's "absent means engaged" default wrote `true` on 100% of rows and the read gate matched everyone. Production: **1,754 of 1,941 build rows carry zero reel switches.** The per-page metric is now two fields — **`buildVisitors`** (exposure) and **`builds`** (engagement) — plus **`buildChangeRate`**. `crossVisits` is **removed** (BREAKING; a required schema field, so leaving it declared would have been a runtime 500). Engagement is NOT retro-derivable — the cash toggle and `?toolbox=` URL arrivals both leave the counters at 0/0 — so there is deliberately **no backfill**.
+- **`page-detail` returns `buildBreakdown`, and `visitsFrom` is removed (BREAKING).** `referrerSlug`'s writer died with the "Explore other toolsets" carousel on 2026-07-22; the last row carrying it is that same date, so the metric was a structural zero. Its replacement is a per-page prize-build breakdown (`defaultBuiltPrizeSlug` + page-level `buildVisitors`/`builds`/`buildChangeRate` + `byBuild[]` with `interactedBuilders` and `isPageDefault`). ⚠️ The page-level figures are NOT the column sums of `byBuild` — a visitor who landed twice on different combinations counts once above and twice below.
+- **Signups are dated by attribution touch, not `User.createdAt`.** Registration writes `signupAttribution` onto pre-existing accounts without touching `createdAt`, so `createdAt` is the age of the ACCOUNT. `signupTouchWindowMatch` prefers `signupAttribution.visitedAt`, mirroring `resolveSignupTouchAtMs`. This applies to every signup leg, including `byBuiltPrize.signups`.
+- **Visit rows now derive UTM from the first-touch `_ta_attr` cookie** (read server-side, with a new `utmBasis` audit column on the model), so visits, signups and conversions sit on one attribution basis. Previously visits read only the landing URL, which gave a paid channel signups with no matching visits.
+- **Permission: `promos.view` → `pageAnalytics.view`** on all three registry entries, matching the admin tab's own gate and the `repeat-purchases` precedent. Latent, not breaking — production has no "Ads Manager" role (only Admin, Manager, Customer Support) and both Admin and Manager held `promos.view`. Reads bypass the per-permission grant anyway (2026-05-21 entry below), so this is documentation-of-record for the reads.
+- **Tooling.** `scripts/internal-norm-smoke.ts` now **exits non-zero on a non-2xx** — it previously printed a 500 and exited 0, so `npm run norm:smoke` could never fail, which defeated the one failure mode the script exists to catch (a `responseSchema` ↔ handler-output mismatch, invisible to `tsc` and `next build`). New composite `npm run norm:smoke:promo-analytics` hits all three endpoints in one command.
+- No PII in any new shape — prize-catalog slugs, channel keys and counts only.
 
 `2026-07-29` — **`/v1/analytics/packages-focus` now supports `platform=tiktok` for real (no count change; one enum value changed).** TikTok used to short-circuit to `supported: false, reason: "awaiting-url-mapping"`; it now returns genuine buckets, because `TikTokAdDestinationService` supplies the missing ad→landing-URL mapping via TikTok's Smart+ id bridge (reporting `ad_id` → `/ad/get/` → `smart_plus_ad_id` → `/smart_plus/ad/get/` → landing URLs — the reporting id is NOT the Smart+ id, which is why a direct lookup resolved 0 of 31 ads). `reason` is now the literal `"not-configured"` and means only that this environment has no account id for the requested platform; there is no longer any `"awaiting-url-mapping"` case. The account id is resolved per platform (`FACEBOOK_AD_ACCOUNT_ID` vs `TIKTOK_ADVERTISER_ID`), and an unconfigured platform returns `supported: false` rather than `500 misconfigured`.
 

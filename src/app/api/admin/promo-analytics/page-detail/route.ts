@@ -20,7 +20,7 @@ const querySchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const _guard = await requirePermission("promos.view");
+    const _guard = await requirePermission("pageAnalytics.view");
     if (_guard instanceof NextResponse) return _guard;
 
     const searchParams = request.nextUrl.searchParams;
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     let range;
     try {
       range = resolvePromoAnalyticsRange({
-        range: hasCustom ? "custom" : "today",
+        dateRange: hasCustom ? "custom" : "today",
         startDate,
         endDate,
       });

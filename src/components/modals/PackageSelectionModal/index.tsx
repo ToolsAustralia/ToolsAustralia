@@ -6,7 +6,7 @@ import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useMemberships } from "@/hooks/useMemberships";
 import { convertToLocalPlan, type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useUserData } from "@/hooks/queries";
-import { isPublicPackage } from "@/utils/membership/additional-package-mapping";
+import { isForemanSubscriptionPlanId, isPublicPackage } from "@/utils/membership/additional-package-mapping";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { getEffectivePromoType } from "@/utils/promo/get-effective-promo-type";
 import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
@@ -397,7 +397,13 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
     }, 200);
   };
 
+  /** Selection-first opens with a placeholder plan — nothing has actually been picked yet. */
+  const hasRealSelection = !selectedPlan.id.startsWith("placeholder");
+
   const isSelectedPlan = (plan: LocalMembershipPlan) => {
+    // Until the visitor picks, the RECOMMENDED tier (Foreman) carries the selected treatment, so
+    // the picker opens on a suggestion rather than three equal-weight cards.
+    if (!hasRealSelection) return activeTab === "membership" && isForemanSubscriptionPlanId(plan.id);
     return plan.id === selectedPlan.id;
   };
 

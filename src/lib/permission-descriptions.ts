@@ -49,10 +49,6 @@ export const AREA_META: Record<Area, AreaMeta> = {
     label: "Page Analytics",
     description: "Page-level analytics dashboard.",
   },
-  promoAnalytics: {
-    label: "Promo Analytics",
-    description: "Promo-specific performance, channel mix, and page detail.",
-  },
   submissions: {
     label: "Submissions",
     description: "Contact form submissions — read the inbox, reply to customers, mark threads as handled.",
@@ -179,12 +175,6 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
   "pageAnalytics.view": {
     label: "View",
     description: "Open the page-level analytics dashboard.",
-  },
-
-  // Promo Analytics
-  "promoAnalytics.view": {
-    label: "View",
-    description: "Open promo-specific analytics including channel detail and page-level breakdown.",
   },
 
   // Submissions

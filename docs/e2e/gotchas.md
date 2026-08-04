@@ -84,6 +84,18 @@ defense-in-depth** (it also still covers Klaviyo/GTM/GA/Hotjar, and a stray manu
 with a real id set would otherwise leak) but is no longer load-bearing for Contentsquare — the
 original incident this section describes is closed at the root cause. History follows.
 
+**Update (2026-08-03): the in-code comment finally caught up.** The comment block in
+`e2e/fixtures/test.ts` still asserted the tag was "HARDCODED with a fixed src and no
+env-conditional `disabled` prop, so the env overlay cannot neuter it" — false since
+2026-07-22, and with stale line numbers. Anyone debugging the Contentsquare integration who
+opened that file first built a wrong mental model of how the tag is controlled. Rewritten to
+match reality: all four trackers are env-gated at the source, the blocklist is now purely
+defense-in-depth for all of them, and it still earns its place because a stray `.env.local`
+with a real id would otherwise leak live third-party traffic into a test run. The same turn
+added `ContentsquarePageTracker` (root layout, same env gate) — it pushes to `window._uxa`
+only, issues no network request of its own, and is covered by the existing blocklist regex
+via the tag itself. No e2e change was required for it.
+
 Unlike Klaviyo/GTM/GA/Hotjar, Contentsquare's `<Script>` in `src/app/layout.tsx` was
 **hardcoded** — a fixed `src` with `strategy="lazyOnload"` and no `disabled`/env-conditional
 prop — so the env overlay had no variable to blank. `strategy="lazyOnload"` fires it after every

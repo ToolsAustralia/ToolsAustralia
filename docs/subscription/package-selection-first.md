@@ -86,3 +86,133 @@ abandoned-checkout deep-link are unaffected.
 **Rule going forward:** never re-arm `packageSelectionAutoOpenedRef` on an in-session condition, and
 keep every auto-open branch gated on `isPlaceholderPlan`. If you need the picker again after a
 selection, that is a user action (`handlePackageChange`), not an effect.
+
+## Entry CTAs: picker first, recommended tier behind it (2026-08-04)
+
+`openEntryFlow()` — the shared entry point behind every "Enter Now" CTA (promo hero, "Build your
+prize", "Enter to unlock discount", major-draw, promo-welcome, dashboard) — now defaults to
+`packageSelectionFirst: true`. Two things happen together, and both matter:
+
+1. **The picker is the first view.** The visitor chooses their package rather than inheriting one.
+2. **The RECOMMENDED tier (Foreman) is already selected behind it.** `openEntryFlow` resolves
+   `getRecommendedSubscriptionPlan()` and passes it along, so dismissing the picker lands on a real,
+   payable package.
+
+> **A customer must never see an empty "Billing Info" step.** That is the point of (2). The picker is
+> how they choose; the default is what guarantees there is always something to pay for if they don't.
+> Never wire an entry CTA to open selection-first *without* a plan.
+
+The chain:
+
+| Step | Where | What happens |
+| --- | --- | --- |
+| 1 | [`useMajorDrawEntryCta`](../../src/hooks/useMajorDrawEntryCta.ts) | Dispatches `openMembershipModal` with `detail: { plan: <Foreman>, packageSelectionFirst: true }`. Skipped on the two paths where a membership tier is the wrong pre-select anyway: a blocking subscription (can't buy a second sub) and `?packages=one-time` (visitor is on the one-time tab). |
+| 2 | [`useOpenMembershipModalListener`](../../src/hooks/useOpenMembershipModalListener.ts) | Forwards the plan and the flag to the host section. |
+| 3 | [`MembershipSection`](../../src/components/sections/MembershipSection.tsx) | `membershipModal.openModalWithPackageSelectionFirst(plan)` + `membershipModalConfig={{ showPackageSelectionFirst: true }}` + `planIsDefaultSelection`. The config object is **memoized** — a fresh literal each render re-runs the auto-open effect every render. |
+| 4 | `MembershipModal` | Config != null → the picker opens synchronously, once, over the default plan. |
+
+### `planIsDefaultSelection` — the plan we chose vs the plan they chose
+
+The auto-open used to be gated purely on `isPlaceholderPlan`, which exists so the picker can never
+pop over a tier the user actually clicked. A CTA default is not that, so the gate is now:
+
+```js
+const canAutoOpenOverSelection =
+  (isPlaceholderPlan || planIsDefaultSelection) && !userPickedPlanRef.current;
+```
+
+- `planIsDefaultSelection` (prop, driven by the hook's `openWithPackageSelectionFirst`) — this open
+  supplied the plan FOR the user. **Do not** source it from the variant config: a variant with
+  `showPackageSelectionFirst: true` would then pop the picker over a tier-card click.
+- `userPickedPlanRef` — set in `handlePackageSelect` the moment the user picks, cleared when a new
+  open session starts. Belt-and-braces with the once-per-session latch: even if that latch were
+  re-armed, the picker can never reopen over a choice the user made.
+
+Dismissing the picker with a default plan behind it just closes the picker (the plan is not a
+placeholder, so `dismissPackageSelection` doesn't close the modal) — the visitor lands on Foreman.
+
+### Foreman is the recommended tier
+
+One tier carries the steer across every surface, via
+[`isForemanSubscriptionPlanId`](../../src/utils/membership/additional-package-mapping.ts):
+
+- **Picker** — Foreman's corner ribbon reads `RECOMMENDED` (not the generic `MOST POPULAR`) and the
+  card renders pre-selected while the incoming plan is still a placeholder (`isSelectedPlan`).
+- **Selected-package card** — [`PlanSummaryCard`](../../src/components/modals/MembershipModal/PlanSummaryCard.tsx)
+  shows a `Recommended` pill next to the name (and `Best Value` for Boss / the top one-time packs).
+- **Pre-select** — `getRecommendedSubscriptionPlan()` (was `getTradieSubscriptionPlan`) returns
+  **Foreman**, so every "we picked one for you" CTA (dashboard "Become a member", rewards
+  membership-only coupon unlock, non-member `getHeavyDutyPack`) lands on Foreman, not Tradie.
+
+### Which CTAs show the picker — and the one exception
+
+**Every CTA that opens the MembershipModal from a surface with no package cards on screen shows the
+picker, with a default plan behind it.** The exception is a **package card the user tapped**: that
+tap *is* the choice, so it goes straight to payment for that tier.
+
+| Opener | Picker? | Default behind it |
+| --- | --- | --- |
+| Promo hero "ENTER NOW", "Build your prize", "Enter to unlock discount" | ✅ | Foreman |
+| Major-draw section CTAs, promo-welcome modal | ✅ | Foreman |
+| Dashboard / rewards "Become a member", rewards floating widget coupon unlock | ✅ | Foreman |
+| Draw-results "become a member" | ✅ | Foreman |
+| "Buy package" / one-time CTAs (`openWithOneTimePlan`) | ✅ (one-time tab) | resolved one-time pack |
+| **Tier card tap** — `MembershipSection`, `/membership`, account membership tier list | ❌ | the tapped tier |
+| Abandoned-checkout deep link (`?openMembership=1&packageId=`) | ❌ | the emailed package |
+
+The last two are deliberate: the visitor already named a package, so re-asking would be a step
+backwards. Everything else routes through `openEntryFlow` (which defaults to
+`packageSelectionFirst: true`) or calls `openModalWithPackageSelectionFirst(defaultPlan)` directly.
+
+**Re-clicking a CTA after already choosing re-opens the picker.** Both the once-per-session latch
+and `userPickedPlanRef` reset when `isOpen` goes false → true, and the CTA supplies a fresh default,
+so every new open starts a new selection.
+
+### The stale-`currentStep` race — why the picker stopped appearing on reopen (2026-08-04)
+
+Reported flow: guest registers → picker appears → picks a package → closes the modal → clicks the
+CTA again → details are prefilled on step 1, but advancing to step 2 shows **no picker**.
+
+`currentStep` is component state and the modal stays **mounted** across a close, so it outlives the
+session. On the commit where `isOpen` flips true it still holds the previous session's value (2), and
+the effect that resets it for guests only lands on the *next* render. The auto-open effect ran on
+that one stale commit, saw `currentStep === 2`, and **spent the once-per-session latch** — briefly
+opening the picker over the details form. When the guest genuinely reached step 2, the latch was gone.
+
+The fix is in the auto-open effect: on the first commit of an open session it uses the step the
+session will settle on, not the stale one.
+
+```js
+const justOpened = isOpen && !autoOpenPrevIsOpenRef.current;
+autoOpenPrevIsOpenRef.current = isOpen;
+const effectiveStep = justOpened ? (isAuthenticated ? 2 : 1) : currentStep;
+```
+
+It keeps its **own** `prevIsOpen` ref rather than reading the latch effect's, so the two never depend
+on effect declaration order. Guests therefore open on step 1 with the latch intact and get the picker
+when they reach payment; authenticated users still get it immediately.
+
+> **If you add state that must not survive a close, reset it on the open EDGE — and remember that any
+> effect reading it in that same commit still sees the old value.**
+
+### Supporting fixes (2026-08-04)
+
+- **Latch re-arms on the open edge too.** `packageSelectionAutoOpenedRef` still resets on any render
+  with `isOpen === false`; it now *also* resets when `isOpen` goes false → true, so a close that
+  never produced an observable closed render cannot leave the latch armed. This is not the in-session
+  re-arm that caused the 2026-07-07 loop — within an open session `isOpen` stays true, so it fires
+  once, before the user has chosen anything.
+- **Guests always reopen on step 1**, with their details already filled in (see
+  [auth/frontend.md](../auth/frontend.md#guest-your-details-carry-over-2026-08-04)). They advance
+  themselves via REGISTER or the step chip; the picker then auto-opens as step 2 is reached. Do not
+  "helpfully" skip a registered guest to step 2 — the owner's call is that the customer sees their
+  own details first.
+- **`MembershipSection` memoizes the config object** it passes as `membershipModalConfig`. A fresh
+  literal every render re-runs the auto-open effect every render — the identity churn that once
+  starved its timer branch.
+
+⚠️ **Plan-id caveat:** `useMemberships` slugifies the package **name** into `plan.id` ("Foreman" →
+`foreman`), so UI code never sees the catalog `_id` (`foreman-subscription`). Literal comparisons
+against the `_id` silently never match — that is why the Boss `Best Value` sash was missing from the
+membership tab. Use the `isForemanSubscriptionPlanId` / `isBossSubscriptionPlanId` predicates, which
+accept both forms.

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
@@ -18,6 +18,8 @@ import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import {
+  isBossSubscriptionPlanId,
+  isForemanSubscriptionPlanId,
   isOneTimeBestValuePlanId,
 } from "@/utils/membership/additional-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
@@ -33,7 +35,9 @@ import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPa
 import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-discount";
 import {
   MEMBERSHIP_PACKAGES_QUERY_PARAM,
+  buildMembershipPackagesHref,
   parseMembershipPackagesTab,
+  type MembershipPackagesTab,
 } from "@/utils/membership/packagesTabParam";
 import ElectricPackageCard from "@/components/sections/membership/ElectricPackageCard";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
@@ -51,7 +55,11 @@ interface MembershipSectionProps {
 }
 
 /**
- * Client-only read of the `?packages=` ad-landing tab override. Returns null during SSR.
+ * Client-only read of the `?packages=` tab override. Returns null during SSR.
+ *
+ * Two things write that param: an ad creative's landing URL, and the visitor's own toggle (see
+ * `selectTab` below). Both mean the same thing to every reader — "this tab was chosen, do not
+ * override it" — which is why they share one param rather than one param plus a state flag.
  *
  * Deliberately NOT `useSearchParams()`: this section renders on PRERENDERED marketing-class
  * pages (`/`, `/promotions/*` — see docs/security-csp/rules.md R8), and `useSearchParams()`
@@ -129,9 +137,30 @@ function MembershipSection({
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
 
+  /**
+   * Config handed to the MembershipModal. MEMOIZED deliberately: it feeds the picker's auto-open
+   * effect dependency array, and a fresh object literal on every render re-runs that effect on
+   * every render — the same identity churn that once starved the effect's 300ms timer branch
+   * indefinitely (see the comments in MembershipModal's auto-open effect).
+   */
+  const membershipModalConfig = useMemo(
+    () =>
+      membershipModal.openWithPackageSelectionFirst
+        ? { showPackageSelectionFirst: true }
+        : contextVariantConfig?.membershipModal,
+    [membershipModal.openWithPackageSelectionFirst, contextVariantConfig?.membershipModal]
+  );
+
   // Open this section's modal when the hero / entry CTAs dispatch the global `openMembershipModal`
   // event; the major-draw purchase gate is applied inside the hook.
-  useOpenMembershipModalListener((plan) => {
+  useOpenMembershipModalListener((plan, options) => {
+    // Entry CTAs ask for the "Select Your Package" picker as the first view. `plan` is the
+    // RECOMMENDED tier they carry as the default — it sits behind the picker so backing out lands
+    // on a real package, never the empty payment step.
+    if (options?.packageSelectionFirst) {
+      membershipModal.openModalWithPackageSelectionFirst(plan);
+      return;
+    }
     if (plan) {
       membershipModal.setSelectedPlan(plan);
     }
@@ -161,9 +190,10 @@ function MembershipSection({
   }, [effectivePromoMultiplier, activeTab, promoThemeSlug, promoToolsetSlug]);
 
   // Update default tab: no active subscription → membership tab; with subscription and access → one-time.
-  // A URL-forced tab (`?packages=`) wins: skip the user-state override so a logged-in non-subscriber
-  // landing on `?packages=one-time` still opens on One-Time, and a later userData change won't fight
-  // a manual toggle.
+  // A chosen tab (`?packages=`) wins: skip the user-state override so a logged-in non-subscriber
+  // landing on `?packages=one-time` still opens on One-Time. Since `selectTab` now writes the param on
+  // every manual toggle, this guard also covers the visitor's own choice — a later userData resolve or
+  // refetch can no longer yank a non-subscriber back to Membership after they picked One-Time.
   useEffect(() => {
     // Read the URL live rather than closing over a mount-time value: this effect and the
     // mount effect above land in the same commit, so a captured value would still be null here.
@@ -190,7 +220,49 @@ function MembershipSection({
   // Note: PromoBanner independently seeds its own tab from the same `?packages=` param (it is a third
   // `activeTab` owner), so a forced landing needs no mount-time `membershipTabChanged` dispatch here —
   // relying on effect ordering across the Suspense boundary would be racy. Manual toggles still emit the
-  // event from the toggle buttons below, which keeps the banner in sync after load.
+  // event from `selectTab` below, which keeps the banner in sync after load.
+
+  /**
+   * Manual tab selection: state, URL, and the PromoBanner sync event, in one place so the two
+   * toggle buttons cannot drift apart.
+   *
+   * ## Why the URL is written at all
+   * The param was previously read-only (ad landings in, nothing out). Mirroring the visitor's
+   * choice back into it makes the tab shareable/refresh-safe, and — because every other reader
+   * treats "param present" as "the tab was chosen" — it also stops the user-state default effect
+   * above from overriding a manual toggle when `userData` later resolves or refetches. Note the
+   * hero/floating entry CTAs read this param live too (useMajorDrawEntryCta), so after a toggle
+   * they pre-select the pack matching the tab the visitor is actually looking at.
+   *
+   * ## Why `history.replaceState`, not `router.replace`
+   * The router resets scroll to the top even with `{ scroll: false }` and refetches the RSC
+   * payload — measured on production 2026-07-27, scrollY 2769 -> 0 about 100ms after the click.
+   * See the same finding documented at PrizeShowcase.tsx:239-251 and useMembershipModalDeepLink.ts.
+   * `replaceState` also adds no history entry, so Back still leaves the page rather than undoing
+   * one toggle at a time.
+   *
+   * Reads `window.location.search` rather than a `useSearchParams()` snapshot for the same reason
+   * PrizeShowcase does: `replaceState` bypasses the Next router, so successive toggles must build
+   * on the URL as it actually is now, and the hook would not have refreshed.
+   *
+   * Only MANUAL selection writes. The mount seed and the user-state default effect deliberately do
+   * not, so a URL stays clean until the visitor actually touches the toggle.
+   */
+  const selectTab = useCallback(
+    (tab: MembershipPackagesTab) => {
+      setActiveTab(tab);
+      if (typeof window === "undefined") return;
+      if (pathname) {
+        window.history.replaceState(
+          null,
+          "",
+          buildMembershipPackagesHref(pathname, new URLSearchParams(window.location.search), tab)
+        );
+      }
+      window.dispatchEvent(new CustomEvent("membershipTabChanged", { detail: { activeTab: tab } }));
+    },
+    [pathname]
+  );
 
   // Check if a plan is the user's current subscription
   // Note: This only applies to subscription plans, not one-time packages
@@ -525,10 +597,20 @@ function MembershipSection({
       else if (hierarchy.isDowngrade) ctaLabel = `Downgrade to ${getPackageDisplayName(plan)}`;
       else if (hierarchy.isUpgrade) ctaLabel = `Upgrade to ${getPackageDisplayName(plan)}`;
     }
+    // `plan.id` for a subscription is the slugified package NAME ("boss"), not the catalog `_id`
+    // ("boss-subscription") — the old literal comparison never matched, so the top membership tier
+    // never showed the Best Value sash the one-time tab's top packs get.
     const showBestValueRibbon =
-      (activeTab === "membership" && plan.id === "boss-subscription") ||
+      (activeTab === "membership" && isBossSubscriptionPlanId(plan.id)) ||
       (activeTab === "one-time" && isOneTimeBestValuePlanId(plan.id));
-    const ribbon = plan.isPopular ? "MOST POPULAR" : null;
+    // Foreman is the steer: it reads RECOMMENDED here, in the package picker, and on the
+    // selected-package card — one label for one tier across every surface.
+    const ribbon =
+      activeTab === "membership" && isForemanSubscriptionPlanId(plan.id)
+        ? "RECOMMENDED"
+        : plan.isPopular
+          ? "MOST POPULAR"
+          : null;
     return (
       <div key={plan.id} className="overflow-visible px-1 pt-8 sm:pt-12">
         <ElectricPackageCard
@@ -579,17 +661,7 @@ function MembershipSection({
             <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-[20px] p-[4px] shadow-[0_0_20px_rgba(0,0,0,0.6)] w-full max-w-full sm:max-w-none sm:w-auto">
               <div className="flex flex-row items-center justify-center w-full">
                 <button
-                  onClick={() => {
-                    setActiveTab("one-time");
-                    // Dispatch event for PromoBanner to sync
-                    if (typeof window !== "undefined") {
-                      window.dispatchEvent(
-                        new CustomEvent("membershipTabChanged", {
-                          detail: { activeTab: "one-time" },
-                        })
-                      );
-                    }
-                  }}
+                  onClick={() => selectTab("one-time")}
                   suppressHydrationWarning
                   className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-[colors,transform,box-shadow] duration-[var(--ta-transition-dur)] whitespace-nowrap focus:outline-none relative ${
                     activeTab === "one-time"
@@ -609,17 +681,7 @@ function MembershipSection({
                         ))}
                 </button>
                 <button
-                  onClick={() => {
-                    setActiveTab("membership");
-                    // Dispatch event for PromoBanner to sync
-                    if (typeof window !== "undefined") {
-                      window.dispatchEvent(
-                        new CustomEvent("membershipTabChanged", {
-                          detail: { activeTab: "membership" },
-                        })
-                      );
-                    }
-                  }}
+                  onClick={() => selectTab("membership")}
                   suppressHydrationWarning
                   className={`font-sans font-extrabold font-black uppercase flex-1 px-4 py-2.5 rounded-[16px] text-[13px] sm:text-[14px] transition-[colors,transform,box-shadow] duration-[var(--ta-transition-dur)] whitespace-nowrap focus:outline-none relative ${
                     activeTab === "membership"
@@ -702,7 +764,8 @@ function MembershipSection({
         onClose={membershipModal.closeModal}
         selectedPlan={membershipModal.selectedPlan}
         onPlanChange={membershipModal.selectPlan}
-        membershipModalConfig={contextVariantConfig?.membershipModal}
+        membershipModalConfig={membershipModalConfig}
+        planIsDefaultSelection={membershipModal.openWithPackageSelectionFirst}
       />
     </section>
   );

@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 import { buildSecurityHeaders, buildSecurityHeadersForWebhook } from "./src/utils/security/csp";
 
-const DEFAULT_IMAGE_HOSTS = ["toolsaustralia.com.au", "assets.toolsaustralia.com.au", "res.cloudinary.com"];
+const DEFAULT_IMAGE_HOSTS = [
+  "toolsaustralia.com.au",
+  "assets.toolsaustralia.com.au",
+  "res.cloudinary.com",
+  // Partner-portal offer artwork shown on /my-account/rewards/catalogue. The vendor serves
+  // unoptimised PNGs (80–435 KB in sampling) at a 40 px tile size, so they MUST go through
+  // the optimiser rather than being loaded raw. Public bucket — no session required.
+  "s3-ap-southeast-2.amazonaws.com",
+];
 const configuredImageHosts = (process.env.NEXT_PUBLIC_IMAGE_HOSTS || "")
   .split(",")
   .map((host) => host.trim())

@@ -295,3 +295,19 @@ option instead, and points at the home page where the combination can be built a
 Adding a brand there is a one-line data change; **this answer does not update itself** — edit
 it in the same task, then re-run `npm run build:chat-knowledge-pack` and
 `npm run test:chat-faqs`. GearWrench is deliberately absent from both until draw 9.
+
+## The partner portal is a third party with its own UI (2026-07-31)
+
+The rewards catalogue is a white-labelled iGoDirect/MyRewards platform. It renders surfaces
+that look like Tools Australia features but are not:
+
+- **"Your Points : 0" / "$0.00 savings"** — a points currency we do not operate. It reads
+  zero for every member, forever. Cobber must never imply a member can earn these; without
+  a grounded entry it matched the TA rewards-points FAQ instead (now: entry **75**).
+- **An editable profile + password form** — the platform's own copy of the member's
+  details. Edits there do not reach us, and its password is never needed because the portal
+  is always opened already signed-in from `/my-account/rewards` (now: entry **76**).
+
+Both entries plus the ACCOUNT SELF-SERVICE MAP bullet in
+`src/services/support-chat/systemPrompt.ts` must stay in lockstep. Full audit:
+`docs/partner/igodirect-portal-ux-audit.md`.

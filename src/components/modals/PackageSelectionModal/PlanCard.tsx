@@ -31,6 +31,8 @@ interface PlanCardProps {
   isCurrent: boolean;
   isSelected: boolean;
   showBestValueRibbon: boolean;
+  /** Foreman tier — its ribbon reads RECOMMENDED instead of the generic MOST POPULAR. */
+  showRecommendedRibbon?: boolean;
   onClick: () => void;
 }
 
@@ -42,6 +44,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
   isCurrent,
   isSelected,
   showBestValueRibbon,
+  showRecommendedRibbon = false,
   onClick,
 }) => {
   return (
@@ -130,14 +133,14 @@ const PlanCard: React.FC<PlanCardProps> = ({
       {showBestValueRibbon && (
         <BestValueBadge position="top-right" size="small" badgeStyle={colorScheme.badgeStyle} colorScheme={colorScheme} />
       )}
-      {!showBestValueRibbon && (isCurrent || (plan.isPopular && !isCurrent)) && (
+      {!showBestValueRibbon && (isCurrent || showRecommendedRibbon || plan.isPopular) && (
         <CornerRibbonBadge
           position="top-right"
           size="small"
           badgeStyle={colorScheme.badgeStyle}
           colorScheme={colorScheme}
         >
-          {isCurrent ? "CURRENT" : "MOST POPULAR"}
+          {isCurrent ? "CURRENT" : showRecommendedRibbon ? "RECOMMENDED" : "MOST POPULAR"}
         </CornerRibbonBadge>
       )}
 

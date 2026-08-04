@@ -57,3 +57,34 @@ When a document holds a growing embedded array (e.g. `MajorDraw.entries[]` — o
 - **Don't need the array at all** (display/metadata reads) → exclude it: `.select("-items")`.
 
 Reference implementation: `getUserMajorDrawStats` / `getMajorDrawParticipantCount` ([`major-draw-queries.ts`](../../src/utils/database/queries/major-draw-queries.ts)) and `getCurrentMajorDrawForDisplay` ([`major-draw-helpers.ts`](../../src/utils/draws/major-draw-helpers.ts)). See `docs/draws/gotchas.md` → "Read-path amplification". The durable end-state for very large arrays is a separate collection keyed `{ parentId, userId }` rather than an embedded array.
+
+## P8. Count distinct values with two `$group` stages, not `$addToSet` + `$size`
+
+The obvious way to count unique visitors per bucket is one `$group` collecting `$addToSet`, then
+`$project` with `$size`. It works, and it is what the older promo-analytics pipelines do — but it
+**materialises every distinct value into one document before counting it**, and a document has a
+hard **16 MB** ceiling that `allowDiskUse` does not raise. One bucket in the channel table already
+holds ~203k visitor ids (Meta), i.e. a multi-MB array walking toward that limit.
+
+Group twice instead. The array is never built:
+
+```ts
+[
+  { $match: { /* index-served date window first */ } },
+  { $group: { _id: { k: <bucket key>, v: VISITOR_ID_EXPR } } },  // one doc per (bucket, visitor)
+  { $group: { _id: "$_id.k", visits: { $sum: 1 } } },            // count them
+]
+```
+
+Two extra properties this shape gives you for free, both used by `PromoAnalyticsRepository`:
+
+- **Per-visitor aggregates.** Carry an accumulator on the inner stage — e.g.
+  `interacted: { $max: BUILD_INTERACTED_FLAG }` — to make a per-row boolean **sticky per visitor**
+  before it is counted, which `$addToSet` cannot express.
+- **Several dedupes from one scan.** Wrap the alternatives in a `$facet` so a whole-scope total and
+  its per-bucket breakdown come from the same pass — and remember the total is *not* the sum of the
+  breakdown (see [backend.md](backend.md#facet--one-scan-several-dedupes-2026-07-31)).
+
+New pipelines should use the two-stage form. Existing `$addToSet` + `$size` blocks over
+low-cardinality buckets (`getAggregatedByPage`'s per-page visits, `getAggregatedByBuiltPrize`'s
+builders) are safe today and were left alone; convert one when its bucket cardinality grows.
