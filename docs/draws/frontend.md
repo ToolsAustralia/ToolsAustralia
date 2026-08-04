@@ -55,18 +55,24 @@ passed plan's `period` (`"mo"` → membership, else → one-time). By default a 
 recommended **subscription** — Foreman since 2026-08-04 (`getHeavyDutyPack()` →
 `getRecommendedSubscriptionPlan()`) — so the modal opens on membership packs.
 
-### `openEntryFlow({ packageSelectionFirst: true })` — picker instead of a pre-selected tier (2026-08-04)
+### `openEntryFlow` is selection-first by default (2026-08-04)
 
-The **promotions-page** CTAs (hero "ENTER NOW", "Build your prize" → "Enter now") pass
-`packageSelectionFirst: true`. `openEntryFlow` then dispatches `openMembershipModal` with
-`detail: { packageSelectionFirst: true }` and **no plan**, and the hosting `MembershipSection` opens the
-modal via `openModalWithPackageSelectionFirst()` + `membershipModalConfig={{ showPackageSelectionFirst: true }}`,
-so "Select Your Package" is the first thing the visitor sees (Foreman pre-highlighted + `RECOMMENDED`).
+`openEntryFlow()` now defaults to `packageSelectionFirst: true`, so **every** entry CTA behaves the
+same way: it dispatches `openMembershipModal` with
+`detail: { plan: <recommended tier>, packageSelectionFirst: true }`, and the hosting section opens the
+modal via `openModalWithPackageSelectionFirst(plan)` + `membershipModalConfig={{ showPackageSelectionFirst: true }}`
++ `planIsDefaultSelection`. The visitor sees "Select Your Package" first (Foreman sashed
+`RECOMMENDED` and pre-selected) **and** has Foreman behind it, so dismissing the picker lands on a
+real package rather than an empty payment step.
 
-The flag is honoured **only on the default membership path** — it is skipped for a blocking subscription
-(cannot buy a second subscription) and for `?packages=one-time` (the visitor is looking at the one-time
-tab), both of which keep pre-selecting the pack that matches their situation. Full chain + the
-picker/summary badge rules: [subscription/package-selection-first.md](../subscription/package-selection-first.md#promotions-page-ctas-are-explicitly-selection-first-2026-08-04).
+Selection-first is skipped on the two paths where a membership tier is the wrong pre-select anyway: a
+blocking subscription (cannot buy a second subscription) and `?packages=one-time` (the visitor is
+looking at the one-time tab). Both keep pre-selecting the pack that matches their situation.
+
+Any host that listens for `openMembershipModal` **must** honour `detail.packageSelectionFirst`
+(`MembershipSection`, `MajorDrawSection`, and the my-account dashboard all do) — otherwise the same
+CTA behaves differently depending on which page it fired from. Full chain, the per-CTA table, and the
+`planIsDefaultSelection` contract: [subscription/package-selection-first.md](../subscription/package-selection-first.md#entry-ctas-picker-first-recommended-tier-behind-it-2026-08-04).
 
 When the `?packages=one-time` param is present (parsed by the shared
 [`parseMembershipPackagesTab`](../../src/utils/membership/packagesTabParam.ts)), `openEntryFlow` hands the

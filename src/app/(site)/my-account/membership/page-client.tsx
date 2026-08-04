@@ -149,12 +149,12 @@ export default function AccountMembershipPage() {
           onManage={() => openSheet("manage")}
           onPayment={() => openSheet("payment")}
           onBecomeMember={() => {
-            // Open with the RECOMMENDED subscription (Foreman) preselected — identical to tapping
-            // the Foreman tier card below (cta.onSelect handles the freeze gate + Started Checkout
-            // tracking). Fallback to the package picker if the catalog hasn't resolved yet.
+            // Picker first with the RECOMMENDED subscription (Foreman) behind it — same as every
+            // other "become a member" CTA. Tapping a tier card below is the exception: that IS the
+            // choice, so it goes straight through (cta.onSelect handles the freeze gate + Started
+            // Checkout tracking). No default resolves only if the catalog hasn't loaded yet.
             const recommended = cta.membershipPlans.find((p) => isForemanSubscriptionPlanId(p.id));
-            if (recommended) cta.onSelect(recommended);
-            else cta.membershipModal.openModalWithPackageSelectionFirst();
+            cta.membershipModal.openModalWithPackageSelectionFirst(recommended);
           }}
           onBuyPackage={() => cta.membershipModal.openModalWithPackageSelectionFirst()}
         />
@@ -182,6 +182,7 @@ export default function AccountMembershipPage() {
         membershipModalConfig={
           cta.membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
         }
+        planIsDefaultSelection={cta.membershipModal.openWithPackageSelectionFirst}
       />
 
       {dash.user && changeTierName !== null && (

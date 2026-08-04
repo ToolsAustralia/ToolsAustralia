@@ -752,18 +752,6 @@ global dark-mode schedule/toggle. That was the original intent.
 
 `MembershipSection` emits an A/B `click` `ExperimentEvent` with `{ element: "package_cta" }` on its CTA path, via `useExperimentTracking().trackEvent(...)`. The emission is **guarded** by `experimentId && variantId` — it no-ops on every page where no experiment is active (which, since the 2026-07 packages-design experiment concluded — control won — is currently all of them; the plumbing stays ready for the next promo-page experiment). This is **diagnostic only** — see [docs/ab-testing/promo-packages-design-runbook.md](../ab-testing/promo-packages-design-runbook.md) for why the Bayesian panel (not this click event) was the winner metric.
 
-### MembershipModal — a placeholder state must carry its own way out (2026-08-04)
-
-`PaymentStep` and `PlanSummaryCard` render the step-2 view. When no package is selected
-(`isPlaceholderPlan`) both used to paint grey skeletons, and the summary card's "Change" link exists
-only in its non-placeholder branch — so that state had nothing clickable but ✕ and stranded anyone
-who got there. They now render `SELECT YOUR PACKAGE` / `Choose package`, both wired to
-`onPackageChange` (opens the package picker).
-
-**Generalise it:** a skeleton means "loading, wait" — never use one for "the user must choose
-something". If a UI state is resolved by a user action, that state must contain the action. Full
-context: [subscription/package-selection-first.md](../subscription/package-selection-first.md#the-placeholder-payment-step-must-never-be-a-dead-end-2026-08-04).
-
 ### Tier ribbons — `RECOMMENDED` (Foreman) and `BEST VALUE` (Boss / top one-time pack) (2026-08-04)
 
 Three surfaces render the same tier flags and must stay in lockstep:

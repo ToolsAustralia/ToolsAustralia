@@ -58,11 +58,13 @@ export default function RewardsPage() {
   }
 
   const userId = dash.user?._id ?? session.user?.id ?? "";
-  // Open with the Tradie SUBSCRIPTION preselected — the same behavior as tapping the Tradie tier
-  // card (owner decision): payment-ready with a "Change" button to swap tiers. Never a bare
-  // openModal() (no plan renders the payment step with skeletons and no package).
+  // Picker first, with the recommended subscription (Foreman) selected behind it: the member picks,
+  // and backing out still leaves a real package. Never a bare openModalWithPackageSelectionFirst()
+  // with no plan — that renders the payment step with skeletons and no package.
   const onBecomeMember = () =>
-    whenGatesOpenElseGateModal(() => membershipModal.openModal(getRecommendedSubscriptionPlan()));
+    whenGatesOpenElseGateModal(() =>
+      membershipModal.openModalWithPackageSelectionFirst(getRecommendedSubscriptionPlan())
+    );
   const onBuyPackage = () => openWithOneTimePlan();
   const onUpdatePayment = () => openSheet("manage");
 
@@ -82,9 +84,9 @@ export default function RewardsPage() {
       const code = (item.campaignCode || item.code || "").trim().toUpperCase();
       if (item.purchaseRequirement === "membership") {
         if (code) window.dispatchEvent(new CustomEvent("openMembershipModal", { detail: { referralCode: code } }));
-        // Recommended subscription (Foreman) preselected, same as "Become a member" —
-        // payment-ready with "Change" to swap tiers; the auto-applied code rides the prefill event.
-        membershipModal.openModal(getRecommendedSubscriptionPlan());
+        // Picker first with the recommended subscription (Foreman) behind it, same as
+        // "Become a member"; the auto-applied code rides the prefill event either way.
+        membershipModal.openModalWithPackageSelectionFirst(getRecommendedSubscriptionPlan());
         return;
       }
       // "one-time" / "any" — route to one-time package entries.
@@ -134,6 +136,7 @@ export default function RewardsPage() {
         membershipModalConfig={
           membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined
         }
+        planIsDefaultSelection={membershipModal.openWithPackageSelectionFirst}
       />
     </div>
   );

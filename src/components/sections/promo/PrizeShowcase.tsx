@@ -471,7 +471,7 @@ function PrizeShowcase({
             onSelectToolbox={handleSelectToolbox}
             onSelectToolset={handleSelectToolset}
             onSelectCash={handleSelectCash}
-            onEnterNow={() => openEntryFlow({ openLocalModal: false, packageSelectionFirst: true })}
+            onEnterNow={() => openEntryFlow({ openLocalModal: false })}
             onOpenDetails={() => setIsSpecsModalOpen(true)}
             gallery={activePrize.gallery}
             drawLabel={drawLabel}

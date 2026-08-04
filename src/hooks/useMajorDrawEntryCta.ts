@@ -287,20 +287,20 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
 
   const openWithOneTimePlan = useCallback(() => {
     whenGatesOpenElseGateModal(() => {
-      const oneTimePlan = getOneTimePlan();
-      if (oneTimePlan) {
-        membershipModal.setSelectedPlan(oneTimePlan);
-        membershipModal.openModal();
-      } else {
-        membershipModal.openModalWithPackageSelectionFirst();
-      }
+      // Picker first here too — the visitor chooses — with the resolved one-time pack behind it, so
+      // the picker opens on the ONE-TIME tab (PackageSelectionModal derives the tab from the plan's
+      // period) and dismissing lands on a real pack. Falls back to the recommended subscription only
+      // when no one-time pack resolves, which still beats an empty payment step.
+      membershipModal.openModalWithPackageSelectionFirst(
+        getOneTimePlan() ?? getRecommendedSubscriptionPlan()
+      );
     });
-  }, [getOneTimePlan, membershipModal, whenGatesOpenElseGateModal]);
+  }, [getOneTimePlan, getRecommendedSubscriptionPlan, membershipModal, whenGatesOpenElseGateModal]);
 
   const openEntryFlow = useCallback(
     ({
       openLocalModal = true,
-      packageSelectionFirst = false,
+      packageSelectionFirst = true,
     }: { openLocalModal?: boolean; packageSelectionFirst?: boolean } = {}) => {
       whenGatesOpenElseGateModal(() => {
         const hasAccess = hasAdditionalPackageAccess(userData, userMajorDrawStats);
@@ -327,17 +327,25 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           parseMembershipPackagesTab(
             new URLSearchParams(window.location.search).get(MEMBERSHIP_PACKAGES_QUERY_PARAM)
           ) === "one-time";
-        // `packageSelectionFirst` callers (the promotions-page CTAs) want the "Select Your
-        // Package" picker to BE the first view instead of landing on a pre-selected tier. Only the
-        // DEFAULT membership path takes it: a blocking subscription cannot buy a second
-        // subscription, and `?packages=one-time` means the visitor is looking at the one-time tab —
-        // both keep pre-selecting the pack that matches their situation.
+        // DEFAULT BEHAVIOUR for every entry CTA: the "Select Your Package" picker is the first
+        // view, with the RECOMMENDED tier (Foreman) already selected behind it. The user chooses,
+        // and backing out of the picker still leaves them on a real, payable package — never the
+        // empty payment step. Opting out (`packageSelectionFirst: false`) is for callers that must
+        // land straight on a specific plan.
+        //
+        // Skipped on the two paths where a membership tier is the wrong pre-select anyway: a
+        // blocking subscription cannot buy a second subscription, and `?packages=one-time` means
+        // the visitor is looking at the one-time tab. Both keep pre-selecting the pack that
+        // matches their situation.
         if (packageSelectionFirst && !hasBlockingSubscription(userData) && !forcedOneTime) {
+          const recommendedPlan = getRecommendedSubscriptionPlan();
           if (openLocalModal) {
-            membershipModal.openModalWithPackageSelectionFirst();
+            membershipModal.openModalWithPackageSelectionFirst(recommendedPlan);
           } else if (typeof window !== "undefined") {
             window.dispatchEvent(
-              new CustomEvent("openMembershipModal", { detail: { packageSelectionFirst: true } })
+              new CustomEvent("openMembershipModal", {
+                detail: { plan: recommendedPlan, packageSelectionFirst: true },
+              })
             );
           }
           return;
@@ -354,8 +362,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
             membershipModal.setSelectedPlan(correctPlan);
             membershipModal.openModal();
           } else {
-            // No concrete one-time plan resolved yet → let the user pick a pack.
-            membershipModal.openModalWithPackageSelectionFirst();
+            // No concrete one-time plan resolved yet → let the user pick, with the recommended
+            // subscription behind the picker so there is never an empty payment step.
+            membershipModal.openModalWithPackageSelectionFirst(getRecommendedSubscriptionPlan());
           }
           return;
         }
@@ -373,6 +382,9 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
       whenGatesOpenElseGateModal,
       clearModalFromSession,
       getHeavyDutyPack,
+      // Required: without it the callback keeps the first-render getter, and the default tier it
+      // pre-selects would carry stale entry counts (catalog / promo multiplier resolve later).
+      getRecommendedSubscriptionPlan,
       getOneTimePlan,
       userData,
       userMajorDrawStats,

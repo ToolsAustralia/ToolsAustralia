@@ -2,6 +2,7 @@
 
 import { BadgeCheck, Check, Facebook, Play, Ticket } from "lucide-react";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
+import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
@@ -12,6 +13,7 @@ const FACEBOOK_URL = "https://www.facebook.com/toolsaust";
 
 export default function ResultsCTA() {
   const modal = useMembershipModal();
+  const { getRecommendedSubscriptionPlan } = useMajorDrawEntryCta();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
   const { userData } = useUserContext();
   const requestModal = useModalPriorityStore((s) => s.requestModal);
@@ -28,7 +30,9 @@ export default function ResultsCTA() {
       if (isActiveMember) {
         requestModal("special-packages", true);
       } else {
-        modal.openModalWithPackageSelectionFirst();
+        // Picker first, recommended tier (Foreman) behind it — this page shows no package cards,
+        // so the modal must both let them choose and never open on an empty payment step.
+        modal.openModalWithPackageSelectionFirst(getRecommendedSubscriptionPlan());
       }
     });
 
@@ -96,6 +100,7 @@ export default function ResultsCTA() {
         onClose={modal.closeModal}
         selectedPlan={modal.selectedPlan}
         membershipModalConfig={{ showPackageSelectionFirst: modal.openWithPackageSelectionFirst }}
+        planIsDefaultSelection={modal.openWithPackageSelectionFirst}
       />
     </section>
   );

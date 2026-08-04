@@ -109,6 +109,7 @@ export default function DrawsPage() {
         selectedPlan={membershipModal.selectedPlan}
         onPlanChange={membershipModal.selectPlan}
         membershipModalConfig={membershipModal.openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined}
+        planIsDefaultSelection={membershipModal.openWithPackageSelectionFirst}
       />
     </div>
   );

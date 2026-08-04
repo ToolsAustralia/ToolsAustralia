@@ -154,10 +154,11 @@ function MembershipSection({
   // Open this section's modal when the hero / entry CTAs dispatch the global `openMembershipModal`
   // event; the major-draw purchase gate is applied inside the hook.
   useOpenMembershipModalListener((plan, options) => {
-    // Promotions-page CTAs ask for the "Select Your Package" picker rather than a pre-selected
-    // tier — open with the membership placeholder so MembershipModal shows selection first.
+    // Entry CTAs ask for the "Select Your Package" picker as the first view. `plan` is the
+    // RECOMMENDED tier they carry as the default — it sits behind the picker so backing out lands
+    // on a real package, never the empty payment step.
     if (options?.packageSelectionFirst) {
-      membershipModal.openModalWithPackageSelectionFirst();
+      membershipModal.openModalWithPackageSelectionFirst(plan);
       return;
     }
     if (plan) {
@@ -764,6 +765,7 @@ function MembershipSection({
         selectedPlan={membershipModal.selectedPlan}
         onPlanChange={membershipModal.selectPlan}
         membershipModalConfig={membershipModalConfig}
+        planIsDefaultSelection={membershipModal.openWithPackageSelectionFirst}
       />
     </section>
   );
