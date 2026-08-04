@@ -62,8 +62,11 @@ function VisaMark() {
 
 function GooglePayMark() {
   return (
-    <svg viewBox="0 0 60 24" height="19" role="img" aria-label="Google Pay" className="shrink-0">
-      <g transform="translate(0.5,2.2) scale(0.92)">
+    <svg viewBox="0 0 48 24" height="19" role="img" aria-label="Google Pay" className="shrink-0">
+      {/* The glyph's own bbox sits low in its path coordinates, so it needs lifting to the
+          text's cap-height centre — left as-authored it reads as sunk below "Pay".
+          scale(1.15) also brings it up to the weight of the neighbouring wordmarks. */}
+      <g transform="translate(0.5,-2.3) scale(1.15)">
         <path
           d="M11.5 12.05c0-.5-.04-.98-.13-1.44H6v2.72h3.09a2.64 2.64 0 0 1-1.15 1.73v1.44h1.85c1.08-1 1.71-2.47 1.71-4.45z"
           fill="#4285F4"
@@ -78,7 +81,7 @@ function GooglePayMark() {
           fill="#EA4335"
         />
       </g>
-      <text x="11" y="17" fontFamily="Arial,Helvetica,sans-serif" fontSize="17" fontWeight="600" fill="var(--sc-gpay)">
+      <text x="16" y="17" fontFamily="Arial,Helvetica,sans-serif" fontSize="17" fontWeight="600" fill="var(--sc-gpay)">
         Pay
       </text>
     </svg>
@@ -87,10 +90,24 @@ function GooglePayMark() {
 
 function MastercardMark() {
   return (
-    <svg viewBox="0 0 46 30" height="25" role="img" aria-label="Mastercard" className="shrink-0">
-      <circle cx="18" cy="15" r="11" fill="#EB001B" />
-      <circle cx="28" cy="15" r="11" fill="#F79E1B" />
-      <path d="M23 6.6a11 11 0 0 1 0 16.8 11 11 0 0 1 0-16.8z" fill="#FF5F00" />
+    <svg viewBox="0 0 46 34" height="25" role="img" aria-label="Mastercard" className="shrink-0">
+      <circle cx="18" cy="14" r="10.5" fill="#EB001B" />
+      <circle cx="28" cy="14" r="10.5" fill="#F79E1B" />
+      <path d="M23 6a10.5 10.5 0 0 1 0 16 10.5 10.5 0 0 1 0-16z" fill="#FF5F00" />
+      {/* Wordmark under the discs. Themed ink, not white — on the light shell a white
+          wordmark disappears. The discs stay fixed brand colours either way. */}
+      <text
+        x="23"
+        y="32"
+        textAnchor="middle"
+        fontFamily="Arial,Helvetica,sans-serif"
+        fontSize="6.2"
+        fontWeight="700"
+        letterSpacing="0.1"
+        fill="var(--sc-ink-strong)"
+      >
+        mastercard
+      </text>
     </svg>
   );
 }
@@ -115,12 +132,15 @@ function StripeMark() {
 
 function ApplePayMark() {
   return (
-    <svg viewBox="0 0 60 24" height="19" role="img" aria-label="Apple Pay" className="shrink-0">
-      <path
-        d="M13.9 7.98c.53-.66.89-1.55.79-2.46-.77.04-1.71.51-2.26 1.17-.49.57-.93 1.5-.81 2.38.86.07 1.74-.44 2.28-1.09zm.78 1.24c-1.25-.07-2.31.71-2.91.71-.6 0-1.51-.67-2.49-.66-1.28.02-2.46.74-3.12 1.9-1.33 2.31-.35 5.73.95 7.61.63.92 1.39 1.95 2.38 1.91.95-.04 1.31-.61 2.46-.61 1.15 0 1.47.61 2.48.59 1.02-.02 1.67-.93 2.3-1.86.72-1.07 1.02-2.1 1.03-2.16-.02-.01-1.98-.76-2-3.02-.02-1.89 1.54-2.79 1.61-2.84-.88-1.3-2.25-1.44-2.73-1.47z"
-        fill="var(--sc-ink-strong)"
-      />
-      <text x="22" y="17" fontFamily="Arial,Helvetica,sans-serif" fontSize="17" fontWeight="600" fill="var(--sc-ink-strong)">
+    <svg viewBox="0 0 52 24" height="19" role="img" aria-label="Apple Pay" className="shrink-0">
+      {/* Same lift-and-enlarge as the Google mark — the apple's path bbox also sits low. */}
+      <g transform="translate(0,-2.6) scale(1.18)">
+        <path
+          d="M13.9 7.98c.53-.66.89-1.55.79-2.46-.77.04-1.71.51-2.26 1.17-.49.57-.93 1.5-.81 2.38.86.07 1.74-.44 2.28-1.09zm.78 1.24c-1.25-.07-2.31.71-2.91.71-.6 0-1.51-.67-2.49-.66-1.28.02-2.46.74-3.12 1.9-1.33 2.31-.35 5.73.95 7.61.63.92 1.39 1.95 2.38 1.91.95-.04 1.31-.61 2.46-.61 1.15 0 1.47.61 2.48.59 1.02-.02 1.67-.93 2.3-1.86.72-1.07 1.02-2.1 1.03-2.16-.02-.01-1.98-.76-2-3.02-.02-1.89 1.54-2.79 1.61-2.84-.88-1.3-2.25-1.44-2.73-1.47z"
+          fill="var(--sc-ink-strong)"
+        />
+      </g>
+      <text x="21" y="17" fontFamily="Arial,Helvetica,sans-serif" fontSize="17" fontWeight="600" fill="var(--sc-ink-strong)">
         Pay
       </text>
     </svg>

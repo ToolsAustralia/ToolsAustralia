@@ -562,6 +562,23 @@
   --pbc-cash-ink: #3ddc84;
 }
 
+/* Package-tile ribbon attention pop. Plays on mount, which in PackageSelectionModal means
+   on every tab switch — the grid keys its tiles by tab, so switching remounts them and the
+   Recommended / Best value flags re-announce themselves. Two short beats, then it settles;
+   an infinite pulse on a modal the user is reading is noise, not emphasis.
+
+   Transform ONLY — no opacity ramp. Fading the badge in made the whole footer read as
+   re-rendering on every tab switch; a pure scale pop keeps the movement on the pill alone.
+
+   A single smooth swell rather than the earlier 4-stop bounce: the overshoot-and-settle
+   read as a twitch when repeated, and repeats are the point on the entries number. One
+   rise and fall on ease-in-out is calmer and reads as "breathing" at any repeat count. */
+@keyframes ta-ribbon-pop {
+  0%,
+  100% { transform: scale(1); }
+  50% { transform: scale(1.22); }
+}
+
 /* ---------------------------------------------------------------------------
  * Partner brand wall (PartnerBrandWall) — odometer + three conveyor belts
  * ---------------------------------------------------------------------------

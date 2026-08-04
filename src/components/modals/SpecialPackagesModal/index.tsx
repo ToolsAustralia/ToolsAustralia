@@ -101,6 +101,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const stripePromise = useMemo(() => getStripePromise(), []);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<StaticMembershipPackage | null>(null);
+  /** Anchor at the end of the body, scrolled to after a pick so the Buy button is in view.
+   *  Declared with the other hooks — this component early-returns further down, and a ref
+   *  created after that point would break the rules-of-hooks call order. */
+  const purchaseAnchorRef = useRef<HTMLDivElement | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponType, setCouponType] = useState<"referral" | "promo" | "campaign" | null>(null);
@@ -395,6 +399,18 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     // Single selection - unselect current and select new
     setSelectedPackage(pkg);
     onPackageSelect(pkg);
+
+    // Bring the Buy button into view. Picking a pack is the point at which the next action
+    // moves to the footer, and with six packs stacked that footer is usually below the fold.
+    // rAF so the scroll runs after the selection has committed and the footer (which only
+    // renders once something is selected) is actually in the DOM.
+    requestAnimationFrame(() => {
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      purchaseAnchorRef.current?.scrollIntoView({
+        behavior: reduce ? "auto" : "smooth",
+        block: "end",
+      });
+    });
   };
 
   const handlePurchase = async (pkg: StaticMembershipPackage, freshPaymentMethodId?: string) => {
@@ -934,6 +950,11 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
           <BenefitsPanel selectedPackage={selectedPackage} variantConfig={variantConfig} />
 
           <TrustIndicators />
+
+          {/* Scroll target for handlePackageSelect. Sits AFTER the trust strip so
+              `block: "end"` lands the whole purchase block — Buy button, benefits and trust
+              marks — in view, rather than stopping with the button at the very bottom edge. */}
+          <div ref={purchaseAnchorRef} aria-hidden />
         </ModalContent>
       </ModalContainer>
     </>

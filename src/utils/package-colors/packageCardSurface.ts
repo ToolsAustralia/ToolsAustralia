@@ -13,9 +13,13 @@
  * scheme, so a hand-rolled vivid card silently disagrees with the section on exactly
  * those tiers.
  *
- * Consumers: `sections/membership/ElectricPackageCard`,
- * `modals/PackageSelectionModal/{PlanCard,FeaturesPreview}`,
- * `modals/SpecialPackagesModal/PackagesGrid`, `modals/MembershipModal/PlanSummaryCard`.
+ * Consumers: `sections/membership/ElectricPackageCard` and
+ * `modals/MembershipModal/PlanSummaryCard`.
+ *
+ * NOTE: the two package MODALS no longer use this — they moved to `modals/PackageTile`
+ * (the 2026-08-04 package-modal redesign), which derives its own chrome from a single tier
+ * hex via `glossFill` / `needsDarkInk`. This module still owns the section card and the
+ * selected-package summary, and remains the home for the cross-tier light-theme remaps.
  *
  * Test: `npm run test:package-card-surface`.
  */
