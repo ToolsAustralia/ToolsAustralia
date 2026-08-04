@@ -6,21 +6,14 @@ import Image from "next/image";
 import BestValueBadge from "@/components/ui/BestValueBadge";
 import CornerRibbonBadge from "@/components/ui/CornerRibbonBadge";
 import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/package-icons";
-import { getCardBorderStyle, type getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
+import { type getPackageColorSchemeForPromo } from "@/utils/package-colors/packageColorScheme";
+import { getPackageCardSurface } from "@/utils/package-colors/packageCardSurface";
 import { cn } from "@/utils/cn";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import FeaturesPreview from "./FeaturesPreview";
 
 type ColorScheme = ReturnType<typeof getPackageColorSchemeForPromo>;
-
-// Helper function to convert hex color to rgba for box-shadow
-const hexToRgba = (hex: string, alpha: number) => {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
 
 interface PlanCardProps {
   plan: LocalMembershipPlan;
@@ -47,43 +40,37 @@ const PlanCard: React.FC<PlanCardProps> = ({
   showRecommendedRibbon = false,
   onClick,
 }) => {
+  // Same chrome the MembershipSection card renders (ElectricPackageCard), so the picker
+  // and the section agree tier-for-tier — including the cross-tier light-theme remaps.
+  const surface = getPackageCardSurface(plan.id, {
+    isMembershipTab: plan.period !== "one-time",
+    colorScheme,
+  });
+  /** Ink-contrast fill for pills/badges — an accent-coloured chip vanishes on a vivid body. */
+  const onInk = surface.blackText ? "#FFFFFF" : "#0A0A0A";
+
   return (
     <div
-      className={`relative rounded-2xl p-2.5 sm:p-4 shadow-[0_0_15px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-[1.02] ${
-        isCurrent ? "cursor-not-allowed opacity-75" : "cursor-pointer"
-      } ${
-        isSelected
-          ? "ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 shadow-2xl"
-          : "hover:shadow-[0_0_25px_rgba(0,0,0,0.6)]"
-      }`}
+      className={cn(
+        "relative rounded-2xl p-2.5 sm:p-4 transition-[transform,box-shadow] duration-300",
+        isCurrent ? "cursor-not-allowed opacity-75" : "cursor-pointer hover:scale-[1.02]"
+      )}
       style={{
-        ...(colorScheme.cardBorderGradient
-          ? getCardBorderStyle(colorScheme, "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)")
-          : {
-              border: isSelected
-                ? `3px solid ${accentHex}`
-                : `2px solid transparent`,
-              backgroundImage: isSelected
-                ? `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${hexToRgba(
-                    accentHex,
-                    0.8
-                  )}, ${hexToRgba(accentHex, 0.5)})`
-                : `linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%), linear-gradient(135deg, ${accentHex}, transparent)`,
-              backgroundOrigin: "border-box",
-              backgroundClip: "padding-box, border-box",
-            }),
-        boxShadow: isSelected
-          ? `0 0 20px ${hexToRgba(accentHex, 0.6)}, 0 0 40px ${hexToRgba(
-              accentHex,
-              0.4
-            )}, 0 0 60px rgba(251, 191, 36, 0.3), 0 0 0 4px rgba(251, 191, 36, 0.2)`
-          : `0 0 15px ${hexToRgba(accentHex, 0.4)}, 0 0 30px ${hexToRgba(
-              accentHex,
-              0.2
-            )}`,
+        background: surface.body,
+        // Constant border in BOTH states so selecting causes no layout shift — only the
+        // bloom escalates. (The old card went 2px → 3px on select and nudged the row.)
+        border: surface.border,
+        boxShadow: isSelected ? surface.bloomSelected : surface.bloom,
       }}
       onClick={onClick}
     >
+      {/* Inner sheen — the depth pass that makes the vivid body read as a card, not a swatch */}
+      <div
+        className="pointer-events-none absolute inset-0.5 rounded-[14px] z-0"
+        style={{ background: surface.sheen }}
+        aria-hidden
+      />
+
       {/* Promo Badge (10x entries) - Upper right, like MembershipSection */}
       {plan.metadata?.isPromoActive && plan.metadata?.promoMultiplier && (
         <div className="absolute -top-4 -right-4 sm:-top-5 sm:-right-5 z-30">
@@ -101,30 +88,24 @@ const PlanCard: React.FC<PlanCardProps> = ({
       {/* Price - Absolute top-left, no background */}
       <div className="absolute top-1.5 left-1.5 z-20 font-poppins text-center">
         <div className="relative inline-block">
-          <div
-            className={cn("font-bold text-base sm:text-lg leading-tight", colorScheme.textGradientStyle ? "" : colorScheme.priceText)}
-            style={colorScheme.textGradientStyle ?? { color: accentHex }}
-          >
+          <div className="font-bold text-base sm:text-lg leading-tight" style={surface.title}>
             ${plan.price}
           </div>
           {discount && (
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-1.5 flex items-center gap-1 whitespace-nowrap leading-none">
-              <span className="text-3xs sm:text-2xs font-bold line-through text-white/40">
+              <span className="text-3xs sm:text-2xs font-bold line-through" style={{ color: surface.inkFaint }}>
                 ${discount.regularPrice}
               </span>
               <span
                 className="rounded-full px-1 py-0.5 text-3xs font-extrabold uppercase"
-                style={{ backgroundColor: accentHex, color: "#0A0A0A" }}
+                style={{ backgroundColor: surface.ink, color: onInk }}
               >
                 {discount.percentOff}% Off
               </span>
             </div>
           )}
         </div>
-        <div
-          className="text-3xs sm:text-2xs font-semibold"
-          style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: "rgba(255,255,255,0.9)" }}
-        >
+        <div className="text-3xs sm:text-2xs font-semibold" style={{ color: surface.inkMuted }}>
           {plan.period === "one-time" ? "One Time" : "Per Giveaway"}
         </div>
       </div>
@@ -147,8 +128,8 @@ const PlanCard: React.FC<PlanCardProps> = ({
       {/* Current Selection Indicator */}
       {isSelected && !isCurrent && (
         <div
-          className="absolute -top-1 -right-1 text-white rounded-full p-0.5 sm:p-1 flex items-center justify-center"
-          style={{ background: accentHex }}
+          className="absolute -top-1 -right-1 z-30 rounded-full p-0.5 sm:p-1 flex items-center justify-center"
+          style={{ background: surface.ring, color: onInk }}
         >
           <Check size={10} className="sm:hidden" />
           <Check size={12} className="hidden sm:block" />
@@ -173,25 +154,19 @@ const PlanCard: React.FC<PlanCardProps> = ({
       )}
 
       {/* Plan Content - Centered Layout */}
-      <div className="text-center pt-8 sm:pt-8">
+      <div className="relative z-10 text-center pt-8 sm:pt-8">
         <div className="flex items-center justify-center gap-2 mb-1 sm:mb-1.5">
-          <h3
-            className="text-base sm:text-lg font-bold tracking-wide"
-            style={colorScheme.textGradientStyle ?? { color: accentHex }}
-          >
+          <h3 className="text-base sm:text-lg font-bold tracking-wide" style={surface.title}>
             {getPackageDisplayName(plan)}
           </h3>
         </div>
         {plan.subtitle && (
-          <p
-            className="text-xs sm:text-sm mb-1.5 sm:mb-2"
-            style={colorScheme.textGradientStyle ? { ...colorScheme.textGradientStyle, opacity: 0.9 } : { color: "rgba(255,255,255,0.8)" }}
-          >
+          <p className="text-xs sm:text-sm mb-1.5 sm:mb-2" style={{ color: surface.inkMuted }}>
             {plan.subtitle}
           </p>
         )}
 
-        <FeaturesPreview plan={plan} colorScheme={colorScheme} accentHex={accentHex} />
+        <FeaturesPreview plan={plan} surface={surface} accentHex={accentHex} />
       </div>
     </div>
   );
