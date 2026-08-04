@@ -21,9 +21,11 @@
 
 > **Never bare-`openModal()` the MembershipModal (2026-07-06):** `useMembershipModal.openModal()` without a
 > plan (and no prior selection) renders the **payment step with no package** — a broken skeleton view. The
-> sanctioned no-plan open is **`openModalWithPackageSelectionFirst()`** (the promotions "Enter Now" path), and
-> the page's `<MembershipModal>` must thread `membershipModalConfig={openWithPackageSelectionFirst ? {
-> showPackageSelectionFirst: true } : undefined}`. Fixed on all dashboard surfaces: rewards `onBecomeMember` +
+> sanctioned open is **`openModalWithPackageSelectionFirst(getRecommendedSubscriptionPlan())`** (the "Enter
+> Now" path — picker first, a real default behind it), and the page's `<MembershipModal>` must thread BOTH
+> `membershipModalConfig={openWithPackageSelectionFirst ? { showPackageSelectionFirst: true } : undefined}`
+> and `planIsDefaultSelection={openWithPackageSelectionFirst}` — without the latter the picker will not
+> open over that default. Fixed on all dashboard surfaces: rewards `onBecomeMember` +
 > the unlock-coupon membership branch, home `onBecomeMember` + the plan-less `openMembershipModal` event
 > branch, and the membership page's guest CTAs (whose modal render was also missing the config pass-through).
 > `getHeavyDutyPack()` is NOT a substitute default — it returns a one-time pack for entry-holders, mislabeling

@@ -6,21 +6,22 @@ step 2, and the invariant that must never be broken again after the 2026-07-07 i
 
 ## The invariant (read this before touching the auto-open effect)
 
-> **The picker auto-opens AT MOST ONCE per modal-open session, and only while no real plan is
-> selected (`isPlaceholderPlan === true`). It re-arms ONLY when the modal fully closes
-> (`!isOpen`) — never on any in-session condition. To change plan after selecting, the user
-> taps the explicit "Change" button (`handlePackageChange`), never an automatic reopen.**
+> **The picker auto-opens AT MOST ONCE per modal-open session, and never over a plan the USER
+> chose. It re-arms only when a new open session starts — never on any in-session condition. To
+> change plan after selecting, the user taps the explicit "Change" button
+> (`handlePackageChange`), never an automatic reopen.**
 
 Both facts are load-bearing:
 
-- **Once per session** — enforced by the `packageSelectionAutoOpenedRef` latch, which is set
-  `true` the moment the picker auto-opens and reset `false` **only** in the `if (!isOpen)` branch.
-- **Only on placeholder** — both auto-open branches (config-driven and the implicit `/promotions`
-  timer) are gated on `isPlaceholderPlan`. Never auto-open the picker over a plan the user already
-  chose (a picked tier, a pre-selected package card, or an abandoned-checkout deep-link plan).
+- **Once per session** — enforced by the `packageSelectionAutoOpenedRef` latch, set `true` the
+  moment the picker auto-opens and reset only when the modal is closed or a new open begins.
+- **Never over the user's own choice** — the gate is
+  `(isPlaceholderPlan || planIsDefaultSelection) && !userPickedPlanRef.current`. A plan the CTA
+  supplied as a default is fair game (that is the whole selection-first flow, below); a picked tier,
+  a tapped package card, or an abandoned-checkout deep-link plan is not.
 
 The relevant code is the auto-open effect in
-[`MembershipModal/index.tsx`](../../src/components/modals/MembershipModal/index.tsx) (~L738–786).
+[`MembershipModal/index.tsx`](../../src/components/modals/MembershipModal/index.tsx).
 
 ## Two auto-open paths
 
@@ -33,16 +34,19 @@ const shouldAutoOpen = finalMembershipModalConfig == null
   : (finalMembershipModalConfig.showPackageSelectionFirst !== false)  // explicit: A/B / dashboard config
 ```
 
-1. **Config-driven** (`finalMembershipModalConfig != null`) — synchronous open. Used by the
-   dashboard "Become a member" (legacy `{}` config) and A/B variants. Gated on `isPlaceholderPlan`.
-2. **Implicit `/promotions/*`** (`config == null`) — 300 ms delayed open (hero paints first). Also
-   gated on `isPlaceholderPlan`. **This is the path the homepage does NOT take** — `isPromotionsPage`
-   is false there, so `shouldAutoOpen` is false and the picker never auto-opens on the homepage.
+1. **Config-driven** (`finalMembershipModalConfig != null`) — synchronous open. Used by every
+   selection-first CTA (below) and by A/B variants.
+2. **Implicit `/promotions/*`** (`config == null`) — 300 ms delayed open (hero paints first).
+   **This is the path the homepage does NOT take** — `isPromotionsPage` is false there, so
+   `shouldAutoOpen` is false and the picker never auto-opens on the homepage.
+
+Both branches share the `canAutoOpenOverSelection` gate from the invariant above.
 
 `configSelectionFirst` (a separate predicate, `config != null && flag !== false`) controls the
 picker's **dismiss** behaviour: when true, dismissing the picker on a placeholder closes the whole
 modal (nothing sensible to show behind it); when false (the `/promotions` `config==null` case),
-dismiss just closes the picker and leaves the modal on step 2.
+dismiss just closes the picker and leaves the modal on step 2. With a CTA default behind the picker
+the plan is not a placeholder, so dismissal simply leaves the visitor on that default.
 
 ## The 2026-07-07 incident — a conversion-killing reopen loop
 
@@ -77,15 +81,16 @@ there is nothing for the re-arm to reopen.
 - **Gated the `/promotions` timer branch on `isPlaceholderPlan`**, mirroring the config branch. As a
   bonus this fixes a latent bug: a package-card / deep-link entry that pre-selects a real plan no
   longer flashes the picker open over the user's choice — it lands straight on payment with a
-  "Change" button (the intended behaviour, cf. dashboard "Tradie preselected").
+  "Change" button (the intended behaviour for a tapped tier card).
 
 Verified: `tsc --noEmit` clean; the primary ad path (hero "Enter Now" → plan-less open → picker
 auto-opens once → pick → payment, no reopen) works; config-driven selection-first and the
 abandoned-checkout deep-link are unaffected.
 
 **Rule going forward:** never re-arm `packageSelectionAutoOpenedRef` on an in-session condition, and
-keep every auto-open branch gated on `isPlaceholderPlan`. If you need the picker again after a
-selection, that is a user action (`handlePackageChange`), not an effect.
+keep every auto-open branch behind `canAutoOpenOverSelection` (2026-08-04 widened the placeholder-only
+gate to allow a CTA default — see below — but never a user's own pick). If you need the picker again
+after a selection, that is a user action (`handlePackageChange`), not an effect.
 
 ## Entry CTAs: picker first, recommended tier behind it (2026-08-04)
 
