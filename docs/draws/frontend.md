@@ -87,6 +87,25 @@ additional-package access divert to the `special-packages` modal earlier in `ope
 selection, so they are unaffected. The param is read from `window.location.search` (not `useSearchParams`)
 because it runs inside a click handler.
 
+#### The param no longer skips the package picker (2026-08-04)
+
+`?packages=one-time` used to **bypass** package-selection-first entirely: the guard read
+`packageSelectionFirst && !hasBlockingSubscription(userData) && !forcedOneTime`, so those visitors
+jumped straight to a pre-selected pack while everyone else got the picker first. The stated reason —
+"a membership tier is the wrong pre-select for a one-time visitor" — was true, but skipping the picker
+was the wrong remedy: it gave the same CTA a different number of steps depending on a URL param.
+
+`forcedOneTime` is now dropped from that condition and used to choose the **pre-selected plan** instead
+(`getOneTimePlan() ?? getRecommendedSubscriptionPlan()`). Because `PackageSelectionModal` derives its
+tab from `currentPlan.period`, handing it the one-time plan opens it on the One-Time tab — same flow,
+right tab. Keep the `??` fallback: `getOneTimePlan()` returns nothing until packages resolve, and
+without it a slow fetch opens the picker with no selection, which is the empty-payment-step failure
+package-selection-first exists to prevent.
+
+**`hasBlockingSubscription` still skips the picker**, for an unrelated and still-valid reason: that
+visitor cannot create a second subscription (`EXISTING_SUBSCRIPTION`), so the picker's membership tab
+would offer them nothing payable. Do not collapse the two conditions — they guard different things.
+
 ## Draw Results & Winners page (redesigned 2026-06-10)
 
 [src/app/(site)/draw-results/](../../src/app/(site)/draw-results/) was rebuilt to the Claude Design "Draw Results & Winners" mockup. Design record: [docs/superpowers/specs/2026-06-10-draw-results-redesign-design.md](../superpowers/specs/2026-06-10-draw-results-redesign-design.md).

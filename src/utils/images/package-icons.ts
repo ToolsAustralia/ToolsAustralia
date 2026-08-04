@@ -92,9 +92,11 @@ export function getPackageIcon(planId: string): PackageIconData | null {
 /** Tailwind scale classes — adjust Boss/VIP emphasis in one place sitewide. */
 const PACKAGE_ICON_WRAPPER_SCALE = {
   bossResponsive: "scale-110 sm:scale-110",
-  vipResponsive: "scale-105 sm:scale-105",
+  // VIP's artwork carries more internal padding than the other tiers, so it reads smaller
+  // at the same box size — it needs a larger scale than Boss, not a smaller one.
+  vipResponsive: "scale-125 sm:scale-125",
   bossCompact: "scale-110",
-  vipCompact: "scale-105",
+  vipCompact: "scale-125",
   desktopOneTimeDefault: "scale-[0.8]",
   desktopOneTimeVip: "scale-[0.88]",
   desktopSubscriptionBoss: "scale-110",

@@ -522,9 +522,18 @@ const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({
     <ModalContainer
       isOpen={isOpen}
       onClose={onClose}
-      size="sm"
+      // xl (576px). `sm` (384px) crushed the wide membership tile — its stats band collided
+      // with the fixed 190px footer column. The handoff's 772px (`3xl`) overshot the other
+      // way: with only three membership tiers the tiles stretched and the stats band opened
+      // a dead gap between the entries number and the ring. 576px fits the one-time 2-up at
+      // ~270px per column and keeps the wide tile's bands touching.
+      // Mobile is unaffected — it renders as a full-bleed sheet, where `size` does not apply.
+      size="xl"
       height="fixed"
-      fixedHeight="max-h-[80dvh]"
+      // 92dvh, not 80: the redesigned tiles are taller than the rows they replaced, and at
+      // 80 the one-time tab (6 packs) only showed ~2 rows before scrolling. dvh (not vh)
+      // so mobile browser chrome collapsing does not clip the footer.
+      fixedHeight="max-h-[92dvh]"
       presentation={isNarrowViewport ? "sheet" : "dialog"}
     >
       <ModalHeader title="Select Your Package" onClose={onClose} showLogo={true} />
