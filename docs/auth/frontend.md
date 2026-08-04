@@ -19,6 +19,24 @@ LLM when `CHAT_ALLOW_GUEST_GENERATIVE` is on). Keep the two auth layouts in lock
 
 [src/components/auth/](../../src/components/auth/) — login form, signup form, password reset, OAuth buttons.
 
+## Guest "Your Details" carry-over (2026-08-04)
+
+[src/utils/auth/guest-details-storage.ts](../../src/utils/auth/guest-details-storage.ts) keeps the
+membership modal's **step-1** fields alive across page navigations, so a visitor who typed their name
+on `/` finds the form already filled when they open the modal on `/promotions/[slug]` or
+`/membership`. Without it every page mounts a fresh `MembershipModal` (via `MembershipSection`) and
+the form state dies on navigation — the visitor retypes everything, which is pure drop-off.
+
+| Decision | Why |
+| --- | --- |
+| `sessionStorage`, key `ta.guestDetails` | Real PII (name / email / mobile). It survives navigation + reload but dies with the tab, so a shared device keeps nothing. `localStorage` would outlive the visit for no extra benefit. |
+| Explicit 4-field allowlist | The modal's `formData` also holds `cardNumber` / `expiryDate` / `cvv`. The module never takes the object — it takes named fields — so card data cannot reach storage even if that shape changes. |
+| Guests only | An authenticated user's fields come from their profile (`userData`). The modal `clearGuestDetails()`s on the authenticated prefill — signing in is an auth boundary. |
+| Hydration fills blanks only | Anything already typed into the open modal wins; a hydration can never overwrite live input. |
+
+Cleared on: authentication (above) and sign-out — the key is registered in `USER_SESSION_KEYS` in
+`total-sign-out.ts`. **Keep those two in sync** when renaming the key.
+
 ## Total sign-out (2026-07-02)
 
 `totalSignOut()` / `clearUserScopedClientStorage()` in

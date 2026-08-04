@@ -51,14 +51,20 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
       {!promoEnhancedPlan ||
       promoEnhancedPlan.id === "placeholder" ||
       promoEnhancedPlan.id.startsWith("placeholder-") ? (
-        <div className="space-y-3">
-          <div className="h-4 bg-gray-200 rounded animate-pulse w-32"></div>
-          <div className="border rounded-lg sm:rounded-xl p-2 sm:p-3 bg-gray-100">
-            <div className="space-y-2">
-              <div className="h-5 bg-gray-200 rounded animate-pulse w-3/4"></div>
-              <div className="h-4 bg-gray-200 rounded animate-pulse w-1/2"></div>
-              <div className="h-3 bg-gray-200 rounded animate-pulse w-2/3"></div>
-            </div>
+        // Nothing selected yet. Deliberately NOT a skeleton: a skeleton reads as "loading, wait"
+        // and offers nothing to click, which is how this step became a dead end when the picker
+        // was dismissed or never auto-opened. State the situation and give the way out.
+        <div className="space-y-1.5 sm:space-y-2">
+          <h3 className="text-xs sm:text-sm font-bold text-gray-800 dark:text-neutral-100">Selected Package</h3>
+          <div className="flex items-center justify-between gap-3 rounded-lg sm:rounded-xl border border-dashed border-gray-300 p-2.5 sm:p-3 dark:border-neutral-700">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-neutral-400">No package selected yet</p>
+            <button
+              type="button"
+              onClick={onPackageChange}
+              className="shrink-0 cursor-pointer rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-gray-700 sm:text-sm dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200"
+            >
+              Choose package
+            </button>
           </div>
         </div>
       ) : (() => {

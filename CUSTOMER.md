@@ -307,6 +307,12 @@ This is the most important and non-obvious behaviour. Registering in **step 1** 
 
 The register route even hard-codes `isAuthenticated: false` in its Klaviyo "Started Checkout" event "because this path runs at registration submit and the user is, by definition, a guest" ([register/route.ts:109-111](src/app/api/auth/register/route.ts#L109)). Documented at [docs/auth/gotchas.md:26-50](docs/auth/gotchas.md#L26).
 
+### 4a-ii. "Your Details" follows the visitor between pages (2026-08-04)
+
+Each page mounts its own copy of the `MembershipModal`, so anything typed into step 1 used to be lost the moment the visitor navigated — someone who started on `/` and then opened the modal on `/promotions/[slug]` or `/membership` faced an empty form again. The four identity fields (first name, last name, email, mobile) are now kept in **`sessionStorage`** (`ta.guestDetails`, owned by [guest-details-storage.ts](src/utils/auth/guest-details-storage.ts)) and refilled when the modal opens.
+
+What the customer can count on: it is **tab-scoped** — it survives navigation and reload but is gone when the tab closes; **card details are never stored** (an explicit four-field allowlist, so the card inputs in the same form object cannot leak in); it applies to **guests only** (a signed-in customer's fields come from their profile); and it is cleared the moment they authenticate, as well as on sign-out ([total-sign-out.ts](src/utils/auth/total-sign-out.ts)) so a shared device never hands the next person the previous visitor's contact details. Hydration fills blanks only — it can never overwrite something being typed.
+
 ### 4b. Registration internals (guest account creation)
 
 `POST /api/auth/register` validates `firstName`, `lastName`, `email`, Australian `mobile` (normalised to `+61…`), plus optional `affiliateCode`, `promotionSlug`, `builtPrizeSlug` (validated the same way as `promotionSlug`), `packageId`, and UTM/click-ID fields ([register/route.ts:56-86](src/app/api/auth/register/route.ts#L56)). Rate limited at 20/min/IP. A **"plain account"** = `!accumulatedEntries || accumulatedEntries === 0`. `builtPrizeSlug` is captured on all four outcomes below (matched-account update, mobile/email-only update, and new-account creation) via `buildSignupAttribution` — see §2h.

@@ -123,6 +123,37 @@ One tier carries the steer across every surface, via
   **Foreman**, so every "we picked one for you" CTA (dashboard "Become a member", rewards
   membership-only coupon unlock, non-member `getHeavyDutyPack`) lands on Foreman, not Tradie.
 
+### The placeholder payment step must never be a dead end (2026-08-04)
+
+Step 2 with no plan chosen (`isPlaceholderPlan`) used to render a grey skeleton for the purchase
+button **and** a grey skeleton for the summary card — and `PlanSummaryCard`'s placeholder branch has
+no "Change" link, so the state contained **nothing clickable but ✕**. Every path that reaches step 2
+without a plan landed there: the picker dismissed on a `config == null` open (where dismissal only
+closes the picker), an auto-open that didn't fire, a step-indicator jump.
+
+Both skeletons are now actions — `SELECT YOUR PACKAGE` in
+[`PaymentStep`](../../src/components/modals/MembershipModal/PaymentStep.tsx) and `Choose package` in
+[`PlanSummaryCard`](../../src/components/modals/MembershipModal/PlanSummaryCard.tsx) — each opening
+the picker via `handlePackageChange`. **Rule: the placeholder state always carries the action that
+resolves it.** That property is what makes the auto-open a convenience rather than a single point of
+failure; keep it if you touch either component.
+
+Two supporting fixes landed with it:
+
+- **Latch re-arms on the open edge too.** `packageSelectionAutoOpenedRef` still resets on any render
+  with `isOpen === false`; it now *also* resets when `isOpen` goes false → true, so a close that
+  never produced an observable closed render cannot leave the latch armed. This is not the in-session
+  re-arm that caused the 2026-07-07 loop — within an open session `isOpen` stays true, so it fires
+  once, before the user has chosen anything.
+- **A registered guest is no longer pushed back to step 1.** Registering does not authenticate (see
+  [auth/gotchas.md](../auth/gotchas.md)), so on reopen `!isAuthenticated` used to force
+  `currentStep = 1` even though `guestUserData` was set. That both asked them to re-register (which
+  fails as "existing account") and, because the picker only auto-opens on step 2, silently disabled
+  selection-first. The step now resolves to 2 whenever `guestUserData !== null`.
+- **`MembershipSection` memoizes the config object** it passes as `membershipModalConfig`. A fresh
+  literal every render re-runs the auto-open effect every render — the identity churn that once
+  starved its timer branch.
+
 ⚠️ **Plan-id caveat:** `useMemberships` slugifies the package **name** into `plan.id` ("Foreman" →
 `foreman`), so UI code never sees the catalog `_id` (`foreman-subscription`). Literal comparisons
 against the `_id` silently never match — that is why the Boss `Best Value` sash was missing from the

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 import { useMemberships } from "@/hooks/useMemberships";
@@ -136,6 +136,20 @@ function MembershipSection({
   // Get resolved multipliers (includes scheduled, toggle, and alternating)
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
+
+  /**
+   * Config handed to the MembershipModal. MEMOIZED deliberately: it feeds the picker's auto-open
+   * effect dependency array, and a fresh object literal on every render re-runs that effect on
+   * every render — the same identity churn that once starved the effect's 300ms timer branch
+   * indefinitely (see the comments in MembershipModal's auto-open effect).
+   */
+  const membershipModalConfig = useMemo(
+    () =>
+      membershipModal.openWithPackageSelectionFirst
+        ? { showPackageSelectionFirst: true }
+        : contextVariantConfig?.membershipModal,
+    [membershipModal.openWithPackageSelectionFirst, contextVariantConfig?.membershipModal]
+  );
 
   // Open this section's modal when the hero / entry CTAs dispatch the global `openMembershipModal`
   // event; the major-draw purchase gate is applied inside the hook.
@@ -749,11 +763,7 @@ function MembershipSection({
         onClose={membershipModal.closeModal}
         selectedPlan={membershipModal.selectedPlan}
         onPlanChange={membershipModal.selectPlan}
-        membershipModalConfig={
-          membershipModal.openWithPackageSelectionFirst
-            ? { showPackageSelectionFirst: true }
-            : contextVariantConfig?.membershipModal
-        }
+        membershipModalConfig={membershipModalConfig}
       />
     </section>
   );

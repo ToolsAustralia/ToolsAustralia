@@ -223,8 +223,21 @@ const PaymentStep: React.FC<PaymentStepProps> = ({
         {/* Purchase Button - Moved above Selected Package for better UX */}
         {/* Option A (wallet UX): when Google Pay or Apple Pay is selected, hide main Purchase and show instruction to click wallet button in form */}
         {isPlaceholderPlan ? (
-          // Payment Button Skeleton – user must select a package first
-          <div className="h-11 bg-gray-200 rounded-lg animate-pulse"></div>
+          // No package chosen yet. This used to be a grey skeleton bar, which — paired with the
+          // summary card's skeleton (no "Change" link in its placeholder branch) — left the step
+          // with NOTHING clickable but ✕. Any path that reaches step 2 without a plan (picker
+          // dismissed, auto-open missed) stranded the user there. The placeholder state must
+          // always carry the action that resolves it.
+          <Button
+            type="button"
+            onClick={onPackageChange}
+            variant="metallic"
+            fullWidth
+            size="lg"
+            className="h-11 !py-0 font-bold text-sm sm:text-base"
+          >
+            SELECT YOUR PACKAGE
+          </Button>
         ) : isWalletPaymentSelected ? (
           <div className="rounded-lg sm:rounded-xl border border-amber-200 bg-amber-50 p-3 sm:p-4 text-center">
             <p className="text-sm font-medium text-amber-900">

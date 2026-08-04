@@ -35,6 +35,12 @@ import Image from "next/image";
 import PackageSelectionModal from "../PackageSelectionModal";
 import { consumePendingOpenMembershipModalDetail } from "./LazyMembershipModal";
 import { formatNamePart } from "@/utils/display-name";
+import {
+  clearGuestDetails,
+  isGuestDetailField,
+  persistGuestDetails,
+  readGuestDetails,
+} from "@/utils/auth/guest-details-storage";
 import ExistingAccountModal from "../ExistingAccountModal";
 import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useLoading } from "@/contexts/LoadingContext";
@@ -748,12 +754,72 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         expiryDate: prevFormData.expiryDate,
         cvv: prevFormData.cvv,
       }));
+      // Signing in is an auth boundary: the profile is now the source of truth, so the guest
+      // carry-over has nothing left to do and must not linger as PII on the device.
+      clearGuestDetails();
 
       setCurrentStep(2);
     } else if (!isAuthenticated && isOpen) {
-      setCurrentStep(1);
+      // A guest who already completed step 1 in this page session (guestUserData is set — see
+      // docs/auth/gotchas.md: registering does NOT authenticate) must NOT be sent back to the
+      // details form when the modal reopens. Their account exists, so re-submitting it fails as
+      // "existing account", and because the package picker only auto-opens on step 2, forcing
+      // step 1 also silently disabled selection-first: they could only reach step 2 by tapping
+      // the step indicator, which landed them on the placeholder payment view with no picker.
+      setCurrentStep(guestUserData !== null ? 2 : 1);
     }
-  }, [isAuthenticated, userData, isOpen]);
+  }, [isAuthenticated, userData, isOpen, guestUserData]);
+
+  /**
+   * Guest details carry-over. The modal is mounted per page, so its form state dies on every
+   * navigation — a visitor who typed their name on `/` used to face an empty form when they opened
+   * the modal on `/promotions/[slug]` or `/membership`. Refill from the tab-scoped store on open.
+   *
+   * Blanks only: anything already typed into THIS instance wins, so a hydration can never overwrite
+   * live input. Authenticated users are skipped entirely — their profile prefill above is the
+   * source of truth.
+   */
+  useEffect(() => {
+    if (!isOpen || isAuthenticated) return;
+    const stored = readGuestDetails();
+    if (!stored) return;
+    setFormData((prev) => {
+      const merged = {
+        ...prev,
+        firstName: prev.firstName || stored.firstName,
+        lastName: prev.lastName || stored.lastName,
+        email: prev.email || stored.email,
+        phone: prev.phone || stored.phone,
+      };
+      const unchanged =
+        merged.firstName === prev.firstName &&
+        merged.lastName === prev.lastName &&
+        merged.email === prev.email &&
+        merged.phone === prev.phone;
+      return unchanged ? prev : merged;
+    });
+  }, [isOpen, isAuthenticated]);
+
+  /**
+   * Re-arm the picker's auto-open latch at the instant the modal opens.
+   *
+   * The latch also re-arms on any render with `isOpen === false` (see the effect below). This
+   * edge-reset is the belt to that suspenders: a close that never produced an observable closed
+   * render — e.g. a selection-first CTA re-tapped while the close was still settling — would
+   * otherwise leave the latch armed, and the next open lands on the placeholder payment step with
+   * no picker.
+   *
+   * This is NOT the in-session re-arm that caused the 2026-07-07 reopen loop. Within one open
+   * session `isOpen` stays `true`, so this runs exactly once, at the start, before the user has
+   * chosen anything — it can never fire after a pick.
+   */
+  const prevIsOpenRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (isOpen && !prevIsOpenRef.current) {
+      packageSelectionAutoOpenedRef.current = false;
+    }
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen]);
 
   useEffect(() => {
     const isPromotionsPage = pathname?.match(/^\/promotions\/([^/?#]+)/) !== null;
@@ -1401,6 +1467,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
+    // Carry the details across pages so the same visitor never types them twice (the modal is
+    // mounted per page, so its state dies on navigation). Guests only — an authenticated user's
+    // fields come from their profile — and only the four identity fields, never card data.
+    if (!isAuthenticated && isGuestDetailField(field)) {
+      persistGuestDetails({ [field]: value });
+    }
+
     if (registrationErrors[field as keyof typeof registrationErrors]) {
       setRegistrationErrors((prev) => {
         const newErrors = { ...prev };
@@ -1566,7 +1639,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           type: "success",
           title: "Step 1 Completed!",
           message: `Welcome ${formatNamePart(formData.firstName)}! Now let's set up your payment method to complete your membership.`,
-          duration: 8000,
+          duration: 5000,
         });
 
         setCurrentStep(2);
