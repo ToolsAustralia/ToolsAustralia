@@ -203,3 +203,19 @@ survived into the next person's session on a shared device. `QueryCacheAuthBound
 [providers.tsx](../../src/app/providers.tsx) now calls `queryClient.clear()` whenever the observed
 identity **leaves** an authenticated user (sign-out, expiry, account switch). The first settled session
 and the guest→member transition are deliberately skipped — neither can be holding someone else's data.
+
+## Resolved — a purchase route's response type did not match the route (2026-08-04)
+
+`MembershipResponse` in `src/hooks/queries/useMembershipQueries.ts` declared the payment intent
+at `data.paymentIntent` with a snake_case `client_secret`. The route actually returns it at the
+**top level** with `clientSecret`. Both the location and the field name were wrong.
+
+That is worse than a cosmetic mismatch: consumers reading the typed path got `undefined` at
+runtime while type-checking cleanly, so `paymentIntent.status` — the field that says whether the
+bank still has to authenticate the charge — was unreadable through the type. Three dead
+`data.paymentIntent` fallbacks had accumulated behind it in MembershipModal and
+SpecialPackagesModal; none could ever have matched. See docs/payment/gotchas.md for the customer-
+facing consequence.
+
+**When a response type and a route disagree, tsc protects nothing.** If you change a purchase
+route's response shape, update the hook's interface in the same edit.

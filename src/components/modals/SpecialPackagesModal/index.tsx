@@ -442,8 +442,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       markPurchaseCompleted();
       hideLoading();
 
-      const resolvedPaymentIntentId =
-        (result as { paymentIntent?: { id: string } }).paymentIntent?.id || result.data?.paymentIntent?.id;
+      // The purchase route returns `paymentIntent` at the TOP level. A `result.data.paymentIntent`
+      // fallback used to sit here; it could never match at runtime — the response type wrongly
+      // declared it, which is part of how the 3-D Secure hole stayed invisible.
+      const resolvedPaymentIntentId = result.paymentIntent?.id;
       if (resolvedPaymentIntentId) {
         setPaymentIntentId(resolvedPaymentIntentId);
         setPurchasePaymentMethodId(paymentMethodIdToCharge);

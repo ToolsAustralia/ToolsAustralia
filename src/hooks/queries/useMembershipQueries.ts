@@ -11,6 +11,7 @@ import { apiGet, apiPost, apiPut } from "@/lib/queries";
 import { useAttribution } from "@/hooks/useAttribution";
 import { freezeRefetchIntervals } from "@/lib/purchaseCooldown";
 import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
+import { completePendingAuthentication } from "@/utils/payment/stripe/complete-pending-authentication";
 import {
   armDashboardEntryHoldFromUserStatsCache,
   clearDashboardEntryHold,
@@ -90,15 +91,33 @@ export interface MembershipPurchaseData {
   userId: string; // Add userId parameter
 }
 
+/**
+ * Response of `/api/stripe/create-one-time-purchase-existing-user`.
+ *
+ * CORRECTED 2026-08-04 — this type did not match the route on two counts, which is how the
+ * 3-D Secure hole stayed hidden: it declared `data.paymentIntent` with a snake_case
+ * `client_secret`, while the route returns `paymentIntent` at the TOP level with a camelCase
+ * `clientSecret` (route.ts, success response). Anything reaching for the intent through the
+ * typed shape found `undefined` and type-checked cleanly, so the `requires_action` status was
+ * unreadable in practice as well as unread.
+ */
 export interface MembershipResponse {
   success: boolean;
+  message?: string;
   data: {
-    membership: UserMembership;
-    paymentIntent?: {
-      id: string;
-      client_secret: string;
-      status: string;
-    };
+    membership?: UserMembership;
+    entriesAdded?: number;
+    totalEntries?: number;
+    packageName?: string;
+    source?: string;
+    /** NOTE: true even for `requires_action` — do not treat as "money taken". */
+    paymentVerified?: boolean;
+  };
+  /** Present on the one-time purchase route; `status` may be `requires_action`. */
+  paymentIntent?: {
+    id: string;
+    status: string;
+    clientSecret: string | null;
   };
 }
 
@@ -184,6 +203,22 @@ export const usePurchaseMembership = () => {
         campaignCode,
         ...(attribution && { attribution }),
       });
+
+      // The route answers `success: true` with `paymentIntent.status: "requires_action"` when
+      // the buyer's bank wants authentication — the charge is NOT taken at that point. Nothing
+      // used to check, so the mutation resolved, the success celebration ran ("Purchase
+      // Complete! Your payment was successful"), and Stripe held the charge as Incomplete
+      // forever: no money, no webhook, no entries. Reproduced with 4000 0025 0000 3155.
+      //
+      // Present the challenge here, inside mutationFn, so the mutation's own outcome reflects
+      // reality: it resolves only once the payment is actually going through, and otherwise
+      // throws into the existing onError (rollback + honest message). A payment that needs no
+      // authentication passes straight through.
+      await completePendingAuthentication(response.paymentIntent, {
+        packageId,
+        packageName: response.data?.packageName,
+      });
+
       return response;
     },
     onMutate: async ({ packageId, userId }) => {

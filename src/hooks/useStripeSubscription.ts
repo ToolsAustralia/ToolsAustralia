@@ -2,6 +2,7 @@ import { useState } from "react";
 import { StripeCardElement } from "@stripe/stripe-js";
 import { getStripePromise } from "@/lib/stripe-client";
 import { useAttribution } from "@/hooks/useAttribution";
+import { completePendingAuthentication } from "@/utils/payment/stripe/complete-pending-authentication";
 
 /**
  * Subscription creation data for new users
@@ -310,6 +311,15 @@ export function useStripeSubscription() {
       if (!result.success) {
         throw new Error(result.error || result.details || "Failed to create purchase");
       }
+
+      // `success: true` does NOT mean the money moved: the route answers that with
+      // `paymentIntent.status: "requires_action"` when the buyer's bank wants authentication.
+      // Present the challenge and let it throw if the payment does not go through, so callers
+      // never celebrate a charge Stripe is still holding as Incomplete.
+      await completePendingAuthentication(result.paymentIntent, {
+        packageId: data.packageId,
+        packageName: result.data?.packageName,
+      });
 
       return result;
     } catch (err) {
