@@ -43,6 +43,7 @@ import {
   Gift,
   BarChart3,
   Handshake,
+  Tag,
   HelpCircle,
   Phone,
   UserCircle,
@@ -745,6 +746,20 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </div>
               )}
             </div>
+            {/* Discounts sits BEFORE "Become a Partner": one is a member benefit to browse,
+                the other is an inbound business application, and they were being read as the
+                same thing when only the latter existed. */}
+            <Link
+              href="/discount"
+              className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
+                isActiveLink("/discount")
+                  ? "text-white bg-red-600"
+                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+              }`}
+              aria-current={isActiveLink("/discount") ? "page" : undefined}
+            >
+              Discounts
+            </Link>
             <Link
               href="/partner"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
@@ -1520,6 +1535,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     </div>
                   )}
                 </div>
+
+                <Link
+                  href="/discount"
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
+                    isActiveLink("/discount")
+                      ? "text-white bg-red-600"
+                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                  }`}
+                  onClick={handleCloseMobileMenu}
+                >
+                  <Tag className="w-5 h-5" />
+                  Discounts
+                </Link>
 
                 <Link
                   href="/partner"

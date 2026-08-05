@@ -1313,3 +1313,45 @@ Design of record: `claudeDesign/Membership milestone streak design` (Build Kit).
 It had been **permanently unreachable**: the manager rendered it with a hard-coded `isOpen={false}` next to a `// This would be controlled by pixel consent logic` placeholder, and both its Accept and Decline handlers merely closed it — Decline gated no pixel. Tools Australia deliberately runs **without a consent banner**; `hasPixelConsent()` in `src/components/PixelTracker.tsx` hard-returns `true` ("auto-accept mode"). A consent control that cannot appear, and would not work if it did, is worse than none — it implies a choice the visitor does not have.
 
 **Do not re-add a consent modal as a UI task.** Real gating means pixels must not load until consent, Decline must block both the browser pixels and the server-side CAPI sends, and consent must persist. Full requirements + the expected drop in measured conversions: [docs/tracking/rules.md R9](../tracking/rules.md).
+
+## Discount catalogue components (2026-08-05)
+
+[`src/components/sections/discount/`](../../src/components/sections/discount/) — the section
+components for `/discount`. Domain rules, data contract and the reasoning behind the banding
+live in [docs/partner/frontend.md](../partner/frontend.md); this entry is the component map.
+
+| File | What it owns |
+|---|---|
+| `DiscountAccessMeter.tsx` | The gold panel: redeemable vs locked counts, the access bar, the "Get more access" CTA |
+| `DiscountFilters.tsx` | Search, sort dropdown, "only what I can use", category chips, and the mobile filter bottom sheet |
+| `DiscountOfferList.tsx` | Banded list, band headers, the wall marker, and the offer row |
+| `DiscountOfferModal.tsx` | The offer popup and its locked/redeemable gate |
+| `DiscountAccessModal.tsx` | "More access" — the level stepper over the two routes |
+| `DiscountPrimitives.tsx` | Access bar, artwork plate, category tag, and the two-route block — each used by BOTH the list and the popups |
+
+`DiscountPrimitives` is one file on purpose: four leaves, each too small to earn its own file
+and each shared by at least two callers. Anything with its own state or layout responsibility
+got a file instead.
+
+**Popups use `Z_INDEX.MODAL_BASE`**, not a local number. They first shipped at a hand-picked
+`z-[9500]`, which is above the documented chat-widget layer (9000) but still let the widget
+paint over the mobile sheet's sticky CTA. Use the constant.
+
+**Breakpoint-dependent entrance is a media query, not a Tailwind variant.** `.ta-dc-popup` and
+`.ta-dc-panel` are hand-authored classes, so `sm:ta-dc-drop` emits nothing and every viewport
+silently gets the mobile sheet slide. Both live in `globals.css` with a real
+`@media (min-width: 640px)` block.
+
+### `PackageTile` gained `ctaLabel`
+
+[`PackageTile`](../../src/components/modals/PackageTile.tsx) now takes an optional `ctaLabel`.
+Default behaviour is unchanged ("Select" / "Selected" / "Current plan"); the override exists
+because a tile rendered ALONE as a route to buy is making a different offer than a tile in a
+chooser — "Get Foreman" rather than "Select". Selection styling is untouched.
+
+### Header gained a "Discounts" nav entry (2026-08-05)
+
+`Header.tsx` links `/discount` in both the desktop nav and the mobile sidebar, placed
+**before** "Become a Partner". The two were reading as the same thing while only the latter
+existed: one is a member benefit to browse, the other an inbound business application. Mobile
+uses the `Tag` glyph against the partner entry's `Handshake`.

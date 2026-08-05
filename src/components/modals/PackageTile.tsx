@@ -62,6 +62,12 @@ export interface PackageTileProps {
    * chooser that is not on screen. Selection styling is unaffected.
    */
   ctaLabel?: string;
+  /**
+   * Overrides the line under "free entries" naming WHICH draw they are for. Defaults to
+   * "Major Giveaway" on a comfortable tile and nothing on a compact one; pass a value to
+   * force it on a compact tile. See the render comment for when that is warranted.
+   */
+  entriesSubLabel?: string | null;
   compact?: boolean;
   /**
    * Full-width single-column tile: puts the stats and footer bands SIDE BY SIDE instead of
@@ -91,6 +97,7 @@ export default function PackageTile({
   isSelected,
   isCurrent,
   ctaLabel,
+  entriesSubLabel,
   compact = false,
   wide = false,
   onSelect,
@@ -330,12 +337,18 @@ export default function PackageTile({
           >
             free entries
           </span>
-          {!compact && (
+          {/* What the entries are FOR. Suppressed on a compact tile by default, because the
+              package modals show six of them at once and the answer is already in the modal's
+              own heading. A caller that renders a compact tile OUT of that context — the
+              /discount unlock routes, where the surrounding words are all about partner
+              offers — passes `entriesSubLabel` so "15 free entries" cannot be misread as
+              entries into a discount. */}
+          {(entriesSubLabel ?? (compact ? null : "Major Giveaway")) && (
             <span
               className="font-sans font-semibold opacity-[0.72]"
-              style={{ fontSize: 10.5, lineHeight: 1.3, marginTop: 3 }}
+              style={{ fontSize: compact ? 9.5 : 10.5, lineHeight: 1.3, marginTop: 3 }}
             >
-              Major Giveaway
+              {entriesSubLabel ?? "Major Giveaway"}
             </span>
           )}
         </div>

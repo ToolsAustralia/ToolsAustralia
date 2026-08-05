@@ -218,3 +218,93 @@ catalogue create, versus the portal turning people away?** That is half of TA-si
 Guarded by `npm run test:partner-catalog-drift`, which builds the href and feeds it through the
 real `resolvePortalReturn` — a rename on either side would otherwise silently degrade every
 locked card to a generic pitch.
+
+## `/discount` — the public partner-discount catalogue (2026-08-05)
+
+Built from the Claude Design handoff `design_handoff_partner_discounts`. Route:
+[`src/app/(site)/discount/`](../../src/app/(site)/discount/) (server shim carrying
+`force-dynamic` for the nonce-CSP route class + metadata → `page-client.tsx`). Components in
+[`src/components/sections/discount/`](../../src/components/sections/discount/); all pure logic
+in [`utils/partner-discounts/discount-catalogue.ts`](../../src/utils/partner-discounts/discount-catalogue.ts);
+test `npm run test:discount-catalogue`.
+
+**It is public, and everything reads in the clear — signed out included.** The discount is the
+hook: a visitor who cannot see what the 1,833 offers *are* is being asked to buy on trust. What
+a membership buys is the ability to **redeem**, so the list is stacked into bands by the access
+level each offer needs and a **wall marker** is drawn on the first band the viewer cannot reach
+("Your access stops at 50% · 916 you cannot redeem yet"). Signed out, the wall sits above the
+very first band and reads "Readable below — a membership is what lets you claim them".
+
+> **Say "redeem", never "open".** Anyone can open an offer and read it; access buys the ability
+> to redeem. Every string on the page depends on that distinction — the test asserts the copy.
+
+### How it differs from `/my-account/rewards/catalogue`
+
+Same generated data and the same portal hand-off, deliberately opposite defaults:
+
+| | `/discount` | `/my-account/rewards/catalogue` |
+|---|---|---|
+| Audience | anyone, signed out included | signed-in member |
+| Default view | the whole catalogue, banded by level | only what the member can use |
+| Question answered | "what is in there at all?" | "what can I use right now?" |
+| Locked row | opens the gate popup with two routes | links straight to `/membership?offer_id=` |
+
+Do not converge them. The member surface exists because the vendor portal cannot say what a
+tier opens; this one exists because the catalogue is the product's best argument.
+
+### Bands, and why they are keyed to LEVELS not tiers
+
+`buildBands` groups by the access percent that opens a row, ascending. The ladder has **11**
+levels and there are only **3** memberships — the other 8 are reached with one-time packs, so
+naming bands after tiers would leave most of them unnameable. Direct partners carry `pct: 0`
+purely as a band key (never displayed) and lead the list under "Included with any membership".
+
+**Bands and the wall render only under the Access-level sort.** Under A–Z or Category they
+would cut across the chosen ordering, so the list goes flat and each row states its own state.
+
+### The two routes past the wall
+
+Both popups render the cheapest **membership** and the cheapest **one-time pack** that reach the
+level, on the real [`PackageTile`](../../src/components/modals/PackageTile.tsx) — a member who
+will not take a subscription always has a route. Resolution delegates to
+`resolveUnlockPackagesForLevel`, so the percent-resolution trap documented there is not
+re-implemented. `PackageTile` gained one optional prop, `ctaLabel`: a tile shown alone as a
+route to buy says "Get Foreman", where the modals' "Select" would name a chooser that is not on
+screen.
+
+The test asserts the membership is cheaper than the covering pack **at every one of the 11
+levels** — the design's fixed "Cheapest way in" / "No subscription" labels are only honest while
+that holds, and a pricing change is exactly what would break it silently.
+
+### Field-quality traps the page handles
+
+Every one of these is a real property of the committed snapshot, not a hypothetical:
+
+- **`highlight` is not unique** — "Explore New Adventures and get 7% Cashback" is on 675 offers
+  (37%). The popup says so rather than letting a member think they misread it.
+- **`highlight` runs to 115 chars**; rows clamp to 2 lines, the popup wraps in full.
+- **3 offers have no value line** → italic, muted "No value line supplied".
+- **`name` runs to 104 chars and 63 are ALL CAPS** → never `text-transform: uppercase`.
+- **Artwork can contradict its own name** (800575 is "GUNNEDAH HYDRAULICS", its logo reads
+  "AG-FIX HYDRAULICS") → the popup states it in plain words.
+- **Artwork is uncontrolled** (per-offer photos and merchant logos, unoptimised, several hundred
+  KB) → fixed-ratio neutral plate, `object-fit: contain`, lazy, through the optimiser. The 29
+  offers with none get the letter plate.
+- **The snapshot is incomplete** → the footer says "A slice of our snapshot. The portal has
+  offers our list does not." and the empty state says "Nothing in our list matches that" —
+  never "that offer doesn't exist".
+
+### Deliberately NOT built
+
+The vendor record has six fields. There is no price/RRP/saving as a number, no expiry, **no
+location or geo at all** (In-Store offers included), no rating, no popularity, no stock, no
+merchant field separate from the name, and no description — the handoff's `DESCS` map was
+stand-in wording and is not shipped. Wiring the authenticated Product API (`details`,
+`web_coupon`, `out_of_stock`, `merchant_id`, the real image set) is what would unlock those;
+see [gotchas.md](./gotchas.md) and the playbook's §5a.
+
+### Skin
+
+Tokens live in `globals.css` under `.ta-discount` / `.dark .ta-discount`, the same
+CSS-not-JS approach as `.ta-brand-wall` and for the same reason: an `isDark` read during render
+is not reactive, so a JS-skinned page stays light inside a dark one.

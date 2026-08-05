@@ -151,6 +151,20 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       category: "PARTNERSHIPS",
     },
     {
+      id: "77",
+      question: "Can I see the partner discounts before I join?",
+      answer:
+        "Yes — the whole catalogue is open to read at [Partner discounts](/discount), no account needed. Every offer shows its partner, category and exactly what the deal is, whether you're signed in or not. What a membership buys is the ability to **redeem** an offer, not the ability to look at it. The list is grouped by the access level each offer needs, so you can see at a glance what your current access covers and what sits above it.",
+      category: "PARTNERSHIPS",
+    },
+    {
+      id: "78",
+      question: "How do I find which partner offers my membership actually covers?",
+      answer:
+        "Two places, depending on what you're after. [Partner discounts](/discount) shows the full catalogue with a marker across the list at your access level — everything above it needs more access, and each of those offers will show you the cheapest membership and the cheapest one-time pack that reach it. If you'd rather see only what you can use right now, [My Account → Rewards → What your tier unlocks](/my-account/rewards/catalogue) filters to exactly that. Redeeming always happens in the partner portal, which you open from [My Account → Rewards](/my-account/rewards).",
+      category: "PARTNERSHIPS",
+    },
+    {
       id: "17",
       question: "How do I become a partner brand?",
       answer:

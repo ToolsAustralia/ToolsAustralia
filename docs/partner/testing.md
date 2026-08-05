@@ -95,3 +95,29 @@ the silent-failure shape that produced two earlier wrong coverage numbers.
 - **`buildPartnerPortalOfferImageUrl` handles both wire forms** — a bare extension resolves
   against the offer id; an explicit `"<m|p>:<mediaId>.<ext>"` must use the media id and ignore
   the offer id entirely. Conflating the two is the original bug in miniature.
+
+## `npm run test:discount-catalogue` (2026-08-05)
+
+[`src/utils/partner-discounts/__tests__/discount-catalogue.test.ts`](../../src/utils/partner-discounts/__tests__/discount-catalogue.test.ts)
+— 33 checks over the pure layer behind `/discount`. The page's argument is a claim about
+numbers, so a wrong figure is a promise we do not keep rather than a visual bug.
+
+What it pins, and why each one matters:
+
+- **The wall lands on the FIRST unreachable band and appears exactly once** — signed out (band
+  one), mid-ladder (the first level above the member), and at 100% (no wall at all). Drawing
+  the member's limit in the wrong place is the one failure that would invert the page's meaning.
+- **Both routes resolve at every one of the 11 levels**, and **the membership is cheaper than
+  the covering pack at every level**. The fixed "Cheapest way in" / "No subscription" labels are
+  only honest while that holds — a pricing change breaks it silently otherwise.
+- **Off-ladder percents fail closed** (`offersAtLevel(60) === null`, `resolveDiscountRoutes(60)`
+  is empty) rather than guessing a tier.
+- **A signed-out viewer can redeem nothing**, whatever percent is passed in.
+- **A direct partner's placeholder `"#"` link never becomes an href**, and one with no site
+  offers no dead CTA.
+- **Rule 11 copy** — every gate, band and route string is swept for gambling vocabulary and for
+  per-entry pricing. This is the cheapest place to catch a legal-line regression, since the
+  strings are all generated from one module.
+
+Companion to `npm run test:partner-catalog-drift` (which guards the generated data) and
+`npm run test:unlock-packages` (which guards the resolver this delegates to).

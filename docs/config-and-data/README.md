@@ -102,3 +102,11 @@ so fixing prose in the builder is as load-bearing as fixing it in the corpus.
 ## 2026-07-31 — FAQ corpus 72 → 74
 
 [supportChatFaqs.ts](../../src/data/supportChatFaqs.ts) gained entries **73** ("What details do you share with the partner rewards portal?") and **74** ("Do I have to agree to open the partner portal?"), covering the new consent screen. The count assertion in [faqs.test.ts](../../src/data/__tests__/faqs.test.ts) was bumped deliberately; `npm run build:chat-knowledge-pack` re-run. Copy is grounded in what the hand-off actually sends — keep it in step with `buildPartnerSsoSharedFields` ([docs/partner/rules.md R4](../partner/rules.md)).
+
+## FAQ corpus grew to 78 entries (2026-08-05)
+
+`src/data/supportChatFaqs.ts` gained two PARTNERSHIPS entries (ids `77`, `78`) covering the
+public `/discount` page: that the catalogue is readable without an account, and how to tell
+which offers a membership actually covers. The count assertion in
+`src/data/__tests__/faqs.test.ts` was bumped 76 → 78 deliberately — it is a double-entry check,
+not a formality. Re-run `npm run build:chat-knowledge-pack` after any corpus edit.
