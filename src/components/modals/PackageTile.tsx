@@ -8,7 +8,7 @@
  * /membership. Structure is three engraved bands over a glossy tier-coloured fill:
  *
  *   band 1  icon + name
- *   band 2  hero entries number | rule | catalogue-access ring
+ *   band 2  hero entries number | rule | partner-discount-access ring
  *   band 3  price + CTA, with the ribbon and discount tag riding the CTA's top edge
  *
  * Bands butt directly against each other — the separation is an engraved seam
@@ -44,10 +44,10 @@ export interface PackageTileProps {
   multiplier?: number | null;
   /** Partner-catalogue access percent (0–100). */
   accessPct: number;
-  /** Caption under the ring, e.g. "catalogue access" / "4-day catalogue access". */
+  /** Caption under the ring, e.g. "partner discount access" / "4-day discount access". */
   accessCaption: string;
   price: number;
-  /** e.g. "One Time" or "per month · cancel anytime". */
+  /** e.g. "One Time" or "Per Giveaway" (modals) / "per month · cancel anytime" (sections). */
   periodLabel: string;
   /** Pre-discount price, shown struck. */
   struckPrice?: number | null;
@@ -55,6 +55,13 @@ export interface PackageTileProps {
   ribbon?: PackageTileRibbon | null;
   isSelected: boolean;
   isCurrent: boolean;
+  /**
+   * Overrides the CTA's label. The default three-way ("Select" / "Selected" / "Current
+   * plan") is the modals' pick-one-of-many grammar; a tile shown ALONE as a route to buy
+   * ("Get Foreman") is making a different offer, and "Select" there reads as a step in a
+   * chooser that is not on screen. Selection styling is unaffected.
+   */
+  ctaLabel?: string;
   compact?: boolean;
   /**
    * Full-width single-column tile: puts the stats and footer bands SIDE BY SIDE instead of
@@ -83,6 +90,7 @@ export default function PackageTile({
   ribbon,
   isSelected,
   isCurrent,
+  ctaLabel,
   compact = false,
   wide = false,
   onSelect,
@@ -467,7 +475,7 @@ export default function PackageTile({
             }}
           >
             {selected && <Check size={14} strokeWidth={3} />}
-            {isCurrent ? "Current plan" : selected ? "Selected" : "Select"}
+            {isCurrent ? "Current plan" : selected ? "Selected" : (ctaLabel ?? "Select")}
           </button>
         </div>
       </div>
@@ -555,7 +563,7 @@ function AccessRing({
       <span
         className="text-center font-sans font-bold uppercase opacity-80"
         style={{
-          fontSize: compact ? 8.5 : 9.5,
+          fontSize: compact ? 7.5 : 9.5,
           lineHeight: 1.25,
           letterSpacing: compact ? "0.01em" : "0.05em",
           maxWidth: compact ? 80 : 96,

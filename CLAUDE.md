@@ -533,9 +533,10 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/partnerCatalogBrowse.ts",
         "src/app/(site)/my-account/rewards/catalogue/**",
         "src/generated/partnerCatalogOffers.ts",
-        "src/generated/partnerWallTiles.ts"
+        "src/generated/partnerWallTiles.ts",
+        "src/app/(site)/discount/**"
       ],
-      "lastVerified": "2026-08-04"
+      "lastVerified": "2026-08-05"
     },
     "upsell": {
       "docs": "docs/upsell/",
@@ -721,6 +722,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/ThemeContext.tsx",
         "src/contexts/AdminThemeContext.tsx",
         "src/stores/useThemeStore.ts",
+        "src/stores/__tests__/themeStore.test.ts",
         "src/stores/usePromoThemeStore.ts"
       ],
       "lastVerified": "2026-04-28"

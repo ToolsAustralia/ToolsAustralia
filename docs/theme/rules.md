@@ -4,9 +4,9 @@
 
 `themeBootstrap.ts` runs synchronously in the root layout to set `<html class>` before React mounts. Don't try to set theme via `useEffect` — that paints wrong theme first.
 
-## R2. Light is the default; only the user toggle — or the promo default-theme experiment — changes it
+## R2. DARK is the default (2026-08-05); only the user toggle — or the promo default-theme experiment — changes it
 
-Light is the hard default for a fresh, un-experimented visitor. Do **not** reintroduce any
+Dark is the hard default for a fresh, un-experimented visitor (flipped from light on 2026-08-05 when the promo default-theme experiment concluded: 2.04% vs 1.74%). Do **not** reintroduce any
 time-of-day or `prefers-color-scheme` auto mode — no clock- or OS-based auto mode, ever.
 
 **Updated (2026-07-28):** this is no longer strictly "only the user toggle." The promo

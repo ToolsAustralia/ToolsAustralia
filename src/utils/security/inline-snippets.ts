@@ -29,7 +29,7 @@
  * so a dark-mode user never flashes light. Legacy v0 auto-dark
  * (userManualOverride === false) is ignored — it resolves to the light default.
  */
-export const THEME_BOOTSTRAP_SNIPPET = `(function(){try{var r=localStorage.getItem("ta-theme");var t=null,o;if(r){var p=JSON.parse(r);if(p&&p.state){t=p.state.theme;o=p.state.userManualOverride}}if(t==="dark"&&o!==false){document.documentElement.classList.add("dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content","#0a0a0a");document.documentElement.style.colorScheme="dark"}}catch(e){}})();`;
+export const THEME_BOOTSTRAP_SNIPPET = `(function(){try{var r=localStorage.getItem("ta-theme");var t=null,o;if(r){var p=JSON.parse(r);if(p&&p.state){t=p.state.theme;o=p.state.userManualOverride}}if(!(t==="light"&&o===true)){document.documentElement.classList.add("dark");var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content","#0a0a0a");document.documentElement.style.colorScheme="dark"}}catch(e){}})();`;
 
 /**
  * Device-tier bootstrap (root layout <head>): set data-tier on <html> before

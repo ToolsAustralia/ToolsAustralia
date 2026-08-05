@@ -117,7 +117,7 @@ function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
           <AccessRing percent={access} size={100} stroke={10} color={ink} trackColor={trackFor(ink)}>
             <span className="font-poppins text-[21px] font-black">{access}%</span>
           </AccessRing>
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em] opacity-[0.78]">catalogue access</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] opacity-[0.78]">partner discount access</span>
         </div>
       </div>
 

@@ -3449,3 +3449,210 @@ html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
+
+/* ── /discount — partner discount catalogue (Build Kit: claudeDesign/design_handoff_partner_discounts) ──
+   Skin is CSS, not JS — same reasoning as `.ta-brand-wall` above: an `isDark` read from the
+   DOM during render is not reactive (the theme class lands after the render that read it),
+   so a JS-skinned page stays light inside a dark one. Variables also mean no hydration
+   mismatch and no re-render on theme change.
+   Base = light, `.dark` = dark, matching the site's convention. The handoff's default frame
+   is the dark one; both are authored here so neither is a derived approximation. */
+.ta-discount {
+  --dc-bg: #f4f5f7;
+  --dc-sf: #ffffff;
+  --dc-sf2: #f7f8fa;
+  --dc-ln: rgba(15, 23, 42, 0.1);
+  --dc-ln2: rgba(15, 23, 42, 0.16);
+  --dc-tx: #15181f;
+  --dc-mu: #5b6573;
+  --dc-mu2: #8a93a1;
+  --dc-ins: rgba(15, 23, 42, 0.05);
+  --dc-chip: rgba(15, 23, 42, 0.04);
+  --dc-good: #0f9d6b;
+  --dc-gold: #b8901f;
+  --dc-shell-image: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 300px);
+}
+
+.dark .ta-discount,
+.ta-discount[data-skin="dark"] {
+  --dc-bg: #0a0a0a;
+  --dc-sf: #161617;
+  --dc-sf2: #1d1d1f;
+  --dc-ln: rgba(255, 255, 255, 0.08);
+  --dc-ln2: rgba(255, 255, 255, 0.14);
+  --dc-tx: #f5f5f5;
+  --dc-mu: #a3a3a3;
+  --dc-mu2: #737373;
+  --dc-ins: rgba(255, 255, 255, 0.04);
+  --dc-chip: rgba(255, 255, 255, 0.03);
+  --dc-good: #34d399;
+  --dc-gold: #d4af37;
+  --dc-shell-image: radial-gradient(820px 320px at 84% -6%, rgba(238, 0, 0, 0.12), transparent 62%);
+}
+
+/* Offer row. The action label is revealed on hover/focus-within rather than always shown —
+   at two-up density a permanent "Redeem" on every card competes with the value line, which
+   is the thing the row exists to state. */
+.ta-dc-row {
+  transition: background 0.22s, border-color 0.22s,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s;
+}
+.ta-dc-row:hover,
+.ta-dc-row:focus-visible {
+  background: var(--dc-ins);
+  border-color: rgba(238, 0, 0, 0.45);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 38px -22px rgba(0, 0, 0, 0.75);
+}
+.ta-dc-rowcta {
+  opacity: 0;
+  transform: translateX(-5px);
+  transition: opacity 0.22s, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ta-dc-row:hover .ta-dc-rowcta,
+.ta-dc-row:focus-visible .ta-dc-rowcta {
+  opacity: 1;
+  transform: none;
+}
+
+/* Icon-ish button: neutral until touched. */
+.ta-dc-ib {
+  transition: color 0.2s, border-color 0.2s, background 0.2s,
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ta-dc-ib:hover {
+  color: var(--dc-tx);
+  border-color: var(--dc-ln2);
+  background: var(--dc-ins);
+  transform: translateY(-1px);
+}
+
+.ta-dc-btn {
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s, background 0.2s,
+    border-color 0.2s, color 0.2s;
+}
+.ta-dc-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+}
+.ta-dc-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+
+/* The access bar grows from zero on mount, so the gap the member has to close is drawn
+   rather than simply stated. */
+@keyframes ta-dc-fill {
+  from {
+    width: 0;
+  }
+}
+.ta-dc-fill {
+  animation: ta-dc-fill 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 0.2s;
+}
+
+@keyframes ta-dc-drop {
+  from {
+    transform: translateY(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.ta-dc-drop {
+  animation: ta-dc-drop 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes ta-dc-sheet {
+  from {
+    transform: translateY(102%);
+  }
+  to {
+    transform: none;
+  }
+}
+.ta-dc-sheet {
+  animation: ta-dc-sheet 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Popups enter differently per breakpoint, and this has to be a MEDIA QUERY rather than a
+   `sm:` utility — these are hand-authored classes, so a Tailwind variant prefix would emit
+   nothing and every viewport would get the sheet slide. A phone gets the bottom-sheet rise
+   (the panel is anchored to the bottom edge); a desktop popup is centred, where rising from
+   off-screen would be a long pointless travel, so it drops in. */
+.ta-dc-popup {
+  animation: ta-dc-sheet 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (min-width: 640px) {
+  .ta-dc-popup {
+    animation: ta-dc-drop 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+/* Panel geometry follows the same split: full-bleed sheet pinned to the bottom on a phone,
+   a 460px centred card from `sm` up. Kept beside the animation so the two never disagree. */
+.ta-dc-panel {
+  width: 100%;
+  max-height: 92svh;
+  border-radius: 24px 24px 0 0;
+}
+@media (min-width: 640px) {
+  .ta-dc-panel {
+    width: 460px;
+    max-height: none;
+    border-radius: 22px;
+  }
+}
+/* The access popup is a gold panel and sits 2px tighter than the offer popup — it carries
+   no artwork, so the softer corner reads as padding rather than as a frame. */
+@media (min-width: 640px) {
+  .ta-dc-panel-gold {
+    border-radius: 20px;
+  }
+}
+
+@keyframes ta-dc-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.ta-dc-scrim {
+  animation: ta-dc-fade 0.28s ease both;
+}
+
+/* Lock medal halo — the one always-on animation on the page, and it only exists while a
+   locked offer's popup is open, so it is never ambient. */
+@keyframes ta-dc-halo {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(212, 175, 55, 0);
+  }
+}
+.ta-dc-halo {
+  animation: ta-dc-halo 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* Scroll containers inside popups: the bar would sit over the panel's rounded corner. */
+.ta-dc-noscroll {
+  scrollbar-width: none;
+}
+.ta-dc-noscroll::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-discount *,
+  .ta-discount *::before,
+  .ta-discount *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

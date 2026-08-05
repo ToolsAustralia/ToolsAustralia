@@ -71,7 +71,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               multiplier={pkg.promoMultiplier}
               accessPct={getPartnerCatalogAccessPercentForPlanId(id)}
               accessCaption={
-                days > 0 ? `${days}-day access` : "catalogue access"
+                days > 0 ? `${days}-day discount access` : "partner discount access"
               }
               price={pkg.price}
               periodLabel="One Time"
