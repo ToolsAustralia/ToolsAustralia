@@ -1467,3 +1467,50 @@ brand"). It now browses all **20** real toolbox x power-tool-kit pairings from
 **Layout trap:** the "Ultimate Tradie Setup" tag is anchored INSIDE the image frame. It used to
 hang off the outer column — the same box as the image, until the rail was added below it and
 `bottom-3` started measuring from the bottom of the rail, dropping the tag onto the thumbnails.
+
+## `PackageTile` wide variant — compacted so all three tiers fit unscrolled (2026-08-05)
+
+The wide tile exists so the membership modal shows all three tiers at once. It had drifted to
+**182px each (573px total)** and was scrolling. Now **152px each (483px total)** — a 90px
+saving, with no information removed. What changed, and why each one:
+
+- **Identity band is a single row**: icon + name left, price + period right, baseline-aligned.
+  The price used to stack over its period, which forced the band to two lines of type on the
+  one variant whose purpose is being short. Band padding drops to `9px 17px`.
+- **`was N` moved inline AFTER the boosted figure** ("150 was 15") instead of sitting above it.
+  That is the order a member says out loud, and it removed a whole row.
+- **Price stays out of the footer column** on wide. That column carries the button plus two
+  pills that overlay its top edge (ribbon upper-left, discount tag upper-right); a price row
+  there means three things in ~190px *and* another line of height.
+- **The access dial shrinks** (48px ring, 8.5px caption at `line-height: 1.1`). It was the
+  tallest thing in the stats band because its caption wraps to two or three lines.
+
+- **The multiplier starburst is ABSOLUTE**, pinned to the entries column's upper right. In flow
+  it cost height twice: it set the baseline row's height, and once that row ran out of width it
+  WRAPPED to a second line and landed on "FREE ENTRIES" — which is how one tile in a set ended
+  up 20px taller than its siblings (measured: `"1000" + "was 100" + a 56px starburst` = 178px of
+  content in a ~177px column). Out of flow it costs nothing and cannot wrap, whatever the
+  number. It stays `wide`-gated and `pointer-events-none`: free of height cost does not make it
+  worth repeating across the six-pack compact grid, where it is too small to read.
+
+### The width budget on a wide tile (2026-08-05)
+
+The band is one row of three columns and they trade against each other. Getting the access
+dial onto a single line only worked once the CTA column gave width back:
+
+| Column | Was | Now | Why |
+|---|---|---|---|
+| CTA footer | 190px | **152px** | 190 was generous for a button reading "Select". The two overlay pills still fit: "RECOMMENDED" (~78px) + a discount tag (~40px) inside 152 with the 10px insets. |
+| Access dial | 96px stacked | **124px inline** | Ring left, caption right, centred on a shared middle line. Costs the height of the ring alone instead of ring + two or three wrapped caption lines. |
+| Entries | ~177px | ~150px | Absorbs the difference. Reserves a 32px lane on the right for the absolute starburst. |
+
+Result: **182px per tile → 145px**, three tiles 573px → 464px, and the hero figure went back
+UP to 29px rather than staying shaved at 26.
+
+**The CTA stays 44px tall.** It is the mobile tap target, and the membership tab renders
+`compact && wide` on a phone — shortening it to save 4px of tile height would trade an
+accessibility floor for almost nothing.
+
+**Verified on the real modal** (`/dev/modals` → PackageSelectionModal), not a mock: three tiles
+at 145px each, entries row on ONE line (26px), the starburst clearing the struck value by
+36–63px, and every ribbon inside its button.

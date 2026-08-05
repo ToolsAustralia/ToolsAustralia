@@ -113,7 +113,10 @@ export default function PackageTile({
   const selected = isSelected && !isCurrent;
   const icon = getPackageIcon(planId);
 
-  const bandPad = compact ? "10px 11px" : "14px 17px";
+  // Tighter on a wide tile: it is a horizontal row of three columns competing for width, and
+  // every px of side padding is taken from the entries figure. The compact-wide case (the
+  // six-pack Additional modal) is the tightest layout in the app and needs the most relief.
+  const bandPad = wide ? (compact ? "8px 10px" : "12px 14px") : compact ? "10px 11px" : "14px 17px";
   const seamStyle: React.CSSProperties = {
     background: tint,
     borderTop: `1px solid ${seam}`,
@@ -128,6 +131,9 @@ export default function PackageTile({
   // saving to the struck price alone. A discount is a reason to buy; a ribbon is a label.
   // The ribbon sits left and the tag right, so they do not overlap — they are only tight.
   const showDiscountTag = discountPercent != null;
+
+  /** The multiplier starburst renders (wide + live promo). Drives the entries row padding. */
+  const badgeShown = Boolean(promoActive && wide && multiplier != null && multiplier > 1);
 
   return (
     <div
@@ -169,10 +175,20 @@ export default function PackageTile({
         style={{ background: "linear-gradient(180deg, transparent 56%, rgba(0,0,0,.14))" }}
       />
 
-      {/* ---- Band 1: identity ---- */}
+      {/* ---- Band 1: identity ----
+          On a WIDE tile this is a SINGLE ROW: icon + name on the left, price + period on the
+          right, nothing stacked. Keeping the price here (rather than above the CTA) leaves the
+          footer column to the button and its two overlay pills alone; keeping it on ONE line
+          is what lets the band run slim — a stacked price forced the row to the height of two
+          lines of type for a tile whose whole point is being short.
+          The non-wide tile is unchanged: there the band tops a tall card and the price belongs
+          with the CTA. */}
       <div
         className="relative z-[1] flex items-center"
-        style={{ gap: compact ? 8 : 11, padding: bandPad }}
+        style={{
+          gap: compact ? 8 : 11,
+          padding: wide ? (compact ? "7px 11px" : "9px 17px") : bandPad,
+        }}
       >
         <span
           className="grid flex-none place-items-center"
@@ -207,33 +223,28 @@ export default function PackageTile({
           {name}
         </span>
 
-        {/* On a wide tile the price rides the identity band's right edge instead of sitting
-            above the CTA. That frees the footer column for the button alone — the ribbon
-            and discount tag overlay its top edge, and with the price there too the three
-            were fighting for the same ~190px. */}
+        {/* One line, baseline-aligned: struck price, price, period. Stacking the period under
+            the price is what made this band two lines tall, and the wide tile exists so three
+            of them fit on screen at once — every row of type here costs a third of that. */}
         {wide && (
-          <span className="ml-auto flex shrink-0 flex-col items-end pl-2">
-            <span className="flex items-baseline gap-1.5">
-              {struckPrice != null && (
-                <span
-                  className="font-sans font-bold leading-none line-through opacity-50"
-                  style={{ fontSize: compact ? 10.5 : 12, textDecorationThickness: 1.5 }}
-                >
-                  ${struckPrice}
-                </span>
-              )}
+          <span className="ml-auto flex shrink-0 items-baseline gap-1.5 pl-2 whitespace-nowrap">
+            {struckPrice != null && (
               <span
-                className="font-poppins font-black leading-none tabular-nums"
-                style={{ fontSize: compact ? 17 : 22 }}
+                className="font-sans font-bold leading-none line-through opacity-50"
+                style={{ fontSize: compact ? 10.5 : 12, textDecorationThickness: 1.5 }}
               >
-                ${price}
+                ${struckPrice}
               </span>
-            </span>
-            {/* The period qualifies the price, so it travels with it — leaving it behind in
-                the footer split one statement across two bands. */}
+            )}
             <span
-              className="whitespace-nowrap font-sans font-semibold opacity-[0.72]"
-              style={{ fontSize: compact ? 9.5 : 11, lineHeight: 1.2, marginTop: 2 }}
+              className="font-poppins font-black leading-none tabular-nums"
+              style={{ fontSize: compact ? 16 : 20 }}
+            >
+              ${price}
+            </span>
+            <span
+              className="font-sans font-semibold leading-none opacity-[0.72]"
+              style={{ fontSize: compact ? 9.5 : 10.5 }}
             >
               {periodLabel}
             </span>
@@ -250,61 +261,73 @@ export default function PackageTile({
         style={{
           // The third column is a FIXED px width. An `auto` column gets squeezed by the
           // 1fr and the caption collapses onto three lines.
-          gridTemplateColumns: compact ? "1fr 1px 62px" : "1fr 1px 96px",
+          //
+          // WIDER on `wide` (136 vs 96) because the dial lays out horizontally there — ring
+          // beside its caption instead of above it. The extra 40px is bought from the entries
+          // column, which can afford it now that the multiplier badge is absolute and no
+          // longer competes for that row's width.
+          gridTemplateColumns: wide
+            ? compact
+              ? "1fr 1px 82px"
+              : "1fr 1px 124px"
+            : compact
+              ? "1fr 1px 62px"
+              : "1fr 1px 96px",
           gap: compact ? 9 : 14,
           padding: bandPad,
           ...seamStyle,
         }}
       >
-        <div className="flex min-w-0 flex-col">
-          {/* Stacked, not a baseline row. The handoff had `was` beside the hero number with
-              flex-wrap, which meant its position depended on the tile width — inline on a
-              wide tile, wrapped above on a narrow one. Fixing it above the number keeps the
-              before/after reading identical in every density. */}
-          <div className="flex flex-col items-start">
-            {/* `was N` and the multiplier chip share ONE row. Stacking the chip on its own
-                line added a third row to the column, which fights the whole point of the
-                wide tile — the chip explains the struck value sitting right next to it. */}
-            {promoActive && (
-              <span
-                className="flex items-center gap-1.5"
-                style={{ marginBottom: compact ? 3 : 4 }}
-              >
-                {wasEntries != null && wasEntries !== entries && (
-                  <span
-                    className="font-sans font-extrabold leading-none line-through opacity-[0.58]"
-                    style={{ fontSize: compact ? 10.5 : 13, textDecorationThickness: 2 }}
-                  >
-                    was {wasEntries}
-                  </span>
-                )}
-                {/* WIDE TILES ONLY. On the compact 2-up one-time grid this repeated a small
-                    starburst on all six packs at once — six copies of one fact, each too
-                    small to read. The tab badge already states the promo for that grid. The
-                    three membership tiles have the width to carry it at a legible size. */}
-                {wide && multiplier != null && multiplier > 1 && (
-                  <Image
-                    src={`/images/badge/X${multiplier}.webp`}
-                    alt={`${multiplier}x entries`}
-                    width={56}
-                    height={56}
-                    className="shrink-0 object-contain"
-                    style={{
-                      width: compact ? 46 : 56,
-                      height: compact ? 46 : 56,
-                      // Vertical negative margins only. Horizontal ones pulled the starburst
-                      // over the entries number beside it.
-                      margin: compact ? "-12px 0 -12px 2px" : "-14px 0 -14px 4px",
-                      filter: "drop-shadow(0 3px 10px rgba(0,0,0,.55))",
-                    }}
-                  />
-                )}
-              </span>
-            )}
+        <div className="relative flex min-w-0 flex-col">
+          {/* The multiplier starburst is ABSOLUTE, pinned to this column's upper right.
+              In flow it cost height twice over: it set the baseline row's height, and once the
+              row ran out of width it WRAPPED to a second line and landed on "FREE ENTRIES" —
+              which is how one tile in a set ended up 20px taller than its siblings. Out of
+              flow it costs nothing, cannot wrap, and sits in the corner the eye already sweeps
+              after reading the number. `pointer-events-none` so it never eats a tile click.
+              WIDE ONLY — unchanged. On the compact 2-up one-time grid this repeated a small
+              starburst across all six packs at once: six copies of one fact, each too small to
+              read. That grid's tab badge already states the promo. Being free of height cost
+              does not make it worth showing six times. */}
+          {promoActive && wide && multiplier != null && multiplier > 1 && (
+            <Image
+              src={`/images/badge/X${multiplier}.webp`}
+              alt={`${multiplier}x entries`}
+              width={56}
+              height={56}
+              className="pointer-events-none absolute z-[2] object-contain"
+              style={{
+                width: wide ? (compact ? 28 : 34) : compact ? 40 : 56,
+                height: wide ? (compact ? 28 : 34) : compact ? 40 : 56,
+                // Nudged past the corner so the starburst's transparent margin does not read
+                // as a gap. It overhangs the column, never the tile.
+                top: wide ? -6 : -8,
+                right: wide ? -4 : -6,
+                filter: "drop-shadow(0 3px 10px rgba(0,0,0,.55))",
+              }}
+            />
+          )}
+
+          {/* ONE baseline row: the boosted figure, then `was N` AFTER it. Reading order matches
+              the sentence a member says out loud — "150, was 15" — and putting `was` above the
+              number cost a whole row on the tile whose purpose is fitting three of itself on
+              screen at once. */}
+          <div
+            className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5"
+            // Reserve the badge lane. Measured on the Boss tile: the row ran 141px inside a
+            // 135px column, so the absolutely-positioned starburst landed 25px on top of the
+            // struck value. Padding the row keeps text out of the corner the badge owns, and
+            // the widths above (narrower ring column, smaller figure and struck value) buy
+            // back enough room that it still fits on one line.
+            style={badgeShown ? { paddingRight: compact ? 22 : 32 } : undefined}
+          >
             <span
               className="font-poppins font-black tabular-nums"
               style={{
-                fontSize: compact ? 21 : 36,
+                // 30 on wide, not 36. Measured: "1000" + "was 100" + the starburst came to
+                // 178px of content in a 177px column, so the row wrapped and that ONE tile grew
+                // 20px taller than its siblings. The widest real value has to fit on one line.
+                fontSize: wide ? (compact ? 18 : 29) : compact ? 21 : 36,
                 lineHeight: 0.9,
                 letterSpacing: "-0.03em",
                 textShadow: promoActive
@@ -325,6 +348,19 @@ export default function PackageTile({
             >
               {entries}
             </span>
+
+            {promoActive && wasEntries != null && wasEntries !== entries && (
+              <span
+                className="font-sans font-extrabold leading-none line-through opacity-[0.58]"
+                style={{ fontSize: wide ? 11 : compact ? 10.5 : 13, textDecorationThickness: 2 }}
+              >
+                was {wasEntries}
+              </span>
+            )}
+
+            {/* WIDE TILES ONLY. On the compact 2-up one-time grid this repeated a small
+                starburst on all six packs at once — six copies of one fact, each too small to
+                read. The tab badge already states the promo for that grid. */}
           </div>
           <span
             className="font-sans font-extrabold uppercase"
@@ -355,47 +391,52 @@ export default function PackageTile({
 
         <span aria-hidden className="self-stretch" style={{ background: seam }} />
 
-        <AccessRing pct={accessPct} caption={accessCaption} compact={compact} dark={dark} />
+        <AccessRing pct={accessPct} caption={accessCaption} compact={compact} dark={dark} wide={wide} />
       </div>
 
       {/* ---- Band 3: footer ---- */}
       <div
         className={cn("relative z-[1] flex flex-col justify-center", !wide && "mt-auto")}
         style={{
-          gap: wide ? 8 : compact ? 16 : 18,
+          // 14, not 8, on `wide`. The ribbon and discount tag are absolutely positioned at
+          // `top: -8` on the BUTTON, so they hang above it — with an 8px gap they would touch
+          // the price row that now sits there. This is the clearance those two pills need.
+          gap: wide ? 14 : compact ? 16 : 18,
           padding: bandPad,
           ...seamStyle,
           // On a wide tile the seam runs down the left edge, not across the top.
           ...(wide
-            ? { borderTop: "none", borderLeft: `1px solid ${seam}`, boxShadow: `inset 1px 0 0 ${seamHi}`, width: compact ? 148 : 190, flex: "none" }
+            ? { borderTop: "none", borderLeft: `1px solid ${seam}`, boxShadow: `inset 1px 0 0 ${seamHi}`, width: compact ? 106 : 152, flex: "none" }
             : {}),
         }}
       >
-        {/* Price + period live in the identity band on a wide tile — see band 1 — leaving
-            this column to the CTA and its ribbon/discount overlays alone. */}
+        {/* Price rides the identity band on a WIDE tile — see band 1. This column is left to
+            the button and the two pills that overlay its top edge (ribbon upper-left, discount
+            tag upper-right); a price row here would put three things in ~190px and add a line
+            of height to the one variant that exists to be short. */}
         {!wide && (
-          <div className="flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5">
+        <div className="flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0.5">
+          <span
+            className="font-poppins font-black leading-none tabular-nums"
+            style={{ fontSize: compact ? 19 : 25 }}
+          >
+            ${price}
+          </span>
+          {struckPrice != null && (
             <span
-              className="font-poppins font-black leading-none tabular-nums"
-              style={{ fontSize: compact ? 19 : 25 }}
+              className="font-sans font-bold leading-none line-through opacity-50"
+              style={{ fontSize: compact ? 10.5 : 12, textDecorationThickness: 1.5 }}
             >
-              ${price}
+              ${struckPrice}
             </span>
-            {struckPrice != null && (
-              <span
-                className="font-sans font-bold leading-none line-through opacity-50"
-                style={{ fontSize: compact ? 10.5 : 12, textDecorationThickness: 1.5 }}
-              >
-                ${struckPrice}
-              </span>
-            )}
-            <span
-              className="font-sans font-semibold opacity-[0.72]"
-              style={{ fontSize: compact ? 10.5 : 11.5, lineHeight: 1.25 }}
-            >
-              {periodLabel}
-            </span>
-          </div>
+          )}
+          <span
+            className="font-sans font-semibold opacity-[0.72]"
+            style={{ fontSize: compact ? 10.5 : 11.5, lineHeight: 1.25 }}
+          >
+            {periodLabel}
+          </span>
+        </div>
         )}
 
         <div className="relative flex w-full">
@@ -410,12 +451,19 @@ export default function PackageTile({
                 // always applies. globals.css's prefers-reduced-motion block still neutralises
                 // it (animation-duration: 1ms on every element), so the a11y gate is intact.
                 animation: "ta-ribbon-pop 1.5s ease-in-out",
-                top: compact ? -6 : -8,
-                left: compact ? 6 : 10,
-                fontSize: compact ? 7 : 7.5,
+                // Sized DOWN on a wide tile. "BEST VALUE" beside a discount tag has to fit
+                // inside a ~106px button on the compact-wide grid, and every px the footer
+                // column does not need goes to the entries figure, which was wrapping.
+                top: wide ? -6 : compact ? -6 : -8,
+                // NEGATIVE on wide: the two pills sit at opposite ends of a ~90-106px button
+                // and were meeting in the middle. Overhanging the button into the band padding
+                // buys ~20px of separation without shrinking either label. The tile clips at
+                // its own border, which is further out still, so nothing is cut off.
+                left: wide ? -6 : compact ? 6 : 10,
+                fontSize: wide ? 6.5 : compact ? 7 : 7.5,
                 lineHeight: 1,
-                letterSpacing: compact ? "0.04em" : "0.1em",
-                padding: compact ? "2.5px 5px" : "3.5px 8px",
+                letterSpacing: wide ? "0.03em" : compact ? "0.04em" : "0.1em",
+                padding: wide ? "2px 4px" : compact ? "2.5px 5px" : "3.5px 8px",
                 borderRadius: 999,
                 border: compact ? "1px solid" : "1.5px solid",
                 boxShadow: "0 5px 12px -6px rgba(0,0,0,.7)",
@@ -436,13 +484,13 @@ export default function PackageTile({
             <span
               className="absolute z-[3] inline-flex items-center whitespace-nowrap font-sans font-black"
               style={{
-                top: compact ? -6 : -8,
-                right: compact ? 6 : 10,
-                gap: compact ? 2.5 : 3.5,
-                fontSize: compact ? 7 : 9.5,
+                top: wide ? -6 : compact ? -6 : -8,
+                right: wide ? -6 : compact ? 6 : 10,
+                gap: wide ? 2 : compact ? 2.5 : 3.5,
+                fontSize: wide ? 6.5 : compact ? 7 : 9.5,
                 lineHeight: 1,
                 letterSpacing: "0.03em",
-                padding: compact ? "2.5px 5px" : "3.5px 8px",
+                padding: wide ? "2px 4px" : compact ? "2.5px 5px" : "3.5px 8px",
                 borderRadius: 999,
                 background: "#ffffff",
                 color: "#0b0b0d",
@@ -503,21 +551,34 @@ function AccessRing({
   caption,
   compact,
   dark,
+  wide = false,
 }: {
   pct: number;
   caption: string;
   compact: boolean;
   dark: boolean;
+  /** Squeeze the dial so three tiles fit on screen without scrolling. */
+  wide?: boolean;
 }) {
-  const size = compact ? 44 : 58;
-  const stroke = compact ? 5 : 6.5;
+  // The wide tile is height-constrained, and this dial is the tallest thing in its stats band
+  // (ring + a caption that wraps to two or three lines). Shrinking the ring and tightening the
+  // caption's leading is the cheapest height available without dropping information.
+  const size = wide ? (compact ? 40 : 48) : compact ? 44 : 58;
+  const stroke = wide ? (compact ? 4.5 : 5.5) : compact ? 5 : 6.5;
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
   const dashoffset = circumference * (1 - Math.max(0, Math.min(100, pct)) / 100);
   const full = pct >= 100;
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    // HORIZONTAL on `wide`: dial on the left, caption to its right, both centred on the shared
+    // middle line. Stacked, the caption wraps to two or three lines directly under the ring and
+    // the pair becomes the tallest thing in the band — on a tile that exists to be short, that
+    // is the wrong axis to spend on. Side by side it costs the height of the ring alone.
+    <div
+      className={cn("flex", wide ? "flex-row items-center justify-center" : "flex-col items-center")}
+      style={{ gap: wide ? 8 : 6 }}
+    >
       <div className="relative grid place-items-center" style={{ width: size, height: size }}>
         {/* Dial face behind the ring */}
         <span
@@ -568,7 +629,7 @@ function AccessRing({
         </svg>
         <span
           className="relative font-poppins font-black leading-none tabular-nums"
-          style={{ fontSize: compact ? 12 : 16 }}
+          style={{ fontSize: wide ? (compact ? 11 : 14) : compact ? 12 : 16 }}
         >
           {pct}%
         </span>
@@ -576,10 +637,17 @@ function AccessRing({
       <span
         className="text-center font-sans font-bold uppercase opacity-80"
         style={{
-          fontSize: compact ? 7.5 : 9.5,
-          lineHeight: 1.25,
+          fontSize: wide ? (compact ? 7 : 8.5) : compact ? 7.5 : 9.5,
+          // 1.15 on wide: the caption still wraps ("2-day discount access" is three words), but
+          // beside the ring rather than under it, so its lines no longer add to the tile height
+          // — they fill space the ring already occupies.
+          lineHeight: wide ? 1.15 : 1.25,
           letterSpacing: compact ? "0.01em" : "0.05em",
-          maxWidth: compact ? 80 : 96,
+          // Deliberately NARROW so the caption wraps to three short lines ("2-DAY /
+          // DISCOUNT / ACCESS") rather than two long ones. Beside the ring those lines are
+          // free — they fill height the dial already occupies — and every px not spent here
+          // goes to the entries figure, which is the column that was wrapping.
+          maxWidth: wide ? (compact ? 42 : 64) : compact ? 80 : 96,
         }}
       >
         {caption}
