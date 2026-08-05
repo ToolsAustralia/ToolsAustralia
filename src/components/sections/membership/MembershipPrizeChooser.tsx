@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
-import { Trophy, Check, ShieldCheck, ArrowRight } from "lucide-react";
+import { Trophy, Check, ShieldCheck, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import Seg from "@/components/ui/Seg";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import MetallicButton from "@/components/ui/MetallicButton";
@@ -21,7 +21,7 @@ const ITEMS: Record<PrizePick, string[]> = {
 };
 
 export default function MembershipPrizeChooser() {
-  const { activePrize, resolvePrize } = usePrizeCatalog();
+  const { prizes, activePrize, resolvePrize } = usePrizeCatalog();
   const cashPrize = resolvePrize("cash-prize");
   const [pick, setPick] = useState<PrizePick>("setup");
   const isCash = pick === "cash";
@@ -30,7 +30,33 @@ export default function MembershipPrizeChooser() {
     { value: "cash" as const, label: "The cash" },
   ];
 
-  const entry = isCash ? cashPrize : activePrize;
+  /**
+   * Every buildable combination, cash excluded — the winner picks a toolbox AND a power-tool
+   * kit, so "the prize" is 20 real pairings rather than one bundle. Filtered on the presence
+   * of a hero image: a combo with no artwork cannot be browsed to, and an empty frame in the
+   * middle of a carousel reads as a broken page.
+   */
+  const combos = useMemo(
+    () => prizes.filter((p) => p.slug !== "cash-prize" && Boolean(p.gallery?.[0]?.src)),
+    [prizes]
+  );
+  const comboCount = combos.length;
+
+  // Open on whatever the catalogue says is current, so the section still leads with the
+  // featured build rather than whichever combo happens to sort first.
+  const defaultComboIndex = Math.max(
+    0,
+    combos.findIndex((p) => p.slug === activePrize?.slug)
+  );
+  const [comboIndex, setComboIndex] = useState(defaultComboIndex);
+
+  // Wraps in both directions — a carousel that dead-ends at either edge makes the user
+  // discover the boundary by pressing a button that does nothing.
+  const stepCombo = (delta: number) =>
+    setComboIndex((i) => (comboCount === 0 ? 0 : (i + delta + comboCount) % comboCount));
+
+  const activeCombo = combos[comboIndex] ?? activePrize;
+  const entry = isCash ? cashPrize : activeCombo;
   const image = entry?.gallery?.[0]?.src ?? activePrize?.gallery?.[0]?.src ?? "";
   const imageAlt = entry?.gallery?.[0]?.alt ?? "This month's prize";
   const tagLabel = isCash ? "$10,000 cash" : "The Ultimate Tradie Setup";
@@ -73,9 +99,96 @@ export default function MembershipPrizeChooser() {
         <div className="mt-8 grid items-center gap-10 lg:grid-cols-2">
           <div className="relative">
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border border-white/15 bg-white/5">
-              {image && <Image src={image} alt={imageAlt} fill className="object-contain" sizes="(max-width:1024px) 100vw, 560px" />}
+              {image && (
+                <Image
+                  // Keyed on the combo so switching swaps the element rather than mutating one
+                  // <img> src — without it the browser paints the old photo until the new one
+                  // decodes, which reads as the arrow having done nothing.
+                  key={image}
+                  src={image}
+                  alt={imageAlt}
+                  fill
+                  className="object-contain"
+                  sizes="(max-width:1024px) 100vw, 560px"
+                />
+              )}
+
+              {/* Combination browser. The setup is not one prize — the winner builds it, and
+                  there are 20 real toolbox x power-tool-kit combinations. Showing only the
+                  default made the whole thing look like a single Milwaukee bundle, which
+                  undersells the actual offer AND contradicts the bullet directly beside it
+                  ("Your pick of brand"). Cash has nothing to browse, so the control is
+                  setup-only. */}
+              {!isCash && comboCount > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => stepCombo(-1)}
+                    aria-label="Previous prize combination"
+                    className="absolute left-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/55 text-white backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:h-11 sm:w-11"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => stepCombo(1)}
+                    aria-label="Next prize combination"
+                    className="absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/55 text-white backdrop-blur transition hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:h-11 sm:w-11"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                  <span className="absolute bottom-3 right-3 rounded-full bg-black/60 px-2.5 py-1 font-mono text-[11px] font-bold tabular-nums text-white/80 backdrop-blur">
+                    {comboIndex + 1} / {comboCount}
+                  </span>
+                </>
+              )}
+
+              {/* Anchored INSIDE the image frame, not the outer column. It used to hang off the
+                  column, which was the same box as the image — until the thumbnail rail was
+                  added below and `bottom-3` started measuring from the bottom of the rail,
+                  dropping the tag on top of the thumbnails. */}
+              <span className="absolute bottom-3 left-3 rounded-full bg-black/60 px-3 py-1.5 text-xs font-bold backdrop-blur">
+                {tagLabel}
+              </span>
             </div>
-            <span className="absolute bottom-3 left-3 rounded-full bg-black/60 px-3 py-1.5 text-xs font-bold backdrop-blur">{tagLabel}</span>
+
+            {/* Every combination is directly selectable, not just reachable by stepping — 20
+                presses to reach the last one is not a choice, it is a chore. The rail is the
+                same hero images at thumbnail size, so what you tap is what you get. */}
+            {!isCash && comboCount > 1 && (
+              <div
+                className="brand-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1"
+                role="listbox"
+                aria-label="Prize combinations"
+              >
+                {combos.map((combo, i) => (
+                  <button
+                    key={combo.slug}
+                    type="button"
+                    role="option"
+                    aria-selected={i === comboIndex}
+                    onClick={() => setComboIndex(i)}
+                    title={combo.label}
+                    className={`relative h-14 w-16 flex-none overflow-hidden rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:h-16 sm:w-20 ${
+                      i === comboIndex
+                        ? "border-amber-300 opacity-100 ring-1 ring-amber-300/60"
+                        : "border-white/15 opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    {combo.gallery?.[0]?.src && (
+                      <Image
+                        src={combo.gallery[0].src}
+                        alt=""
+                        fill
+                        className="object-contain p-1"
+                        sizes="80px"
+                        loading="lazy"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>

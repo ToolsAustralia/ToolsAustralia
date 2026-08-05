@@ -90,12 +90,18 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, isCurrentPlan, isSelectedPla
         // Subscriptions are lifecycle-gated (access lasts while subscribed), so they carry
         // partnerDiscountDays: 0 — only one-time packs get a day window in the caption.
         const days = staticPkg?.partnerDiscountDays ?? 0;
+        // One phrase at both densities — compact fits it by shrinking the type (7.5px in
+        // PackageTile) rather than abbreviating, so the caption never changes meaning
+        // between breakpoints.
+        // The full phrase names the thing being accessed — "10-day PARTNER discount access",
+        // not a bare "10-day discount access", which reads as a discount on the pack itself.
+        // Abbreviated only where the column genuinely cannot carry it (compact).
         const accessCaption =
           isMembershipTab || days <= 0
-            ? "catalogue access"
+            ? "partner discount access"
             : compact
-              ? `${days}-day access`
-              : `${days}-day catalogue access`;
+              ? `${days}-day discount access`
+              : `${days}-day partner discount access`;
 
         return (
           <PackageTile
@@ -114,7 +120,10 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, isCurrentPlan, isSelectedPla
             accessPct={getPartnerCatalogAccessPercentForPlanId(plan.id)}
             accessCaption={accessCaption}
             price={plan.price}
-            periodLabel={plan.period === "one-time" ? "One Time" : "per month · cancel anytime"}
+            // Modals say "Per Giveaway"; the landing/section cards say "per month · cancel
+            // anytime". By the modal the visitor is buying, and what matters is which draw
+            // the payment buys into. /terms defines the two as equivalent.
+            periodLabel={plan.period === "one-time" ? "One Time" : "Per Giveaway"}
             struckPrice={discount ? discount.regularPrice : null}
             discountPercent={discount ? discount.percentOff : null}
             ribbon={ribbon}
@@ -123,6 +132,7 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, isCurrentPlan, isSelectedPla
             compact={compact}
             // Stats + footer side by side, so three stacked tiers fit without scrolling.
             wide={singleColumn}
+            accessFirst
             onSelect={() => onSelect(plan)}
           />
         );

@@ -32,6 +32,43 @@ white — never hardcode `#fff` on this card.
 `packageCardSurface.ts` still owns the *section* card and the selected-package summary — the
 two systems now coexist deliberately; see the note in that file.
 
+### Package copy conventions — 2026-08-05
+
+Two strings differ **by surface on purpose**. Both look like inconsistencies at a glance, so
+neither should be "fixed" to match the other without reading this.
+
+**Period label.**
+
+| Surface | Subscription label |
+| --- | --- |
+| Membership section / landing cards (`ElectricPackageCard`) | `per month · cancel anytime` |
+| Modals (`PackageTile` via `PlanGrid`, `PlanSummaryCard`) | `Per Giveaway` |
+
+A visitor on a landing card has not joined yet and needs the billing cadence plus the
+no-lock-in reassurance. By the modal they are buying, and the useful fact is which draw the
+payment enters. These are not contradictory —
+[`/terms`](../../src/app/(site)/terms/page.tsx) states *"Per giveaway" means per calendar
+month*, so the two are defined as equivalent. One-time packs read `One Time` / `One Time
+Payment` on every surface.
+
+**Access-ring caption** — `catalogue access` was replaced everywhere (2026-08-05) with
+partner-discount wording, to match the terms and the rest of the site:
+
+| Context | Caption |
+| --- | --- |
+| Membership tiers, and any pack with no day window | `partner discount access` |
+| One-time pack, comfortable density | `{n}-day discount access` |
+| One-time pack, compact density | `{n}-day access` |
+
+The shortened forms exist because the ring's column is a fixed 96px (80px compact) — see the
+fixed-width note above — and a day-count prefix pushes the full phrase past it. Shorten
+rather than truncate.
+
+Note the word "catalogue" survives legitimately in **code**, describing the numeric
+percentage and the vendor catalogue itself (`getPartnerCatalogAccessPercentForPlanId`,
+`PARTNER_CATALOG_TOTAL`, `PackageTile`'s `accessPct` doc). Only customer-visible *strings*
+changed.
+
 **Not yet done from that handoff:** the modal *chrome* — shell gradient/border, the header
 and promo banner, the gold tab pills, the benefits panel restyle, the accent Buy button and
 trust strip. Only the tile and the two grids landed. The tile is the piece that makes both

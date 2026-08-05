@@ -12,10 +12,37 @@
 
 ## Default & persistence
 
-**Light is the hard default.** The theme changes only when the user taps the toggle, or when
-the promo default-theme experiment assigns one (see below); the resulting state is persisted
-in `localStorage` under `ta-theme` (Zustand `persist`). No time-of-day or `prefers-color-scheme`
-auto mode — a new, un-experimented visitor always gets light regardless of clock or OS preference.
+**DARK is the hard default (2026-08-05).** The theme changes only when the user taps the
+toggle, or when the promo default-theme experiment assigns one (see below); the resulting
+state is persisted in `localStorage` under `ta-theme` (Zustand `persist`). No time-of-day or
+`prefers-color-scheme` auto mode — a new, un-experimented visitor always gets dark regardless
+of clock or OS preference.
+
+### Flipping the default takes THREE coordinated changes
+
+Light was the default until the "Promo landing — default theme (light vs dark)" experiment
+concluded in favour of dark (2.04% vs 1.74% conversion, ~6.1k users per arm). Changing it
+required all three of these together — any one alone half-ships the flip:
+
+1. **`useThemeStore`'s initial state** (`theme: "dark"`). On its own this reaches only
+   visitors with no `ta-theme` record — i.e. new ones.
+2. **`migrateThemeState` + a `version` bump** (2 → 3). Everyone already carrying a v2 record
+   has `theme: "light"` stored; zustand only re-runs the migration when the version changes,
+   so without the bump the existing audience is pinned to the old default **permanently**.
+3. **`src/utils/themeBootstrap.ts`** — the pre-hydration reader that sets the class on
+   `<html>`. It resolves the theme independently, so if it disagrees the page paints one
+   theme and swaps after hydration.
+
+The migration rule itself is unchanged and should stay that way: **only a real choice
+survives.** `userManualOverride === true` means the user worked the toggle, so their theme is
+preserved verbatim (including light); everything else follows the current default. The flag
+must never be persisted as `false` — absent is what keeps "never chose" distinguishable from
+"chose". Pinned by `npm run test:theme-store`.
+
+> The experiment assigns via `useThemeStore.setState`, which does **not** set
+> `userManualOverride`. So while that experiment is still **Active** it keeps handing ~50% of
+> visitors the light arm regardless of this default — concluding the experiment in the admin
+> is what actually lands the flip.
 
 [src/stores/useThemeStore.ts](../../src/stores/useThemeStore.ts) holds
 `{ theme, userManualOverride?: true, setTheme, toggleTheme }` at **persist `version: 2`**.
@@ -53,7 +80,7 @@ their theme and permanently exclude them from future experiment assignment.
 
 `migrateThemeState` (exported from `useThemeStore.ts` for direct testing — see
 [testing.md](./testing.md)) resolves **legacy auto-dark** (v0 wrote `theme: "dark"` with
-`userManualOverride === false` for users who never chose dark) back to the light default, while
+`userManualOverride === false` for users who never chose dark) to the CURRENT default, while
 keeping a genuinely user-chosen dark and dropping the flag entirely when it isn't `true`.
 
 zustand's `persist` middleware calls `migrate(persistedState, version)` **once**, with whatever

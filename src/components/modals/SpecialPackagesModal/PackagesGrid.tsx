@@ -10,6 +10,7 @@ import { getAdditionalPackDiscount } from "@/utils/membership/additional-pack-di
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { isOneTimeBestValuePlanId } from "@/utils/membership/additional-package-mapping";
 import PackageTile, { type PackageTileRibbon } from "../PackageTile";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 interface PackagesGridProps {
   packagesWithPromo: StaticMembershipPackage[];
@@ -42,6 +43,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
   onCouponCodeChange,
   onCouponApply,
 }) => {
+  const isNarrow = useMediaQuery("(max-width: 639px)");
 
   return (
     <>
@@ -71,7 +73,11 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               multiplier={pkg.promoMultiplier}
               accessPct={getPartnerCatalogAccessPercentForPlanId(id)}
               accessCaption={
-                days > 0 ? `${days}-day access` : "catalogue access"
+                days > 0
+                  ? isNarrow
+                    ? `${days}-day discount access`
+                    : `${days}-day partner discount access`
+                  : "partner discount access"
               }
               price={pkg.price}
               periodLabel="One Time"
@@ -81,10 +87,14 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
               isSelected={selectedPackage?._id === pkg._id}
               // Additional packs are never a "current plan" — they are repeat purchases.
               isCurrent={false}
-              // Always compact + wide: this modal's job is comparing six packs at a glance,
-              // so every row is as short as the tile can go, at every width.
-              compact
+              // Wide always — six packs stacked as tall cards would not fit any viewport.
+              // COMPACT only below the tablet breakpoint: the tight treatment (smaller figure,
+              // inline dial, shrunken pills) exists to fit a phone. On a desktop there is room
+              // for the full-size tile, and a scroll is a better trade than shrinking type
+              // nobody needed to shrink.
+              compact={isNarrow}
               wide
+              accessFirst
               onSelect={() => onSelectPackage(pkg)}
             />
           );

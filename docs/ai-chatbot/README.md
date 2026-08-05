@@ -96,3 +96,21 @@ Enforced **structurally** (not just by prompt) — full detail in [implementatio
 ## 2026-07-31 — Knowledge pack rebuilt for the partner-portal consent screen
 
 FAQ entries 73–74 describe what the portal hand-off shares and that agreeing is optional; `src/generated/chatKnowledgePack.ts` regenerated (8 sections, ~11.9k tokens). **Timing caveat (rule 5c):** the portal itself is still dark behind `PARTNER_DISCOUNT_SSO_ENABLED`, so these answers describe a flow customers cannot reach yet — they must go live in the same step as the flag. Their factual content is pinned to `buildPartnerSsoSharedFields`; if the shared-field set changes, fix the FAQ copy in the same change ([docs/partner/rules.md R4](../partner/rules.md)).
+
+## `/discount` added to the self-service map (2026-08-05)
+
+The ACCOUNT SELF-SERVICE MAP in `src/services/support-chat/systemPrompt.ts` gained a partner-
+discount bullet. It routes "what discounts are there / can I see them before joining" to the
+public [`/discount`](../partner/frontend.md) page and — for a member who wants only what they
+can use — to `/my-account/rewards/catalogue`.
+
+The bullet also carries the distinction the page is built on, because it is the thing Cobber
+would otherwise get wrong: **reading an offer is free; access is what lets a member redeem it.**
+Cobber must never state a member's live access percentage or offer count (navigation only,
+never a data value — the map's standing rule).
+
+## Knowledge pack rebuilt for the discounts vocabulary (2026-08-05)
+
+`chatKnowledgePack.ts` regenerated after the FAQ corpus moved from "partner catalogue" to
+"partner discounts" (see [docs/config-and-data/README.md](../config-and-data/README.md)). No
+structural change — same 8 sections, ~12.5k tokens.

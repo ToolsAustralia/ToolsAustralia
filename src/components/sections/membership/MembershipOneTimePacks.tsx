@@ -117,7 +117,7 @@ export function PackCard({
             {access}%
           </span>
         </AccessRing>
-        <span className="text-[9px] font-bold uppercase tracking-[0.06em] opacity-80">catalogue access</span>
+        <span className="text-[9px] font-bold uppercase tracking-[0.06em] opacity-80">partner discount access</span>
         {typeof days === "number" && days > 0 && <span className="text-[10.5px] opacity-80">{days}-day window</span>}
         <span className="inline-flex items-center gap-1 text-[11.5px] font-extrabold">
           <Bolt className="h-3 w-3" /> {entries.toLocaleString()} free entries

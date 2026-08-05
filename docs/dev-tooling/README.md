@@ -29,3 +29,21 @@ Four Claude Code slash commands under `.claude/commands/` implement a multi-revi
 - **`.claude/commands/panel-fix.md`** — the executor half (`/panel-fix`). Reads a `panel-review` doc's "Now" batch, applies fixes one at a time, re-verifies (`type-check`/`lint` against the known baseline + targeted `test:*`/`e2e:smoke` slices), and ticks the checkboxes. Never commits — same hard rule as the rest of this repo's tooling.
 
 Both commands are **explicit-invocation only** — never wired to a hook or run automatically. `docs/tech-debt/panel-review-<branch>.md` sits outside the Domain Manifest by design (it's a review artifact, not domain documentation), so writing it never trips the `doc-sync` Stop hook. See `docs/e2e/` for the harness details these commands lean on (`how-to-run.md`, `proof-mode.md`, `gotchas.md`).
+
+## `/copy` — the wording panel (2026-08-05)
+
+`.claude/commands/copy.md` + `.claude/agents/copy-reviewer.md`. A read-only panel over every
+customer-facing STRING in a scope, complementary to `/review` (which judges the code).
+
+Five lenses: **LEGAL** (CLAUDE.md §11 — blocking), **TRUE** (numbers and claims against
+BUSINESS.md, plus overclaiming), **CONSISTENT** (one concept one word, checked against
+`/terms`, `/privacy` and Cobber's FAQ corpus), **RELEVANT** (does the string belong on this
+page/section, or restate its neighbour), **HUMAN** (padding openers, hedge stacks, triads,
+two sentences where one carries the fact).
+
+Every finding must quote the exact current string, propose an exact replacement, and cite
+`file:line` for any factual claim — a review that paraphrases the UI is unreviewable. It never
+edits; fixes belong to the caller. `VERDICT: SHIP` on a clean scope is a valid result, and the
+agent is told not to manufacture findings to look thorough.
+
+Scope defaults to the branch diff vs `main`; pass a path, route or component to narrow it.

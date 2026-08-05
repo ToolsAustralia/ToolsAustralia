@@ -82,3 +82,10 @@ Foundations for the `support-chat` domain (see [docs/ai-chatbot/](../ai-chatbot/
 ## 2026-07-31 — `test:partner-consent` script added
 
 `package.json` gained `"test:partner-consent": "tsx src/utils/partner-discounts/__tests__/partner-consent.test.ts"` — the anti-drift guard asserting the partner consent screen discloses exactly the fields the SSO payload carries. No new env vars were introduced by this change. See [docs/partner/testing.md](../partner/testing.md).
+
+## `test:discount-catalogue` (2026-08-05)
+
+New npm script → `src/utils/partner-discounts/__tests__/discount-catalogue.test.ts`, the pure
+layer behind the public `/discount` page (bands, the wall, the gate copy, and the two unlock
+routes at all 11 access levels). Standalone `tsx`, no runner. Detail:
+[docs/partner/testing.md](../partner/testing.md).

@@ -52,7 +52,7 @@ function MiniDeck({ plans, metric, label }: { plans: MembershipPlan[]; metric: "
 
 const STEPS = [
   { n: 1, title: "Pick your tier", body: "Choose Tradie, Foreman or Boss — your member discounts go live across our partner brands the day you join." },
-  { n: 2, title: "Save with partner discounts", body: "Your tier unlocks up to 100% of the partner catalogue — save on every job, and your free entries stack each month." },
+  { n: 2, title: "Save with partner discounts", body: "Your tier unlocks up to 100% of our partner discounts — save on every job, and your free entries stack each month." },
   { n: 3, title: "Win on the 27th", body: "Every 27th, one member wins the Ultimate Tradie Setup — or $10,000 cash — drawn live on Facebook." },
 ];
 

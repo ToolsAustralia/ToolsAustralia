@@ -1,9 +1,14 @@
 /**
  * Read the effective theme from Zustand persist localStorage (`ta-theme`).
  *
- * Light is the default. A persisted `"dark"` is honoured only when the user actually
- * chose it: the removed v0 auto-switcher wrote `"dark"` for users who never toggled
- * (those carry `userManualOverride === false`), so we resolve those back to light.
+ * DARK is the default (2026-08-05, from the promo default-theme experiment). This runs
+ * BEFORE hydration to set the class on <html>, so it MUST agree with useThemeStore's
+ * default and with migrateThemeState — if they disagree the page paints one theme and
+ * then swaps a moment later.
+ *
+ * A persisted `"light"` is honoured only when the user actually CHOSE it
+ * (`userManualOverride === true`). A stored light WITHOUT that flag is just the old
+ * default sitting in localStorage, not a preference, so it resolves to dark.
  *
  * Returns null if missing or invalid (caller may fall back to DOM / default).
  */
@@ -17,8 +22,8 @@ export function readThemeFromPersistStorage(): "light" | "dark" | null {
     } | null;
     const t = parsed?.state?.theme;
     const override = parsed?.state?.userManualOverride;
-    if (t === "dark") return override === false ? "light" : "dark";
-    if (t === "light") return "light";
+    if (t === "light") return override === true ? "light" : "dark";
+    if (t === "dark") return "dark";
     return null;
   } catch {
     return null;
