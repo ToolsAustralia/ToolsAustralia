@@ -12,6 +12,7 @@ import { useUserMajorDrawStats } from "@/hooks/queries/useMajorDrawQueries";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
+import { useNavNudges } from "@/hooks/useNavNudges";
 // User setup store removed - using unified modal priority system
 import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
@@ -44,6 +45,7 @@ import {
   BarChart3,
   Handshake,
   Tag,
+  Compass,
   HelpCircle,
   Phone,
   UserCircle,
@@ -153,6 +155,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const [isMobileResultsOpen, setIsMobileResultsOpen] = useState(false);
   const [isGiveawaysMenuOpen, setIsGiveawaysMenuOpen] = useState(false);
   const [isMobileGiveawaysOpen, setIsMobileGiveawaysOpen] = useState(false);
+  const [isExploreMenuOpen, setIsExploreMenuOpen] = useState(false);
+  const [isMobileExploreOpen, setIsMobileExploreOpen] = useState(false);
   const [isTopBarHidden, setIsTopBarHidden] = useState(false);
   const [authStateResolved, setAuthStateResolved] = useState(false); // Track if authentication state has been resolved
   // const [wasAuthenticated, // setWasAuthenticated] = useState<boolean | null>(null);
@@ -171,6 +175,50 @@ export default function Header({ isFixed = true }: HeaderProps) {
   );
   const { requestModal } = useModalPriorityStore();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
+  // Both navs read the SAME source, so the desktop row and the mobile drawer can never
+  // disagree about whether a dot is lit — see hooks/useNavNudges.
+  const nudges = useNavNudges();
+
+  /**
+   * Hover-to-open for the desktop dropdowns, on top of click (never instead of it).
+   *
+   * Click has to keep working: hover does not exist on touch, and a keyboard user tabbing to
+   * the button needs Enter to do something. So these handlers only ADD a pointer affordance.
+   *
+   * The CLOSE is delayed ~140ms and cancelled on re-enter. The panel sits `mt-2` below the
+   * button, so travelling from one to the other crosses 8px of dead space — closing on the
+   * raw `mouseleave` would shut the menu underneath the cursor on the way to it, which is the
+   * single most common way hover menus are got wrong.
+   *
+   * `pointer: fine` gate: a touch device fires a synthetic mouseenter on tap, which would open
+   * the menu and let the same tap's click immediately close it again.
+   */
+  const hoverCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canHover = () =>
+    typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+  const openOnHover = useCallback((open: (v: boolean) => void) => {
+    if (!canHover()) return;
+    if (hoverCloseTimer.current) {
+      clearTimeout(hoverCloseTimer.current);
+      hoverCloseTimer.current = null;
+    }
+    // One menu at a time — hovering a sibling should swap, not stack.
+    setIsGiveawaysMenuOpen(false);
+    setIsResultsMenuOpen(false);
+    setIsExploreMenuOpen(false);
+    open(true);
+  }, []);
+
+  const closeOnHover = useCallback((open: (v: boolean) => void) => {
+    if (!canHover()) return;
+    if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+    hoverCloseTimer.current = setTimeout(() => open(false), 140);
+  }, []);
+
+  useEffect(() => () => {
+    if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+  }, []);
   const router = useRouter();
   const { isAuthenticated: isAffiliateAuthenticated, affiliateData, loading: affiliateLoading } = useAffiliateAuth();
 
@@ -409,6 +457,12 @@ export default function Header({ isFixed = true }: HeaderProps) {
         setIsGiveawaysMenuOpen(false);
       }
 
+      // Close Explore dropdown if clicking outside
+      const exploreDropdown = document.querySelector(".explore-dropdown-container");
+      if (isExploreMenuOpen && exploreDropdown && !exploreDropdown.contains(target)) {
+        setIsExploreMenuOpen(false);
+      }
+
       // Close desktop user menu if clicking outside
       if (isDesktopUserMenuOpen && desktopUserMenu && !desktopUserMenu.contains(target)) {
         // console.log("🖱️ Clicking outside desktop user menu, closing it");
@@ -430,7 +484,13 @@ export default function Header({ isFixed = true }: HeaderProps) {
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("touchstart", handleClickOutside);
     };
-  }, [isResultsMenuOpen, isGiveawaysMenuOpen, isDesktopUserMenuOpen, isMobileUserMenuOpen]);
+  }, [
+    isResultsMenuOpen,
+    isGiveawaysMenuOpen,
+    isExploreMenuOpen,
+    isDesktopUserMenuOpen,
+    isMobileUserMenuOpen,
+  ]);
 
   // Disable background scrolling when sidebars are open
   useEffect(() => {
@@ -513,6 +573,21 @@ export default function Header({ isFixed = true }: HeaderProps) {
     return pathname.startsWith("/promotions") || pathname.startsWith("/mini-draws");
   };
 
+  /**
+   * Explore is the long tail — the pages a visitor goes LOOKING for rather than browses into.
+   *
+   * Grouping them freed the row for /discount, but the real gain is hierarchy: Partner, FAQ
+   * and Contact were peers of Membership and Giveaways while serving a completely different
+   * intent, which flattened the nav into a list of every page that exists.
+   */
+  const isExploreActive = () => {
+    return (
+      pathname.startsWith("/partner") ||
+      pathname.startsWith("/faq") ||
+      pathname.startsWith("/contact")
+    );
+  };
+
   return (
     <header
       data-sticky="true"
@@ -573,11 +648,30 @@ export default function Header({ isFixed = true }: HeaderProps) {
           <div className="flex items-center">
             {/* Mobile Menu Button - Left Side with Animation */}
             <button
-              className="lg:hidden w-9 h-9 sm:w-10 sm:h-10 text-gray-700 dark:text-white hover:text-white transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-full hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 hover:scale-105 flex items-center justify-center touch-manipulation mr-1 sm:mr-2 group"
+              className="lg:hidden relative w-9 h-9 sm:w-10 sm:h-10 text-gray-700 dark:text-white hover:text-white transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-full hover:bg-gradient-to-br hover:from-red-600 hover:to-red-700 hover:scale-105 flex items-center justify-center touch-manipulation mr-1 sm:mr-2 group"
               onClick={() => (isMobileMenuOpen ? handleCloseMobileMenu() : setIsMobileMenuOpen(true))}
-              aria-label="Toggle mobile menu"
+              aria-label={
+                nudges.anyOnMobile && !isMobileMenuOpen ? "Open menu (something new inside)" : "Toggle mobile menu"
+              }
               suppressHydrationWarning
             >
+              {/* The burger INHERITS a dot — it is a container, not a subject, so it never
+                  carries news of its own. Hidden while the menu is open: the member is
+                  already looking at the thing the dot points to. Red when a draw is live
+                  (the louder fact wins), gold when it is only the new page. */}
+              {nudges.anyOnMobile && !isMobileMenuOpen && (
+                <span aria-hidden className="absolute right-0.5 top-0.5 flex h-2.5 w-2.5">
+                  {nudges.giveawayIsLive && (
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 motion-safe:animate-ping" />
+                  )}
+                  <span
+                    className={cn(
+                      "relative inline-flex h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-neutral-900",
+                      nudges.giveawayIsLive ? "bg-red-600" : "bg-[#d4af37]"
+                    )}
+                  />
+                </span>
+              )}
               <div className="relative w-5 h-5 sm:w-6 sm:h-6">
                 {/* Animated Hamburger/X Icon */}
                 <div
@@ -635,19 +729,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
             >
               Home
             </Link>
-            <Link
-              href="/shop"
-              className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
-                isActiveLink("/shop")
-                  ? "text-white bg-red-600"
-                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
-              }`}
-              aria-current={isActiveLink("/shop") ? "page" : undefined}
-            >
-              Shop
-            </Link>
+            {/* ORDER IS BY VISITOR INTENT, not by page inventory (2026-08-05):
+                  Giveaways (the product) → Membership (the conversion) → Discounts (the
+                  benefit that justifies the price) → Results (the proof, read AFTER the
+                  pitch) → Shop → Explore (the long tail).
+                Shop sits second-to-last on purpose: it is still "coming soon", and a
+                top-three slot pointing at an unfinished surface spends the most valuable
+                space on the page to disappoint someone. */}
             {/* Giveaways Dropdown — Major Draw (/promotions gallery) + Mini Draw (/mini-draws) */}
-            <div className="relative giveaways-dropdown-container">
+            <div
+              className="relative giveaways-dropdown-container"
+              onMouseEnter={() => openOnHover(setIsGiveawaysMenuOpen)}
+              onMouseLeave={() => closeOnHover(setIsGiveawaysMenuOpen)}
+            >
               <button
                 onClick={() => setIsGiveawaysMenuOpen(!isGiveawaysMenuOpen)}
                 suppressHydrationWarning
@@ -658,6 +752,18 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 }`}
               >
                 Giveaways
+                {/* STATUS, not news — a Major Draw is running right now. Brand red and
+                    pulsing so it cannot be confused with the gold "new" dot, and deliberately
+                    NOT dismissible: it stops being true on its own, and letting a member
+                    switch it off would mute the one signal that the thing they joined for is
+                    live. `motion-safe` only (CLAUDE.md: always-on animation needs a gate). */}
+                {nudges.giveawayIsLive && (
+                  <span aria-hidden className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 motion-safe:animate-ping" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-red-600" />
+                  </span>
+                )}
+                {nudges.giveawayIsLive && <span className="sr-only"> (draw is live)</span>}
                 <ChevronDown
                   className={cn("w-4 h-4 transition-transform duration-200", isGiveawaysMenuOpen ? "rotate-180" : "")}
                 />
@@ -695,6 +801,29 @@ export default function Header({ isFixed = true }: HeaderProps) {
             >
               Membership
             </Link>
+            {/* Discounts — directly after Membership because it is the benefit that justifies
+                the price. The dot is NEWS (one-time, clears on arrival), so it is neutral gold
+                and never pulses forever; see useNavNudges for why it differs from the live
+                Giveaways dot. */}
+            <Link
+              href="/discount"
+              onClick={nudges.markDiscountSeen}
+              className={`relative text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
+                isActiveLink("/discount")
+                  ? "text-white bg-red-600"
+                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+              }`}
+              aria-current={isActiveLink("/discount") ? "page" : undefined}
+            >
+              Discounts
+              {nudges.discountIsNew && (
+                <span
+                  aria-hidden
+                  className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[#d4af37] shadow-[0_0_8px_rgba(212,175,55,0.9)]"
+                />
+              )}
+              {nudges.discountIsNew && <span className="sr-only"> (new)</span>}
+            </Link>
             {isAuthenticated && isRewardsFeatureEnabled && (
               <Link
                 href="/rewards"
@@ -709,7 +838,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </Link>
             )}
             {/* Results Dropdown */}
-            <div className="relative results-dropdown-container">
+            <div
+              className="relative results-dropdown-container"
+              onMouseEnter={() => openOnHover(setIsResultsMenuOpen)}
+              onMouseLeave={() => closeOnHover(setIsResultsMenuOpen)}
+            >
               <button
                 onClick={() => setIsResultsMenuOpen(!isResultsMenuOpen)}
                 suppressHydrationWarning
@@ -746,53 +879,69 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </div>
               )}
             </div>
-            {/* Discounts sits BEFORE "Become a Partner": one is a member benefit to browse,
-                the other is an inbound business application, and they were being read as the
-                same thing when only the latter existed. */}
             <Link
-              href="/discount"
+              href="/shop"
               className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
-                isActiveLink("/discount")
+                isActiveLink("/shop")
                   ? "text-white bg-red-600"
                   : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
               }`}
-              aria-current={isActiveLink("/discount") ? "page" : undefined}
+              aria-current={isActiveLink("/shop") ? "page" : undefined}
             >
-              Discounts
+              Shop
             </Link>
-            <Link
-              href="/partner"
-              className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
-                isActiveLink("/partner")
-                  ? "text-white bg-red-600"
-                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
-              }`}
-              aria-current={isActiveLink("/partner") ? "page" : undefined}
+            {/* Explore Dropdown — Become a Partner + FAQ + Contact */}
+            <div
+              className="relative explore-dropdown-container"
+              onMouseEnter={() => openOnHover(setIsExploreMenuOpen)}
+              onMouseLeave={() => closeOnHover(setIsExploreMenuOpen)}
             >
-              Become a Partner
-            </Link>
-            <Link
-              href="/faq"
-              className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
-                isActiveLink("/faq")
-                  ? "text-white bg-red-600"
-                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
-              }`}
-              aria-current={isActiveLink("/faq") ? "page" : undefined}
-            >
-              FAQ
-            </Link>
-            <Link
-              href="/contact"
-              className={`text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
-                isActiveLink("/contact")
-                  ? "text-white bg-red-600"
-                  : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
-              }`}
-              aria-current={isActiveLink("/contact") ? "page" : undefined}
-            >
-              Contact
-            </Link>
+              <button
+                onClick={() => setIsExploreMenuOpen(!isExploreMenuOpen)}
+                suppressHydrationWarning
+                aria-expanded={isExploreMenuOpen}
+                aria-haspopup="menu"
+                className={`flex items-center gap-1 text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
+                  isExploreActive()
+                    ? "text-white bg-red-600"
+                    : "text-black dark:text-white hover:text-white hover:bg-gradient-to-r hover:from-red-600 hover:to-red-700"
+                }`}
+              >
+                Explore
+                <ChevronDown
+                  className={cn("w-4 h-4 transition-transform duration-200", isExploreMenuOpen ? "rotate-180" : "")}
+                />
+              </button>
+
+              {isExploreMenuOpen && (
+                <div className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
+                  <Link
+                    href="/partner"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
+                    onClick={() => setIsExploreMenuOpen(false)}
+                  >
+                    <Handshake className="w-4 h-4" />
+                    Become a Partner
+                  </Link>
+                  <Link
+                    href="/faq"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
+                    onClick={() => setIsExploreMenuOpen(false)}
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                    FAQ
+                  </Link>
+                  <Link
+                    href="/contact"
+                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
+                    onClick={() => setIsExploreMenuOpen(false)}
+                  >
+                    <Phone className="w-4 h-4" />
+                    Contact
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right Side - User Stats and Icons */}
@@ -1396,19 +1545,9 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   Home
                 </Link>
 
-                <Link
-                  href="/shop"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
-                    isActiveLink("/shop")
-                      ? "text-white bg-red-600"
-                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
-                  }`}
-                  onClick={handleCloseMobileMenu}
-                >
-                  <Store className="w-5 h-5" />
-                  Shop
-                </Link>
-
+                {/* Mirrors the desktop order exactly (Giveaways → Membership → Discounts →
+                    Results → Shop → Explore). Two navs that teach different mental models is
+                    worse than either order on its own. */}
                 {/* Giveaways Collapsible — Major Draw (/promotions) + Mini Draw (/mini-draws) */}
                 <div>
                   <button
@@ -1421,6 +1560,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   >
                     <Gift className="w-5 h-5" />
                     Giveaways
+                    {nudges.giveawayIsLive && (
+                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+                        Live
+                      </span>
+                    )}
                     <ChevronDown
                       className={`w-5 h-5 ml-auto transition-transform duration-200 ${
                         isMobileGiveawaysOpen ? "rotate-180" : ""
@@ -1470,6 +1614,30 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 >
                   <Crown className="w-5 h-5" />
                   Membership
+                </Link>
+
+                <Link
+                  href="/discount"
+                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
+                    isActiveLink("/discount")
+                      ? "text-white bg-red-600"
+                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                  }`}
+                  onClick={() => {
+                    nudges.markDiscountSeen();
+                    handleCloseMobileMenu();
+                  }}
+                  aria-current={isActiveLink("/discount") ? "page" : undefined}
+                >
+                  <Tag className="w-5 h-5" />
+                  Discounts
+                  {nudges.discountIsNew && (
+                    <span
+                      className="ml-auto rounded-full bg-[#d4af37] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#221a02]"
+                    >
+                      New
+                    </span>
+                  )}
                 </Link>
 
                 {isAuthenticated && isRewardsFeatureEnabled && (
@@ -1537,56 +1705,67 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </div>
 
                 <Link
-                  href="/discount"
+                  href="/shop"
                   className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
-                    isActiveLink("/discount")
+                    isActiveLink("/shop")
                       ? "text-white bg-red-600"
                       : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
                   }`}
                   onClick={handleCloseMobileMenu}
                 >
-                  <Tag className="w-5 h-5" />
-                  Discounts
+                  <Store className="w-5 h-5" />
+                  Shop
                 </Link>
 
-                <Link
-                  href="/partner"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
-                    isActiveLink("/partner")
-                      ? "text-white bg-red-600"
-                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
-                  }`}
-                  onClick={handleCloseMobileMenu}
-                >
-                  <Handshake className="w-5 h-5" />
-                  Become a Partner
-                </Link>
+                {/* Explore Collapsible — Become a Partner + FAQ + Contact */}
+                <div>
+                  <button
+                    onClick={() => setIsMobileExploreOpen(!isMobileExploreOpen)}
+                    aria-expanded={isMobileExploreOpen}
+                    className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium w-full ${
+                      isExploreActive()
+                        ? "text-white bg-red-600"
+                        : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
+                    }`}
+                  >
+                    <Compass className="w-5 h-5" />
+                    Explore
+                    <ChevronDown
+                      className={`w-5 h-5 ml-auto transition-transform duration-200 ${
+                        isMobileExploreOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
 
-                <Link
-                  href="/faq"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
-                    isActiveLink("/faq")
-                      ? "text-white bg-red-600"
-                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
-                  }`}
-                  onClick={handleCloseMobileMenu}
-                >
-                  <HelpCircle className="w-5 h-5" />
-                  FAQ
-                </Link>
-
-                <Link
-                  href="/contact"
-                  className={`sidebar-item flex items-center gap-3 py-3 px-3 transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] rounded-xl text-base font-medium ${
-                    isActiveLink("/contact")
-                      ? "text-white bg-red-600"
-                      : "text-gray-700 dark:text-neutral-200 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
-                  }`}
-                  onClick={handleCloseMobileMenu}
-                >
-                  <Phone className="w-5 h-5" />
-                  Contact
-                </Link>
+                  {isMobileExploreOpen && (
+                    <div className="ml-8 mt-1 space-y-1">
+                      <Link
+                        href="/partner"
+                        className="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-600 dark:text-neutral-300 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800 rounded-lg transition-colors duration-150"
+                        onClick={handleCloseMobileMenu}
+                      >
+                        <Handshake className="w-4 h-4" />
+                        Become a Partner
+                      </Link>
+                      <Link
+                        href="/faq"
+                        className="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-600 dark:text-neutral-300 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800 rounded-lg transition-colors duration-150"
+                        onClick={handleCloseMobileMenu}
+                      >
+                        <HelpCircle className="w-4 h-4" />
+                        FAQ
+                      </Link>
+                      <Link
+                        href="/contact"
+                        className="flex items-center gap-3 py-2.5 px-3 text-sm text-gray-600 dark:text-neutral-300 hover:text-red-600 hover:bg-gray-50 dark:hover:bg-neutral-800 rounded-lg transition-colors duration-150"
+                        onClick={handleCloseMobileMenu}
+                      >
+                        <Phone className="w-4 h-4" />
+                        Contact
+                      </Link>
+                    </div>
+                  )}
+                </div>
 
                 {/* Affiliate Links */}
                 {!affiliateLoading && isAffiliateAuthenticated && affiliateData && (

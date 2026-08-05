@@ -1380,7 +1380,15 @@
     background: var(--background);
     color: var(--foreground);
     font-feature-settings: "rlig" 1, "calt" 1;
-    overflow-x: hidden;
+    /* `clip`, NOT `hidden` — and the difference is load-bearing.
+       Setting `overflow-x: hidden` forces the computed `overflow-y` to `auto`, which makes
+       <body> a scroll container. Every `position: sticky` descendant then resolves against
+       body's scrollport, which never scrolls (the viewport does), so sticky silently does
+       nothing site-wide. `clip` visually clips exactly the same way but does not create a
+       scroll container, so sticky works. Verified 2026-08-05 on /discount, where the sticky
+       filter bar would not stick until this changed. Nothing reads body.scrollTop/scrollLeft,
+       so removing the scroll container has no other consumer. */
+    overflow-x: clip;
   }
 
   /* Display typography: heavier headings + emphatic bold (Tailwind `font-bold` also extended in tailwind.config). */
@@ -1490,9 +1498,12 @@
       transform: translateZ(0); /* Hardware acceleration to prevent zoom */
     }
 
-    /* Prevent horizontal scrolling on mobile modals */
+    /* Prevent horizontal scrolling on mobile modals.
+       `clip` for the same reason as the base rule above — `hidden` would re-create the body
+       scroll container on small screens only, breaking sticky on mobile and nowhere else,
+       which is the worst kind of bug to find. */
     body {
-      overflow-x: hidden;
+      overflow-x: clip;
     }
 
     /* Ensure modals don't cause horizontal overflow */
@@ -3655,4 +3666,18 @@ html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Sticky controls on /discount. Opaque, not translucent: 1,833 rows slide under this bar and
+   a blurred backdrop still shows their movement through it, which reads as a rendering fault
+   rather than as depth. The hairline only appears once the bar has something above it to
+   separate from — `top: -1px` makes the sentinel trick unnecessary. */
+.ta-dc-stick {
+  background: var(--dc-bg);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.ta-dc-stick[data-stuck="true"] {
+  border-bottom-color: var(--dc-ln);
+  box-shadow: 0 14px 26px -22px rgba(0, 0, 0, 0.9);
 }

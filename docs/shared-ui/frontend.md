@@ -1355,3 +1355,75 @@ chooser — "Get Foreman" rather than "Select". Selection styling is untouched.
 **before** "Become a Partner". The two were reading as the same thing while only the latter
 existed: one is a member benefit to browse, the other an inbound business application. Mobile
 uses the `Tag` glyph against the partner entry's `Handshake`.
+
+### `/discount` sticky controls, and the body-overflow fix they needed (2026-08-05)
+
+The search + filter row docks under the site header at any scroll depth. Two non-obvious
+things make it work, both worth keeping:
+
+1. **`body` had `overflow-x: hidden`, which silently disabled `position: sticky` site-wide.**
+   Setting `overflow-x: hidden` forces the computed `overflow-y` to `auto`, making `<body>` a
+   scroll container; every sticky descendant then resolves against body's scrollport, which
+   never scrolls. `globals.css` now uses **`overflow-x: clip`** — same visual clipping, no
+   scroll container. Nothing reads `body.scrollTop/scrollLeft`, so nothing else depended on it.
+   Any sticky UI added anywhere in the app depends on this staying `clip`.
+2. **The dock offset is MEASURED, not `var(--app-header-h)`.** That constant is the reserved
+   padding for the header alone; the dismissible announcement bar above it makes the real
+   bottom edge taller, and docking at the constant leaves a strip of page scrolling in the
+   gap. The page measures `.site-header header` — the FIXED child, since the wrapper is
+   `static, h=0` by design — and re-measures via `ResizeObserver`. It arrives after a Suspense
+   boundary, so a `MutationObserver` waits for it; measuring the empty fallback yields 0 and
+   docks the bar *behind* the header. Verified flush (gap = 0px) at 390px and 1320px.
+
+## Header IA restructure + nav nudges (2026-08-05)
+
+**Order is by visitor intent, not page inventory:**
+`Home · Giveaways▾ · Membership · Discounts · Results▾ · Shop · Explore▾`
+
+Giveaways (the product) → Membership (the conversion) → Discounts (the benefit that justifies
+the price) → Results (the proof, read *after* the pitch) → Shop → Explore.
+
+- **`Explore▾`** absorbs Become a Partner, FAQ and Contact. They were peers of Membership while
+  serving a different intent, which flattened the nav into "every page that exists". `isExploreActive()`
+  keeps the parent lit on any child route.
+- **Shop is second-to-last**, deliberately. It is still "coming soon"; a top-three slot pointing
+  at an unfinished surface spends the most valuable space on the page to disappoint someone.
+- **Results stayed top-level** rather than folding into Giveaways. They are topically adjacent
+  but opposite in intent — Giveaways is "what can I win", Results is "did they actually pay
+  out". Burying the proof two clicks deep hides it from the skeptical first-timer who needs it.
+- **Measured**: 7 items render on one line at 1024 / 1280 / 1440px (max item height 40px, nav
+  72px). The previous 8-item row wrapped "Become a Partner" to three lines at 1024 and 1280,
+  taking the header to ~85px. Re-check these three widths before adding an item.
+
+**Hover opens the dropdowns** (`openOnHover` / `closeOnHover`), *in addition to* click — click
+must keep working for touch and keyboard. Two details are load-bearing: the close is delayed
+140ms and cancelled on re-enter, because the panel sits `mt-2` below the button and closing on
+the raw `mouseleave` shuts the menu while the cursor is crossing that 8px gap; and the whole
+thing is gated on `(hover: hover) and (pointer: fine)`, because a tap fires a synthetic
+mouseenter and the same tap's click would immediately close what it just opened.
+
+### The two nav indicators — [useNavNudges](../../src/hooks/useNavNudges.ts)
+
+Both navs read one hook, so the desktop row and the mobile drawer cannot disagree.
+
+| | Discounts | Giveaways |
+|---|---|---|
+| Kind | **News** — a surface you have not seen | **Status** — a draw is running now |
+| Look | static gold dot / "New" pill | red pulsing dot / "Live" pill |
+| Dismissible | yes, once | **no** |
+| Clears | on ARRIVAL at `/discount` | on its own, when the draw stops being `active` |
+
+Status is not dismissible on purpose: it stops being true by itself, and letting a member mute
+it would switch off the one signal that the thing they joined for is happening. Only `active`
+counts — a `frozen` or `completed` draw is not something they can act on, and a live dot
+pointing at a closed gate is worse than no dot.
+
+The **hamburger inherits** `anyOnMobile` — it is a container, not a subject, so it never carries
+news of its own and hides the dot while the drawer is open. Red beats gold when both apply.
+
+**Storage is localStorage, not sessionStorage** — sessionStorage clears on tab close, so a
+"new" badge would return on every visit and stop meaning new. `/discount` is public, so the key
+falls back to a shared `guest` bucket and re-fires once after sign-in (deliberate: the page
+means something different once you have an access level). The `discountNavNudgeSeen_` prefix is
+registered in [total-sign-out.ts](../../src/utils/auth/total-sign-out.ts) so it cannot follow
+the next person on a shared device.

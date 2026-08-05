@@ -308,3 +308,32 @@ see [gotchas.md](./gotchas.md) and the playbook's §5a.
 Tokens live in `globals.css` under `.ta-discount` / `.dark .ta-discount`, the same
 CSS-not-JS approach as `.ta-brand-wall` and for the same reason: an `isDark` read during render
 is not reactive, so a JS-skinned page stays light inside a dark one.
+
+### `/discount` page shell — later revisions (2026-08-05)
+
+Changes to [page-client.tsx](../../src/app/(site)/discount/page-client.tsx) after the first
+build, each for a stated reason:
+
+- **No visible hero.** The headline restated what the meter says with real numbers
+  ("917 of 1,833 redeemable"), and a claim is weaker than a count. An `sr-only` `<h1>` remains
+  — a public indexed route with no heading is a real regression, and it costs nothing visually.
+- **The controls are sticky**, docked flush under the site header. The list runs to 1,833 rows;
+  scrolling back to the top to change one filter was the failure this removes. The offset is
+  **measured**, not `var(--app-header-h)` — see
+  [docs/shared-ui/frontend.md](../shared-ui/frontend.md) for why, and for the `overflow-x: clip`
+  fix that made `position: sticky` work at all.
+- **Buying a route opens the membership modal IN PLACE** (`selectRoute`) rather than navigating
+  to `/membership`. The member is mid-thought about one specific offer; a page change discards
+  the popup, their filters and their scroll to re-ask a question they already answered by
+  tapping the tile. The discount popup closes first — two overlays at the same z-layer would
+  trap focus behind the wrong one. Plans come from `useMemberships` matched on the catalog
+  `_id`, through `convertToLocalPlan`; if the catalog has not loaded, it opens the picker
+  rather than a payment step with nothing selected.
+- **The unlock tiles show the live promo multiplier** (`useResolvedMultiplier`, the same
+  resolved source every other package surface reads). Without it the tile that made the offer
+  quoted base entries while the modal one tap later quoted the boosted figure — the page would
+  have undersold itself against its own checkout.
+- **The tiles name the draw** (`entriesSubLabel="into the Major Draw"`). Surrounded by
+  partner-offer language, a bare "15 free entries" reads as entries into the discount.
+- **The offer popup's "Back" button only renders beside a primary CTA.** Alone it duplicated
+  the close button and the scrim — three ways to do one thing, costing a 50px row on a phone.

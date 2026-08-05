@@ -46,6 +46,10 @@ const USER_LOCAL_PREFIXES = [
   // useStreakCelebration). Must not leak the previous member's streak position to
   // the next sign-in on a shared device.
   "ta-streak-seen:",
+  // "New" badge on the Discounts nav item. Prefix-matched, so this clears the signed-in
+  // bucket AND the shared `guest` one — on a shared device the next anonymous visitor should
+  // be treated as new, not inherit the last person's dismissal.
+  "discountNavNudgeSeen_",
 ];
 
 /** User-scoped sessionStorage keys (exact match). */

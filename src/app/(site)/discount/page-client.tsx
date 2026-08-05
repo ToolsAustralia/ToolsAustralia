@@ -27,6 +27,7 @@ import { useSession } from "next-auth/react";
 
 import { useDashboardState } from "@/hooks/useDashboardState";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useIsLgUp } from "@/hooks/useIsLgUp";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
@@ -109,6 +110,85 @@ export default function DiscountPageClient() {
     [visible, viewerPct, signedIn, sort]
   );
 
+  const isLgUp = useIsLgUp();
+
+  /**
+   * Where the controls dock — MEASURED off the real header, not read from `--app-header-h`.
+   *
+   * That constant (86 / 106px) is the reserved padding for the header ALONE. The site also
+   * renders a dismissible announcement bar above it, so the actual bottom edge is taller
+   * whenever the bar is up — docking at the constant left a strip of the list visible between
+   * the header and the bar, scrolling behind both. Measuring the fixed header's `bottom` is
+   * the only value that is right in every combination (bar up, bar dismissed, either
+   * breakpoint), and a ResizeObserver keeps it right when the member dismisses the bar
+   * mid-scroll.
+   */
+  const [headerBottom, setHeaderBottom] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    let ro: ResizeObserver | null = null;
+    let mo: MutationObserver | null = null;
+
+    // The wrapper is `static, h=0` by design (the layout says so) — only its FIXED child has
+    // real height, so the child is what must be measured. It arrives after a Suspense
+    // boundary resolves, and measuring the empty fallback yields 0, which docks the bar
+    // behind the header instead of below it. Hence: wait for the child, then observe it.
+    const attach = (): boolean => {
+      const header = document.querySelector<HTMLElement>(".site-header header");
+      if (!header) return false;
+      const measure = () => setHeaderBottom(Math.round(header.getBoundingClientRect().bottom));
+      measure();
+      ro = new ResizeObserver(measure);
+      ro.observe(header);
+      window.addEventListener("resize", measure);
+      return true;
+    };
+
+    if (!attach()) {
+      const wrapper = document.querySelector(".site-header");
+      if (wrapper) {
+        mo = new MutationObserver(() => {
+          if (attach()) {
+            mo?.disconnect();
+            mo = null;
+          }
+        });
+        mo.observe(wrapper, { childList: true, subtree: true });
+      }
+    }
+
+    return () => {
+      ro?.disconnect();
+      mo?.disconnect();
+    };
+  }, []);
+
+  const stickyTop =
+    headerBottom !== null
+      ? `${headerBottom}px`
+      : isLgUp
+        ? "var(--app-header-h-lg)"
+        : "var(--app-header-h)";
+
+  /**
+   * Whether the controls have actually docked, so the separator only appears when there is
+   * something above to separate from — a hairline floating mid-page reads as a stray border.
+   *
+   * A 1px sentinel + IntersectionObserver, not a scroll listener: this fires twice per page
+   * (dock and undock) instead of on every frame of a 1,833-row scroll.
+   */
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+  const [stuck, setStuck] = React.useState(false);
+  React.useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || headerBottom === null) return;
+    const io = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting), {
+      rootMargin: `-${headerBottom + 1}px 0px 0px 0px`,
+      threshold: 0,
+    });
+    io.observe(node);
+    return () => io.disconnect();
+  }, [headerBottom]);
+
   const reset = React.useCallback(() => {
     setQuery("");
     setCategory(null);
@@ -164,7 +244,10 @@ export default function DiscountPageClient() {
   );
 
   return (
-    <div className="ta-discount pt-[var(--app-header-h)]" style={{ background: "var(--dc-bg)" }}>
+    <div
+      className="ta-discount pt-[var(--app-header-h)] lg:pt-[var(--app-header-h-lg)]"
+      style={{ background: "var(--dc-bg)" }}
+    >
       <div
         className="relative"
         style={{ backgroundImage: "var(--dc-shell-image)" }}
@@ -184,19 +267,33 @@ export default function DiscountPageClient() {
             onOpenAccess={() => setAccessOpen(true)}
           />
 
-          <DiscountFilters
-            query={query}
-            onQueryChange={setQuery}
-            category={category}
-            onCategoryChange={setCategory}
-            openOnly={openOnly}
-            onOpenOnlyChange={setOpenOnly}
-            sort={sort}
-            onSortChange={setSort}
-            signedIn={signedIn}
-            resultCount={filtered.length}
-            onReset={reset}
-          />
+          {/* The controls stay reachable at any scroll depth — the list runs to 1,833 rows, and
+              having to scroll back to the top to change one filter is the failure this avoids.
+              It docks flush under the fixed site header (`--app-header-h`, and its taller `lg`
+              twin), and goes full-bleed with negative gutters so rows pass UNDER an opaque bar
+              rather than beside it. `sticky` on a flex child needs no extra wrapper; what it
+              does need is no `overflow` on any ancestor, which is why the page shell sets
+              none. */}
+          <div ref={sentinelRef} aria-hidden className="h-px" />
+          <div
+            className="ta-dc-stick sticky z-20 -mx-4 px-4 py-2.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+            style={{ top: stickyTop }}
+            data-stuck={stuck}
+          >
+            <DiscountFilters
+              query={query}
+              onQueryChange={setQuery}
+              category={category}
+              onCategoryChange={setCategory}
+              openOnly={openOnly}
+              onOpenOnlyChange={setOpenOnly}
+              sort={sort}
+              onSortChange={setSort}
+              signedIn={signedIn}
+              resultCount={filtered.length}
+              onReset={reset}
+            />
+          </div>
 
           <div className="flex flex-col gap-[9px]">
             {filtered.length === 0 ? (

@@ -252,3 +252,19 @@ assertions; do not "simplify" one away on the grounds that the other covers it.
 **Where this logic lives:** `src/services/attribution/signup-attribution.ts` (moved out of the route
 handler 2026-07-29, panel F-038 — `app/api/**` handlers hold no business logic). All three functions
 keep their original names. Covered by `npm run test:signup-attribution`.
+
+## Sign-out clears the Discounts nav badge — including the `guest` bucket (2026-08-05)
+
+`USER_LOCAL_PREFIXES` in [`total-sign-out.ts`](../../src/utils/auth/total-sign-out.ts) gained
+`discountNavNudgeSeen_`, the one-time "new" marker on the header's Discounts item.
+
+It is prefix-matched, so signing out clears **both** the per-user key and the shared
+`discountNavNudgeSeen_guest` one. That is the intended behaviour, not an oversight: on a shared
+device the next anonymous visitor should be treated as new rather than inherit the previous
+person's dismissal. It is also the only entry in that list whose key can exist for a signed-out
+visitor at all — `/discount` is public, so the marker is written before anyone has a `userId`.
+
+The general rule this follows is the standing one for this file: **a per-user breadcrumb in
+localStorage must never survive an auth boundary.** Anything new that records "this person has
+already seen X" gets its prefix added here in the same change, or the next member on a shared
+device silently inherits it and is never shown the feature.

@@ -18,8 +18,12 @@ import {
   fmtAu,
   nextLevelAbove,
   offersAtLevel,
+  resolveDiscountRoutes,
   PARTNER_CATALOG_TOTAL,
 } from "@/utils/partner-discounts/discount-catalogue";
+
+/** The cheapest membership tier's access level — what "See memberships" actually opens. */
+const ENTRY_LEVEL = 50;
 
 export interface DiscountAccessMeterProps {
   signedIn: boolean;
@@ -43,17 +47,33 @@ export default function DiscountAccessMeter({
   const openLabel = signedIn ? `Redeemable on your ${viewerPct}% access` : "Redeemable once you log in";
   const lockLabel = signedIn ? "Cannot redeem yet" : "Need a membership to redeem";
 
-  // The sub-line only earns its place when it adds a NUMBER the label does not already carry.
-  // Signed in that is the next rung's payoff ("55% makes 1,009 redeemable"), which is the one
-  // fact the member cannot work out from what is on screen. Signed out there is no such fact —
-  // the label and the figure above it already say everything, and the copy that used to sit
-  // here ("Every deal reads in full…") only restated the label in more words.
-  const openSub = signedIn ? `${viewerPct}% makes ${fmtAu(redeemable)} redeemable.` : null;
+  /**
+   * The sub-line earns its place only by carrying a NUMBER the label above it does not.
+   *
+   * Signed in that is the next rung's payoff. Signed out it is the entry price — the panel
+   * shows 0 of 1,833 and a "See memberships" button, and the one thing a visitor wants before
+   * pressing it is what the cheapest way in costs and buys. Both states share one sentence
+   * shape ("X makes N redeemable") so the panel reads the same before and after joining.
+   *
+   * The price is RESOLVED, never typed: it is the cheapest membership reaching the entry
+   * level, from the same resolver the unlock routes use, so a repricing cannot leave a stale
+   * number on the busiest surface on the page.
+   */
+  const entryRoute = signedIn
+    ? null
+    : (resolveDiscountRoutes(ENTRY_LEVEL, 0).find((r) => r.kind === "membership") ?? null);
+  const entryCount = offersAtLevel(ENTRY_LEVEL);
+
+  const openSub = signedIn
+    ? `${viewerPct}% makes ${fmtAu(redeemable)} redeemable.`
+    : "Every offer reads in full.";
   const lockSub = signedIn
     ? nextLevel !== null && nextCount !== null
       ? `${nextLevel}% makes ${fmtAu(nextCount)} redeemable.`
       : "Nothing locked — you are at 100%."
-    : null;
+    : entryRoute && entryCount !== null
+      ? `${entryRoute.name} at $${entryRoute.price}/mo makes ${fmtAu(entryCount)} redeemable.`
+      : null;
   const ctaLabel = signedIn ? (nextLevel !== null ? "Get more access" : "Open the portal") : "See memberships";
 
   return (

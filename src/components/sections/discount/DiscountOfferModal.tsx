@@ -350,14 +350,19 @@ export default function DiscountOfferModal({
             )}
           </div>
 
-          {/* ---- Footer ---- */}
+          {/* ---- Footer ----
+              "Back" only exists as the SECONDARY half of a pair. On its own it duplicated the
+              close button two inches above it and the scrim behind it — three ways to do one
+              thing, costing a full 50px row on a phone. When there is no primary action the
+              footer is simply not rendered. */}
+          {gate.ctaLabel && (
           <div className="flex w-full flex-col gap-[9px] sm:flex-row">
             <button
               type="button"
               onClick={onClose}
               className="ta-dc-btn flex items-center justify-center whitespace-nowrap font-sans font-extrabold"
               style={{
-                flex: gate.ctaLabel ? "none" : 1,
+                flex: "none",
                 minWidth: 0,
                 height: 50,
                 padding: "0 18px",
@@ -386,6 +391,7 @@ export default function DiscountOfferModal({
               />
             )}
           </div>
+          )}
 
           {gate.footNote && (
             <p
