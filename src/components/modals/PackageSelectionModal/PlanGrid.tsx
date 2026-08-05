@@ -93,10 +93,15 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, isCurrentPlan, isSelectedPla
         // One phrase at both densities — compact fits it by shrinking the type (7.5px in
         // PackageTile) rather than abbreviating, so the caption never changes meaning
         // between breakpoints.
+        // The full phrase names the thing being accessed — "10-day PARTNER discount access",
+        // not a bare "10-day discount access", which reads as a discount on the pack itself.
+        // Abbreviated only where the column genuinely cannot carry it (compact).
         const accessCaption =
           isMembershipTab || days <= 0
             ? "partner discount access"
-            : `${days}-day discount access`;
+            : compact
+              ? `${days}-day discount access`
+              : `${days}-day partner discount access`;
 
         return (
           <PackageTile
@@ -127,6 +132,7 @@ const PlanGrid: React.FC<PlanGridProps> = ({ plans, isCurrentPlan, isSelectedPla
             compact={compact}
             // Stats + footer side by side, so three stacked tiers fit without scrolling.
             wide={singleColumn}
+            accessFirst
             onSelect={() => onSelect(plan)}
           />
         );

@@ -34,7 +34,10 @@ const BenefitsPanel: React.FC<BenefitsPanelProps> = ({ selectedPackage }) => {
   const darkBg = `linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
   return (
     <div
-      className="rounded-2xl p-3 sm:p-4 my-3 sm:my-4"
+      // Top margin only. The panel is the LAST thing in the scroll column, so its bottom
+      // margin stacked with the footer's own spacing and left a visible dead band above the
+      // trust row.
+      className="rounded-2xl p-3 sm:p-4 mt-3 sm:mt-4"
       style={{
         ...getCardBorderStyle(colorScheme, darkBg),
         ...(!colorScheme.cardBorderGradient && { background: darkBg }),
