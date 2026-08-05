@@ -337,3 +337,11 @@ build, each for a stated reason:
   partner-offer language, a bare "15 free entries" reads as entries into the discount.
 - **The offer popup's "Back" button only renders beside a primary CTA.** Alone it duplicated
   the close button and the scrim — three ways to do one thing, costing a 50px row on a phone.
+
+### Catalogue page copy follows the "partner discounts" noun (2026-08-05)
+
+`/my-account/rewards/catalogue` now titles itself **"Partner discounts"** and loads with
+"Loading partner discounts…". The ROUTE keeps `/catalogue` — a URL change is a separate,
+riskier decision (links, analytics, the spotlight key) and the engine vocabulary is
+`partnerCatalog*` either way. See [docs/shared-ui/frontend.md](../shared-ui/frontend.md) for
+the layer split.

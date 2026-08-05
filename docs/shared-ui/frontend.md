@@ -1427,3 +1427,43 @@ falls back to a shared `guest` bucket and re-fires once after sign-in (deliberat
 means something different once you have an access level). The `discountNavNudgeSeen_` prefix is
 registered in [total-sign-out.ts](../../src/utils/auth/total-sign-out.ts) so it cannot follow
 the next person on a shared device.
+
+## Customer-facing noun is "partner discounts", not "partner catalogue" (2026-08-05)
+
+One concept had two names. The package tiles said **"partner discount access"** while the
+membership banner, tier cards, rewards card, mini-draw packs, dashboard preview and support
+sheet all said **"partner catalogue"** — so the same benefit read as two different products
+depending on which surface you landed on.
+
+**"Partner discounts" wins in customer-facing copy.** Twelve display strings were rewritten
+(`MiniDrawPackages`, `PartnerDiscountQueue`, `MiniDrawPackageModal`, `PartnerPreview`,
+`MembershipEntriesStack`, `MembershipHowItWorks`, `MembershipPortalReturnBanner`,
+`MembershipTierChooser`, `RewardsPartnerCard`, `SupportSheet`, the catalogue page title and
+its loader), plus Cobber's corpus.
+
+**Code identifiers keep `partnerCatalog*`** — `getPartnerCatalogAccessPercentForPlanId`,
+`PARTNER_CATALOG_TIER_COUNTS`, `resolvePartnerCatalogPlanId`, the `/my-account/rewards/catalogue`
+route. That is the engine term and renaming it buys nothing but churn; the naming rule asks for
+one name *per layer*, and this is the documented split between the two. When adding a customer
+string, say "partner discounts". When writing code against the data, say catalog.
+
+## Prize combination browser (2026-08-05)
+
+`MembershipPrizeChooser` showed only the default combo, which made a build-your-own prize look
+like a single Milwaukee bundle — and contradicted the bullet directly beside it ("Your pick of
+brand"). It now browses all **20** real toolbox x power-tool-kit pairings from
+`listPrizeSummaries()`:
+
+- Chevrons over the image, wrapping in both directions (a carousel that dead-ends teaches you
+  the boundary by doing nothing when pressed).
+- A thumbnail rail so every combo is **directly selectable** — 20 presses to reach the last one
+  is a chore, not a choice.
+- Opens on the catalogue's featured combo, not index 0.
+- Combos with no hero image are filtered out; an empty frame mid-carousel reads as broken.
+- The `<Image>` is keyed on src so switching swaps the element instead of holding the old photo
+  until the new one decodes.
+- Cash has nothing to browse, so the whole control is setup-only.
+
+**Layout trap:** the "Ultimate Tradie Setup" tag is anchored INSIDE the image frame. It used to
+hang off the outer column — the same box as the image, until the rail was added below it and
+`bottom-3` started measuring from the bottom of the rail, dropping the tag onto the thumbnails.

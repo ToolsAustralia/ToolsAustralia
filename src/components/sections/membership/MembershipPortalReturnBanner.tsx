@@ -128,7 +128,7 @@ export default function MembershipPortalReturnBanner({
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-8 lg:py-6">
           <div className="min-w-0 flex-1">
             <span className="inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#ff6b6b]">
-              <Store className="h-3.5 w-3.5" /> Partner catalogue
+              <Store className="h-3.5 w-3.5" /> Partner discounts
             </span>
             {/* Sized to the TALLEST settled variant, not to a guess (panel F-027):
                 the first pass reserved 24px/16px for a wrapping h2 + sub and the hero
@@ -200,7 +200,7 @@ export default function MembershipPortalReturnBanner({
       <div className="mx-auto flex max-w-7xl flex-col gap-4 px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-8 lg:py-6">
         <div className="min-w-0">
           <span className="inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#ff6b6b]">
-            <Store className="h-3.5 w-3.5" /> Partner catalogue
+            <Store className="h-3.5 w-3.5" /> Partner discounts
           </span>
           <h2 className="mt-1.5 font-poppins text-lg font-black leading-snug sm:text-xl">
             {view.headline}

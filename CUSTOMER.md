@@ -783,3 +783,12 @@ Customer-unique terms are defined here. For shared draw/billing terms (Anchor, M
 > modals are now lazily mounted — their payment-method and referral-profile fetches fire only
 > when the customer opens them, not on every dashboard load. Pure performance refactor; no
 > customer-visible behavior, data field, or lifecycle fact changed.
+
+**One name for the perk, everywhere (2026-08-05).** The same benefit was called "partner
+discounts" on some surfaces and "the partner catalogue" on others — package tiles said one, the
+membership banner, tier cards, rewards card, mini-draw packs and Cobber said the other. A
+customer reading both reasonably concludes they are two different products. Customer-facing copy
+now says **partner discounts** everywhere, including the chatbot; the `/my-account/rewards/catalogue`
+URL and the internal `partnerCatalog*` identifiers are unchanged, since those are engine terms a
+customer never sees. Nothing about the entitlement itself changed — same tiers, same percentages,
+same stacking rules (§7a above).

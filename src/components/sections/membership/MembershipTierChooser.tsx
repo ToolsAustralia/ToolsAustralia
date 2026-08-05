@@ -40,7 +40,7 @@ function TierCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
   const tint = dark ? "rgba(0,0,0,.07)" : "rgba(255,255,255,.08)";
   const seam = dark ? "rgba(28,20,3,.2)" : "rgba(255,255,255,.18)";
   const feats = [
-    `Unlocks ${access}% of the partner catalogue`,
+    `Unlocks ${access}% of partner discounts`,
     "Partner discounts stay live while subscribed",
     "Cancel anytime — no lock-in",
   ];

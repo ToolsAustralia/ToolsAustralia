@@ -110,3 +110,12 @@ public `/discount` page: that the catalogue is readable without an account, and 
 which offers a membership actually covers. The count assertion in
 `src/data/__tests__/faqs.test.ts` was bumped 76 → 78 deliberately — it is a double-entry check,
 not a formality. Re-run `npm run build:chat-knowledge-pack` after any corpus edit.
+
+## FAQ corpus vocabulary aligned (2026-08-05)
+
+Five answers in `supportChatFaqs.ts` said "partner catalogue" / "the catalogue"; they now say
+"partner discounts" (or "them", where the sentence already named the discounts). Cobber must not
+be the last surface using a retired noun — a member who reads "partner discounts" everywhere and
+then hears "catalogue" from the chatbot reasonably concludes they are two different things.
+Corpus size is unchanged at 78; `npm run build:chat-knowledge-pack` re-run and
+`npm run test:chat-faqs` green.

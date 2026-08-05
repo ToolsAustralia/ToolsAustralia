@@ -108,3 +108,9 @@ The bullet also carries the distinction the page is built on, because it is the 
 would otherwise get wrong: **reading an offer is free; access is what lets a member redeem it.**
 Cobber must never state a member's live access percentage or offer count (navigation only,
 never a data value — the map's standing rule).
+
+## Knowledge pack rebuilt for the discounts vocabulary (2026-08-05)
+
+`chatKnowledgePack.ts` regenerated after the FAQ corpus moved from "partner catalogue" to
+"partner discounts" (see [docs/config-and-data/README.md](../config-and-data/README.md)). No
+structural change — same 8 sections, ~12.5k tokens.
