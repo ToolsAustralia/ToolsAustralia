@@ -45,16 +45,36 @@ const TabSwitcher: React.FC<TabSwitcherProps> = ({
     },
   ];
 
+  // Sticky, and FLUSH on all three edges it meets.
+  //
+  // It was already `sticky top-0`, but only half-escaped its scroll container:
+  //   - `-mt-3` cancels the container's mobile `p-3`; nothing cancelled the `sm:p-6`, so on
+  //     desktop the bar docked 12px BELOW the header with page showing through the gap.
+  //   - nothing cancelled the horizontal padding, so the band stopped short of the modal
+  //     edges and tiles slid past it on both sides.
+  //
+  // Negative margins pull it to the container's edges; matching padding puts its own content
+  // back where it was, so the opaque band spans the full width at every breakpoint. Opaque,
+  // not translucent: tiles scroll under this, and a blurred backdrop still shows them moving.
+  //
+  // And the offset is NEGATIVE, not `top-0`. A scroll container's padding-top offsets its
+  // sticky children, so `top-0` docked the bar 25px down (1px border + 24px `sm:p-6`) with
+  // page visible in the gap. `-top-3 sm:-top-6` cancels exactly that, so the docked position
+  // matches the flow position and the bar is flush in BOTH states.
   return (
     // Sticky to the top of ModalContent's scroll area so the tab (and its multiplier badge)
     // stays reachable while scrolling a long pack list — previously it scrolled away and the
     // only way back was to scroll to the top.
     //
-    // The opaque background matches ModalContent's own (bg-white / dark:bg-neutral-950) so
-    // tiles pass UNDER it rather than showing through. pt-3 gives the badge's -18px overhang
+    // The background is the scroll body's own measured surface (#ffffff / #0a0a0a) so tiles
+    // pass UNDER it rather than showing through. Written as ARBITRARY values, not `bg-white`
+    // + `dark:bg-neutral-950`: globals.css has `.dark .modal-panel-body .bg-white` glassing
+    // every white chip in a dark modal to `rgb(38 38 38 / .4)`, and at (0,3,0) it out-specifies
+    // the `dark:` utility — the band went 40% transparent and tiles read straight through it.
+    // That rule's own comment prescribes this escape hatch. pt-3 gives the badge's -18px overhang
     // room to sit inside the sticky box; without it the starburst is clipped at the top edge
     // once the element pins. -mt-3 cancels that padding so nothing shifts at rest.
-    <div className="sticky top-0 z-20 -mt-3 mb-4 flex justify-center bg-white pb-2 pt-3 dark:bg-neutral-950 sm:mb-6">
+    <div className="sticky -top-3 z-20 -mx-3 -mt-3 mb-4 flex justify-center bg-[#ffffff] px-3 pb-2 pt-3 dark:bg-[#0a0a0a] sm:-top-6 sm:-mx-6 sm:-mt-6 sm:mb-6 sm:px-6 sm:pt-6">
       <div
         role="tablist"
         aria-label="Package type"
