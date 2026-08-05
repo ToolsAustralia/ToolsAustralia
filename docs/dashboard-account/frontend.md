@@ -897,3 +897,9 @@ independently — someone who dismissed the widget years ago should still be sho
 did not exist then. Both `partnerCatalogueSpotlightSeen_` and the portal's
 `ta.partnerPortal.handedOff` session marker are registered in `utils/auth/total-sign-out.ts`:
 per-user breadcrumbs must not follow the next person to sign in on a shared device.
+
+## Support sheet FAQ wording (2026-08-05)
+
+The "How do partner discounts work?" answer in `SupportSheet` said "a percentage of our partner
+catalogue"; it now says "our partner discounts", matching the noun used on every other
+customer-facing surface. See [docs/shared-ui/frontend.md](../shared-ui/frontend.md).

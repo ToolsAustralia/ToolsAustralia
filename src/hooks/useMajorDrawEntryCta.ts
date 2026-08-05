@@ -333,18 +333,29 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
         // empty payment step. Opting out (`packageSelectionFirst: false`) is for callers that must
         // land straight on a specific plan.
         //
-        // Skipped on the two paths where a membership tier is the wrong pre-select anyway: a
-        // blocking subscription cannot buy a second subscription, and `?packages=one-time` means
-        // the visitor is looking at the one-time tab. Both keep pre-selecting the pack that
-        // matches their situation.
-        if (packageSelectionFirst && !hasBlockingSubscription(userData) && !forcedOneTime) {
-          const recommendedPlan = getRecommendedSubscriptionPlan();
+        // `?packages=one-time` no longer SKIPS the picker (2026-08-04). It used to, on the
+        // reasoning that a membership tier is the wrong pre-select for a one-time visitor —
+        // true, but the fix is to pre-select a one-time PACK and let the picker open on that
+        // tab, not to send those visitors down a different number of steps. The picker
+        // derives its tab from the plan it is handed (`currentPlan.period`), so passing the
+        // one-time plan lands them exactly where they were looking, with the same flow
+        // everyone else gets.
+        //
+        // Still skipped for a blocking subscription: that visitor cannot create a second
+        // subscription at all, so the picker's membership tab would offer them nothing
+        // payable.
+        if (packageSelectionFirst && !hasBlockingSubscription(userData)) {
+          // Fall back to the subscription default when no one-time plan has resolved yet,
+          // so a slow package fetch never opens the picker with nothing selected.
+          const preselectedPlan = forcedOneTime
+            ? getOneTimePlan() ?? getRecommendedSubscriptionPlan()
+            : getRecommendedSubscriptionPlan();
           if (openLocalModal) {
-            membershipModal.openModalWithPackageSelectionFirst(recommendedPlan);
+            membershipModal.openModalWithPackageSelectionFirst(preselectedPlan);
           } else if (typeof window !== "undefined") {
             window.dispatchEvent(
               new CustomEvent("openMembershipModal", {
-                detail: { plan: recommendedPlan, packageSelectionFirst: true },
+                detail: { plan: preselectedPlan, packageSelectionFirst: true },
               })
             );
           }

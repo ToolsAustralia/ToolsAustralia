@@ -87,7 +87,7 @@ export default function RewardsPartnerCard({
             // Makita and Ryobi all return zero offers in the portal). State the real count.
             unlocked.count != null
             ? `${fmtAu(unlocked.count)} of ${fmtAu(unlocked.total)} partner offers, on your account`
-            : "of the partner catalogue, on your account";
+            : "of partner discounts, on your account";
 
   return (
     <section>

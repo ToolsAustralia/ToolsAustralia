@@ -524,6 +524,32 @@ iframe, no page they ever see) and then send the tab they already have open stra
 offer. What they experience is a tab opening on "Opening your offer…" for a moment, then the
 deal.
 
+**Anyone can browse the deals now — `/discount`, no account needed (2026-08-05).** The
+catalogue above is the *member's* view and answers "what can I use". A second, **public** page
+answers the question a visitor has instead: "what is actually in there?" It lists the same
+1,833 offers plus the 7 direct partners, and every offer — name, category, value line, artwork
+— reads in full **signed out**. Nothing about a deal is withheld.
+
+What a membership buys is the ability to **redeem**, and the page is built to make exactly that
+distinction visible rather than argue it: offers are stacked into bands by the access level each
+one needs, and at the customer's own limit a **wall** is drawn across the list — *"Your access
+stops at 50% · 916 you cannot redeem yet"*. A signed-out visitor meets that wall at the very
+top, reading *"Readable below — a membership is what lets you claim them"*.
+
+Tapping a locked offer opens a popup that names the level it needs and shows the **two cheapest
+ways to reach it** — a membership and a one-time pack — so a customer who does not want a
+subscription is never left without a route. A redeemable offer hands them to the portal by the
+same one-tap flow as the member catalogue. Nothing on the page prices entries, and nothing
+frames the draws as anything other than free entries into prize draws (rule 11), which
+`npm run test:discount-catalogue` asserts over every generated string.
+
+**Two honesty constraints hold here as well as on the member page.** The footer says *"A slice
+of our snapshot. The portal has offers our list does not"* and the empty state says *"Nothing in
+our list matches that"* — never that an offer does not exist, because our snapshot is known to
+be missing offers the portal carries. And where the vendor's artwork shows a different trading
+name than the offer, the popup says so in plain words rather than leaving the customer to
+wonder whether they misread it.
+
 - **Normal case** — one tap, lands on the offer, no visible sign-in step at all.
 - **If the invisible sign-in cannot run** (the customer's browser blocks it, or we are not on a
   `toolsaustralia.com.au` origin) they land on the portal home instead and the catalogue tells
@@ -757,3 +783,12 @@ Customer-unique terms are defined here. For shared draw/billing terms (Anchor, M
 > modals are now lazily mounted — their payment-method and referral-profile fetches fire only
 > when the customer opens them, not on every dashboard load. Pure performance refactor; no
 > customer-visible behavior, data field, or lifecycle fact changed.
+
+**One name for the perk, everywhere (2026-08-05).** The same benefit was called "partner
+discounts" on some surfaces and "the partner catalogue" on others — package tiles said one, the
+membership banner, tier cards, rewards card, mini-draw packs and Cobber said the other. A
+customer reading both reasonably concludes they are two different products. Customer-facing copy
+now says **partner discounts** everywhere, including the chatbot; the `/my-account/rewards/catalogue`
+URL and the internal `partnerCatalog*` identifiers are unchanged, since those are engine terms a
+customer never sees. Nothing about the entitlement itself changed — same tiers, same percentages,
+same stacking rules (§7a above).

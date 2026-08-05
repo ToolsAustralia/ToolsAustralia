@@ -193,7 +193,12 @@ export default function ElectricPackageCard({
             </div>
 
             <div className="mt-1.5 w-full text-center text-[9px] font-semibold uppercase tracking-[0.16em] text-white/55">
-              {plan.period === "one-time" ? "One Time Payment" : "Per Giveaway"}
+              {/* Landing/section cards say "per month · cancel anytime" — a visitor who has
+                  not joined yet needs the billing cadence and the no-lock-in reassurance.
+                  The MODALS keep "Per Giveaway" (see PlanSummaryCard): by then the visitor
+                  is buying, and what matters is which draw the payment buys into.
+                  /terms defines "per giveaway" = per calendar month, so the two agree. */}
+              {plan.period === "one-time" ? "One Time Payment" : "per month · cancel anytime"}
             </div>
 
             {discount && (

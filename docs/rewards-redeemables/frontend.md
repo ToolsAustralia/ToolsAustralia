@@ -96,3 +96,29 @@ telling. Any third nudge should add its own pair rather than reuse either.
 Both prefixes are registered in [`utils/auth/total-sign-out.ts`](../../src/utils/auth/total-sign-out.ts);
 a per-user "seen" flag that survives sign-out hides the feature from the next member on a shared
 device. Behaviour and the reduced-motion gate: [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+
+## Spotlight storage now also backs the Discounts nav badge (2026-08-05)
+
+[`src/utils/rewards-widget-spotlight-storage.ts`](../../src/utils/rewards-widget-spotlight-storage.ts)
+gained a third marker, `hasSeenDiscountNavNudge` / `markDiscountNavNudgeSeen`, for the "new"
+badge on the header's **Discounts** item (`/discount`). It lives beside the rewards-widget and
+partner-catalogue spotlights because it is the same mechanic; it is a **separate key** for the
+same reason those two are separate — features must be retirable independently, and someone who
+dismissed one should still be shown a surface that did not exist then.
+
+Two differences from its siblings, both deliberate:
+
+- **`userId` is nullable.** `/discount` is a public page, so the visitor most worth nudging has
+  no account. Signed-out visitors share a `guest` bucket (`discountNavNudgeSeen_guest`);
+  signing in moves them to their own key, so the badge fires once more for the same person as a
+  member. That re-fire is intended — the page means something different once you have an access
+  level to measure against.
+- **The write is wrapped in try/catch.** It runs from a nav click handler, where a private-mode
+  `QuotaExceededError` would otherwise throw inside navigation. A cosmetic repeat of the badge
+  is a far better failure than a broken menu.
+
+The `discountNavNudgeSeen_` prefix is registered in
+[`utils/auth/total-sign-out.ts`](../../src/utils/auth/total-sign-out.ts) — see
+[docs/auth/gotchas.md](../auth/gotchas.md). Consumed by
+[`useNavNudges`](../../src/hooks/useNavNudges.ts); behaviour and the news-vs-status distinction
+are documented in [docs/shared-ui/frontend.md](../shared-ui/frontend.md).

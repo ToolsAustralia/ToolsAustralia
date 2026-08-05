@@ -145,21 +145,16 @@ export default function PartnerBrandWall({
 
       {/* Header */}
       <div className="mx-auto flex max-w-[820px] flex-col items-center gap-[18px] px-[26px] pb-10 pt-[46px] text-center">
-        <span className="inline-flex items-center gap-[9px] font-sans text-[11px] font-extrabold uppercase leading-none tracking-[0.2em] text-[var(--bw-eyebrow)]">
-          <span
-            aria-hidden
-            className="h-[7px] w-[7px] rounded-full bg-[var(--bw-pip)] motion-safe:animate-[ta-pulse-dot_2.1s_cubic-bezier(.22,1,.36,1)_infinite]"
-          />
-          Partner network · live
-        </span>
-
         <Odometer count={count} />
 
-        {/* Says what the number IS. The handoff read "PARTNER BRANDS · ONE CARD" — both
-            halves were wrong for us: these are OFFERS not brands (the direct brand list is
-            7), and we issue no card, the membership is the key. */}
+        {/* Says what the number IS, and nothing more. The handoff read "PARTNER BRANDS · ONE
+            CARD"; both halves were wrong for us — these are OFFERS, not brands (the direct
+            brand list is 7), and we issue no card. "· one membership" was the first attempt
+            at replacing "one card" and read as a quantity ("one membership offer?"), which
+            is exactly the confusion a label under a big number cannot afford. The scope is
+            already carried by the headline right below it. */}
         <span className="font-sans text-[11.5px] font-extrabold uppercase leading-none tracking-[0.3em] text-[var(--bw-sub)]">
-          Partner offers · one membership
+          Partner offers Australia-wide
         </span>
 
         <h2

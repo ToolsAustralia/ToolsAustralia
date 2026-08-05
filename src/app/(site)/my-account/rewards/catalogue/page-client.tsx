@@ -193,7 +193,7 @@ export default function RewardsCataloguePage() {
   const openCount = React.useMemo(() => prepared.filter((o) => o.pct <= accessPct).length, [prepared, accessPct]);
 
   if (status === "loading" || dash.isLoading) {
-    return <DashboardLoader label="Loading the partner catalogue…" />;
+    return <DashboardLoader label="Loading partner discounts…" />;
   }
   if (!session) {
     return (
@@ -209,7 +209,7 @@ export default function RewardsCataloguePage() {
   return (
     <div className="w-full min-w-0 max-w-full overflow-x-hidden pb-8">
       <DashboardPageHeader
-        title="Partner catalogue"
+        title="Partner discounts"
         sub="What your access opens"
         icon={Gift}
         stateTheme={dash.stateTheme}

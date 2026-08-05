@@ -1,5 +1,79 @@
 # Shared UI — Patterns
 
+## PackageTile — the package-modal card — 2026-08-04
+
+`src/components/modals/PackageTile.tsx` is the single package card rendered by **both**
+package modals (`PackageSelectionModal/PlanGrid`, `SpecialPackagesModal/PackagesGrid`),
+from the "Package Selection + Special Packages modals" handoff. It replaced
+`PackageSelectionModal/{PlanCard,FeaturesPreview}` — **both deleted**, not left orphaned.
+
+Three engraved bands over a glossy tier fill: identity → stats (hero entries + catalogue-
+access ring) → footer (price + CTA, with the ribbon and discount tag riding the CTA's top
+edge). Bands butt directly together; the separation is a seam (`border-top` + inset
+highlight), never padding.
+
+**One hex drives the whole card.** `glossFill`, `needsDarkInk` and `shadeHex` live in
+`packageColorScheme.ts`. `needsDarkInk` thresholds relative luminance at 0.62, which is why
+the amber Foreman and lime Tradie-pack tiles carry **black** ink while cyan/red/blue carry
+white — never hardcode `#fff` on this card.
+
+**Rules that are easy to get wrong:**
+- **`isCurrent` suppresses the selected treatment** (`selected = isSelected && !isCurrent`),
+  or the modal dresses the plan the user already owns as their active choice.
+- **A current plan shows no ribbon** — the CTA already reads "Current plan"; a CURRENT tag
+  on top says it twice.
+- **A compact tile never shows both overlays.** The discount tag renders only when
+  `hasDiscount && (!compact || !ribbon)`; with a ribbon, the struck price carries the
+  discount alone. Two pills on a ~152px button is the congestion the redesign fixed.
+- **Band 2's third column is a fixed px width, not `auto`** — an `auto` column gets squeezed
+  by the `1fr` and the access caption collapses onto three lines.
+- The CTA is **44px at every breakpoint** (mobile tap target).
+
+`packageCardSurface.ts` still owns the *section* card and the selected-package summary — the
+two systems now coexist deliberately; see the note in that file.
+
+### Package copy conventions — 2026-08-05
+
+Two strings differ **by surface on purpose**. Both look like inconsistencies at a glance, so
+neither should be "fixed" to match the other without reading this.
+
+**Period label.**
+
+| Surface | Subscription label |
+| --- | --- |
+| Membership section / landing cards (`ElectricPackageCard`) | `per month · cancel anytime` |
+| Modals (`PackageTile` via `PlanGrid`, `PlanSummaryCard`) | `Per Giveaway` |
+
+A visitor on a landing card has not joined yet and needs the billing cadence plus the
+no-lock-in reassurance. By the modal they are buying, and the useful fact is which draw the
+payment enters. These are not contradictory —
+[`/terms`](../../src/app/(site)/terms/page.tsx) states *"Per giveaway" means per calendar
+month*, so the two are defined as equivalent. One-time packs read `One Time` / `One Time
+Payment` on every surface.
+
+**Access-ring caption** — `catalogue access` was replaced everywhere (2026-08-05) with
+partner-discount wording, to match the terms and the rest of the site:
+
+| Context | Caption |
+| --- | --- |
+| Membership tiers, and any pack with no day window | `partner discount access` |
+| One-time pack, comfortable density | `{n}-day discount access` |
+| One-time pack, compact density | `{n}-day access` |
+
+The shortened forms exist because the ring's column is a fixed 96px (80px compact) — see the
+fixed-width note above — and a day-count prefix pushes the full phrase past it. Shorten
+rather than truncate.
+
+Note the word "catalogue" survives legitimately in **code**, describing the numeric
+percentage and the vendor catalogue itself (`getPartnerCatalogAccessPercentForPlanId`,
+`PARTNER_CATALOG_TOTAL`, `PackageTile`'s `accessPct` doc). Only customer-visible *strings*
+changed.
+
+**Not yet done from that handoff:** the modal *chrome* — shell gradient/border, the header
+and promo banner, the gold tab pills, the benefits panel restyle, the accent Buy button and
+trust strip. Only the tile and the two grids landed. The tile is the piece that makes both
+modals match the membership cards; the chrome is a second pass.
+
 ## PartnerBrandWall — odometer + conveyor belts — 2026-08-04
 
 `src/components/sections/PartnerBrandWall.tsx` is the partner-network section rendered by

@@ -127,8 +127,10 @@ const toolsAustraliaLogo = "/images/Tools%20Australia%20Logo/Primary%20Logo.webp
 
 interface UnlockDiscountsProps {
   showUnlockButton?: boolean;
-  title?: string;
-  description?: string;
+  // `title` / `description` removed 2026-08-04: the brand wall above owns the section's
+  // eyebrow, headline and CTA, so rendering them here duplicated the copy. The old default
+  // description ("1,800+ Australian brands") lives on in the wall's odometer, which reads
+  // the real PARTNER_CATALOG_TOTAL rather than a hardcoded string.
   hasAccess?: boolean; // Whether user has access to partner discounts
   /** Optional package theme to use when user has active package (Partner Discounts section on my-account) */
   packageTheme?: PromoLandingTheme;
@@ -137,12 +139,9 @@ interface UnlockDiscountsProps {
 }
 
 export default function UnlockDiscounts({
-  showUnlockButton = true,
-  title = "Unlock Partner Discounts",
-  // Was "from Australia's top tool brands" — the partner catalogue returns zero offers for
-  // Milwaukee, DeWalt, Makita and Ryobi (audit 2026-07-31), so that claim set an expectation
-  // the catalogue cannot meet. Breadth is the real, defensible sell.
-  description = "Get instant access to exclusive discounts from 1,800+ Australian brands",
+  // Default flipped to false: the brand wall above now owns the section's CTA, so leaving
+  // this on rendered two "unlock" buttons stacked on every public promo page.
+  showUnlockButton = false,
   hasAccess = false, // Default to false for public pages
   packageTheme,
   className,
@@ -187,12 +186,11 @@ export default function UnlockDiscounts({
       />
 
       <div className="w-full px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        {/* Section Header */}
-        <div className="text-center mb-8 sm:mb-12">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white font-sans mb-3 sm:mb-4 drop-shadow-lg">
-            {title}
-          </h2>
-          <p className="text-base sm:text-lg text-gray-700 dark:text-neutral-400 font-['Inter'] max-w-2xl mx-auto">{description}</p>
+        {/* No section header here — the brand wall above already carries the eyebrow,
+            headline and CTA. Rendering the old "Unlock Partner Discounts" title and the
+            "ENTER TO UNLOCK DISCOUNT" button as well said the same thing twice, which on a
+            public promo page (hasAccess=false, so no grid) was the entire section. */}
+        <div className="text-center mb-8 sm:mb-12 empty:mb-0">
           {hasAccess && showPartialCatalogNote && (
             <p
               className="text-sm sm:text-base font-medium mt-3 font-['Inter'] max-w-2xl mx-auto"
@@ -301,7 +299,8 @@ export default function UnlockDiscounts({
           </div>
         )}
 
-        {/* Enter to Unlock Button - Conditionally rendered */}
+        {/* Enter to Unlock Button. Suppressed by default now that the brand wall carries the
+            section CTA — a caller must opt back in to render a second one. */}
         {showUnlockButton && (
           <div className="text-center mt-8 sm:mt-12">
             <button

@@ -1313,3 +1313,204 @@ Design of record: `claudeDesign/Membership milestone streak design` (Build Kit).
 It had been **permanently unreachable**: the manager rendered it with a hard-coded `isOpen={false}` next to a `// This would be controlled by pixel consent logic` placeholder, and both its Accept and Decline handlers merely closed it — Decline gated no pixel. Tools Australia deliberately runs **without a consent banner**; `hasPixelConsent()` in `src/components/PixelTracker.tsx` hard-returns `true` ("auto-accept mode"). A consent control that cannot appear, and would not work if it did, is worse than none — it implies a choice the visitor does not have.
 
 **Do not re-add a consent modal as a UI task.** Real gating means pixels must not load until consent, Decline must block both the browser pixels and the server-side CAPI sends, and consent must persist. Full requirements + the expected drop in measured conversions: [docs/tracking/rules.md R9](../tracking/rules.md).
+
+## Discount catalogue components (2026-08-05)
+
+[`src/components/sections/discount/`](../../src/components/sections/discount/) — the section
+components for `/discount`. Domain rules, data contract and the reasoning behind the banding
+live in [docs/partner/frontend.md](../partner/frontend.md); this entry is the component map.
+
+| File | What it owns |
+|---|---|
+| `DiscountAccessMeter.tsx` | The gold panel: redeemable vs locked counts, the access bar, the "Get more access" CTA |
+| `DiscountFilters.tsx` | Search, sort dropdown, "only what I can use", category chips, and the mobile filter bottom sheet |
+| `DiscountOfferList.tsx` | Banded list, band headers, the wall marker, and the offer row |
+| `DiscountOfferModal.tsx` | The offer popup and its locked/redeemable gate |
+| `DiscountAccessModal.tsx` | "More access" — the level stepper over the two routes |
+| `DiscountPrimitives.tsx` | Access bar, artwork plate, category tag, and the two-route block — each used by BOTH the list and the popups |
+
+`DiscountPrimitives` is one file on purpose: four leaves, each too small to earn its own file
+and each shared by at least two callers. Anything with its own state or layout responsibility
+got a file instead.
+
+**Popups use `Z_INDEX.MODAL_BASE`**, not a local number. They first shipped at a hand-picked
+`z-[9500]`, which is above the documented chat-widget layer (9000) but still let the widget
+paint over the mobile sheet's sticky CTA. Use the constant.
+
+**Breakpoint-dependent entrance is a media query, not a Tailwind variant.** `.ta-dc-popup` and
+`.ta-dc-panel` are hand-authored classes, so `sm:ta-dc-drop` emits nothing and every viewport
+silently gets the mobile sheet slide. Both live in `globals.css` with a real
+`@media (min-width: 640px)` block.
+
+### `PackageTile` gained `ctaLabel`
+
+[`PackageTile`](../../src/components/modals/PackageTile.tsx) now takes an optional `ctaLabel`.
+Default behaviour is unchanged ("Select" / "Selected" / "Current plan"); the override exists
+because a tile rendered ALONE as a route to buy is making a different offer than a tile in a
+chooser — "Get Foreman" rather than "Select". Selection styling is untouched.
+
+### Header gained a "Discounts" nav entry (2026-08-05)
+
+`Header.tsx` links `/discount` in both the desktop nav and the mobile sidebar, placed
+**before** "Become a Partner". The two were reading as the same thing while only the latter
+existed: one is a member benefit to browse, the other an inbound business application. Mobile
+uses the `Tag` glyph against the partner entry's `Handshake`.
+
+### `/discount` sticky controls, and the body-overflow fix they needed (2026-08-05)
+
+The search + filter row docks under the site header at any scroll depth. Two non-obvious
+things make it work, both worth keeping:
+
+1. **`body` had `overflow-x: hidden`, which silently disabled `position: sticky` site-wide.**
+   Setting `overflow-x: hidden` forces the computed `overflow-y` to `auto`, making `<body>` a
+   scroll container; every sticky descendant then resolves against body's scrollport, which
+   never scrolls. `globals.css` now uses **`overflow-x: clip`** — same visual clipping, no
+   scroll container. Nothing reads `body.scrollTop/scrollLeft`, so nothing else depended on it.
+   Any sticky UI added anywhere in the app depends on this staying `clip`.
+2. **The dock offset is MEASURED, not `var(--app-header-h)`.** That constant is the reserved
+   padding for the header alone; the dismissible announcement bar above it makes the real
+   bottom edge taller, and docking at the constant leaves a strip of page scrolling in the
+   gap. The page measures `.site-header header` — the FIXED child, since the wrapper is
+   `static, h=0` by design — and re-measures via `ResizeObserver`. It arrives after a Suspense
+   boundary, so a `MutationObserver` waits for it; measuring the empty fallback yields 0 and
+   docks the bar *behind* the header. Verified flush (gap = 0px) at 390px and 1320px.
+
+## Header IA restructure + nav nudges (2026-08-05)
+
+**Order is by visitor intent, not page inventory:**
+`Home · Giveaways▾ · Membership · Discounts · Results▾ · Shop · Explore▾`
+
+Giveaways (the product) → Membership (the conversion) → Discounts (the benefit that justifies
+the price) → Results (the proof, read *after* the pitch) → Shop → Explore.
+
+- **`Explore▾`** absorbs Become a Partner, FAQ and Contact. They were peers of Membership while
+  serving a different intent, which flattened the nav into "every page that exists". `isExploreActive()`
+  keeps the parent lit on any child route.
+- **Shop is second-to-last**, deliberately. It is still "coming soon"; a top-three slot pointing
+  at an unfinished surface spends the most valuable space on the page to disappoint someone.
+- **Results stayed top-level** rather than folding into Giveaways. They are topically adjacent
+  but opposite in intent — Giveaways is "what can I win", Results is "did they actually pay
+  out". Burying the proof two clicks deep hides it from the skeptical first-timer who needs it.
+- **Measured**: 7 items render on one line at 1024 / 1280 / 1440px (max item height 40px, nav
+  72px). The previous 8-item row wrapped "Become a Partner" to three lines at 1024 and 1280,
+  taking the header to ~85px. Re-check these three widths before adding an item.
+
+**Hover opens the dropdowns** (`openOnHover` / `closeOnHover`), *in addition to* click — click
+must keep working for touch and keyboard. Two details are load-bearing: the close is delayed
+140ms and cancelled on re-enter, because the panel sits `mt-2` below the button and closing on
+the raw `mouseleave` shuts the menu while the cursor is crossing that 8px gap; and the whole
+thing is gated on `(hover: hover) and (pointer: fine)`, because a tap fires a synthetic
+mouseenter and the same tap's click would immediately close what it just opened.
+
+### The two nav indicators — [useNavNudges](../../src/hooks/useNavNudges.ts)
+
+Both navs read one hook, so the desktop row and the mobile drawer cannot disagree.
+
+| | Discounts | Giveaways |
+|---|---|---|
+| Kind | **News** — a surface you have not seen | **Status** — a draw is running now |
+| Look | static gold dot / "New" pill | red pulsing dot / "Live" pill |
+| Dismissible | yes, once | **no** |
+| Clears | on ARRIVAL at `/discount` | on its own, when the draw stops being `active` |
+
+Status is not dismissible on purpose: it stops being true by itself, and letting a member mute
+it would switch off the one signal that the thing they joined for is happening. Only `active`
+counts — a `frozen` or `completed` draw is not something they can act on, and a live dot
+pointing at a closed gate is worse than no dot.
+
+The **hamburger inherits** `anyOnMobile` — it is a container, not a subject, so it never carries
+news of its own and hides the dot while the drawer is open. Red beats gold when both apply.
+
+**Storage is localStorage, not sessionStorage** — sessionStorage clears on tab close, so a
+"new" badge would return on every visit and stop meaning new. `/discount` is public, so the key
+falls back to a shared `guest` bucket and re-fires once after sign-in (deliberate: the page
+means something different once you have an access level). The `discountNavNudgeSeen_` prefix is
+registered in [total-sign-out.ts](../../src/utils/auth/total-sign-out.ts) so it cannot follow
+the next person on a shared device.
+
+## Customer-facing noun is "partner discounts", not "partner catalogue" (2026-08-05)
+
+One concept had two names. The package tiles said **"partner discount access"** while the
+membership banner, tier cards, rewards card, mini-draw packs, dashboard preview and support
+sheet all said **"partner catalogue"** — so the same benefit read as two different products
+depending on which surface you landed on.
+
+**"Partner discounts" wins in customer-facing copy.** Twelve display strings were rewritten
+(`MiniDrawPackages`, `PartnerDiscountQueue`, `MiniDrawPackageModal`, `PartnerPreview`,
+`MembershipEntriesStack`, `MembershipHowItWorks`, `MembershipPortalReturnBanner`,
+`MembershipTierChooser`, `RewardsPartnerCard`, `SupportSheet`, the catalogue page title and
+its loader), plus Cobber's corpus.
+
+**Code identifiers keep `partnerCatalog*`** — `getPartnerCatalogAccessPercentForPlanId`,
+`PARTNER_CATALOG_TIER_COUNTS`, `resolvePartnerCatalogPlanId`, the `/my-account/rewards/catalogue`
+route. That is the engine term and renaming it buys nothing but churn; the naming rule asks for
+one name *per layer*, and this is the documented split between the two. When adding a customer
+string, say "partner discounts". When writing code against the data, say catalog.
+
+## Prize combination browser (2026-08-05)
+
+`MembershipPrizeChooser` showed only the default combo, which made a build-your-own prize look
+like a single Milwaukee bundle — and contradicted the bullet directly beside it ("Your pick of
+brand"). It now browses all **20** real toolbox x power-tool-kit pairings from
+`listPrizeSummaries()`:
+
+- Chevrons over the image, wrapping in both directions (a carousel that dead-ends teaches you
+  the boundary by doing nothing when pressed).
+- A thumbnail rail so every combo is **directly selectable** — 20 presses to reach the last one
+  is a chore, not a choice.
+- Opens on the catalogue's featured combo, not index 0.
+- Combos with no hero image are filtered out; an empty frame mid-carousel reads as broken.
+- The `<Image>` is keyed on src so switching swaps the element instead of holding the old photo
+  until the new one decodes.
+- Cash has nothing to browse, so the whole control is setup-only.
+
+**Layout trap:** the "Ultimate Tradie Setup" tag is anchored INSIDE the image frame. It used to
+hang off the outer column — the same box as the image, until the rail was added below it and
+`bottom-3` started measuring from the bottom of the rail, dropping the tag onto the thumbnails.
+
+## `PackageTile` wide variant — compacted so all three tiers fit unscrolled (2026-08-05)
+
+The wide tile exists so the membership modal shows all three tiers at once. It had drifted to
+**182px each (573px total)** and was scrolling. Now **152px each (483px total)** — a 90px
+saving, with no information removed. What changed, and why each one:
+
+- **Identity band is a single row**: icon + name left, price + period right, baseline-aligned.
+  The price used to stack over its period, which forced the band to two lines of type on the
+  one variant whose purpose is being short. Band padding drops to `9px 17px`.
+- **`was N` moved inline AFTER the boosted figure** ("150 was 15") instead of sitting above it.
+  That is the order a member says out loud, and it removed a whole row.
+- **Price stays out of the footer column** on wide. That column carries the button plus two
+  pills that overlay its top edge (ribbon upper-left, discount tag upper-right); a price row
+  there means three things in ~190px *and* another line of height.
+- **The access dial shrinks** (48px ring, 8.5px caption at `line-height: 1.1`). It was the
+  tallest thing in the stats band because its caption wraps to two or three lines.
+
+- **The multiplier starburst is ABSOLUTE**, pinned to the entries column's upper right. In flow
+  it cost height twice: it set the baseline row's height, and once that row ran out of width it
+  WRAPPED to a second line and landed on "FREE ENTRIES" — which is how one tile in a set ended
+  up 20px taller than its siblings (measured: `"1000" + "was 100" + a 56px starburst` = 178px of
+  content in a ~177px column). Out of flow it costs nothing and cannot wrap, whatever the
+  number. It stays `wide`-gated and `pointer-events-none`: free of height cost does not make it
+  worth repeating across the six-pack compact grid, where it is too small to read.
+
+### The width budget on a wide tile (2026-08-05)
+
+The band is one row of three columns and they trade against each other. Getting the access
+dial onto a single line only worked once the CTA column gave width back:
+
+| Column | Was | Now | Why |
+|---|---|---|---|
+| CTA footer | 190px | **152px** | 190 was generous for a button reading "Select". The two overlay pills still fit: "RECOMMENDED" (~78px) + a discount tag (~40px) inside 152 with the 10px insets. |
+| Access dial | 96px stacked | **124px inline** | Ring left, caption right, centred on a shared middle line. Costs the height of the ring alone instead of ring + two or three wrapped caption lines. |
+| Entries | ~177px | ~150px | Absorbs the difference. Reserves a 32px lane on the right for the absolute starburst. |
+
+Result: **182px per tile → 145px**, three tiles 573px → 464px, and the hero figure went back
+UP to 29px rather than staying shaved at 26.
+
+**The CTA stays 44px tall.** It is the mobile tap target, and the membership tab renders
+`compact && wide` on a phone — shortening it to save 4px of tile height would trade an
+accessibility floor for almost nothing.
+
+**Verified on the real modal** (`/dev/modals` → PackageSelectionModal), not a mock: three tiles
+at 145px each, entries row on ONE line (26px), the starburst clearing the struck value by
+36–63px, and every ribbon inside its button.

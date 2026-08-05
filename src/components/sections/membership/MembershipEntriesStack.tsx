@@ -124,7 +124,7 @@ export default function MembershipEntriesStack() {
           <div>
             <h3 className="font-poppins text-2xl font-extrabold">Your member discounts live in one partner portal.</h3>
             <p className="mt-3 text-white/70">
-              Open it straight from your account — your tier sets how much of the partner catalogue you unlock.
+              Open it straight from your account — your tier sets how many partner discounts you unlock.
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <MetallicButton
@@ -135,7 +135,11 @@ export default function MembershipEntriesStack() {
                 className="whitespace-nowrap !rounded-xl !px-5 !text-sm sm:!rounded-full sm:!px-8 sm:!text-base"
                 icon={<ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />}
               >
-                Start stacking entries
+                {/* The button has to promise what the block above it is selling. This panel is
+                    about the partner portal and how much of it a tier opens; "Start stacking
+                    entries" was inherited from the entries half of the section and left the
+                    CTA answering a question nobody had just been asked. */}
+                See what your tier unlocks
               </MetallicButton>
             </div>
           </div>

@@ -667,14 +667,19 @@ scroll containers, and any `position: sticky` descendant sticks to *them* rather
 viewport. Since the window is what actually scrolls, such an element just scrolls away.
 
 This is what broke the dashboard's sticky sidebar (full write-up, with measurements:
-[dashboard-account/gotchas.md](../dashboard-account/gotchas.md)). It is fixed **only for the
-account layout** so far, via `overflow-x: clip` — which clips exactly the same way but creates
-no scroll container.
+[dashboard-account/gotchas.md](../dashboard-account/gotchas.md)). The fix is `overflow-x: clip`
+— it clips exactly the same way but creates no scroll container.
 
-**Before adding a `sticky` element anywhere else**, check it actually sticks; if not, this is
-almost certainly why, and the fix is `clip` on the offending ancestor rather than anything on
-the element. Changing the global base rule would fix every route at once — worth doing
-deliberately, weighing that `clip` also forbids programmatic horizontal scrolling.
+**Resolved site-wide 2026-08-04**: the base rule is now `body { overflow-x: clip }` (both the
+base declaration and the mobile media-query copy), so sticky works on every route rather than
+just the account layout. `html` deliberately keeps `hidden` — the root element propagates its
+overflow to the viewport instead of becoming a separate scroll container, so it was never the
+culprit. The trade-off accepted with `clip`: programmatic horizontal scrolling of `body` is no
+longer possible. Nothing in the app does that.
+
+**Before adding a `sticky` element anywhere else**, check it actually sticks. If it doesn't,
+look for a *nearer* ancestor with a non-`visible` overflow — the same rule applies at every
+level, and the fix is `clip` on that ancestor rather than anything on the element.
 
 ## The same mutation mounted three times must fail the same way three times (2026-08)
 
@@ -761,3 +766,36 @@ Two wiring details:
 The `purchaseComplete` latch documented above is still intentionally **not** cleared on either
 path — once `mutateAsync` returned a `paymentIntentId` the money is taken, and re-enabling the
 button would risk a second charge.
+
+## Two ways a sticky bar inside a modal fails to sit flush (2026-08-05)
+
+[`TabSwitcher`](../../src/components/modals/PackageSelectionModal/TabSwitcher.tsx) — the
+One-Time / Membership Packs toggle — was `sticky top-0` with an opaque background and still
+docked wrong in both axes. Two independent causes, each easy to mistake for the other.
+
+**1. A scroll container's padding offsets its sticky children.** `ModalContent`'s body is
+`p-3 sm:p-6`. Sticky offsets resolve against the scrollport's **content** box, so `top-0`
+docked the bar 25px down (1px border + 24px padding) with the page showing through the gap
+above it. The negative margin that pulls the bar to the container edge fixes the **at-rest**
+position only — once sticky engages, `top` takes over and the margin no longer applies.
+
+So the offset has to cancel the padding too: `-top-3 sm:-top-6` alongside `-mx-3 -mt-3
+sm:-mx-6 sm:-mt-6` (with matching `px-3 pt-3 sm:px-6 sm:pt-6` putting the bar's own content
+back). Docked position then equals flow position, and the band is flush left/right/top in
+**both** states. Measured after the fix: `gapTop: 1` (the panel's 1px border), `left: 0`,
+`right: 0` at 390px and 1320px, light and dark.
+
+**Verify by measuring, not by eye.** A bar that is 25px low still looks plausible. Scroll the
+container to `scrollHeight`, then compare `bar.getBoundingClientRect()` against the scroll
+container's — and `elementFromPoint` at the band's own corners to confirm nothing paints over it.
+
+**2. `.dark .modal-panel-body .bg-white` glasses every white chip.** That rule
+([globals.css](../../src/app/globals.css)) repaints `bg-white` inside a dark modal body as
+`rgb(38 38 38 / .4)` so general chips read as glass. At specificity (0,3,0) it beats
+`dark:bg-neutral-950` at (0,2,0), so the bar's background silently became **40% transparent**
+and the tiles read straight through it — while every geometric measurement said "flush".
+
+The rule's own comment prescribes the escape hatch: use arbitrary values. The bar is
+`bg-[#ffffff] dark:bg-[#0a0a0a]`, which matches the scroll body's measured surface exactly and
+is not caught by the selector. **Any element inside `.modal-panel-body` that needs a genuinely
+opaque light surface must do the same** — `bg-white` there does not mean white.

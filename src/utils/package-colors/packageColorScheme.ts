@@ -406,6 +406,37 @@ export function getToolsetBadgeStyle(toolsetSlug: string): PackageColorScheme["b
 }
 
 /** Parse hex (#RRGGBB) to [r, g, b]. Used for RGB/RGBA string generation. */
+/**
+ * Shift a hex toward white (pct > 0) or black (pct < 0). Percentages are of the remaining
+ * distance to the endpoint, so shade(c, 34) is "34% of the way to white".
+ *
+ * This is the gloss formula the package tiles use: one tier hex drives the whole card.
+ */
+export function shadeHex(hex: string, pct: number): string {
+  const [r, g, b] = hexToRgbaValues(hex);
+  const t = pct < 0 ? 0 : 255;
+  const p = Math.abs(pct) / 100;
+  const mix = (c: number) => Math.round((t - c) * p + c);
+  return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * True when a fill is light enough that text on it must be dark ink.
+ *
+ * Threshold 0.62 on relative luminance — matches the package-tile design system. Lime and
+ * amber tiers land above it, which is why those cards carry black ink while cyan/red/blue
+ * carry white.
+ */
+export function needsDarkInk(hex: string): boolean {
+  const [r, g, b] = hexToRgbaValues(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62;
+}
+
+/** The tier-coloured gloss fill shared by every package tile. */
+export function glossFill(hex: string): string {
+  return `linear-gradient(150deg, ${shadeHex(hex, -24)} 0%, ${hex} 40%, ${shadeHex(hex, 34)} 50%, ${hex} 60%, ${shadeHex(hex, -24)} 100%)`;
+}
+
 export function hexToRgbaValues(hex: string): [number, number, number] {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
