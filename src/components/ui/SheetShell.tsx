@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/utils/cn";
+import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 
 interface SheetShellProps {
   open: boolean;
@@ -19,19 +20,24 @@ interface SheetShellProps {
  * over a blurred backdrop. Closes on backdrop click or Escape.
  */
 export default function SheetShell({ open, onClose, children, className, labelledBy }: SheetShellProps) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [open, onClose]);
+  /**
+   * Replaces a hand-rolled `body.style.overflow` + Escape effect. Two things it got wrong,
+   * both of which only show up when a second overlay is involved:
+   *
+   * - SAVE/RESTORE IS NOT NESTING-SAFE. It captured `prevOverflow` at open and wrote it back
+   *   at close. Open a sheet (captures ""), open a modal on top (locks), close the SHEET
+   *   first — it restores "" and unlocks the page while the modal is still up. Reference
+   *   counting in `useScrollLock` is what makes the last one out the one that releases.
+   * - `overflow: hidden` alone does not stop touch-scrolling in iOS Safari, and these five
+   *   sheets are mobile-first surfaces.
+   *
+   * It also declared `aria-modal="true"` with nothing trapping Tab, so focus walked into the
+   * dashboard behind the backdrop. `useModalA11y` supplies the trap, initial focus, Escape
+   * and focus-restore-on-close that the old effect only half-covered.
+   */
+  const panelRef = useRef<HTMLDivElement>(null);
+  useScrollLock(open);
+  useModalA11y(open, panelRef, onClose);
 
   if (!open) return null;
 
@@ -44,8 +50,9 @@ export default function SheetShell({ open, onClose, children, className, labelle
     <div className="fixed inset-0 z-[120] flex flex-col justify-end lg:items-center lg:justify-center lg:p-6" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/55 backdrop-blur-sm motion-safe:animate-[ta-sheet-fade_.25s_ease-out]" />
       <div
+        ref={panelRef}
         className={cn(
-          "relative flex max-h-[90%] w-full flex-col overflow-hidden border border-token bg-surface shadow-[0_-20px_50px_-20px_rgba(0,0,0,.5)]",
+          "relative flex max-h-[90%] w-full flex-col overflow-hidden overscroll-contain border border-token bg-surface shadow-[0_-20px_50px_-20px_rgba(0,0,0,.5)]",
           "rounded-t-[26px] lg:max-h-[86%] lg:max-w-[468px] lg:rounded-3xl lg:shadow-[0_40px_90px_-30px_rgba(0,0,0,.7)]",
           "motion-safe:animate-[ta-sheet-up_.34s_cubic-bezier(.22,1,.36,1)] lg:motion-safe:animate-[ta-sheet-pop_.28s_cubic-bezier(.22,1,.36,1)]",
           className,
