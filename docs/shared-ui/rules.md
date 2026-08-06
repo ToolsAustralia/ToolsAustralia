@@ -85,7 +85,26 @@ Two traps found while fixing this, both worth checking on any new overlay:
    resolved to `rgba(0,0,0,0)` — a transparent sheet. **Re-apply the scope class on the portal
    root.** Theme classes on `<html>` (`.dark`) still apply; page-level wrapper classes do not.
 
+**Adopted so far:** the three `/discount` overlays; `ShopContent` + `MiniDrawsContent` mobile
+filter drawers (both also gained the `role="dialog"`/`aria-modal` they were missing — set the
+attribute and the trap together, never one alone); `PastDueTierSwitchModal`.
+
+Two things worth copying from those:
+
+- **Key the lock on the OPEN state, not the exit animation.** `MiniDrawsContent` is wrapped in
+  `AnimatePresence` with a spring exit, so the panel lingers in the DOM ~1.2s after close.
+  Releasing on `isFiltersOpen` frees the page immediately; the extra frames of a visible panel
+  cost nothing, whereas holding the lock until unmount is a page that stays stuck after the
+  thing that locked it is visually gone.
+- **A modal that guards its own dismissal must guard Escape too.** `PastDueTierSwitchModal`
+  is non-dismissable while `submitting` (a past-due money action), so it passes a
+  `requestClose` that respects that flag rather than raw `onClose` — otherwise a keyboard user
+  is the one person who can abandon the request mid-flight.
+
+Not every overlay needs the portal: `ShopContent` and `MiniDrawsContent` were verified to have
+no stacking-context ancestor, so their `z-[110]` already beats the header. Check before adding
+one — `document.elementFromPoint` over the header while the overlay is open answers it.
+
 Still outstanding (audited, not yet fixed): `SheetShell` (five dashboard sheets) locks with the
-weak body-only mechanism, `ShopContent` and `MiniDrawsContent` mobile filter drawers do not
-lock at all, `PastDueTierSwitchModal` declares `aria-modal` without locking, and
-`ModalContainer` itself has no focus trap and no ownership token on release.
+weak body-only mechanism and has a nested-restore bug, and `ModalContainer` itself has no focus
+trap, no Escape handler and no ownership token on release.

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import MiniDrawCard, { type MiniDrawCardData } from "./MiniDrawCard";
 import MiniDrawsFilters from "./MiniDrawsFilters";
 import { Grid, List, Filter, X, Search, Sparkles, ArrowUpDown } from "lucide-react";
@@ -122,6 +123,14 @@ export default function MiniDrawsContent({
     setIsFiltersOpen(false);
   };
 
+  // Same drawer, same omission as ShopContent — full-viewport scrim, its own
+  // `overflow-y-auto`, no lock and no focus trap. Fixed together so the two cannot drift.
+  // The lock is keyed on `isFiltersOpen` rather than the AnimatePresence exit: releasing a
+  // frame early is invisible, holding it a frame too long is a stuck page.
+  const filtersPanelRef = useRef<HTMLDivElement>(null);
+  useScrollLock(isFiltersOpen);
+  useModalA11y(isFiltersOpen, filtersPanelRef, handleCloseFilters);
+
   const handleSortChange = (newSort: string) => {
     setSortBy(newSort);
     setCurrentPage(1);
@@ -167,7 +176,11 @@ export default function MiniDrawsContent({
                 onClick={handleCloseFilters}
               />
               <motion.div
-                className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto brand-scrollbar border-r-2 border-gray-200 dark:border-red-900/40"
+                ref={filtersPanelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Mini draw filters"
+                className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto overscroll-contain brand-scrollbar border-r-2 border-gray-200 dark:border-red-900/40"
                 initial={{ x: "-100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "-100%" }}
