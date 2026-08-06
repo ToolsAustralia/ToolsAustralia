@@ -125,10 +125,22 @@ const FOCUSABLE =
 export function useModalA11y(
   active: boolean,
   panelRef: React.RefObject<HTMLElement | null>,
-  onClose: () => void
+  onClose: () => void,
+  options?: {
+    /**
+     * Close on Escape. Default true.
+     *
+     * Set false for a surface that deliberately refuses casual dismissal — one mid-request,
+     * or one whose backdrop is already inert. The trap and focus restore still apply; only
+     * the key is dropped. Without this the hook would hand a keyboard user a dismissal route
+     * the pointer does not have, which is how you abandon a payment with Escape.
+     */
+    closeOnEscape?: boolean;
+  }
 ): void {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const closeOnEscape = options?.closeOnEscape ?? true;
 
   useEffect(() => {
     if (!active) return;
@@ -145,6 +157,7 @@ export function useModalA11y(
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (!closeOnEscape) return;
         e.preventDefault();
         onCloseRef.current();
         return;
@@ -178,5 +191,5 @@ export function useModalA11y(
       document.removeEventListener("keydown", onKeyDown, true);
       previouslyFocused?.focus?.({ preventScroll: true });
     };
-  }, [active, panelRef]);
+  }, [active, panelRef, closeOnEscape]);
 }

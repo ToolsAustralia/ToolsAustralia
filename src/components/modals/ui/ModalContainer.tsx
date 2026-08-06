@@ -15,7 +15,7 @@ import {
   reducedPanelVariants,
   sheetPanelVariants,
 } from "@/utils/motion/modalPresets";
-import { useScrollLock } from "@/hooks/useModalBlocking";
+import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import { cn } from "@/utils/cn";
 
 export type ModalPresentation = "dialog" | "sheet" | "drawer";
@@ -475,6 +475,20 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
    * the only version of this that is correct with 58 consumers and a stacking modal system.
    */
   useScrollLock(modalBlocking);
+
+  /**
+   * Focus containment. This renders `role="dialog" aria-modal="true"`, which promises
+   * assistive tech the rest of the page is inert — and across ~58 consumers nothing enforced
+   * it, so Tab walked straight out of every modal in the app into the page behind the
+   * backdrop.
+   *
+   * Escape is keyed to `closeOnBackdrop` rather than always-on. That prop is the existing
+   * vocabulary for "this surface accepts casual dismissal"; a modal that opts out of a
+   * backdrop click has already said it does not, and handing a keyboard user a dismissal
+   * route the pointer does not have is how a payment gets abandoned mid-request. Reusing the
+   * prop means no consumer has to be revisited to stay correct.
+   */
+  useModalA11y(modalBlocking, modalContentRef, onClose, { closeOnEscape: closeOnBackdrop });
 
   if (!isLocked) return null;
 
