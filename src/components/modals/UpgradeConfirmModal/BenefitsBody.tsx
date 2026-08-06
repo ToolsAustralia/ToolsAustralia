@@ -31,11 +31,11 @@ const CheckItem: React.FC<{
   children: React.ReactNode;
 }> = ({ icon, children }) => (
   <li className="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-200 leading-[1.35]">
-    {/* `--tier-color-deep` is defined only in the LIGHT `.scrollFrame[data-tier=…]` blocks —
-        the dark block overrides the stat vars but not this one — so an inline
-        `color: var(--tier-color-deep)` left these glyphs in the light-mode deep ink on the
-        dark panel. `--tier-color` is the bright stop and IS set in both. */}
-    <span className="flex-none text-[color:var(--tier-color-deep)] dark:text-[color:var(--tier-color)]">
+    {/* Back to the plain variable: the dark `.scrollFrame[data-tier=…]` blocks now define
+        `--tier-color-deep` too, so it resolves correctly in both themes. Fixing the variable
+        rather than this consumer is what also fixed DowngradeConfirmModal's two identical
+        call sites, which nobody had noticed were broken. */}
+    <span className="flex-none" style={{ color: "var(--tier-color-deep)" }}>
       {icon}
     </span>
     {children}

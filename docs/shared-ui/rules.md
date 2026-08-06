@@ -120,12 +120,21 @@ Two things to know before touching them:
   hold the page after the panel is visually gone.
 
 **Guard rail:** `internal-norm/no-adhoc-scroll-lock` flags direct
-`document.body.style.{overflow,overflowY,position}` writes. It is set to **`warn`, not
-`error`**, because 57 pre-existing hand-rolled locks remain — `Header`, `AdminPage`,
-`RewardsFloatingWidget`, `WinnersTestimony`, the `*/Shell.tsx` family and the two admin filter
-drawers. The rule's job today is to stop copy #21 appearing in review; flipping it to `error`
-is the last step of that migration, not the first. Sweeping 57 call sites in one unverifiable
-pass is exactly the blast radius this rule exists to argue against.
+`document.body.style.{overflow,overflowY,position}` writes, at **`warn`** — 57 pre-existing
+hand-rolled locks remain (`Header`, `AdminPage`, `RewardsFloatingWidget`, `WinnersTestimony`,
+the `*/Shell.tsx` family, the two admin filter drawers).
+
+**A warning alone was not enough**, and an audit was right to call that a band-aid: warning
+#58 would appear in a run that already emitted 57 and exits the same way, so a reviewer has no
+signal distinguishing the new one from the noise they have learned to scroll past. So `lint`
+now carries **`--max-warnings 89`** (the current total). The count can only go down: a new
+hand-rolled lock fails the command rather than needing to be spotted.
+
+**Finishing the migration is smaller than the 57 suggests.** Most of those are `overflow`-only
+copies, which `useScrollLock`'s `position: fixed` already neutralises when it owns the lock —
+the genuinely live surfaces are **`Header` and `AdminPage`**. Migrate those two, drop the
+count, and the rule can go to `error`. That is a days job, not the quarter-long sweep the
+original rationale implied.
 
 Still outstanding: those 57 sites, and `ModalContainer`'s hardcoded
 `aria-labelledby="modal-title"` — 56 of its 58 consumers define no such id, so most modals

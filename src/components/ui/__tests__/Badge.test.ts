@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import Badge from "../Badge";
+import { assertThemePaired } from "./assertThemePaired";
 
 let testsRun = 0;
 let testsFailed = 0;
@@ -32,6 +33,15 @@ test("accepts and forwards className override", () => {
   const el = React.createElement(Badge, { className: "test-override", children: "X" });
   const html = renderToString(el);
   assert.ok(html.includes("test-override"));
+});
+
+test("every tone is theme-paired", () => {
+  let checked = 0;
+  for (const tone of tones) {
+    const html = renderToString(React.createElement(Badge, { tone, children: "x" }));
+    checked += assertThemePaired(html, `Badge tone=${tone}`).length;
+  }
+  assert.ok(checked > 0, "expected to find themeable tokens to check");
 });
 
 console.log("\n========================================");
