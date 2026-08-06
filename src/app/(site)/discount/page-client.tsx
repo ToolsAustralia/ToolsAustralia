@@ -63,6 +63,7 @@ export default function DiscountPageClient() {
 
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState<string | null>(null);
+  const [levels, setLevels] = React.useState<number[]>([]);
   const [openOnly, setOpenOnly] = React.useState(false);
   const [sort, setSort] = React.useState<DiscountSort>("access");
   const [limit, setLimit] = React.useState(PAGE_SIZE);
@@ -93,16 +94,28 @@ export default function DiscountPageClient() {
       filterAndSortRows(ALL_ROWS, {
         query: debouncedQuery,
         category,
+        levels,
         openOnly,
         sort,
         viewerPct,
         signedIn,
       }),
-    [debouncedQuery, category, openOnly, sort, viewerPct, signedIn]
+    [debouncedQuery, category, levels, openOnly, sort, viewerPct, signedIn]
   );
 
   // Reset paging whenever the result set changes underneath the reader.
-  React.useEffect(() => setLimit(PAGE_SIZE), [debouncedQuery, category, openOnly, sort]);
+  React.useEffect(() => setLimit(PAGE_SIZE), [debouncedQuery, category, levels, openOnly, sort]);
+
+  /** "Any" (null) clears; a rung toggles. Kept sorted so the state reads like the ladder. */
+  const toggleLevel = React.useCallback((value: number | null) => {
+    setLevels((prev) =>
+      value === null
+        ? []
+        : prev.includes(value)
+          ? prev.filter((p) => p !== value)
+          : [...prev, value].sort((a, b) => a - b)
+    );
+  }, []);
 
   const visible = React.useMemo(() => filtered.slice(0, limit), [filtered, limit]);
   const bands = React.useMemo(
@@ -192,6 +205,7 @@ export default function DiscountPageClient() {
   const reset = React.useCallback(() => {
     setQuery("");
     setCategory(null);
+    setLevels([]);
     setOpenOnly(false);
     setLimit(PAGE_SIZE);
   }, []);
@@ -285,6 +299,8 @@ export default function DiscountPageClient() {
               onQueryChange={setQuery}
               category={category}
               onCategoryChange={setCategory}
+              levels={levels}
+              onLevelToggle={toggleLevel}
               openOnly={openOnly}
               onOpenOnlyChange={setOpenOnly}
               sort={sort}

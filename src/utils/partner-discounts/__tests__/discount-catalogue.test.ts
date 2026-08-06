@@ -19,6 +19,7 @@ import {
   VENDOR_ROWS,
   DISCOUNT_LEVELS,
   CATEGORY_CHIPS,
+  LEVEL_CHIPS,
   buildBands,
   buildGate,
   filterAndSortRows,
@@ -127,6 +128,7 @@ check("nextLevelAbove walks the ladder and stops at the top", () => {
 const baseFilter = {
   query: "",
   category: null as string | null,
+  levels: [] as number[],
   openOnly: false,
   sort: "access" as const,
   viewerPct: 50,
@@ -171,6 +173,69 @@ check("category filter is single-select and exact", () => {
   const out = filterAndSortRows(ALL_ROWS, { ...baseFilter, category: "Automotive" });
   assert.equal(out.length, 62);
   assert.ok(out.every((r) => r.cat === "Automotive"));
+});
+
+check("a level chip selects its rung EXACTLY, and returns exactly the count it advertises", () => {
+  for (const chip of LEVEL_CHIPS) {
+    if (chip.value === null) continue;
+    const rows = filterAndSortRows(ALL_ROWS, { ...baseFilter, levels: [chip.value] });
+    // The number on the chip is the number you get — no offset to explain. Direct partners
+    // (pct 0) are NOT included: they are "included with any membership", not unlocked at a
+    // percent, so an exact-rung filter must exclude them.
+    assert.equal(rows.length, chip.count, `level ${chip.value}`);
+    assert.ok(rows.every((r) => r.pct === chip.value), `level ${chip.value} is exact`);
+  }
+});
+
+check("the top rung is a real filter, not a no-op alias for 'Any'", () => {
+  // This is why the filter is exact rather than cumulative: cumulative `pct <= 100` selects
+  // the entire catalogue, making the 100% chip indistinguishable from "Any".
+  const at100 = filterAndSortRows(ALL_ROWS, { ...baseFilter, levels: [100] });
+  assert.ok(at100.length > 0);
+  assert.ok(at100.length < ALL_ROWS.length);
+  assert.ok(at100.every((r) => r.pct === 100));
+});
+
+check("rungs union, so selecting 5…50 rebuilds the cumulative 'up to 50%' view", () => {
+  const upTo50 = DISCOUNT_LEVELS.filter((p) => p <= 50);
+  const rows = filterAndSortRows(ALL_ROWS, { ...baseFilter, levels: upTo50 });
+  assert.ok(rows.every((r) => r.pct <= 50 && r.pct > 0));
+  // Equals the cumulative tier count for 50% — the two views agree where they overlap.
+  assert.equal(rows.length, offersAtLevel(50));
+
+  // And every per-rung count sums to the cumulative one, so the chips partition the ladder.
+  const summed = upTo50.reduce(
+    (n, p) => n + (LEVEL_CHIPS.find((c) => c.value === p)?.count ?? 0),
+    0
+  );
+  assert.equal(summed, offersAtLevel(50));
+});
+
+check("per-rung chip counts partition the whole vendor catalogue", () => {
+  const total = LEVEL_CHIPS.filter((c) => c.value !== null).reduce((n, c) => n + c.count, 0);
+  assert.equal(total, PARTNER_CATALOG_TOTAL);
+});
+
+check("no levels selected is not a filter at all", () => {
+  assert.equal(filterAndSortRows(ALL_ROWS, { ...baseFilter, levels: [] }).length, ALL_ROWS.length);
+});
+
+check("level selection composes with 'only what I can use' rather than overriding it", () => {
+  // A 50% member selecting the 100% rung is asking to see something they cannot redeem; with
+  // the "only what I can use" guard on, it must still be filtered back out.
+  const capped = filterAndSortRows(ALL_ROWS, { ...baseFilter, levels: [100], openOnly: true });
+  assert.equal(capped.length, 0);
+
+  // A rung at or below their access is unaffected by the guard.
+  const within = filterAndSortRows(ALL_ROWS, { ...baseFilter, levels: [15], openOnly: true });
+  assert.equal(within.length, LEVEL_CHIPS.find((c) => c.value === 15)?.count);
+});
+
+check("LEVEL_CHIPS covers the whole ladder once, ascending, behind an 'Any' lead", () => {
+  assert.equal(LEVEL_CHIPS[0].value, null);
+  const rungs = LEVEL_CHIPS.slice(1).map((c) => c.value);
+  assert.deepEqual(rungs, [...DISCOUNT_LEVELS]);
+  assert.equal(new Set(rungs).size, rungs.length);
 });
 
 // ── Bands and the wall ────────────────────────────────────────────────────────

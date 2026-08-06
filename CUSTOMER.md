@@ -536,6 +536,17 @@ one needs, and at the customer's own limit a **wall** is drawn across the list �
 stops at 50% · 916 you cannot redeem yet"*. A signed-out visitor meets that wall at the very
 top, reading *"Readable below — a membership is what lets you claim them"*.
 
+**A customer can now browse the catalogue by access level (2026-08-06).** Alongside search,
+sort and the category chips, `/discount` carries an **Access level** filter — one chip per rung
+of the 11-level ladder, each stating exactly what that rung unlocks (*5% · 92*, *50% · 183*,
+*100% · 274*). Chips are **multi-select**: one tap answers "what does 100% specifically get
+me?", and tapping several (5 + 10 + … + 50) builds the "everything up to 50%" view. Tapping a
+lit chip deselects it; "Any" clears. A signed-out visitor can use it to price up the decision,
+and a member can use it to see what a level above or below their own actually contains. It
+composes with "only what I can use", so a 50% member who selects the 100% rung correctly sees
+nothing. No access rule changed — this is a way to read the same catalogue, not a change to
+what anyone can redeem.
+
 Tapping a locked offer opens a popup that names the level it needs and shows the **two cheapest
 ways to reach it** — a membership and a one-time pack — so a customer who does not want a
 subscription is never left without a route. A redeemable offer hands them to the portal by the

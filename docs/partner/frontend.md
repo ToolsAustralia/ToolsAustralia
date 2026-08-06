@@ -262,6 +262,41 @@ purely as a band key (never displayed) and lead the list under "Included with an
 **Bands and the wall render only under the Access-level sort.** Under A–Z or Category they
 would cut across the chosen ordering, so the list goes flat and each row states its own state.
 
+### Access-level filter — exact rungs, multi-select (2026-08-06)
+
+`LEVEL_CHIPS` + `DiscountFilterInput.levels` filter the list by access rung. Four things about
+it are deliberate:
+
+**Each chip is an EXACT rung (`levels.includes(r.pct)`), not cumulative.** The first cut was
+cumulative (`r.pct <= level`) and that was wrong in a way the chips make obvious: cumulative
+makes the **100% chip a no-op**, because `pct <= 100` is the entire catalogue — identical to
+"Any". Every high rung degrades the same way (85% would return 1,559 of 1,833). The question
+worth asking at the top of the ladder is *"what does this tier ADD"*, and only exact rungs
+answer it. 100% now returns 274.
+
+**Rungs union, so the cumulative view is still reachable** — tapping 5 + 10 + 15 + 25 + 40 + 50
+is "everything up to 50%", and the test pins that this equals `offersAtLevel(50)`. One
+mechanism, both questions. Tapping a lit chip deselects it; "Any" is the clear-all and is lit
+only when nothing is picked.
+
+**Chip counts are per-rung, measured off `VENDOR_ROWS`** exactly as `CATEGORY_CHIPS` measures
+categories — so the number on the chip is the number selecting it returns, with no offset to
+explain. They deliberately do **not** match `PARTNER_CATALOG_TIER_COUNTS`, which is cumulative
+and remains what the band headers, gate panels and unlock popups quote; the two answer
+different questions. `npm run test:discount-catalogue` pins both the per-rung equality and the
+bridge between them (per-rung counts sum to 1,833; 5…50 sums to `offersAtLevel(50)`).
+
+**Direct partners are not chipped.** They sit at `pct: 0`, which is a band key and never a
+displayed percent, so they are excluded whenever any rung is selected — they are "included
+with any membership", not unlocked at a percent. This is also why the exact-rung filter has no
+`+7` offset while `CATEGORY_CHIPS` does.
+
+It composes with "only what I can use" rather than overriding it: that guard stays relative to
+the VIEWER, so a 50% member selecting the 100% rung correctly gets an empty list.
+
+Desktop now carries two chip rows, so both are labelled (`FieldLabel`, shared with the sheet):
+unlabelled, "50%" sat beside "Beauty" as if they came from the same list.
+
 ### The two routes past the wall
 
 Both popups render the cheapest **membership** and the cheapest **one-time pack** that reach the

@@ -41,3 +41,28 @@ If you change a constant in `legal.ts`, legal team must review before merge. Tre
 ## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).
+
+## A combo's `gallery[0]` is the hero everywhere — a fallback left there ships as the product shot (2026-08-06)
+
+`prize-summaries.ts` had `ryobi-gearwrench` pointing `gallery[0]` at
+`toolbox/gearwrenchTB.webp` — the **standalone** GearWrench box, no Ryobi tools in shot — as a
+placeholder from draw 9, when that one composite had not been photographed. The composite
+(`ryobi-set/ryobi-gearwrench.webp`) later shipped to `public/`, but the config was never
+repointed, so for weeks the `/membership` prize carousel showed 19 full lifestyle builds and
+one bare toolbox, captioned as if it were the same kind of thing.
+
+Two lessons:
+
+- **`gallery[0]` is not "the first picture", it is THE hero** — it is what every carousel,
+  card and preview reaches for. A placeholder parked there is customer-facing, not internal.
+- **Adding the file is only half the change.** `public/` and the config drift independently:
+  nothing type-checks a `src:` string against the filesystem, and the entry looked complete.
+  When combo art lands, repoint `gallery[0]` **and** `cardBackgroundImage` in the same commit,
+  and check the new asset matches its siblings' geometry — this one was 1000×1000 square
+  against the other 19 at 1600×1200, so `object-contain` also shrank it to ~75% width
+  mid-carousel.
+
+`COMBOS_AWAITING_COMBO_ART` (`prize-builder-model.ts`) is the *intended* home for this state
+and is keyed per COMBINATION, not per toolbox. It is currently empty and every one of the 20
+combos has its own composite — keep the mechanism for the next toolbox/toolset addition, but
+do not park a placeholder in `gallery[0]` instead of using it.

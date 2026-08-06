@@ -99,10 +99,23 @@ the silent-failure shape that produced two earlier wrong coverage numbers.
 ## `npm run test:discount-catalogue` (2026-08-05)
 
 [`src/utils/partner-discounts/__tests__/discount-catalogue.test.ts`](../../src/utils/partner-discounts/__tests__/discount-catalogue.test.ts)
-— 33 checks over the pure layer behind `/discount`. The page's argument is a claim about
+— 40 checks over the pure layer behind `/discount`. The page's argument is a claim about
 numbers, so a wrong figure is a promise we do not keep rather than a visual bug.
 
 What it pins, and why each one matters:
+
+- **Each access-level chip returns exactly the count it advertises** (2026-08-06) — for every
+  rung, chip count ≡ filtered row count, and every returned row is `pct === rung`. The chip is
+  the only control on the page that *states a figure before you click it*, so drift between the
+  promise and the result is the exact failure this page cannot afford.
+- **The top rung is a real filter, not an alias for "Any"** — this is the regression that made
+  the filter exact rather than cumulative in the first place, so it is pinned directly.
+- **Per-rung counts partition the catalogue** (they sum to 1,833) and **5…50 unions to
+  `offersAtLevel(50)`** — the bridge between the per-rung chip numbers and the cumulative tier
+  counts the band headers quote. If the ladder or the snapshot changes, this is what catches
+  the two views disagreeing.
+- **Level selection composes with "only what I can use"** rather than overriding it: a 50%
+  member selecting the 100% rung gets an empty list, not a list they cannot redeem.
 
 - **The wall lands on the FIRST unreachable band and appears exactly once** — signed out (band
   one), mid-ladder (the first level above the member), and at 100% (no wall at all). Drawing

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import { ArrowRight, Loader2, X, AlertTriangle, Repeat } from "lucide-react";
 import { cn } from "@/utils/cn";
 
@@ -48,6 +49,22 @@ export default function PastDueTierSwitchModal({
     }
   }, [isOpen]);
 
+  /**
+   * This already declared `role="dialog" aria-modal="true"` but locked nothing and trapped
+   * nothing — the account page scrolled behind it and Tab walked out into it. It is a
+   * past-due MONEY action, so the two guards matter more here than on a filter drawer.
+   *
+   * Escape honours the same `submitting` guard the scrim and the X already use: once the
+   * switch is in flight the modal is deliberately non-dismissable, and a keyboard user must
+   * not be the one person who can abandon it mid-request.
+   */
+  const panelRef = useRef<HTMLDivElement>(null);
+  const requestClose = useCallback(() => {
+    if (!submitting) onClose();
+  }, [submitting, onClose]);
+  useScrollLock(isOpen);
+  useModalA11y(isOpen, panelRef, requestClose);
+
   if (!isOpen || typeof document === "undefined") return null;
 
   const handleConfirm = async () => {
@@ -82,10 +99,11 @@ export default function PastDueTierSwitchModal({
         aria-hidden
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Switch to ${newTierName}`}
-        className="relative w-full max-w-md overflow-hidden rounded-t-3xl bg-surface shadow-2xl sm:rounded-3xl"
+        className="relative w-full max-w-md overflow-hidden overscroll-contain rounded-t-3xl bg-surface shadow-2xl sm:rounded-3xl"
       >
         {/* Amber header — this is a past-due money action. */}
         <div className="relative bg-gradient-to-br from-[#fbbf24] to-[#d97706] px-5 pb-4 pt-5 text-[#241a02]">

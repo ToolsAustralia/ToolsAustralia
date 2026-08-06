@@ -276,20 +276,23 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     return renderOverlay(
       <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
         <div className="absolute inset-0 bg-black/60" />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto p-6 sm:p-8 text-center">
+        {/* Theme-paired throughout. This block had no `dark:` token at all, so the 45s
+            "taking longer than usual" state punched a pure-white card into the middle of an
+            otherwise dark screen — at the worst possible moment, right after a payment. */}
+        <div className="relative bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-md mx-auto p-6 sm:p-8 text-center">
           {onStillProcessingDismiss && (
             <button
               type="button"
               onClick={onStillProcessingDismiss}
-              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors"
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-gray-800 dark:hover:text-neutral-100 transition-colors"
               aria-label="Close and stay on this page"
             >
               <X className="h-5 w-5" />
             </button>
           )}
           <AlertCircle className="w-14 h-14 text-amber-500 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Still processing</h3>
-          <p className="text-sm text-gray-600 mb-6">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-neutral-100 mb-2">Still processing</h3>
+          <p className="text-sm text-gray-600 dark:text-neutral-400 mb-6">
             Your payment is taking longer than usual to confirm. We&apos;ll email you when everything is finalised. You can
             safely leave this screen.
           </p>
@@ -298,7 +301,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
               <button
                 type="button"
                 onClick={onStillProcessingDismiss}
-                className="w-full px-4 py-3 border border-gray-300 text-gray-900 bg-white rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-neutral-700 text-gray-900 dark:text-neutral-100 bg-white dark:bg-neutral-800 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors font-medium"
               >
                 Stay on this page
               </button>
@@ -308,7 +311,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
               onClick={() => {
                 window.location.href = "/my-account";
               }}
-              className="w-full px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+              className="w-full px-4 py-3 bg-gray-900 dark:bg-neutral-100 text-white dark:text-neutral-900 rounded-lg hover:bg-gray-800 dark:hover:bg-white transition-colors font-medium"
             >
               Go to dashboard
             </button>

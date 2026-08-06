@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import ProductCard from "@/components/ui/ProductCard";
 import ProductFilters from "@/components/features/ProductFilters";
 import MetallicButton from "@/components/ui/MetallicButton";
@@ -139,6 +140,15 @@ export default function ShopContent({
     setIsFiltersOpen(false);
   };
 
+  // The mobile filter drawer paints a full-viewport scrim, which makes it modal by the
+  // shared-ui R-MODAL test — so it owes the page behind it a scroll lock and a focus trap.
+  // It had neither, while the ADMIN copy of this same drawer already locked, which is what
+  // marks this as an oversight rather than a decision. The drawer has its own
+  // `overflow-y-auto`, so without a lock a swipe past its end chains into the product grid.
+  const filtersPanelRef = useRef<HTMLDivElement>(null);
+  useScrollLock(isFiltersOpen);
+  useModalA11y(isFiltersOpen, filtersPanelRef, handleCloseFilters);
+
   // Handle sort change
   const handleSortChange = (newSort: string) => {
     setSortBy(newSort);
@@ -188,8 +198,16 @@ export default function ShopContent({
               onClick={handleCloseFilters}
             />
 
-            {/* Sidebar */}
-            <div className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto brand-scrollbar transform transition-transform duration-300 ease-in-out border-r-2 border-gray-200 dark:border-red-900/40">
+            {/* Sidebar. `role="dialog"` + `aria-modal` are new and are matched by the focus
+                trap above — the pair must ship together, or the attribute is a claim to
+                assistive tech that nothing enforces. */}
+            <div
+              ref={filtersPanelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Product filters"
+              className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto overscroll-contain brand-scrollbar transform transition-transform duration-300 ease-in-out border-r-2 border-gray-200 dark:border-red-900/40"
+            >
               <div className="p-4 border-b border-gray-200 dark:border-neutral-800 sticky top-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm z-10">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>

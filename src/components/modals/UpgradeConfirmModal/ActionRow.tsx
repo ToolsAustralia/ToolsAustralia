@@ -2,6 +2,7 @@
 
 import React from "react";
 import { cn } from "@/utils/cn";
+import { useHtmlDarkForUi } from "@/hooks/useHtmlDarkForUi";
 import styles from "./styles.module.css";
 import type { Tier } from "./Shell";
 
@@ -16,12 +17,28 @@ interface ActionRowProps {
   onConfirm: () => void;
 }
 
-/** Outline accent per tier — mirrors the dark .tier-* gradient end stops but
- * tuned for a light/dark surface. Used to tint the "Keep <tier>" button. */
-const KEEP_OUTLINE: Record<Tier, { color: string; border: string; bg: string; bgHover: string }> = {
+interface KeepOutline { color: string; border: string; bg: string; bgHover: string }
+
+/**
+ * Outline accent per tier for the "Keep <tier>" button.
+ *
+ * TWO maps, because this is an INLINE style and Tailwind's `dark:` cannot reach it. The light
+ * palette pairs a deep ink with a pastel border (sky-200 / amber-200 / red-200) — correct on
+ * white, wrong on the `dark:bg-neutral-950` frame this modal actually uses by default, where
+ * the pastel ring reads as a light-mode pill dropped into a dark panel and the boss ink lands
+ * around 3:1 against the background. The dark map uses the bright tier stops already defined
+ * in styles.module.css (`--tier-color`), so the two themes agree with the rest of the modal.
+ */
+const KEEP_OUTLINE: Record<Tier, KeepOutline> = {
   tradie:  { color: "#0b7e88", border: "#bae6fd", bg: "rgba(0,194,237,0.08)", bgHover: "rgba(0,194,237,0.16)" },
   foreman: { color: "#a17b00", border: "#fde68a", bg: "rgba(255,210,0,0.08)", bgHover: "rgba(255,210,0,0.16)" },
   boss:    { color: "#b91c1c", border: "#fecaca", bg: "rgba(238,0,0,0.08)",   bgHover: "rgba(238,0,0,0.16)" },
+};
+
+const KEEP_OUTLINE_DARK: Record<Tier, KeepOutline> = {
+  tradie:  { color: "#5ce0ff", border: "rgba(0,194,237,0.45)", bg: "rgba(0,194,237,0.10)", bgHover: "rgba(0,194,237,0.20)" },
+  foreman: { color: "#ffe066", border: "rgba(255,210,0,0.45)", bg: "rgba(255,210,0,0.10)", bgHover: "rgba(255,210,0,0.20)" },
+  boss:    { color: "#ff6b6b", border: "rgba(238,0,0,0.45)",   bg: "rgba(238,0,0,0.10)",   bgHover: "rgba(238,0,0,0.20)" },
 };
 
 const ActionRow: React.FC<ActionRowProps> = ({
@@ -32,7 +49,10 @@ const ActionRow: React.FC<ActionRowProps> = ({
   onClose,
   onConfirm,
 }) => {
-  const keep = KEEP_OUTLINE[fromTier];
+  // The DOM class, not the store: this is portaled UI, and `useHtmlDarkForUi` is the repo's
+  // answer for exactly that case.
+  const isDark = useHtmlDarkForUi();
+  const keep = (isDark ? KEEP_OUTLINE_DARK : KEEP_OUTLINE)[fromTier];
   return (
     <div
       className="grid gap-2"

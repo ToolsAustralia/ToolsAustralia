@@ -562,8 +562,9 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
     heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and the GearWrench 288-piece mobile workstation plus $5000 cash.",
     summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
     prizeValueLabel: "$25,000+ Value",
+    cardBackgroundImage: "/images/majordraws/ryobi-set/ryobi-gearwrench.webp",
     gallery: [
-      { src: "/images/majordraws/toolbox/gearwrenchTB.webp", alt: "GearWrench 288-piece tool set and mobile workstation" },
+      { src: "/images/majordraws/ryobi-set/ryobi-gearwrench.webp", alt: "Ryobi power toolset with the GearWrench 288-piece mobile workstation" },
       ...RYOBI_GALLERY_SHOTS,
       ...GEARWRENCH_TOOLBOX_SHOTS,
     ],
