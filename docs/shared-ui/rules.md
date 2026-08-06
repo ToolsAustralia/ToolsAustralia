@@ -126,8 +126,14 @@ the `*/Shell.tsx` family, the two admin filter drawers).
 
 **A warning alone was not enough**, and an audit was right to call that a band-aid: warning
 #58 would appear in a run that already emitted 57 and exits the same way, so a reviewer has no
-signal distinguishing the new one from the noise they have learned to scroll past. So `lint`
-now carries **`--max-warnings 89`** (the current total). The count can only go down: a new
+signal distinguishing the new one from the noise they have learned to scroll past.
+
+**Be honest about what the ratchet does today, though:** `npm run lint` ALREADY exits non-zero
+because of **6 pre-existing errors** in `e2e/` and `scripts/`, so the warning budget does not
+yet change any exit code. It is a tripwire waiting to become load-bearing — fix those 6 errors
+and it starts governing immediately, at which point it has zero headroom, so expect to move the
+number when unrelated warnings are added or removed. So `lint`
+now carries **`--max-warnings 77`** (the current total). The count can only go down: a new
 hand-rolled lock fails the command rather than needing to be spotted.
 
 **`Header` and `AdminPage` are now migrated** — they were the two genuinely live surfaces, and

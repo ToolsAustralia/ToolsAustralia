@@ -200,6 +200,13 @@ export function useModalA11y(
       if (!isTopmost()) return;
       if (e.key === "Escape") {
         if (!closeOnEscapeRef.current) return;
+        // Yield to an open dropdown inside the panel. Escape on a `<Select>` means "close the
+        // select", not "discard this form" — and before this guard it did the latter, taking a
+        // half-filled admin form (Create Experiment, targeting, multiplier config) with it, no
+        // confirmation and no undo. `[data-dropdown-list]` is the existing marker Select,
+        // Dropdown and BirthdatePicker already render, and that ModalContainer itself keys off.
+        // One Escape closes the dropdown, the next closes the modal — the expected two-step.
+        if (panelRef.current?.querySelector("[data-dropdown-list]")) return;
         e.preventDefault();
         onCloseRef.current();
         return;

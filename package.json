@@ -27,7 +27,7 @@
     "check:env:all": "node scripts/check-env.mjs --all",
     "prebuild": "npm run build:upsell-manifest && npm run build:landing-manifest && npm run build:landing-video-manifest && npm run build:norm-manifest && npm run build:chat-knowledge-pack && npm run build:partner-catalog",
     "predev": "npm run build:upsell-manifest && npm run build:landing-manifest && npm run build:landing-video-manifest && npm run build:norm-manifest && npm run build:chat-knowledge-pack && npm run build:partner-catalog && node scripts/check-env.mjs --warn",
-    "lint": "eslint . --ext .ts,.tsx,.js,.jsx --max-warnings 78",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx --max-warnings 77",
     "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
     "mini-draw:order": "tsx scripts/update-mini-draw-order.ts",
     "seed:variation-experiment": "tsx scripts/seed-variation1-vs-variation2-experiment.ts",

@@ -328,5 +328,16 @@ these modals.
 
 Practical rule for this flow: the confirm modal is effectively always-dark (its
 `styles.module.css` hardcodes `#0a0a0a`/`#141416`), so anything you add inside it must be
-styled for a dark surface, and any tier ink must come from `--tier-color` (set on the base
-block, correct in both themes) rather than `--tier-color-deep` (light block only).
+styled for a dark surface, and tier ink should come from **`--tier-color-deep`** — which now
+has a dark value in the `:global(.dark) .scrollFrame[data-tier=…]` blocks of **both**
+`UpgradeConfirmModal/styles.module.css` and `DowngradeConfirmModal/styles.module.css`.
+
+_(Corrected 2026-08-06. This previously said the opposite — use `--tier-color`, avoid
+`--tier-color-deep` — which was true only while the dark blocks omitted the ink variable.
+Following the old advice now paints the BRIGHT stop (#00c2ed / #ffd200 / #ee0000) beside
+existing deep-ink glyphs on the light frame, visibly mismatched. `--tier-color` remains the
+right token where you specifically want the bright accent.)_
+
+**Only those two stylesheets were fixed.** `PackageDetailModal/styles.module.css`,
+`ReferFriendModal/styles.module.css` and `SubscriptionExplainerModal.tsx` still define
+`--tier-color-deep` light-only, so the original caveat still applies there.

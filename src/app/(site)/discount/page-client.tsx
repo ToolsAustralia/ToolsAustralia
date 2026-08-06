@@ -205,28 +205,27 @@ export default function DiscountPageClient() {
   }, [headerBottom]);
 
   /**
-   * Collapsing the docked bar removes ~174px of IN-FLOW height, so every row below it would
-   * leap up by that much in a single frame — the row you were reading replaced by one three
-   * further down, and scrolling back up slams it down again. Worse, the shift moves the
-   * sentinel, which can flip `stuck` straight back and thrash the bar between states.
+   * NO SCROLL COMPENSATION HERE — deliberately, and it was tried.
    *
-   * Measure the bar across the change and scroll by the delta to cancel it. A LAYOUT effect
-   * runs before paint, so the compensating scroll and the height change land in the same
-   * frame and the intermediate one is never shown.
+   * Collapsing the docked bar removes ~174px of in-flow height, so content below shifts up
+   * once at the threshold. The obvious fix is a layout effect that measures the bar across
+   * the change and `window.scrollBy`s the delta to cancel it. That was implemented, and it
+   * made things worse: the compensating scroll moves the VIEWPORT relative to the sentinel
+   * this observer watches, so it re-triggers the very transition that caused it.
    *
-   * The alternative — reserving the expanded height with a spacer — would keep the 174px of
-   * chrome the collapse exists to reclaim, so it defeats the feature.
+   * Measured with 20px increments across the boundary — a wheel, not a jump. With the
+   * compensation in place, content moved 194px, then -106, -154, +74 for successive 20px
+   * scrolls: the page fights the reader right where they are trying to read. Without it,
+   * every step moves content exactly 20px and `data-stuck` flips exactly once.
+   *
+   * A single one-off shift at the threshold is what every collapsing sticky header does. An
+   * unstable boundary is a bug. If the shift is ever worth removing, do it WITHOUT touching
+   * scroll position — hysteresis (separate dock/undock sentinels offset by the collapse
+   * delta) is the approach that does not feed back.
+   *
+   * A single-jump `scrollTo` test CANNOT see this — it lands past the boundary and looks
+   * clean. Verify this area with incremental scrolling only.
    */
-  const prevBarHeightRef = React.useRef<number | null>(null);
-  React.useLayoutEffect(() => {
-    const el = stickyBarRef.current;
-    if (!el) return;
-    const next = el.offsetHeight;
-    const prev = prevBarHeightRef.current;
-    prevBarHeightRef.current = next;
-    if (prev === null || prev === next) return;
-    window.scrollBy(0, next - prev);
-  }, [stuck]);
 
   const reset = React.useCallback(() => {
     setQuery("");

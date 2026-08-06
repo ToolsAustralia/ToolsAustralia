@@ -139,7 +139,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
   const { trackSearch } = usePixelTracking();
 
-  const scrollPositionRef = useRef<number>(0);
   // Ref to track if we've completed at least one loading cycle (to ensure auth state is verified)
   const hasCompletedLoadingCycle = useRef<boolean>(false);
 
@@ -316,7 +315,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   // Handle mobile menu close with animation
   const handleCloseMobileMenu = useCallback(() => {
-    // console.log("🔍 Closing mobile menu - Saved scroll position:", scrollPositionRef.current);
 
     setIsClosingMobileMenu(true);
     setTimeout(() => {
@@ -327,7 +325,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   // Handle cart close with animation
   const handleCloseCart = useCallback(() => {
-    // console.log("🛒 Closing cart - Saved scroll position:", scrollPositionRef.current);
 
     setIsClosingCart(true);
     setTimeout(() => {
@@ -502,7 +499,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
    * reference count, so the last holder is the one that releases.
    *
    * Scroll restore now comes from the hook (it re-applies the position it locked at), which
-   * is why `scrollPositionRef` is gone from here.
+   * is why the old scrollPositionRef is gone.
    */
   useScrollLock(isMobileMenuOpen || isCartOpen);
 
