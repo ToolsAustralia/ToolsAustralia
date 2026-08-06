@@ -130,11 +130,23 @@ signal distinguishing the new one from the noise they have learned to scroll pas
 now carries **`--max-warnings 89`** (the current total). The count can only go down: a new
 hand-rolled lock fails the command rather than needing to be spotted.
 
-**Finishing the migration is smaller than the 57 suggests.** Most of those are `overflow`-only
-copies, which `useScrollLock`'s `position: fixed` already neutralises when it owns the lock —
-the genuinely live surfaces are **`Header` and `AdminPage`**. Migrate those two, drop the
-count, and the rule can go to `error`. That is a days job, not the quarter-long sweep the
-original rationale implied.
+**`Header` and `AdminPage` are now migrated** — they were the two genuinely live surfaces, and
+both had the same defect for the same reason: they cleared the body styles unconditionally in
+BOTH an else-branch and a cleanup, so closing the mobile menu / admin sidebar released whatever
+modal was open underneath. The Header is mounted on every page, so that one was reachable from
+anywhere. AdminPage additionally re-derived its restore position by parsing `body.style.top`
+back out of the DOM, which breaks the moment anything else owns that property.
+
+That took the violation count 57 → 45 and the repo-wide warning count 89 → **78**, and the
+ratchet moved with it. What remains is `overflow`-only copies that `useScrollLock`'s
+`position: fixed` already neutralises when it owns the lock, plus admin-only surfaces — worth
+finishing, no longer urgent.
+
+**Verified under WebKit** (Safari's engine, iPhone 13 viewport, real touch gestures): with the
+`/discount` sheet open and the body pinned at `-900px`, an in-panel swipe leaves the lock
+intact; the `/shop` drawer behaves the same. This is the check that actually justifies
+`position: fixed` — every earlier run was desktop Chromium, where plain `overflow: hidden`
+would have passed too and proved nothing.
 
 Still outstanding: those 57 sites, and `ModalContainer`'s hardcoded
 `aria-labelledby="modal-title"` — 56 of its 58 consumers define no such id, so most modals

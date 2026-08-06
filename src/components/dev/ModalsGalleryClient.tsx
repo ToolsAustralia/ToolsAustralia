@@ -35,6 +35,7 @@ import GateClosedModal from "@/components/modals/GateClosedModal";
 import ReportProblemModal from "@/components/modals/ReportProblemModal";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 import SheetShell, { SheetHead } from "@/components/ui/SheetShell";
+import PastDueTierSwitchModal from "@/components/sections/account-membership/PastDueTierSwitchModal";
 import MembershipModal from "@/components/modals/MembershipModal";
 import SpecialPackagesModal from "@/components/modals/SpecialPackagesModal";
 import UserSetupModal from "@/components/modals/UserSetupModal";
@@ -404,6 +405,12 @@ const BASE_ENTRIES: Omit<Entry, "sourcePath">[] = [
   { id: "renewal-failed", label: "RenewalFailedModal", category: "Account", note: "Stripe — needs logged-in user for full UI" },
   { id: "report-problem", label: "ReportProblemModal", category: "Account" },
   { id: "confirmation", label: "ConfirmationModal (warning)", category: "Account" },
+  {
+    id: "past-due-tier-switch",
+    label: "PastDueTierSwitchModal",
+    category: "Account",
+    note: "Needs a past_due subscription in the app — reachable here instead. Escape must NOT close it while submitting.",
+  },
   {
     id: "sheet-shell",
     label: "SheetShell (dashboard sheet)",
@@ -1098,6 +1105,19 @@ export default function ModalsGalleryClient() {
           entry sheet, rewards claimables) all sit behind /my-account, so the shell itself was
           the one shared overlay primitive with no reviewable surface. Enough content here to
           make it scroll, which is what exercises the scroll lock and overscroll containment. */}
+      {/* Needs a real past_due subscription to reach in the app, which made it the one
+          modal on this branch that could not be exercised. Its distinguishing behaviour is
+          that it refuses dismissal while a switch is in flight — scrim, X and Escape all go
+          inert together. */}
+      <PastDueTierSwitchModal
+        isOpen={isOpen("past-due-tier-switch")}
+        onClose={close}
+        currentTierLabel="Tradie"
+        newTierName="Foreman"
+        newTierPrice={40}
+        onSwitched={close}
+        onRecovered={close}
+      />
       <SheetShell open={isOpen("sheet-shell")} onClose={close} labelledBy="gallery-sheet-title">
         <SheetHead
           id="gallery-sheet-title"

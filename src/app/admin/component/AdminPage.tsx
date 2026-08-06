@@ -17,6 +17,7 @@ import UpcomingDraws from "./UpcomingDraws";
 import SubmissionsManagement from "./SubmissionsManagement";
 import PromoManagement from "./PromoManagement";
 import { AdminDashboardProps } from "@/types/admin";
+import { useScrollLock } from "@/hooks/useModalBlocking";
 import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
@@ -67,33 +68,20 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isMobileSidebarOpen]);
 
-  // Disable background scrolling when sidebar is open
-  useEffect(() => {
-    if (isMobileSidebarOpen) {
-      const scrollY = window.scrollY;
-      document.body.style.overflow = "hidden";
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = "100%";
-    } else {
-      const scrollY = document.body.style.top;
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-
-      if (scrollY) {
-        window.scrollTo(0, parseInt(scrollY || "0") * -1);
-      }
-    }
-
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-    };
-  }, [isMobileSidebarOpen]);
+  /**
+   * Background scroll lock for the mobile admin sidebar.
+   *
+   * Was the same `position: fixed` recipe, hand-rolled, and it cleared the body styles
+   * unconditionally in both its else-branch and its cleanup — so closing the sidebar while an
+   * admin modal was open released that modal's lock. Admin stacks modals routinely (a user
+   * detail modal over a list, a confirmation over that), which is exactly the case a
+   * reference count exists for.
+   *
+   * It also read the restore position back out of `body.style.top` and parsed it, which
+   * breaks the moment anything else owns that property. `useScrollLock` keeps the value it
+   * locked at instead of re-deriving it from the DOM.
+   */
+  useScrollLock(isMobileSidebarOpen);
 
   // Access gating happens in two places that are sufficient on their own:
   // - src/app/admin/layout.tsx server-side: blocks any non-staff/non-admin user.

@@ -14,7 +14,14 @@ import { cn } from "@/utils/cn";
  * still reads as a raised panel rather than merging into the body.
  */
 const card = cva(
-  "bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-sm",
+  // Arbitrary values, not `bg-white dark:bg-neutral-900`, and that is load-bearing. The
+  // `.dark .modal-panel-body .bg-white` compensation rule in globals.css is a 3-class
+  // selector and out-specifies Tailwind's 2-class `.dark .dark\:bg-neutral-900`, so inside
+  // any modal body this card would lose its own dark surface and render as 40%-transparent
+  // "glass" over whatever sits behind it. globals.css prescribes exactly this escape hatch
+  // ("use bg-[#ffffff] or dark:!bg-* on popovers or they read as transparent") because an
+  // arbitrary value is not what that selector matches. #171717 IS neutral-900.
+  "bg-[#ffffff] dark:bg-[#171717] rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-sm",
   {
     variants: {
       padding: {

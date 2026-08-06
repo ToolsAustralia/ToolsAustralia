@@ -13,6 +13,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useNavNudges } from "@/hooks/useNavNudges";
+import { useScrollLock } from "@/hooks/useModalBlocking";
 // User setup store removed - using unified modal priority system
 import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
@@ -138,7 +139,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
   const { trackSearch } = usePixelTracking();
 
-  // Ref to store scroll position for proper restoration
   const scrollPositionRef = useRef<number>(0);
   // Ref to track if we've completed at least one loading cycle (to ensure auth state is verified)
   const hasCompletedLoadingCycle = useRef<boolean>(false);
@@ -492,39 +492,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
     isMobileUserMenuOpen,
   ]);
 
-  // Disable background scrolling when sidebars are open
-  useEffect(() => {
-    if (isMobileMenuOpen || isCartOpen) {
-      // Save scroll position to ref
-      scrollPositionRef.current = window.scrollY;
-
-      // Disable scrolling
-      document.body.style.overflow = "hidden";
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${scrollPositionRef.current}px`;
-      document.body.style.width = "100%";
-    } else {
-      // Re-enable scrolling
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-
-      // Restore scroll position from ref
-      if (scrollPositionRef.current > 0) {
-        window.scrollTo(0, scrollPositionRef.current);
-        scrollPositionRef.current = 0;
-      }
-    }
-
-    // Cleanup function to restore scrolling if component unmounts
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-    };
-  }, [isMobileMenuOpen, isCartOpen]);
+  /**
+   * Background scroll lock for the mobile menu / cart sidebars.
+   *
+   * This was the same `position: fixed` + saved-scrollY recipe, hand-rolled — but it cleared
+   * the body styles UNCONDITIONALLY, both in its else-branch and its cleanup. The Header is
+   * mounted on every page, so closing the mobile menu while ANY modal was open released that
+   * modal's lock and let the page scroll behind it. `useScrollLock` is the same recipe with a
+   * reference count, so the last holder is the one that releases.
+   *
+   * Scroll restore now comes from the hook (it re-applies the position it locked at), which
+   * is why `scrollPositionRef` is gone from here.
+   */
+  useScrollLock(isMobileMenuOpen || isCartOpen);
 
   const handleSignOut = () => {
     setIsTopBarHidden(false);
