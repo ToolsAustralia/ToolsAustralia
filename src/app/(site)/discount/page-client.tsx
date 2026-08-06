@@ -308,6 +308,7 @@ export default function DiscountPageClient() {
               signedIn={signedIn}
               resultCount={filtered.length}
               onReset={reset}
+              stuck={stuck}
             />
           </div>
 

@@ -47,6 +47,15 @@ export interface DiscountFiltersProps {
   /** How many rows the current filters return — the sheet's CTA states it. */
   resultCount: number;
   onReset: () => void;
+  /**
+   * True once the control bar has stuck to the header.
+   *
+   * Desktop then collapses to the same compact bar the phone always shows. Measured at
+   * 1440x900: docked, the header + bar ate 342px of a 900px viewport — 38% of the screen
+   * given over to chrome while reading a 1,833-row list, and 163px of that was the two chip
+   * rows alone. Collapsing them takes the bar from 241px to ~62px.
+   */
+  stuck?: boolean;
 }
 
 export default function DiscountFilters(props: DiscountFiltersProps) {
@@ -76,18 +85,10 @@ export default function DiscountFilters(props: DiscountFiltersProps) {
     };
   }, [sortOpen]);
 
-  // The sheet is `lg:hidden`, so crossing to desktop hides it WITHOUT closing it — the state
-  // stayed true behind a display:none panel. Harmless while nothing was locked; now it would
-  // leave the page scroll-locked with no visible way to release it. Close on the way up.
-  React.useEffect(() => {
-    if (!sheetOpen) return;
-    const mq = window.matchMedia("(min-width: 1024px)");
-    if (mq.matches) setSheetOpen(false);
-    const onChange = (e: MediaQueryListEvent) => e.matches && setSheetOpen(false);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [sheetOpen]);
-
+  // NOTE: this deliberately no longer force-closes on the way up to `lg`. It had to while the
+  // sheet was `lg:hidden` — the state stayed true behind a display:none panel, which with a
+  // scroll lock would have stranded the page. The sheet now renders at every width (it is the
+  // stuck-desktop filter UI too), so there is nothing to strand.
   React.useEffect(() => {
     if (!sheetOpen) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSheetOpen(false);
@@ -219,11 +220,15 @@ export default function DiscountFilters(props: DiscountFiltersProps) {
           </button>
         )}
 
-        {/* Phone: one button for everything else. */}
+        {/* Phone always; desktop once the bar has docked. Same button, same sheet — the
+            compact mode is not a second implementation. */}
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          className="ta-dc-ib relative inline-flex flex-none items-center gap-2 font-sans font-bold lg:hidden"
+          className={cn(
+            "ta-dc-ib relative inline-flex flex-none items-center gap-2 font-sans font-bold",
+            props.stuck ? "" : "lg:hidden"
+          )}
           style={{
             height: 46,
             padding: "0 14px",
@@ -259,7 +264,7 @@ export default function DiscountFilters(props: DiscountFiltersProps) {
       {/* Chip rows — desktop only; the sheet carries both on a phone. Two rows now share the
           space, so each is labelled: unlabelled, "50%" sat beside "Beauty" as if they picked
           from the same list. */}
-      <div className="hidden flex-col gap-[9px] lg:flex">
+      <div className={cn("hidden flex-col gap-[9px]", props.stuck ? "" : "lg:flex")}>
         <div className="flex flex-col gap-1.5">
           <FieldLabel>Access level</FieldLabel>
           <LevelChipRow levels={props.levels} onToggle={props.onLevelToggle} />
@@ -419,8 +424,11 @@ function FilterSheet({
     // resolved to `rgba(0,0,0,0)` — a fully transparent sheet with the catalogue showing
     // through it. The dark skin still works because its selector is `.dark .ta-discount` and
     // `.dark` lives on <html>, which is still an ancestor here.
+    // `lg:hidden` is gone: this is the stuck-desktop filter UI too. At `lg` it centres and
+    // takes a max-width instead of spanning the viewport — a 1440px-wide bottom sheet reads
+    // as a mis-render, not as a panel.
     <div
-      className="ta-discount fixed inset-0 flex flex-col justify-end lg:hidden"
+      className="ta-discount fixed inset-0 flex flex-col justify-end lg:items-center lg:justify-center lg:p-6"
       style={{ zIndex: Z_INDEX.MODAL_BASE }}
     >
       <button
@@ -435,17 +443,19 @@ function FilterSheet({
         role="dialog"
         aria-modal="true"
         aria-label="Filter offers"
-        className="ta-dc-sheet ta-dc-noscroll relative flex max-h-[88%] flex-col overflow-auto overscroll-contain"
+        className="ta-dc-sheet ta-dc-noscroll relative flex max-h-[88%] w-full flex-col overflow-auto overscroll-contain rounded-t-[24px] lg:max-h-[80vh] lg:w-[460px] lg:rounded-[20px] lg:border"
         style={{
-          borderRadius: "24px 24px 0 0",
           background: "var(--dc-sf)",
           borderTop: "1px solid var(--dc-ln2)",
+          borderColor: "var(--dc-ln2)",
           padding: "18px 14px 0",
         }}
       >
+        {/* Drag-handle affordance — a bottom-sheet signal, meaningless on a centred desktop
+            panel, so it goes away with the sheet framing. */}
         <span
           aria-hidden
-          className="absolute left-1/2 -translate-x-1/2"
+          className="absolute left-1/2 -translate-x-1/2 lg:hidden"
           style={{
             top: 7,
             width: 38,
