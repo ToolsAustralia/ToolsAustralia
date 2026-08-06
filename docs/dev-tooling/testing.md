@@ -1,5 +1,23 @@
 # Dev Tooling — Testing
 
+## `ops:*` is not `test:*` — the naming carries a safety guarantee (2026-08-06)
+
+**`test:*` is safe to run blind. `ops:*` is not.** Anything under `test:` is a self-contained
+assertion script you can sweep over in bulk; anything under `ops:` operates on real data,
+takes required arguments, and may move money.
+
+Six scripts were renamed `test:force-charge:*` / `test:recover-stranded*` → **`ops:`** for
+exactly that reason. Three of them (`:live`) **charge real customers**, and while named
+`test:*` they answered to any "run all the tests" loop — a sweep over every `test:*` script
+invoked them, and only the missing-argument guard stopped them doing anything. That is one
+CLI flag away from a very bad afternoon.
+
+The rename is the guard: a bulk `test:*` runner can no longer reach them, and the prefix tells
+you what you are about to run before you run it.
+
+**When adding a script, pick the prefix by blast radius, not by folder.** Living in
+`scripts/test-*.ts` does not make something a test — `ops:force-charge:live` did.
+
 ## Scenario scripts
 
 ```bash
@@ -21,11 +39,11 @@ Visit `http://localhost:3000/test-pixels/` to fire test events for each tracking
 
 ```bash
 # Dry-run: print eligibility for a user (no writes)
-npm run test:force-charge:dry -- --email=user@example.com
-npm run test:force-charge:dry -- --customer=cus_xxx
+npm run ops:force-charge:dry -- --email=user@example.com
+npm run ops:force-charge:dry -- --customer=cus_xxx
 
 # Live execution (requires an admin user in DB)
-npm run test:force-charge:live -- --email=user@example.com --admin-email=admin@example.com
+npm run ops:force-charge:live -- --email=user@example.com --admin-email=admin@example.com
 ```
 
 Both modes print `=== Target user ===`, `=== Eligibility ===`, and either `=== Plan (dry-run) ===` or `=== LIVE execution ===`. The live flag requires `--admin-email` and errors out if missing.
@@ -36,12 +54,12 @@ Single-user diagnostic mirroring `test-force-charge.ts` but exercising the stran
 
 ```bash
 # Dry-run: scans open invoices for a stranded candidate and prints eligibility (no writes)
-npm run test:recover-stranded:dry -- --email=user@example.com
-npm run test:recover-stranded:dry -- --customer=cus_xxx
-npm run test:recover-stranded:dry -- --email=user@example.com --invoice=in_xxx
+npm run ops:recover-stranded:dry -- --email=user@example.com
+npm run ops:recover-stranded:dry -- --customer=cus_xxx
+npm run ops:recover-stranded:dry -- --email=user@example.com --invoice=in_xxx
 
 # Live execution: voids the dead invoice, finalizes the held draft, pays
-npm run test:recover-stranded:live -- --email=user@example.com --admin-email=admin@example.com
+npm run ops:recover-stranded:live -- --email=user@example.com --admin-email=admin@example.com
 ```
 
 Flags: `--email=` or `--customer=` (required), `--invoice=` (optional; auto-scans for a stranded invoice otherwise), `--live`, `--admin-email=` (required when `--live`). Live mode calls the recovery flow with `bypassRecentRecoveryLock: true` so devs can re-run inside the 6h window during testing.
@@ -52,13 +70,13 @@ Flags: `--email=` or `--customer=` (required), `--invoice=` (optional; auto-scan
 
 ```bash
 # Dry-run everything (no writes)
-npm run test:recover-stranded-all:dry
+npm run ops:recover-stranded-all:dry
 
 # Dry-run first 5 past_due users
-npm run test:recover-stranded-all:dry -- --limit=5
+npm run ops:recover-stranded-all:dry -- --limit=5
 
 # Live execution — requires --admin-email AND --confirm-bulk
-npm run test:recover-stranded-all:live -- --admin-email=admin@example.com --confirm-bulk
+npm run ops:recover-stranded-all:live -- --admin-email=admin@example.com --confirm-bulk
 ```
 
 Flags: `--limit=N` (optional cap), `--live`, `--admin-email=` (required when `--live`), `--confirm-bulk` (extra safety gate required when `--live` — this script touches many real cards in one run). Per-user errors are printed and counted but never abort the batch. Final summary tallies scanned / no-stranded / not-eligible / recovered (success/failed/skipped) / errors.
