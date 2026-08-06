@@ -106,6 +106,8 @@ export default function DiscountPageClient() {
   // Reset paging whenever the result set changes underneath the reader.
   React.useEffect(() => setLimit(PAGE_SIZE), [debouncedQuery, category, levels, openOnly, sort]);
 
+  const stickyBarRef = React.useRef<HTMLDivElement>(null);
+
   /** "Any" (null) clears; a rung toggles. Kept sorted so the state reads like the ladder. */
   const toggleLevel = React.useCallback((value: number | null) => {
     setLevels((prev) =>
@@ -202,6 +204,30 @@ export default function DiscountPageClient() {
     return () => io.disconnect();
   }, [headerBottom]);
 
+  /**
+   * Collapsing the docked bar removes ~174px of IN-FLOW height, so every row below it would
+   * leap up by that much in a single frame — the row you were reading replaced by one three
+   * further down, and scrolling back up slams it down again. Worse, the shift moves the
+   * sentinel, which can flip `stuck` straight back and thrash the bar between states.
+   *
+   * Measure the bar across the change and scroll by the delta to cancel it. A LAYOUT effect
+   * runs before paint, so the compensating scroll and the height change land in the same
+   * frame and the intermediate one is never shown.
+   *
+   * The alternative — reserving the expanded height with a spacer — would keep the 174px of
+   * chrome the collapse exists to reclaim, so it defeats the feature.
+   */
+  const prevBarHeightRef = React.useRef<number | null>(null);
+  React.useLayoutEffect(() => {
+    const el = stickyBarRef.current;
+    if (!el) return;
+    const next = el.offsetHeight;
+    const prev = prevBarHeightRef.current;
+    prevBarHeightRef.current = next;
+    if (prev === null || prev === next) return;
+    window.scrollBy(0, next - prev);
+  }, [stuck]);
+
   const reset = React.useCallback(() => {
     setQuery("");
     setCategory(null);
@@ -290,6 +316,7 @@ export default function DiscountPageClient() {
               none. */}
           <div ref={sentinelRef} aria-hidden className="h-px" />
           <div
+            ref={stickyBarRef}
             className="ta-dc-stick sticky z-20 -mx-4 px-4 py-2.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
             style={{ top: stickyTop }}
             data-stuck={stuck}

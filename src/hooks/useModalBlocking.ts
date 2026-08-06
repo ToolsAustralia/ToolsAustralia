@@ -161,7 +161,17 @@ export function useModalA11y(
 ): void {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  const closeOnEscape = options?.closeOnEscape ?? true;
+  /**
+   * A REF, not a dep. `closeOnEscape` is derived from props that legitimately change WHILE the
+   * modal is open — ModalContainer maps it from `closeOnBackdrop`, and admin modals flip that
+   * to false for the duration of a request. As a dep it tore the effect down mid-open, and
+   * teardown calls `previouslyFocused.focus()` — which is the trigger BEHIND the scrim. A
+   * screen reader would leave the dialog, land on a covered control, then get dragged back and
+   * re-announced 30ms later. Reading it through a ref keeps the handler current without
+   * remounting the trap.
+   */
+  const closeOnEscapeRef = useRef(options?.closeOnEscape ?? true);
+  closeOnEscapeRef.current = options?.closeOnEscape ?? true;
 
   useEffect(() => {
     if (!active) return;
@@ -189,7 +199,7 @@ export function useModalA11y(
       // neither by trapping its Tab nor by closing itself on its Escape.
       if (!isTopmost()) return;
       if (e.key === "Escape") {
-        if (!closeOnEscape) return;
+        if (!closeOnEscapeRef.current) return;
         e.preventDefault();
         onCloseRef.current();
         return;
@@ -228,5 +238,5 @@ export function useModalA11y(
       // hand ownership to a trap that has already gone.
       previouslyFocused?.focus?.({ preventScroll: true });
     };
-  }, [active, panelRef, closeOnEscape]);
+  }, [active, panelRef]);
 }

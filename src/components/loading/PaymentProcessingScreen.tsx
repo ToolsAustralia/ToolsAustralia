@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Check, Gift, Star, Zap, AlertCircle, Tag, X } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
+import { useModalA11y } from "@/hooks/useModalBlocking";
 import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries/usePaymentQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
@@ -36,6 +37,9 @@ const STEP_BY_EVENT: Record<string, number> = {
   BenefitsGranted: 3,
 };
 
+/** The trap needs an onClose it will never call — Escape is disabled for this overlay. */
+const noop = () => {};
+
 function deriveStepIndex(
   processed: boolean,
   latestEventType: string | undefined,
@@ -63,11 +67,29 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 }) => {
   const mountTo = typeof document !== "undefined" ? document.body : null;
 
+  /**
+   * This overlay portals to <body>, so it is a SIBLING of whatever modal launched it — not a
+   * descendant. That modal's ModalContainer stays mounted underneath (payment flows keep the
+   * modal open while the webhook settles), and its focus trap is still armed. Without
+   * registering here, that trap sees focus land in this overlay, decides it has escaped, and
+   * drags it back into the invisible modal behind — so the "Still processing" dismiss button,
+   * the only exit from a stuck payment, could never be focused.
+   *
+   * Claiming the top of the shared trap stack makes the lower trap inert and contains focus
+   * here instead. Escape is off deliberately: a payment mid-flight is not casually dismissable,
+   * and the panel offers explicit choices instead.
+   */
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useModalA11y(isVisible, overlayRef, noop, { closeOnEscape: false });
+
   const renderOverlay = (ui: React.ReactNode) => {
+    // The wrapper is unstyled and its children are `fixed`, so it adds no layout — it exists
+    // only to give the trap a single panel node across all four render branches.
+    const wrapped = <div ref={overlayRef}>{ui}</div>;
     if (mountTo) {
-      return createPortal(ui, mountTo);
+      return createPortal(wrapped, mountTo);
     }
-    return ui;
+    return wrapped;
   };
   const [status, setStatus] = useState<PaymentStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
