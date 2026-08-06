@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
+
 /**
  * The two things a MODAL surface owes the page behind it: it must not scroll, and it must not
  * be reachable by Tab.
@@ -43,10 +45,6 @@ let lockCount = 0;
 let savedScrollY = 0;
 let prevScrollbarGutter = "";
 
-function getScrollbarWidthPx(): number {
-  return Math.max(0, window.innerWidth - document.documentElement.clientWidth);
-}
-
 function applyLock() {
   savedScrollY = window.scrollY;
   const html = document.documentElement;
@@ -56,7 +54,7 @@ function applyLock() {
   // which reads as "content jumped left and left a dead strip". Release it, THEN measure —
   // the measurement has to happen before `position: fixed` removes the scrollbar.
   html.style.scrollbarGutter = "auto";
-  const scrollbarWidth = getScrollbarWidthPx();
+  const scrollbarWidth = getViewportScrollbarWidthPx();
 
   const body = document.body;
   body.style.overflow = "hidden";

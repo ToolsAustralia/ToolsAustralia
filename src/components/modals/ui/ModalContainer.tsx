@@ -15,7 +15,7 @@ import {
   reducedPanelVariants,
   sheetPanelVariants,
 } from "@/utils/motion/modalPresets";
-import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
+import { useScrollLock } from "@/hooks/useModalBlocking";
 import { cn } from "@/utils/cn";
 
 export type ModalPresentation = "dialog" | "sheet" | "drawer";
@@ -134,7 +134,6 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
   // Track if we've pushed a history state for this modal instance
   const historyStatePushed = useRef(false);
   const backButtonPressed = useRef(false);
-  const savedScrollPosition = useRef<number>(0);
   const modalContentRef = useRef<HTMLDivElement>(null);
   const modalId = useRef<string>(`modal-${Date.now()}-${Math.random()}`);
   const isHandlingPopState = useRef(false);
@@ -462,52 +461,20 @@ const ModalContainer: React.FC<ModalContainerProps> = ({
     };
   }, [modalBlocking, preventBackButton, onClose]);
 
-  useEffect(() => {
-    if (!modalBlocking) return;
-
-    const isBodyAlreadyLocked = document.body.style.position === "fixed";
-
-    if (isBodyAlreadyLocked) {
-      return () => {};
-    }
-
-    savedScrollPosition.current = window.scrollY;
-
-    const html = document.documentElement;
-    const prevHtmlScrollbarGutter = html.style.scrollbarGutter;
-
-    // `scrollbar-gutter: stable` (globals.css) keeps an empty lane when the root scrollbar is
-    // suppressed — looks like content jumped left with a dead strip on the right. Release gutter
-    // while locked, then measure the real scrollbar width before body `fixed` removes it.
-    html.style.scrollbarGutter = "auto";
-    const scrollbarWidth = getViewportScrollbarWidthPx();
-
-    document.body.style.overflow = "hidden";
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${savedScrollPosition.current}px`;
-    document.body.style.width = "100%";
-
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
-      html.style.setProperty("--scrollbar-width", `${scrollbarWidth}px`);
-      html.setAttribute("data-modal-scroll-lock", "");
-    }
-
-    return () => {
-      if (document.body.style.position === "fixed") {
-        html.style.scrollbarGutter = prevHtmlScrollbarGutter;
-        document.body.style.overflow = "";
-        document.body.style.position = "";
-        document.body.style.top = "";
-        document.body.style.width = "";
-        document.body.style.paddingRight = "";
-        html.style.removeProperty("--scrollbar-width");
-        html.removeAttribute("data-modal-scroll-lock");
-
-        window.scrollTo(0, savedScrollPosition.current);
-      }
-    };
-  }, [modalBlocking]);
+  /**
+   * Page scroll lock. This used to be ~40 lines inline here, and the recipe was right — save
+   * scrollY, pin the body `fixed` at `top: -Y`, compensate the scrollbar, restore on release.
+   * `useScrollLock` is that exact recipe, lifted verbatim; the only change is WHO decides to
+   * release it.
+   *
+   * The inline version guarded against double-LOCKING (`if (document.body.style.position ===
+   * "fixed") return`) but not against premature UNLOCKING. With two of these modals open at
+   * once, the second deferred correctly — and then the FIRST one to close ran its cleanup,
+   * saw `position === "fixed"` (which it had set), and unlocked the page while the second was
+   * still on screen. Reference counting makes the last holder the one that releases, which is
+   * the only version of this that is correct with 58 consumers and a stacking modal system.
+   */
+  useScrollLock(modalBlocking);
 
   if (!isLocked) return null;
 
