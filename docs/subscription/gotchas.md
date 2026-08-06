@@ -309,3 +309,24 @@ See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and channel anal
 ## /terms and /competition-term-majordraw are marketing-class static pages (2026-07-19)
 
 Both legal pages render static/ISR under the no-nonce CSP variant (see docs/security-csp/architecture.md "Route classes") — their `getNonce()` calls were removed (JSON-LD is non-executable data and needs no nonce). Do not add `headers()`/`cookies()`/session reads to them; that silently flips them dynamic.
+
+## The upgrade flow's confirm + payment steps were unreadable in dark mode (2026-08-06)
+
+The `SubscriptionManagementModal → UpgradeConfirmModal → StripePaymentModal` path shipped
+light-only UI on a dark surface at the moment the member commits to a paid upgrade. Worst of
+it: the **Order Summary panel rendered as a solid white card while its own labels themed
+correctly to light-grey** — so "Current plan / Upgrading to / Charge today" and the price were
+effectively invisible on the final confirm step. The "Cancel" button beside "Pay $X" was a
+solid white pill for the same reason.
+
+Root causes were plain CSS, not the Stripe `appearance` plumbing that looks guilty here —
+`ui/Card` and `ui/Button` had no `dark:` tokens, and four upgrade components paint tier
+accents through inline `style={{ color }}`, which `dark:` cannot reach. Full write-up,
+including the theme-source hypothesis that was investigated and **refuted**, lives in
+[shared-ui/gotchas.md](../shared-ui/gotchas.md) — read it before touching tier colours in
+these modals.
+
+Practical rule for this flow: the confirm modal is effectively always-dark (its
+`styles.module.css` hardcodes `#0a0a0a`/`#141416`), so anything you add inside it must be
+styled for a dark surface, and any tier ink must come from `--tier-color` (set on the base
+block, correct in both themes) rather than `--tier-color-deep` (light block only).

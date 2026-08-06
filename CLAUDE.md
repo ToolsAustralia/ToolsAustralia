@@ -310,7 +310,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-08-05",
+  "lastModified": "2026-08-06",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -344,7 +344,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useOpenMembershipModalListener.ts",
         "src/app/(site)/membership/**"
       ],
-      "lastVerified": "2026-08-04"
+      "lastVerified": "2026-08-06"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -536,7 +536,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/partnerWallTiles.ts",
         "src/app/(site)/discount/**"
       ],
-      "lastVerified": "2026-08-05"
+      "lastVerified": "2026-08-06"
     },
     "upsell": {
       "docs": "docs/upsell/",
@@ -756,6 +756,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useInViewportAnimation.ts",
         "src/hooks/useLeafTimer.ts",
         "src/hooks/useTilt.ts",
+        "src/hooks/useModalBlocking.ts",
         "src/types/upsell.ts",
         "src/app/globals.css",
         "tailwind.config.ts",
@@ -767,7 +768,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-08-05"
+      "lastVerified": "2026-08-06"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -948,7 +949,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/constants/**",
         "src/data/**"
       ],
-      "lastVerified": "2026-08-05"
+      "lastVerified": "2026-08-06"
     },
     "support-chat": {
       "docs": "docs/ai-chatbot/",

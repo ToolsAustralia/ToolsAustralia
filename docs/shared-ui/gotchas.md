@@ -799,3 +799,74 @@ The rule's own comment prescribes the escape hatch: use arbitrary values. The ba
 `bg-[#ffffff] dark:bg-[#0a0a0a]`, which matches the scroll body's measured surface exactly and
 is not caught by the selector. **Any element inside `.modal-panel-body` that needs a genuinely
 opaque light surface must do the same** — `bg-white` there does not mean white.
+
+## An `overflow-x-auto` rail inside a grid item sizes the TRACK, not itself (2026-08-06)
+
+`MembershipPrizeChooser` rendered a giant, cropped sliver of one toolbox on every phone. The
+image is `aspect-[4/3] w-full` inside a `<div className="relative">` grid item — nothing about
+it is wide. What was wide was its **sibling**: a 20-thumbnail `overflow-x-auto` rail whose
+max-content width is ~1432px.
+
+A grid item defaults to **`min-width: auto`**, which floors it at its content's min-content
+size, and the single implicit MOBILE track is `auto`-sized. So the track resolved to 1432px
+inside a 348px grid box, the `w-full` image frame filled that 1432px, and the whole right-hand
+column (price, bullets, CTA) went with it. `overflow-x-auto` never engaged, because the rail
+got all the width it asked for.
+
+Two things made this survive review:
+
+1. **The section had `overflow-hidden`**, so it never produced a page-level horizontal
+   scrollbar — the usual tell for this bug. It just rendered wrong, quietly.
+2. **`lg:grid-cols-2` is immune**, because Tailwind's `grid-cols-*` already expands to
+   `repeat(N, minmax(0, 1fr))`. So it looked correct on the desktop the author was using and
+   broke only below `lg`, where the explicit template drops away.
+
+**The rule: any grid or flex item that CONTAINS a scrolling region needs an explicit
+`min-w-0`.** Tailwind's `grid-cols-*` gives you `minmax(0,1fr)` for free only where the
+utility applies; a single-column (or `flex`) parent gives you nothing. Verify at a phone width
+by reading `getComputedStyle(grid).gridTemplateColumns` — if the track is wider than the grid
+box, this is what you are looking at.
+
+## Inline `style={{ color }}` is invisible to `dark:` — the upgrade flow's real dark-mode bug (2026-08-06)
+
+Reported as "the upgrade flow's dark mode is not properly coded — light features in dark
+mode". A 20-agent audit traced it to **two independent causes**, and refuted a third that
+looked far more likely.
+
+**Cause 1 — light-only shared primitives.** `ui/Card.tsx` was `bg-white` with no pair, and
+`ui/Button.tsx` had **no `dark:` token at all** (its `outline` variant is `bg-white`). The
+Card failure is the instructive one: its only consumer, StripePaymentModal's Order Summary,
+themes its *own* text with `dark:`, so in dark mode the labels correctly went light-grey —
+onto a white card. **A light-only primitive does not render "in light mode"; it renders broken
+against any child that respects the theme.** `PaymentProcessingScreen`'s 45s "Still
+processing" card had the same shape (zero `dark:` tokens, pure white, mid-payment).
+
+**Cause 2 — tier inks applied as INLINE STYLES.** `UpgradeConfirmModal/ActionRow`,
+`BenefitsBody`, `StripePaymentModal/UpgradeBenefitsPreview` and `ui/UpgradeBenefitStatGrid`
+all paint tier accents via `style={{ color: theme.deep }}` or
+`style={{ color: "var(--tier-color-deep)" }}`. Those inks (`#0b7e88` teal, `#a17b00` gold,
+`#b91c1c` red) and the pastel borders beside them (sky-200 / amber-200 / red-200) are chosen
+to read on **white**, and a `dark:` utility cannot override an inline style. So they survived
+on a `neutral-950` panel at ~3:1 contrast while the text right next to them themed correctly.
+
+The fixes, in order of preference:
+1. Move the colour to a CSS variable that the `:global(.dark)` block already overrides
+   (`--tier-color` is set on the base block, `--tier-color-deep` only on the light one — that
+   asymmetry is exactly what stranded `BenefitsBody`'s glyphs).
+2. Failing that, resolve the value in JS from `useHtmlDarkForUi()` and keep two maps.
+3. Last resort, an `!important` utility (`dark:!text-white`) — already the local idiom in
+   `UpgradeBenefitsPreview`.
+
+**What was REFUTED, and why it matters:** the obvious suspect was that six payment modals read
+`useThemeStore((s) => s.theme === "dark")` instead of `useHtmlDarkForUi()`, so Stripe's iframe
+would get the wrong `appearance.theme`. It is a real inconsistency but **not this bug**:
+the store's default is already `"dark"`, zustand's persist rehydrates synchronously from
+localStorage (so there is no pre-hydration light render), the one genuine divergence path
+(`PromoThemeExperimentGate` calling `setState` instead of `setTheme`) self-heals in a root
+`useLayoutEffect` before any modal mounts, and every `<Elements>` already carries an
+isDark-keyed remount key so it re-themes anyway. Chasing the plumbing would have cost a day
+and fixed nothing — the bug was always plain CSS.
+
+**Guard:** `Card.test.ts` now asserts every `bg-`/`text-`/`border-` token it renders has a
+`dark:` counterpart (`npm run test:ui-primitives`). That catches cause 1. Cause 2 is not
+mechanically checkable — when you reach for an inline colour, pick option 1 above.
