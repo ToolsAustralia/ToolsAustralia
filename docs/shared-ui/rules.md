@@ -105,6 +105,28 @@ Not every overlay needs the portal: `ShopContent` and `MiniDrawsContent` were ve
 no stacking-context ancestor, so their `z-[110]` already beats the header. Check before adding
 one — `document.elementFromPoint` over the header while the overlay is open answers it.
 
-Still outstanding (audited, not yet fixed): `SheetShell` (five dashboard sheets) locks with the
-weak body-only mechanism and has a nested-restore bug, and `ModalContainer` itself has no focus
-trap, no Escape handler and no ownership token on release.
+**`ModalContainer` and `SheetShell` now route through the same hook**, so every one of their
+~65 consumers inherits reference-counted locking and a focus trap without changes of its own.
+
+Two things to know before touching them:
+
+- **`ModalContainer` keys Escape to `closeOnBackdrop`.** That prop already meant "this surface
+  accepts casual dismissal", so a modal that opted out of backdrop-click also opts out of
+  Escape. Handing a keyboard user a dismissal route the pointer does not have is how a payment
+  gets abandoned mid-request. If you need the trap without the key elsewhere, `useModalA11y`
+  takes `{ closeOnEscape: false }`.
+- **Release on the OPEN state, not on unmount.** Anything behind an exit animation
+  (`AnimatePresence`, framer springs, `ModalContainer`'s own `isLocked` tail) would otherwise
+  hold the page after the panel is visually gone.
+
+**Guard rail:** `internal-norm/no-adhoc-scroll-lock` flags direct
+`document.body.style.{overflow,overflowY,position}` writes. It is set to **`warn`, not
+`error`**, because 57 pre-existing hand-rolled locks remain — `Header`, `AdminPage`,
+`RewardsFloatingWidget`, `WinnersTestimony`, the `*/Shell.tsx` family and the two admin filter
+drawers. The rule's job today is to stop copy #21 appearing in review; flipping it to `error`
+is the last step of that migration, not the first. Sweeping 57 call sites in one unverifiable
+pass is exactly the blast radius this rule exists to argue against.
+
+Still outstanding: those 57 sites, and `ModalContainer`'s hardcoded
+`aria-labelledby="modal-title"` — 56 of its 58 consumers define no such id, so most modals
+point at nothing. Unrelated to scrolling, but it is the other half of the same a11y story.
