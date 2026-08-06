@@ -114,8 +114,11 @@ const UpgradeBenefitsPreview: React.FC<UpgradeBenefitsPreviewProps> = ({
           />
         </div>
         <div className="min-w-0 flex-1">
+          {/* `theme.deep` is the light-mode ink. Inline styles are invisible to `dark:`, so
+              the dark arm has to be an `!important` utility — the same trick lines 133/138
+              already use for the tier name two lines down. */}
           <p
-            className="text-[10px] font-extrabold tracking-[0.16em] uppercase"
+            className="text-[10px] font-extrabold tracking-[0.16em] uppercase dark:!text-white"
             style={{ color: theme.deep }}
           >
             {fromPackageName ? "Upgrading to" : "You're getting"}
@@ -127,7 +130,7 @@ const UpgradeBenefitsPreview: React.FC<UpgradeBenefitsPreviewProps> = ({
                   {fromPackageName}
                 </span>{" "}
                 <ArrowUp
-                  className="inline h-3 w-3"
+                  className="inline h-3 w-3 dark:!text-white"
                   style={{ color: theme.deep }}
                 />{" "}
                 <span style={{ color: theme.deep }} className="dark:!text-white">

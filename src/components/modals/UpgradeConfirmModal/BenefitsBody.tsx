@@ -31,10 +31,11 @@ const CheckItem: React.FC<{
   children: React.ReactNode;
 }> = ({ icon, children }) => (
   <li className="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-200 leading-[1.35]">
-    <span
-      className="flex-none"
-      style={{ color: "var(--tier-color-deep)" }}
-    >
+    {/* `--tier-color-deep` is defined only in the LIGHT `.scrollFrame[data-tier=…]` blocks —
+        the dark block overrides the stat vars but not this one — so an inline
+        `color: var(--tier-color-deep)` left these glyphs in the light-mode deep ink on the
+        dark panel. `--tier-color` is the bright stop and IS set in both. */}
+    <span className="flex-none text-[color:var(--tier-color-deep)] dark:text-[color:var(--tier-color)]">
       {icon}
     </span>
     {children}
