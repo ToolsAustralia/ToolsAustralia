@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import Button from "../Button";
+import { assertThemePaired } from "./assertThemePaired";
 
 let testsRun = 0;
 let testsFailed = 0;
@@ -88,6 +89,17 @@ test("asChild + disabled does not pass disabled attr to non-button child", () =>
   const withoutClassValue = html.replace(/class="[^"]*"/g, 'class=""');
   assert.ok(!withoutClassValue.includes('disabled="disabled"') && !withoutClassValue.match(/\sdisabled[\s>]/), "should NOT have disabled attr");
   assert.ok(html.includes('aria-disabled="true"'), "should have aria-disabled");
+});
+
+test("every variant x tone is theme-paired", () => {
+  let checked = 0;
+  for (const variant of variants) {
+    for (const tone of tones) {
+      const html = renderToString(React.createElement(Button, { variant, tone, children: "x" }));
+      checked += assertThemePaired(html, `Button variant=${variant} tone=${tone}`).length;
+    }
+  }
+  assert.ok(checked > 0, "expected to find themeable tokens to check");
 });
 
 console.log("\n========================================");

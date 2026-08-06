@@ -850,9 +850,15 @@ to read on **white**, and a `dark:` utility cannot override an inline style. So 
 on a `neutral-950` panel at ~3:1 contrast while the text right next to them themed correctly.
 
 The fixes, in order of preference:
-1. Move the colour to a CSS variable that the `:global(.dark)` block already overrides
-   (`--tier-color` is set on the base block, `--tier-color-deep` only on the light one — that
-   asymmetry is exactly what stranded `BenefitsBody`'s glyphs).
+1. **Fix the VARIABLE, not the consumer.** `--tier-color-deep` was set only in the light
+   `.scrollFrame[data-tier=…]` blocks — the dark ones overrode three stat vars and skipped the
+   ink — which is what stranded `BenefitsBody`'s glyphs. The first attempt patched the one
+   glyph anyone had noticed, with a `dark:text-[color:var(--tier-color)]` utility. That left
+   every OTHER reader broken, including two byte-identical call sites in
+   `DowngradeConfirmModal` that were live in the default dark theme. Giving the variable a
+   dark value in both stylesheets was six lines and fixed all of them at once.
+   **Upgrade and Downgrade are done; `PackageDetailModal`, `ReferFriendModal` and
+   `SubscriptionExplainerModal` still define it light-only.**
 2. Failing that, resolve the value in JS from `useHtmlDarkForUi()` and keep two maps.
 3. Last resort, an `!important` utility (`dark:!text-white`) — already the local idiom in
    `UpgradeBenefitsPreview`.

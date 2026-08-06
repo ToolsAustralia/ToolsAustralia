@@ -757,6 +757,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useLeafTimer.ts",
         "src/hooks/useTilt.ts",
         "src/hooks/useModalBlocking.ts",
+        "eslint/rules/no-adhoc-scroll-lock.js",
         "src/types/upsell.ts",
         "src/app/globals.css",
         "tailwind.config.ts",

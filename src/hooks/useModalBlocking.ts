@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
+import { getViewportScrollbarWidthPx } from "@/utils/dom/getScrollbarWidth";
+
 /**
  * The two things a MODAL surface owes the page behind it: it must not scroll, and it must not
  * be reachable by Tab.
@@ -43,10 +45,6 @@ let lockCount = 0;
 let savedScrollY = 0;
 let prevScrollbarGutter = "";
 
-function getScrollbarWidthPx(): number {
-  return Math.max(0, window.innerWidth - document.documentElement.clientWidth);
-}
-
 function applyLock() {
   savedScrollY = window.scrollY;
   const html = document.documentElement;
@@ -56,7 +54,7 @@ function applyLock() {
   // which reads as "content jumped left and left a dead strip". Release it, THEN measure —
   // the measurement has to happen before `position: fixed` removes the scrollbar.
   html.style.scrollbarGutter = "auto";
-  const scrollbarWidth = getScrollbarWidthPx();
+  const scrollbarWidth = getViewportScrollbarWidthPx();
 
   const body = document.body;
   body.style.overflow = "hidden";
@@ -108,8 +106,29 @@ export function useScrollLock(active: boolean): void {
   }, [active]);
 }
 
+/**
+ * `iframe` is in here deliberately. Stripe's Payment Element renders the card fields inside
+ * one, and a selector that omits it computes a `last` that sits BEFORE the iframe — so the
+ * wrap-around fires early and Tab skips the card inputs entirely, making payment unreachable
+ * by keyboard. That would be a worse bug than the one this trap fixes.
+ */
 const FOCUSABLE =
-  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  'button, [href], input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Stack of currently-active traps, innermost last. Only the top one acts.
+ *
+ * Without this, two open modals means two document-level capture listeners, and BOTH run on
+ * every Tab. Because `ModalContainer` portals to <body>, a nested modal is a DOM *sibling* of
+ * the outer one — so the outer trap sees `!panel.contains(active)` and yanks focus into
+ * itself. Today the inner one happens to win because it registered last and therefore runs
+ * last, quietly undoing the theft. That is attach-order luck, not design: the outer modal
+ * re-running its effect (an `active` or `closeOnEscape` change) re-attaches it last and flips
+ * the outcome, at which point Tab inside the inner modal throws you into the outer one.
+ *
+ * A stack makes it deterministic and stops the per-keystroke focus tug-of-war.
+ */
+const trapStack: symbol[] = [];
 
 /**
  * Make a modal panel keyboard-honest: focus moves in on open, Tab cannot leave, Escape
@@ -127,13 +146,40 @@ const FOCUSABLE =
 export function useModalA11y(
   active: boolean,
   panelRef: React.RefObject<HTMLElement | null>,
-  onClose: () => void
+  onClose: () => void,
+  options?: {
+    /**
+     * Close on Escape. Default true.
+     *
+     * Set false for a surface that deliberately refuses casual dismissal — one mid-request,
+     * or one whose backdrop is already inert. The trap and focus restore still apply; only
+     * the key is dropped. Without this the hook would hand a keyboard user a dismissal route
+     * the pointer does not have, which is how you abandon a payment with Escape.
+     */
+    closeOnEscape?: boolean;
+  }
 ): void {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  /**
+   * A REF, not a dep. `closeOnEscape` is derived from props that legitimately change WHILE the
+   * modal is open — ModalContainer maps it from `closeOnBackdrop`, and admin modals flip that
+   * to false for the duration of a request. As a dep it tore the effect down mid-open, and
+   * teardown calls `previouslyFocused.focus()` — which is the trigger BEHIND the scrim. A
+   * screen reader would leave the dialog, land on a covered control, then get dragged back and
+   * re-announced 30ms later. Reading it through a ref keeps the handler current without
+   * remounting the trap.
+   */
+  const closeOnEscapeRef = useRef(options?.closeOnEscape ?? true);
+  closeOnEscapeRef.current = options?.closeOnEscape ?? true;
 
   useEffect(() => {
     if (!active) return;
+
+    const token = Symbol("modal-trap");
+    trapStack.push(token);
+    /** Only the innermost open modal owns the keyboard. */
+    const isTopmost = () => trapStack[trapStack.length - 1] === token;
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
     // A tick, so the panel has painted before focus lands — focusing an unpainted node is a
@@ -141,12 +187,26 @@ export function useModalA11y(
     const focusTimer = window.setTimeout(() => {
       const panel = panelRef.current;
       if (!panel) return;
+      // Same reason as the keydown guard: if this modal has since been covered by another,
+      // pulling focus back would drag the user out of the one actually on top.
+      if (!isTopmost()) return;
       if (panel.contains(document.activeElement)) return;
       panel.querySelector<HTMLElement>(FOCUSABLE)?.focus({ preventScroll: true });
     }, 30);
 
     const onKeyDown = (e: KeyboardEvent) => {
+      // An outer modal must not answer for keys aimed at the one stacked on top of it —
+      // neither by trapping its Tab nor by closing itself on its Escape.
+      if (!isTopmost()) return;
       if (e.key === "Escape") {
+        if (!closeOnEscapeRef.current) return;
+        // Yield to an open dropdown inside the panel. Escape on a `<Select>` means "close the
+        // select", not "discard this form" — and before this guard it did the latter, taking a
+        // half-filled admin form (Create Experiment, targeting, multiplier config) with it, no
+        // confirmation and no undo. `[data-dropdown-list]` is the existing marker Select,
+        // Dropdown and BirthdatePicker already render, and that ModalContainer itself keys off.
+        // One Escape closes the dropdown, the next closes the modal — the expected two-step.
+        if (panelRef.current?.querySelector("[data-dropdown-list]")) return;
         e.preventDefault();
         onCloseRef.current();
         return;
@@ -178,6 +238,11 @@ export function useModalA11y(
     return () => {
       window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", onKeyDown, true);
+      const i = trapStack.lastIndexOf(token);
+      if (i !== -1) trapStack.splice(i, 1);
+      // Splice by identity, not pop(): overlays do not always close innermost-first (a route
+      // change can unmount an outer one while an inner is still up), and popping blindly would
+      // hand ownership to a trap that has already gone.
       previouslyFocused?.focus?.({ preventScroll: true });
     };
   }, [active, panelRef]);

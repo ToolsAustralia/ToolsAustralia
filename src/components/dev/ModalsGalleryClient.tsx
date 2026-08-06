@@ -34,6 +34,8 @@ import LoginModal from "@/components/modals/LoginModal";
 import GateClosedModal from "@/components/modals/GateClosedModal";
 import ReportProblemModal from "@/components/modals/ReportProblemModal";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
+import SheetShell, { SheetHead } from "@/components/ui/SheetShell";
+import PastDueTierSwitchModal from "@/components/sections/account-membership/PastDueTierSwitchModal";
 import MembershipModal from "@/components/modals/MembershipModal";
 import SpecialPackagesModal from "@/components/modals/SpecialPackagesModal";
 import UserSetupModal from "@/components/modals/UserSetupModal";
@@ -403,6 +405,18 @@ const BASE_ENTRIES: Omit<Entry, "sourcePath">[] = [
   { id: "renewal-failed", label: "RenewalFailedModal", category: "Account", note: "Stripe — needs logged-in user for full UI" },
   { id: "report-problem", label: "ReportProblemModal", category: "Account" },
   { id: "confirmation", label: "ConfirmationModal (warning)", category: "Account" },
+  {
+    id: "past-due-tier-switch",
+    label: "PastDueTierSwitchModal",
+    category: "Account",
+    note: "Needs a past_due subscription in the app — reachable here instead. Escape must NOT close it while submitting.",
+  },
+  {
+    id: "sheet-shell",
+    label: "SheetShell (dashboard sheet)",
+    category: "Account",
+    note: "Shared shell for Support / Payment / Manage — those five are auth-gated, this is not",
+  },
   { id: "prize-specs", label: "PrizeSpecificationsModal", category: "Account" },
   { id: "export", label: "ExportModal", category: "Admin — data & catalog" },
   { id: "icon-picker", label: "IconPickerModal", category: "Admin — data & catalog" },
@@ -1087,6 +1101,39 @@ export default function ModalsGalleryClient() {
         effectiveDateLabel="Fri 26 Dec"
       />
       <ReportProblemModal isOpen={isOpen("report-problem")} onClose={close} errorContext={MOCK_ERROR_CONTEXT} />
+      {/* SheetShell's five real consumers (Support / Payment / Manage sheets, the mini-draw
+          entry sheet, rewards claimables) all sit behind /my-account, so the shell itself was
+          the one shared overlay primitive with no reviewable surface. Enough content here to
+          make it scroll, which is what exercises the scroll lock and overscroll containment. */}
+      {/* Needs a real past_due subscription to reach in the app, which made it the one
+          modal on this branch that could not be exercised. Its distinguishing behaviour is
+          that it refuses dismissal while a switch is in flight — scrim, X and Escape all go
+          inert together. */}
+      <PastDueTierSwitchModal
+        isOpen={isOpen("past-due-tier-switch")}
+        onClose={close}
+        currentTierLabel="Tradie"
+        newTierName="Foreman"
+        newTierPrice={40}
+        onSwitched={close}
+        onRecovered={close}
+      />
+      <SheetShell open={isOpen("sheet-shell")} onClose={close} labelledBy="gallery-sheet-title">
+        <SheetHead
+          id="gallery-sheet-title"
+          title="Sheet shell"
+          sub="Bottom sheet on mobile, centred panel at lg"
+          onClose={close}
+        />
+        <div className="overflow-y-auto overscroll-contain px-5 pb-6 text-sm text-muted-token">
+          {Array.from({ length: 12 }, (_, i) => (
+            <p key={i} className="mb-3">
+              Row {i + 1} — scroll to the end of this panel and keep going: the page behind must
+              not move, and focus must not leave the sheet on Tab.
+            </p>
+          ))}
+        </div>
+      </SheetShell>
       <ConfirmationModal
         isOpen={isOpen("confirmation")}
         onClose={close}

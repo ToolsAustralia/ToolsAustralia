@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import Card from "../Card";
+import { assertThemePaired } from "./assertThemePaired";
 
 let testsRun = 0;
 let testsFailed = 0;
@@ -46,8 +47,11 @@ test("compound: Card + Card.Header + Card.Body + Card.Footer", () => {
  * (StripePaymentModal's Order Summary) themed its own text with `dark:`, so in dark mode the
  * labels went light-grey on a white card — unreadable, on the confirm step of a paid upgrade.
  * A light-only primitive does not render "in light mode"; it renders broken against any child
- * that respects the theme. Asserted on the class string rather than by eye, because the
- * failure is invisible until someone opens that exact modal in that exact theme.
+ * that respects the theme.
+ *
+ * The assertion lives in `assertThemePaired` so Button and Badge run the same check — the
+ * first version of it was inline here and guarded Card alone, which let an identical defect
+ * sit undetected in Badge while this file stayed green.
  */
 test("every surface and ink token is theme-paired", () => {
   const html = renderToString(
@@ -59,19 +63,9 @@ test("every surface and ink token is theme-paired", () => {
       React.createElement(Card.Footer, null, "F")
     )
   );
-  const classes = [...html.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1].split(/\s+/));
-  const needsPair = classes.filter((c) =>
-    /^(bg|text|border)-(white|black|neutral-\d{2,3})$/.test(c)
-  );
-  for (const c of needsPair) {
-    const [prop] = c.split("-");
-    assert.ok(
-      classes.some((other) => other.startsWith(`dark:${prop}-`)),
-      `"${c}" has no dark: counterpart — it will render light-on-light in dark mode`
-    );
-  }
-  // Guard the guard: if the regex stops matching anything, the test silently passes forever.
-  assert.ok(needsPair.length > 0, "expected to find themeable tokens to check");
+  const checked = assertThemePaired(html, "Card");
+  // Guard the guard: if the regex stops matching anything, the test passes forever.
+  assert.ok(checked.length > 0, "expected to find themeable tokens to check");
 });
 
 console.log("\n========================================");

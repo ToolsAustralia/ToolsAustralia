@@ -126,16 +126,31 @@
 /* Dark mode tier-stat overrides — invert panel tints for dark frame.
  * Tailwind dark strategy is "class" so :global(.dark) targets the html.dark ancestor. */
 :global(.dark) .scrollFrame[data-tier="tradie"] {
+  /* The INK half of the tier theme. This block overrode the three stat vars but not
+     this one, so every consumer of --tier-color-deep painted the light-mode deep
+     swatch onto the dark frame — ~3:1 contrast. The variable was the bug, not the
+     components reading it. */
+  --tier-color-deep: #5ce0ff;
   --tier-stat-bg: linear-gradient(180deg, rgba(0, 194, 237, 0.10), rgba(0, 0, 0, 0));
   --tier-stat-border: rgba(0, 194, 237, 0.32);
   --tier-icon-bg-light: rgba(0, 194, 237, 0.18);
 }
 :global(.dark) .scrollFrame[data-tier="foreman"] {
+  /* The INK half of the tier theme. This block overrode the three stat vars but not
+     this one, so every consumer of --tier-color-deep painted the light-mode deep
+     swatch onto the dark frame — ~3:1 contrast. The variable was the bug, not the
+     components reading it. */
+  --tier-color-deep: #ffe066;
   --tier-stat-bg: linear-gradient(180deg, rgba(255, 210, 0, 0.10), rgba(0, 0, 0, 0));
   --tier-stat-border: rgba(255, 210, 0, 0.32);
   --tier-icon-bg-light: rgba(255, 210, 0, 0.18);
 }
 :global(.dark) .scrollFrame[data-tier="boss"] {
+  /* The INK half of the tier theme. This block overrode the three stat vars but not
+     this one, so every consumer of --tier-color-deep painted the light-mode deep
+     swatch onto the dark frame — ~3:1 contrast. The variable was the bug, not the
+     components reading it. */
+  --tier-color-deep: #ff6b6b;
   --tier-stat-bg: linear-gradient(180deg, rgba(238, 0, 0, 0.10), rgba(0, 0, 0, 0));
   --tier-stat-border: rgba(238, 0, 0, 0.32);
   --tier-icon-bg-light: rgba(238, 0, 0, 0.18);

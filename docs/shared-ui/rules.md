@@ -105,6 +105,55 @@ Not every overlay needs the portal: `ShopContent` and `MiniDrawsContent` were ve
 no stacking-context ancestor, so their `z-[110]` already beats the header. Check before adding
 one — `document.elementFromPoint` over the header while the overlay is open answers it.
 
-Still outstanding (audited, not yet fixed): `SheetShell` (five dashboard sheets) locks with the
-weak body-only mechanism and has a nested-restore bug, and `ModalContainer` itself has no focus
-trap, no Escape handler and no ownership token on release.
+**`ModalContainer` and `SheetShell` now route through the same hook**, so every one of their
+~65 consumers inherits reference-counted locking and a focus trap without changes of its own.
+
+Two things to know before touching them:
+
+- **`ModalContainer` keys Escape to `closeOnBackdrop`.** That prop already meant "this surface
+  accepts casual dismissal", so a modal that opted out of backdrop-click also opts out of
+  Escape. Handing a keyboard user a dismissal route the pointer does not have is how a payment
+  gets abandoned mid-request. If you need the trap without the key elsewhere, `useModalA11y`
+  takes `{ closeOnEscape: false }`.
+- **Release on the OPEN state, not on unmount.** Anything behind an exit animation
+  (`AnimatePresence`, framer springs, `ModalContainer`'s own `isLocked` tail) would otherwise
+  hold the page after the panel is visually gone.
+
+**Guard rail:** `internal-norm/no-adhoc-scroll-lock` flags direct
+`document.body.style.{overflow,overflowY,position}` writes, at **`warn`** — 57 pre-existing
+hand-rolled locks remain (`Header`, `AdminPage`, `RewardsFloatingWidget`, `WinnersTestimony`,
+the `*/Shell.tsx` family, the two admin filter drawers).
+
+**A warning alone was not enough**, and an audit was right to call that a band-aid: warning
+#58 would appear in a run that already emitted 57 and exits the same way, so a reviewer has no
+signal distinguishing the new one from the noise they have learned to scroll past.
+
+**Be honest about what the ratchet does today, though:** `npm run lint` ALREADY exits non-zero
+because of **6 pre-existing errors** in `e2e/` and `scripts/`, so the warning budget does not
+yet change any exit code. It is a tripwire waiting to become load-bearing — fix those 6 errors
+and it starts governing immediately, at which point it has zero headroom, so expect to move the
+number when unrelated warnings are added or removed. So `lint`
+now carries **`--max-warnings 77`** (the current total). The count can only go down: a new
+hand-rolled lock fails the command rather than needing to be spotted.
+
+**`Header` and `AdminPage` are now migrated** — they were the two genuinely live surfaces, and
+both had the same defect for the same reason: they cleared the body styles unconditionally in
+BOTH an else-branch and a cleanup, so closing the mobile menu / admin sidebar released whatever
+modal was open underneath. The Header is mounted on every page, so that one was reachable from
+anywhere. AdminPage additionally re-derived its restore position by parsing `body.style.top`
+back out of the DOM, which breaks the moment anything else owns that property.
+
+That took the violation count 57 → 45 and the repo-wide warning count 89 → **78**, and the
+ratchet moved with it. What remains is `overflow`-only copies that `useScrollLock`'s
+`position: fixed` already neutralises when it owns the lock, plus admin-only surfaces — worth
+finishing, no longer urgent.
+
+**Verified under WebKit** (Safari's engine, iPhone 13 viewport, real touch gestures): with the
+`/discount` sheet open and the body pinned at `-900px`, an in-panel swipe leaves the lock
+intact; the `/shop` drawer behaves the same. This is the check that actually justifies
+`position: fixed` — every earlier run was desktop Chromium, where plain `overflow: hidden`
+would have passed too and proved nothing.
+
+Still outstanding: those 57 sites, and `ModalContainer`'s hardcoded
+`aria-labelledby="modal-title"` — 56 of its 58 consumers define no such id, so most modals
+point at nothing. Unrelated to scrolling, but it is the other half of the same a11y story.

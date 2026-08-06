@@ -106,6 +106,8 @@ export default function DiscountPageClient() {
   // Reset paging whenever the result set changes underneath the reader.
   React.useEffect(() => setLimit(PAGE_SIZE), [debouncedQuery, category, levels, openOnly, sort]);
 
+  const stickyBarRef = React.useRef<HTMLDivElement>(null);
+
   /** "Any" (null) clears; a rung toggles. Kept sorted so the state reads like the ladder. */
   const toggleLevel = React.useCallback((value: number | null) => {
     setLevels((prev) =>
@@ -202,6 +204,29 @@ export default function DiscountPageClient() {
     return () => io.disconnect();
   }, [headerBottom]);
 
+  /**
+   * NO SCROLL COMPENSATION HERE — deliberately, and it was tried.
+   *
+   * Collapsing the docked bar removes ~174px of in-flow height, so content below shifts up
+   * once at the threshold. The obvious fix is a layout effect that measures the bar across
+   * the change and `window.scrollBy`s the delta to cancel it. That was implemented, and it
+   * made things worse: the compensating scroll moves the VIEWPORT relative to the sentinel
+   * this observer watches, so it re-triggers the very transition that caused it.
+   *
+   * Measured with 20px increments across the boundary — a wheel, not a jump. With the
+   * compensation in place, content moved 194px, then -106, -154, +74 for successive 20px
+   * scrolls: the page fights the reader right where they are trying to read. Without it,
+   * every step moves content exactly 20px and `data-stuck` flips exactly once.
+   *
+   * A single one-off shift at the threshold is what every collapsing sticky header does. An
+   * unstable boundary is a bug. If the shift is ever worth removing, do it WITHOUT touching
+   * scroll position — hysteresis (separate dock/undock sentinels offset by the collapse
+   * delta) is the approach that does not feed back.
+   *
+   * A single-jump `scrollTo` test CANNOT see this — it lands past the boundary and looks
+   * clean. Verify this area with incremental scrolling only.
+   */
+
   const reset = React.useCallback(() => {
     setQuery("");
     setCategory(null);
@@ -290,6 +315,7 @@ export default function DiscountPageClient() {
               none. */}
           <div ref={sentinelRef} aria-hidden className="h-px" />
           <div
+            ref={stickyBarRef}
             className="ta-dc-stick sticky z-20 -mx-4 px-4 py-2.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
             style={{ top: stickyTop }}
             data-stuck={stuck}
@@ -308,6 +334,7 @@ export default function DiscountPageClient() {
               signedIn={signedIn}
               resultCount={filtered.length}
               onReset={reset}
+              stuck={stuck}
             />
           </div>
 
