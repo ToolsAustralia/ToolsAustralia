@@ -106,8 +106,29 @@ export function useScrollLock(active: boolean): void {
   }, [active]);
 }
 
+/**
+ * `iframe` is in here deliberately. Stripe's Payment Element renders the card fields inside
+ * one, and a selector that omits it computes a `last` that sits BEFORE the iframe — so the
+ * wrap-around fires early and Tab skips the card inputs entirely, making payment unreachable
+ * by keyboard. That would be a worse bug than the one this trap fixes.
+ */
 const FOCUSABLE =
-  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  'button, [href], input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Stack of currently-active traps, innermost last. Only the top one acts.
+ *
+ * Without this, two open modals means two document-level capture listeners, and BOTH run on
+ * every Tab. Because `ModalContainer` portals to <body>, a nested modal is a DOM *sibling* of
+ * the outer one — so the outer trap sees `!panel.contains(active)` and yanks focus into
+ * itself. Today the inner one happens to win because it registered last and therefore runs
+ * last, quietly undoing the theft. That is attach-order luck, not design: the outer modal
+ * re-running its effect (an `active` or `closeOnEscape` change) re-attaches it last and flips
+ * the outcome, at which point Tab inside the inner modal throws you into the outer one.
+ *
+ * A stack makes it deterministic and stops the per-keystroke focus tug-of-war.
+ */
+const trapStack: symbol[] = [];
 
 /**
  * Make a modal panel keyboard-honest: focus moves in on open, Tab cannot leave, Escape
@@ -145,17 +166,28 @@ export function useModalA11y(
   useEffect(() => {
     if (!active) return;
 
+    const token = Symbol("modal-trap");
+    trapStack.push(token);
+    /** Only the innermost open modal owns the keyboard. */
+    const isTopmost = () => trapStack[trapStack.length - 1] === token;
+
     const previouslyFocused = document.activeElement as HTMLElement | null;
     // A tick, so the panel has painted before focus lands — focusing an unpainted node is a
     // no-op in some browsers. `preventScroll` because the panel may be mid-transition.
     const focusTimer = window.setTimeout(() => {
       const panel = panelRef.current;
       if (!panel) return;
+      // Same reason as the keydown guard: if this modal has since been covered by another,
+      // pulling focus back would drag the user out of the one actually on top.
+      if (!isTopmost()) return;
       if (panel.contains(document.activeElement)) return;
       panel.querySelector<HTMLElement>(FOCUSABLE)?.focus({ preventScroll: true });
     }, 30);
 
     const onKeyDown = (e: KeyboardEvent) => {
+      // An outer modal must not answer for keys aimed at the one stacked on top of it —
+      // neither by trapping its Tab nor by closing itself on its Escape.
+      if (!isTopmost()) return;
       if (e.key === "Escape") {
         if (!closeOnEscape) return;
         e.preventDefault();
@@ -189,6 +221,11 @@ export function useModalA11y(
     return () => {
       window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", onKeyDown, true);
+      const i = trapStack.lastIndexOf(token);
+      if (i !== -1) trapStack.splice(i, 1);
+      // Splice by identity, not pop(): overlays do not always close innermost-first (a route
+      // change can unmount an outer one while an inner is still up), and popping blindly would
+      // hand ownership to a trap that has already gone.
       previouslyFocused?.focus?.({ preventScroll: true });
     };
   }, [active, panelRef, closeOnEscape]);
