@@ -328,6 +328,45 @@ Before R7's timing policy, GTM + Meta + TikTok + Klaviyo + Contentsquare (~539 K
 
 Pure `lazyOnload` for the suite LOST every queued event when a visitor bounced before browser idle — including the authed `Started Checkout` that drives the abandoned-checkout email. `KlaviyoScriptLoader` now injects the suite script on the FIRST `klaviyo`/`_klOnsite` push (patched queue push, with retry because the afterInteractive queue snippet may install after the effect) or at browser idle, whichever comes first. Tracked visitors ship events as fast as pre-split; event-less visitors keep the full deferral. Don't "simplify" back to a plain lazyOnload `<Script>`.
 
+## Contentsquare double-counted every SPA navigation (tag-side CSTC + client push, 2026-08-07)
+
+**Incident (verified live 2026-08-07):** `/membership` and `/faq` each sent **two** artificial
+pageviews per client-side navigation (`pn=2` and `pn=3`, then `pn=5` and `pn=6`). Cause: the live
+Contentsquare project config contained a **CSTC** snippet pairing the "Artificial Pageview"
+template with a **"HistoryChange"** trigger (fires on `pushState` / `replaceState` / `popstate`)
+**in addition to** our own `trackPageview` push. Contentsquare does not de-duplicate the two —
+its docs assume you use CSTC or a manual push, never both. Effect: inflated pages/session and
+phantom self-loops (`/membership` → `/membership`) in Journey Analysis.
+
+**Why code review could not catch it:** the CSTC snippet lives in the Contentsquare dashboard,
+not in this repo. Worse, `ContentsquarePageTracker`'s header comment asserted the tag "does NOT
+auto-detect History API navigations" — true when verified against the bundle on 2026-08-03, and
+silently false once the snippet was enabled. A comment about third-party dashboard state ages
+without any local signal; verify it, don't trust it.
+
+**Resolution:** the CSTC snippet was disabled and the client-side push kept — it also applies
+`shouldTrackRoute()` filtering and the 255-char cap, which the tag-side trigger does not.
+Check the (public) tag-side config with
+`curl -s https://t.contentsquare.net/settings/598444.json | jq .implementations`; an empty array
+is healthy. Full rule: [rules.md R11](./rules.md#r11-contentsquare-virtual-pageviews-come-from-the-client-push-only--never-also-from-a-tag-side-cstc-snippet).
+
+## Contentsquare replay masks form fields, not text nodes — rendered PII was unmasked until 2026-08-07
+
+Verified against the live project config on 2026-08-07: session replay ran at 100% capture with
+**no masking configured at all** (`anonymisationMethod: null`, `textVisibilityEnabled: 0`,
+`maskMedia: false`). That is less exposed than it sounds — `<input>` / `<textarea>` /
+contenteditable content is masked by default, and Automatic Personal Data Redaction (always on)
+strips emails, JWTs, OAuth tokens and card numbers from the DOM, URLs and error strings. The gap
+was **personal data rendered as a text node**: a member's name in the header, a shipping address
+on checkout success, a date of birth, free text typed into support chat.
+
+Closed by pushing `setPIISelectors` with `[data-cs-mask]` and marking those render sites — see
+[frontend.md](./frontend.md#contentsquare-pii-masking--data-cs-mask-2026-08-07). Two footguns when
+touching this: the push **must** happen before the main tag fires (Contentsquare's docs are
+explicit; a late masking rule has already lost the first pageview), and masking is driven by the
+bare attribute only — adding a class-based selector list instead would break the next time someone
+renames a class.
+
 ## GTM custom-HTML tags are blocklisted client-side (2026-07-20)
 
 `GTM_INIT_SNIPPET` pushes `{'gtm.blocklist':['html']}` before gtm.js loads. Why: container GTM-TBCCQQVZ's ONLY tag is a dead legacy Hotjar custom-HTML tag whose loader is CSP-blocked (console error on every page); the blocklist stops GTM from attempting the injection at all. If you ever add a legitimate custom-HTML tag to the container, REMOVE the blocklist key from `src/utils/security/inline-snippets.ts` (and recompute the GTM_INIT_SNIPPET hash in csp.ts — `npm run test:csp-inline-hashes` guards the pairing). Best end-state: delete the Hotjar tag in the GTM UI, then this blocklist becomes belt-and-braces.

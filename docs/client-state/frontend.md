@@ -27,6 +27,9 @@ the recurring-vs-new split needs no separate request. See
 - `<DeviceTierProvider />` — once, writes `data-tier` / `data-viewport-tier` / `data-save-data` on `<html>`. See [shared-ui/patterns.md](../shared-ui/patterns.md#device-tier-system).
 - `<MotionConfig reducedMotion="user">` — framer-motion respects OS `prefers-reduced-motion`.
 - Tracking trackers (Affiliate / Referral / PromoLink / Klaviyo identifier).
+- `<ContentsquareDynamicVariables />` (2026-08-07) — renders null, pushes Contentsquare dynamic variables. Mounted immediately after `<KlaviyoUserIdentifier />` and gated at the mount site on `process.env.NEXT_PUBLIC_CONTENTSQUARE_ID` (blank id ⇒ never mounted), matching how the tag itself is gated in `src/app/layout.tsx` ([tracking/rules.md](../tracking/rules.md) R8). The component's own behaviour is documented by the [tracking](../tracking/) domain.
+
+**Why identity-aware trackers mount here and not in the root layout.** Anything that needs to know *who* the user is must sit inside these providers — `<SessionProvider>` and `<QueryClientProvider>` don't exist above them. `ContentsquareDynamicVariables` is mounted here for exactly that reason: its sibling `<ContentsquarePageTracker />` sits OUTSIDE `<Providers>` and so cannot read the NextAuth session or the React Query cache. `KlaviyoUserIdentifier` and `ConversionPixelsAdvancedMatching` are the existing precedent for the same placement.
 
 The `QueryClient` it constructs carries **both** cache-level error handlers — `queryCache` and
 `mutationCache` — because a per-query/per-mutation `onError` replaces the `defaultOptions` one instead of
