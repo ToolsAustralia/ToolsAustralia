@@ -3,6 +3,10 @@
     "playwright": {
       "command": "cmd",
       "args": ["/c", "npx", "-y", "@playwright/mcp@latest"]
+    },
+    "contentsquare": {
+      "type": "http",
+      "url": "https://api.contentsquare.com/mcp"
     }
   }
 }
