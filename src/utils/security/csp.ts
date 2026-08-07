@@ -77,9 +77,17 @@ export function buildContentSecurityPolicy(nonce?: string): string {
   })();
   const partnerPortalFrameSrc = portalOrigin ? ` ${portalOrigin}` : "";
 
+  // script-src carries `*.contentsquare.net`, not just the `t.` tag host (widened 2026-08-07).
+  // Contentsquare's Voice of Customer works by having the main tag INJECT a second script,
+  // `hotjar-{SITE_ID}.js`, served from a sibling contentsquare.net host — so pinning `t.` alone
+  // silently blocks every survey. This matches the vendor's documented policy
+  // (docs.contentsquare.com/en/web/content-security-policy/ asks for `script-src *.contentsquare.net`).
+  // Widening within a vendor domain we already let execute arbitrary JS grants no new capability;
+  // it is NOT a precedent for wildcarding generic cloud hosts — see the `*.on.aws` / `*.run.app`
+  // refusal in docs/security-csp/gotchas.md, which still stands.
   const scriptSrc = nonce
-    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net${vercelToolbarScript} 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk=' 'sha256-K86BfaTDTe7VC3e7Zx6FI4uwzIxOmpeJZ5ZdraUzNlM=' 'sha256-yEQTk36ZkLbyTcwSVYFpl/2k0ZDTLfLcCaNGWE/vG98=' 'sha256-xaGf90svAEIA1mo6apEICfa+VIdlJdA72R2TvCgsBLY=' 'sha256-z/YgGrCJhp1RQPr9KSfm7P9DNBwUTwHa1UAaVdzzWQY='`
-    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://t.contentsquare.net${vercelToolbarScript}`;
+    ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://*.contentsquare.net${vercelToolbarScript} 'sha256-DYFSjgyML0TKIOzsnWRWtsvywBFJ9rY4U8a6TgrKiXU=' 'sha256-fLWhKT52f/f9E2X9DpwgQUgQe08peiH9FRDd5oyirNk=' 'sha256-K86BfaTDTe7VC3e7Zx6FI4uwzIxOmpeJZ5ZdraUzNlM=' 'sha256-yEQTk36ZkLbyTcwSVYFpl/2k0ZDTLfLcCaNGWE/vG98=' 'sha256-xaGf90svAEIA1mo6apEICfa+VIdlJdA72R2TvCgsBLY=' 'sha256-z/YgGrCJhp1RQPr9KSfm7P9DNBwUTwHa1UAaVdzzWQY='`
+    : `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://js.stripe.com https://analytics.tiktok.com https://static.klaviyo.com https://static-tracking.klaviyo.com https://static-forms.klaviyo.com https://www.googletagmanager.com https://js.hcaptcha.com https://*.hcaptcha.com https://applepay.cdn-apple.com https://script.hotjar.com https://*.contentsquare.net${vercelToolbarScript}`;
   const directives = [
     "default-src 'self'",
     "base-uri 'self'",
