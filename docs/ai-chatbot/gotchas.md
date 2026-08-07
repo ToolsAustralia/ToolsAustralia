@@ -311,3 +311,21 @@ that look like Tools Australia features but are not:
 Both entries plus the ACCOUNT SELF-SERVICE MAP bullet in
 `src/services/support-chat/systemPrompt.ts` must stay in lockstep. Full audit:
 `docs/partner/igodirect-portal-ux-audit.md`.
+
+## What the visitor types to Cobber is masked from session replay (2026-08-07)
+
+Contentsquare records 100% of sessions, and the chat widget is the one place on the site where a
+visitor types **arbitrary free text** — order numbers, email addresses, phone numbers, whatever
+they think support needs. Two elements in `SupportChatWidget.tsx` therefore carry `data-cs-mask`:
+the **user** message bubble (the `isUser` branch only) and the composer `<textarea>`. Assistant
+bubbles are deliberately left visible — Cobber's own replies are not customer data, and being
+able to read them in a replay is exactly how you debug a bad answer.
+
+Convention: [docs/shared-ui/frontend.md](../shared-ui/frontend.md). Mechanism:
+[docs/tracking](../tracking/).
+
+The `<textarea>` attribute is belt-and-braces: Contentsquare masks `<textarea>` content by
+default. The **bubble** is the one that mattered — once a message is sent it stops being form
+input and becomes ordinary page text, which nothing masks automatically. If the transcript is
+ever re-rendered somewhere else (an admin review view, an emailed transcript, a re-hydrated
+history panel), that surface needs the attribute too.

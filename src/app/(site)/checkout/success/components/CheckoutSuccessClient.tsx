@@ -195,7 +195,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                 ) : null}
                 <div className="flex items-start gap-2">
                   <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-                  <div className="text-sm text-gray-600 dark:text-neutral-400">
+                  <div data-cs-mask className="text-sm text-gray-600 dark:text-neutral-400">
                     <div>
                       <strong>{shipName}</strong>
                     </div>

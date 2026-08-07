@@ -439,6 +439,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                       isUser ? (
                         <div
                           key={m.id}
+                          data-cs-mask
                           className={`w-fit max-w-full rounded-2xl first:rounded-tr-sm px-3 py-2 text-sm leading-relaxed text-[var(--cob-acc-ink)] shadow-sm ${BUBBLE_RISE}`}
                           style={{
                             background:
@@ -628,6 +629,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
             <div className="flex gap-2 items-end">
               <textarea
                 ref={inputRef}
+                data-cs-mask
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}

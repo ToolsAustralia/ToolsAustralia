@@ -156,7 +156,7 @@ const SettingsRedesignPayment: React.FC<SettingsRedesignPaymentProps> = ({
                 <div className="flex items-end justify-between">
                   <div className="min-w-0">
                     <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/60">Card holder</p>
-                    <p className="truncate font-poppins text-sm font-bold tracking-wide">{cardholderName || "Cardholder"}</p>
+                    <p data-cs-mask className="truncate font-poppins text-sm font-bold tracking-wide">{cardholderName || "Cardholder"}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/60">Expires</p>

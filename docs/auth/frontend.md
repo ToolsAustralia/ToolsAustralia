@@ -113,3 +113,17 @@ never shown a feature they have not seen. Deliberately a **separate prefix** fro
 The general rule still holds and is worth restating because this branch nearly broke it: **a new
 per-user client-storage key is not finished until it is in one of these lists.** The handoff
 marker shipped without it and had to be retro-fitted.
+
+## Echoed identifiers in auth modals are masked from session replay (2026-08-07)
+
+`EmailVerificationModal.tsx` echoes the address being verified *and* greets the user by name
+(`Hi {userName}!`). Both now carry `data-cs-mask`, so Contentsquare session replay masks them —
+the name is wrapped in its own `<span>` so "Hi" and "!" stay legible. Convention:
+[docs/shared-ui/frontend.md](../shared-ui/frontend.md). Mechanism: [docs/tracking](../tracking/).
+
+Auth screens are a recurring source of this: the whole point of a verification or reset screen is
+to show the user which identifier is in play, so they render PII as text by design. Login and
+registration **fields** need nothing — Contentsquare masks `<input>` content by default, and its
+always-on redaction replaces any email address found in the DOM or a URL. It is the *confirmation
+copy* that leaks. Any new auth surface that prints an email, phone or name back to the user needs
+the attribute.

@@ -1514,3 +1514,32 @@ accessibility floor for almost nothing.
 **Verified on the real modal** (`/dev/modals` → PackageSelectionModal), not a mock: three tiles
 at 145px each, entries row on ONE line (26px), the starburst clearing the struck value by
 36–63px, and every ribbon inside its button.
+
+## `data-cs-mask` — the session-replay masking attribute (2026-08-07)
+
+Any shared component that renders **customer PII as page text** carries a bare `data-cs-mask`
+attribute on the element holding that value. Contentsquare session replay masks everything
+matching `[data-cs-mask]`; the selector is registered once, before the tag initializes, in
+[`ContentsquarePageTracker`](../../src/components/tracking/ContentsquarePageTracker.tsx). See
+[docs/tracking](../tracking/) for the mechanism.
+
+Currently tagged in this domain: `Header.tsx` (member + affiliate name/email in the desktop
+menu, mobile menu and mobile drawer), `Monogram.tsx` (rendered initials),
+`DashboardHero.tsx` (first name, both breakpoints), `BirthdatePicker.tsx` (the DOB trigger
+label), `SettingsRedesignPayment.tsx` (cardholder name), `PortalTransit.tsx` (member name),
+`Step3EmailVerification.tsx` (echoed email).
+
+Three conventions, all load-bearing:
+
+- **Tag the tightest wrapper around the value, never the card.** Mask `{firstName}`, not the
+  greeting containing it — `DashboardHero` keeps "Good morning," visible and masks only the
+  name, because a replay where every label is bulleted is useless for UX research.
+- **An attribute, not a class list.** A renamed Tailwind class silently *stops* masking and
+  nothing fails loudly; an attribute moves with the element through refactors.
+- **Do not add it to form inputs.** Contentsquare masks `<input>`, `<textarea>` and
+  contenteditable content by default and never collects typed text, so an attribute there is
+  noise. This is strictly for text nodes.
+
+`PortalTransit.tsx` is the one imprecise case: `memberName` is `.join(" · ")`-ed with the tier
+label and catalogue %, so the whole `<span>` is masked rather than the name alone. Isolating it
+would mean restructuring the join. If you touch that line, prefer splitting the nodes.

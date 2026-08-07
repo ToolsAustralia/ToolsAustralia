@@ -903,3 +903,17 @@ per-user breadcrumbs must not follow the next person to sign in on a shared devi
 The "How do partner discounts work?" answer in `SupportSheet` said "a percentage of our partner
 catalogue"; it now says "our partner discounts", matching the noun used on every other
 customer-facing surface. See [docs/shared-ui/frontend.md](../shared-ui/frontend.md).
+
+## `DeskNav` name + email are masked from session replay (2026-08-07)
+
+`DeskNav.tsx` renders the member's name and email on **every** `/my-account` page, so it was the
+single largest standing exposure to Contentsquare session replay. Both elements now carry
+`data-cs-mask`; the convention is documented in
+[docs/shared-ui/frontend.md](../shared-ui/frontend.md) and the mechanism in
+[docs/tracking](../tracking/).
+
+Worth knowing when reasoning about this domain's privacy surface: `/my-account/settings` is in
+`EXCLUDED_TRACKING_PREFIXES` and is excluded from replay **entirely**, but the rest of
+`/my-account` — dashboard, profile, draws — **is** recorded. That split is deliberate (logged-in
+member sessions are legitimate retention signal), which is exactly why the per-element masking
+matters here rather than a blanket route exclusion.

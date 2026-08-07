@@ -1051,10 +1051,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   {isDesktopUserMenuOpen && (
                     <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
                       <div className="px-4 py-2 border-b border-gray-100 dark:border-neutral-700">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        <p data-cs-mask className="text-sm font-medium text-gray-900 dark:text-white">
                           {formatDisplayName(userData?.firstName, userData?.lastName)}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
+                        <p data-cs-mask className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
                       </div>
                       {isStaff ? (
                         <>
@@ -1238,10 +1238,10 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 {isMobileUserMenuOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
                     <div className="px-4 py-2 border-b border-gray-100 dark:border-neutral-700">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      <p data-cs-mask className="text-sm font-medium text-gray-900 dark:text-white">
                         {formatDisplayName(userData?.firstName, userData?.lastName)}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
+                      <p data-cs-mask className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
                     </div>
                     {isStaff ? (
                       <>
@@ -1436,8 +1436,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <User className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-white">{affiliateData.name}</p>
-                    <p className="text-sm text-gray-600 dark:text-neutral-400">{affiliateData.email}</p>
+                    <p data-cs-mask className="font-semibold text-gray-900 dark:text-white">{affiliateData.name}</p>
+                    <p data-cs-mask className="text-sm text-gray-600 dark:text-neutral-400">{affiliateData.email}</p>
                   </div>
                 </div>
               </div>
@@ -1451,7 +1451,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-gray-900 dark:text-white">
+                      <p data-cs-mask className="font-semibold text-gray-900 dark:text-white">
                         {formatDisplayName(userData?.firstName, userData?.lastName)}
                       </p>
                       {(() => {
