@@ -48,7 +48,7 @@ const Step3EmailVerification: React.FC<Step3EmailVerificationProps> = ({
         <p className="text-sm text-gray-500 dark:text-neutral-400">
           We&apos;ll send a verification code to:
         </p>
-        <p className="font-semibold text-gray-900 dark:text-white break-all">
+        <p data-cs-mask className="font-semibold text-gray-900 dark:text-white break-all">
           {currentEmail}
         </p>
         <button

@@ -115,3 +115,16 @@ never a purchased line item, so the layout deliberately separates them:
 Never render entries as a priced line item, a per-entry rate, or part of a subtotal that implies
 they were bought. If you add a tax breakdown, an emailed invoice, or a PDF later, the same split
 applies there.
+
+## The checkout-success shipping block is masked from session replay (2026-08-07)
+
+`CheckoutSuccessClient.tsx` renders the recipient name and full delivery address — the highest
+concentration of PII anywhere in the purchase flow, and it sits on a page every buyer reaches.
+The address `<div>` carries `data-cs-mask`, so Contentsquare session replay masks it. The
+`MapPin` icon and the **Shipping** label stay outside the masked element, so the block is still
+recognisable in a replay.
+
+Convention: [docs/shared-ui/frontend.md](../shared-ui/frontend.md). Mechanism:
+[docs/tracking](../tracking/). Card details need no treatment — they are entered in a
+cross-origin Stripe iframe and never enter our DOM. If you add an order-confirmation surface
+that echoes the address (a PDF, an order-history detail view), it needs the same attribute.

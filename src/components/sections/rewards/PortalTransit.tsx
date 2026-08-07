@@ -313,7 +313,7 @@ export default function PortalTransit({
           className="flex flex-wrap items-center justify-center gap-2 text-center text-[10px] font-medium leading-[1.4] sm:text-[11px]"
           style={{ color: "var(--pt-faint)" }}
         >
-          <span className="inline-flex items-center gap-1.5">
+          <span data-cs-mask className="inline-flex items-center gap-1.5">
             {errored ? <AlertTriangle className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
             {[memberName, tierLabel, accessPct != null ? `${accessPct}% catalogue` : null]
               .filter(Boolean)

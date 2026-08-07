@@ -161,10 +161,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disabled={process.env.NODE_ENV === "development" && !process.env.NEXT_PUBLIC_ENABLE_PIXEL_TESTING}
         />
         <KlaviyoPageTracker />
-        {/* Contentsquare virtual pageviews + session-replay exclusion for internal/staff
-            routes. Gated on the same id as the <Script> above (rules.md R8) so dev/e2e
-            never mount it; the tag itself has no SPA route detection, so without this the
-            whole visit collapses into the single natural pageview. */}
+        {/* Contentsquare virtual pageviews + the two replay privacy controls
+            (excludeURLforReplay for internal/staff routes, setPIISelectors for masked text).
+            Gated on the same id as the <Script> above (rules.md R8) so dev/e2e never mount it.
+            This must stay the ONLY source of virtual pageviews — Contentsquare can also emit
+            them tag-side via a CSTC snippet, and nothing de-duplicates the two (rules.md R11).
+            Membership attributes are NOT sent from here: that needs the session and the query
+            cache, which live inside <Providers> below, so ContentsquareDynamicVariables mounts
+            there instead. */}
         {contentsquareId ? <ContentsquarePageTracker /> : null}
         <Providers>{children}</Providers>
         <Analytics />

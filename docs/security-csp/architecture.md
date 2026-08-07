@@ -174,3 +174,7 @@ DOM (the frame is cross-origin), or be granted any fetch capability.
 
 **Do not add a wildcard here.** The same reasoning as the `connect-src` cloud-host decision
 above: one named host is auditable, `https://*.somevendor.com` is not.
+
+_(`script-src` does carry `https://*.contentsquare.net` since 2026-08-07. Not a counter-example:
+that wildcard widens a vendor domain already granted script execution, rather than granting a new
+capability to a host we don't otherwise trust. See gotchas.md.)_

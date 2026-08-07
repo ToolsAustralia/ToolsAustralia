@@ -1,6 +1,6 @@
 # Tracking domain
 
-Marketing analytics: Facebook Pixel + Meta CAPI, Google Tag Manager, Klaviyo, TikTok Pixel, UTM attribution.
+Marketing analytics: Facebook Pixel + Meta CAPI, Google Tag Manager, Klaviyo, TikTok Pixel, UTM attribution, plus Contentsquare UX analytics / session replay.
 
 ## Index
 
