@@ -30,10 +30,10 @@ The first three are pure (no Mongo, no env vars) — run with just `tsx`, as is 
 | npm script | file | covers |
 |---|---|---|
 | `npm run find:stuck-paused-users` | `scripts/find-stuck-paused-users.ts` | CSV export of `past_due` users whose current Stripe sub has no chargeable invoice; accepts `--limit=N` and `--include-orphans` |
-| `npm run test:force-charge:dry` | `scripts/test-force-charge.ts` | dry-run force-charge against a single user; accepts `--email=<addr>` or `--customer=<cus_id>` |
-| `npm run test:force-charge:live` | `scripts/test-force-charge.ts --live` | live force-charge execution; requires `--email=` or `--customer=` plus `--admin-email=<admin's email>` |
-| `npm run test:recover-stranded:dry` | `scripts/test-recover-stranded-past-due.ts` | Resolves a user by email/customer, scans open invoices for a stranded candidate, prints eligibility. No writes. |
-| `npm run test:recover-stranded:live` | `scripts/test-recover-stranded-past-due.ts --live` | Runs the full void → finalize draft → pay flow against a real user. Requires `--admin-email=`. Bypasses the 6h recovery lock so devs can re-run quickly during testing. |
+| `npm run ops:force-charge:dry` | `scripts/test-force-charge.ts` | dry-run force-charge against a single user; accepts `--email=<addr>` or `--customer=<cus_id>` |
+| `npm run ops:force-charge:live` | `scripts/test-force-charge.ts --live` | live force-charge execution; requires `--email=` or `--customer=` plus `--admin-email=<admin's email>` |
+| `npm run ops:recover-stranded:dry` | `scripts/test-recover-stranded-past-due.ts` | Resolves a user by email/customer, scans open invoices for a stranded candidate, prints eligibility. No writes. |
+| `npm run ops:recover-stranded:live` | `scripts/test-recover-stranded-past-due.ts --live` | Runs the full void → finalize draft → pay flow against a real user. Requires `--admin-email=`. Bypasses the 6h recovery lock so devs can re-run quickly during testing. |
 
 Both scripts load `.env.local` via dotenv and exit with an error if `MONGODB_URI` or `STRIPE_SECRET_KEY` are missing.
 
