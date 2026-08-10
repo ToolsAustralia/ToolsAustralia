@@ -458,3 +458,16 @@ Run against production only from a secure machine with `.env.local` set up. The 
 - Cron endpoint auth thoroughness
 - Cloudinary signing edge cases
 - Env validation across all consumers
+
+## `test:utm-storage` added (2026-08-10)
+
+`package.json` gained `test:utm-storage` → `src/utils/tracking/__tests__/utm-storage.test.ts`.
+Per CLAUDE.md, a `src/**/__tests__/*.test.ts` file is undiscoverable without its own `test:*`
+script, since there is no test runner that globs them.
+
+One convention worth copying: the test uses **static** imports plus mocks installed afterwards,
+matching `attribution-cookie.test.ts`. Dynamic `await import()` fails here — tsx transforms to
+CJS and rejects top-level await. Static imports are safe as long as the module under test
+touches `window`/`document`/`sessionStorage` only inside functions, never at module scope.
+
+Rationale for the test itself: [docs/tracking/testing.md](../tracking/testing.md).
