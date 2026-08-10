@@ -388,6 +388,8 @@
     "test:spend-freshness": "tsx src/services/meta/__tests__/spend-by-url-freshness.test.ts",
     "test:attribution-cookie": "tsx src/utils/tracking/__tests__/attribution-cookie.test.ts",
     "test:utm-storage": "tsx src/utils/tracking/__tests__/utm-storage.test.ts",
+    "test:utm-helpers": "tsx src/utils/tracking/__tests__/utm-helpers.test.ts",
+    "test:attribution-metadata": "tsx src/utils/tracking/__tests__/attribution-metadata.test.ts",
     "test:normalize-platform": "tsx src/services/attribution/__tests__/normalizePlatform.test.ts",
     "test:signup-attribution": "tsx src/services/attribution/__tests__/signup-attribution.test.ts",
     "test:classify-renewal": "tsx src/services/attribution/__tests__/classifyIsRenewal.test.ts",
