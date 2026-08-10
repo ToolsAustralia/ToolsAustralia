@@ -431,3 +431,28 @@ strictly worse. Pinned by `npm run test:attribution-metadata`.
 The general rule: **anything derived from a URL and forwarded to a payment provider needs a
 bound at the boundary**, because the URL is attacker-controlled and the provider's limits are
 hard failures.
+
+## `traffic_source` lost a Suspense race and reported `direct` (fixed 2026-08-10)
+
+`ContentsquareDynamicVariables` originally read the acquisition channel from the sessionStorage
+UTM copy alone. That copy is written by `useUTMPersistence`, which lives inside
+`PromoLinkTracker` — and **that component self-wraps in `<Suspense>`** (it must, because
+`useSearchParams` needs a boundary on prerendered routes). A suspended subtree commits its
+effects *after* its siblings, so the dynamic-variables push consistently ran first and read
+nothing.
+
+The symptom was maddening precisely because everything else looked right: on production,
+`sessionStorage`, `_ta_attr` and `_ta_attr_last` were all correctly populated with
+`utm_source=TIKTOK` — and the `dvar` payload still said `traffic_source: "direct"`. Storage was
+not broken; it simply had not been written *yet* at the moment we read it.
+
+Fixed by reading `window.location.search` FIRST (via `extractAttributionParams`), falling back
+to storage only when the URL carries no campaign params. The landing URL is available
+synchronously and depends on no other component having mounted, which makes it authoritative
+for the pageview that matters most — the one an ad lands on. Storage still covers SPA
+navigations, where the URL has dropped the params but the session is unchanged; by then
+`useUTMPersistence` has long since run.
+
+**The general trap:** component B reading state that component A writes in an effect is a
+race, and `<Suspense>` makes the ordering non-obvious — tree order is not effect order. If the
+value exists in the URL, read the URL.
