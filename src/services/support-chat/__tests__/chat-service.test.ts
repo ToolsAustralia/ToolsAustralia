@@ -275,6 +275,13 @@ async function testNonDeflectable() {
     // Inject a stub that always succeeds so this test verifies existing behavior
     // (the gate itself is exercised in guest-gate.test.ts).
     verifyHcaptcha: async () => true,
+    // Without this the real Mongo-backed generative limiter runs, keyed on this
+    // test's hard-coded ipKey. It allows 5 requests per 5-minute window, so
+    // running the suite more than ~3 times inside one window tripped the limit
+    // and this case failed with "streamFn called 0 times" — a flake that looks
+    // exactly like a regression in the code under test. The limiter has its own
+    // dedicated cases below; this one is about the LLM path, so stub it out.
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
   };
 
   const res = await chatService.respond(
@@ -746,6 +753,217 @@ async function testRequestHumanWithEmail() {
   pass("with-email → escalate(server actor + request contact) once, setEscalated, escalated=true; model-supplied email ignored");
 }
 
+// ─── Test: member email resolved server-side (no widget contact) ──────────────
+
+/**
+ * The production bug this pins: the widget never sends `contact`, so before the
+ * fix execute() always hit the no-email branch and NO ContactSubmission was ever
+ * created — while Cobber went on telling customers their case had been passed to
+ * support. For a signed-in member the server already knows the email, so it must
+ * escalate without asking.
+ */
+async function testRequestHumanMemberEmailFromSession() {
+  console.log("\nrequest_human tool — member with NO widget contact (email from session)");
+
+  let escalateCalls = 0;
+  let escalateArgs:
+    | { actor: ChatActor; contact: { name?: string; email: string; phone?: string }; transcriptSummary: string }
+    | undefined;
+  const setEscalatedCalls: Array<{ conversationId: string; submissionId: string }> = [];
+  let escalatedFlag = false;
+  const resolveCalls: string[] = [];
+
+  const persist = makePersistSpy();
+  persist.port.setEscalated = async (conversationId, submissionId) => {
+    setEscalatedCalls.push({ conversationId, submissionId });
+  };
+
+  const serverActor: ChatActor = {
+    kind: "member",
+    userId: "507f1f77bcf86cd799439077",
+    firstName: "Matthew",
+  };
+
+  const tool = buildRequestHumanTool({
+    actor: serverActor,
+    contact: undefined, // the widget sends nothing — this is production reality
+    conversationId: "conv_member_session",
+    messages: [userMessage("I paid twice and have no entries.")],
+    persist: persist.port,
+    escalate: async (args) => {
+      escalateCalls++;
+      escalateArgs = args;
+      return { submissionId: "sub_member_001" };
+    },
+    onEscalated: () => {
+      escalatedFlag = true;
+    },
+    resolveMemberEmail: async (userId) => {
+      resolveCalls.push(userId);
+      return "matthew@example.com";
+    },
+  });
+
+  const result = await tool.execute!({ reason: "billing issue" }, fakeToolCtx);
+
+  if (resolveCalls.length !== 1 || resolveCalls[0] !== serverActor.userId) {
+    fail("resolveMemberEmail called with the session userId", `got ${JSON.stringify(resolveCalls)}`);
+    return;
+  }
+  if (escalateCalls !== 1) {
+    fail("escalate called once for a member with no widget contact", `called ${escalateCalls} times`);
+    return;
+  }
+  if (escalateArgs?.contact.email !== "matthew@example.com") {
+    fail("escalate got the session email", `got ${escalateArgs?.contact.email}`);
+    return;
+  }
+  // Session-resolved identity must use the session firstName, not a model value.
+  if (escalateArgs?.contact.name !== "Matthew") {
+    fail("escalate got the session firstName", `got ${escalateArgs?.contact.name}`);
+    return;
+  }
+  if (setEscalatedCalls.length !== 1) {
+    fail("setEscalated called", `got ${JSON.stringify(setEscalatedCalls)}`);
+    return;
+  }
+  if (!escalatedFlag) {
+    fail("audit.escalated === true", `flag=${escalatedFlag}`);
+    return;
+  }
+  if (typeof result !== "string" || /NOT_ESCALATED/.test(result)) {
+    fail("returns a success string (not NOT_ESCALATED)", `got ${JSON.stringify(result)}`);
+    return;
+  }
+
+  pass("member + no widget contact → email resolved from session, submission filed, escalated=true");
+}
+
+/**
+ * A member whose lookup yields nothing (deleted user / no email on file) must
+ * fall back to the honest branch, NOT escalate with an empty address.
+ */
+async function testRequestHumanMemberEmailMissing() {
+  console.log("\nrequest_human tool — member whose email cannot be resolved");
+
+  let escalateCalls = 0;
+  let escalatedFlag = false;
+  const persist = makePersistSpy();
+
+  const tool = buildRequestHumanTool({
+    actor: { kind: "member", userId: "507f1f77bcf86cd799439078", firstName: "Ghost" },
+    contact: undefined,
+    conversationId: "conv_member_no_email",
+    messages: [userMessage("Help me.")],
+    persist: persist.port,
+    escalate: async () => {
+      escalateCalls++;
+      return { submissionId: "should_not_be_created" };
+    },
+    onEscalated: () => {
+      escalatedFlag = true;
+    },
+    resolveMemberEmail: async () => null,
+  });
+
+  const result = await tool.execute!({}, fakeToolCtx);
+
+  if (escalateCalls !== 0) {
+    fail("escalate NOT called when email cannot be resolved", `called ${escalateCalls} times`);
+    return;
+  }
+  if (escalatedFlag) {
+    fail("audit.escalated stays false", `flag=${escalatedFlag}`);
+    return;
+  }
+  // The model must be told unambiguously that nothing was sent — this string is
+  // what stops it inventing "I've passed your case to our team".
+  if (typeof result !== "string" || !/^NOT_ESCALATED/.test(result)) {
+    fail("returns a NOT_ESCALATED-prefixed string", `got ${JSON.stringify(result)}`);
+    return;
+  }
+
+  pass("member with unresolvable email → NOT_ESCALATED, files nothing, escalated=false");
+}
+
+/**
+ * A lookup that THROWS must not take the turn down with it — it degrades to the
+ * same honest no-email branch.
+ */
+async function testRequestHumanMemberEmailLookupThrows() {
+  console.log("\nrequest_human tool — member email lookup throws");
+
+  let escalateCalls = 0;
+  const persist = makePersistSpy();
+
+  const tool = buildRequestHumanTool({
+    actor: { kind: "member", userId: "507f1f77bcf86cd799439079", firstName: "Boom" },
+    contact: undefined,
+    conversationId: "conv_member_throw",
+    messages: [userMessage("Help me.")],
+    persist: persist.port,
+    escalate: async () => {
+      escalateCalls++;
+      return { submissionId: "should_not_be_created" };
+    },
+    onEscalated: () => {},
+    resolveMemberEmail: async () => {
+      throw new Error("mongo down");
+    },
+  });
+
+  const result = await tool.execute!({}, fakeToolCtx);
+
+  if (escalateCalls !== 0) {
+    fail("escalate NOT called when lookup throws", `called ${escalateCalls} times`);
+    return;
+  }
+  if (typeof result !== "string" || !/^NOT_ESCALATED/.test(result)) {
+    fail("degrades to NOT_ESCALATED rather than throwing", `got ${JSON.stringify(result)}`);
+    return;
+  }
+
+  pass("member email lookup throws → NOT_ESCALATED, no submission, turn survives");
+}
+
+/**
+ * An ANONYMOUS actor has no session email, so nothing should be looked up and
+ * the existing ask-for-email behaviour must be preserved.
+ */
+async function testRequestHumanAnonNoSessionLookup() {
+  console.log("\nrequest_human tool — anonymous actor does NOT trigger a member lookup");
+
+  let resolveCalled = false;
+  const persist = makePersistSpy();
+
+  const tool = buildRequestHumanTool({
+    actor: { kind: "anonymous", ipKey: "1.1.1.1" },
+    contact: undefined,
+    conversationId: "conv_anon_lookup",
+    messages: [userMessage("I need a human.")],
+    persist: persist.port,
+    escalate: async () => ({ submissionId: "should_not_be_created" }),
+    onEscalated: () => {},
+    resolveMemberEmail: async () => {
+      resolveCalled = true;
+      return "leaked@example.com";
+    },
+  });
+
+  const result = await tool.execute!({}, fakeToolCtx);
+
+  if (resolveCalled) {
+    fail("resolveMemberEmail NOT called for an anonymous actor", "it was called");
+    return;
+  }
+  if (typeof result !== "string" || !/^NOT_ESCALATED/.test(result)) {
+    fail("anonymous still gets the NOT_ESCALATED ask", `got ${JSON.stringify(result)}`);
+    return;
+  }
+
+  pass("anonymous → no member lookup, still asks for an email, files nothing");
+}
+
 // ─── Test: getActiveChatProvider dep wiring ───────────────────────────────────
 
 async function testGetActiveChatProviderWiring() {
@@ -848,6 +1066,10 @@ async function run() {
   await testGenRateLimitOk();
   await testRequestHumanNoEmail();
   await testRequestHumanWithEmail();
+  await testRequestHumanMemberEmailFromSession();
+  await testRequestHumanMemberEmailMissing();
+  await testRequestHumanMemberEmailLookupThrows();
+  await testRequestHumanAnonNoSessionLookup();
   await testGetActiveChatProviderWiring();
 
   console.log(`\n${"─".repeat(60)}`);
@@ -865,6 +1087,9 @@ async function run() {
   console.log("           gen-rate-limit OK (model called, 200, writeAudit(200)),");
   console.log("           request_human no-email (files nothing, escalated=false),");
   console.log("           request_human with-email (server-side actor + request contact, setEscalated, escalated=true),");
+  console.log("           request_human member w/o widget contact (email resolved from session → real submission),");
+  console.log("           request_human member email missing / lookup throws (NOT_ESCALATED, files nothing),");
+  console.log("           request_human anonymous (no member lookup, still asks for email),");
   console.log("           getActiveChatProvider wiring (google provider path → model called, 200, writeAudit)");
   process.exit(0);
 }

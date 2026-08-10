@@ -345,3 +345,32 @@ Worth stating plainly since the `side` prop still exists: bottom-right is the co
 (Intercom, Zendesk, Drift, Crisp, HubSpot) and the better thumb target for the most-tapped
 floating control. Only pass `side="left"` if some future route genuinely occupies the right
 corner — and prefer moving *that* control instead.
+
+## `request_human` files nothing without an email — and the widget never sends one (2026-08-10)
+
+**The trap:** `buildRequestHumanTool.execute()` creates a `ContactSubmission` **only** when it can
+resolve an email. It deliberately refuses a model-supplied address (identity must never come from
+the LLM), so its only sources are the request body's `contact` field and — as of 2026-08-10 — a
+signed-in member's account email read server-side from `actor.userId`.
+
+`SupportChatWidget.tsx` **does not send `contact`.** It never has. So for the whole first month
+every escalation attempt hit the no-email branch, filed nothing, and the model papered over it:
+six customers were told support would reach out within one business day, and no ticket existed for
+any of them. Nothing in the audit surfaced it either — `escalated` stays false when the tool
+short-circuits, so the admin "Escalations" metric read a confident `0` the entire time.
+
+**Two things to remember when touching this path:**
+
+1. **A member never needs to be asked.** `resolveMemberEmail(userId)` is authoritative; pair a
+   session-resolved email with the session `firstName`, not a widget-supplied name. Anonymous
+   actors have no session email, so they must NOT trigger the lookup (guarded + tested).
+2. **The tool's return string is load-bearing.** The no-email branch returns a `NOT_ESCALATED:`
+   prefix that explicitly forbids claiming a handoff. Do not soften it — that string, plus the
+   `systemPrompt` HARD RULE, is what stops the model inventing a confirmation. And do not rely on
+   it alone: prompt-only enforcement is exactly what failed here, which is why `onFinish` also
+   detects a claim-without-escalation, logs an `ErrorReport`, and marks the message with a failed
+   `escalation_claim_unverified` tool call (renders red in Admin → Chatbot → Conversations).
+
+**Guests are still uncovered.** Until the widget collects an email into `contact`, an anonymous
+visitor cannot be escalated at all — they now get an honest "I can't pass this on yet" instead of
+a fake promise, which is the correct failure mode but not a substitute for wiring the capture step.

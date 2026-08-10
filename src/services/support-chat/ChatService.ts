@@ -229,6 +229,12 @@ export interface ChatServiceDeps {
   streamFn?: (args: StreamArgs) => StreamResultLike;
   persist?: PersistPort;
   escalateToHuman?: typeof realEscalateToHuman;
+  /**
+   * Resolves a signed-in member's account email from their userId, so escalation
+   * never has to ask a member for an address the server already holds. Defaults
+   * to a Mongo lookup; injected in tests to stay Mongo-free.
+   */
+  resolveMemberEmail?: (userId: string) => Promise<string | null>;
   /** Defaults to getChatModel('primary'). When provided, takes precedence over getActiveChatProvider. */
   getModel?: () => LanguageModel;
   /**
@@ -491,6 +497,29 @@ const defaultPersist: PersistPort = {
  * branches: no-email files nothing; with-email escalates with the server-side
  * actor + request contact, never a model-supplied value).
  */
+/**
+ * Reads a member's account email server-side from their session userId.
+ * Lazy-imports Mongo so tests injecting a stub never load Mongoose.
+ * Returns null when the user is gone or has no email — callers must treat that
+ * as "cannot escalate", never as an empty-string email.
+ */
+async function defaultResolveMemberEmail(userId: string): Promise<string | null> {
+  const { default: connectDB } = await import("@/lib/mongodb");
+  const { default: User } = await import("@/models/User");
+  await connectDB();
+  const doc = await User.findById(userId).select({ email: 1 }).lean().exec();
+  const email = (doc as { email?: string } | null)?.email;
+  return email && email.trim().length > 0 ? email.trim() : null;
+}
+
+/**
+ * Matches an assistant claiming it handed the conversation to a human.
+ * Used only to DETECT a false claim (escalation flag never set) so it surfaces
+ * instead of failing silently — it never rewrites the customer's answer.
+ */
+const CLAIMS_ESCALATION_RE =
+  /\b(?:i(?:'|’)?(?:ve| have)|i(?:'|’)?m|i am)\s+(?:just\s+)?(?:passed|pass|escalat\w*|flagg\w*|forward\w*|connect\w*|sent)\b[^.!?]{0,80}?\b(?:team|support|human|agent|someone)\b/i;
+
 export function buildRequestHumanTool(opts: {
   actor: ChatActor;
   contact: ChatContact | undefined;
@@ -499,6 +528,12 @@ export function buildRequestHumanTool(opts: {
   persist: PersistPort;
   escalate: typeof realEscalateToHuman;
   onEscalated: () => void;
+  /**
+   * Resolves a signed-in member's account email from their userId. Injectable
+   * for tests; defaults to the real Mongo lookup. Returns null when the user is
+   * missing or has no email on file.
+   */
+  resolveMemberEmail?: (userId: string) => Promise<string | null>;
 }) {
   return tool({
     description:
@@ -507,14 +542,57 @@ export function buildRequestHumanTool(opts: {
       reason: z.string().max(500).optional(),
     }),
     execute: async ({ reason }) => {
-      const email = opts.contact?.email;
+      // Resolution order is deliberate and never trusts the model:
+      //   1. The widget-collected contact on the request body.
+      //   2. For a SIGNED-IN MEMBER, their account email, read server-side from
+      //      the session userId.
+      // (2) exists because the widget does not currently send `contact` at all,
+      // which made escalation impossible: execute() always fell through to the
+      // no-email branch, so Cobber asked for an email, the user typed it as an
+      // ordinary chat message (where nothing could read it), and no
+      // ContactSubmission was ever created — while the model went on to tell the
+      // customer their case had been passed to support. Six real customers were
+      // told that in the first month and no ticket existed for any of them.
+      // A member's email is authoritative on the server, so for them there is no
+      // reason to ask at all.
+      let email = opts.contact?.email;
+      let resolvedFromSession = false;
+
+      if (!email && opts.actor.kind === "member") {
+        const resolve = opts.resolveMemberEmail ?? defaultResolveMemberEmail;
+        try {
+          const sessionEmail = await resolve(opts.actor.userId);
+          if (sessionEmail) {
+            email = sessionEmail;
+            resolvedFromSession = true;
+          }
+        } catch (err) {
+          // Never let a lookup failure block the turn — fall through to the
+          // ask-for-email branch, which is honest about not having escalated.
+          console.error("[ChatService] resolveMemberEmail failed", err);
+        }
+      }
+
       if (!email) {
-        // No contact email yet — ask the user to share it. Create NO submission.
-        return "To pass this to our team, please share the best email address to reach you on.";
+        // No contact email available — create NO submission. The instruction to
+        // the model is explicit because it has previously claimed success off
+        // the back of this branch (see the comment above).
+        return (
+          "NOT_ESCALATED: no contact email is on file, so nothing has been sent to the team. " +
+          "Ask the user for the best email address to reach them on. " +
+          "Do NOT tell the user their case has been passed on, escalated, or that support will " +
+          "contact them — none of that has happened yet."
+        );
       }
 
       const contact: EscalationContact = {
-        ...(opts.contact?.name ? { name: opts.contact.name } : {}),
+        // A session-resolved email is authoritative, so pair it with the
+        // session's firstName rather than any widget-supplied name.
+        ...(resolvedFromSession && opts.actor.kind === "member"
+          ? { name: opts.actor.firstName }
+          : opts.contact?.name
+            ? { name: opts.contact.name }
+            : {}),
         email,
         ...(opts.contact?.phone ? { phone: opts.contact.phone } : {}),
       };
@@ -771,6 +849,9 @@ export const chatService = {
       messages,
       persist,
       escalate,
+      ...(deps.resolveMemberEmail
+        ? { resolveMemberEmail: deps.resolveMemberEmail }
+        : {}),
       onEscalated: () => {
         escalated = true;
         ctx.audit.escalated = true;
@@ -813,6 +894,40 @@ export const chatService = {
             // 3a. Persist the assistant message (redacted) — only if non-empty (a
             // tool-only turn may produce no assistant text).
             const assistantText = (text ?? "").trim();
+
+            // Detect the model telling the customer it handed them to a human
+            // when no ContactSubmission was actually created. The answer has
+            // already streamed, so this cannot un-say it — but an undetected
+            // false promise is far worse than a logged one: it leaves the
+            // customer waiting on a callback nobody queued. Recording it as a
+            // FAILED tool call makes it render red in the admin transcript
+            // viewer, and the ErrorReport means it is countable rather than
+            // needing someone to read every transcript to find it.
+            const falseEscalationClaim =
+              !escalated &&
+              assistantText.length > 0 &&
+              CLAIMS_ESCALATION_RE.test(assistantText);
+
+            if (falseEscalationClaim) {
+              console.error(
+                "[ChatService] assistant claimed escalation but none was filed " +
+                  `(conversationId=${conversationId})`
+              );
+              try {
+                await ErrorLoggingService.logSystemError(
+                  new Error("Cobber claimed an escalation that was never filed"),
+                  {
+                    component: "ChatService",
+                    action: "false-escalation-claim",
+                    endpoint: "/api/chat",
+                  },
+                  { isServerSide: true, request: ctx.req }
+                );
+              } catch {
+                // Error reporting must never break the customer response.
+              }
+            }
+
             if (assistantText.length > 0) {
               try {
                 await persist.addMessage({
@@ -821,7 +936,13 @@ export const chatService = {
                   content: redactPII(assistantText),
                   ...(escalated
                     ? { toolCalls: [{ name: "request_human", ok: true }] }
-                    : {}),
+                    : falseEscalationClaim
+                      ? {
+                          toolCalls: [
+                            { name: "escalation_claim_unverified", ok: false },
+                          ],
+                        }
+                      : {}),
                 });
               } catch (e) {
                 console.error("[ChatService] onFinish persist failed", e);
