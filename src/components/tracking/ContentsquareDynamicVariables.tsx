@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useUserContext } from "@/contexts/UserContext";
 import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
 import { getSessionUTMParams } from "@/utils/tracking/utm-storage";
+import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
 
 /**
  * Contentsquare dynamic variables — membership segmentation.
@@ -110,7 +111,20 @@ export default function ContentsquareDynamicVariables() {
     // see getSessionUTMParams for why that distinction decides whether a channel comparison
     // is meaningful. No campaign params this session ⇒ direct/organic, which is a real answer
     // rather than a missing one, so it gets an explicit value instead of being omitted.
-    const utm = getSessionUTMParams();
+    //
+    // THE URL IS READ FIRST, AND THAT ORDER IS LOAD-BEARING.
+    // sessionStorage is written by useUTMPersistence, which lives inside PromoLinkTracker —
+    // and that component self-wraps in <Suspense>, so its effects commit AFTER ours. Reading
+    // storage alone lost the race on the landing pageview and reported `direct` for genuine
+    // TikTok traffic (verified against production 2026-08-10: storage and both cookies were
+    // correctly populated, yet the dvar payload still said direct). The landing URL carries
+    // the campaign params synchronously and needs no other component to have run, so it is
+    // the authoritative source for the pageview that matters most — the one an ad lands on.
+    //
+    // Storage remains the fallback for SPA navigations, where the URL has dropped the params
+    // but the session is unchanged. By then useUTMPersistence has long since written.
+    const fromUrl = extractAttributionParams(window.location.search);
+    const utm = fromUrl.utm_source || fromUrl.utm_medium ? fromUrl : getSessionUTMParams();
 
     const variables: DynamicVariables = {
       is_member: isMember ? "yes" : "no",
