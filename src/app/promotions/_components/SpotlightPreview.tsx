@@ -165,9 +165,14 @@ export default function SpotlightPreview({ view, isDefaultView }: SpotlightPrevi
       {/* Floating CTA — mobile/tablet only (desktop keeps the inline one beside the
           sticky preview). `data-floating-widget` is the contract the Cobber launcher
           reads to dodge bottom-anchored floaters (see shared-ui/frontend.md). Pure CSS
-          transition rather than framer: this page ships no motion library otherwise. */}
+          transition rather than framer: this page ships no motion library otherwise.
+          The attribute lives on the PILL below, not on this full-width centering wrapper
+          (measuring the wrapper made the corner controls dodge a centered pill that never
+          reaches them), and it is attached ONLY while the CTA is actually shown: this
+          element stays mounted and parks at `opacity-0`, so its rect stays non-zero and
+          the launcher's size check can't see through it. Toggling the attribute is what
+          the dodge hook's MutationObserver watches, so it recomputes with no extra wiring. */}
       <div
-        data-floating-widget="true"
         aria-hidden={!ctaOffscreen}
         className={cn(
           "pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 flex justify-center px-4 lg:hidden",
@@ -177,6 +182,7 @@ export default function SpotlightPreview({ view, isDefaultView }: SpotlightPrevi
       >
         <Link
           href={view.href}
+          data-floating-widget={ctaOffscreen ? "true" : undefined}
           tabIndex={ctaOffscreen ? undefined : -1}
           className={cn(
             "pointer-events-auto inline-flex items-center gap-1.5 rounded-full px-6 py-3 font-poppins text-sm font-extrabold uppercase tracking-[0.02em]",

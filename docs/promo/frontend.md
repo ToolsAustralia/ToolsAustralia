@@ -74,11 +74,33 @@ CTA has scrolled off and acting on it meant scrolling back up (owner). `Spotligh
 **floating twin** on `lg:hidden`, shown by an `IntersectionObserver` on the real CTA — when the
 inline one leaves the viewport the floating one fades in, and it carries the SAME accent, ink and
 live `href`, so it re-points as the selection changes. Same contract as the `[slug]` pages'
-`FloatingGetEntriesButton`: `data-floating-widget="true"` (so the Cobber launcher dodges it — see
+`FloatingGetEntriesButton`: `data-floating-widget` (so the Cobber launcher dodges it — see
 [shared-ui/frontend.md](../shared-ui/frontend.md)), `bottom-[calc(env(safe-area-inset-bottom)+1rem)]`,
 centered, `pointer-events-none` wrapper with a `pointer-events-auto` pill. It is a **CSS**
 transition, not framer — this page ships no motion library otherwise — and it takes `tabIndex={-1}`
 while hidden so it is never a phantom tab stop.
+
+**The opt-in attribute is conditional, and lives on the pill (2026-08-10).** Two corrections landed
+together, both about `data-floating-widget`:
+
+1. **It sits on the inner `Link` (the visible pill), not the `inset-x-0` centering wrapper.** The
+   wrapper spans the viewport, so measuring it made the corner controls dodge a centered pill that
+   never reaches them. Same correction was applied to `FloatingGetEntriesButton` and
+   `FloatingCountdownBanner` — see [shared-ui/frontend.md](../shared-ui/frontend.md).
+2. **It is `{ctaOffscreen ? "true" : undefined}`, not a static `"true"`.** Unlike
+   `FloatingGetEntriesButton` (framer `AnimatePresence`, which **unmounts** when hidden), this twin
+   stays mounted and parks at `opacity-0 translate-y-6` — so its rect stays non-zero and the
+   launcher's `width/height === 0` check can't see through it. With the attribute statically
+   attached, the Cobber launcher and the right-corner FABs sat lifted over a bar nobody could see at
+   the top of `/promotions`.
+
+The dodge hook's `MutationObserver` already watches this attribute, so toggling it recomputes for
+free. Any future floater that hides by fading rather than unmounting must do the same.
+
+**The floating twin has no trailing arrow (2026-08-10).** `FloatingGetEntriesButton`'s pill used to
+render a `→` glyph after the label; it was dropped for a cleaner bar (owner). The label is
+`Enter Now` alone. Note the two CTAs differ deliberately: the promo hero says `ENTER NOW` (uppercase,
+from `PromoHero`'s `ctaText`), the floating bar says `Enter Now`.
 
 ### Accessibility
 The rail is ONE `role="radiogroup"` whose 16th option is the cash tile, with a **roving tabindex** —

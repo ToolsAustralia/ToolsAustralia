@@ -159,7 +159,6 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
     <AnimatePresence>
       {isReady && !isDismissed && (
         <m.div
-          data-floating-widget="true"
           initial={{ opacity: 0, y: 100 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 100 }}
@@ -167,6 +166,11 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
           className={cn("fixed bottom-10 sm:bottom-12 left-0 right-0 z-50 flex justify-center pointer-events-none", className)}
         >
           <m.div
+            // Obstacle contract sits on the PILL, not the full-width centering wrapper —
+            // measuring the wrapper made the corner controls dodge a centered banner that
+            // never actually reaches them. This is what makes the documented
+            // "desktop: max-w-4xl never reaches the corner → no lift" behaviour real.
+            data-floating-widget="true"
             animate={{
               scale: isCollapsedState ? 0.95 : 1,
             }}

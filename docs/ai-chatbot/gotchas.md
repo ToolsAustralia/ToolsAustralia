@@ -95,9 +95,12 @@ The `SupportChatWidget` "Workshop" redesign replaced the old fixed **orange** wi
 
 The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (the draw countdown banner `FloatingCountdownBanner`, the promotions "get entries" bar `FloatingGetEntriesButton`, the upsell gift `FloatingGiftIcon`). Researched pattern (Intercom/Zendesk/Material): keep a persistent corner FAB and **lift it above** the obstacle — never hide it, never move it into a menu.
 
-**How it works:** [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts) scans `document.querySelectorAll('[data-floating-widget]')`, does an **AABB overlap test against the bubble's DEFAULT corner rect**, and returns the bubble's target `bottom` (obstacle top + 12px) when one collides, else 0. The widget applies it as an inline `bottom` (the existing `transition-all` animates the slide). Obstacles opt in **declaratively** by carrying `data-floating-widget` — no per-page wiring, no store.
+**How it works:** [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts) scans `document.querySelectorAll('[data-floating-widget]')`, does an **AABB overlap test against the caller's DEFAULT corner rect**, and returns the target `bottom` (obstacle top + 12px) when one collides, else 0. The widget applies it as an inline `bottom` (the existing `transition-all` animates the slide). Obstacles opt in **declaratively** by carrying `data-floating-widget` — no per-page wiring, no store.
+
+**Three callers, one dock (2026-08-10).** The hook is shared with the two `/promotions` right-corner FABs, so it exports the dock geometry every corner-docked control must use: `FLOATING_DOCK_BOTTOM_PX` (20 = `bottom-5`) and `FLOATING_DOCK_SIDE_PX` (20 = `left-5`/`right-5`). Those constants must stay in lockstep with each caller's Tailwind classes. The signature takes a third `cornerPx` (default 56 = the launcher's `w-14`); the promo FABs pass 48. Before this, the hook hard-coded the launcher's 56px for everyone, so the overlap test ran against a rect two of its three callers didn't occupy — and the promo FABs had drifted to their own `bottom-16`/`bottom-4` offsets, leaving them visibly unaligned with the launcher. Full write-up: [`docs/shared-ui/gotchas.md`](../shared-ui/gotchas.md) § floating dock.
 
 **Why the AABB test is load-bearing (don't "simplify" it to a boolean "banner present"):**
+_(2026-08-10: these three claims only became TRUE that day. Every centered bar had `data-floating-widget` on its full-width `inset-x-0` centering wrapper rather than on the visible pill, so the AABB test saw a viewport-wide rect and lifted on every viewport — including desktop, where the bullet below says it shouldn't. The attribute now sits on the pill in all three carriers.)_
 - **Mobile** the countdown banner is near-full-width → it reaches the corner → bubble lifts.
 - **Desktop** the same banner is centered + narrow (`max-w-4xl`) → it does NOT reach the corner → no lift (correct — a boolean would over-lift here).
 - **Top-docked** banners (the scroll-follow `PromoBanner` flips to `top-4`) never intersect the bottom rect → ignored for free.
@@ -106,7 +109,7 @@ The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (t
 - **Dodge only while the bubble is shown AND the panel is closed.** The launcher (`ChatBubbleButton`) passes `enabled = !open`; since the mount only renders the launcher OFF `/my-account` (the "Ask Cobber" card is the entry there), the old `!onDashboard` guard is now implicit. An open panel is `z-9000` and opaque — it already covers every obstacle (`z ≤ 50`), so lifting it would instead expose the banner *below* it.
 - **Corner selection stays the `side` prop** (right by default, `left` on promotions where the right corner holds the theme toggle + account FAB). The hook only decides how far UP to sit, not which corner.
 
-**Reactivity:** recomputes on scroll (rAF, banners collapse/appear), resize, and a `MutationObserver` (a banner dismissed via ✕ or mounted via AnimatePresence un-lifts the bubble immediately). When you add a NEW bottom-anchored floater, give it `data-floating-widget="true"` and the launcher dodges it automatically.
+**Reactivity:** recomputes on scroll (rAF, banners collapse/appear), resize, and a `MutationObserver` (a banner dismissed via ✕ or mounted via AnimatePresence un-lifts the bubble immediately). When you add a NEW bottom-anchored floater, give it `data-floating-widget="true"` and the launcher dodges it automatically — but attach the attribute **only while the floater is visible**. A floater that unmounts when hidden can carry it statically; one that stays mounted and fades (`opacity-0`) must bind it (`data-floating-widget={shown ? "true" : undefined}`), because a faded element still has a non-zero rect and the launcher would lift over something invisible. Reading computed opacity in the hook instead does NOT work — framer obstacles animate in from `opacity: 0` with no `transitionend`, so the gate misses real obstacles (tried and reverted 2026-08-10). See [shared-ui/frontend.md § `data-floating-widget`](../shared-ui/frontend.md).
 
 ---
 
@@ -329,3 +332,16 @@ default. The **bubble** is the one that mattered — once a message is sent it s
 input and becomes ordinary page text, which nothing masks automatically. If the transcript is
 ever re-rendered somewhere else (an admin review view, an emailed transcript, a re-hydrated
 history panel), that surface needs the attribute too.
+
+## Cobber is bottom-RIGHT everywhere again, including /promotions (2026-08-10)
+
+`src/app/promotions/layout.tsx` no longer passes `side="left"` to `SupportChatWidgetMount`, so
+the launcher uses its site-wide default corner on every route. The left override existed only
+because `/promotions` had the guest theme toggle + account FAB in the bottom-right; both moved
+to bottom-left when that control became the hamburger-morph column
+([shared-ui/gotchas.md § Promotions corners SWAPPED](../shared-ui/gotchas.md)).
+
+Worth stating plainly since the `side` prop still exists: bottom-right is the convention
+(Intercom, Zendesk, Drift, Crisp, HubSpot) and the better thumb target for the most-tapped
+floating control. Only pass `side="left"` if some future route genuinely occupies the right
+corner — and prefer moving *that* control instead.

@@ -29,9 +29,11 @@ export default function PromotionalLayout({ children }: { children: React.ReactN
         <Footer />
       </div>
       <UnifiedModalManager />
-      {/* Cobber AI support — docked LEFT here: the bottom-right corner is taken
-          by the guest theme toggle + account FAB (PromotionsLayoutShell). */}
-      <SupportChatWidgetMount side="left" />
+      {/* Cobber AI support — docked RIGHT, the site-wide default. It used to be forced LEFT
+          because the guest theme toggle + account FAB occupied bottom-right; those both moved
+          to bottom-left (2026-08-10), so /promotions now matches every other page. Chat on the
+          right is also the near-universal convention and the better thumb target. */}
+      <SupportChatWidgetMount />
     </PromotionsLayoutShell>
   );
 }

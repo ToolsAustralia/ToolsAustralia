@@ -48,23 +48,26 @@ export function ThemeToggleButton({
 
 /**
  * Floating theme toggle for guests on `/promotions/*` only.
- * Authenticated users get the control inside PromotionsAccountButton (same corner as the FAB).
+ * Authenticated users get this control inside PromotionsAccountButton's column — the two are
+ * mutually exclusive, and both live BOTTOM-LEFT so they never stack.
+ * Docks at the shared FLOATING_DOCK offsets (`bottom-5 left-5`) and bottom-aligns with the
+ * Cobber launcher, which owns bottom-right here as it does site-wide.
  */
 export function PromotionsGuestThemeToggle() {
   const pathname = usePathname();
   const { isAuthenticated, loading } = useUserContext();
   const onPromotionsRoute = pathname === "/promotions" || pathname?.startsWith("/promotions/");
   const show = Boolean(onPromotionsRoute) && !loading && !isAuthenticated;
-  // Lift above the full-width floating "Enter Now" bar (and any other bottom
-  // right-corner floating widget) when it scrolls in — the same collision-dodge
-  // the Cobber launcher uses. Returns 0 (keep the default bottom-4) when clear.
-  const dodgeBottom = useDodgeFloatingObstacles("right", show);
+  // Lift above any bottom-LEFT floating obstacle when it scrolls in — the same collision-dodge
+  // the Cobber launcher uses. Returns 0 (keep the default bottom-5) when clear.
+  // 48 = this button's h-12, the disc that actually occupies the corner.
+  const dodgeBottom = useDodgeFloatingObstacles("left", show, 48);
 
   if (!show) return null;
 
   return (
     <div
-      className="fixed z-[55] pointer-events-auto bottom-4 right-4 transition-[bottom] duration-300 ease-out"
+      className="fixed z-[55] pointer-events-auto bottom-5 left-5 transition-[bottom] duration-300 ease-out"
       style={dodgeBottom > 0 ? { bottom: dodgeBottom } : undefined}
     >
       <ThemeToggleButton />

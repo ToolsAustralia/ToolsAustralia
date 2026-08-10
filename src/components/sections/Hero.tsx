@@ -73,67 +73,39 @@ export default function Hero() {
             <img {...mobileBg} alt="Tools background" className="object-cover" />
           </picture>
         </div>
-        {/* Dark overlay for better text readability */}
-        <div className="absolute inset-0 bg-black/20 dark:bg-black/45" />
+        {/* NO readability scrim — removed 2026-08-10 at the owner's call after the stats row
+            (the lowest-contrast element, sitting over busy pallet art) was dropped from the hero.
+            What remains — an 80px black headline, one short paragraph and a solid red button —
+            carries itself on text-shadow alone against this photo, so the photo runs at full
+            colour. If copy is ever added back BELOW the button, re-check contrast there first:
+            that is where every previous scrim iteration was actually needed.
+            Full history of what was tried and why: docs/shared-ui/gotchas.md. */}
       </div>
 
       {/* Main Hero Content */}
       <div className="flex-1 flex flex-col items-start justify-center w-full relative z-10">
         <div className="relative w-full px-2 sm:px-3 lg:px-[100px] lg:max-w-1440 lg:mx-auto">
           {/* Unified Content Layout - Mobile */}
-          <div className="lg:hidden flex flex-col items-center justify-center min-h-[calc(100vh-200px)] py-8">
+          <div className="lg:hidden flex flex-col items-center justify-start min-h-[calc(100vh-200px)] pt-2 pb-8">
             <div className="max-w-[621px] w-full px-4">
               {/* Main Title */}
-              <h1 className="text-[40px] sm:text-[60px] font-black leading-[40px] sm:leading-[60px] text-white font-poppins mb-4 sm:mb-6 text-center drop-shadow-lg">
+              <h1 className="text-[40px] sm:text-[60px] font-black leading-[40px] sm:leading-[60px] text-white font-poppins mb-4 sm:mb-6 text-center [text-shadow:0_2px_4px_rgba(0,0,0,0.85),0_4px_14px_rgba(0,0,0,0.8),0_8px_34px_rgba(0,0,0,0.7)]">
                 Tools Australia
               </h1>
 
               {/* Description */}
-              <p className="text-[16px] sm:text-[18px] text-gray-200 font-normal leading-[20px] sm:leading-[22px] max-w-[545px] mb-6 sm:mb-8 font-['Inter',_sans-serif] text-center mx-auto drop-shadow-md">
-                Your go-to for tools and Australia&apos;s biggest tool giveaways. Shop the best tools, find exclusive
-                partner deals, and win big!
+              <p className="text-[16px] sm:text-[18px] text-white/95 font-normal leading-[20px] sm:leading-[22px] max-w-[545px] mb-6 sm:mb-8 font-['Inter',_sans-serif] text-center mx-auto [text-shadow:0_1px_2px_rgba(0,0,0,0.98),0_2px_8px_rgba(0,0,0,0.92),0_5px_22px_rgba(0,0,0,0.85)]">
+                Become a member to unlock exclusive partner deals and free entries in Australia&apos;s biggest
+                tool giveaways — plus exciting mini draws, open to everyone.
               </p>
 
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8 sm:mb-12">
                 <MetallicButton href="/membership" variant="primary" size="md" borderRadius="lg">
-                  Join Membership
-                </MetallicButton>
-
-                <MetallicButton href="/shop" variant="secondary" size="md" borderRadius="lg" borderColor="red">
-                  Shop Now
+                  Become a member
                 </MetallicButton>
               </div>
 
-              {/* Stats */}
-              <div className="w-full flex flex-row items-center justify-center gap-2 sm:gap-4">
-                <div className="flex flex-col flex-1 text-center">
-                  {/* <div className="text-[16px] sm:text-[18px] font-bold text-white mb-[-2px] font-['Inter',_sans-serif] leading-[18px] sm:leading-[20px] drop-shadow-md">
-                    200+
-                  </div> */}
-                  <div className="text-2xs sm:text-2xs text-gray-300 font-['Inter',_sans-serif] font-normal leading-[12px] sm:leading-[13px] drop-shadow-sm">
-                    Australia’s Best Brands
-                  </div>
-                </div>
-
-                <div className="flex flex-col flex-1 text-center">
-                  {/* <div className="text-[16px] sm:text-[18px] font-bold text-white mb-[-2px] font-['Inter',_sans-serif] leading-[18px] sm:leading-[20px] drop-shadow-md">
-                    2,000+
-                  </div> */}
-                  <div className="text-2xs sm:text-2xs text-gray-300 font-['Inter',_sans-serif] font-normal leading-[12px] sm:leading-[13px] drop-shadow-sm">
-                    High-Quality Products
-                  </div>
-                </div>
-
-                <div className="flex flex-col flex-1 text-center">
-                  {/* <div className="text-[16px] sm:text-[18px] font-bold text-white mb-[-2px] font-['Inter',_sans-serif] leading-[18px] sm:leading-[20px] drop-shadow-md">
-                    30,000+
-                  </div> */}
-                  <div className="text-2xs sm:text-2xs text-gray-300 font-['Inter',_sans-serif] font-normal leading-[12px] sm:leading-[13px] drop-shadow-sm">
-                    Happy Customers
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -141,60 +113,23 @@ export default function Hero() {
           <div className="hidden lg:flex items-start justify-start py-12">
             <div className="max-w-[621px]">
               {/* Main Title */}
-              <h1 className="text-[80px] font-black leading-[80px] text-white font-poppins mb-6 drop-shadow-lg">
+              <h1 className="text-[80px] font-black leading-[80px] text-white font-poppins mb-6 [text-shadow:0_2px_4px_rgba(0,0,0,0.85),0_4px_14px_rgba(0,0,0,0.8),0_8px_34px_rgba(0,0,0,0.7)]">
                 Tools Australia
               </h1>
 
               {/* Description */}
-              <p className="text-[20px] text-gray-200 font-normal leading-[22px] max-w-[545px] mb-8 font-['Inter',_sans-serif] drop-shadow-md">
-                Your go-to for tools and Australia&apos;s biggest tool giveaways. Shop the best tools, find exclusive
-                partner deals, and win big!
+              <p className="text-[20px] text-white/95 font-normal leading-[22px] max-w-[545px] mb-8 font-['Inter',_sans-serif] [text-shadow:0_1px_2px_rgba(0,0,0,0.98),0_2px_8px_rgba(0,0,0,0.92),0_5px_22px_rgba(0,0,0,0.85)]">
+                Become a member to unlock exclusive partner deals and free entries in Australia&apos;s biggest
+                tool giveaways — plus exciting mini draws, open to everyone.
               </p>
 
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
                 <MetallicButton href="/membership" variant="primary" size="md" borderRadius="lg">
-                  Join Membership
-                </MetallicButton>
-
-                <MetallicButton href="/shop" variant="secondary" size="md" borderRadius="lg" borderColor="red">
-                  Shop Now
+                  Become a member
                 </MetallicButton>
               </div>
 
-              {/* Stats */}
-              <div className="flex flex-row items-center justify-start gap-8">
-                <div className="flex flex-col text-left">
-                  {/* <div className="text-[40px] font-bold text-white mb-[-2px] font-['Inter',_sans-serif] leading-[48px] drop-shadow-md">
-                    200+
-                  </div> */}
-                  <div className="text-[16px] text-gray-300 font-['Inter',_sans-serif] font-normal leading-[22px] drop-shadow-sm">
-                    Australia’s Best Brands
-                  </div>
-                </div>
-
-                <div className="w-px h-[68px] bg-white/30"></div>
-
-                <div className="flex flex-col text-left">
-                  {/* <div className="text-[40px] font-bold text-white mb-[-2px] font-['Inter',_sans-serif] leading-[48px] drop-shadow-md">
-                    2,000+
-                  </div> */}
-                  <div className="text-[16px] text-gray-300 font-['Inter',_sans-serif] font-normal leading-[22px] drop-shadow-sm">
-                    High-Quality Products
-                  </div>
-                </div>
-
-                <div className="w-px h-[68px] bg-white/30"></div>
-
-                <div className="flex flex-col text-left">
-                  {/* <div className="text-[40px] font-bold text-white mb-[-2px] font-['Inter',_sans-serif] leading-[48px] drop-shadow-md">
-                    30,000+
-                  </div> */}
-                  <div className="text-[16px] text-gray-300 font-['Inter',_sans-serif] font-normal leading-[22px] drop-shadow-sm">
-                    Happy Customers
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -202,7 +137,7 @@ export default function Hero() {
 
       {/* Brand Logos Section - CSS Marquee */}
       <div className="py-6 sm:py-8 lg:py-10 w-full relative z-10">
-        <p className="text-center text-white/90 font-['Inter'] font-semibold text-sm sm:text-base lg:text-lg tracking-wide mb-4 sm:mb-6 drop-shadow-md">
+        <p className="text-center text-white/90 font-['Inter'] font-extrabold text-sm sm:text-base lg:text-lg tracking-wide mb-4 sm:mb-6 [text-shadow:0_1px_2px_rgba(0,0,0,0.98),0_2px_8px_rgba(0,0,0,0.92),0_5px_22px_rgba(0,0,0,0.85)]">
           WIN AUSTRALIA&apos;S TOP TOOL BRANDS
         </p>
         <BrandScroller speed={800} speedMobile={400} />

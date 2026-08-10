@@ -310,7 +310,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-08-07",
+  "lastModified": "2026-08-10",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -483,7 +483,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-draw9-landing-videos.ts",
         "src/docs/PROMOTION_ANALYTICS.md"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-10"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -769,7 +769,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-08-07"
+      "lastVerified": "2026-08-10"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -845,7 +845,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-10"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -941,7 +941,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/wt-*.sh",
         "scripts/codemods/**"
       ],
-      "lastVerified": "2026-08-07"
+      "lastVerified": "2026-08-10"
     },
     "config-and-data": {
       "docs": "docs/config-and-data/",
@@ -965,13 +965,15 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/ChatAuditLog.ts",
         "src/models/ChatSettings.ts",
         "src/app/api/admin/chatbot-settings/**",
+        "src/app/api/admin/chatbot-conversations/**",
+        "src/services/admin/chatTranscripts.ts",
         "src/generated/chatKnowledgePack.ts",
         "scripts/build-chat-knowledge-pack.ts",
         "scripts/embed-chat-knowledge.ts",
         "scripts/eval-chat-goldenset.ts",
         "scripts/calibrate-chat-deflection.ts"
       ],
-      "lastVerified": "2026-08-07"
+      "lastVerified": "2026-08-10"
     },
     "e2e": {
       "docs": "docs/e2e/",

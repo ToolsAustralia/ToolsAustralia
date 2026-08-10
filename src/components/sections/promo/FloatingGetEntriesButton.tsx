@@ -128,7 +128,6 @@ export default function FloatingGetEntriesButton() {
     <AnimatePresence>
       {isVisible && (
         <m.div
-          data-floating-widget="true"
           initial={{ opacity: 0, scale: 0, y: 100 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0, y: 100 }}
@@ -141,6 +140,10 @@ export default function FloatingGetEntriesButton() {
           className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-0 right-0 flex justify-center z-50 pointer-events-none"
         >
           <m.button
+            // The obstacle contract goes on the PILL, not the full-width centering wrapper.
+            // The wrapper spans the viewport, so measuring it made the corner controls dodge
+            // a bar that visually never reaches them. See docs/shared-ui/frontend.md.
+            data-floating-widget="true"
             onClick={handleGetEntries}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -157,9 +160,6 @@ export default function FloatingGetEntriesButton() {
             }
           >
             <span className="relative z-10">Enter Now</span>
-            <svg className="relative z-10 w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
 
             {!isInWinnersOrHowItWorks && (
               <span

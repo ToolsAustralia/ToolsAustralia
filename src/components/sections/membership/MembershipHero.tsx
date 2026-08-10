@@ -1,17 +1,32 @@
 "use client";
 
+import Image from "next/image";
 import { ArrowRight, Trophy, Crown } from "lucide-react";
 import MetallicButton from "@/components/ui/MetallicButton";
 import AccessRing from "@/components/ui/AccessRing";
+import { getPackageIcon } from "@/utils/images/package-icons";
 import type { MembershipCardCta } from "@/hooks/useMembershipCardCta";
 import type { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { TIER_HEX, tierKeyFromName, glossGrad, inkOn } from "@/utils/membership/tier-visuals";
 import { cn } from "@/utils/cn";
 
-function baseEntries(plan: LocalMembershipPlan): number {
-  // hero deck shows BASE entries (not promo-boosted), matching the prototype
-  return (plan.metadata?.originalEntries as number | undefined) ?? plan.metadata?.entriesCount ?? 0;
+/**
+ * Entries shown on a hero deck card.
+ *
+ * MUST be the promo-boosted `entriesCount`, i.e. the SAME number `MembershipTierChooser`
+ * renders further down this page. The deck used to show `originalEntries` (the pre-promo
+ * base) "matching the prototype", which meant that during a promo the hero said Tradie
+ * "15 free entries / mo" while the tier card a screen below said "was 15 → 75". Two
+ * different numbers for the same tier on one page reads as a bug or a bait-and-switch.
+ *
+ * `entriesCount` already has the multiplier applied upstream; `originalEntries` is only
+ * present when a promo is live, which is also how we know to show the "was" strike.
+ */
+function heroEntries(plan: LocalMembershipPlan): { entries: number; was: number | null } {
+  const entries = plan.metadata?.entriesCount ?? 0;
+  const original = plan.metadata?.originalEntries as number | undefined;
+  return { entries, was: original != null && original !== entries ? original : null };
 }
 
 function trackFor(ink: string): string {
@@ -23,6 +38,8 @@ function DeckCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
   const hex = TIER_HEX[key];
   const ink = inkOn(hex);
   const access = getPartnerCatalogAccessPercentForPlanId(`${key}-subscription`);
+  const { entries, was } = heroEntries(plan);
+  const icon = getPackageIcon(plan.id) ?? getPackageIcon(key);
   const apex = key === "boss";
   const pos =
     apex
@@ -62,14 +79,21 @@ function DeckCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
           className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 -skew-x-12 opacity-0 transition-all duration-700 ease-out group-hover:left-[120%] group-hover:opacity-100"
           style={{ background: "linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent)" }}
         />
-        <div className="relative flex flex-col items-center gap-[13px] px-4 pb-[23px] pt-[22px] text-center">
+        {/* pt clears the icon medallion that straddles the top edge (rendered as a sibling
+            of this button, below) — without it the tier name sits under the icon. */}
+        <div className="relative flex flex-col items-center gap-[13px] px-4 pb-[23px] pt-[30px] text-center">
           <span className="font-poppins text-[15px] font-black uppercase tracking-[0.12em]">{plan.name}</span>
           <AccessRing percent={access} size={84} stroke={8} color={ink} trackColor={trackFor(ink)}>
             <span className="font-poppins text-[19px] font-extrabold">{access}%</span>
           </AccessRing>
           <span className="-mt-1 text-[9.5px] font-extrabold uppercase tracking-[0.14em] opacity-90">Partner access</span>
           <div className="text-xs leading-tight opacity-85">
-            <b className="block font-poppins text-[18px] font-extrabold leading-tight">{baseEntries(plan)}</b>
+            {was !== null && (
+              <span className="block text-[10px] font-semibold leading-none opacity-70">
+                was <s>{was}</s>
+              </span>
+            )}
+            <b className="block font-poppins text-[18px] font-extrabold leading-tight">{entries}</b>
             free entries / mo
           </div>
           <div className="font-poppins text-[23px] font-black">
@@ -78,6 +102,27 @@ function DeckCard({ plan, cta }: { plan: LocalMembershipPlan; cta: MembershipCar
           </div>
         </div>
       </button>
+
+      {/* Package icon medallion, centred on the card's TOP EDGE.
+          Deliberately a SIBLING of the <button>, not a child: the button is
+          `overflow-hidden` (it clips the gloss/sheen layers), which would cut off the half
+          of this medallion that straddles the edge. `pointer-events-none` so it never steals
+          the card's click, and aria-hidden because the button's aria-label already names the
+          tier — the icon is decoration, not a second label. */}
+      {icon && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 z-10 grid h-[42px] w-[42px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border transition-transform duration-300 ease-out group-hover:-translate-y-[calc(50%+0.5rem)]"
+          style={{
+            background: glossGrad(hex),
+            borderColor: "rgba(255,255,255,.5)",
+            boxShadow:
+              "0 6px 16px -4px rgba(0,0,0,.65), 0 0 0 3px rgba(10,10,10,.35), inset 0 1px 0 rgba(255,255,255,.5)",
+          }}
+        >
+          <Image src={icon} alt="" width={26} height={26} className="h-[26px] w-[26px] object-contain drop-shadow" />
+        </span>
+      )}
     </div>
   );
 }
