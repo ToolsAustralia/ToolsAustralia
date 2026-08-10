@@ -123,3 +123,23 @@ arbitrary `font-['[Poppins]']` Tailwind class → the real `font-poppins` utilit
 _Fix round 1 (2026-07-20):_ `sweep-font-poppins.ts` regex hardened to also match the
 fallback-suffixed `font-['[Poppins]',sans-serif]` form (was exact-literal only), preserving
 variant prefixes; dry-run/apply behavior unchanged; idempotent.
+
+## 2026-08-10 — dev corner widgets are dismissible for a page view
+
+Both bottom-left dev overlays now have a ✕ that removes them from the corner outright:
+
+- [`MajorDrawTestControls`](../../src/components/dev/MajorDrawTestControls.tsx) — the beaker pill at `bottom-6 left-6`, `z-[9998]`.
+- [`PromoHolidayDevToolbar`](../../src/components/sections/promo/PromoHolidayDevToolbar.tsx) — the "Holiday dev" pill at `bottom-3 left-3`, `z-[10000]` (✕ on both the collapsed pill and the expanded panel).
+
+Why: each already had a collapse-to-pill, but the *pill itself* is a fixed overlay at a
+z-index above everything, sitting exactly where the bottom-left product UI lives — so
+collapsing didn't actually free the corner. This matters more now that `/promotions` is
+getting a bottom-left control of its own.
+
+**Dismissal is in-memory (`useState`), deliberately NOT persisted** — unlike
+`PromoHolidayDevToolbar`'s collapse state, which stays in `sessionStorage`. A reload brings
+the widget back, which is both how you restore it and the guarantee that a dev tool can't be
+permanently lost. If you add another corner dev overlay, follow the same shape.
+
+`PromoHolidayDevToolbar`'s "Hide" button also swapped its icon from `X` to `ChevronDown`, so
+collapse and dismiss no longer look like the same action.

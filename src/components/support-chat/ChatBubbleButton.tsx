@@ -27,7 +27,10 @@ interface ChatBubbleButtonProps {
 }
 
 export default function ChatBubbleButton({ side, open, onToggle }: ChatBubbleButtonProps) {
-  // Horizontal dock — same inset on either side so the bubble/panel line up.
+  // Horizontal dock — same inset on either side so the bubble/panel line up. `bottom-5` +
+  // `{left,right}-5` below are the shared FLOATING_DOCK_* offsets: the promotions FABs in
+  // the opposite corner use the identical values so the two corners bottom-align. Change
+  // one and you must change FLOATING_DOCK_BOTTOM_PX / FLOATING_DOCK_SIDE_PX with it.
   const sideClass = side === "left" ? "left-5" : "right-5";
   const accentVars = useCobberAccentVars();
 

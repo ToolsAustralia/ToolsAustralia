@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import type { HolidayPromoSlot } from "@/utils/promo-banner/holiday-promo-banner";
 import {
   getActiveHolidayPromoSlot,
@@ -22,12 +22,19 @@ export type PromoHolidayDevToolbarProps = {
  */
 export function PromoHolidayDevToolbar({ forcedSlot, onForcedSlotChange }: PromoHolidayDevToolbarProps) {
   const [toolbarHidden, setToolbarHidden] = useState(false);
+  // Fully dismissed for THIS page view. Deliberately in-memory (not sessionStorage, unlike
+  // `toolbarHidden`): the collapsed pill still occupies bottom-left at z-10000 and covers
+  // whatever corner UI you're working on, so you need a way to clear the corner outright —
+  // but a dev tool you can permanently lose is a dev tool you forget exists. A reload brings
+  // it back, which is also how you get it back after dismissing.
+  const [dismissedForPageView, setDismissedForPageView] = useState(false);
 
   useEffect(() => {
     setToolbarHidden(readHolidayDevToolbarHidden());
   }, []);
 
   if (process.env.NODE_ENV !== "development") return null;
+  if (dismissedForPageView) return null;
 
   const liveSlot = getActiveHolidayPromoSlot();
 
@@ -36,18 +43,29 @@ export function PromoHolidayDevToolbar({ forcedSlot, onForcedSlotChange }: Promo
 
   if (toolbarHidden) {
     return (
-      <button
-        type="button"
-        className="pointer-events-auto fixed bottom-3 left-3 z-[10000] rounded-lg border border-amber-400/35 bg-neutral-950/95 px-2.5 py-1.5 text-2xs font-semibold text-amber-100 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-md hover:bg-neutral-900/95"
-        onClick={() => {
-          writeHolidayDevToolbarHidden(false);
-          setToolbarHidden(false);
-        }}
-        title="Show holiday banner dev tools"
-        aria-label="Show holiday banner development tools"
-      >
-        Holiday dev
-      </button>
+      <div className="pointer-events-auto fixed bottom-3 left-3 z-[10000] flex items-stretch overflow-hidden rounded-lg border border-amber-400/35 bg-neutral-950/95 text-2xs font-semibold text-amber-100 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur-md">
+        <button
+          type="button"
+          className="px-2.5 py-1.5 hover:bg-neutral-900/95"
+          onClick={() => {
+            writeHolidayDevToolbarHidden(false);
+            setToolbarHidden(false);
+          }}
+          title="Show holiday banner dev tools"
+          aria-label="Show holiday banner development tools"
+        >
+          Holiday dev
+        </button>
+        <button
+          type="button"
+          className="border-l border-amber-400/25 px-1.5 text-amber-200/70 hover:bg-neutral-900/95 hover:text-amber-100"
+          onClick={() => setDismissedForPageView(true)}
+          title="Clear this corner — comes back on the next page load"
+          aria-label="Dismiss the holiday dev toggle until the next page load"
+        >
+          <X className="h-3 w-3" aria-hidden />
+        </button>
+      </div>
     );
   }
 
@@ -62,19 +80,28 @@ export function PromoHolidayDevToolbar({ forcedSlot, onForcedSlotChange }: Promo
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            title="Hide this panel until you click “Holiday dev” (saved for this tab)"
+            title="Collapse to the “Holiday dev” pill (saved for this tab)"
             onClick={() => {
               writeHolidayDevToolbarHidden(true);
               setToolbarHidden(true);
             }}
             className="inline-flex items-center gap-1 rounded-lg border border-amber-400/45 bg-amber-950/70 px-2 py-1 text-2xs font-semibold uppercase tracking-wide text-amber-100 shadow-[0_0_0_1px_rgba(0,0,0,0.2)] hover:bg-amber-900/80"
           >
-            <X className="h-3.5 w-3.5 opacity-90" aria-hidden />
+            <ChevronDown className="h-3.5 w-3.5 opacity-90" aria-hidden />
             Hide
           </button>
           <span className="rounded-md border border-white/15 bg-white/10 px-2 py-1 text-2xs font-semibold uppercase text-white/80">
             Dev
           </span>
+          <button
+            type="button"
+            title="Clear this corner — comes back on the next page load"
+            aria-label="Dismiss the holiday dev panel until the next page load"
+            onClick={() => setDismissedForPageView(true)}
+            className="rounded-md border border-white/15 bg-white/5 px-1.5 py-1 text-white/70 hover:bg-white/15 hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
         </div>
       </div>
       <p className="mb-2 text-2xs leading-snug text-neutral-400">

@@ -14,7 +14,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Beaker, ChevronDown, ChevronUp, ArrowLeft, RotateCcw } from "lucide-react";
+import { Beaker, ChevronDown, ChevronUp, ArrowLeft, RotateCcw, X } from "lucide-react";
 import { queryKeys } from "@/lib/queryKeys";
 
 interface DrawPair {
@@ -33,6 +33,11 @@ export default function MajorDrawTestControls() {
   const [currentScenario, setCurrentScenario] = useState<number | null>(null);
   const [scenarioHistory, setScenarioHistory] = useState<Array<{ scenario: number; drawPair: DrawPair }>>([]);
   const [currentDrawPair, setCurrentDrawPair] = useState<DrawPair | null>(null);
+  // Cleared for THIS page view only. In-memory on purpose (no localStorage, unlike the
+  // scenario state below): the collapsed beaker still sits bottom-left at z-9998 and covers
+  // whatever corner UI you're working on, so you need to clear the corner outright — but a
+  // dev tool you can permanently lose is a dev tool you forget exists. A reload brings it back.
+  const [dismissedForPageView, setDismissedForPageView] = useState(false);
 
   // Load current scenario and draw pair from localStorage on mount
   // NOTE: Hooks must be called before any conditional returns
@@ -160,6 +165,8 @@ export default function MajorDrawTestControls() {
 
   // Render only in dev — parent Providers also gates mount.
   // Bottom-left so we do not stack on promotions guest theme FAB (bottom-right).
+  if (dismissedForPageView) return null;
+
   return (
     <div className="fixed bottom-6 left-6 z-[9998]">
       {/* Floating Button */}
@@ -288,16 +295,26 @@ export default function MajorDrawTestControls() {
           </div>
         )}
 
-        {/* Toggle Button */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="bg-gray-900 hover:bg-gray-800 text-white rounded-full p-4 shadow-2xl border border-gray-700 transition-all duration-200 hover:scale-110 flex items-center gap-2"
-          title="Major Draw Test Controls"
-          suppressHydrationWarning
-        >
-          <Beaker className="w-6 h-6 text-blue-400" />
-          {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronUp className="w-4 h-4 text-gray-400" />}
-        </button>
+        {/* Toggle Button + dismiss */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="bg-gray-900 hover:bg-gray-800 text-white rounded-full p-4 shadow-2xl border border-gray-700 transition-all duration-200 hover:scale-110 flex items-center gap-2"
+            title="Major Draw Test Controls"
+            suppressHydrationWarning
+          >
+            <Beaker className="w-6 h-6 text-blue-400" />
+            {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronUp className="w-4 h-4 text-gray-400" />}
+          </button>
+          <button
+            onClick={() => setDismissedForPageView(true)}
+            className="bg-gray-900/90 hover:bg-gray-800 text-gray-400 hover:text-white rounded-full p-1.5 shadow-lg border border-gray-700 transition-colors"
+            title="Clear this corner — comes back on the next page load"
+            aria-label="Dismiss the major draw test controls until the next page load"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );
