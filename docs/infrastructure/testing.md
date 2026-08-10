@@ -478,3 +478,11 @@ Rationale for the test itself: [docs/tracking/testing.md](../tracking/testing.md
 guarding a bug where `extractAttributionParams(window.location.search)` returned `{}` and
 silently disabled all client-side UTM capture. Full write-up:
 [docs/tracking/gotchas.md](../tracking/gotchas.md).
+
+## `test:attribution-metadata` added (2026-08-10)
+
+`package.json` gained `test:attribution-metadata` →
+`src/utils/tracking/__tests__/attribution-metadata.test.ts`. Guards every Stripe purchase path
+against an over-long URL-derived attribution value exceeding Stripe's 500-character metadata
+limit, which would fail the charge. Rationale:
+[docs/tracking/gotchas.md](../tracking/gotchas.md).

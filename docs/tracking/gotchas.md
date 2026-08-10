@@ -406,3 +406,28 @@ Fixed by testing `startsWith("?")` **before** the `includes("?")` branch and par
 **The lesson worth keeping:** a parser that catches its own exceptions and returns an empty
 result cannot be trusted to tell you it is broken. When attribution looks thin, verify the
 capture path end to end on production rather than assuming the data is simply sparse.
+
+## Attribution must never fail a charge — Stripe metadata is clipped to 500 chars (2026-08-10)
+
+Directly downstream of the parser bug above. `buildAttributionMetadata` stamps raw UTM values
+into Stripe metadata as `attr_utm_source` etc., and **Stripe rejects the entire request if any
+metadata value exceeds 500 characters**. Nothing upstream capped them:
+`attributionSchema` declares plain `z.string().optional()` with no `.max()`, and the values
+originate in the URL — anyone can append `?utm_source=<600 chars>` to a landing link.
+
+Every purchase path funnels through that function — `create-subscription` (+ existing-user),
+`create-payment-intent`, `create-one-time-purchase` (+ existing-user), `mini-draw/purchase`,
+`upsell/purchase` — so an unbounded value fails the **charge**, not merely the reporting.
+
+This was unreachable while `extractAttributionParams` returned `{}` for
+`window.location.search`: the values were permanently empty, so no limit was ever tested.
+Fixing that parser is precisely what made a long UTM able to reach Stripe.
+
+**Clip, never reject.** Attribution is reporting metadata. A truncated `utm_term` costs a
+little fidelity; a refused PaymentIntent costs the sale. Do not "fix" this by adding `.max()`
+to `attributionSchema` — that turns an over-long campaign tag into a failed purchase, which is
+strictly worse. Pinned by `npm run test:attribution-metadata`.
+
+The general rule: **anything derived from a URL and forwarded to a payment provider needs a
+bound at the boundary**, because the URL is attacker-controlled and the provider's limits are
+hard failures.
