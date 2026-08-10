@@ -110,3 +110,28 @@ hook as a type error rather than as an empty result set.
 
 The hook is `enabled` only when `channel` and both dates are set, matching the sibling
 `usePromoPageDetail`.
+
+## 2026-08-10 — Cobber transcript hooks (`useChatbotConversations.ts`)
+
+`src/hooks/queries/admin/useChatbotConversations.ts` adds two **read-only** admin queries for the
+Cobber transcript browser. There are no mutations on this surface, so nothing invalidates and no
+`queryKeys.ts` entry was added — both use inline keys, matching the sibling
+`useChatbotCostAnalytics`.
+
+| Hook | Key | Notes |
+|---|---|---|
+| `useChatbotConversations(filters)` | `["admin","chatbot-conversations",days,status,actor,kind,q,page]` | Every filter is in the key, so each combination caches independently. |
+| `useChatbotConversation(id)` | `["admin","chatbot-conversation",id]` | `enabled: Boolean(id)` — the detail view is only mounted once a row is picked, and passing `null` must not fire a request to `/undefined`. |
+
+**`placeholderData: keepPreviousData` on the list hook.** Paging and filter changes remount the
+same table, and without it every click blanks the list to the loading state and jumps scroll
+position. With it the previous page stays on screen while the next resolves; the component
+distinguishes the two states via `isFetching && !isLoading` and shows a quiet "updating…" label
+rather than a spinner. Use this whenever a query key changes as a *direct* result of a user
+interaction on a list that stays mounted.
+
+**Type re-exports.** The hook file re-exports `ChatTranscriptRow` / `ChatTranscriptDetail` / the
+three filter unions from the service (`@/services/admin/chatTranscripts`) so the client component
+imports its types from the hook, not from a service module that also imports Mongoose models.
+Type-only re-exports are erased at build time, so this does not drag `mongoose` into the client
+bundle — the same pattern `useChatbotCostAnalytics` uses for `ChatbotCostData`.

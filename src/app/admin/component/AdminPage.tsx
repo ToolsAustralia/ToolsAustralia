@@ -32,7 +32,7 @@ import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueM
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
 import CancellationFlowAnalytics from "@/components/admin/CancellationFlowAnalytics";
 import RepeatPurchaseAnalytics from "@/components/admin/RepeatPurchaseAnalytics";
-import ChatbotCostManagement from "@/components/admin/ChatbotCostManagement";
+import ChatbotManagement from "@/components/admin/ChatbotManagement";
 import ActivityLogManagement from "./ActivityLogManagement";
 import SettingsTab from "./SettingsTab";
 import AuditLogTab from "./internal-norm/AuditLogTab";
@@ -166,7 +166,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "all-platforms" && "Combined ad effectiveness — spend, revenue, ROAS, and hourly across every platform"}
                   {selectedTab === "cancellation-flow" && "Cancellation-flow funnel, save rate, and retention analytics"}
                   {selectedTab === "repeat-purchases" && "One-time buyers who came back — repeat rate, time-to-return, and the fetchable cohort"}
-                  {selectedTab === "chatbot" && "Cobber AI chatbot — availability, daily spend, deflection rate, and usage"}
+                  {selectedTab === "chatbot" && "Cobber AI chatbot — availability, daily spend, deflection rate, usage, and conversation transcripts"}
                   {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
@@ -255,7 +255,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* REPEAT PURCHASES ANALYTICS TAB */}
           {selectedTab === "repeat-purchases" && <RepeatPurchaseAnalytics />}
-          {selectedTab === "chatbot" && <ChatbotCostManagement />}
+          {selectedTab === "chatbot" && <ChatbotManagement />}
 
           {/* ACTIVITY LOG TAB */}
           {selectedTab === "activity-log" && <ActivityLogManagement />}
