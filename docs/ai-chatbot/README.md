@@ -114,3 +114,40 @@ never a data value — the map's standing rule).
 `chatKnowledgePack.ts` regenerated after the FAQ corpus moved from "partner catalogue" to
 "partner discounts" (see [docs/config-and-data/README.md](../config-and-data/README.md)). No
 structural change — same 8 sections, ~12.5k tokens.
+
+## Reading real conversations in admin (2026-08-10)
+
+Cobber has persisted every conversation since it went live (**8 Jul 2026**) — `ChatConversation` +
+`ChatMessage`, both on a **90-day TTL**. Until now nothing surfaced them: the admin Chatbot tab
+read `ChatAuditLog` aggregates only (cost, tokens, deflection rate), so you could see *that* Cobber
+answered 48 questions but never *what* it said.
+
+**Admin → Chatbot → Conversations** now browses those transcripts. See
+[docs/admin/frontend.md](../admin/frontend.md) for the UI and
+[docs/admin/backend.md](../admin/backend.md) for the service; the short version:
+
+- Filter by range (7/30/90d), status, member-vs-guest, and **FAQ-only vs AI-answered**; search the
+  redacted message text.
+- Open a conversation to read the full exchange, with each answer's **`citations`** (the FAQ
+  `docId`s it was grounded on) and a per-turn table of model / latency / tokens / HTTP status.
+
+**Using it to improve Cobber.** The highest-value signal is an assistant message that is
+confidently worded but carries **zero citations** — that is Cobber answering from the system prompt
+rather than from grounded knowledge, and it is exactly the hallucination risk rule 11 exists to
+prevent. When you find one, the fix is a new/edited FAQ entry in `src/data/supportChatFaqs.ts`
+followed by `npm run build:chat-knowledge-pack` + `npm run test:chat-faqs` (bump the count
+assertion in `src/data/__tests__/faqs.test.ts` deliberately). The other two signals worth scanning:
+questions that got deflected to a *wrong* FAQ, and repeated questions with no matching entry at all.
+
+**Retention is deliberately 90 days, not shorter.** All Cobber data combined is ~0.22 MB against a
+~330 MB production database (~0.07%); the `stripewebhookqueue` collection alone is 137 MB. There is
+no storage argument for shortening it, and the 90-day figure is stated to customers in the in-chat
+disclosure and in [privacy-policy-changes.md](./privacy-policy-changes.md) — changing it means
+changing customer-facing copy and `CUSTOMER.md` §9c. Members can still self-serve a delete at any
+time ("Delete my chat history" → `DELETE /api/chat/history`), and because the admin view reads live
+data, a member deletion removes it from admin too.
+
+**Known TTL asymmetry.** `ChatConversation`'s TTL is on `updatedAt` (sliding) while `ChatMessage`'s
+is on `createdAt` (fixed), so a conversation that stays active longer than 90 days can outlive its
+earliest messages. The transcript API flags this as `possiblyTruncated`. Not yet fixed — chats are
+short-lived enough that it has never bitten; aligning both onto `createdAt` is the durable fix.

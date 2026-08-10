@@ -929,9 +929,20 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 **Client-safe constant copies.** `CancellationFlowAnalytics.tsx` declares its own module-local `CANCELLATION_REASONS` and `OFFER_TYPES` constants (identical values and order to the model) instead of importing them from `@/models/CancellationFlowEvent`. That module is a Mongoose model file — runtime-evaluating it in a client component crashes (`mongoose` is `serverExternalPackages`, so `models.CancellationFlowEvent` is undefined in the browser). The type-only imports (`import type { CancellationReason, OfferType }`) remain safe because types are fully erased at build time. Keep the local constants in sync by hand whenever the model's `CANCELLATION_REASONS` or `OFFER_TYPES` arrays change. This is the same pattern used elsewhere on this branch for the same class of crash.
 
-## Chatbot (Cobber) — availability, cost & usage (2026-06-26, updated 2026-07-08)
+## Chatbot (Cobber) — availability, cost & usage (2026-06-26, updated 2026-08-10)
 
-[src/components/admin/ChatbotCostManagement.tsx](../../src/components/admin/ChatbotCostManagement.tsx) is the **`chatbot`** tab — relocated 2026-07-08 from the Analytics group to the **Team** group (below Norm) and renamed "Chatbot Cost" → "Chatbot", since the section now toggles availability, not just reports cost. Rendered by `AdminPage` on `selectedTab === "chatbot"` (URL `/admin/chatbot`; the H1 derives from the id via `capitalize`). Gated by `overview.view`. Read-only **except** two `PATCH` controls: the Cobber availability (pause) toggle and the AI model provider toggle (see below). The component file/class keep the `ChatbotCost*` name (still primarily the cost-analytics surface). No external chart library.
+**Tab container (2026-08-10).** `AdminPage` now renders [src/components/admin/ChatbotManagement.tsx](../../src/components/admin/ChatbotManagement.tsx) on `selectedTab === "chatbot"`, not `ChatbotCostManagement` directly. It is a thin container owning one `Segmented` sub-view switch so each leaf view stays a single concern:
+
+| Sub-view | Component | Permission |
+|---|---|---|
+| **Usage & cost** (default) | `ChatbotCostManagement` | `overview.view` (the tab gate) |
+| **Conversations** | `ChatbotConversations` | **`submissions.view`** |
+
+The two sub-views deliberately differ in gate. The tab is granted by `overview.view`, which is right for aggregate cost numbers — but transcripts contain what individual customers typed. `ChatbotManagement` calls `usePermissions().has("submissions.view")` and, when absent, renders `ChatbotCostManagement` alone with **no switch at all**, so a user never clicks a sub-tab into a 403. Keep this in lockstep with the `requirePermission("submissions.view")` in both `/api/admin/chatbot-conversations` routes.
+
+### Usage & cost sub-view
+
+[src/components/admin/ChatbotCostManagement.tsx](../../src/components/admin/ChatbotCostManagement.tsx) is the **`chatbot`** tab's default view — relocated 2026-07-08 from the Analytics group to the **Team** group (below Norm) and renamed "Chatbot Cost" → "Chatbot", since the section now toggles availability, not just reports cost. Reached via `AdminPage` → `ChatbotManagement` on `selectedTab === "chatbot"` (URL `/admin/chatbot`; the H1 comes from `adminTabLabel`). Gated by `overview.view`. Read-only **except** two `PATCH` controls: the Cobber availability (pause) toggle and the AI model provider toggle (see below). The component file/class keep the `ChatbotCost*` name (still primarily the cost-analytics surface). No external chart library.
 
 **Headline KPI: Deflection rate** — the share of requests answered free (via FAQ deflection) with no LLM/AI spend. Higher = lower cost.
 
@@ -966,6 +977,30 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 **Client-safe constant note.** `ChatbotCostManagement.tsx` does not import from `@/models/ChatAuditLog`; the `actorKind` literal tuple is re-declared locally with a "keep in sync" comment — same pattern as `CancellationFlowAnalytics.tsx`.
 
 Endpoint: `GET /api/admin/chatbot-cost` — see [api.md](./api.md).
+
+### Conversations sub-view — transcript browser (2026-08-10)
+
+[src/components/admin/ChatbotConversations.tsx](../../src/components/admin/ChatbotConversations.tsx) answers "what are people actually asking Cobber, and how did it reply" — the read surface for the transcripts that `ChatService` has been persisting since Cobber went live (2026-07-08). Cost analytics reads `ChatAuditLog` aggregates only and never showed message content; this view reads `ChatConversation` + `ChatMessage`.
+
+**Two screens in one component,** switched by local `selectedId` state (no routing — the tab has no URL sub-segment):
+
+**1. List.** Filter `Card` (all `Segmented`, size `sm`) + a search form, then a result `Card`:
+- **Range** 7 / 30 / 90 days (90 = the TTL ceiling; the API clamps anything higher).
+- **Status** All / Open / Escalated / Closed · **Who** Everyone / Members / Guests · **Answered by** All / FAQ only / AI answered.
+- **Search** — a *submit-on-enter* form (not debounced-as-you-type), matching redacted message content. Note it matches **assistant** messages too, so a term Cobber uses in its own replies ("entries") matches far more conversations than a term only customers type.
+- Every filter change resets `page` to 1 via a `resetAnd` wrapper — otherwise a narrowed filter can strand the user on a now-empty page 7.
+- Rows show actor + firstName, status/`FAQ only` badges, the **first user message** (the "why did they open Cobber" signal), message counts and tokens. Rows are `<button>`s, so keyboard access comes free.
+- Pagination is prev/next with `page / totalPages`, hidden when `totalPages <= 1`.
+
+**2. Detail.** Header card (actor, status, models used, tokens, escalation link, TTL-truncation warning), the message thread, then a per-turn table.
+- **Message bubbles** are role-coloured (user indigo/right, assistant amber/left, tool grey) and render two grounding affordances that are the whole point of the view: **`citations`** — the FAQ `docId`s Cobber's answer was grounded on (green chips) — and **`toolCalls`** (blue = ok, red = failed, with duration). A confidently-worded answer with **zero citations** is the signal to go fix the FAQ corpus.
+- **Per-turn table** — one row per `ChatAuditLog` entry: time, *Answered by* (Escalated / FAQ (free) / AI), model, tokens, latency, HTTP status (≥400 in red).
+
+**Data hooks:** `src/hooks/queries/admin/useChatbotConversations.ts` — `useChatbotConversations(filters)` (queryKey `["admin","chatbot-conversations",days,status,actor,kind,q,page]`, `placeholderData: keepPreviousData` so paging doesn't flash an empty table) and `useChatbotConversation(id)` (queryKey `["admin","chatbot-conversation",id]`, `enabled: Boolean(id)`). Both are read-only — there are no mutations on this surface, so nothing invalidates.
+
+**Privacy posture.** Message content was already PII-redacted at write time by `redactPII()` in `ChatService` (`[email]` / `[phone]` / `[card]`), so this layer has no raw PII to leak — verified against production: **0** stored messages match a raw email pattern. Identity is the Norm projection only: `firstName` + the opaque `userId`. Do not widen it to email/full name/phone.
+
+Endpoints: `GET /api/admin/chatbot-conversations` and `GET /api/admin/chatbot-conversations/[id]` — see [api.md](./api.md). Service: `src/services/admin/chatTranscripts.ts` (see [backend.md](./backend.md)).
 
 ## Facebook Ads Management — Health view tab (Task 29, 2026-05-27)
 
