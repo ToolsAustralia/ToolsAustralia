@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useUserContext } from "@/contexts/UserContext";
 import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
+import { getSessionUTMParams } from "@/utils/tracking/utm-storage";
 
 /**
  * Contentsquare dynamic variables — membership segmentation.
@@ -30,10 +31,17 @@ import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
  * unchanged value is harmless: Contentsquare keeps only the last value per key per pageview.
  *
  * WHAT IS DELIBERATELY NOT SENT
- * No PII. Tier and status are plan metadata, not personal information; name/email/entry
- * history never go through here. `identify` and `addUserProperties` are also avoided — both
- * require the Product Analytics (heap) configuration this account does not have, so they
- * would silently no-op.
+ * No PII. Tier and status are plan metadata and traffic_source/medium are campaign metadata —
+ * none of it is personal information; name/email/entry history never go through here, and no
+ * click id (fbclid/ttclid) or campaign/adset/ad id is sent either, only the channel label.
+ * `identify` and `addUserProperties` are also avoided — both require the Product Analytics
+ * (heap) configuration this account does not have, so they would silently no-op.
+ *
+ * WHY traffic_source EXISTS
+ * On 2026-08-07 Contentsquare showed Prize Details (≈all TikTok) at 3.4s on page vs the
+ * Milwaukee landing (≈all Meta) at 15.5s, same device class. That gap is confounded — it
+ * could be the page or the audience, and the two demand opposite fixes. Segmenting one page
+ * by channel separates them, which no other data we hold can do.
  *
  * Gated at the mount site on NEXT_PUBLIC_CONTENTSQUARE_ID (rules.md R8), exactly like
  * <ContentsquarePageTracker /> in the root layout — blank id ⇒ never mounted, so dev/e2e
@@ -43,6 +51,19 @@ import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
 
 /** Contentsquare's cap for a dynamic-variable value. */
 const MAX_VALUE_LENGTH = 255;
+
+/**
+ * Lower-cases and trims a campaign value so one channel is one segment.
+ *
+ * This is not cosmetic. Production `promoanalyticsvisits` carries BOTH `tiktok` and `TIKTOK`
+ * as utmSource (26,799 and 3,854 visits over three days on 2026-08-07), so any grouping by
+ * raw source splits a single campaign into two rows and understates it by ~13%. Normalising
+ * here means Contentsquare never sees the split in the first place.
+ */
+function normalizeChannel(value: string | undefined): string | null {
+  const trimmed = value?.trim().toLowerCase();
+  return trimmed ? trimmed.slice(0, MAX_VALUE_LENGTH) : null;
+}
 
 type DynamicVariables = Record<string, string | number>;
 
@@ -85,12 +106,20 @@ export default function ContentsquareDynamicVariables() {
           })
         : null;
 
+    // Acquisition channel for THIS session (last-touch), not the 90-day first-touch cookie —
+    // see getSessionUTMParams for why that distinction decides whether a channel comparison
+    // is meaningful. No campaign params this session ⇒ direct/organic, which is a real answer
+    // rather than a missing one, so it gets an explicit value instead of being omitted.
+    const utm = getSessionUTMParams();
+
     const variables: DynamicVariables = {
       is_member: isMember ? "yes" : "no",
       is_authenticated: isAuthenticated ? "yes" : "no",
       // "None" for guests and for signed-in non-members — matches useUserMembership's own default.
       membership_tier: membership?.membershipTier || "None",
       has_one_time_pack: membership?.hasActiveOneTimePackages ? "yes" : "no",
+      traffic_source: normalizeChannel(utm?.utm_source) ?? "direct",
+      traffic_medium: normalizeChannel(utm?.utm_medium) ?? "none",
     };
 
     const signature = `${pathname}|${JSON.stringify(variables)}`;

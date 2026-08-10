@@ -52,6 +52,29 @@ export function getStoredUTMParams(): AttributionParams | null {
     if (cookie.packages_focus === "one-time") p.packages_focus = "one-time";
     if (Object.keys(p).length > 0) return p;
   }
+  return getSessionUTMParams();
+}
+
+/**
+ * The sessionStorage half of `getStoredUTMParams`, on its own — **deliberately skipping the
+ * 90-day first-touch cookie that function prefers.**
+ *
+ * WHY THIS EXISTS SEPARATELY
+ * `_ta_attr` is FIRST-touch and lives 90 days, which is exactly right for attributing a
+ * signup or a purchase back to the campaign that originally won the customer. It is exactly
+ * WRONG for asking "what drove *this* visit" — a visitor first acquired via TikTok three
+ * weeks ago who arrives today from Meta still reads as `tiktok`, so any channel-behaviour
+ * comparison built on it silently over-credits whichever channel ran first.
+ *
+ * This read is scoped to the sessionStorage copy, whose `UTM_EXPIRY_MS` window lines up with
+ * how analytics tools bound a session, so it answers the last-touch question instead. Used by
+ * `ContentsquareDynamicVariables` to segment Contentsquare by acquisition channel.
+ *
+ * Returns null when this session arrived with no campaign params at all — callers should read
+ * that as direct/organic rather than as "unknown".
+ */
+export function getSessionUTMParams(): AttributionParams | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(UTM_STORAGE_KEY);
     if (!raw) return null;

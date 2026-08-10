@@ -310,7 +310,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-08-07",
+  "lastModified": "2026-08-10",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -654,7 +654,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/types/tracking.ts",
         "src/types/klaviyo.ts",
         "src/services/facebook-ads-health/**",
-        "src/models/MetaAdDestination.ts",
+        "src/models/AdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
         "src/models/TikTokAdInsightsDaily.ts",
         "src/models/TikTokSyncRun.ts",
@@ -669,7 +669,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-08-07"
+      "lastVerified": "2026-08-10"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",

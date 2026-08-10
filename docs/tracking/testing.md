@@ -29,3 +29,28 @@ Brief: use Facebook Pixel Helper (browser extension), GTM debug mode, and Meta E
   - GTM debug mode
   - Klaviyo profile activity
   - TikTok Events Manager
+
+## `npm run test:utm-storage` (2026-08-10)
+
+Pins the split between the two UTM reads in
+[`utm-storage.ts`](../../src/utils/tracking/utm-storage.ts), because they answer different
+questions and confusing them is silent and expensive:
+
+| Read | Source | Answers | Feeds |
+|---|---|---|---|
+| `getStoredUTMParams()` | prefers the 90-day **first-touch** `_ta_attr` cookie | "which campaign originally won this customer" | purchase attribution (`MembershipModal`), `useAttribution`, affiliate, Klaviyo |
+| `getSessionUTMParams()` | sessionStorage **only**, 30-min expiry | "what drove **this** visit" | Contentsquare `traffic_source` dynamic variable |
+
+The load-bearing assertion sets the cookie to `facebook.com` and sessionStorage to `tiktok`,
+then requires `getStoredUTMParams` to still say **facebook.com** and `getSessionUTMParams` to
+say **tiktok**. If that ever flips, purchase attribution starts crediting the wrong campaign,
+or the Contentsquare channel comparison over-credits whichever campaign ran first — neither
+fails loudly.
+
+Also covers expiry (a 31-minute-old entry is dropped *and* removed), malformed JSON, a missing
+`capturedAt`, empty-input writes, and that a tampered `packages_focus` is validated rather than
+passed through.
+
+Written when `getSessionUTMParams` was extracted out of `getStoredUTMParams` — that function is
+on the revenue path and had no test at all, so these assertions exist mainly to prove the
+extraction did not change what the purchase flow sees.
