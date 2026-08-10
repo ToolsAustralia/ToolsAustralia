@@ -55,8 +55,19 @@ export function extractAttributionParams(urlOrParams: string | URLSearchParams):
 
     // Handle both URL string and URLSearchParams
     if (typeof urlOrParams === "string") {
-      // If it's a full URL, extract search params
-      if (urlOrParams.includes("?")) {
+      // A BARE query string — "?utm_source=…", exactly what window.location.search returns.
+      // This case must be tested BEFORE the includes("?") branch below: it contains a "?", so
+      // it used to fall into the full-URL branch, where `new URL("?utm_source=…")` throws on a
+      // relative string, the outer try swallowed it, and the function returned {}.
+      //
+      // That silently broke every client-side UTM capture: `useUTMPersistence` passes
+      // `window.location.search` verbatim, so `_ta_attr`, `_ta_attr_last` and the sessionStorage
+      // UTM copy were NEVER written — confirmed absent on production after landing with UTMs
+      // (2026-08-10). It failed closed and without an error, so nothing surfaced it.
+      // `URLSearchParams` strips the leading "?" itself, so it is the right parser here.
+      if (urlOrParams.startsWith("?")) {
+        searchParams = new URLSearchParams(urlOrParams);
+      } else if (urlOrParams.includes("?")) {
         const url = new URL(urlOrParams);
         searchParams = url.searchParams;
       } else if (urlOrParams.includes("=")) {

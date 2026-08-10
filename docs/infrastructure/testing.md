@@ -471,3 +471,10 @@ CJS and rejects top-level await. Static imports are safe as long as the module u
 touches `window`/`document`/`sessionStorage` only inside functions, never at module scope.
 
 Rationale for the test itself: [docs/tracking/testing.md](../tracking/testing.md).
+
+## `test:utm-helpers` added (2026-08-10)
+
+`package.json` gained `test:utm-helpers` → `src/utils/tracking/__tests__/utm-helpers.test.ts`,
+guarding a bug where `extractAttributionParams(window.location.search)` returned `{}` and
+silently disabled all client-side UTM capture. Full write-up:
+[docs/tracking/gotchas.md](../tracking/gotchas.md).

@@ -370,3 +370,39 @@ renames a class.
 ## GTM custom-HTML tags are blocklisted client-side (2026-07-20)
 
 `GTM_INIT_SNIPPET` pushes `{'gtm.blocklist':['html']}` before gtm.js loads. Why: container GTM-TBCCQQVZ's ONLY tag is a dead legacy Hotjar custom-HTML tag whose loader is CSP-blocked (console error on every page); the blocklist stops GTM from attempting the injection at all. If you ever add a legitimate custom-HTML tag to the container, REMOVE the blocklist key from `src/utils/security/inline-snippets.ts` (and recompute the GTM_INIT_SNIPPET hash in csp.ts — `npm run test:csp-inline-hashes` guards the pairing). Best end-state: delete the Hotjar tag in the GTM UI, then this blocklist becomes belt-and-braces.
+
+## `extractAttributionParams(window.location.search)` returned `{}` — all client-side UTM capture was dead (fixed 2026-08-10)
+
+`extractAttributionParams` branched on `urlOrParams.includes("?")` and handed the string to
+`new URL()`. A bare query string — `"?utm_source=tiktok&utm_medium=paid"`, exactly what
+`window.location.search` returns — contains a `?`, so it took that branch, `new URL()` threw
+on a relative string, the function's own outer `try` swallowed it, and it returned `{}`.
+
+**It failed closed and threw nothing.** No error, no console warning, no failing request. The
+only symptom was attribution data that quietly wasn't there.
+
+Two of the four callers passed that shape, and both are attribution-critical:
+
+| Caller | Argument | Was |
+|---|---|---|
+| `api/auth/register/route.ts` | full referer URL | fine |
+| `utils/promo-analytics/record-promo-visit.ts` | full URL | fine |
+| **`hooks/useUTMPersistence.ts`** | `window.location.search` | **broken** |
+| **`components/modals/MembershipModal/index.tsx`** | `window.location.search` | **broken** |
+
+So `_ta_attr` (first-touch, 90 days), `_ta_attr_last` and the sessionStorage UTM copy were
+**never written client-side**, and the membership modal's URL read at purchase time returned
+nothing. Verified on production 2026-08-10: landing on
+`/promotions/milwaukee-milwaukee?utm_source=TIKTOK&utm_medium=paid` left all three absent.
+
+This also resolves a confusing pair of facts. `promoanalyticsvisits` was full of campaign data
+(26,799 `tiktok` rows in three days) while the attribution cookie did not exist — because
+`record-promo-visit` passes a **full URL** and worked, while the cookie writer passed
+`window.location.search` and did not.
+
+Fixed by testing `startsWith("?")` **before** the `includes("?")` branch and parsing with
+`URLSearchParams`, which strips the leading `?` itself. Pinned by `npm run test:utm-helpers`.
+
+**The lesson worth keeping:** a parser that catches its own exceptions and returns an empty
+result cannot be trusted to tell you it is broken. When attribution looks thin, verify the
+capture path end to end on production rather than assuming the data is simply sparse.
