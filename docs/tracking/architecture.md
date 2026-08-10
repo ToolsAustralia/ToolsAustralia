@@ -187,7 +187,7 @@ The tag (`t.contentsquare.net/uxa/<id>.js`, `lazyOnload`) is only half the integ
 | Component | Mounted in | Pushes | Why there |
 |---|---|---|---|
 | [`ContentsquarePageTracker`](../../src/components/tracking/ContentsquarePageTracker.tsx) | [`src/app/layout.tsx`](../../src/app/layout.tsx), outside `<Providers>` | `trackPageview` (path only, ≤255 chars) on every App Router route change after the first; `excludeURLforReplay` + `setPIISelectors` once, before the tag fires | Needs only `usePathname()`. The tag emits its own pageview for the initial document load, so the first route is skipped. |
-| [`ContentsquareDynamicVariables`](../../src/components/tracking/ContentsquareDynamicVariables.tsx) | [`src/app/providers.tsx`](../../src/app/providers.tsx), next to `<KlaviyoUserIdentifier />` | `trackDynamicVariable` for `is_member`, `is_authenticated`, `membership_tier`, `has_one_time_pack` | It reads the session + React Query cache, which exist only inside `<Providers>`. The page tracker sits outside them and cannot read either. |
+| [`ContentsquareDynamicVariables`](../../src/components/tracking/ContentsquareDynamicVariables.tsx) | [`src/app/providers.tsx`](../../src/app/providers.tsx), next to `<KlaviyoUserIdentifier />` | `trackDynamicVariable` for `is_member`, `is_authenticated`, `membership_tier`, `has_one_time_pack`, `traffic_source`, `traffic_medium` | It reads the session + React Query cache, which exist only inside `<Providers>`. The page tracker sits outside them and cannot read either. |
 
 Both are env-gated on `NEXT_PUBLIC_CONTENTSQUARE_ID` at their mount site ([rules.md R8](rules.md#r8-every-third-party-script-must-be-env-gated-no-exceptions)) and both suppress internal/staff routes via `shouldTrackRoute` / `EXCLUDED_TRACKING_PREFIXES`.
 
