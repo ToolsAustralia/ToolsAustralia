@@ -151,3 +151,44 @@ data, a member deletion removes it from admin too.
 is on `createdAt` (fixed), so a conversation that stays active longer than 90 days can outlive its
 earliest messages. The transcript API flags this as `possiblyTruncated`. Not yet fixed — chats are
 short-lived enough that it has never bitten; aligning both onto `createdAt` is the durable fix.
+
+## Escalation was structurally impossible — fixed (2026-08-10)
+
+**The bug.** In Cobber's first month, six customers were told *"I've passed your case to our
+support team"*. Production held **zero** escalated conversations, **zero** `escalatedSubmissionId`
+values, and **zero** `toolCalls` across all 350 messages. No ticket existed for any of them.
+
+The cause was not model misbehaviour, it was a missing wire. `buildRequestHumanTool` files a
+`ContactSubmission` only when `opts.contact?.email` is present, and `contact` comes from the
+request body — which **`SupportChatWidget.tsx` has never sent**. So `execute()` always fell to the
+no-email branch, returned "please share your email", and created nothing. The user then typed their
+address as an ordinary chat message, where nothing could read it, and the model filled the gap with
+a plausible confirmation. The tell is in the transcripts: Cobber's "What's the best email address
+for our support team to reach you on?" is almost verbatim the tool's own no-email return string.
+
+**The fix has two halves.**
+
+1. **A member's email is resolved server-side.** `buildRequestHumanTool` now takes an injectable
+   `resolveMemberEmail(userId)` (default: a `User.findById().select({email:1})` lookup, lazy-imported
+   so tests stay Mongo-free). For a signed-in member the server already holds an authoritative
+   address, so escalation completes on the first call and the member is never asked for something
+   we already know. This covers ~2/3 of traffic (49 of 76 conversations were members). Identity
+   still never comes from the model: a session-resolved email is paired with the session
+   `firstName`. A missing user, an empty email, or a throwing lookup all degrade to the honest
+   no-email branch — never an escalation with a blank address.
+2. **The model cannot claim an escalation that did not happen.** The no-email return is now
+   prefixed `NOT_ESCALATED:` and explicitly forbids saying the case was passed on, backed by a new
+   HARD RULE in `systemPrompt.ts`. Because prompt rules alone already failed once here, `onFinish`
+   also *detects* the failure: if the assistant text matches `CLAIMS_ESCALATION_RE` while
+   `escalated` is false, it logs an `ErrorReport` (`action: "false-escalation-claim"`) and stamps
+   the stored message with a **failed** tool call `escalation_claim_unverified`, which renders red
+   in the admin transcript viewer. The answer has already streamed so this cannot un-say it — but a
+   detected false promise is vastly better than a silent one.
+
+**Still open — guests.** An anonymous visitor has no session email, so they still get the
+(now honest) ask, and escalation completes only if the widget sends `contact`. Wiring an
+email-capture step into `SupportChatWidget.tsx` is the remaining half; until then guest escalation
+is honest-but-unavailable rather than silently fake.
+
+**Tests:** `npm run test:chat-service` covers member-email-from-session, unresolvable email,
+throwing lookup, and the anonymous path (no lookup, still asks).

@@ -148,6 +148,12 @@ async function testAnonNoToken() {
   let verifyCalled = false;
 
   const deps: ChatServiceDeps = {
+    // Stub the generative limiter: the real one is Mongo-backed and keyed on this
+    // file's hard-coded ipKey, so running the suite repeatedly inside its 5-minute
+    // window returns 429 and fails these cases spuriously — a flake that reads
+    // exactly like a regression in the code under test. The limiter has dedicated
+    // coverage in chat-service.test.ts; these cases are about the guest gate.
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
     tryDeflect: async () => ({ answered: false }),
     assertWithinBudget: async () => ({ ok: true }),
     recordUsage: async () => {},
@@ -211,6 +217,12 @@ async function testAnonInvalidToken() {
   let streamCalled = false;
 
   const deps: ChatServiceDeps = {
+    // Stub the generative limiter: the real one is Mongo-backed and keyed on this
+    // file's hard-coded ipKey, so running the suite repeatedly inside its 5-minute
+    // window returns 429 and fails these cases spuriously — a flake that reads
+    // exactly like a regression in the code under test. The limiter has dedicated
+    // coverage in chat-service.test.ts; these cases are about the guest gate.
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
     tryDeflect: async () => ({ answered: false }),
     assertWithinBudget: async () => ({ ok: true }),
     recordUsage: async () => {},
@@ -263,6 +275,12 @@ async function testAnonValidToken() {
   const stream = makeStreamStub(true);
 
   const deps: ChatServiceDeps = {
+    // Stub the generative limiter: the real one is Mongo-backed and keyed on this
+    // file's hard-coded ipKey, so running the suite repeatedly inside its 5-minute
+    // window returns 429 and fails these cases spuriously — a flake that reads
+    // exactly like a regression in the code under test. The limiter has dedicated
+    // coverage in chat-service.test.ts; these cases are about the guest gate.
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
     tryDeflect: async () => ({ answered: false }),
     assertWithinBudget: async () => ({ ok: true }),
     recordUsage: async () => {},
@@ -322,6 +340,12 @@ async function testAnonAlreadyVerified() {
   let verifyCalled = false;
 
   const deps: ChatServiceDeps = {
+    // Stub the generative limiter: the real one is Mongo-backed and keyed on this
+    // file's hard-coded ipKey, so running the suite repeatedly inside its 5-minute
+    // window returns 429 and fails these cases spuriously — a flake that reads
+    // exactly like a regression in the code under test. The limiter has dedicated
+    // coverage in chat-service.test.ts; these cases are about the guest gate.
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
     tryDeflect: async () => ({ answered: false }),
     assertWithinBudget: async () => ({ ok: true }),
     recordUsage: async () => {},
@@ -389,6 +413,12 @@ async function testAnonDeflectionAnswered() {
   let streamCalled = false;
 
   const deps: ChatServiceDeps = {
+    // Stub the generative limiter: the real one is Mongo-backed and keyed on this
+    // file's hard-coded ipKey, so running the suite repeatedly inside its 5-minute
+    // window returns 429 and fails these cases spuriously — a flake that reads
+    // exactly like a regression in the code under test. The limiter has dedicated
+    // coverage in chat-service.test.ts; these cases are about the guest gate.
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
     tryDeflect: async () => ({
       answered: true,
       answer: "Draws happen on the 27th.",
@@ -461,6 +491,12 @@ async function testMemberNoGate() {
   let verifyCalled = false;
 
   const deps: ChatServiceDeps = {
+    // Stub the generative limiter: the real one is Mongo-backed and keyed on this
+    // file's hard-coded ipKey, so running the suite repeatedly inside its 5-minute
+    // window returns 429 and fails these cases spuriously — a flake that reads
+    // exactly like a regression in the code under test. The limiter has dedicated
+    // coverage in chat-service.test.ts; these cases are about the guest gate.
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
     tryDeflect: async () => ({ answered: false }),
     assertWithinBudget: async () => ({ ok: true }),
     recordUsage: async () => {},
@@ -513,6 +549,12 @@ async function testGuestGenerativeOpen() {
   let verifyCalled = false;
 
   const deps: ChatServiceDeps = {
+    // Stub the generative limiter: the real one is Mongo-backed and keyed on this
+    // file's hard-coded ipKey, so running the suite repeatedly inside its 5-minute
+    // window returns 429 and fails these cases spuriously — a flake that reads
+    // exactly like a regression in the code under test. The limiter has dedicated
+    // coverage in chat-service.test.ts; these cases are about the guest gate.
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
     tryDeflect: async () => ({ answered: false }),
     assertWithinBudget: async () => ({ ok: true }),
     recordUsage: async () => {},

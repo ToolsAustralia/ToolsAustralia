@@ -229,6 +229,12 @@ export interface ChatServiceDeps {
   streamFn?: (args: StreamArgs) => StreamResultLike;
   persist?: PersistPort;
   escalateToHuman?: typeof realEscalateToHuman;
+  /**
+   * Resolves a signed-in member's account email from their userId, so escalation
+   * never has to ask a member for an address the server already holds. Defaults
+   * to a Mongo lookup; injected in tests to stay Mongo-free.
+   */
+  resolveMemberEmail?: (userId: string) => Promise<string | null>;
   /** Defaults to getChatModel('primary'). When provided, takes precedence over getActiveChatProvider. */
   getModel?: () => LanguageModel;
   /**
@@ -297,6 +303,77 @@ function latestUserText(messages: UIMessage[]): string {
 /** modelId for a v6 LanguageModel (which may be a string or a model object). */
 function modelIdOf(model: LanguageModel): string {
   return typeof model === "string" ? model : model.modelId;
+}
+
+/**
+ * Text of the most recent assistant message, or "" if there is none.
+ * Exported for the test; not part of the service's public surface.
+ */
+export function lastAssistantText(messages: UIMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant") continue;
+    return (m.parts ?? [])
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
+/**
+ * True when a candidate canned answer is what we just said. Compared on
+ * whitespace-normalised text so trivial formatting differences still count as a
+ * repeat.
+ */
+export function isSameAsLastAssistantMessage(
+  messages: UIMessage[],
+  candidate: string
+): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+  const prev = lastAssistantText(messages);
+  return prev.length > 0 && norm(prev) === norm(candidate);
+}
+
+/**
+ * Detects a customer disputing money, alleging an unauthorised charge, or
+ * threatening escalation — the cases where a canned FAQ is actively harmful.
+ *
+ * Deliberately NOT a general "is the user unhappy" classifier: it targets money
+ * and authorisation language, which is what the production failures had in
+ * common. Refund POLICY questions ("what's your refund policy") are left to
+ * deflect normally — the guard needs a possessive/dispute cue, not the bare word.
+ *
+ * Over-triggering costs one LLM call; under-triggering sends a price list to
+ * someone who says you took their rent money. The asymmetry is intentional.
+ */
+export function looksLikeComplaint(text: string): boolean {
+  const t = text.toLowerCase();
+
+  // Unauthorised / unexpected money movement.
+  const unauthorised =
+    /\b(took|taken|taking|charged|charging|debited|withdrew|withdrawn|deducted)\b[^.?!]{0,40}\b(money|funds|\$?\d+|from my|out of my|my (?:bank|account|card))\b/.test(t) ||
+    /\b(without (?:my )?(?:asking|permission|authority|consent|knowledge)|didn'?t (?:sign up|authorise|authorize|agree|consent)|never (?:signed up|authorised|authorized|agreed)|unauthorised|unauthorized|not authorised|not authorized)\b/.test(t) ||
+    /\b(don'?t recognise|don'?t recognize|unrecognised charge|fraud|scammed|stolen)\b/.test(t);
+
+  // A personal refund demand (not a policy lookup).
+  const refundDemand =
+    /\b(i want|i need|give me|get me|want my|need my|expect(?:ing)? (?:the|my)?)\b[^.?!]{0,30}\b(money|refund|\$?\d+)\b/.test(t) ||
+    /\b(refund me|money back|reimburse|charge ?back)\b/.test(t);
+
+  // Regulator / legal escalation.
+  const regulator =
+    /\b(ombudsman|accc|acma|fair trading|consumer affairs|legal action|solicitor|lawyer|small claims|tribunal)\b/.test(t);
+
+  // Paid-but-missing — a support incident, never a pricing question.
+  // Note the plurals: the first draft used \bpayment\b, which does not match
+  // "payments", and so missed the real transcript "I have made 2 $80 payments
+  // … there are no entries showing up".
+  const missingBenefit =
+    /\b(paid|payments?|charges?d?|purchased?|bought|subscribed)\b[^.?!]{0,70}\b(no|zero|0|not|nothing|missing|haven'?t (?:got|received)|didn'?t (?:get|receive)|still (?:no|waiting))\b[^.?!]{0,30}\b(entr(?:y|ies)|membership|access|tickets?|benefits?)\b/.test(t);
+
+  return unauthorised || refundDemand || regulator || missingBenefit;
 }
 
 /**
@@ -491,6 +568,29 @@ const defaultPersist: PersistPort = {
  * branches: no-email files nothing; with-email escalates with the server-side
  * actor + request contact, never a model-supplied value).
  */
+/**
+ * Reads a member's account email server-side from their session userId.
+ * Lazy-imports Mongo so tests injecting a stub never load Mongoose.
+ * Returns null when the user is gone or has no email — callers must treat that
+ * as "cannot escalate", never as an empty-string email.
+ */
+async function defaultResolveMemberEmail(userId: string): Promise<string | null> {
+  const { default: connectDB } = await import("@/lib/mongodb");
+  const { default: User } = await import("@/models/User");
+  await connectDB();
+  const doc = await User.findById(userId).select({ email: 1 }).lean().exec();
+  const email = (doc as { email?: string } | null)?.email;
+  return email && email.trim().length > 0 ? email.trim() : null;
+}
+
+/**
+ * Matches an assistant claiming it handed the conversation to a human.
+ * Used only to DETECT a false claim (escalation flag never set) so it surfaces
+ * instead of failing silently — it never rewrites the customer's answer.
+ */
+const CLAIMS_ESCALATION_RE =
+  /\b(?:i(?:'|’)?(?:ve| have)|i(?:'|’)?m|i am)\s+(?:just\s+)?(?:passed|pass|escalat\w*|flagg\w*|forward\w*|connect\w*|sent)\b[^.!?]{0,80}?\b(?:team|support|human|agent|someone)\b/i;
+
 export function buildRequestHumanTool(opts: {
   actor: ChatActor;
   contact: ChatContact | undefined;
@@ -499,6 +599,12 @@ export function buildRequestHumanTool(opts: {
   persist: PersistPort;
   escalate: typeof realEscalateToHuman;
   onEscalated: () => void;
+  /**
+   * Resolves a signed-in member's account email from their userId. Injectable
+   * for tests; defaults to the real Mongo lookup. Returns null when the user is
+   * missing or has no email on file.
+   */
+  resolveMemberEmail?: (userId: string) => Promise<string | null>;
 }) {
   return tool({
     description:
@@ -507,14 +613,57 @@ export function buildRequestHumanTool(opts: {
       reason: z.string().max(500).optional(),
     }),
     execute: async ({ reason }) => {
-      const email = opts.contact?.email;
+      // Resolution order is deliberate and never trusts the model:
+      //   1. The widget-collected contact on the request body.
+      //   2. For a SIGNED-IN MEMBER, their account email, read server-side from
+      //      the session userId.
+      // (2) exists because the widget does not currently send `contact` at all,
+      // which made escalation impossible: execute() always fell through to the
+      // no-email branch, so Cobber asked for an email, the user typed it as an
+      // ordinary chat message (where nothing could read it), and no
+      // ContactSubmission was ever created — while the model went on to tell the
+      // customer their case had been passed to support. Six real customers were
+      // told that in the first month and no ticket existed for any of them.
+      // A member's email is authoritative on the server, so for them there is no
+      // reason to ask at all.
+      let email = opts.contact?.email;
+      let resolvedFromSession = false;
+
+      if (!email && opts.actor.kind === "member") {
+        const resolve = opts.resolveMemberEmail ?? defaultResolveMemberEmail;
+        try {
+          const sessionEmail = await resolve(opts.actor.userId);
+          if (sessionEmail) {
+            email = sessionEmail;
+            resolvedFromSession = true;
+          }
+        } catch (err) {
+          // Never let a lookup failure block the turn — fall through to the
+          // ask-for-email branch, which is honest about not having escalated.
+          console.error("[ChatService] resolveMemberEmail failed", err);
+        }
+      }
+
       if (!email) {
-        // No contact email yet — ask the user to share it. Create NO submission.
-        return "To pass this to our team, please share the best email address to reach you on.";
+        // No contact email available — create NO submission. The instruction to
+        // the model is explicit because it has previously claimed success off
+        // the back of this branch (see the comment above).
+        return (
+          "NOT_ESCALATED: no contact email is on file, so nothing has been sent to the team. " +
+          "Ask the user for the best email address to reach them on. " +
+          "Do NOT tell the user their case has been passed on, escalated, or that support will " +
+          "contact them — none of that has happened yet."
+        );
       }
 
       const contact: EscalationContact = {
-        ...(opts.contact?.name ? { name: opts.contact.name } : {}),
+        // A session-resolved email is authoritative, so pair it with the
+        // session's firstName rather than any widget-supplied name.
+        ...(resolvedFromSession && opts.actor.kind === "member"
+          ? { name: opts.actor.firstName }
+          : opts.contact?.name
+            ? { name: opts.contact.name }
+            : {}),
         email,
         ...(opts.contact?.phone ? { phone: opts.contact.phone } : {}),
       };
@@ -570,8 +719,35 @@ export const chatService = {
     const userAgent = ctx.req.headers.get("user-agent") ?? undefined;
 
     // ── 1. Deflect first (no LLM) ─────────────────────────────────────────────
-    const deflection = await tryDeflect(userText);
-    if (deflection.answered && deflection.answer) {
+    // Two guards run BEFORE the canned answer is accepted. Both exist because
+    // production transcripts showed the free FAQ layer confidently answering the
+    // wrong thing and having no way to notice.
+    //
+    // (a) Complaints never deflect. The matcher scores on keyword overlap, so
+    //     "You have just taken $20 from my bank account, I didn't sign up for any
+    //     membership" scored against the membership FAQ and the customer was
+    //     served the PRICE LIST. Same for "I've made 2 $80 payments and have no
+    //     entries" and "why don't you disclose SA residents are ineligible".
+    //     A canned fact is the worst possible reply to someone disputing a
+    //     charge — send these to the model, which can escalate.
+    //
+    // (b) Never repeat the previous answer verbatim. The matcher is stateless,
+    //     so a rephrase that lands on the same entry replays it word for word.
+    //     One member asked "But I can't add a payment method" FIVE times and got
+    //     the identical "we accept Visa, Mastercard, American Express" every
+    //     time. Repetition is the signal the canned answer missed — fall through
+    //     to the model rather than saying it again.
+    const isComplaint = looksLikeComplaint(userText);
+    const deflection = isComplaint
+      ? { answered: false as const }
+      : await tryDeflect(userText);
+
+    const repeatsLastAnswer =
+      deflection.answered &&
+      !!deflection.answer &&
+      isSameAsLastAssistantMessage(messages, deflection.answer);
+
+    if (deflection.answered && deflection.answer && !repeatsLastAnswer) {
       const { conversationId } = await persist.ensureConversation({
         actor: ctx.actor,
         conversationId: input.conversationId,
@@ -771,6 +947,9 @@ export const chatService = {
       messages,
       persist,
       escalate,
+      ...(deps.resolveMemberEmail
+        ? { resolveMemberEmail: deps.resolveMemberEmail }
+        : {}),
       onEscalated: () => {
         escalated = true;
         ctx.audit.escalated = true;
@@ -813,6 +992,40 @@ export const chatService = {
             // 3a. Persist the assistant message (redacted) — only if non-empty (a
             // tool-only turn may produce no assistant text).
             const assistantText = (text ?? "").trim();
+
+            // Detect the model telling the customer it handed them to a human
+            // when no ContactSubmission was actually created. The answer has
+            // already streamed, so this cannot un-say it — but an undetected
+            // false promise is far worse than a logged one: it leaves the
+            // customer waiting on a callback nobody queued. Recording it as a
+            // FAILED tool call makes it render red in the admin transcript
+            // viewer, and the ErrorReport means it is countable rather than
+            // needing someone to read every transcript to find it.
+            const falseEscalationClaim =
+              !escalated &&
+              assistantText.length > 0 &&
+              CLAIMS_ESCALATION_RE.test(assistantText);
+
+            if (falseEscalationClaim) {
+              console.error(
+                "[ChatService] assistant claimed escalation but none was filed " +
+                  `(conversationId=${conversationId})`
+              );
+              try {
+                await ErrorLoggingService.logSystemError(
+                  new Error("Cobber claimed an escalation that was never filed"),
+                  {
+                    component: "ChatService",
+                    action: "false-escalation-claim",
+                    endpoint: "/api/chat",
+                  },
+                  { isServerSide: true, request: ctx.req }
+                );
+              } catch {
+                // Error reporting must never break the customer response.
+              }
+            }
+
             if (assistantText.length > 0) {
               try {
                 await persist.addMessage({
@@ -821,7 +1034,13 @@ export const chatService = {
                   content: redactPII(assistantText),
                   ...(escalated
                     ? { toolCalls: [{ name: "request_human", ok: true }] }
-                    : {}),
+                    : falseEscalationClaim
+                      ? {
+                          toolCalls: [
+                            { name: "escalation_claim_unverified", ok: false },
+                          ],
+                        }
+                      : {}),
                 });
               } catch (e) {
                 console.error("[ChatService] onFinish persist failed", e);
