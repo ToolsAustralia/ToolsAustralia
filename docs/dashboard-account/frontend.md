@@ -1,5 +1,17 @@
 # Dashboard-Account — Frontend
 
+> **Rewards catalogue is instrumented (2026-08-11):** `my-account/rewards/catalogue/page-client.tsx`
+> mounts `usePartnerDiscountTracking({ surface: "catalogue", … })`. Two things to preserve if this page
+> is touched: (1) tracking is gated on `enabled: status === "authenticated"`, because the page bounces
+> everyone else to `/login` and recording a visit for a redirected visitor would inflate the member
+> surface with people who never saw it; (2) `accessPct` is passed as the **unresolved**
+> `dash.partnerAccessPct`, NOT the `?? 0` fallback the rest of the component uses — absent means "tier
+> still loading", and collapsing it to 0 would record members as having no partner access. A locked
+> card counts as both an offer open and an **unlock click**, because on this page a locked card routes
+> straight to `/membership` carrying the offer id. The parent `/my-account/rewards` hub is deliberately
+> NOT a tracked surface — it is a rewards page with a discount card on it, and its visits are not
+> comparable to a catalogue visit. See [docs/partner/analytics.md](../partner/analytics.md).
+
 > **"Become a member" preselects the Tradie subscription (2026-07-07, owner decision):** matching the tier-card
 > behavior ("clicking Tradie opens it with Tradie — why not Become a member too?"), every dashboard
 > "Become a member" CTA now opens the MembershipModal **payment-ready with the promo-boosted Tradie

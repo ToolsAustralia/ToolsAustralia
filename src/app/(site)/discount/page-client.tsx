@@ -31,6 +31,7 @@ import { useIsLgUp } from "@/hooks/useIsLgUp";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
+import { usePartnerDiscountTracking } from "@/hooks/usePartnerDiscountTracking";
 import { convertToLocalPlan } from "@/utils/membership/membership-adapters";
 import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 import { usePortalHandoff } from "@/components/sections/rewards/PortalHandoff";
@@ -80,6 +81,17 @@ export default function DiscountPageClient() {
   const membershipModal = useMembershipModal();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
+  /**
+   * Page analytics. `accessPct` is deliberately NOT `viewerPct`: that value coalesces an
+   * unresolved tier to 0, which would record a member as having no access. A signed-out
+   * visitor genuinely has 0; anyone else reports only once their tier has actually loaded,
+   * and the beacon corrects the row when they leave.
+   */
+  const track = usePartnerDiscountTracking({
+    surface: "discount",
+    accessPct: status === "unauthenticated" ? 0 : dash.partnerAccessPct,
+  });
+
   const sso = usePortalHandoff({
     memberName: dash.user?.firstName,
     tierLabel: dash.subscriptionTierLabel,
@@ -105,6 +117,27 @@ export default function DiscountPageClient() {
 
   // Reset paging whenever the result set changes underneath the reader.
   React.useEffect(() => setLimit(PAGE_SIZE), [debouncedQuery, category, levels, openOnly, sort]);
+
+  /**
+   * "Did they touch the controls at all?" — derived from the filter state rather than wrapped
+   * around each of the five setters, which would have meant five near-identical callbacks and
+   * a sixth to forget. Any control moving off its default counts, and `interaction()` is
+   * idempotent, so clearing a filter again does not un-count it.
+   */
+  React.useEffect(() => {
+    if (debouncedQuery || category !== null || levels.length > 0 || openOnly || sort !== "access") {
+      track.interaction();
+    }
+  }, [debouncedQuery, category, levels, openOnly, sort, track]);
+
+  /**
+   * A search that found nothing. Gated on there being a query — the empty state also renders
+   * for a filter combination with no matches, but "searched for a brand we don't list" is the
+   * specific failure this page's copy is written around and the one worth counting.
+   */
+  React.useEffect(() => {
+    if (filtered.length === 0 && debouncedQuery.trim()) track.zeroResultSearch();
+  }, [filtered.length, debouncedQuery, track]);
 
   const stickyBarRef = React.useRef<HTMLDivElement>(null);
 
@@ -241,12 +274,13 @@ export default function DiscountPageClient() {
    */
   const redeem = React.useCallback(
     (row: DiscountRow) => {
+      track.portalHandoff();
       const url = buildPartnerPortalOfferUrl(row.id);
       if (url) sso.startForOffer(url);
       else sso.start();
       setOpenRow(null);
     },
-    [sso]
+    [sso, track]
   );
 
   const goToLogin = React.useCallback(() => {
@@ -268,6 +302,9 @@ export default function DiscountPageClient() {
    */
   const selectRoute = React.useCallback(
     (route: DiscountUnlockRoute) => {
+      // The unlock click: this visitor looked at something they cannot redeem and asked what
+      // opens it. It is the single strongest intent signal the public page produces.
+      track.unlockClick();
       setOpenRow(null);
       setAccessOpen(false);
       const pool = route.kind === "membership" ? subscriptionPackages : oneTimePackages;
@@ -279,7 +316,7 @@ export default function DiscountPageClient() {
         else membershipModal.openModalWithPackageSelectionFirst();
       });
     },
-    [subscriptionPackages, oneTimePackages, whenGatesOpenElseGateModal, membershipModal]
+    [subscriptionPackages, oneTimePackages, whenGatesOpenElseGateModal, membershipModal, track]
   );
 
   return (
@@ -346,7 +383,15 @@ export default function DiscountPageClient() {
                 bands={bands}
                 viewerPct={viewerPct}
                 signedIn={signedIn}
-                onOpenOffer={setOpenRow}
+                onOpenOffer={(row) => {
+                  // "Locked" is the SAME predicate the row itself renders against — a
+                  // signed-out visitor's every open is a locked open, which is exactly the
+                  // conversion signal this page exists to produce.
+                  track.offerOpened(!(signedIn && row.pct <= viewerPct));
+                  setOpenRow(row);
+                }}
+                onSeamRendered={track.seamRendered}
+                onSeamReached={track.seamReached}
               />
             )}
 
@@ -401,6 +446,7 @@ export default function DiscountPageClient() {
           signedIn={signedIn}
           onClose={() => setAccessOpen(false)}
           onOpenPortal={() => {
+            track.portalHandoff();
             setAccessOpen(false);
             sso.start();
           }}

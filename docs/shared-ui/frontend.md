@@ -1,5 +1,24 @@
 # Shared UI — Frontend
 
+## `DiscountOfferList` reports the access seam to page analytics (2026-08-11)
+
+The `WallMarker` — the dashed gold seam where a viewer's access stops — now optionally reports
+itself via `onSeamRendered` / `onSeamReached`. Three things to preserve if this component is
+touched:
+
+- **An `IntersectionObserver` on the marker, never a scroll listener.** It fires once and
+  disconnects. The list runs to 1,833 rows and this component's sibling page-client documents at
+  length what happens when work is coupled to scroll position here.
+- **A wall on the FIRST band is not a seam, and neither callback fires for it.** `reachable` is
+  `signedIn && viewerPct >= level`, so for a signed-out visitor *every* band is unreachable and
+  the marker lands above the very first row. Reporting that would make "reached the seam" true
+  for anyone who saw the top of the list — a column reading ~100% while measuring nothing.
+- **Callbacks are read through a ref** inside `WallMarker`, so a parent passing an inline arrow
+  cannot re-subscribe the observer on every render.
+
+Both props are optional; the component renders identically without them. See
+[partner/analytics.md](../partner/analytics.md).
+
 ## MembershipModal sends the visitor's built prize at signup (2026-07-28)
 
 `handleRegistration` derives `builtPrizeSlug` directly after the existing `promotionSlug`

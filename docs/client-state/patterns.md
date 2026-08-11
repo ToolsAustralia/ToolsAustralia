@@ -1,5 +1,7 @@
 # Client State — Patterns
 
+> **Two analytics reads on one admin tab need two query keys (2026-08-11).** `queryKeys.admin.partnerDiscountAnalytics(params)` sits beside `promoAnalytics(params)` because both render on the **Page Analytics** tab over the same date range. They are deliberately *not* one key: different collections, different response shapes, so sharing a key would make one refetch serve the other's cached data. The discount section reads the date range from the **URL search params** the promo half already owns rather than taking it as a prop — one source of truth, one date picker, no drift. See [partner/analytics.md](../partner/analytics.md).
+
 ## P1. Query key factory
 
 ```ts

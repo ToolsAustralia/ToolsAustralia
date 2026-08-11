@@ -2,6 +2,8 @@
 
 6 collections own subscription state. Schemas live in [`src/models/`](../../src/models/).
 
+> **`signupAttribution.anonymousId` is now indexed (2026-08-11).** `UserSchema.index({ "signupAttribution.anonymousId": 1 })` — added for the partner-discount funnel, which joins a visit row to the account it produced on that path. **No field was added to `User`**; the field already existed and is written on every register path. The index is deliberately **plain, not partial**, unlike the `signupAttribution.builtPrizeSlug` one directly below it: that one is partial because its query filters `$exists: true` (whose bounds span a non-sparse index's whole key range — panel F-021), whereas this one is only ever queried as an `$in` of concrete anonymousId strings, which a plain index answers exactly. See [partner/analytics.md](../partner/analytics.md).
+
 ## `User.subscription` (subdocument on `User`)
 
 [src/models/User.ts](../../src/models/User.ts) — the subscription state lives as an **embedded subdocument** on `User`, not a separate collection. One subscription per user (only one active at a time).
