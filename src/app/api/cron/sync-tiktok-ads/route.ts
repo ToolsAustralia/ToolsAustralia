@@ -21,12 +21,54 @@ export const maxDuration = 300;
 const TZ = "Australia/Sydney";
 
 /**
+ * Sydney-local wall-clock slots this sync actually does work at — 3am, 6am, 9am, 12pm, 3pm,
+ * 6pm, 9pm and 11:59pm. Identical to `sync-meta-ads`; see the rationale on the handler.
+ */
+const SLOT_HOURS = new Set([3, 6, 9, 12, 15, 18, 21]);
+
+/**
  * GET /api/cron/sync-tiktok-ads
  *
- * Nightly re-sync of the FULL TikTok spend-by-URL pipeline — insights → ad→landing-URL
- * destinations → per-URL daily aggregates — the TikTok analogue of sync-meta-ads. Re-pulls
- * a trailing 8-day window so TikTok's later revisions to recent days are picked up. No-ops
- * cleanly when the TikTok Marketing-API creds are not set.
+ * Re-sync of the FULL TikTok spend-by-URL pipeline — insights → ad→landing-URL destinations
+ * → per-URL daily aggregates — the TikTok analogue of sync-meta-ads. Re-pulls a trailing
+ * 8-day window so TikTok's later revisions to recent days are picked up. No-ops cleanly when
+ * the TikTok Marketing-API creds are not set.
+ *
+ * CADENCE (2026-08-11): every 3 hours, matching `sync-meta-ads` exactly.
+ *
+ * It ran ONCE daily (`45 2 * * *`) until then, which was an oversight rather than a
+ * decision — TikTok shipped "nightly" on 2026-07-16 and kept that cadence when the shared
+ * `runSpendByUrlSync` pipeline was wired in on 2026-07-29, even though Meta had been running
+ * the same pipeline 3-hourly all along. Nothing justified the asymmetry: no rate-limit
+ * constraint is documented, and a run is a couple of report calls.
+ *
+ * The cost of the daily cadence was real. TikTok spend for the CURRENT day was invisible
+ * until the next morning, and every downstream read — the Advertising card, blended ROAS,
+ * MER, the spend-by-URL drill-down — inherited that staleness. It also left the day's figures
+ * settling ~12h after the daily snapshot recorded them (see the ordering note on
+ * `dashboard-stats-daily-snapshot`).
+ *
+ * AEST/AEDT gating + Vercel schedule rationale (copied from sync-meta-ads):
+ *   Vercel cron fires in UTC and does NOT follow DST, so we over-invoke from Vercel and gate
+ *   here against the actual Sydney wall clock (DST-correct via date-fns-tz). Real work only
+ *   happens when local time is a target slot — hour ∈ {3,6,9,12,15,18,21} at minute 0, OR
+ *   exactly 23:59. Every other invocation returns 200 "skipped" cheaply, before touching
+ *   Mongo or TikTok.
+ *
+ *   vercel.json schedules:
+ *     - "0 * * * *"      hourly on the hour; covers every 3-hourly slot for both AEST
+ *                        (UTC+10) and AEDT (UTC+11), since hour-0 slots always land on a UTC
+ *                        hour boundary.
+ *     - "59 12,13 * * *" covers the 23:59 slot: 23:59 AEDT = 12:59 UTC and 23:59 AEST =
+ *                        13:59 UTC. The handler's 23:59 gate picks whichever is really local
+ *                        23:59 today.
+ *
+ * ⚠️ The 23:59 slot is the one that matters for day-boundary accuracy: it lands just before
+ * the AEST day closes, so the day is captured near-complete before `dashboard-stats-daily-
+ * snapshot` writes it at 14:00/15:00 UTC. It does NOT remove the need for the later 03:20 UTC
+ * snapshot re-run — TikTok keeps attributing conversions for hours after midnight (7-day
+ * click / 1-day view), so the day is only SETTLED well after it ends. The two fixes are
+ * complementary: this one makes the number fresh, that one makes it final.
  *
  * It ran insights-only until 2026-07-29. That left `LandingPageMetricsDaily` permanently
  * empty for TikTok in production: the Ad Spend drill-down and Prize Performance read the
@@ -46,8 +88,24 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Sydney-local gate (DST-correct) — see the handler note. Returns before touching Mongo
+  // or TikTok on the ~16 invocations a day that are not a target slot.
+  const now = new Date();
+  const localHour = Number(formatInTimeZone(now, TZ, "H"));
+  const localMinute = Number(formatInTimeZone(now, TZ, "m"));
+  const isSlotHour = SLOT_HOURS.has(localHour) && localMinute === 0;
+  const isEndOfDay = localHour === 23 && localMinute === 59;
+  if (!isSlotHour && !isEndOfDay) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "not-a-target-slot",
+      localTime: formatInTimeZone(now, TZ, "yyyy-MM-dd HH:mm"),
+    });
+  }
+
   const startTime = Date.now();
-  const until = new Date();
+  const until = now;
   const since = subDays(until, 7);
   const dateRange = {
     since: formatInTimeZone(since, TZ, "yyyy-MM-dd"),
