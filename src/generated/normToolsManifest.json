@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-11T06:55:05.224Z",
+  "generatedAt": "2026-08-11T07:31:51.969Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -505,6 +505,13 @@
       "path": "/v1/promo-analytics/page-detail",
       "method": "GET",
       "summary": "Promo analytics for a single page: per-campaign attribution + the prize-build breakdown (which combination visitors ended on, and whether they changed it)"
+    },
+    {
+      "registryKey": "partner-discount-analytics.summary",
+      "tier": "read",
+      "path": "/v1/partner-discount-analytics",
+      "method": "GET",
+      "summary": "Partner-discount funnel per surface (public /discount vs the members' rewards catalogue): visitors, filter use, offer opens, locked-offer opens, access-seam reach (rate is over seamRendered, NOT visits), unlock clicks, portal hand-offs, empty searches, signups, conversions, revenue. Aggregate-only — no per-person field. Portal redemption is NOT included: the vendor sends no activity back, so the hand-off is the last observable step."
     },
     {
       "registryKey": "promo.active",

@@ -660,6 +660,32 @@ not the `User` record):
   nothing had written the field since. The field, its index declaration and the beacon parameter
   were all removed — **strictly less data held about the visitor**.
 
+### 8a-ii. Partner-discount page analytics (2026-08-11) — first-party only, nothing leaves
+
+Browsing either partner-discount catalogue now writes a **first-party** analytics row. It is worth
+being precise about what this does and does not mean for the customer:
+
+- **Nothing new leaves to a third party.** No Klaviyo property, no Meta/TikTok/Snapchat event, no
+  new pixel. The rows are written to our own `partnerdiscountvisits` collection and read only by
+  staff on the admin Page Analytics tab (and by Norm, which receives **aggregate counts only** —
+  its projection has no per-person field at all).
+- **What is held per visit:** which surface (`/discount` or the members' rewards catalogue), the
+  `ta_anon_id` cookie, an opaque `userId` when signed in, whether they were signed in, their
+  partner-access % (a display number, absent when their tier had not resolved), referrer, the
+  three UTM values already described in the table above, and **behaviour counters** — whether they
+  used a filter, how many offers they opened, how many of those were above their access level,
+  whether the access seam scrolled into view, whether they clicked an unlock CTA, whether they
+  crossed into the partner portal, and whether a search came back empty.
+- **What is NOT held:** no email, no name, and **not which offers or brands they looked at** —
+  only counts. A member's browsing interests inside the catalogue are deliberately not recorded.
+- **Retention: 90 days**, TTL-deleted, matching `PartnerDiscountSsoIssuance`. A visitor's rows
+  disappear on their own.
+- **Existing customer data reused, not extended:** the funnel joins a visit to the account it
+  produced via `signupAttribution.anonymousId`, which §2h already documents. **No new field was
+  added to the `User` model** — only a database index on that existing path.
+
+Detail: [docs/partner/analytics.md](docs/partner/analytics.md).
+
 ### 8b. The "converting platform" concept
 
 At purchase, `resolveAttributionAtEdge` reads the click cookies + `_ta_attr` + the last-touch `_ta_attr_last` ([resolveAtEdge.ts:19-27](src/services/attribution/resolveAtEdge.ts#L19)) and resolves a **single** converting platform via a priority+recency ladder ([resolveConvertingPlatform.ts:11-76](src/services/attribution/resolveConvertingPlatform.ts#L11)). Window durations are defined in `platformPriority.ts` (`windowDaysFor`) ([platformPriority.ts:25](src/services/attribution/platformPriority.ts#L25)):

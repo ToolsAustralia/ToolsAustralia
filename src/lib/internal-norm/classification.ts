@@ -39,6 +39,7 @@ import {
   NormPromoAnalyticsPageDetailSchema,
   NormPromoAnalyticsSummarySchema,
 } from "./schemas/promo-analytics";
+import { NormPartnerDiscountAnalyticsSummarySchema } from "./schemas/partner-discount-analytics";
 import {
   NormMetricsDebugSchema,
   NormUserMajorDrawComparisonSchema,
@@ -1154,6 +1155,17 @@ export const NORM_ENDPOINTS = {
     summary:
       "Promo analytics for a single page: per-campaign attribution + the prize-build breakdown (which combination visitors ended on, and whether they changed it)",
     responseSchema: NormPromoAnalyticsPageDetailSchema,
+  },
+
+  // ─── Partner-discount page analytics (wired) ──────────────────────────
+  "partner-discount-analytics.summary": {
+    tier: "read",
+    requiredPermission: "pageAnalytics.view",
+    path: "/v1/partner-discount-analytics",
+    method: "GET",
+    summary:
+      "Partner-discount funnel per surface (public /discount vs the members' rewards catalogue): visitors, filter use, offer opens, locked-offer opens, access-seam reach (rate is over seamRendered, NOT visits), unlock clicks, portal hand-offs, empty searches, signups, conversions, revenue. Aggregate-only — no per-person field. Portal redemption is NOT included: the vendor sends no activity back, so the hand-off is the last observable step.",
+    responseSchema: NormPartnerDiscountAnalyticsSummarySchema,
   },
 
   // ─── Promo — core (roadmap) ───────────────────────────────────────────
