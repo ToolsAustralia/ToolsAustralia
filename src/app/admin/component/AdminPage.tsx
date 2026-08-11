@@ -30,6 +30,7 @@ import BlockedTransactionsManagement from "@/components/admin/BlockedTransaction
 import PastDueChargeHistory from "./PastDueChargeHistory";
 import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
+import DiscountAnalyticsSection from "@/components/admin/promo-analytics/DiscountAnalyticsSection";
 import CancellationFlowAnalytics from "@/components/admin/CancellationFlowAnalytics";
 import RepeatPurchaseAnalytics from "@/components/admin/RepeatPurchaseAnalytics";
 import ChatbotManagement from "@/components/admin/ChatbotManagement";
@@ -161,7 +162,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "submissions" && "Partner applications and contact form submissions"}
                   {selectedTab === "users" && "User account management and administration"}
                   {selectedTab === "promos" && "Manage promotional campaigns and entry multipliers"}
-                  {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page"}
+                  {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page and partner-discount surface"}
                   {selectedTab === "klaviyo" && "Klaviyo campaign & flow revenue, scheduled sends, and hourly"}
                   {selectedTab === "all-platforms" && "Combined ad effectiveness — spend, revenue, ROAS, and hourly across every platform"}
                   {selectedTab === "cancellation-flow" && "Cancellation-flow funnel, save rate, and retention analytics"}
@@ -247,8 +248,17 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           {/* ALL-PLATFORMS AGGREGATE TAB */}
           {selectedTab === "all-platforms" && <AllPlatformsManagement />}
 
-          {/* PROMO ANALYTICS TAB */}
-          {selectedTab === "promo-analytics" && <PromoAnalyticsManagement />}
+          {/* PROMO ANALYTICS TAB — promo funnel, then the partner-discount funnel beneath it.
+              Two sections rather than one merged table: they answer the same question shape
+              but over different populations, so their totals are not addable. The discount
+              section reads the date range from the URL params the promo half already owns, so
+              there is one date picker on the tab and the two can never disagree. */}
+          {selectedTab === "promo-analytics" && (
+            <>
+              <PromoAnalyticsManagement />
+              <DiscountAnalyticsSection />
+            </>
+          )}
 
           {/* CANCELLATION FLOW ANALYTICS TAB */}
           {selectedTab === "cancellation-flow" && <CancellationFlowAnalytics />}

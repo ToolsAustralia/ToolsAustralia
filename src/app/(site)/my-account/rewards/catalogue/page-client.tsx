@@ -52,6 +52,7 @@ import {
   hasPartnerPortalSession,
 } from "@/utils/partner-discounts/portal-offer-url";
 import { usePortalHandoff } from "@/components/sections/rewards/PortalHandoff";
+import { usePartnerDiscountTracking } from "@/hooks/usePartnerDiscountTracking";
 import { usePartnerCatalogueSpotlightSeen } from "../../components/PartnerCatalogueSpotlight";
 import { cn } from "@/utils/cn";
 
@@ -84,6 +85,20 @@ export default function RewardsCataloguePage() {
   usePartnerCatalogueSpotlightSeen();
 
   const accessPct = dash.partnerAccessPct ?? 0;
+
+  /**
+   * Page analytics. `enabled` is gated on a resolved, authenticated session because this page
+   * bounces everyone else to `/login` — recording a visit for someone who never saw the
+   * catalogue would inflate the member surface with people who were redirected away.
+   *
+   * `accessPct` is passed unresolved (`dash.partnerAccessPct`, not the `?? 0` above), so a
+   * member whose tier has not loaded yet is recorded as unknown rather than as 0%.
+   */
+  const track = usePartnerDiscountTracking({
+    surface: "catalogue",
+    accessPct: dash.partnerAccessPct,
+    enabled: status === "authenticated",
+  });
 
   /**
    * TWO-CLICK FLOW (rules.md R12).
@@ -190,6 +205,17 @@ export default function RewardsCataloguePage() {
   // Reset paging whenever the result set changes underneath the user.
   React.useEffect(() => setLimit(PAGE_SIZE), [debouncedQuery, category, openOnly]);
 
+  /**
+   * A search that found nothing AT ALL — not the `aboveTierMatches` case, which is a
+   * successful search for something they cannot yet redeem and is already counted as an
+   * unlock opportunity below. This is the "the portal has it and we don't list it" wall.
+   */
+  React.useEffect(() => {
+    if (filtered.length === 0 && aboveTierMatches === 0 && debouncedQuery.trim()) {
+      track.zeroResultSearch();
+    }
+  }, [filtered.length, aboveTierMatches, debouncedQuery, track]);
+
   const openCount = React.useMemo(() => prepared.filter((o) => o.pct <= accessPct).length, [prepared, accessPct]);
 
   if (status === "loading" || dash.isLoading) {
@@ -247,7 +273,10 @@ export default function RewardsCataloguePage() {
             <input
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                track.interaction();
+                setQuery(e.target.value);
+              }}
               placeholder="Search offers"
               aria-label="Search partner offers by name"
               className="w-full rounded-[10px] border border-token bg-transparent py-2.5 pl-9 pr-3 text-[13px] font-semibold text-primary-token placeholder:font-medium placeholder:text-muted-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white"
@@ -259,7 +288,10 @@ export default function RewardsCataloguePage() {
             <input
               type="checkbox"
               checked={openOnly}
-              onChange={(e) => setOpenOnly(e.target.checked)}
+              onChange={(e) => {
+                track.interaction();
+                setOpenOnly(e.target.checked);
+              }}
               className="h-4 w-4 accent-red-600"
             />
             <span className="text-[12px] font-bold text-primary-token dark:text-white">
@@ -269,9 +301,24 @@ export default function RewardsCataloguePage() {
 
           {/* Category chips */}
           <div className="mt-3 flex flex-wrap gap-1.5">
-            <CategoryChip active={category === null} onClick={() => setCategory(null)} label="All" />
+            <CategoryChip
+              active={category === null}
+              onClick={() => {
+                track.interaction();
+                setCategory(null);
+              }}
+              label="All"
+            />
             {PARTNER_CATALOG_BROWSE_CATEGORIES.map((c, i) => (
-              <CategoryChip key={c} active={category === i} onClick={() => setCategory(i)} label={c} />
+              <CategoryChip
+                key={c}
+                active={category === i}
+                onClick={() => {
+                  track.interaction();
+                  setCategory(i);
+                }}
+                label={c}
+              />
             ))}
           </div>
 
@@ -316,7 +363,10 @@ export default function RewardsCataloguePage() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setOpenOnly(false)}
+                  onClick={() => {
+                    track.interaction();
+                    setOpenOnly(false);
+                  }}
                   className="mt-3 rounded-[10px] bg-red-600 px-4 py-2 text-[12.5px] font-extrabold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
                 >
                   Show {aboveTierMatches === 1 ? "it" : "them"}
@@ -336,7 +386,10 @@ export default function RewardsCataloguePage() {
                 </p>
                 <button
                   type="button"
-                  onClick={sso.start}
+                  onClick={() => {
+                    track.portalHandoff();
+                    sso.start();
+                  }}
                   className="mt-3 rounded-[10px] border border-token px-4 py-2 text-[12.5px] font-extrabold text-primary-token focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600 dark:text-white"
                 >
                   Search the partner portal
@@ -359,9 +412,17 @@ export default function RewardsCataloguePage() {
                   accessPct={accessPct}
                   offerId={o.id}
                   href={portalWarm ? o.href : null}
+                  // A LOCKED card on this page IS the upgrade CTA — it routes straight to
+                  // /membership carrying the offer id — so it counts as both an offer open
+                  // and an unlock click. An open card is just an open.
+                  onCardOpen={(locked) => {
+                    track.offerOpened(locked);
+                    if (locked) track.unlockClick();
+                  }}
                   // Cold: warm the session invisibly, then land on THIS offer — one tap.
                   onColdOpen={() => {
                     if (!o.href) return;
+                    track.portalHandoff();
                     setOpeningId(o.id);
                     sso.startForOffer(o.href);
                   }}
@@ -489,6 +550,7 @@ function OfferRow({
   accessPct,
   offerId,
   href,
+  onCardOpen,
   onColdOpen,
   opening = false,
   imageSrc,
@@ -500,6 +562,8 @@ function OfferRow({
   accessPct: number;
   offerId: string;
   href: string | null;
+  /** Page analytics: the card was opened, and whether it was above the member's access. */
+  onCardOpen: (locked: boolean) => void;
   onColdOpen: () => void;
   /** This card's cold open is in flight — the session is warming behind the scenes. */
   opening?: boolean;
@@ -592,6 +656,7 @@ function OfferRow({
           target="_blank"
           rel="noopener noreferrer"
           className={cls}
+          onClick={() => onCardOpen(false)}
           title={`${name} — opens in the partner portal`}
         >
           {inner}
@@ -603,7 +668,10 @@ function OfferRow({
         // already open in front of them, so the card they left behind must not look dead.
         <button
           type="button"
-          onClick={onColdOpen}
+          onClick={() => {
+            onCardOpen(false);
+            onColdOpen();
+          }}
           disabled={opening}
           aria-busy={opening || undefined}
           className={cn(cls, "relative", opening && "cursor-progress")}
@@ -627,7 +695,12 @@ function OfferRow({
       ) : (
         // LOCKED → the upgrade funnel, carrying the offer id so /membership can name the
         // offer and preselect the cheapest plan that opens it.
-        <Link href={upgradeHref} className={cls} title={`${name} — see the membership that opens this`}>
+        <Link
+          href={upgradeHref}
+          className={cls}
+          onClick={() => onCardOpen(true)}
+          title={`${name} — see the membership that opens this`}
+        >
           {inner}
         </Link>
       )}

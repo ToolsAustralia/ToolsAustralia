@@ -1326,6 +1326,17 @@ UserSchema.index({ createdAt: -1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
 UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
 UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });
+// Partner-discount analytics joins a visit row to the account it produced on this field —
+// `PartnerDiscountVisit.anonymousId` -> `signupAttribution.anonymousId` — which is what lets
+// the `/discount` funnel be measured without adding a new attribution field to this model.
+//
+// PLAIN, not partial, and deliberately unlike the `builtPrizeSlug` index directly below. That
+// one is partial because its query filters `$exists: true`, whose bounds span a non-sparse
+// index's whole key range (panel F-021). This one is only ever queried as an `$in` of concrete
+// anonymousId strings — an equality match, which a plain index answers exactly. A partial
+// index would additionally depend on the planner proving the predicate implies the filter
+// expression, which buys nothing here and is a behaviour this codebase has not measured.
+UserSchema.index({ "signupAttribution.anonymousId": 1 });
 // PARTIAL, not plain (panel F-021). The built-prize signup aggregation filters
 // `"signupAttribution.builtPrizeSlug": { $exists: true }`, which a NON-sparse index cannot narrow
 // (a missing field is indexed as `null`, so the bounds span the whole key range). The plain index
