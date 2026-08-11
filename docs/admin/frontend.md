@@ -29,6 +29,29 @@
 > client storage before ending the session (keeps `ta-admin-theme` + admin UI-layout keys). See
 > [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
 
+## Prize performance card — totals row (2026-08-11)
+
+The table now ends in a **Total** row: summed spend, revenue and conversions, plus a ROAS
+recomputed as **`total revenue ÷ total spend`**.
+
+**Not an average of the per-row ROAS values** — that would weight an $11 prize the same as a
+$276 one and produce a number matching nothing. Computed this way the footer reconciles
+exactly with the ad platform's own account-level figure, which is the point of showing it: on
+2026-08-10 the TikTok tab summed to $411 spend / $90 revenue / 3 conversions / **0.219**,
+matching TikTok Ads Manager to the cent.
+
+It renders through a new optional **`footer`** prop on the shared `DataTable`
+([`src/components/admin/ui/DataTable.tsx`](../../src/components/admin/ui/DataTable.tsx)) — a
+real `<tfoot>`, so it stays column-aligned and is announced as a footer rather than as one
+more data row, and it is **not** sorted with the body. The prop takes the `<tr>`/`<td>`s from
+the caller and deliberately computes nothing: a table's totals are rarely a plain column sum,
+as the ROAS case above shows. Optional, so every existing `DataTable` consumer is unchanged.
+
+⚠️ **The blended caveat still applies.** Under "All platforms" the revenue column adds each
+platform's OWN attribution, so a purchase claimed by both Meta and TikTok is counted twice and
+the total ROAS reads high — same warning already shown beneath the table. The per-platform tabs
+are the figures that reconcile.
+
 ## Prize performance card — brands derived from the source of truth (2026-06-30)
 
 `PrizePerformanceCard` `PROMOTION_BRANDS` is now **derived** from `TOOLSET_LANDING_SLUGS`
