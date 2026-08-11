@@ -240,6 +240,21 @@ export default function PrizePerformanceCard({
   /** True when at least one visible row actually mixes platforms — drives the ROAS caveat. */
   const hasBlendedRow = rows.some((r) => (r.platforms as SpendByUrlPlatform[]).length > 1);
 
+  /**
+   * Column totals for the footer.
+   *
+   * ROAS is recomputed as `total revenue ÷ total spend`, NOT averaged across the rows —
+   * averaging per-prize ROAS would weight an $11 prize the same as a $276 one and produce a
+   * number that matches nothing. Computed this way the footer reconciles exactly with the ad
+   * platform's own account-level figure, which is the whole point of showing it.
+   */
+  const totals = useMemo(() => {
+    const spend = rows.reduce((sum, r) => sum + r.spend, 0);
+    const revenue = rows.reduce((sum, r) => sum + r.revenue, 0);
+    const conversions = rows.reduce((sum, r) => sum + r.conversions, 0);
+    return { spend, revenue, conversions, roas: spend > 0 ? revenue / spend : 0 };
+  }, [rows]);
+
   const [selectedBrand, setSelectedBrand] = useState<{
     brand: string;
     slug: string;
@@ -376,6 +391,35 @@ export default function PrizePerformanceCard({
             columns={COLUMNS}
             rows={rows}
             renderCell={renderCell}
+            footer={
+              <tr className="border-t border-neutral-200 dark:border-neutral-700 font-semibold">
+                <td className="py-2.5 px-2 text-left text-xs sm:text-sm text-neutral-700 dark:text-neutral-300">
+                  Total
+                </td>
+                <td className="py-2.5 px-2 text-right">
+                  <span
+                    className={`num text-xs sm:text-sm font-semibold ${
+                      totals.roas >= 3
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-amber-600 dark:text-amber-500"
+                    }`}
+                  >
+                    {totals.roas.toFixed(2)}x
+                  </span>
+                </td>
+                <td className="py-2.5 px-2 text-right">
+                  <span className="num text-xs sm:text-sm">{fmtCompact(totals.spend)}</span>
+                </td>
+                <td className="py-2.5 px-2 text-right">
+                  <span className="num text-xs sm:text-sm">{fmtCompact(totals.revenue)}</span>
+                </td>
+                <td className="py-2.5 px-2 text-right">
+                  <span className="num text-xs sm:text-sm">
+                    {formatNumber(totals.conversions)}
+                  </span>
+                </td>
+              </tr>
+            }
             onRowClick={(row) => {
               const platforms = row.platforms as SpendByUrlPlatform[];
               setSelectedBrand({

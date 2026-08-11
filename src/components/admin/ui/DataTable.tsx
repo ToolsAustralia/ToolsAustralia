@@ -5,7 +5,7 @@ import { ChevronUp, ChevronDown } from "lucide-react";
 export type Column = { key: string; label: string; align?: "left" | "right"; sortable?: boolean };
 
 export function DataTable<T extends Record<string, unknown> & { id?: string | number }>({
-  columns, rows, renderCell, onRowClick, onRowMouseEnter, onRowMouseLeave,
+  columns, rows, renderCell, onRowClick, onRowMouseEnter, onRowMouseLeave, footer,
 }: {
   columns: Column[];
   rows: T[];
@@ -13,6 +13,15 @@ export function DataTable<T extends Record<string, unknown> & { id?: string | nu
   onRowClick?: (row: T) => void;
   onRowMouseEnter?: (row: T, e: MouseEvent<HTMLTableRowElement>) => void;
   onRowMouseLeave?: () => void;
+  /**
+   * Optional totals row, rendered in a real `<tfoot>` so it stays aligned to the columns
+   * and is announced as a footer rather than as one more data row.
+   *
+   * Supply the `<tr>`/`<td>`s yourself — a table's totals are rarely a plain column sum
+   * (ROAS is revenue ÷ spend, not an average of the per-row ROAS values), so this component
+   * deliberately does NOT try to compute them. It is NOT sorted with the body.
+   */
+  footer?: ReactNode;
 }) {
   const [sort, setSort] = useState<{ key: string | null; dir: 1 | -1 }>({ key: null, dir: 1 });
   const sorted = useMemo(() => {
@@ -71,6 +80,7 @@ export function DataTable<T extends Record<string, unknown> & { id?: string | nu
             </tr>
           ))}
         </tbody>
+        {footer ? <tfoot>{footer}</tfoot> : null}
       </table>
     </div>
   );
