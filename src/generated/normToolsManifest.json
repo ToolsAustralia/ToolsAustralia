@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-31T08:16:28.009Z",
+  "generatedAt": "2026-08-11T06:55:05.224Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -280,7 +280,7 @@
       "tier": "read",
       "path": "/v1/tiktok-ads/insights",
       "method": "GET",
-      "summary": "TikTok per-ad insights for a date range: per-ad spend + TikTok-reported conversions/revenue/ROAS + totals (empty until TikTok Marketing-API creds are set)"
+      "summary": "TikTok ad insights for a date range, grouped by `level` (campaign | adset | ad, default ad): spend + TikTok-reported conversions/revenue/ROAS + totals. Totals are identical at every level — only the row grouping changes. Empty until TikTok Marketing-API creds are set."
     },
     {
       "registryKey": "facebook-ads.health.insights",

@@ -1,5 +1,15 @@
 # Client State — Patterns
 
+> **A view-shape control belongs IN the query key (2026-08-11).** `useTikTokAdsInsights` gained a
+> `level` param (`campaign | adset | ad`) and it is part of the key:
+> `["admin", "tiktok-ads", "insights", startDate, endDate, level]`. The rows are a *different
+> grouping of the same window*, not a filter over one result set — so sharing a key across levels
+> would hand campaign-grouped rows to the ad view and render them under the wrong headers until
+> the refetch landed. The consuming table further guards this by rendering against `data.level`
+> (what came back) rather than the selected level, so the headers can never describe rows that
+> aren't on screen yet. Same rule as any param that changes the SHAPE of the response rather than
+> narrowing it. `level` defaults to `"ad"`, matching the endpoint's own default.
+
 ## P1. Query key factory
 
 ```ts
