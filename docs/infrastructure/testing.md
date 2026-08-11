@@ -1,5 +1,7 @@
 # Infrastructure — Testing
 
+> `test:discount-visit` (`tsx src/utils/partner-discounts/__tests__/record-discount-visit.test.ts`) covers the partner-discount page-analytics core: dedup **fails open** (a timed-out dedup read still records the visit), `accessPct` absent stays absent rather than collapsing to 0%, locked opens are clamped to a subset of offer opens, a seam cannot be "reached" where none was rendered, first-touch UTM beats the landing URL, and engagement **never** creates a visit row. Also `norm:smoke:partner-discount-analytics` — needs a running dev server, and is the only check that catches a schema↔output mismatch (a runtime 500 `tsc` cannot see). See [partner/analytics.md](../partner/analytics.md).
+
 > `test:climb-series` (`tsx src/utils/membership/__tests__/climb-series.test.ts`) covers the `/membership` climb-chart accumulation math (`buildClimbSeries`).
 
 > `test:package-card-surface` (`tsx src/utils/package-colors/__tests__/packageCardSurface.test.ts`) covers the shared package-card chrome (`getPackageCardSurface`) that the membership section card and all three package modals render — most importantly the three cross-tier light-theme background remaps, which no colour scheme exposes. See [shared-ui/patterns.md](../shared-ui/patterns.md) "Package card surface".
