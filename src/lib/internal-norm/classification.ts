@@ -702,7 +702,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/tiktok-ads/insights",
     method: "GET",
     summary:
-      "TikTok per-ad insights for a date range: per-ad spend + TikTok-reported conversions/revenue/ROAS + totals (empty until TikTok Marketing-API creds are set)",
+      "TikTok ad insights for a date range, grouped by `level` (campaign | adset | ad, default ad): spend + TikTok-reported conversions/revenue/ROAS + totals. Totals are identical at every level — only the row grouping changes. Empty until TikTok Marketing-API creds are set.",
     rateLimit: { perMinute: 10 },
     responseSchema: NormTikTokAdsInsightsSchema,
   },

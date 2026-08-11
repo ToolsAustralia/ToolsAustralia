@@ -2,6 +2,16 @@
 
 > **Two analytics reads on one admin tab need two query keys (2026-08-11).** `queryKeys.admin.partnerDiscountAnalytics(params)` sits beside `promoAnalytics(params)` because both render on the **Page Analytics** tab over the same date range. They are deliberately *not* one key: different collections, different response shapes, so sharing a key would make one refetch serve the other's cached data. The discount section reads the date range from the **URL search params** the promo half already owns rather than taking it as a prop — one source of truth, one date picker, no drift. See [partner/analytics.md](../partner/analytics.md).
 
+> **A view-shape control belongs IN the query key (2026-08-11).** The sibling case to the one
+> above. `useTikTokAdsInsights` gained a `level` param (`campaign | adset | ad`) and it is part of
+> the key: `["admin", "tiktok-ads", "insights", startDate, endDate, level]`. The rows are a
+> *different grouping of the same window*, not a filter over one result set — so sharing a key
+> across levels would hand campaign-grouped rows to the ad view and render them under the wrong
+> headers until the refetch landed. The consuming table further guards this by rendering against
+> `data.level` (what came back) rather than the selected level, so the headers can never describe
+> rows that aren't on screen yet. Same rule as any param that changes the SHAPE of the response
+> rather than narrowing it. `level` defaults to `"ad"`, matching the endpoint's own default.
+
 ## P1. Query key factory
 
 ```ts
