@@ -41,7 +41,7 @@ import path from "node:path";
 // Load .env.local before importing app modules (mirrors sibling tests).
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
-import { chatService, buildRequestHumanTool } from "../ChatService";
+import { chatService, buildRequestHumanTool, looksLikeComplaint } from "../ChatService";
 import type { ChatServiceDeps, PersistPort } from "../ChatService";
 import type { ChatCtx } from "@/lib/support-chat/withChatbot";
 import type { ChatActor } from "@/lib/support-chat/types";
@@ -753,6 +753,207 @@ async function testRequestHumanWithEmail() {
   pass("with-email → escalate(server actor + request contact) once, setEscalated, escalated=true; model-supplied email ignored");
 }
 
+// ─── Test: deflection guards (complaint routing + repeat suppression) ─────────
+
+/**
+ * Pins the complaint classifier against the exact production messages that
+ * were served a canned FAQ, and against the routine questions that must keep
+ * deflecting for free. Over-triggering costs one LLM call; under-triggering
+ * sends a price list to someone disputing a charge.
+ */
+async function testComplaintClassifier() {
+  console.log("\nlooksLikeComplaint — real production messages");
+
+  // Verbatim from production transcripts; each was answered with a canned FAQ.
+  const mustFlag: Array<[string, string]> = [
+    ["unauthorised charge", "You have just taken $20 from my bank account, I didn't sign up for any membership that I am aware of"],
+    ["paid but no entries", "I have made 2 $80 payments for my membership, however, there are no entries showing up on my portal home pages"],
+    ["regulator threat", "I will take this to the ombudsman/ACCC if I don't get refundd"],
+    ["refund demand", "I want my money back I paid for your bullshit compition once"],
+    ["stop taking money", "Please stop taking money from my account with out any authority"],
+    ["distressed cancel", "I want to cancel this I don't want use pulling out money without asking I need that 20 dollars"],
+    ["bare refund demand", "I need a refund"],
+  ];
+  // These must STILL deflect — they are routine lookups, not disputes.
+  const mustNotFlag: Array<[string, string]> = [
+    ["policy lookup", "Refund policy"],
+    ["cancel how-to", "How do I cancel"],
+    ["draw timing", "When is the Major Draw?"],
+    ["pricing", "What are the membership prices?"],
+    ["entries location", "Where can I see my entries?"],
+    ["more entries", "How do I get more entries?"],
+    ["delete account", "How to delete account"],
+    ["payment methods", "How to add payment method"],
+    ["eligibility", "Can SA residents enter the draw?"],
+    ["prizes", "What can I win?"],
+  ];
+
+  for (const [label, text] of mustFlag) {
+    if (!looksLikeComplaint(text)) {
+      fail(`complaint detected — ${label}`, `NOT flagged: "${text.slice(0, 60)}"`);
+      return;
+    }
+  }
+  for (const [label, text] of mustNotFlag) {
+    if (looksLikeComplaint(text)) {
+      fail(`routine question still deflects — ${label}`, `wrongly flagged: "${text}"`);
+      return;
+    }
+  }
+
+  pass(`complaint classifier: ${mustFlag.length} disputes caught, ${mustNotFlag.length} routine questions still free`);
+}
+
+/** A complaint must bypass the FAQ layer entirely and reach the model. */
+async function testComplaintSkipsDeflection() {
+  console.log("\nchatService.respond — complaint bypasses the canned FAQ");
+
+  const { ctx } = makeCtx({ kind: "member", userId: "507f1f77bcf86cd799439055", firstName: "Upset" });
+  const persist = makePersistSpy();
+  let deflectCalls = 0;
+  let streamCalls = 0;
+
+  const deps: ChatServiceDeps = {
+    // Would happily answer if consulted — the point is that it must NOT be.
+    tryDeflect: async () => {
+      deflectCalls++;
+      return { answered: true, answer: "We accept Visa, Mastercard and American Express.", sources: [{ id: "10", title: "Payments" }] };
+    },
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
+    streamFn: (args) => {
+      streamCalls++;
+      void Promise.resolve().then(() => args.onFinish?.({ text: "Let me get a human onto this.", usage: { inputTokens: 10, outputTokens: 5 } }));
+      return { toUIMessageStreamResponse: () => new Response("ok", { status: 200 }) };
+    },
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+    verifyHcaptcha: async () => true,
+  };
+
+  const res = await chatService.respond(
+    { ctx, messages: [userMessage("You have just taken $20 from my bank account, I didn't sign up for any membership")] },
+    deps
+  );
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  if (deflectCalls !== 0) {
+    fail("tryDeflect NOT consulted for a complaint", `called ${deflectCalls} times`);
+    return;
+  }
+  if (streamCalls !== 1) {
+    fail("complaint reaches the model", `streamFn called ${streamCalls} times`);
+    return;
+  }
+  if (ctx.audit.deflected !== false) {
+    fail("audit.deflected === false for a complaint", `got ${ctx.audit.deflected}`);
+    return;
+  }
+
+  pass("complaint → FAQ layer skipped entirely, model answers, deflected=false");
+}
+
+/**
+ * The production loop: a member asked "But I can't add a payment method" five
+ * times and got the identical canned answer every time. A repeat must fall
+ * through to the model instead of replaying the same text.
+ */
+async function testRepeatedDeflectionFallsThrough() {
+  console.log("\nchatService.respond — repeated canned answer falls through to the model");
+
+  const CANNED = "We accept all major credit and debit cards (Visa, Mastercard, American Express) processed securely through Stripe.";
+  const { ctx } = makeCtx({ kind: "member", userId: "507f1f77bcf86cd799439056", firstName: "Loop" });
+  const persist = makePersistSpy();
+  let streamCalls = 0;
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: true, answer: CANNED, sources: [{ id: "10", title: "Payments" }] }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
+    streamFn: (args) => {
+      streamCalls++;
+      void Promise.resolve().then(() => args.onFinish?.({ text: "Let me actually help with that.", usage: { inputTokens: 10, outputTokens: 5 } }));
+      return { toUIMessageStreamResponse: () => new Response("ok", { status: 200 }) };
+    },
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+    verifyHcaptcha: async () => true,
+  };
+
+  // History already contains the canned answer — the user is rephrasing.
+  const history: UIMessage[] = [
+    userMessage("How to add payment method"),
+    { id: "a1", role: "assistant", parts: [{ type: "text", text: CANNED }] },
+    userMessage("But I can't add a payment method"),
+  ];
+
+  const res = await chatService.respond({ ctx, messages: history }, deps);
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  if (streamCalls !== 1) {
+    fail("repeat falls through to the model", `streamFn called ${streamCalls} times`);
+    return;
+  }
+  if (ctx.audit.deflected !== false) {
+    fail("audit.deflected === false when the repeat is suppressed", `got ${ctx.audit.deflected}`);
+    return;
+  }
+
+  pass("identical canned answer suppressed → model answers instead of repeating");
+}
+
+/** A DIFFERENT canned answer after a previous one must still deflect (stay free). */
+async function testDifferentDeflectionStillFree() {
+  console.log("\nchatService.respond — a different canned answer still deflects");
+
+  const { ctx } = makeCtx({ kind: "member", userId: "507f1f77bcf86cd799439057", firstName: "Fine" });
+  const persist = makePersistSpy();
+  let streamCalls = 0;
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: true, answer: "The Major Draw runs on the 27th of every month.", sources: [{ id: "2", title: "Major Draw" }] }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
+    streamFn: (args) => {
+      streamCalls++;
+      void Promise.resolve().then(() => args.onFinish?.({ text: "x", usage: { inputTokens: 1, outputTokens: 1 } }));
+      return { toUIMessageStreamResponse: () => new Response("ok", { status: 200 }) };
+    },
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+    verifyHcaptcha: async () => true,
+  };
+
+  const history: UIMessage[] = [
+    userMessage("How do I cancel"),
+    { id: "a1", role: "assistant", parts: [{ type: "text", text: "You can cancel from My Account → Membership." }] },
+    userMessage("When is the draw?"),
+  ];
+
+  const res = await chatService.respond({ ctx, messages: history }, deps);
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  if (streamCalls !== 0) {
+    fail("different canned answer must NOT hit the model", `streamFn called ${streamCalls} times`);
+    return;
+  }
+  if (ctx.audit.deflected !== true) {
+    fail("audit.deflected === true for a genuine new deflection", `got ${ctx.audit.deflected}`);
+    return;
+  }
+
+  pass("different canned answer → still deflects free, model not called");
+}
+
 // ─── Test: member email resolved server-side (no widget contact) ──────────────
 
 /**
@@ -1064,6 +1265,10 @@ async function run() {
   await testDeflectWinsOverBudget();
   await testGenRateLimitExceeded();
   await testGenRateLimitOk();
+  await testComplaintClassifier();
+  await testComplaintSkipsDeflection();
+  await testRepeatedDeflectionFallsThrough();
+  await testDifferentDeflectionStillFree();
   await testRequestHumanNoEmail();
   await testRequestHumanWithEmail();
   await testRequestHumanMemberEmailFromSession();

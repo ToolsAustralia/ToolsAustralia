@@ -111,11 +111,30 @@ for (const brand of PARTNER_BRAND_OFFERS) {
 // Must be non-trivial (>1500 chars)
 assert.ok(text.length > 1500, `text.length (${text.length}) must be > 1500 chars`);
 
-// Must be under ~12,000 tokens (≈ 48,000 chars) so the cached prefix stays economical
+// Ceiling on pack growth. Raised 12,000 → 14,000 on 2026-08-11.
+//
+// READ THIS BEFORE RAISING IT AGAIN. The original 12,000 was chosen "so the
+// cached prefix stays economical" — but there is no prompt caching: no
+// cache_control is set anywhere in src/lib/support-chat or
+// src/services/support-chat, and production ChatConversation.tokenUsage shows
+// cacheRead: 0 / cacheWrite: 0 across every conversation. The whole pack is
+// therefore re-sent UNCACHED on every single request (measured: ~14,000 input
+// tokens per LLM turn against ~90 output tokens).
+//
+// The guard was already breached at 12,540 tokens before the 2026-08-11 FAQ
+// additions; those additions (5 entries answering questions real customers
+// asked and got "I don't have that information" for) took it to ~13,375. The
+// number was bumped rather than the knowledge dropped because the knowledge is
+// the product and the cost is currently trivial (~$1.41/month projected).
+//
+// The real fix is prompt caching on the system block, which would cut the input
+// cost of the prefix by ~90% and take latency with it. Until that lands, treat
+// this ceiling as a reminder that every token here is paid on every turn — do
+// not bump it again to fit "nice to have" content.
 const approxTokens = text.length / 4;
 assert.ok(
-  approxTokens < 12000,
-  `Approx token count (${approxTokens.toFixed(0)}) must be < 12,000 (text.length=${text.length})`
+  approxTokens < 14000,
+  `Approx token count (${approxTokens.toFixed(0)}) must be < 14,000 (text.length=${text.length})`
 );
 
 // ─── Sources catalog assertions ───────────────────────────────────────────────

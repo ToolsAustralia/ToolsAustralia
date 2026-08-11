@@ -374,3 +374,48 @@ short-circuits, so the admin "Escalations" metric read a confident `0` the entir
 **Guests are still uncovered.** Until the widget collects an email into `contact`, an anonymous
 visitor cannot be escalated at all — they now get an honest "I can't pass this on yet" instead of
 a fake promise, which is the correct failure mode but not a substitute for wiring the capture step.
+
+## The free FAQ layer was confidently wrong, twice over (2026-08-11)
+
+A read of all 76 production conversations (350 messages, 8 Jul – 9 Aug) found the deflection
+layer's two failure modes. Both are now guarded in `ChatService.respond` **before** a canned answer
+is accepted — deliberately at the call site, not inside `tryDeflect`, because both guards need
+conversation context the deflection module doesn't have.
+
+**1. It repeated itself.** The matcher is stateless, so a rephrase that lands on the same entry
+replays it verbatim. One member asked *"But I can't add a payment method"* **five times** and got
+the identical "we accept Visa, Mastercard, American Express" every single time — never helped,
+never escalated. Eleven such repeat events across 76 conversations. `isSameAsLastAssistantMessage`
+now compares the candidate answer against the previous assistant turn (whitespace-normalised) and
+falls through to the model on a match. Repetition IS the signal that the canned answer missed.
+
+**2. It answered complaints with facts.** Scoring is keyword overlap, so *"You have just taken $20
+from my bank account, I didn't sign up for any membership"* scored against the membership entry and
+the customer was served **the price list**. Same for *"I've made 2 $80 payments and have no
+entries"* and *"why don't you disclose SA residents are ineligible before they sign up"* — one of
+them replied *"That did not answer my question."* `looksLikeComplaint` now short-circuits deflection
+for unauthorised-charge, personal-refund-demand, regulator-threat, and paid-but-missing language,
+sending those turns to the model (which can escalate).
+
+**Tuning notes for `looksLikeComplaint`:** it is NOT a general sentiment classifier — it targets
+money and authorisation language, which is what every production failure had in common. A bare
+policy lookup ("Refund policy") must keep deflecting for free, so the refund branch requires a
+possessive/demand cue, not the word alone. Validated against all 176 real user messages: **13
+flagged (7.4%), 0 false positives** on the routine top-10 questions. Watch the plurals — the first
+draft used `\bpayment\b`, which does not match "payments", and missed the real transcript *"I have
+made 2 $80 payments … there are no entries showing up"*.
+
+**Cost note:** both guards trade a free canned answer for a paid LLM turn, on ~7% of traffic plus
+repeats. That is the correct trade — those were precisely the turns where the free answer did
+damage.
+
+## We were *asking* Cobber to print `[from major-draw]` (2026-08-11)
+
+Eight production replies contained internal source tags like `[from membership-tiers]` in
+customer-visible text. Not a leak — system-prompt rule 2 literally said *"Cite your source section
+when possible (e.g. `[from membership-tiers]`)"*. Nothing ever parsed those tags (generative
+citations are never extracted; only the deflection path sets `citations`, from
+`deflection.sources`), so they were pure noise. Rule 2 is now an explicit prohibition. Fix the
+variable, not the consumer — do not add an output-side stripper for this unless the prompt change
+proves insufficient, and note a stream transform would be needed since the text streams to the
+customer before `onFinish` sees it.

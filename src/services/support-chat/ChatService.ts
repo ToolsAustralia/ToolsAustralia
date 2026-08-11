@@ -306,6 +306,77 @@ function modelIdOf(model: LanguageModel): string {
 }
 
 /**
+ * Text of the most recent assistant message, or "" if there is none.
+ * Exported for the test; not part of the service's public surface.
+ */
+export function lastAssistantText(messages: UIMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant") continue;
+    return (m.parts ?? [])
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("")
+      .trim();
+  }
+  return "";
+}
+
+/**
+ * True when a candidate canned answer is what we just said. Compared on
+ * whitespace-normalised text so trivial formatting differences still count as a
+ * repeat.
+ */
+export function isSameAsLastAssistantMessage(
+  messages: UIMessage[],
+  candidate: string
+): boolean {
+  const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+  const prev = lastAssistantText(messages);
+  return prev.length > 0 && norm(prev) === norm(candidate);
+}
+
+/**
+ * Detects a customer disputing money, alleging an unauthorised charge, or
+ * threatening escalation — the cases where a canned FAQ is actively harmful.
+ *
+ * Deliberately NOT a general "is the user unhappy" classifier: it targets money
+ * and authorisation language, which is what the production failures had in
+ * common. Refund POLICY questions ("what's your refund policy") are left to
+ * deflect normally — the guard needs a possessive/dispute cue, not the bare word.
+ *
+ * Over-triggering costs one LLM call; under-triggering sends a price list to
+ * someone who says you took their rent money. The asymmetry is intentional.
+ */
+export function looksLikeComplaint(text: string): boolean {
+  const t = text.toLowerCase();
+
+  // Unauthorised / unexpected money movement.
+  const unauthorised =
+    /\b(took|taken|taking|charged|charging|debited|withdrew|withdrawn|deducted)\b[^.?!]{0,40}\b(money|funds|\$?\d+|from my|out of my|my (?:bank|account|card))\b/.test(t) ||
+    /\b(without (?:my )?(?:asking|permission|authority|consent|knowledge)|didn'?t (?:sign up|authorise|authorize|agree|consent)|never (?:signed up|authorised|authorized|agreed)|unauthorised|unauthorized|not authorised|not authorized)\b/.test(t) ||
+    /\b(don'?t recognise|don'?t recognize|unrecognised charge|fraud|scammed|stolen)\b/.test(t);
+
+  // A personal refund demand (not a policy lookup).
+  const refundDemand =
+    /\b(i want|i need|give me|get me|want my|need my|expect(?:ing)? (?:the|my)?)\b[^.?!]{0,30}\b(money|refund|\$?\d+)\b/.test(t) ||
+    /\b(refund me|money back|reimburse|charge ?back)\b/.test(t);
+
+  // Regulator / legal escalation.
+  const regulator =
+    /\b(ombudsman|accc|acma|fair trading|consumer affairs|legal action|solicitor|lawyer|small claims|tribunal)\b/.test(t);
+
+  // Paid-but-missing — a support incident, never a pricing question.
+  // Note the plurals: the first draft used \bpayment\b, which does not match
+  // "payments", and so missed the real transcript "I have made 2 $80 payments
+  // … there are no entries showing up".
+  const missingBenefit =
+    /\b(paid|payments?|charges?d?|purchased?|bought|subscribed)\b[^.?!]{0,70}\b(no|zero|0|not|nothing|missing|haven'?t (?:got|received)|didn'?t (?:get|receive)|still (?:no|waiting))\b[^.?!]{0,30}\b(entr(?:y|ies)|membership|access|tickets?|benefits?)\b/.test(t);
+
+  return unauthorised || refundDemand || regulator || missingBenefit;
+}
+
+/**
  * Build a compact transcript summary (≤2000 chars) from recent messages for
  * the escalation ContactSubmission. Redacts PII defensively.
  */
@@ -648,8 +719,35 @@ export const chatService = {
     const userAgent = ctx.req.headers.get("user-agent") ?? undefined;
 
     // ── 1. Deflect first (no LLM) ─────────────────────────────────────────────
-    const deflection = await tryDeflect(userText);
-    if (deflection.answered && deflection.answer) {
+    // Two guards run BEFORE the canned answer is accepted. Both exist because
+    // production transcripts showed the free FAQ layer confidently answering the
+    // wrong thing and having no way to notice.
+    //
+    // (a) Complaints never deflect. The matcher scores on keyword overlap, so
+    //     "You have just taken $20 from my bank account, I didn't sign up for any
+    //     membership" scored against the membership FAQ and the customer was
+    //     served the PRICE LIST. Same for "I've made 2 $80 payments and have no
+    //     entries" and "why don't you disclose SA residents are ineligible".
+    //     A canned fact is the worst possible reply to someone disputing a
+    //     charge — send these to the model, which can escalate.
+    //
+    // (b) Never repeat the previous answer verbatim. The matcher is stateless,
+    //     so a rephrase that lands on the same entry replays it word for word.
+    //     One member asked "But I can't add a payment method" FIVE times and got
+    //     the identical "we accept Visa, Mastercard, American Express" every
+    //     time. Repetition is the signal the canned answer missed — fall through
+    //     to the model rather than saying it again.
+    const isComplaint = looksLikeComplaint(userText);
+    const deflection = isComplaint
+      ? { answered: false as const }
+      : await tryDeflect(userText);
+
+    const repeatsLastAnswer =
+      deflection.answered &&
+      !!deflection.answer &&
+      isSameAsLastAssistantMessage(messages, deflection.answer);
+
+    if (deflection.answered && deflection.answer && !repeatsLastAnswer) {
       const { conversationId } = await persist.ensureConversation({
         actor: ctx.actor,
         conversationId: input.conversationId,

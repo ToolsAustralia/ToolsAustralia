@@ -58,7 +58,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "4",
       question: "What are my membership options and how many entries do I get?",
       answer:
-        "We have three monthly membership tiers (all prices in AUD): Tradie at $20/month includes 15 free entries per month; Foreman at $40/month includes 40 free entries; Boss at $80/month includes 100 free entries. Higher tiers also unlock a larger share of our partner discounts. Membership entries accumulate and carry forward each month while your membership stays active. You can join on the [membership page](/membership).",
+        "We have three monthly membership tiers (all prices in AUD): Tradie at $20/month includes 15 free entries per month; Foreman at $40/month includes 40 free entries; Boss at $80/month includes 100 free entries. Higher tiers also unlock a larger share of our partner discounts. Your free entries **build up while your membership stays active** — each renewal adds your tier's entries on top of the total you've already built, so a Tradie member is in with 15 free entries for their first draw, 30 for the next, 45 after that, and so on (Boss: 100, then 200, then 300). You can join on the [membership page](/membership).",
       category: "SHOPPING",
     },
     {
@@ -332,7 +332,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "39",
       question: "I have an active membership but I see 0 entries — why?",
       answer:
-        "That's usually just timing, not a problem. Your membership entries are free and are **credited to each Major Draw on your renewal (billing) date**, and they build up month over month while your membership stays active. Each monthly draw is a fresh pool, so once one draw is held (on the 27th) your entries for the **next** draw are credited on your **next renewal date** — so an active member often sees **0 entries for the upcoming draw** in the short gap between a draw and their renewal. They appear automatically on your renewal date; there's nothing you need to do. (If a renewal payment recently failed, your entries are credited as soon as you settle it.) You can see your exact renewal date on [My Account → Membership](/my-account/membership). If that date has already passed and you still see 0, please [contact us](/contact) and we'll look into it. I can't see your account from here, so I can't read your live entry count.",
+        "That's usually just timing, not a problem — and nothing has been lost. Your free membership entries are **credited into each Major Draw on your renewal (billing) date**, not on the 1st or on draw day. Each month's draw is its own pool, so once a draw is held (on the 27th) your entries for the **next** one land on your **next renewal date** — which means an active member can briefly see **0 for the upcoming draw** in the gap between the two. Your total isn't reset by that: every renewal credits your tier's entries **on top of the total you've already built**, so the number going into each draw keeps growing while your membership stays active (a Tradie member: 15, then 30, then 45; a Boss member: 100, then 200, then 300). They appear automatically on your renewal date — there's nothing you need to do. (If a renewal payment recently failed, they're credited as soon as you settle it.) You can see your exact renewal date on [My Account → Membership](/my-account/membership). If that date has passed and you still see 0, please [contact us](/contact) and we'll look into it. I can't see your account from here, so I can't read your live entry count.",
       category: "SHOPPING",
     },
 
@@ -623,6 +623,49 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       answer:
         "No — the partner platform keeps its own copy of your details, so anything you edit over there stays over there and won't reach Tools Australia. It also won't change how you sign in with us: you always reach the portal by opening it from [My Account → Rewards](/my-account/rewards), which signs you in automatically, so a password set inside the portal isn't one you need. To change the details we actually hold, use [My Account → Settings](/my-account/settings) — and if your portal details already look out of date, updating them with us is the change that matters.",
       category: "REWARDS",
+    },
+
+    // ── GAPS FOUND IN LIVE TRANSCRIPTS (2026-08-11) ──────────────────────────
+    // Each of these is a question real customers asked that Cobber answered
+    // with "I don't have that information". Sources are cited per entry so the
+    // facts can be re-verified rather than trusted.
+    {
+      id: "77",
+      question:
+        "Where do I watch the live draw — what's your Facebook page?",
+      answer:
+        "The Major Draw is streamed **live on Facebook at 8:30 PM AEST/AEDT on the 27th**, right after entries freeze at 8:00 PM. Our page is [facebook.com/toolsaust](https://www.facebook.com/toolsaust) — that's where the stream runs, and it's the same page linked from our [contact page](/contact). If you miss it, every result plus the independent verification link is published on the [Draw Results](/draw-results) page afterwards.",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "78",
+      question: "Do you have a mobile app I can download?",
+      answer:
+        "Not yet. A native **Android** app for the Google Play Store is planned but hasn't been built — and an iPhone/iOS app isn't on the roadmap at this stage. For now everything works in your phone's browser: sign in at [My Account](/my-account) and you can check your entries, manage your membership, and buy packs exactly as you would on a computer. You can add the site to your home screen if you'd like it to open like an app.",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "79",
+      question:
+        "How many people enter the draw? Is there a limit on entries?",
+      answer:
+        "We don't publish how many members or entries are in a draw — that's not something we share. What we can tell you is there's **no cap on entries for you**: you can hold as many free entries as your membership and packs include, and there's no limit on how many one-time or Additional packs you buy, or how many mates you refer (each referral adds 100 free bonus entries for both of you once they make their first purchase). Every entry you hold goes into that month's Major Draw. You can see your own total any time on your [My Account](/my-account) dashboard.",
+      category: "SHOPPING",
+    },
+    {
+      id: "80",
+      question:
+        "I was offered something cheap right after checkout — what was that?",
+      answer:
+        "That's our post-purchase offer: a one-off, heavily discounted pack shown once, straight after you've paid, which **includes extra free entries** for the draw you've just entered. It's entirely optional, it's only available on that screen, and declining it doesn't affect the pack you already bought. If you took it, it appears as a separate small charge alongside your original purchase. To see exactly what you bought and what entries it included, sign in and check [My Account](/my-account) — and if the charge doesn't look right, [contact us](/contact) and our team will pull up your order.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "81",
+      question: "Who won the last draw — are winners announced publicly?",
+      answer:
+        "Yes. Every Major Draw winner is published on our [Draw Results](/draw-results) page, shown as their first name and last initial (like \"John D.\") along with their state and the prize they took — plus the verification link from randomdraws.com.au, the independent service that picks the winner. Winners are also contacted directly by our team, and the draw itself is streamed live on [Facebook](https://www.facebook.com/toolsaust). We don't share any more of a winner's details than that. I can't look results up from here, so head to [Draw Results](/draw-results) for the latest.",
+      category: "ALL QUESTIONS",
     },
   ];
 }
