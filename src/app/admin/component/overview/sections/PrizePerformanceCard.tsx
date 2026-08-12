@@ -255,6 +255,48 @@ export default function PrizePerformanceCard({
     return { spend, revenue, conversions, roas: spend > 0 ? revenue / spend : 0 };
   }, [rows]);
 
+  /**
+   * Every landing URL behind the visible rows, per platform — what the Total row drills into.
+   *
+   * Deduped with a Set because two prizes can legitimately advertise the same URL (a combo
+   * page such as `/promotions/milwaukee-milwaukee` appears under more than one brand). Passing
+   * it twice would make the modal fetch and then double-count that URL's ads, so the drill-down
+   * would disagree with the Total row that opened it.
+   *
+   * Built from `rows`, NOT from the full catalogue, so it always matches whatever the platform
+   * chips are currently showing.
+   */
+  const allUrlsByPlatform = useMemo(() => {
+    const meta = new Set<string>();
+    const tiktok = new Set<string>();
+    for (const r of rows) {
+      const byPlatform = r.canonicalUrlsByPlatform as Record<SpendByUrlPlatform, string[]>;
+      for (const u of byPlatform.meta ?? []) meta.add(u);
+      for (const u of byPlatform.tiktok ?? []) tiktok.add(u);
+    }
+    return { meta: [...meta], tiktok: [...tiktok] } as Record<SpendByUrlPlatform, string[]>;
+  }, [rows]);
+
+  /**
+   * Which platform the Total drill-down opens on. Follows the chips when one is selected;
+   * falls back to Meta under "All platforms" for the same reason a mixed row does — ad ids
+   * are only unique WITHIN a platform, so a per-ad tree has to name one.
+   */
+  const totalDrilldownPlatform: SpendByUrlPlatform =
+    platformFilter === "tiktok" ? "tiktok" : "meta";
+
+  const openTotalDrilldown = () => {
+    if (rows.length === 0) return;
+    setSelectedBrand({
+      brand: platformFilter === "all" ? "All prizes" : `All prizes — ${platformFilter === "tiktok" ? "TikTok" : "Meta"}`,
+      // `slug` is unused by the modal (it takes `_slug`), but the field is required by the
+      // state shape; a sentinel makes it obvious in a debugger that this is not one brand.
+      slug: "__all__",
+      canonicalUrlsByPlatform: allUrlsByPlatform,
+      platform: totalDrilldownPlatform,
+    });
+  };
+
   const [selectedBrand, setSelectedBrand] = useState<{
     brand: string;
     slug: string;
@@ -392,9 +434,24 @@ export default function PrizePerformanceCard({
             rows={rows}
             renderCell={renderCell}
             footer={
-              <tr className="border-t border-neutral-200 dark:border-neutral-700 font-semibold">
+              <tr
+                onClick={openTotalDrilldown}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault(); // Space must activate, not scroll the page
+                    openTotalDrilldown();
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label="Ad breakdown across all prizes"
+                className="border-t border-neutral-200 dark:border-neutral-700 font-semibold cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400"
+              >
                 <td className="py-2.5 px-2 text-left text-xs sm:text-sm text-neutral-700 dark:text-neutral-300">
                   Total
+                  <span className="ml-1.5 font-normal text-2xs text-neutral-400 dark:text-neutral-500">
+                    all ads
+                  </span>
                 </td>
                 <td className="py-2.5 px-2 text-right">
                   <span

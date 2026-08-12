@@ -52,6 +52,31 @@ platform's OWN attribution, so a purchase claimed by both Meta and TikTok is cou
 the total ROAS reads high — same warning already shown beneath the table. The per-platform tabs
 are the figures that reconcile.
 
+### The Total row is a drill-down too (2026-08-11)
+
+Clicking it opens `PrizePerformanceAdsModal` across **every** prize rather than one brand, so
+you can see the whole account's campaign → ad-set → ad tree in one place.
+
+It works because the modal already takes `canonicalUrlsByPlatform` (a per-platform URL *list*)
+and `useSpendByUrlDetailMany` sends them as repeated `canonicalUrl` params in **one** request —
+so the Total row is the same code path with a bigger URL set, not a new fetch shape. The route
+imposes no cap and dedupes server-side.
+
+Three things to preserve:
+
+- **The URL union is deduped client-side with a `Set`.** Two prizes can advertise the same URL
+  (a combo page like `/promotions/milwaukee-milwaukee` appears under more than one brand).
+  Passing it twice would double-count that URL's ads, and the drill-down would then disagree
+  with the Total row that opened it.
+- **It is built from `rows`, not the full catalogue**, so it always matches whatever the
+  platform chips are currently showing.
+- **It opens on one platform** (chips' selection, else Meta) for the same reason a mixed brand
+  row does — ad ids are only unique WITHIN a platform, so a merged tree would be ambiguous.
+
+The row carries `role="button"`, `tabIndex={0}` and an Enter/Space handler, matching how
+`DataTable` makes its body rows keyboard-reachable when `onRowClick` is set (panel F-017) —
+the footer is rendered by the card, not by `DataTable`, so it has to do that itself.
+
 ## Prize performance card — brands derived from the source of truth (2026-06-30)
 
 `PrizePerformanceCard` `PROMOTION_BRANDS` is now **derived** from `TOOLSET_LANDING_SLUGS`
