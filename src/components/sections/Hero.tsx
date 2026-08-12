@@ -87,7 +87,7 @@ export default function Hero() {
         <div className="relative w-full px-2 sm:px-3 lg:px-[100px] lg:max-w-1440 lg:mx-auto">
           {/* Unified Content Layout - Mobile */}
           <div className="lg:hidden flex flex-col items-center justify-start min-h-[calc(100vh-200px)] pt-2 pb-8">
-            <div className="max-w-[621px] w-full px-4">
+            <div className="flex flex-1 flex-col max-w-[621px] w-full px-4">
               {/* Main Title */}
               <h1 className="text-[40px] sm:text-[60px] font-black leading-[40px] sm:leading-[60px] text-white font-poppins mb-4 sm:mb-6 text-center [text-shadow:0_2px_4px_rgba(0,0,0,0.85),0_4px_14px_rgba(0,0,0,0.8),0_8px_34px_rgba(0,0,0,0.7)]">
                 Tools Australia
@@ -99,8 +99,12 @@ export default function Hero() {
                 tool giveaways — plus exciting mini draws, open to everyone.
               </p>
 
-              {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8 sm:mb-12">
+              {/* CTA Buttons — `mt-auto` pins the button to the BOTTOM of the hero content
+                  area (just above the brand marquee) instead of letting it sit mid-photo over
+                  the people. The parent's `pb-8` is the only gap below it. Mobile only: the
+                  desktop hero is a left-aligned column where the button already reads under
+                  the copy. */}
+              <div className="mt-auto flex flex-col sm:flex-row gap-4 justify-center">
                 <MetallicButton href="/membership" variant="primary" size="md" borderRadius="lg">
                   Become a member
                 </MetallicButton>
