@@ -46,8 +46,15 @@ export default function SheetShell({ open, onClose, children, className, labelle
   // sheet, mounted inside <main>) would otherwise render UNDER the fixed z-40
   // BottomNav and leave the top of the screen uncovered. z sits above the nav +
   // floating chrome but below the payment/modal layer (Z_INDEX 10000).
+  //
+  // 9500, not 120: "floating chrome" includes the Cobber launcher, which docks at
+  // Z_INDEX.MODAL_BASE - 1000 = 9000. At 120 the launcher painted OVER the sheet — invisible
+  // on /my-account (the launcher is suppressed there) but obvious the moment a SheetShell
+  // shipped on a public route (the /mini-draws filter + pack sheets). 9500 keeps the stated
+  // ordering intact: above every floating control, still below MODAL_BASE and the
+  // TOAST_LOADING payment overlay.
   const overlay = (
-    <div className="fixed inset-0 z-[120] flex flex-col justify-end lg:items-center lg:justify-center lg:p-6" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
+    <div className="fixed inset-0 z-[9500] flex flex-col justify-end lg:items-center lg:justify-center lg:p-6" role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/55 backdrop-blur-sm motion-safe:animate-[ta-sheet-fade_.25s_ease-out]" />
       <div
         ref={panelRef}

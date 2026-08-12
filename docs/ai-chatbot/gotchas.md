@@ -419,3 +419,21 @@ citations are never extracted; only the deflection path sets `citations`, from
 variable, not the consumer — do not add an output-side stripper for this unless the prompt change
 proves insufficient, and note a stream transform would be needed since the text streams to the
 customer before `onFinish` sees it.
+
+## The launcher out-ranked `SheetShell` on public routes (2026-08-12)
+
+`ChatBubbleButton` docks at `Z_INDEX.MODAL_BASE - 1000` = **9000**;
+[`SheetShell`](../../src/components/ui/SheetShell.tsx) was at `z-[120]`. Every SheetShell caller
+until now lived on `/my-account`, where `SupportChatWidgetMount` **suppresses the launcher** (the
+dashboard "Ask Cobber" card is the canonical entry there), so nothing ever revealed the mismatch.
+The first public-route SheetShell — the `/mini-draws` filter / sort / quick-enter / catalogue /
+pack-detail sheets — put Cobber straight over the sheet's primary CTA.
+
+Fixed in `SheetShell` (raised to `z-[9500]`, still below `MODAL_BASE` 10000 and the
+`TOAST_LOADING` payment overlay), not in the chat widget: a **modal** surface should out-rank
+persistent chrome. The panel's own header comment was corrected at the same time.
+
+The other direction still holds: a bottom-anchored **non-modal** bar (the mini-draw sticky
+"Enter draw" bar) must NOT climb above the launcher — it carries `data-floating-widget` and
+[`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
+lifts Cobber clear of it instead. Modal → out-rank it; persistent chrome → dodge it.

@@ -5,6 +5,7 @@
 | Path | Purpose |
 |---|---|
 | `src/app/(site)/major-draw/page.tsx` | Current major draw landing — hero, countdown, entry CTA |
+| `src/app/(site)/mini-draws/` | Mini-draw browse + filter — hero, sticky mobile control bar (search / filter / sort + brand chip rail) or desktop sidebar, card grid, `HowMiniDrawsWork`, `ReadyToEnter` (redesigned 2026-08-12) |
 | `src/app/(site)/mini-draws/[id]/` | Individual mini-draw detail page |
 | `src/app/(site)/mini-draw-success/` | Post-purchase success for mini-draw entry |
 | `src/app/(site)/draw-results/` | Draw Results & Winners — hero, the register (all/major/mini), the wall (winners-board grid), how-chosen, CTA (redesigned 2026-06-10) |
@@ -17,6 +18,9 @@
 | `src/app/(site)/mini-draws/[id]/components/MiniDrawCountdown.tsx` | Countdown timer to mini-draw end |
 | `src/app/(site)/mini-draws/[id]/components/ShareButton.tsx` | Social-share for mini-draw |
 | `src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx` | Prize-image carousel: main slide + thumbnail strip + pagination dots + nav chevrons + image counter, with click-to-fullscreen via `FullscreenImageViewer`. |
+| `src/app/(site)/mini-draws/components/ReadyToEnter.tsx` | Closing block on `/mini-draws` — replaced `MembershipSection` there 2026-08-12. Explains the order of operations (pick a draw → choose a pack on that draw) and opens the pack catalogue with **no draw bound**. Deliberately NOT a purchasable grid. |
+| `src/components/features/MiniDrawPackTiles.tsx` | Shared light pack tiles (`MiniPackTile`, `BigPackRow`), the `PackTrustRow`, and the full "Entry packages" sheet (`MiniDrawPacksSheet`). One source for the three surfaces that render the two pack tiers. |
+| `src/components/features/MiniDrawQuickEnterSheet.tsx` | Browse-page "buy without leaving the list" sheet, opened by a card's **Enter draw** CTA. Mounted per draw so `useMiniDrawPurchase` is always keyed to a real id. |
 | _other major-draw components_ | _TODO: enumerate from src/components/ that map to draws (per the manifest, draws-domain components are not pulled out separately — they live near pages)._ |
 
 ### MiniDrawImageGallery
@@ -196,3 +200,61 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## Mini-draws redesign — browse + detail (2026-08-12)
+
+Both public mini-draw surfaces were rebuilt from a design handoff. Three problems it set out to fix,
+and what replaced each:
+
+| Problem | Fix |
+|---|---|
+| Mobile filtering was buried in a 320px left drawer with a 13-item scrolling list | Sticky control bar (search + filter + sort) with a horizontal **brand chip rail**, plus a filter **bottom sheet** whose brand list is a 2-column grid |
+| The pack picker was 8 neon-glow tiles ~76px wide in a 4-column grid | Two clearly-labelled tiers of clean light cards — see [shared-ui/patterns.md](../shared-ui/patterns.md#minidrawpackages--two-light-tiers-rewritten-2026-08-12) |
+| `MembershipSection` closed both pages — it sells **major-draw** entries, which do nothing here | Removed from both; `/mini-draws` gets `ReadyToEnter` instead, `/mini-draws/[id]` ends at Related draws |
+
+### Browse (`/mini-draws`)
+
+- **Sticky control bar** (below `lg`) pinned at `top-[var(--app-header-h)]`: 42px search, 42px filter
+  button with a live selected-brand count badge, 42px sort button, then the chip rail
+  (`All brands` → Sidchrome, Milwaukee, Makita, KINCROME, DEWALT, Knipex → a dashed `+ More` that
+  opens the filter sheet). `All brands` renders "on" when no brand is selected.
+- **Desktop (`lg+`)** keeps the sidebar (`MiniDrawsFilters isMobile={false}`, sticky at `top-24`) plus
+  a control card with search, grid/list toggle and a 250px sort **dropdown** (a popover — it asserts
+  `aria-expanded`, so it must NOT lock scroll; it closes on outside pointer-down, not `useModalA11y`).
+- **Sheets** — filter, sort and quick-enter all use [`SheetShell`](../../src/components/ui/SheetShell.tsx)
+  rather than a fourth hand-rolled overlay, so scroll-lock, focus trap, Escape and the portal come from
+  one place. `MiniDrawsFilters` in mobile mode returns a **fragment** (pinned search + scrolling grid) so
+  the sheet's own header and sticky `Show {n} draws` footer are siblings in the panel's flex column —
+  the footer count is live and filter-aware, and the button only dismisses (selection already applied).
+- **Card CTA divergence.** `MiniDrawCard` gained an optional `onEnter`: the image and title still
+  navigate to `/mini-draws/{id}`, but the CTA opens `MiniDrawQuickEnterSheet` for that draw. Only the
+  browse grid passes it — the homepage grid, `RelatedMiniDraws` and the dashboard keep their existing
+  behaviour. `viewMode` also gained a third value, `"compact"`, used by `RelatedMiniDraws`.
+
+### Detail (`/mini-draws/[id]`)
+
+- **Key facts strip** (mobile only) under the hero: `$1 / Per entry`, `{n} / Entries left`,
+  `{pct}% / Filled`. The `$1 Entry` pill stays desktop-only — on mobile the sticky bar carries the price.
+- **Sticky gallery column** on `lg+`. The gallery sits in a wrapper `div` that stretches to the grid row
+  height, with `sticky top-24` on an inner div; `sticky` applied directly to a grid item collapses to
+  content height and never engages. The right column's old `lg:sticky lg:top-28` is gone — two sticky
+  columns fight.
+- **Sticky "Enter draw" bar** (mobile only) is owned by `MiniDrawPackages`, portaled to `<body>`, and
+  reflects the **currently selected pack**; tapping it opens that pack's detail sheet, not the list. The
+  page container carries `pb-[78px]` so it never covers the last card. It opts into
+  `data-floating-widget` so [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
+  lifts the Cobber launcher above it.
+- **Pack card first on both breakpoints.** Desktop previously ordered "About this prize" above the
+  buy card via `lg:order-1/2`; those overrides are removed.
+- **Winners & rules** is no longer wrapped in `CollapsibleSection` — the tabs are their own affordance.
+  The empty-winners "Get your entries" link dispatches the `OPEN_MINI_DRAW_PACKS_EVENT` window event
+  (exported from `MiniDrawPackages`), the same decoupling `useOpenMembershipModalListener` uses, so the
+  tabs never need a reference to the picker.
+
+### Copy corrections shipped with it
+
+`MiniDrawTabs` listed **"Buy a mini pack to receive free entries (membership required)"** under Entry
+methods. Mini-draw entry is **package-only** — no membership is required, and members' free entries go
+to the *major* draws. Now reads "Buy a mini pack to receive free entries". Everything customer-facing
+here follows CLAUDE.md §11: the purchasable unit is the pack, entries are a free inclusion, and no
+odds/chance framing appears anywhere on either page.

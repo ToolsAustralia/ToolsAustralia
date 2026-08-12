@@ -1,6 +1,6 @@
 "use client";
 
-import { Ticket, ShieldCheck, Zap, Lock } from "lucide-react";
+import { ShieldCheck, Zap, Lock } from "lucide-react";
 import MiniDrawPackages from "@/components/features/MiniDrawPackages";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
 
@@ -34,43 +34,14 @@ export default function MiniDrawInteractions({ miniDraw }: MiniDrawInteractionsP
   const isSoldOut = !isCancelled && entriesRemaining <= 0;
   const showPackages = isActive && !isSoldOut;
 
-  const percentage = minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
-
   return (
-    <div className="relative rounded-2xl border border-gray-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-lg dark:shadow-none">
-      {/* Subtle gradient accent at top */}
-      <div className="h-1 rounded-t-2xl bg-gradient-to-r from-red-600 via-red-400 to-red-600" />
+    <div className="relative overflow-hidden rounded-[20px] border border-[#EFF0F3] bg-white shadow-[0_10px_26px_-20px_rgba(15,23,42,.5)] dark:border-neutral-800 dark:bg-neutral-900 dark:shadow-none">
+      {/* 4px brand rule across the top */}
+      <div className="h-1 bg-gradient-to-r from-red-600 via-[#FF6B6B] to-red-600" />
 
-      <div className="p-3 sm:p-5">
-        {/* Urgency banner */}
-        {showPackages && percentage >= 75 && (
-          <div className="mb-3 sm:mb-4 flex items-center gap-2.5 bg-gradient-to-r from-red-600/5 to-red-600/10 border border-red-600/15 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3">
-            <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-600 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
-            </span>
-            <span className="text-xs sm:text-sm font-semibold text-red-600 dark:text-red-400 leading-tight">
-              {percentage >= 90
-                ? `Almost full! Only ${entriesRemaining.toLocaleString()} entries left`
-                : `Filling fast — ${entriesRemaining.toLocaleString()} entries remaining`}
-            </span>
-          </div>
-        )}
-
-        {/* User entry count */}
-        {userEntryCount > 0 && (
-          <div className="mb-3 sm:mb-4 flex items-center gap-2.5 bg-green-50/80 dark:bg-green-950/35 border border-green-100 dark:border-green-900/40 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-green-100 dark:bg-green-900/50 flex items-center justify-center flex-shrink-0">
-              <Ticket className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 dark:text-green-400" />
-            </div>
-            <span className="text-xs sm:text-sm font-medium text-green-700 dark:text-green-300">
-              You have <span className="font-bold">{userEntryCount}</span>{" "}
-              {userEntryCount === 1 ? "entry" : "entries"} in this draw
-            </span>
-          </div>
-        )}
-
-        {/* Entry Packages */}
+      <div className="p-3.5 lg:p-[22px]">
+        {/* Entry packs — header, tier picker, sticky mobile buy bar and the money path all
+            live inside MiniDrawPackages so purchase state has exactly one owner. */}
         {showPackages && (
           <MiniDrawPackages
             key={String(miniDraw._id)}
@@ -78,20 +49,22 @@ export default function MiniDrawInteractions({ miniDraw }: MiniDrawInteractionsP
             minimumEntries={miniDraw.minimumEntries}
             totalEntries={miniDraw.totalEntries}
             userEntryCount={userEntryCount}
+            drawName={miniDraw.name}
+            showStickyBar
           />
         )}
 
         {/* Closed / Completed / Cancelled states */}
         {!isCompleted && !isCancelled && !showPackages && (
-          <div className="flex flex-col items-center text-center py-8 sm:py-10">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gray-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
-              <Lock className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-neutral-500" />
+          <div className="flex flex-col items-center py-8 text-center sm:py-10">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 dark:bg-neutral-800 sm:h-14 sm:w-14">
+              <Lock className="h-5 w-5 text-gray-400 dark:text-neutral-500 sm:h-6 sm:w-6" />
             </div>
-            <p className="text-sm sm:text-base font-semibold text-gray-800 dark:text-neutral-100">
+            <p className="text-sm font-semibold text-gray-800 dark:text-neutral-100 sm:text-base">
               {isSoldOut ? "Entries are now closed" : "This draw is no longer accepting entries"}
             </p>
             {!isSoldOut && (
-              <p className="text-xs sm:text-sm text-gray-500 mt-1.5 max-w-xs">
+              <p className="mt-1.5 max-w-xs text-xs text-gray-500 sm:text-sm">
                 Please check back for other giveaways.
               </p>
             )}
@@ -99,44 +72,28 @@ export default function MiniDrawInteractions({ miniDraw }: MiniDrawInteractionsP
         )}
 
         {isCompleted && (
-          <div className="flex flex-col items-center text-center py-8 sm:py-10">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gray-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
-              <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-neutral-500" />
+          <div className="flex flex-col items-center py-8 text-center sm:py-10">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100 dark:bg-neutral-800 sm:h-14 sm:w-14">
+              <ShieldCheck className="h-5 w-5 text-gray-400 dark:text-neutral-500 sm:h-6 sm:w-6" />
             </div>
-            <p className="text-sm sm:text-base font-semibold text-gray-800 dark:text-neutral-100">
+            <p className="text-sm font-semibold text-gray-800 dark:text-neutral-100 sm:text-base">
               This mini draw has ended
             </p>
-            <p className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400 mt-1.5">
+            <p className="mt-1.5 text-xs text-gray-500 dark:text-neutral-400 sm:text-sm">
               Check the results page for winners!
             </p>
           </div>
         )}
 
         {isCancelled && (
-          <div className="flex flex-col items-center text-center py-8 sm:py-10">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-red-50 flex items-center justify-center mb-4">
-              <Zap className="w-5 h-5 sm:w-6 sm:h-6 text-red-400" />
+          <div className="flex flex-col items-center py-8 text-center sm:py-10">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 sm:h-14 sm:w-14">
+              <Zap className="h-5 w-5 text-red-400 sm:h-6 sm:w-6" />
             </div>
-            <p className="text-sm sm:text-base font-semibold text-red-700">
-              This mini draw has been cancelled
-            </p>
-            <p className="text-xs sm:text-sm text-red-500 mt-1.5">
+            <p className="text-sm font-semibold text-red-700 sm:text-base">This mini draw has been cancelled</p>
+            <p className="mt-1.5 text-xs text-red-500 sm:text-sm">
               Reach out to the support team if you need assistance.
             </p>
-          </div>
-        )}
-
-        {/* Trust signals */}
-        {showPackages && (
-          <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100 dark:border-neutral-800 flex items-center justify-center gap-4 sm:gap-6 text-2xs sm:text-xs text-gray-400 dark:text-neutral-500">
-            <div className="flex items-center gap-1">
-              <ShieldCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-              <span>Secure Payment</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-              <span>Instant Entry</span>
-            </div>
           </div>
         )}
       </div>

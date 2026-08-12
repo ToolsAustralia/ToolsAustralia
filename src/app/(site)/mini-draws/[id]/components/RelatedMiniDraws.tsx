@@ -12,21 +12,23 @@ export default function RelatedMiniDraws({ draws }: RelatedMiniDrawsProps) {
   if (draws.length === 0) return null;
 
   return (
-    <section className="mt-14 sm:mt-16">
-      <div className="flex items-center justify-between mb-6 sm:mb-8">
-        <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white font-poppins">You May Also Like</h2>
+    <section className="pt-[18px] sm:pt-14">
+      <div className="flex items-center justify-between pb-3 sm:pb-6">
+        <h2 className="font-poppins text-[16px] font-extrabold text-[#111827] dark:text-white sm:text-[22px]">
+          You may also like
+        </h2>
         <Link
           href="/mini-draws"
-          className="text-red-600 dark:text-red-400 hover:text-red-675 dark:hover:text-red-300 font-medium flex items-center gap-1 text-sm transition-colors"
+          className="flex items-center gap-1 text-[12.5px] font-semibold text-red-600 transition-colors hover:text-red-675 dark:text-red-400 sm:text-sm"
         >
-          <span className="hidden sm:inline">View All Mini Draws</span>
-          <span className="sm:hidden">View All</span>
-          <ArrowRight className="w-4 h-4" />
+          <span className="hidden sm:inline">View all mini draws</span>
+          <span className="sm:hidden">View all</span>
+          <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
         </Link>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+      <div className="grid grid-cols-2 gap-[11px] lg:grid-cols-4 lg:gap-5">
         {draws.map((draw, index) => (
-          <MiniDrawCard key={draw._id} miniDraw={draw} index={index} viewMode="grid" />
+          <MiniDrawCard key={draw._id} miniDraw={draw} index={index} viewMode="compact" />
         ))}
       </div>
     </section>
