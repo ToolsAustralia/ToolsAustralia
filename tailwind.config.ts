@@ -156,6 +156,13 @@ const config: Config = {
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-in-out",
+        /**
+         * Header dropdown panels. Separate from `fade-in` because 0.5s is far too slow for a
+         * menu that opens on hover — the pointer is already moving toward the item it wants, so
+         * the panel has to be legible before it gets there. 120ms + a 4px rise reads as
+         * "revealed", not "faded". Do NOT reuse `fade-in` for hover-opened surfaces.
+         */
+        "dropdown-in": "dropdownIn 0.12s ease-out",
         "slide-up": "slideUp 0.5s ease-out",
         "bounce-slow": "bounce 2s infinite",
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
@@ -179,6 +186,10 @@ const config: Config = {
         fadeIn: {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
+        },
+        dropdownIn: {
+          "0%": { opacity: "0", transform: "translateY(-4px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
         slideUp: {
           "0%": { transform: "translateY(20px)", opacity: "0" },

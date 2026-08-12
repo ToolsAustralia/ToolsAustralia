@@ -1,11 +1,12 @@
 "use client";
 
 import React from "react";
-import { X } from "lucide-react";
+import { Ticket, X } from "lucide-react";
 import type { MiniDrawPackage } from "@/data/miniDrawPackages";
-import ModalContainer from "@/components/modals/ui/ModalContainer";
+import SheetShell from "@/components/ui/SheetShell";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
-import { getMiniDrawPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
+import { getMiniDrawPackLightScheme } from "@/utils/package-colors/electricPackageScheme";
+import { PackTrustRow, packAccessLabel } from "@/components/features/MiniDrawPackTiles";
 
 interface MiniDrawPackageModalProps {
   isOpen: boolean;
@@ -14,8 +15,31 @@ interface MiniDrawPackageModalProps {
   onPurchase: () => void;
   isPurchasing?: boolean;
   disabled?: boolean;
+  /**
+   * The draw these free entries land on. Omitted when the sheet is opened from a surface
+   * with no draw bound (the browse page's `ReadyToEnter`), which renders the generic
+   * "Any active mini draw you pick" instead.
+   */
+  drawName?: string;
+  /** Override the CTA copy — used when there is no draw to purchase into yet. */
+  ctaLabel?: string;
 }
 
+/** The allocation row is a single nowrap line; anything longer gets an ellipsis. */
+const DRAW_NAME_MAX = 38;
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+/**
+ * Pack detail — bottom sheet on mobile, centred modal on desktop (via `SheetShell`).
+ *
+ * Light surface with a per-tier ink/soft ramp (`getMiniDrawPackLightScheme`). The old
+ * neon-on-black treatment came from the dark `ElectricPackageCard` language, which is
+ * still correct on the membership surfaces but was unreadable sitting inside the white
+ * mini-draw page.
+ */
 const MiniDrawPackageModal: React.FC<MiniDrawPackageModalProps> = ({
   isOpen,
   onClose,
@@ -23,162 +47,124 @@ const MiniDrawPackageModal: React.FC<MiniDrawPackageModalProps> = ({
   onPurchase,
   isPurchasing = false,
   disabled = false,
+  drawName,
+  ctaLabel = "Purchase now",
 }) => {
   const partnerCatalogPct = getPartnerCatalogAccessPercentForPlanId(pkg._id);
-  // Same scheme + electric visual language as the MembershipSection ElectricPackageCard,
-  // derived from the pack id so this modal stays in lockstep without prop threading
-  // (keeps the dev gallery working).
-  const scheme = getMiniDrawPackageColorScheme(pkg._id);
-  const accent = scheme.accentHex;
-  const gradientText = scheme.textGradientStyle as React.CSSProperties | undefined;
-  const isPremium = !!gradientText; // VIP — champagne gold gradient tier
+  const scheme = getMiniDrawPackLightScheme(pkg._id);
+  const hasPartnerAccess = pkg.partnerDiscountDays > 0 || pkg.partnerDiscountHours > 0;
 
-  const titleStyle: React.CSSProperties = gradientText
-    ? { ...gradientText, filter: `drop-shadow(0 0 4px ${accent}) drop-shadow(0 0 9px ${accent}80)` }
-    : { color: accent, textShadow: `0 0 14px ${accent}80` };
-  const bigNumberStyle: React.CSSProperties = gradientText
-    ? { ...gradientText }
-    : { color: "#FFFFFF", textShadow: `0 0 18px ${accent}, 0 0 36px ${accent}80` };
-
-  const bodyBg = isPremium
-    ? `radial-gradient(120% 80% at 50% 0%, ${accent}30 0%, transparent 55%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
-    : `radial-gradient(120% 85% at 50% 0%, ${accent}33 0%, ${accent}12 32%, transparent 62%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
-  const bodyShadow = isPremium
-    ? `0 0 0 1px #FFFCEB, 0 0 0 3px ${accent}, 0 0 14px ${accent}B3, 0 14px 40px rgba(0,0,0,0.6)`
-    : `0 0 0 1px ${accent}40, 0 0 30px ${accent}66, 0 0 70px ${accent}33, 0 16px 48px rgba(0,0,0,0.55)`;
+  const tierVars = {
+    ["--pk-accent" as string]: scheme.accent,
+    ["--pk-ink" as string]: scheme.ink,
+    ["--pk-ink-d" as string]: scheme.inkDark,
+    ["--pk-soft" as string]: scheme.soft,
+    ["--pk-soft-d" as string]: scheme.softDark,
+  } as React.CSSProperties;
 
   return (
-    <ModalContainer
-      isOpen={isOpen}
-      onClose={onClose}
-      size="sm"
-      height="auto"
-      className="!max-w-[360px] sm:!max-w-sm !bg-transparent !border-0 !shadow-none !overflow-visible"
-    >
-      <div
-        className="relative isolate flex max-h-[min(85vh,calc(100vh-3rem))] min-h-[280px] flex-col rounded-3xl p-5 sm:p-6 text-sm sm:text-base"
-        style={{
-          background: bodyBg,
-          border: isPremium ? `1px solid ${accent}` : `2px solid ${accent}59`,
-          boxShadow: bodyShadow,
-        }}
-      >
-        {/* Electric inner sheen */}
-        <div
-          className="pointer-events-none absolute inset-0.5 rounded-[22px] z-0"
-          style={{
-            background: isPremium
-              ? `linear-gradient(180deg, ${accent}33 0%, transparent 12%), radial-gradient(120% 70% at 50% 0%, ${accent}1A 0%, transparent 52%)`
-              : `radial-gradient(135% 90% at 50% 0%, ${accent}26 0%, ${accent}0D 30%, transparent 60%)`,
-          }}
-          aria-hidden
-        />
-
-        <div className="relative z-10 flex min-h-0 flex-col">
-          <div className="flex shrink-0 items-start justify-between gap-3">
-            <div
-              className="min-w-0 flex-1 font-extrabold uppercase tracking-wide text-lg sm:text-xl break-words pr-1"
-              style={titleStyle}
+    <SheetShell open={isOpen} onClose={onClose} labelledBy="mini-draw-pack-title" className="lg:!max-w-[440px]">
+      <div style={tierVars} className="flex min-h-0 flex-col overflow-y-auto overscroll-contain">
+        {/* 1 — title + tier chip */}
+        <div className="flex items-start justify-between gap-2.5 px-[18px] pt-3">
+          <span className="flex min-w-0 flex-col">
+            <span
+              id="mini-draw-pack-title"
+              className="font-poppins text-[17px] font-extrabold leading-[1.25] tracking-[-0.005em] text-[#111827] dark:text-white"
             >
               {pkg.displayName ?? pkg.name}
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-white/80 transition-all hover:bg-white/10 hover:text-white"
-              style={{ border: `1px solid ${accent}40` }}
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            </span>
+            <span className="mt-1.5 inline-flex w-fit items-center gap-1.5 rounded-full bg-[var(--pk-soft)] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-[var(--pk-ink)] dark:bg-[var(--pk-soft-d)] dark:text-[var(--pk-ink-d)]">
+              <span className="h-[7px] w-[7px] rounded-full bg-[var(--pk-accent)]" />
+              {scheme.group === "mini" ? "Mini pack" : "Bigger pack"}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#F1F2F5] text-[#4B5563] transition-colors hover:bg-[#E2E4E9] dark:bg-neutral-800 dark:text-neutral-300"
+          >
+            <X className="h-[15px] w-[15px]" />
+          </button>
+        </div>
+
+        {/* 2 — entries hero */}
+        <div className="px-[18px] pb-0.5 pt-3.5 text-center">
+          <div className="text-[46px] font-extrabold leading-none tracking-[-0.03em] text-[var(--pk-ink)] dark:text-[var(--pk-ink-d)]">
+            {pkg.entries.toLocaleString()}
           </div>
-
-          {/* Hero entries number */}
-          <div className="mt-4 text-center">
-            <div className="text-[40px] sm:text-[46px] font-extrabold leading-none" style={bigNumberStyle}>
-              {pkg.entries}
-            </div>
-            <div className="mt-1 text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-white/65">
-              Free Entries
-            </div>
-          </div>
-
-          <div className="my-4 h-px w-full rounded-full" style={{ background: `${accent}59` }} />
-
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-0.5">
-            <div className="space-y-3 sm:space-y-4">
-              {pkg.description && (
-                <div className="text-white/70 text-xs sm:text-sm leading-relaxed break-words">
-                  {pkg.description}
-                </div>
-              )}
-
-              <div className="space-y-2.5 sm:space-y-3">
-                <div
-                  className="flex items-center justify-between border-b py-1.5"
-                  style={{ borderColor: "rgba(255,255,255,0.08)" }}
-                >
-                  <span className="text-white/55 text-sm sm:text-base">Partner discounts:</span>
-                  <span className="ml-2 text-right font-semibold text-cyan-300 text-sm sm:text-base">
-                    {partnerCatalogPct}% of offers
-                  </span>
-                </div>
-                {(pkg.partnerDiscountDays > 0 || pkg.partnerDiscountHours > 0) && (
-                  <div
-                    className="flex items-center justify-between border-b py-1.5"
-                    style={{ borderColor: "rgba(255,255,255,0.08)" }}
-                  >
-                    <span className="text-white/55 text-sm sm:text-base">Partner access:</span>
-                    <span className="ml-2 break-words text-right font-semibold text-green-400 text-sm sm:text-base">
-                      {pkg.partnerDiscountDays >= 1
-                        ? `${pkg.partnerDiscountDays} ${pkg.partnerDiscountDays === 1 ? "day" : "days"}`
-                        : `${pkg.partnerDiscountHours} ${pkg.partnerDiscountHours === 1 ? "hour" : "hours"}`}
-                    </span>
-                  </div>
-                )}
-                <div
-                  className="flex items-center justify-between border-b py-1.5"
-                  style={{ borderColor: "rgba(255,255,255,0.08)" }}
-                >
-                  <span className="text-white/55 text-sm sm:text-base">Price:</span>
-                  <span className="font-bold text-base sm:text-lg" style={{ color: accent }}>
-                    ${pkg.price}
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={onPurchase}
-                disabled={isPurchasing || disabled}
-                style={{
-                  backgroundColor: "#000000",
-                  border: `1.5px solid ${accent}`,
-                  color: accent,
-                  boxShadow: `0 0 18px ${accent}40, inset 0 0 12px ${accent}1F`,
-                  // Disable the breathing scale/glow keyframe; the ::after shimmer
-                  // sweep animates on the pseudo-element and is unaffected.
-                  animation: "none",
-                }}
-                className="ta-enter-cta mt-4 w-full py-3 px-4 rounded-2xl font-black uppercase tracking-wide text-sm sm:text-base transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isPurchasing ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span
-                      className="h-4 w-4 animate-spin rounded-full border-2 border-t-transparent"
-                      style={{ borderColor: accent, borderTopColor: "transparent" }}
-                    />
-                    <span>Processing...</span>
-                  </span>
-                ) : (
-                  <span>Purchase Now</span>
-                )}
-              </button>
-            </div>
+          <div className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#9CA3AF] dark:text-neutral-500">
+            Free entries
           </div>
         </div>
+
+        {/* 3 — rule */}
+        <div className="mx-[18px] my-4 h-px rounded-full bg-[#F1F2F5] dark:bg-neutral-800" />
+
+        {/* 4 — where the free entries land */}
+        <div className="px-[18px] pb-3">
+          <div className="flex items-center gap-2.5 rounded-[13px] border border-[var(--pk-soft)] bg-[var(--pk-soft)] px-3 py-2.5 text-[var(--pk-ink)] dark:border-transparent dark:bg-[var(--pk-soft-d)] dark:text-[var(--pk-ink-d)]">
+            <Ticket className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[9.5px] font-extrabold uppercase tracking-[0.09em] opacity-65">Entries go to</span>
+              <span className="truncate whitespace-nowrap text-[12px] font-bold leading-[1.3]">
+                {drawName ? truncate(drawName, DRAW_NAME_MAX) : "Any active mini draw you pick"}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        {/* 5 — description */}
+        {pkg.description && (
+          <div className="px-[18px] pb-1 text-[12px] leading-[1.55] text-[#4B5563] text-pretty dark:text-neutral-400">
+            {pkg.description}
+          </div>
+        )}
+
+        {/* 6 — spec rows */}
+        <div className="flex flex-col px-[18px] pt-3">
+          <div className="flex items-center justify-between border-b border-[#F1F2F5] py-2.5 dark:border-neutral-800">
+            <span className="text-[12.5px] text-[#6B7280] dark:text-neutral-400">Partner discounts</span>
+            <span className="text-[12.5px] font-bold text-[#0E7490] dark:text-cyan-400">
+              {partnerCatalogPct}% of offers
+            </span>
+          </div>
+          {hasPartnerAccess && (
+            <div className="flex items-center justify-between border-b border-[#F1F2F5] py-2.5 dark:border-neutral-800">
+              <span className="text-[12.5px] text-[#6B7280] dark:text-neutral-400">Partner access</span>
+              <span className="text-[12.5px] font-bold text-[#16A34A] dark:text-green-400">
+                {packAccessLabel(pkg)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center justify-between py-2.5">
+            <span className="text-[12.5px] text-[#6B7280] dark:text-neutral-400">Price</span>
+            <span className="text-[16px] font-extrabold text-[#111827] dark:text-white">${pkg.price}</span>
+          </div>
+        </div>
+
+        {/* 7 + 8 — CTA and trust row */}
+        <div className="px-[18px] pb-7 pt-3">
+          <button
+            type="button"
+            onClick={onPurchase}
+            disabled={isPurchasing || disabled}
+            className="flex h-[52px] w-full items-center justify-center rounded-[14px] bg-[var(--pk-ink)] text-[14px] font-extrabold tracking-[0.01em] text-white shadow-[0_12px_24px_-14px_var(--pk-ink)] transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[var(--pk-ink-d)] dark:text-neutral-950"
+          >
+            {isPurchasing ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                <span>Processing…</span>
+              </span>
+            ) : (
+              ctaLabel
+            )}
+          </button>
+          <PackTrustRow className="pt-3" />
+        </div>
       </div>
-    </ModalContainer>
+    </SheetShell>
   );
 };
 

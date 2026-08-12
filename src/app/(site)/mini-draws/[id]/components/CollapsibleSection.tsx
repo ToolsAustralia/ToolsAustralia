@@ -10,8 +10,6 @@ interface CollapsibleSectionProps {
   children: React.ReactNode;
   defaultOpen?: boolean;
   className?: string;
-  /** Hide the title on desktop (lg:) — useful when children have their own heading */
-  hideDesktopTitle?: boolean;
 }
 
 export default function CollapsibleSection({
@@ -20,7 +18,6 @@ export default function CollapsibleSection({
   children,
   defaultOpen = false,
   className = "",
-  hideDesktopTitle = false,
 }: CollapsibleSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const prefersReduced = useReducedMotion();
@@ -30,31 +27,27 @@ export default function CollapsibleSection({
       {/* Mobile: collapsible header */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between gap-3 lg:hidden group"
+        className="w-full flex items-center justify-between gap-2.5 lg:hidden group"
         aria-expanded={isOpen}
       >
         <div className="flex items-center gap-2 min-w-0">
           {icon}
-          <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-            {title}
-          </span>
+          <span className="truncate text-[14px] font-extrabold text-[#111827] dark:text-white">{title}</span>
         </div>
-        <motion.div
+        <motion.span
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: prefersReduced ? 0 : 0.2 }}
-          className="w-6 h-6 rounded-full bg-gray-100 dark:bg-neutral-800 group-hover:bg-gray-200 dark:group-hover:bg-neutral-700 flex items-center justify-center flex-shrink-0 transition-colors"
+          className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[#6B7280] transition-colors group-hover:bg-[#E9EAEE] dark:bg-neutral-800 dark:text-neutral-400"
         >
-          <ChevronDown className="w-3.5 h-3.5 text-gray-500 dark:text-neutral-400" />
-        </motion.div>
+          <ChevronDown className="h-3.5 w-3.5" />
+        </motion.span>
       </button>
 
-      {/* Desktop: always-visible title (optional) */}
-      {!hideDesktopTitle && (
-        <div className="hidden lg:flex items-center gap-2 mb-3">
-          {icon}
-          <span className="text-base font-semibold text-gray-900 dark:text-white">{title}</span>
-        </div>
-      )}
+      {/* Desktop: always-visible title */}
+      <div className="mb-3 hidden items-center gap-2 lg:flex">
+        {icon}
+        <span className="text-base font-extrabold text-[#111827] dark:text-white">{title}</span>
+      </div>
 
       {/* Mobile: animated collapsible content */}
       <div className="lg:hidden">
@@ -70,7 +63,7 @@ export default function CollapsibleSection({
               }}
               className="overflow-hidden"
             >
-              <div className="pt-3">{children}</div>
+              <div className="pt-2.5">{children}</div>
             </motion.div>
           )}
         </AnimatePresence>

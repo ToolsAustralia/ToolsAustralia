@@ -228,3 +228,17 @@ padding is absorbed by the reservation instead of extending it — the box stays
 100svh and the layout shift is unchanged. A commit that tried this was reverted after
 measurement. Full geometry and the before/after numbers:
 [docs/promo/gotchas.md](../promo/gotchas.md) → "A viewport of reservation is 92px too short".
+
+## `animate-dropdown-in` vs `animate-fade-in` (2026-08-12)
+
+`animate-fade-in` is `fadeIn 0.5s ease-in-out`. That is fine for a full-screen surface, and wrong
+for a **hover-opened** menu: the pointer is already travelling toward the item it wants, so a
+half-second fade means the user arrives before the panel is legible. The header's five desktop
+dropdown panels read as sluggish for exactly this reason.
+
+`animate-dropdown-in` (`dropdownIn 0.12s ease-out`, opacity + a 4px rise) is the token for
+trigger-anchored panels. Use it for anything that opens under a cursor; keep `animate-fade-in`
+for full-bleed surfaces (the mobile sidebar, its scrims) where a slower fade still reads well.
+
+Pair it with `motion-reduce:animate-none` — a one-shot reveal is cheap, but the OS signal is free
+to honour.

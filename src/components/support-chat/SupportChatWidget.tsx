@@ -16,7 +16,9 @@
  *   /my-account so the card is the canonical entry there. The panel is closed by its own
  *   header ✕ (onClose).
  * - The panel hides while a dashboard overlay sheet (Support/Payment/Manage — SheetShell
- *   portaled to <body> at z-[120]) is open, so Cobber never floats over it.
+ *   portaled to <body> at z-[9500]) is open, so Cobber never floats over it. That z was raised
+ *   from 120 on 2026-08-12: the launcher sits at MODAL_BASE - 1000 = 9000, so at 120 a SheetShell
+ *   on a PUBLIC route (where the launcher is not suppressed) rendered under the robot.
  * - Labelled "AI support mate" in the header AND the welcome block.
  * - 4-6 quick-reply buttons shown before the text input (no LLM cost on deflection).
  * - hCaptcha rendered when the server returns captcha_required (anonymous guests only).

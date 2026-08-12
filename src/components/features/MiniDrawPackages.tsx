@@ -1,21 +1,43 @@
 "use client";
 
-import React, { useState } from "react";
-import { Package, Info } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { Package, Ticket } from "lucide-react";
 import { getMiniDrawPackages } from "@/data/miniDrawPackages";
 import { useUserContext } from "@/contexts/UserContext";
 import PaymentProcessingScreen from "@/components/loading/PaymentProcessingScreen";
-import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
-import { getMiniDrawPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import MiniDrawPackageModal from "@/components/modals/MiniDrawPackageModal";
 import LoginPromptModal from "@/components/modals/LoginPromptModal";
 import { useMiniDrawPurchase } from "@/hooks/useMiniDrawPurchase";
+import {
+  BigPackRow,
+  MiniPackTile,
+  MiniDrawPacksSheet,
+  PackTrustRow,
+  getMiniDrawPackTiers,
+  packEntriesLabel,
+} from "@/components/features/MiniDrawPackTiles";
+import { cn } from "@/utils/cn";
+
+/**
+ * Fired by any surface that wants the full "Entry packages" catalogue without holding a
+ * reference to this component — today the empty-winners state in `MiniDrawTabs`. Same
+ * decoupling pattern as `useOpenMembershipModalListener`.
+ */
+export const OPEN_MINI_DRAW_PACKS_EVENT = "mini-draw:open-packs";
 
 interface MiniDrawPackagesProps {
   miniDrawId: string;
   minimumEntries?: number;
   totalEntries?: number;
   userEntryCount?: number;
+  /** Shown in the pack sheet's "Entries go to" row so the buyer sees where they land. */
+  drawName?: string;
+  /**
+   * Mounts the mobile sticky "Enter draw" bar. Only the `/mini-draws/[id]` page passes
+   * this — the dashboard Draws-tab sheet is already a bottom-anchored surface of its own.
+   */
+  showStickyBar?: boolean;
 }
 
 export default function MiniDrawPackages({
@@ -23,19 +45,22 @@ export default function MiniDrawPackages({
   minimumEntries,
   totalEntries,
   userEntryCount = 0,
+  drawName,
+  showStickyBar = false,
 }: MiniDrawPackagesProps) {
   const { userData, isAuthenticated } = useUserContext();
 
   // The money path (charge → webhook-confirmed grant → upsell) lives in the shared
   // useMiniDrawPurchase hook so this page and the dashboard Draws-tab entry sheet
-  // never fork it. This component owns only the pack-grid presentation.
+  // never fork it. This component owns only the pack-picker presentation.
   const { purchase, purchasingPackageId, entriesRemaining, isSoldOut, isExceedsCapacity, paymentProcessing, loginModal } =
     useMiniDrawPurchase({ miniDrawId, minimumEntries, totalEntries });
 
   // Mini-draw catalog is intentionally NOT tier-gated: every visitor (signed-in or not,
   // member or not, entrant or not) sees all 8 active packs (Mini Pack 1–3 + the five
   // mini-scoped Additional packs). Login is enforced at purchase time via LoginPromptModal.
-  const viewerPackages = getMiniDrawPackages();
+  const { miniPacks, bigPacks } = useMemo(() => getMiniDrawPackTiers(), []);
+  const allPacks = useMemo(() => getMiniDrawPackages(), []);
 
   /**
    * Calculate user's entry count for this specific minidraw
@@ -121,233 +146,189 @@ export default function MiniDrawPackages({
 
   const calculatedUserEntryCount = calculateUserEntryCount();
 
-  const [hoveredPackageId, setHoveredPackageId] = useState<string | null>(null);
-  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [packTab, setPackTab] = useState<"mini" | "big">("mini");
+  /** Drives the sticky bar's price / entries line. */
+  const [selectedPackId, setSelectedPackId] = useState<string>(miniPacks[0]?._id ?? allPacks[0]?._id ?? "mini-pack-1");
+  /** Which pack's detail sheet is open, if any. */
+  const [detailPackId, setDetailPackId] = useState<string | null>(null);
+  const [packsSheetOpen, setPacksSheetOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  // Get selected package for modal
-  const selectedPackage = selectedPackageId ? viewerPackages.find((p) => p._id === selectedPackageId) : null;
+  useEffect(() => setMounted(true), []);
+
+  // Empty-winners "Get your entries" (and any future sibling) opens the catalogue.
+  useEffect(() => {
+    const open = () => setPacksSheetOpen(true);
+    window.addEventListener(OPEN_MINI_DRAW_PACKS_EVENT, open);
+    return () => window.removeEventListener(OPEN_MINI_DRAW_PACKS_EVENT, open);
+  }, []);
+
+  const selectedPack = allPacks.find((p) => p._id === selectedPackId) ?? allPacks[0];
+  const detailPack = detailPackId ? allPacks.find((p) => p._id === detailPackId) : null;
+
+  /** Tapping a pack selects it AND opens its detail — the old "What's included?" button is gone. */
+  const pickPack = (packId: string) => {
+    setSelectedPackId(packId);
+    setDetailPackId(packId);
+  };
+
+  const isBlocked = (entries: number) => isSoldOut || isExceedsCapacity(entries);
+
+  const segButton = (tab: "mini" | "big", label: string) => (
+    <button
+      key={tab}
+      type="button"
+      onClick={() => setPackTab(tab)}
+      aria-pressed={packTab === tab}
+      className={cn(
+        "h-[34px] rounded-[10px] px-4 text-[12.5px] font-bold transition-all duration-150",
+        packTab === tab
+          ? "bg-[#111827] text-white shadow-[0_4px_10px_-6px_rgba(15,23,42,.9)] dark:bg-white dark:text-neutral-900"
+          : "bg-transparent text-[#6B7280] dark:text-neutral-400"
+      )}
+    >
+      {label}
+    </button>
+  );
+
+  const miniGrid = (
+    <div className="grid grid-cols-3 gap-[9px] lg:gap-3">
+      {miniPacks.map((pkg) => (
+        <MiniPackTile
+          key={pkg._id}
+          pkg={pkg}
+          size="responsive"
+          selected={selectedPackId === pkg._id}
+          disabled={isBlocked(pkg.entries)}
+          onClick={() => pickPack(pkg._id)}
+        />
+      ))}
+    </div>
+  );
+
+  const bigList = (detailed: boolean) => (
+    <div className="flex flex-col gap-2">
+      {bigPacks.map((pkg) => (
+        <BigPackRow
+          key={pkg._id}
+          pkg={pkg}
+          detailed={detailed}
+          selected={selectedPackId === pkg._id}
+          disabled={isBlocked(pkg.entries)}
+          onClick={() => pickPack(pkg._id)}
+        />
+      ))}
+    </div>
+  );
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-red-600 to-red-675 flex items-center justify-center">
-            <Package className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-          </div>
-          <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white">Choose Your Pack</h3>
-        </div>
-        {calculatedUserEntryCount > 0 && (
-          <div className="flex items-center gap-1 bg-green-50 border border-green-100 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1">
-            <span className="text-2xs sm:text-xs font-bold text-green-700">
-              {calculatedUserEntryCount.toLocaleString()}{" "}
-              {calculatedUserEntryCount === 1 ? "free entry" : "free entries"}
-            </span>
-          </div>
+    <div className="flex flex-col gap-3 lg:gap-4">
+      {/* Header — icon tile, title, capacity pill */}
+      <div className="flex items-center gap-2.5 lg:gap-3">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-red-600 to-red-675 text-white lg:h-9 lg:w-9 lg:rounded-[11px]">
+          <Package className="h-[15px] w-[15px] lg:h-[19px] lg:w-[19px]" />
+        </span>
+        <h3 className="text-[15px] font-extrabold text-[#111827] dark:text-white lg:text-[19px]">Choose your pack</h3>
+        {entriesRemaining !== undefined && !isSoldOut && (
+          <span className="ml-auto shrink-0 rounded-full border border-[#FFEDD5] bg-[#FFF7ED] px-2.5 py-1 text-[10.5px] font-bold text-[#C2410C] dark:border-orange-900/40 dark:bg-orange-950/40 dark:text-orange-300 lg:px-3 lg:py-1.5 lg:text-[12.5px]">
+            <span className="lg:hidden">{entriesRemaining.toLocaleString()} left</span>
+            <span className="hidden lg:inline">Only {entriesRemaining.toLocaleString()} free entries remaining</span>
+          </span>
         )}
       </div>
 
-      {/* Remaining / Sold Out */}
-      {entriesRemaining !== undefined && (
-        <div
-          className={`mb-3 sm:mb-4 text-center text-2xs sm:text-xs font-medium px-3 py-1.5 rounded-lg ${
-            isSoldOut
-              ? "bg-red-50 dark:bg-red-950/35 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/40"
-              : "bg-gray-50 dark:bg-neutral-800/80 text-gray-600 dark:text-neutral-300 border border-gray-100 dark:border-neutral-700"
-          }`}
-        >
-          {isSoldOut
-            ? "Sold out — no more free entries available."
-            : `Only ${entriesRemaining.toLocaleString()} free entries remaining`}
+      {/* The buyer's own entries in this draw */}
+      {calculatedUserEntryCount > 0 && (
+        <div className="flex items-center gap-2.5 rounded-[13px] border border-green-100 bg-green-50/80 px-3 py-2.5 dark:border-green-900/40 dark:bg-green-950/35">
+          <Ticket className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+          <span className="text-[12px] font-medium text-green-700 dark:text-green-300">
+            You have <span className="font-bold">{calculatedUserEntryCount.toLocaleString()}</span>{" "}
+            {calculatedUserEntryCount === 1 ? "free entry" : "free entries"} in this draw
+          </span>
         </div>
       )}
 
-      {/* Package Grid */}
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-2.5">
-        {viewerPackages.map((pkg) => {
-          const disabled =
-            purchasingPackageId === pkg._id || isSoldOut || isExceedsCapacity(pkg.entries);
-          const isProcessing = purchasingPackageId === pkg._id;
-          const partnerCatalogPct = getPartnerCatalogAccessPercentForPlanId(pkg._id);
-          // Per-pack electric scheme — same function + visual language as the
-          // MembershipSection one-time ElectricPackageCard (dark radial body, accent
-          // glow, premium gold double-rim for VIP) so the catalog reads identically.
-          const scheme = getMiniDrawPackageColorScheme(pkg._id);
-          const accent = scheme.accentHex;
-          const gradientText = scheme.textGradientStyle as React.CSSProperties | undefined;
-          const isPremium = !!gradientText; // VIP — champagne gold gradient tier
-          const dotInk = scheme.text.includes("black") ? "#0A0A0A" : "#FFFFFF";
-          const tileBg = isPremium
-            ? `radial-gradient(120% 95% at 50% 0%, ${accent}26 0%, transparent 58%), linear-gradient(180deg, #0b0a06 0%, #050402 100%)`
-            : `radial-gradient(120% 95% at 50% 0%, ${accent}3D 0%, ${accent}14 34%, transparent 64%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`;
-          const tileBorder = isPremium ? `1px solid ${accent}` : `1.5px solid ${accent}59`;
-          const tileShadow = disabled
-            ? "none"
-            : isPremium
-              ? `0 0 0 1px #FFFCEB, 0 0 0 2px ${accent}, 0 0 12px ${accent}99, 0 8px 22px rgba(0,0,0,0.6)`
-              : `0 0 0 1px ${accent}40, 0 0 16px ${accent}59, 0 0 34px ${accent}2E, 0 8px 22px rgba(0,0,0,0.5)`;
-          const priceStyle: React.CSSProperties = gradientText
-            ? { ...gradientText }
-            : { color: "#FFFFFF", textShadow: `0 0 12px ${accent}, 0 0 24px ${accent}80` };
+      {/* Mobile — segmented control, one tier at a time */}
+      <div className="lg:hidden">
+        <div className="inline-flex rounded-xl bg-[#F1F2F5] p-[3px] dark:bg-neutral-800">
+          {segButton("mini", "Mini packs")}
+          {segButton("big", "Bigger packs")}
+        </div>
+      </div>
+      <div className="lg:hidden">{packTab === "mini" ? miniGrid : bigList(false)}</div>
 
-          return (
-            <div key={pkg._id} className="relative" data-package-id={pkg._id}>
-              <div className="relative">
-                <button
-                  onMouseEnter={() => setHoveredPackageId(pkg._id)}
-                  onMouseLeave={() => {
-                    if (selectedPackageId !== pkg._id) setHoveredPackageId(null);
-                  }}
-                  onClick={() => setSelectedPackageId(pkg._id)}
-                  disabled={disabled}
-                  title={`${partnerCatalogPct}% partner discounts · ${pkg.entries} free entries · $${pkg.price}`}
-                  className={`
-                    w-full relative overflow-hidden rounded-xl sm:rounded-2xl transition-all duration-300
-                    ${disabled
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:scale-105 hover:brightness-110 active:scale-[0.97]"
-                    }
-                  `}
-                  style={{
-                    background: tileBg,
-                    border: tileBorder,
-                    boxShadow: tileShadow,
-                  }}
-                  suppressHydrationWarning
-                >
-                  {/* Electric inner sheen — accent wash from the top, mirrors the card */}
-                  <div
-                    className="pointer-events-none absolute inset-0"
-                    style={{
-                      background: isPremium
-                        ? `linear-gradient(180deg, ${accent}2E 0%, transparent 14%), radial-gradient(120% 80% at 50% 0%, ${accent}1A 0%, transparent 55%)`
-                        : `radial-gradient(135% 95% at 50% 0%, ${accent}33 0%, ${accent}0D 32%, transparent 62%)`,
-                    }}
-                    aria-hidden
-                  />
-
-                  <div className="relative z-10 py-2.5 sm:py-3.5 px-1 sm:px-2">
-                    {isProcessing ? (
-                      <div className="flex flex-col items-center justify-center gap-1 py-1">
-                        <div
-                          className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-2"
-                          style={{ borderColor: `${accent}40`, borderTopColor: accent }}
-                        />
-                        <span className="text-3xs sm:text-2xs font-semibold text-white/70">
-                          Processing
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-0.5 sm:gap-1">
-                        {/* Price — glowing tier ink (VIP keeps its gold gradient) */}
-                        <span
-                          className="text-base sm:text-xl font-extrabold leading-none tracking-tight"
-                          style={priceStyle}
-                        >
-                          ${pkg.price}
-                        </span>
-
-                        {/* Free entries */}
-                        <span className="text-3xs sm:text-xs font-semibold leading-tight text-white/65">
-                          {pkg.entries} {pkg.entries === 1 ? "free entry" : "free entries"}
-                        </span>
-
-                        {/* Capacity warning */}
-                        {isExceedsCapacity(pkg.entries) && (
-                          <span className="text-3xs sm:text-2xs font-bold text-red-400 leading-tight mt-0.5">
-                            {entriesRemaining} left
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </button>
-
-                {/* Info dot */}
-                <button
-                  onMouseEnter={() => setHoveredPackageId(pkg._id)}
-                  onMouseLeave={() => {
-                    if (selectedPackageId !== pkg._id) setHoveredPackageId(null);
-                  }}
-                  className="absolute -top-1 -right-1 w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 hover:brightness-110 z-20"
-                  style={{
-                    backgroundColor: accent,
-                    color: dotInk,
-                    boxShadow: `0 0 10px ${accent}99, 0 2px 6px rgba(0,0,0,0.5)`,
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedPackageId(pkg._id);
-                  }}
-                  suppressHydrationWarning
-                >
-                  <Info className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
-                </button>
-
-                {/* Hover tooltip (desktop) */}
-                {hoveredPackageId === pkg._id && selectedPackageId !== pkg._id && (
-                  <div
-                    className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2.5 z-50 w-56 text-white text-sm rounded-2xl p-3 pointer-events-none"
-                    style={{
-                      background: `radial-gradient(120% 90% at 50% 0%, ${accent}26 0%, transparent 60%), linear-gradient(180deg, #0b0c0f 0%, #060607 100%)`,
-                      border: isPremium ? `1px solid ${accent}` : `1.5px solid ${accent}59`,
-                      boxShadow: `0 0 0 1px ${accent}33, 0 0 22px ${accent}40, 0 12px 30px rgba(0,0,0,0.6)`,
-                    }}
-                  >
-                    <div
-                      className="font-bold mb-1"
-                      style={
-                        gradientText
-                          ? { ...gradientText }
-                          : { color: accent, textShadow: `0 0 12px ${accent}80` }
-                      }
-                    >
-                      {pkg.displayName ?? pkg.name}
-                    </div>
-                    <div className="text-white/65 text-xs">
-                      ${pkg.price} &middot; {pkg.entries}{" "}
-                      {pkg.entries === 1 ? "free entry" : "free entries"}
-                    </div>
-                    <div className="text-cyan-300 text-xs mt-1.5 flex items-center gap-1">
-                      <span className="w-1 h-1 rounded-full bg-cyan-300 inline-block shrink-0" />
-                      {partnerCatalogPct}% of partner discounts
-                    </div>
-                    {(pkg.partnerDiscountDays > 0 || pkg.partnerDiscountHours > 0) && (
-                      <div className="text-green-400 text-xs mt-1.5 flex items-center gap-1">
-                        <span className="w-1 h-1 rounded-full bg-green-400 inline-block shrink-0" />
-                        {pkg.partnerDiscountDays >= 1
-                          ? `${pkg.partnerDiscountDays} ${pkg.partnerDiscountDays === 1 ? "day" : "days"} partner access`
-                          : `${pkg.partnerDiscountHours} ${pkg.partnerDiscountHours === 1 ? "hour" : "hours"} partner access`}
-                      </div>
-                    )}
-                    <div
-                      className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 rotate-45"
-                      style={{ background: "#070708", borderRight: `1px solid ${accent}59`, borderBottom: `1px solid ${accent}59` }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+      {/* Desktop — both tiers stacked under uppercase labels */}
+      <div className="hidden flex-col gap-2.5 lg:flex">
+        <span className="text-[11.5px] font-extrabold uppercase tracking-[0.1em] text-[#9CA3AF] dark:text-neutral-500">
+          Mini packs
+        </span>
+        {miniGrid}
+      </div>
+      <div className="hidden flex-col gap-2.5 lg:flex">
+        <span className="text-[11.5px] font-extrabold uppercase tracking-[0.1em] text-[#9CA3AF] dark:text-neutral-500">
+          Bigger packs · more entries + partner access
+        </span>
+        {bigList(true)}
       </div>
 
-      {/* Package Details Modal */}
-      {selectedPackage && (
+      <PackTrustRow className="hidden border-t border-[#F1F2F5] pt-4 dark:border-neutral-800 lg:flex" />
+
+      {/* Mobile sticky buy bar — portaled so a transformed ancestor can never break `fixed`.
+          `data-floating-widget` is the opt-in that makes the Cobber launcher lift above it
+          (see useDodgeFloatingObstacles). */}
+      {showStickyBar && mounted && selectedPack && !isSoldOut &&
+        createPortal(
+          <div
+            data-floating-widget
+            className="fixed inset-x-0 bottom-0 z-[60] flex items-center justify-between gap-4 border-t border-[#EDEFF2] bg-white/[.97] px-3.5 pt-2.5 shadow-[0_-10px_26px_-18px_rgba(15,23,42,.6)] backdrop-blur-md lg:hidden dark:border-neutral-800 dark:bg-neutral-900/95"
+            style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+          >
+            <div className="flex min-w-0 flex-col">
+              <span className="text-[16px] font-extrabold leading-[1.1] text-[#111827] dark:text-white">
+                ${selectedPack.price}
+              </span>
+              <span className="whitespace-nowrap text-[10.5px] font-semibold text-[#6B7280] dark:text-neutral-400">
+                {packEntriesLabel(selectedPack)}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDetailPackId(selectedPack._id)}
+              className="flex h-[50px] flex-[0_1_auto] items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-red-600 to-red-675 px-6 text-[14px] font-extrabold tracking-[0.01em] text-white shadow-[0_14px_26px_-12px_rgba(238,0,0,.85)]"
+            >
+              <Ticket className="h-4 w-4" />
+              Enter draw
+            </button>
+          </div>,
+          document.body
+        )}
+
+      {/* Full catalogue */}
+      <MiniDrawPacksSheet
+        open={packsSheetOpen}
+        onClose={() => setPacksSheetOpen(false)}
+        selectedPackId={selectedPackId}
+        isExceedsCapacity={isExceedsCapacity}
+        isSoldOut={isSoldOut}
+        onPickPack={(id) => {
+          setPacksSheetOpen(false);
+          pickPack(id);
+        }}
+      />
+
+      {/* Pack detail */}
+      {detailPack && (
         <MiniDrawPackageModal
-          isOpen={selectedPackageId === selectedPackage._id}
-          onClose={() => {
-            setSelectedPackageId(null);
-            setHoveredPackageId(null);
-          }}
-          package={selectedPackage}
+          isOpen={detailPackId === detailPack._id}
+          onClose={() => setDetailPackId(null)}
+          package={detailPack}
+          drawName={drawName}
           onPurchase={() => {
-            setSelectedPackageId(null);
-            setHoveredPackageId(null);
-            purchase(selectedPackage._id);
+            setDetailPackId(null);
+            purchase(detailPack._id);
           }}
-          isPurchasing={purchasingPackageId === selectedPackage._id}
-          disabled={false}
+          isPurchasing={purchasingPackageId === detailPack._id}
+          disabled={isBlocked(detailPack.entries)}
         />
       )}
 

@@ -739,6 +739,15 @@ longer possible. Nothing in the app does that.
 look for a *nearer* ancestor with a non-`visible` overflow — the same rule applies at every
 level, and the fix is `clip` on that ancestor rather than anything on the element.
 
+**Hit again 2026-08-12 — the nearer ancestor was a PAGE wrapper.** The mini-draws redesign added
+a sticky mobile control bar to `/mini-draws` and a sticky gallery column to `/mini-draws/[id]`.
+Neither engaged, even though `body` had been fixed site-wide: both page roots carried
+`w-full overflow-x-hidden`, so each page's own wrapper was the scroll container. Measured: the
+bar's `getBoundingClientRect().top` read **28.8px** at `scrollY = 300` with `top: 86px` set — it
+was simply scrolling away. Swapping both wrappers to `overflow-x-clip` fixed it. The site-wide
+`body` fix does **not** immunise a page that re-introduces the same declaration one level down;
+`overflow-x-hidden` on a full-bleed page container is a common instinct, so check for it first.
+
 ## The same mutation mounted three times must fail the same way three times (2026-08)
 
 [`RewardsClaimables`](../../src/components/sections/rewards/RewardsClaimables.tsx) called
@@ -1049,3 +1058,54 @@ carry `pointer-events-none` (never steal the card's click) and `aria-hidden` (th
 `aria-label` already names the tier; the icon is decoration, not a second label). Card top
 padding went `pt-[22px]` → `pt-[30px]` to clear them. Icons come from the shared
 `getPackageIcon(plan.id)` helper, same source the tier cards use — don't add a second mapping.
+
+## `SheetShell` at `z-[120]` rendered UNDER the Cobber launcher (2026-08-12)
+
+[`SheetShell`](../../src/components/ui/SheetShell.tsx) documented its z as "above the nav +
+floating chrome but below the payment/modal layer" — but the value was `z-[120]`, and the Cobber
+chat launcher ([`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx)) docks
+at `Z_INDEX.MODAL_BASE - 1000` = **9000**. The comment and the number disagreed by two orders of
+magnitude.
+
+It never showed, because every SheetShell caller until now lived on `/my-account`, where
+`SupportChatWidgetMount` **suppresses the launcher** (the dashboard "Ask Cobber" card is the
+canonical entry point there). The first public-route SheetShell — the `/mini-draws` filter, sort,
+quick-enter, catalogue and pack-detail sheets — put the robot straight over the sheet footer,
+covering the primary CTA.
+
+Fixed by raising the overlay to `z-[9500]`: above every floating control, still below
+`Z_INDEX.MODAL_BASE` (10000) and `TOAST_LOADING` (99999, the `PaymentProcessingScreen` overlay
+that a pack purchase opens *on top of* the sheet). The lesson generalises — **a z-index chosen
+against the surfaces you can see today is untested against the ones you can't**; if a comment
+claims an ordering, the number has to be checkable against the constants in
+[`z-index.ts`](../../src/constants/z-index.ts).
+
+Related: a bottom-anchored **non-modal** bar (the mini-draw sticky "Enter draw" bar) must NOT
+climb above the launcher — it opts into `data-floating-widget` instead, and
+[`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
+lifts Cobber clear of it. Modal → out-rank it; persistent chrome → dodge it.
+
+## A hover-opened dropdown must not close on the trigger's own click (2026-08-12)
+
+The header's three desktop dropdowns (Giveaways / Results / Explore) open on hover **and** on
+click. The trigger's handler was a plain toggle:
+
+```tsx
+onClick={() => setIsGiveawaysMenuOpen(!isGiveawaysMenuOpen)}
+```
+
+With hover-to-open added on top, that reads the wrong intent. The pointer opens the panel; the
+user then clicks the trigger they are already hovering; `isOpen` is already `true`, so the toggle
+**collapses the menu under the cursor**. Every pointer user hits this — the only way to keep the
+menu was to never click the thing that looks clickable.
+
+Fixed with an ownership ref rather than by removing the toggle. `openOnHover` records which menu
+hover opened (`hoverOpenedMenu`); `toggleFromClick` absorbs the first click on a hover-opened menu
+and hands ownership to click, so the *second* click closes it normally. Keyboard (Enter) and touch
+never set the ref — `openOnHover` returns early without `(hover: hover) and (pointer: fine)` — so
+both keep toggling in each direction. Moving the pointer away still closes it via the existing
+140ms `closeOnHover` delay.
+
+**The general rule: when a surface can be opened two ways, "toggle" is not a safe default for
+either.** A click must mean "open" or "keep", never "undo what hover just did" — decide from what
+opened it, not from the boolean alone.
