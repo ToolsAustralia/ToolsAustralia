@@ -108,21 +108,13 @@ export default function PromotionsAccountButton() {
       className="fixed bottom-5 left-5 z-40 transition-[bottom] duration-300 ease-out"
       style={dodgeBottom > 0 ? { bottom: dodgeBottom } : undefined}
     >
-      {/* Scrim behind the column so dark-glass discs stay readable over bright prize art. */}
-      <m.div
-        aria-hidden
-        className="pointer-events-none absolute rounded-full"
-        style={{
-          left: -60,
-          bottom: -60,
-          width: 320,
-          height: 320,
-          background: "radial-gradient(circle at 34% 76%, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%)",
-        }}
-        animate={{ opacity: isOpen ? 1 : 0 }}
-        transition={{ duration: reduceMotion ? 0 : 0.3 }}
-      />
-
+      {/* The 320px radial scrim that used to sit here was REMOVED on 2026-08-11 (owner call).
+          It faded in behind the open column to keep the dark-glass discs readable over bright
+          prize art, but it read as a large grey smudge over the hero on the promo pages — more
+          distracting than the contrast problem it solved. The discs keep their own
+          `backdrop-blur-sm` + border, which is what actually carries their legibility.
+          If contrast ever becomes a genuine problem on a specific hero, tint THAT disc rather
+          than reintroducing a full-bleed circle over the artwork. */}
       {MENU_ITEMS.map((item, i) => {
         const y = -(FIRST_OFFSET + i * PITCH);
         const Icon = item.key === "theme" ? (isLightSite ? Moon : Sun) : item.icon;

@@ -1,5 +1,19 @@
 # Shared UI — Frontend
 
+## Promotions account menu — radial scrim removed (2026-08-11)
+
+`PromotionsAccountButton` (the bottom-left FAB column on `/promotions/*`) used to fade in a
+**320 × 320 radial scrim** behind the open menu — `radial-gradient(circle at 34% 76%,
+rgba(0,0,0,0.55) → transparent 70%)`, animated on `isOpen`. It has been **removed** (owner call).
+
+Its stated job was keeping the dark-glass discs readable over bright prize art, but in practice
+it rendered as a large grey smudge across the hero whenever the menu opened — more distracting
+than the contrast problem it solved. The discs keep their own `backdrop-blur-sm` and border,
+which is what actually carries their legibility.
+
+**If contrast becomes a genuine problem on a specific hero, tint that disc** rather than
+reintroducing a full-bleed circle over the artwork.
+
 ## `DiscountOfferList` reports the access seam to page analytics (2026-08-11)
 
 The `WallMarker` — the dashed gold seam where a viewer's access stops — now optionally reports
