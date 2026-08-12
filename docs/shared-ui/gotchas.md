@@ -1027,6 +1027,25 @@ Other hero changes in the same pass:
   Rule-11 check: "free entries", "giveaways", "mini draws" — no odds/chance/lottery framing, and
   entries are never priced or sold.
 
+### Mobile CTA pinned to the bottom of the frame (2026-08-12)
+
+Top-aligning the copy (above) freed the centre of the photo but left the **button** mid-frame,
+directly over the two subjects. The mobile CTA wrapper is now `mt-auto` inside a
+`flex flex-1 flex-col` content column, so it sits at the **bottom of the hero content area** —
+below the people, just above the brand marquee — with the column's `pb-8` as the only gap. Its
+old `mb-8 sm:mb-12` is gone: with `mt-auto` a bottom margin just lifts the button back up.
+
+`flex-1` needs the `min-h-[calc(100vh-200px)]` on the parent to have something to fill — if that
+min-height is ever removed, the column collapses to content height and `mt-auto` silently does
+nothing (no layout break, the button just drifts back up under the paragraph).
+
+**Mobile only** (`lg:hidden` block). The desktop hero is a left-aligned column where the button
+already reads directly under the copy and nothing sits behind it; it was left untouched.
+
+Contrast: this moves the CTA into the busy-pallet zone the note above flags as the hero's hard
+case. It survives the move because a solid red filled button carries its own contrast — the
+warning is about **text**, which is why nothing else was moved down with it.
+
 ## Membership hero deck must show PROMO-BOOSTED entries (2026-08-10)
 
 [`MembershipHero`](../../src/components/sections/membership/MembershipHero.tsx)'s three deck
