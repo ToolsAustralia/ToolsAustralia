@@ -14,7 +14,13 @@
  */
 export const AREA_ACTIONS = {
   overview: ["view", "edit"],
-  users: ["view", "edit", "export", "charge", "cancelSubscription", "refund", "delete"],
+  // `viewDetail` splits the PII depth of the detail modal away from the list. `view` grants the
+  // roster (name, status, package); `viewDetail` grants the modal — email, mobile, address,
+  // payment history, activity. A support role can triage the list without reading personal data.
+  // Adding a permission does NOT auto-grant it to existing custom roles, so the migration
+  // backfills `viewDetail` onto every role that already had `view` (see
+  // scripts/migrate-seed-staff-roles.ts) — otherwise this ships as a silent access removal.
+  users: ["view", "viewDetail", "edit", "export", "charge", "cancelSubscription", "refund", "delete"],
   promos: ["view", "edit", "end", "delete"],
   facebookAds: ["view", "edit"],
   pageAnalytics: ["view"],

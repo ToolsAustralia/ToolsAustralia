@@ -4193,6 +4193,13 @@ If an operator requests a capability not in this document and not in the current
 
 ## Last updated
 
+`2026-08-13` — **Customer-record reads move from `users.view` to `users.viewDetail` (registry only; no endpoint, path or response-shape change).**
+
+- `users.view` used to gate both the customer LIST and the single-customer RECORD. It was split so a staff role can browse the roster without reading personal data (email, mobile, address, payment history). Four `read` entries moved to the new permission — **`users.get`**, **`users.deletion-summary`**, **`users.payment-events.list`**, **`users.charge-past-due.preview`** — mirroring the admin routes they wrap (CLAUDE.md rule 10). `users.list` / `users.search` stay on `users.view`; `users.export` stays on `users.export`.
+- **No behavioural change for Norm.** Reads bypass the per-permission grant (see the 2026-05-21 entry), so `requiredPermission` on a `read` entry is documentation-of-record — but it must not drift from the admin gate, or the registry stops describing the real access model. The published manifest does not carry `requiredPermission`, so `npm run build:norm-manifest` is correctly a no-op here (95 endpoints unchanged).
+- The PII boundary itself is unchanged and still lives in each endpoint's Zod projection — `users.get` remains firstName + state only, with email/lastName/mobile/address/savedPaymentMethods/orders stripped.
+- Admin-side companion: `npm run migrate:backfill-users-view-detail` grants `users.viewDetail` to every role that already held `users.view`, so the split ships as a no-op and is narrowed per role afterwards.
+
 `2026-07-31` — **All three `/v1/promo-analytics*` endpoints rebuilt (no endpoint-count change; several BREAKING response-shape changes).** Seven defects, fixed together. **Treat every figure these endpoints returned before this date as suspect.**
 
 - **The date filter was inert.** `resolvePromoAnalyticsRange`'s parameter was named `range` while all six callers (three admin routes, three Norm routes) passed a `dateRange`-keyed object, so `input.range` was always `undefined`, the `?? "today"` default won, and **every** requested range silently returned AEST today. `tsc` could not see it (optional field + non-literal argument = no excess-property check). The parameter is now `dateRange` and every call site maps field-by-field. `yesterday` was separately DST-unsafe (`subDays` on a UTC instant = a fixed 24 h; two adjacent AEST midnights are 23 h or 25 h apart) and now uses calendar-date arithmetic. Guard: `npm run test:promo-analytics-range`.

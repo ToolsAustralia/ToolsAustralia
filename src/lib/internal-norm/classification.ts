@@ -1471,7 +1471,10 @@ export const NORM_ENDPOINTS = {
   },
   "users.get": {
     tier: "read",
-    requiredPermission: "users.view",
+    // Mirrors the admin route: the single-user record is `users.viewDetail`, a deeper read than
+    // the `users.view` roster. Norm reads bypass the per-permission grant, so this is
+    // documentation-of-record — but it must not drift from the admin gate (CLAUDE.md rule 10).
+    requiredPermission: "users.viewDetail",
     path: "/v1/users/:id",
     method: "GET",
     summary: "Single-user detail with statistics counts + membership signals: subscription (incl. cancelledAt, nextRenewalEntries — what the next renewal grants — and renewalLandsInCurrentDraw — whether that grant lands in the current draw or a future one) and partnerAccessRing (partner-catalogue access % + state). PII-safe: firstName + state only; email/lastName/mobile/address/savedPaymentMethods/orders array stripped",
@@ -1493,7 +1496,7 @@ export const NORM_ENDPOINTS = {
   },
   "users.deletion-summary": {
     tier: "read",
-    requiredPermission: "users.view",
+    requiredPermission: "users.viewDetail",
     path: "/v1/users/:id/deletion-summary",
     method: "GET",
     summary: "Counts-only preview of what would be deleted with a user (entry counts, payment-event count, winner-draw names) — no per-row PII",
@@ -1515,7 +1518,7 @@ export const NORM_ENDPOINTS = {
   },
   "users.charge-past-due.preview": {
     tier: "read",
-    requiredPermission: "users.view",
+    requiredPermission: "users.viewDetail",
     path: "/v1/users/:id/charge-past-due",
     method: "GET",
     summary: "Preview eligible past-due Stripe invoices for a single user (same eligibility rules as the bulk past-due job; no per-invoice email)",
@@ -1552,7 +1555,7 @@ export const NORM_ENDPOINTS = {
   },
   "users.payment-events.list": {
     tier: "read",
-    requiredPermission: "users.view",
+    requiredPermission: "users.viewDetail",
     path: "/v1/users/:id/payment-events",
     method: "GET",
     summary: "Paged payment events for one user with refund-match flag (route is user-scoped; no PII per row beyond the package metadata)",

@@ -590,6 +590,42 @@ A synthetic **"Other / Unknown"** row appears only when a classified subscriptio
 
 The following components are **no longer referenced** by `UserMetricsView` but were not deleted: `SignupSourceChart.tsx`, `MembershipLifecycleChart.tsx`, `DailyUserMetricsTable.tsx`, `ComparisonModeToggle.tsx`, `MajorDrawSelector.tsx`, `MetricsDateFilter.tsx`, `CustomDateRangeModal.tsx`. If you reintroduce date-scoped or comparison views, prefer reviving these over rebuilding.
 
+## Admin > Users — "Top 20%" filter + `users.viewDetail` row gating (2026-08-13)
+
+**a) Top 20% of major-draw entry holders is now a FILTER, not export-only.** A `Top holders`
+dropdown sits beside the `Major draw` one in
+[UsersManagement.tsx](../../src/components/admin/UsersManagement.tsx), backed by a new
+`UserFilters.segment` (`"top20MajorDraw" | ""`). It reuses the **same `segment` param name and the
+same segment id** the users export already used — so "filter the list, then export" and "export the
+segment" resolve to the identical people, which is the whole point of not coining a second name.
+
+Three things worth knowing:
+
+- **It composes; the export's version replaces.** The filter is pushed onto `$and` inside
+  `buildUserFilter` like every other `_id` constraint, so *top 20% in VIC on the Tradie package* is
+  a valid query. The **export** route's segment branch still deliberately ignores the other filters
+  (documented in its own header) — that asymmetry is pre-existing, not introduced here.
+- **Ties at the cut are included**, so the segment can return slightly over 20% of holders. With
+  100 holders and 15 people tied on the 20th-highest entry count, it returns 34. Cutting at exactly
+  20 would make membership depend on Mongo's document order, which is not stable.
+- **No active draw ⇒ empty result, not "all users".** The filter pushes `{ _id: { $in: [] } }`.
+  Falling back to unfiltered would read as the filter being ignored.
+
+The logic behind it lives in **one** place now — `resolveTop20MajorDrawSegment()` in
+[userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts). It previously existed as two
+hand-copies (the export route and `aggregateUserExport` for Norm) which had **already drifted** on
+the threshold read (`entryCounts[takeCount - 1]!.count` vs `?.count ?? 0`); adding a third copy for
+this filter would have meant three features labelled "top 20%" able to disagree about who that is.
+
+**b) Rows only open when the viewer holds `users.viewDetail`.** `users.view` now grants the roster
+only; the detail modal is a separate grant (see
+[auth/permissions-catalog.md](../auth/permissions-catalog.md#viewdetail--splitting-pii-depth-out-of-view-2026-08-13)).
+Without it the `<tr>` drops its `onClick` and `cursor-pointer` and carries a `title` explaining why,
+rather than opening a modal that then 403s on its own fetch.
+[`ClickableUserDisplay`](../../src/components/admin/ClickableUserDisplay.tsx) — the modal's *other*
+entry point, rendered on overview, promo analytics, affiliates and draw surfaces — falls back to
+plain text under the same check. Both are presentation only; the endpoints enforce independently.
+
 ## UsersManagement header (Admin > Users) — 2026-05-04
 
 [src/components/admin/UsersManagement.tsx](../../src/components/admin/UsersManagement.tsx) drives the Users / Metrics segmented control via URL param `?viewMode=users|metrics` and `handleViewModeChange()`. Header layout:

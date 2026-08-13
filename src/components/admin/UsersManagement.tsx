@@ -32,6 +32,7 @@ import {
   MapPin,
   BarChart3,
   Flame,
+  Crown,
 } from "lucide-react";
 import Image from "next/image";
 import { AdminUserListItem, UserFilters } from "@/types/admin";
@@ -198,6 +199,7 @@ export default function UsersManagement() {
     states: undefined,
     inActiveMajorDraw: undefined,
     streak: undefined,
+    segment: undefined,
     sortBy: "createdAt",
     sortOrder: "desc",
   });
@@ -305,6 +307,7 @@ export default function UsersManagement() {
       states: undefined,
       inActiveMajorDraw: undefined,
       streak: undefined,
+      segment: undefined,
       sortBy: "createdAt",
       sortOrder: "desc",
     });
@@ -320,7 +323,8 @@ export default function UsersManagement() {
       filters.role ||
       (filters.states?.length ?? 0) > 0 ||
       filters.inActiveMajorDraw ||
-      filters.streak
+      filters.streak ||
+      filters.segment
     );
   }, [filters]);
 
@@ -361,8 +365,18 @@ export default function UsersManagement() {
     );
   };
 
-  // Handle user row click
+  /**
+   * Opening a row is gated on `users.viewDetail`, not `users.view`.
+   *
+   * `view` grants this roster; `viewDetail` grants the modal behind it (email, mobile, address,
+   * payment history). A role can hold the first without the second. This is presentation only —
+   * `GET /api/admin/users/[id]` and the modal's sub-reads enforce the same permission server-side,
+   * so a crafted request gets a 403 regardless of what this component renders.
+   */
+  const canViewDetail = has("users.viewDetail");
+
   const handleUserClick = (user: AdminUserListItem) => {
+    if (!canViewDetail) return;
     openUserModal(user.id);
   };
 
@@ -654,6 +668,24 @@ export default function UsersManagement() {
               />
             </div>
 
+            {/*
+              Top 20% of entry holders in the ACTIVE major draw. Same `segment` param and same
+              resolver the export uses, so filtering here then exporting gives the identical set.
+              Ties at the cut are included, so this can return a little over 20% of holders.
+            */}
+            <div className="min-w-[100px] sm:min-w-[150px] lg:min-w-[170px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Top holders", icon: Crown },
+                  { value: "top20MajorDraw", label: "Top 20% of entries", icon: Crown },
+                ]}
+                value={filters.segment || ""}
+                onChange={(value) => updateFilter("segment", value)}
+                placeholder="Top holders"
+                active={!!filters.segment}
+              />
+            </div>
+
             {/* Items Per Page */}
             <div className="min-w-[70px] sm:min-w-[80px] lg:min-w-[90px]">
               <Dropdown
@@ -820,8 +852,14 @@ export default function UsersManagement() {
                     return (
                       <tr
                         key={user.id}
-                        className="hover:bg-gray-50 dark:hover:bg-neutral-800/80 cursor-pointer transition-colors even:bg-gray-50/30 dark:even:bg-neutral-800/40"
-                        onClick={() => handleUserClick(user)}
+                        className={`hover:bg-gray-50 dark:hover:bg-neutral-800/80 transition-colors even:bg-gray-50/30 dark:even:bg-neutral-800/40 ${
+                          canViewDetail ? "cursor-pointer" : ""
+                        }`}
+                        // Without `users.viewDetail` the row is inert: no handler, no pointer
+                        // cursor, and a title saying why — rather than a click that opens a
+                        // modal which then 403s on its own fetch.
+                        onClick={canViewDetail ? () => handleUserClick(user) : undefined}
+                        title={canViewDetail ? undefined : "You do not have permission to open customer details"}
                       >
                         <td className="px-2 sm:px-3 lg:px-6 py-2 sm:py-2.5 lg:py-4 whitespace-nowrap">
                           <div className="flex items-center">

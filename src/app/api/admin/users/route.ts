@@ -32,6 +32,9 @@ export async function GET(request: NextRequest) {
     const states = searchParams.getAll("state").map((s) => s.trim()).filter(Boolean);
     const inActiveMajorDraw = searchParams.get("inActiveMajorDraw") || "";
     const streak = searchParams.get("streak") || "";
+    // Same param name and same segment id the export route uses, so "filter then export" and
+    // "export the segment" resolve to the same people.
+    const segment = searchParams.get("segment") || "";
 
     const result = await listAdminUsers({
       page,
@@ -46,6 +49,7 @@ export async function GET(request: NextRequest) {
       states,
       inActiveMajorDraw,
       streak,
+      segment,
       sortBy,
       sortOrder,
     });
