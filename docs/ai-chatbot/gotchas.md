@@ -105,30 +105,28 @@ opposite side has to be reset to `auto` or `inset-x-0` keeps it pinned. Both var
 written as literals: Tailwind's JIT scans source text, so a class assembled from an expression
 (`lg:${side}-5`) is never generated.
 
-## The panel is DARK in both site themes (2026-08-13)
+## The panel follows the site theme (2026-08-13)
 
-The design handoff's Cobber is a dark panel (`#111318` shell, `#1b1f26` bubbles), and
-[`SupportChatWidget`](../../src/components/support-chat/SupportChatWidget.tsx) now matches it —
-**site-wide, not only on the promo pages**. Every `dark:` fork inside the panel is gone; there is
-one surface.
+The design handoff's Cobber is a dark panel (`#111318` shell, `#1b1f26` bubbles). It briefly
+shipped dark in BOTH themes on that basis, and that was wrong — on a light page it read as a black
+slab. [`SupportChatWidget`](../../src/components/support-chat/SupportChatWidget.tsx) keeps the
+handoff's SHAPE but forks its surface: light panel / gray-50 bubbles / dark ink in light mode, the
+handoff's dark palette under `.dark`. The accent header band, the avatar and the hazard stripe are
+theme-independent and unchanged.
 
-Why the fork went rather than gaining a third variant: the header band, the cobber avatar and the
-hazard stripe were already built for a dark ground, so the light theme was the odd one out — and
-because the panel floats over whatever page opened it, the same component read as two different
-products depending on where you clicked. The notice colours (amber for rate-limit / unavailable /
-captcha, red for a hard error) kept their dark-mode values for the same reason; their light values
-were unreadable on `#111318`.
+Two things worth knowing when editing it:
 
-Two consequences to keep in mind when editing this file:
-
-- **Do not reintroduce `dark:` variants here.** A `dark:` class inside the panel is now dead on a
-  light page and redundant on a dark one. `grep 'dark:' SupportChatWidget.tsx` should return
-  nothing.
-- **Accent-derived colours use `color-mix` via INLINE style, not Tailwind arbitrary values.** The
-  quick-reply label is the accent tinted toward white (the handoff's `#ffb3aa`, but per-brand) and
-  the send button's glow is the accent at 40% — both are inline with a plain-class fallback
-  (`text-white/90`). Tailwind arbitrary values containing `color-mix(...)` with nested commas are
-  fragile to parse; the inline form is not, and the fallback covers browsers without `color-mix`.
+- **Accent-derived colours cannot be plain Tailwind classes.** The quick-reply LABEL has to derive
+  from `--cob-acc` *and* fork by theme — the chip's ground is a 10% accent tint, near-white in
+  light mode and near-black in dark, so no single colour reads on both. That lives in
+  `.cob-quick-ink` (globals.css): a dark neutral by default, `color-mix(accent 30%, white)` under
+  `.dark`, with a flat fallback for browsers without `color-mix`. An inline style cannot fork by
+  theme; a Tailwind arbitrary value containing `color-mix(...)` with nested commas is fragile to
+  parse. The send button's glow is the accent at 40% and stays inline (no fork needed).
+- **The panel stacks ON the promo dock.** It carries `promo-dock-stacks-above`, which is inert
+  everywhere except under `html[data-promo-dock]`, where it swaps `bottom-24` for the dock's
+  measured height (`--promo-dock-h`, published by `PromoBottomDock`). Without it the panel floats
+  with a visible gap above the bar, because `bottom-24` was tuned for the old corner launcher.
 
 The welcome state is also no longer a centred splash: the greeting renders as Cobber's FIRST
 MESSAGE (avatar + bubble + "Just now"), and the quick replies are full-width rows under a

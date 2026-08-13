@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Gift, LayoutDashboard, LogIn, Menu, Moon, X } from "lucide-react";
@@ -163,6 +163,44 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
     return () => document.documentElement.removeAttribute("data-promo-dock");
   }, []);
 
+  /**
+   * Publish the dock's occupied height as `--promo-dock-h` so anything that must sit ON it
+   * rather than float over it can (today: the Cobber panel, which otherwise left a gap above
+   * the bar). It cannot be a constant — the height changes with the collapsed/expanded state,
+   * the breakpoint and the safe-area inset — and the TABS are the dock's highest point, so the
+   * measurement takes the topmost of the container and the tab, not just the bar.
+   *
+   * `useLayoutEffect` so the value lands before paint on the frame the bar expands; otherwise
+   * an open panel visibly jumps.
+   */
+  const dockRef = useRef<HTMLDivElement>(null);
+  const menuTabRef = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    const write = () => {
+      const tops: number[] = [];
+      if (dockRef.current) tops.push(dockRef.current.getBoundingClientRect().top);
+      if (menuTabRef.current) tops.push(menuTabRef.current.getBoundingClientRect().top);
+      if (tops.length === 0) return;
+      const height = Math.max(0, Math.round(window.innerHeight - Math.min(...tops)));
+      document.documentElement.style.setProperty("--promo-dock-h", `${height}px`);
+    };
+    write();
+    const observer = new ResizeObserver(write);
+    if (dockRef.current) observer.observe(dockRef.current);
+    window.addEventListener("resize", write);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", write);
+    };
+  }, [expanded, menuOpen]);
+
+  useEffect(
+    () => () => {
+      document.documentElement.style.removeProperty("--promo-dock-h");
+    },
+    []
+  );
+
   // Escape closes the drawer. Only bound while open.
   useEffect(() => {
     if (!menuOpen) return;
@@ -265,7 +303,7 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
         />
       )}
 
-      <div className="fixed inset-x-0 bottom-0 z-[60]">
+      <div ref={dockRef} className="fixed inset-x-0 bottom-0 z-[60]">
         <div className="relative">
           {/* ── Menu drawer ─────────────────────────────────────────── */}
           {menuOpen && (
@@ -367,6 +405,7 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
 
           {/* ── Corner tabs, attached to the bar's top edge ──────────── */}
           <button
+            ref={menuTabRef}
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}

@@ -127,6 +127,20 @@ reads as a second, competing page surface.
   event contract — so the same lazy `SupportChatWidget` every other page uses opens here. One chat
   implementation, one conversation state. The prototype's in-dock chat panel is a mock and was
   deliberately NOT ported.
+- **It follows the site theme** (white surface / black hairline / dark ink in light mode) via
+  Tailwind `dark:` variants rather than a JS read of `themeMode` — the theme bootstrap sets
+  `html.dark` before hydration, so the first paint is already right instead of painting light and
+  flipping. It also **publishes its measured height as `--promo-dock-h`** on `<html>`, which is
+  what lets the Cobber panel sit flush ON the bar (`.promo-dock-stacks-above`). Measured, not a
+  constant: the height changes with the collapsed/expanded state, the breakpoint and the
+  safe-area inset, and the TABS are the dock's highest point, so it takes the topmost of the
+  container and the tab.
+- **Light brand accents take dark ink.** Ryobi's neon and DeWalt's yellow swallow white text — the
+  CTA read as an empty lime slab on Ryobi. The dock reuses the exact test `PromoHero` and
+  `FloatingGetEntriesButton` run (`preferDarkBackground`, plus an explicit dewalt-slug check
+  because the store only sets the flag for Ryobi) so every promo CTA flips together. The same flag
+  picks the icon colour on the tabs' white plate, since an accent illegible on white is illegible
+  for the same reason.
 - **The old floaters stand down via CSS, not props.** Mounting the dock stamps `data-promo-dock` on
   `<html>`; one rule in `globals.css` hides anything carrying `.promo-dock-supersedes` and reserves
   the bar's height with `body { padding-bottom }`. Two of the four
