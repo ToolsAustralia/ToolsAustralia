@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { X } from "lucide-react";
 
 import ModalContainer from "../ui/ModalContainer";
+import PrizeImageViewer from "@/components/ui/PrizeImageViewer";
+import { Z_INDEX } from "@/constants/z-index";
 import FeaturePanel from "./FeaturePanel";
 import SpecCard from "./SpecCard";
 import TabBar from "./TabBar";
@@ -144,6 +146,37 @@ export default function PrizeSpecificationsModal({
     };
   }, [featureProp, prize, comboImage]);
 
+  /**
+   * Everything the fullscreen viewer pages through, in the order the sheet presents it: the
+   * combination, then each section's item photos. Deduped — the same render can appear in
+   * more than one section, and a repeated frame reads as a broken carousel.
+   */
+  const viewerImages = useMemo(() => {
+    const seen = new Set<string>([feature.image]);
+    const out = [feature.image];
+    for (const section of sections) {
+      for (const item of section.items) {
+        const src = item.image?.src;
+        if (src && !seen.has(src)) {
+          seen.add(src);
+          out.push(src);
+        }
+      }
+    }
+    return out;
+  }, [feature.image, sections]);
+
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const openViewerAt = (src: string) => {
+    const at = viewerImages.indexOf(src);
+    setViewerIndex(at >= 0 ? at : 0);
+  };
+
+  // A viewer left open behind a closed sheet would reopen with it.
+  useEffect(() => {
+    if (!isOpen) setViewerIndex(null);
+  }, [isOpen]);
+
   return (
     <ModalContainer
       isOpen={isOpen}
@@ -187,6 +220,7 @@ export default function PrizeSpecificationsModal({
               comboTitle={feature.title}
               stats={feature.stats}
               showCashBonus={feature.showCashBonus}
+              onOpenViewer={() => setViewerIndex(0)}
             />
           </aside>
 
@@ -199,6 +233,7 @@ export default function PrizeSpecificationsModal({
                 comboTitle={feature.title}
                 stats={feature.stats}
                 showCashBonus={feature.showCashBonus}
+                onOpenViewer={() => setViewerIndex(0)}
               />
             </div>
 
@@ -236,6 +271,7 @@ export default function PrizeSpecificationsModal({
                         key={`${item.name}-${index}`}
                         item={item}
                         isCash={activeSection?.id === CASH_SECTION_ID}
+                        onOpenImage={openViewerAt}
                       />
                     ))}
                   </div>
@@ -289,6 +325,22 @@ export default function PrizeSpecificationsModal({
           </button>
         </footer>
       </div>
+
+      {/* Fullscreen inspection over the sheet — the same viewer the builder card and the
+          mini-draw detail page use. `zIndex` MUST clear this modal: the viewer's default sits
+          just under the modal layer (right when it opens from the page), which would paint it
+          behind the sheet that opened it. */}
+      {viewerIndex !== null && (
+        <PrizeImageViewer
+          open
+          images={viewerImages}
+          index={viewerIndex}
+          onIndexChange={setViewerIndex}
+          onClose={() => setViewerIndex(null)}
+          title={feature.title}
+          zIndex={Z_INDEX.MODAL_NESTED}
+        />
+      )}
     </ModalContainer>
   );
 }

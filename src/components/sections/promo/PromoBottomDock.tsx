@@ -215,7 +215,10 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
     const foreman = getRecommendedSubscriptionPlan();
     return {
       name: foreman.name,
-      price: `$${foreman.price}/mo`,
+      // "/giveaway", not "/mo" — the promo surface prices a membership by the draw it buys you
+      // into, which is the unit this page is about. Matches the tier list in
+      // `PartnerBenefitsPromoSection`. One-time packs take no suffix: they are not recurring.
+      price: `$${foreman.price}/giveaway`,
       entries: foreman.metadata?.entriesCount ?? 0,
     };
   }, [packagesTab, oneTimePackages, oneTimePromoMultiplier, getRecommendedSubscriptionPlan]);

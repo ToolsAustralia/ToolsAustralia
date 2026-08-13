@@ -91,6 +91,36 @@ The `SupportChatWidget` "Workshop" redesign replaced the old fixed **orange** wi
 - **Semantics are FIXED regardless of brand** (do NOT wire these to the accent, or they vanish into a same-hue brand): **green** Online dot, **amber** notices (rate-limit / busy / captcha — heading amber, body neutral-ink for contrast), **red** hard error. On green/yellow brands the notices stay distinct via border + label, not colour alone.
 - Other changes: messages are **grouped** by run (one `CobberMini` avatar per assistant run, warm sand bubbles, `motion-safe` slide-in), a crafted **welcome/empty state**, slimmer header, and the existing **cobber.png** avatar is kept (DRY'd into `CobberMini` + `COBBER_AVATAR`). **Source-citation chips were designed but NOT built** — the citation data isn't streamed to the client yet (a separate backend task).
 
+## The panel is DARK in both site themes (2026-08-13)
+
+The design handoff's Cobber is a dark panel (`#111318` shell, `#1b1f26` bubbles), and
+[`SupportChatWidget`](../../src/components/support-chat/SupportChatWidget.tsx) now matches it —
+**site-wide, not only on the promo pages**. Every `dark:` fork inside the panel is gone; there is
+one surface.
+
+Why the fork went rather than gaining a third variant: the header band, the cobber avatar and the
+hazard stripe were already built for a dark ground, so the light theme was the odd one out — and
+because the panel floats over whatever page opened it, the same component read as two different
+products depending on where you clicked. The notice colours (amber for rate-limit / unavailable /
+captcha, red for a hard error) kept their dark-mode values for the same reason; their light values
+were unreadable on `#111318`.
+
+Two consequences to keep in mind when editing this file:
+
+- **Do not reintroduce `dark:` variants here.** A `dark:` class inside the panel is now dead on a
+  light page and redundant on a dark one. `grep 'dark:' SupportChatWidget.tsx` should return
+  nothing.
+- **Accent-derived colours use `color-mix` via INLINE style, not Tailwind arbitrary values.** The
+  quick-reply label is the accent tinted toward white (the handoff's `#ffb3aa`, but per-brand) and
+  the send button's glow is the accent at 40% — both are inline with a plain-class fallback
+  (`text-white/90`). Tailwind arbitrary values containing `color-mix(...)` with nested commas are
+  fragile to parse; the inline form is not, and the fallback covers browsers without `color-mix`.
+
+The welcome state is also no longer a centred splash: the greeting renders as Cobber's FIRST
+MESSAGE (avatar + bubble + "Just now"), and the quick replies are full-width rows under a
+"Pick a question to get started" rule. Five questions wrapped as pills in a 22rem panel produced a
+ragged block nobody scanned.
+
 ## The launcher is suppressed on promo prize pages (2026-08-13)
 
 `/promotions/[slug]` and the toolset landings mount

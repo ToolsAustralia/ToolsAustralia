@@ -92,8 +92,8 @@ function groupMessages(messages: UIMessage[]): MessageGroup[] {
 function DisclosureNotice({ onAcknowledge }: { onAcknowledge: () => void }) {
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-4">
-      <div className="rounded-2xl border border-[#E7D3B8] dark:border-[#463617] bg-[#F6ECDC] dark:bg-[#2C2314] p-4 text-sm text-gray-800 dark:text-gray-200 space-y-3">
-        <p className="flex items-center gap-2 font-extrabold text-[#7A5A2E] dark:text-[#E7C58C]">
+      <div className="rounded-2xl border border-white/[0.09] bg-[#1b1f26] p-4 text-sm text-[#c3c9d1] space-y-3">
+        <p className="flex items-center gap-2 font-extrabold text-[#E7C58C]">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             className="w-4 h-4 shrink-0"
@@ -116,13 +116,13 @@ function DisclosureNotice({ onAcknowledge }: { onAcknowledge: () => void }) {
             person.
           </li>
         </ul>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-[#8a9099]">
           Read our{" "}
           <a
             href="/privacy"
             target="_blank"
             rel="noopener noreferrer"
-            className="underline text-[#7A5A2E] dark:text-[#E7C58C] hover:opacity-80 transition-opacity"
+            className="underline text-[#E7C58C] hover:opacity-80 transition-opacity"
           >
             privacy policy
           </a>{" "}
@@ -131,7 +131,7 @@ function DisclosureNotice({ onAcknowledge }: { onAcknowledge: () => void }) {
         <button
           type="button"
           onClick={onAcknowledge}
-          className="w-full mt-1 rounded-xl bg-gray-900 hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white text-white text-sm font-semibold py-2 px-4 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+          className="w-full mt-1 rounded-xl bg-white text-gray-900 hover:bg-gray-100 text-sm font-semibold py-2.5 px-4 transition-colors focus:outline-none focus:ring-2 focus:ring-white/60"
         >
           Got it — start chatting
         </button>
@@ -161,7 +161,7 @@ function extractText(msg: UIMessage): string {
 // Small cobber avatar disc reused for each assistant turn.
 function CobberMini() {
   return (
-    <div className="mt-0.5 w-7 h-7 rounded-full overflow-hidden bg-[#F1DDC2] dark:bg-[#2C2314] ring-1 ring-black/5 dark:ring-white/10 shrink-0">
+    <div className="mt-0.5 w-7 h-7 rounded-full overflow-hidden bg-[#F1DDC2] ring-1 ring-white/10 shrink-0">
       <Image
         src={COBBER_AVATAR}
         alt={COBBER_ALT}
@@ -311,7 +311,11 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
           (ChatBubbleButton); this lazy component renders the panel only. */}
       {open && !dashboardSheetOpen && (
         <div
-          className={`fixed bottom-24 ${sideClass} w-[22rem] max-w-[calc(100vw-2.5rem)] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200 dark:border-neutral-700 overflow-hidden`}
+          // Dark in BOTH site themes (design handoff, 2026-08-13). Cobber sits over prize
+          // photography and dark page chrome far more often than not, and the old
+          // white/neutral-900 fork made it read as a different product depending on where you
+          // opened it. The accent band, avatar and hazard stripe already assumed a dark ground.
+          className={`fixed bottom-24 ${sideClass} w-[22rem] max-w-[calc(100vw-2.5rem)] bg-[#111318] rounded-2xl shadow-2xl flex flex-col border border-white/10 overflow-hidden`}
           style={{
             zIndex: Z_INDEX.MODAL_BASE - 1000,
             height: "min(560px, calc(100svh - 8rem))",
@@ -384,39 +388,64 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
           <div className={`flex-1 overflow-y-auto px-3.5 py-4 flex flex-col gap-4 ${disclosureAcked === false ? "hidden" : ""}`}>
             {/* Welcome / empty state — one block: big cobber, greeting, quick-reply chips */}
             {showIntro && !captchaRequired && (
-              <div className="flex flex-col items-center text-center px-2 pt-3 pb-1">
-                <div className="w-[76px] h-[76px] rounded-full overflow-hidden bg-[#F1DDC2] dark:bg-[#2C2314] ring-4 ring-[#F6ECDC] dark:ring-[#2C2314] shadow-sm mb-3">
-                  <Image
-                    src={COBBER_AVATAR}
-                    alt={COBBER_ALT}
-                    width={76}
-                    height={76}
-                    className="w-full h-full object-cover"
-                  />
+              /* The greeting arrives as Cobber's FIRST MESSAGE (design handoff), not as a
+                 centred splash. It is the same shape every later reply takes, so the panel
+                 opens already looking like a conversation rather than a landing page — and
+                 the quick replies below read as answers to it. */
+              <div className="flex flex-col">
+                <div className="flex items-start gap-2.5">
+                  <div className="h-[30px] w-[30px] shrink-0 overflow-hidden rounded-full bg-[#F1DDC2] ring-1 ring-white/10">
+                    <Image
+                      src={COBBER_AVATAR}
+                      alt={COBBER_ALT}
+                      width={30}
+                      height={30}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="rounded-[14px] rounded-bl-[4px] border border-white/[0.07] bg-[#1b1f26] px-3.5 py-3">
+                      <h3 className="text-sm font-extrabold text-white">
+                        G&apos;day, I&apos;m <span className="text-[var(--cob-acc)]">Cobber</span>
+                      </h3>
+                      <p className="mt-1.5 text-xs leading-[1.55] text-[#c3c9d1]">
+                        Your Tools Australia support mate. I can help with memberships, draws,
+                        entries and more. For complex issues I&apos;ll connect you to our team,
+                        who reply within one business day.
+                      </p>
+                    </div>
+                    <p className="mt-1 font-mono text-[9px] text-[#5d646e]">Just now</p>
+                  </div>
                 </div>
-                <h3 className="text-lg font-extrabold text-gray-900 dark:text-gray-100">
-                  G&apos;day, I&apos;m{" "}
-                  <span className="text-[var(--cob-acc)]">Cobber</span>
-                </h3>
-                <p className="mt-1 max-w-[32ch] text-[13.5px] text-gray-500 dark:text-gray-400">
-                  Your Tools Australia support mate. I can help with memberships,
-                  draws, entries and more. For complex issues I&apos;ll connect
-                  you to our team, who reply within one business day.
-                </p>
-                <p className="mt-4 mb-2 text-xs text-gray-500 dark:text-gray-400">
-                  Pick a question to get started
-                </p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {QUICK_REPLIES.map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => handleQuickReply(q)}
-                      disabled={isStreaming}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--cob-acc)] bg-[color-mix(in_srgb,var(--cob-acc)_12%,transparent)] text-[var(--cob-acc)] hover:bg-[var(--cob-acc)] hover:text-[var(--cob-acc-ink)] transition-colors disabled:opacity-50"
-                    >
-                      {q}
-                    </button>
-                  ))}
+
+                <div className="mt-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.11em] text-[#8a9099]">
+                      Pick a question to get started
+                    </span>
+                    <span className="h-px flex-1 bg-white/[0.08]" />
+                  </div>
+                  {/* Full-width rows, not wrapped pills: five questions in a 22rem panel
+                      wrapped into a ragged block nobody scanned. */}
+                  <div className="flex flex-col gap-1.5">
+                    {QUICK_REPLIES.map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => handleQuickReply(q)}
+                        disabled={isStreaming}
+                        className="flex items-center justify-between gap-2.5 rounded-[11px] border border-[color-mix(in_srgb,var(--cob-acc)_45%,transparent)] bg-[color-mix(in_srgb,var(--cob-acc)_10%,transparent)] px-3.5 py-2.5 text-left text-[11.5px] font-semibold leading-snug text-white/90 transition-colors hover:bg-[color-mix(in_srgb,var(--cob-acc)_18%,transparent)] disabled:opacity-50"
+                        // Inline, not a Tailwind arbitrary value: the label wants the ACCENT
+                        // tinted toward white (the handoff's #ffb3aa, but per-brand), and the
+                        // `text-white/90` class is the fallback if `color-mix` is unsupported.
+                        style={{ color: "color-mix(in srgb, var(--cob-acc) 30%, #ffffff)" }}
+                      >
+                        <span>{q}</span>
+                        <span aria-hidden className="font-extrabold text-[var(--cob-acc)]">
+                          ›
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -453,7 +482,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                       ) : (
                         <div
                           key={m.id}
-                          className={`w-fit max-w-full rounded-2xl first:rounded-tl-sm px-3 py-2 text-sm leading-relaxed bg-[#FBF6F0] dark:bg-[#2A211A] text-gray-900 dark:text-gray-100 border border-[#E7DCD1] dark:border-[#372B21] shadow-sm [&_a]:text-[var(--cob-acc)] ${BUBBLE_RISE}`}
+                          className={`w-fit max-w-full rounded-2xl first:rounded-tl-sm px-3 py-2 text-sm leading-relaxed bg-[#1b1f26] text-[#e6e9ee] border border-white/[0.07] shadow-sm [&_a]:text-[var(--cob-acc)] ${BUBBLE_RISE}`}
                         >
                           <ChatMarkdown>{m.text}</ChatMarkdown>
                         </div>
@@ -467,7 +496,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
             {isStreaming && (
               <div className="flex items-start gap-2">
                 <CobberMini />
-                <div className="bg-[#FBF6F0] dark:bg-[#2A211A] border border-[#E7DCD1] dark:border-[#372B21] rounded-2xl rounded-tl-sm px-3 py-2.5 shadow-sm">
+                <div className="bg-[#1b1f26] border border-white/[0.07] rounded-2xl rounded-tl-sm px-3 py-2.5 shadow-sm">
                   <div className="flex gap-1 items-center h-4">
                     <span
                       className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
@@ -490,16 +519,16 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                 / unavailable) is showing, so the user never sees a stacked
                 "something went wrong" over the actionable message. Red = hard error. */}
             {error && !captchaRequired && !isRateLimited && !unavailable && (
-              <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2.5 text-xs">
-                <p className="font-bold text-red-700 dark:text-red-300 mb-0.5">
+              <div className="rounded-xl border border-red-800 bg-red-950/40 px-3 py-2.5 text-xs">
+                <p className="font-bold text-red-300 mb-0.5">
                   That didn&apos;t go through
                 </p>
-                <span className="text-gray-700 dark:text-gray-200">
+                <span className="text-gray-200">
                   Something went wrong.{" "}
                 </span>
                 <button
                   onClick={clearError}
-                  className="underline font-semibold text-red-700 dark:text-red-300"
+                  className="underline font-semibold text-red-300"
                 >
                   Try again
                 </button>
@@ -508,16 +537,16 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
 
             {/* Service-unavailable notice (kill-switch / daily budget → 503). Amber. */}
             {unavailable && !captchaRequired && (
-              <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-3 text-xs">
-                <p className="font-bold text-amber-700 dark:text-amber-300 mb-1">
+              <div className="rounded-xl border border-amber-800 bg-amber-950/40 px-3 py-3 text-xs">
+                <p className="font-bold text-amber-300 mb-1">
                   Cobber&apos;s taking a short break
                 </p>
-                <p className="text-gray-700 dark:text-gray-200">
+                <p className="text-gray-200">
                   Our assistant is temporarily unavailable. Please try again shortly,
                   or{" "}
                   <a
                     href="/contact"
-                    className="underline font-semibold text-amber-700 dark:text-amber-300"
+                    className="underline font-semibold text-amber-300"
                   >
                     leave us a message
                   </a>{" "}
@@ -528,12 +557,12 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
 
             {/* Generative rate-limit notice — quick-replies still work (FAQ deflection is free). Amber. */}
             {isRateLimited && !captchaRequired && (
-              <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-3 text-xs">
-                <p className="font-bold text-amber-700 dark:text-amber-300 mb-1">
+              <div className="rounded-xl border border-amber-800 bg-amber-950/40 px-3 py-3 text-xs">
+                <p className="font-bold text-amber-300 mb-1">
                   You&apos;ve reached the chat limit for now
                   {rateLimitMinutesLeft !== null ? ` (resets in ~${rateLimitMinutesLeft} min)` : ""}.
                 </p>
-                <p className="text-gray-700 dark:text-gray-200">
+                <p className="text-gray-200">
                   Meanwhile, tap a question below for an instant answer:
                 </p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -542,7 +571,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                       key={q}
                       onClick={() => handleQuickReply(q)}
                       disabled={isStreaming}
-                      className="text-xs px-2.5 py-1 rounded-full border border-amber-400 dark:border-amber-600 text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-800/40 transition-colors disabled:opacity-50"
+                      className="text-xs px-2.5 py-1 rounded-full border border-amber-600 text-amber-200 bg-amber-900/40 hover:bg-amber-800/40 transition-colors disabled:opacity-50"
                     >
                       {q}
                     </button>
@@ -553,14 +582,14 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
 
             {/* hCaptcha gate. Amber. */}
             {captchaRequired && (
-              <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-3 text-xs">
+              <div className="rounded-xl border border-amber-800 bg-amber-950/40 px-3 py-3 text-xs">
                 {/* Defense-in-depth: never render the captcha for a member. The
                     server never 401s an authenticated session, so this branch only
                     fires for anonymous guests — but the !isAuthenticated guard means
                     a member never sees a captcha even if the state machine misfires. */}
                 {captchaSitekey && !isAuthenticated ? (
                   <>
-                    <p className="mb-2 font-bold text-amber-700 dark:text-amber-300">
+                    <p className="mb-2 font-bold text-amber-300">
                       Quick verification needed
                     </p>
                     <HCaptcha
@@ -578,11 +607,11 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                       onChalExpired={() => setCaptchaKey((k) => k + 1)}
                       onError={() => setCaptchaKey((k) => k + 1)}
                     />
-                    <p className="mt-1.5 text-gray-700 dark:text-gray-200">
+                    <p className="mt-1.5 text-gray-200">
                       Or{" "}
                       <a
                         href="/login"
-                        className="underline font-semibold text-amber-700 dark:text-amber-300"
+                        className="underline font-semibold text-amber-300"
                       >
                         sign in
                       </a>{" "}
@@ -590,11 +619,11 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                     </p>
                   </>
                 ) : (
-                  <p className="text-gray-700 dark:text-gray-200">
+                  <p className="text-gray-200">
                     Please{" "}
                     <a
                       href="/login"
-                      className="underline font-semibold text-amber-700 dark:text-amber-300"
+                      className="underline font-semibold text-amber-300"
                     >
                       sign in
                     </a>{" "}
@@ -610,10 +639,10 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
           {/* Input area — hidden until disclosure acknowledged */}
           <form
             onSubmit={(e) => void handleSubmit(e)}
-            className={`px-3.5 pb-3 pt-2.5 shrink-0 border-t border-gray-100 dark:border-neutral-800 ${disclosureAcked === false ? "hidden" : ""}`}
+            className={`px-3.5 pb-3 pt-2.5 shrink-0 border-t border-white/[0.09] ${disclosureAcked === false ? "hidden" : ""}`}
           >
             {/* Persistent PII micro-hint — always visible above the input */}
-            <p className="flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-gray-500 mb-1.5 leading-snug">
+            <p className="flex items-center gap-1.5 text-[10px] text-[#6b7280] mb-1.5 leading-snug">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="w-3 h-3 shrink-0"
@@ -646,7 +675,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                 }
                 disabled={inputBlocked}
                 rows={1}
-                className={`flex-1 resize-none text-sm bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[var(--cob-acc)] max-h-24 overflow-auto${inputBlocked ? " opacity-50 cursor-not-allowed" : ""}`}
+                className={`flex-1 resize-none text-sm bg-white/[0.05] border border-white/[0.12] rounded-full px-4 py-2.5 text-white placeholder-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[var(--cob-acc)] max-h-24 overflow-auto${inputBlocked ? " opacity-50 cursor-not-allowed" : ""}`}
                 style={{ lineHeight: "1.5" }}
               />
               {/* Stop button — shown while streaming (dark) */}
@@ -655,7 +684,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                   type="button"
                   onClick={stop}
                   aria-label="Stop generating"
-                  className="shrink-0 w-9 h-9 rounded-xl bg-gray-900 hover:bg-black text-white flex items-center justify-center transition-transform active:scale-95"
+                  className="shrink-0 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-transform active:scale-95"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -672,10 +701,11 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                   type="submit"
                   disabled={!input.trim() || inputBlocked}
                   aria-label="Send message"
-                  className="shrink-0 w-9 h-9 rounded-xl text-[var(--cob-acc-ink)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-transform active:scale-95"
+                  className="shrink-0 w-10 h-10 rounded-full text-[var(--cob-acc-ink)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-transform active:scale-95"
                   style={{
                     background:
                       "linear-gradient(180deg, var(--cob-acc), var(--cob-acc-deep))",
+                    boxShadow: "0 4px 14px color-mix(in srgb, var(--cob-acc) 40%, transparent)",
                   }}
                 >
                   <svg
@@ -704,7 +734,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                 type="button"
                 onClick={() => void handleDeleteHistory()}
                 disabled={deleteState === "deleting" || isStreaming}
-                className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="text-[11px] text-[#6b7280] hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {deleteState === "confirming"
                   ? "Tap again to confirm delete"

@@ -81,16 +81,11 @@ function PromoFAQsMobile() {
 
   return (
     <section className="bg-white px-3.5 py-6 dark:bg-neutral-950 lg:hidden">
-      <p
-        className="font-sans text-3xs font-bold uppercase tracking-[0.16em]"
-        style={{ color: theme.primary }}
-      >
-        Questions
-      </p>
-      <h2 className="mt-2 font-sans text-[22px] font-extrabold leading-[1.15] tracking-[-0.01em] text-gray-900 dark:text-white">
-        Everything you&apos;re
-        <br />
-        probably wondering
+      {/* Just "FAQ" (owner call). The handoff's "Questions / Everything you're probably
+          wondering" spent three lines and the top of the fold saying what one universally
+          understood word says. */}
+      <h2 className="font-sans text-[22px] font-extrabold leading-[1.15] tracking-[-0.01em] text-gray-900 dark:text-white">
+        FAQ
       </h2>
 
       <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 shadow-[0_2px_10px_rgba(0,0,0,0.04)] dark:border-white/10">

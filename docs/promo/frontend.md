@@ -14,7 +14,7 @@ components.
 |---|---|---|
 | How it works | [`GiveawayDetails.tsx`](../../src/components/sections/promo/GiveawayDetails.tsx) | Six equal logistics cards → a **3-step timeline** ("Pick a pack" / "Your entries land" / "Drawn live") + a 2×2 fact grid + the ABN/permit line |
 | Become a member | [`PartnerBenefitsPromoSection.tsx`](../../src/components/sections/promo/PartnerBenefitsPromoSection.tsx) | Eyebrow is now **"Become a member"** (was "Why Subscribe") in BOTH layouts. Mobile is a new pitch: accumulation chart, four benefit tiles, then the /membership hero's **tier deck** (Tradie/Foreman/Boss fan with `AccessRing`) |
-| FAQ | [`PromoFAQs.tsx`](../../src/components/sections/promo/PromoFAQs.tsx) | Flat edge-to-edge accordion ("Questions" / "Everything you're probably wondering") closed by an **"Ask Cobber"** row; desktop keeps the shared `FAQSection` |
+| FAQ | [`PromoFAQs.tsx`](../../src/components/sections/promo/PromoFAQs.tsx) | Flat edge-to-edge accordion under a plain **"FAQ"** heading, closed by an **"Ask Cobber"** row; desktop keeps the shared `FAQSection` |
 | Build your prize | [`prize-selection/*`](../../src/components/sections/promo/prize-selection/) | "What's in this prize" tiles now **swap the combo stage**; the stage opens the **fullscreen viewer**; the grid is 4 × 2 on a phone (was hidden below `sm`) |
 | Floating chrome | [`PromoBottomDock.tsx`](../../src/components/sections/promo/PromoBottomDock.tsx) | **New.** One bottom bar replaces three separate floaters |
 
@@ -59,6 +59,21 @@ look at none of them.
   has to be truthful about what is hidden. A single grid re-flowing 6 → 4 columns would keep 12
   cells and silently grow a third row on the narrowest screens — exactly what the two-row cap
   exists to prevent. Guarded by `npm run test:prize-builder`.
+- **The chip row is one row that scrolls, not a wrapping row.** The three chips (tool count,
+  storage, cash) land within ~6px of a 402px viewport's inner width, so they wrapped to a second
+  row that was 90% empty — and a longer storage name (GearWrench, Sidchrome) makes that worse.
+  `flex-nowrap overflow-x-auto` keeps one row and truncates nothing.
+
+**The same viewer is in the spec sheet.** "View full details" opens
+[`PrizeSpecificationsModal`](../../src/components/modals/PrizeSpecificationsModal/index.tsx), whose
+feature image and every spec-card photo now open `PrizeImageViewer` too — the sheet is where a
+visitor goes to actually read about a tool, so it was the one place you could see a photo and not
+enlarge it. Its image list is the combination followed by each section's item photos, **deduped**
+(the same render can appear in more than one section, and a repeated frame reads as a broken
+carousel). One gotcha worth knowing: the viewer's default `zIndex` sits just under the modal layer,
+which is right when it opens from the PAGE — a caller opening it from inside a modal must pass
+something above that modal (this one passes `Z_INDEX.MODAL_NESTED`) or the viewer paints behind the
+sheet that opened it.
 
 ### The bottom dock
 
@@ -84,7 +99,9 @@ reads as a second, competing page surface.
   tab comes from `MembershipSection`'s existing `membershipTabChanged` broadcast, seeded from
   `?packages=` — the same channel `PromoBanner` already listens on. The draw date is on the trust
   bar and the combo card; repeating it in the dock spent the most valuable line on the page
-  saying nothing new.
+  saying nothing new. A membership is priced **"/giveaway"**, matching the tier list in
+  `PartnerBenefitsPromoSection` — this surface sells the draw a membership buys you into, not a
+  billing period. One-time packs take no suffix; they are not recurring.
 
 - **Cobber is the real Cobber.** The right tab dispatches `openSupportChat()` — the shared window
   event contract — so the same lazy `SupportChatWidget` every other page uses opens here. One chat

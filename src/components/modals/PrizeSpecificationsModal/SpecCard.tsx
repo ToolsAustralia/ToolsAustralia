@@ -12,6 +12,8 @@ interface SpecCardProps {
    * as "this box is worth $5,000". Everything else gets a neutral no-photo placeholder.
    */
   isCash?: boolean;
+  /** Open the fullscreen viewer on this item's photo. Only ever called when it has one. */
+  onOpenImage?: (src: string) => void;
 }
 
 /**
@@ -22,10 +24,13 @@ interface SpecCardProps {
  * whole sheet re-tints with the selected power toolset without a single prop
  * being threaded down.
  */
-export default function SpecCard({ item, isCash = false }: SpecCardProps) {
+export default function SpecCard({ item, isCash = false, onOpenImage }: SpecCardProps) {
   const specifications = item.specifications ?? [];
   const includes = item.includes ?? [];
   const hasColumns = specifications.length > 0 || includes.length > 0;
+  const imageSrc = item.image?.src ?? null;
+  const canZoom = Boolean(imageSrc && onOpenImage);
+  const Tile = canZoom ? "button" : "div";
 
   return (
     <article className="rounded-[14px] border border-[var(--pbc-border)] bg-[var(--pbc-tile-bg)] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,.04)]">
@@ -33,14 +38,23 @@ export default function SpecCard({ item, isCash = false }: SpecCardProps) {
         {/* Three tile states: the product photo, the cash section's green "$5K" plate, and
             a neutral dashed placeholder for catalogue items that simply have no photo yet
             (plenty of storage boxes, chargers and battery kits don't). */}
-        <div
+        <Tile
+          {...(canZoom
+            ? {
+                type: "button" as const,
+                onClick: () => onOpenImage?.(imageSrc as string),
+                "aria-label": `View ${item.image?.alt ?? item.name} full screen`,
+              }
+            : {})}
           className={cn(
             "flex h-[84px] w-[84px] flex-none items-center justify-center overflow-hidden rounded-xl border",
             item.image
               ? "border-[var(--pbc-tile-border)] bg-white"
               : isCash
                 ? "border-[#18a94d]/30 bg-[#18a94d]/[0.12]"
-                : "border-dashed border-[var(--pbc-border)] bg-[var(--pbc-chip-bg)]"
+                : "border-dashed border-[var(--pbc-border)] bg-[var(--pbc-chip-bg)]",
+            canZoom &&
+              "cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pbc-accent)]"
           )}
         >
           {item.image ? (
@@ -58,7 +72,7 @@ export default function SpecCard({ item, isCash = false }: SpecCardProps) {
           ) : (
             <NoPhotoPlaceholder />
           )}
-        </div>
+        </Tile>
 
         <div className="min-w-0 flex-1">
           <h4 className="font-poppins text-sm font-bold leading-tight text-[var(--pbc-text)]">
