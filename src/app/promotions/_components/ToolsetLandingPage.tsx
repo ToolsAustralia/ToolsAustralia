@@ -9,6 +9,9 @@ import BrandsShowcase from "@/components/sections/promo/BrandsShowcase";
 import FloatingGetEntriesButton from "@/components/sections/promo/FloatingGetEntriesButton";
 import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
 import PromoTrustBar from "@/components/sections/promo/PromoTrustBar";
+// Phone-only chrome. Below `lg` this one bar owns the menu, Cobber and the entry CTA, and the
+// three separate floating controls below stand down there. See PromoBottomDock.tsx.
+import PromoBottomDock from "@/components/sections/promo/PromoBottomDock";
 
 import {
   getDefaultPrizeForToolsetSlug,
@@ -227,6 +230,7 @@ export default async function ToolsetLandingPage({ toolsetSlug }: ToolsetLanding
               </Suspense>
             </main>
 
+            <PromoBottomDock prizeSlug={defaultPrizeSlug} />
             <FloatingGetEntriesButton />
             <Suspense fallback={null}>
               <PromotionsAccountButton />

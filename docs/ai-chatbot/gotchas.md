@@ -91,6 +91,30 @@ The `SupportChatWidget` "Workshop" redesign replaced the old fixed **orange** wi
 - **Semantics are FIXED regardless of brand** (do NOT wire these to the accent, or they vanish into a same-hue brand): **green** Online dot, **amber** notices (rate-limit / busy / captcha — heading amber, body neutral-ink for contrast), **red** hard error. On green/yellow brands the notices stay distinct via border + label, not colour alone.
 - Other changes: messages are **grouped** by run (one `CobberMini` avatar per assistant run, warm sand bubbles, `motion-safe` slide-in), a crafted **welcome/empty state**, slimmer header, and the existing **cobber.png** avatar is kept (DRY'd into `CobberMini` + `COBBER_AVATAR`). **Source-citation chips were designed but NOT built** — the citation data isn't streamed to the client yet (a separate backend task).
 
+## The launcher is suppressed on promo prize pages below `lg` (2026-08-13)
+
+`/promotions/[slug]` and the toolset landings mount
+[`PromoBottomDock`](../../src/components/sections/promo/PromoBottomDock.tsx) on phones — one bar that
+owns the bottom band. Its **right tab is the Cobber launcher there**, so the corner bubble would be a
+duplicate affordance. [`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx)
+therefore carries `promo-dock-supersedes`, a class that is **inert everywhere else** and only bites
+under `html[data-promo-dock]` below 1024px (rule in `globals.css`; full write-up in
+[shared-ui/gotchas.md](../shared-ui/gotchas.md) § `.promo-dock-supersedes`).
+
+Two things that make this safe rather than a second chat surface:
+
+- **The dock does not implement chat.** Its tab calls `openSupportChat()` — the same
+  `OPEN_SUPPORT_CHAT_EVENT` contract the dashboard's Ask Cobber card uses — which trips the
+  `hasOpened` latch in [`SupportChatWidgetMount`](../../src/components/support-chat/SupportChatWidgetMount.tsx)
+  and opens the one real lazy panel. Conversation state, budget and audit are untouched.
+- **Only the LAUNCHER is hidden, never the panel.** The panel is a separate element at
+  `Z_INDEX.MODAL_BASE - 1000`, well above the dock's `z-60`.
+
+This is the same shape as the existing `/my-account` suppression (the dashboard's Ask Cobber card is
+the entry point there and the bubble is hidden) — a surface that provides its own Cobber affordance
+hides the bubble and opens the panel by event. Any future surface doing this must do BOTH; hiding
+the bubble without an event-based opener leaves the page with no way to reach support.
+
 ## Launcher placement — collision-aware, not per-page hardcoding (2026-07-07)
 
 The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (the draw countdown banner `FloatingCountdownBanner`, the promotions "get entries" bar `FloatingGetEntriesButton`, the upsell gift `FloatingGiftIcon`). Researched pattern (Intercom/Zendesk/Material): keep a persistent corner FAB and **lift it above** the obstacle — never hide it, never move it into a menu.

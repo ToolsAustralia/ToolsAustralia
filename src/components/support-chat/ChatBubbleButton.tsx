@@ -45,7 +45,11 @@ export default function ChatBubbleButton({ side, open, onToggle }: ChatBubbleBut
     <button
       onClick={onToggle}
       aria-label={open ? "Close chat" : "Open AI support chat"}
-      className={`fixed bottom-5 ${sideClass} w-14 h-14 rounded-full text-[var(--cob-acc-ink)] shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--cob-acc)] focus:ring-offset-2`}
+      // `promo-dock-supersedes` is inert everywhere except a promo prize page below `lg`,
+      // where PromoBottomDock stamps `data-promo-dock` on <html> and its Cobber tab becomes
+      // the launcher (it opens THIS panel via the shared openSupportChat event). See
+      // globals.css and PromoBottomDock.tsx.
+      className={`promo-dock-supersedes fixed bottom-5 ${sideClass} w-14 h-14 rounded-full text-[var(--cob-acc-ink)] shadow-lg flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--cob-acc)] focus:ring-offset-2`}
       style={{
         zIndex: Z_INDEX.MODAL_BASE - 1000,
         background: "linear-gradient(180deg, var(--cob-acc), var(--cob-acc-deep))",

@@ -105,7 +105,9 @@ export default function PromotionsAccountButton() {
   return (
     <div
       ref={rootRef}
-      className="fixed bottom-5 left-5 z-40 transition-[bottom] duration-300 ease-out"
+      // `promo-dock-supersedes`: hidden below `lg` while PromoBottomDock is mounted — its
+      // drawer carries the same three items there. See globals.css.
+      className="promo-dock-supersedes fixed bottom-5 left-5 z-40 transition-[bottom] duration-300 ease-out"
       style={dodgeBottom > 0 ? { bottom: dodgeBottom } : undefined}
     >
       {/* The 320px radial scrim that used to sit here was REMOVED on 2026-08-11 (owner call).

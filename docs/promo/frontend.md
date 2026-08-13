@@ -1,5 +1,67 @@
 # Promo — Frontend
 
+## `/promotions/[slug]` mobile redesign (2026-08-13)
+
+Built from the design handoff at `Milwaukee promotions page redesign/design_handoff_promotions_page/`
+(mobile prototype, 402×874). **Scope is deliberately `< lg` only** — desktop keeps every surface it
+had. Each rebuilt section renders its phone layout under `lg:hidden` and its existing desktop layout
+under `hidden lg:*`, in the SAME component, so there is one file to read per section and no route
+fork. Both promo page types get all of it: `[slug]/page.tsx` and
+[`ToolsetLandingPage`](../../src/app/promotions/_components/ToolsetLandingPage.tsx) compose the same
+components.
+
+| Surface | File | What changed on mobile |
+|---|---|---|
+| How it works | [`GiveawayDetails.tsx`](../../src/components/sections/promo/GiveawayDetails.tsx) | Six equal logistics cards → a **3-step timeline** ("Pick a pack" / "Your entries land" / "Drawn live") + a 2×2 fact grid + the ABN/permit line |
+| Become a member | [`PartnerBenefitsPromoSection.tsx`](../../src/components/sections/promo/PartnerBenefitsPromoSection.tsx) | Eyebrow is now **"Become a member"** (was "Why Subscribe") in BOTH layouts. Mobile is a new pitch: accumulation chart, four benefit tiles, then the /membership hero's **tier deck** (Tradie/Foreman/Boss fan with `AccessRing`) |
+| FAQ | [`PromoFAQs.tsx`](../../src/components/sections/promo/PromoFAQs.tsx) | Flat edge-to-edge accordion ("Questions" / "Everything you're probably wondering") closed by an **"Ask Cobber"** row; desktop keeps the shared `FAQSection` |
+| Floating chrome | [`PromoBottomDock.tsx`](../../src/components/sections/promo/PromoBottomDock.tsx) | **New.** One bottom bar replaces three separate floaters below `lg` |
+
+The hero's own `ENTER NOW` button is **retained** (owner call — the prototype dropped it). It sits at
+the bottom of the hero box, ~400–550px down a phone viewport, so it never collides with the dock
+pinned at the viewport bottom.
+
+The old five-icon strip under the mobile benefits copy is **deleted**: it mixed one-time packs
+(Apprentice, Power) into what is a MEMBERSHIP pitch, which is the wrong offer for that section.
+
+### Every number is derived, none typed in
+
+The mobile "Become a member" block reads `useMemberships()` + `useResolvedMultiplier("membership-packages", "display")`,
+takes partner access from `getPartnerCatalogAccessPercentForPlanId` and the offer count from
+`PARTNER_CATALOG_TOTAL`. This is not tidiness: the block it replaced hard-coded "15 / 40 / 100
+entries", so the moment a promo went live it contradicted the packages card one screen above it —
+the exact failure [`MembershipHero`](../../src/components/sections/membership/MembershipHero.tsx)
+documents. The climb chart is `month1 = base × multiplier`, then `+base` per cycle (Foreman on a 5×
+promo: 200/240/280/320/360) — the multiplier applies to the month it runs, not forever.
+
+### The bottom dock
+
+`PromoBottomDock` owns the whole bottom band below `lg`: menu tab (left), Cobber tab (right), the
+visitor's live build in the middle, and the entry CTA with its `X{n}` multiplier badge on the right.
+The drawer carries My Account / Mini Draws (authenticated only), a Dark mode switch, and a Log in
+button for guests. It stays dark in both site themes — it sits over prize photography at every
+scroll depth, and a light bar there reads as a second, competing page surface.
+
+- **Cobber is the real Cobber.** The right tab dispatches `openSupportChat()` — the shared window
+  event contract — so the same lazy `SupportChatWidget` every other page uses opens here. One chat
+  implementation, one conversation state. The prototype's in-dock chat panel is a mock and was
+  deliberately NOT ported.
+- **The old floaters stand down via CSS, not props.** Mounting the dock stamps `data-promo-dock` on
+  `<html>`; one media-scoped rule in `globals.css` hides anything carrying `.promo-dock-supersedes`
+  below `lg` and reserves the bar's height with `body { padding-bottom }`. Two of the four
+  superseded controls ([`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx) and
+  [`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx)) are mounted by the
+  promotions **layout**, not by the page, so a prop could never reach them. `/promotions` (the
+  Spotlight gallery) mounts no dock, so nothing there changes.
+- **The live build arrives by event, not by URL.** `PrizeShowcase` owns the two lanes locally and
+  mirrors them to the URL with `history.replaceState`, which fires **no** event — so the dock cannot
+  read the URL and stay in sync. The builder publishes each change through `publishPrizeSelection()`
+  in [`prize-selection/utils.ts`](../../src/components/sections/promo/prize-selection/utils.ts) and
+  the dock subscribes. The last value is **retained** in that module because the dock renders after
+  `<main>` and its effect therefore runs after the builder's first publish; without the retained
+  snapshot the bar would sit on its fallback until the visitor happened to touch a reel. The dock
+  also takes a `prizeSlug` prop so the FIRST paint already names the page's own combination.
+
 ## /promotions — "Spotlight" showroom (2026-07-22) — SUPERSEDES the filter-grid gallery
 
 Rewritten to the design handoff at `claudeDesign/design_handoff_prize_gallery_spotlight/`. The

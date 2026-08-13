@@ -1,5 +1,26 @@
 # Promo — Gotchas
 
+## `replaceState` fires no event, so the URL cannot be a live channel (2026-08-13)
+
+The prize builder mirrors its two lanes into `?toolbox=` / `?toolset=` with
+`window.history.replaceState` — deliberately, because `router.replace` resets scroll (see
+[frontend.md](./frontend.md)). But `replaceState` dispatches **nothing**: no `popstate`, no
+`hashchange`, and `useSearchParams()` does not refresh from it. Anything outside the builder that
+must REACT to the build (today: `PromoBottomDock`) therefore cannot read the URL — it would show
+whatever the build was at mount and never move again.
+
+The builder publishes instead: `publishPrizeSelection()` in
+[`prize-selection/utils.ts`](../../src/components/sections/promo/prize-selection/utils.ts) fires a
+`CustomEvent` **and retains the last snapshot in the module**. The retention is the part that is
+easy to skip and breaks silently: subscribers can mount AFTER the builder (the dock renders below
+`<main>`, so its effect runs second), so an event-only channel means the first publish is missed and
+the subscriber sits on its fallback until the visitor happens to touch a reel — which looks like
+"the dock is just wrong" rather than "the dock missed one event". Seed from
+`getPublishedPrizeSelection()` before subscribing.
+
+Do NOT "fix" this by lifting the builder's state into a store: `PrizeShowcase` is embedded on the
+homepage and `/my-account` too, and none of those surfaces want the coupling.
+
 ## Promo-visit recording is a dep-injected functional core
 
 `recordPromoVisit` (`src/utils/promo-analytics/record-promo-visit.ts`) holds the visit-recording orchestration: dedup (when an anonymousId is present) → resolve UTM/referrer attribution → persist. Its side effects (`hasRecentVisit`, `recordVisit`) are **injected** by the caller — the `/api/tracking/promo-page-visit` route wires the real Mongo-backed deps inside `after()` (the injected `hasRecentVisit` calls `connectDB()` first — mongoose never auto-connects, and on a cold instance a bare query would buffer ~10s and lose the visit). This keeps the route thin and makes the logic unit-testable with no DB (`npm run test:promo-visit`). Dedup **fails open**: if the dedup read throws (timeout / connection error), the visit is recorded anyway — at worst one duplicate row inside the 60s window beats a silently dropped visit. UTM resolution order is (since 2026-07-31): **first-touch `_ta_attr` cookie** → explicit body value → URL `utm_*` → (utmCampaign only) `fb_<campaign_id>` fallback for Facebook ads that omit `utm_campaign`. The raw slug is passed to `recordVisit` (which lowercases on write); the dedup query uses the normalized slug. See [docs/tracking/gotchas.md](../tracking/gotchas.md) for why it runs in `after()`.

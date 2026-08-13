@@ -42,6 +42,7 @@ import {
   getToolset,
   parseToolboxQueryParam,
   parseToolsetQueryParam,
+  publishPrizeSelection,
   resolveAccent,
   toPrizeSlug,
   type ToolboxBrand,
@@ -336,6 +337,13 @@ function PrizeShowcase({
   useEffect(() => {
     setStoreSlug(activeSlug);
   }, [activeSlug, setStoreSlug]);
+
+  // Publish the build to page chrome outside this subtree — today the mobile bottom dock,
+  // which shows the visitor what they're about to enter for. Runs on mount too, so a dock
+  // that never sees a reel click still opens on the right combination.
+  useEffect(() => {
+    publishPrizeSelection({ toolbox: selection.toolbox, toolset: selection.toolset, isCash });
+  }, [selection.toolbox, selection.toolset, isCash]);
 
   const rememberToolbox = (id: ToolboxBrand) => {
     try {
