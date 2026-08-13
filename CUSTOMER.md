@@ -261,6 +261,14 @@ These exist on the same collection but are RBAC / service-account machinery ([Us
 | `tokenVersion` | number (def 0) | Permission-change counter forcing JWT re-auth |
 | `role: "admin"` | (see §2a) | Legacy admin marker — not a customer value |
 
+**Who internally can read a customer's record (2026-08-13).** Reading a customer's personal data
+is now a *separate* staff grant from browsing the customer list. `users.view` gates the roster
+(name, membership, status, entries); the new **`users.viewDetail`** gates the detail modal and its
+reads — email, mobile, address, payment history, activity, deletion summary. Previously one
+permission granted both, so any staff role that could see the customer list could read every
+customer's contact details. Nothing about what is *stored* or *shared externally* changed — this
+narrows internal access only. See [docs/auth/permissions-catalog.md](docs/auth/permissions-catalog.md#viewdetail--splitting-pii-depth-out-of-view-2026-08-13).
+
 ---
 
 ## 3. Customer lifecycle & states

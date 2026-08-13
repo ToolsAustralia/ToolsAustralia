@@ -108,8 +108,12 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
 
   // Users
   "users.view": {
-    label: "View",
-    description: "Browse the customer list, search, open user detail, see payment history and deletion summary.",
+    label: "View list",
+    description: "Browse and search the customer list — name, membership, status, entries. Does NOT open a customer's detail modal; that needs 'View detail'.",
+  },
+  "users.viewDetail": {
+    label: "View detail",
+    description: "Open a customer's detail modal — email, mobile, address, payment history, activity, and deletion summary. Grant 'View list' without this for a role that triages the roster but must not read personal data.",
   },
   "users.edit": {
     label: "Edit",

@@ -14,8 +14,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/api-auth-permissions";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import MajorDraw from "@/models/MajorDraw";
-import { buildUserFilter } from "@/utils/admin/userFilterBuilder";
+import {
+  buildUserFilter,
+  resolveTop20MajorDrawSegment,
+  TOP20_MAJOR_DRAW_SEGMENT,
+} from "@/utils/admin/userFilterBuilder";
 import { validateFieldKeys, getDefaultFields } from "@/services/admin/userExportFields";
 import {
   transformUsersForExport,
@@ -66,35 +69,19 @@ export async function GET(request: NextRequest) {
     const segment = searchParams.get("segment") || "";
     let users: UserLeanDocument[];
 
-    if (segment === "top20MajorDraw") {
+    if (segment === TOP20_MAJOR_DRAW_SEGMENT) {
       // --- Top 20% active major draw entry holders ---
-      const currentMajorDraw = await MajorDraw.findOne({ status: "active" }).lean();
-      if (!currentMajorDraw?.entries || currentMajorDraw.entries.length === 0) {
+      // Shared resolver (ties included — see resolveTop20MajorDrawSegment). This block used to
+      // hand-roll the same maths, and the copy in `aggregateUserExport` had already drifted from
+      // it, so the Norm aggregate and this CSV could disagree about who "top 20%" meant.
+      const top20 = await resolveTop20MajorDrawSegment();
+      if (!top20) {
         return NextResponse.json(
           { error: "No active major draw found, or no entries in the current draw" },
           { status: 404 }
         );
       }
-
-      const countMap = new Map<string, number>();
-      for (const entry of currentMajorDraw.entries as Array<{
-        userId: { toString: () => string } | string;
-        totalEntries?: number;
-        quantity?: number;
-      }>) {
-        const userId = typeof entry.userId === "string" ? entry.userId : entry.userId.toString();
-        const count = entry.totalEntries || entry.quantity || 0;
-        if (count > 0) {
-          countMap.set(userId, (countMap.get(userId) || 0) + count);
-        }
-      }
-      const entryCounts = Array.from(countMap.entries()).map(([userId, count]) => ({ userId, count }));
-
-      // Sort by count descending. Take top 20%, including ALL users tied at the threshold.
-      entryCounts.sort((a, b) => b.count - a.count);
-      const takeCount = Math.max(1, Math.ceil(entryCounts.length * 0.2));
-      const thresholdCount = entryCounts[takeCount - 1]!.count;
-      const topUserIds = entryCounts.filter((e) => e.count >= thresholdCount).map((e) => e.userId);
+      const topUserIds = top20.userIds;
 
       if (topUserIds.length === 0) {
         return NextResponse.json(
@@ -149,7 +136,7 @@ export async function GET(request: NextRequest) {
     const dateStr = formatDateInAEST(new Date(), "yyyy-MM-dd");
     const timeStr = formatDateInAEST(new Date(), "HHmmss");
     const filterSummary: string[] = [];
-    if (segment === "top20MajorDraw") {
+    if (segment === TOP20_MAJOR_DRAW_SEGMENT) {
       filterSummary.push("top20-major-draw");
     } else {
       const sub = searchParams.get("subscriptionStatus") || "";

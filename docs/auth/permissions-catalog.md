@@ -52,6 +52,40 @@ When deciding whether to add a sub-action instead of reusing `edit`, ask: *would
 | `selectWinner` | Irreversible prize/winner declaration | `majorDraw.selectWinner`, `abTesting.selectWinner` |
 | `processPayout` | Money **out** to a third party | `affiliates.processPayout` |
 | `end` | Permanently closing a live entity | `promos.end` |
+| `viewDetail` | A **deeper read** of the same entity — personal data behind a list | `users.viewDetail` |
+
+### `viewDetail` — splitting PII depth out of `view` (2026-08-13)
+
+The sub-action test above ("would I trust them to flip a toggle but not do this thing?") has a
+read-side twin: **would I trust this person to see the list but not the record behind it?**
+
+`users.view` used to gate both the customer roster *and* the detail modal, so any role that could
+browse customers could also read every customer's email, mobile, address and payment history —
+the catalog simply could not express a triage role. `users.viewDetail` now gates the modal:
+
+| Permission | Grants |
+|---|---|
+| `users.view` | The customer list + search: name, membership, status, entries |
+| `users.viewDetail` | `GET /api/admin/users/[id]` and the modal-only reads — `payment-events`, `deletion-summary`, `charge-past-due` preview |
+
+Two things that make this different from adding a normal permission:
+
+1. **It is a REMOVAL for existing roles, not an addition.** New catalog actions are deliberately
+   not auto-granted to custom roles (step 4 above), which is right when a permission unlocks
+   something new — and wrong when one is carved OUT of an existing grant, because the deploy then
+   silently revokes access staff already had. `npm run migrate:backfill-users-view-detail` grants
+   it to every role that already held `users.view`, so the split ships as a no-op and is narrowed
+   per role afterwards. **Any future `viewDetail`-style split needs the same backfill.**
+2. **The backfill must NOT live in `migrate-seed-staff-roles.ts`.** That script is re-runnable;
+   this operation is not. Once an operator deliberately removes `users.viewDetail` from a role,
+   that role still holds `users.view`, so a re-seed would match it again and silently re-grant the
+   permission they just revoked. It is a dated one-shot under `scripts/migrations/` for that reason.
+
+UI gating alone is not the boundary: both modal entry points (the users table row and
+`ClickableUserDisplay`, which appears on overview / promo analytics / affiliates / draws) check
+`users.viewDetail`, but the endpoints enforce it independently, so a crafted request still 403s.
+The Norm registry entries that mirror those routes (`users.get`, `users.deletion-summary`,
+`users.payment-events.list`, `users.charge-past-due.preview`) moved in lockstep (CLAUDE.md rule 10).
 
 ## Areas
 

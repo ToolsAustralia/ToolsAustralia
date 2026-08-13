@@ -17,6 +17,8 @@ import {
   buildUserFilter,
   getActiveSubscriptionFilter,
   getEverPaidUserFilter,
+  resolveTop20MajorDrawSegment,
+  TOP20_MAJOR_DRAW_SEGMENT,
 } from "@/utils/admin/userFilterBuilder";
 import { resolvePartnerAccessRing, type PartnerAccessRing } from "@/utils/partner-discounts/partner-access-ring";
 import {
@@ -45,6 +47,12 @@ export interface ListUsersArgs {
   inActiveMajorDraw?: string;
   /** Membership Streak: "none" = streak 0/absent; a number string = at least N consecutive paid renewals */
   streak?: string;
+  /**
+   * Named cohort. Only `top20MajorDraw` today — the top 20% of entry holders in the ACTIVE major
+   * draw, ties included. Same segment id and same resolver the export uses, so the filtered list
+   * and the exported CSV are always the same people.
+   */
+  segment?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
 }
@@ -130,6 +138,7 @@ export async function listAdminUsers(args: ListUsersArgs): Promise<ListUsersResu
     states: args.states ?? [],
     inActiveMajorDraw: args.inActiveMajorDraw ?? "",
     streak: args.streak ?? "",
+    segment: args.segment ?? "",
   });
 
   const isComputedFieldSort = COMPUTED_SORT_FIELDS.has(sortBy);
@@ -591,26 +600,14 @@ export async function aggregateUserExport(
     subscription?: { packageId?: string; status?: string; isActive?: boolean };
   }>;
 
-  if (args.segment === "top20MajorDraw") {
-    const currentMajorDraw = await MajorDraw.findOne({ status: "active" }).lean();
-    if (!currentMajorDraw?.entries || currentMajorDraw.entries.length === 0) {
-      return { totalCount: 0, byState: [], byPackage: [], bySubscriptionStatus: [], segment: "top20MajorDraw" };
+  if (args.segment === TOP20_MAJOR_DRAW_SEGMENT) {
+    // Shared resolver — this used to be a hand-copy of the export route's block, and the two had
+    // already drifted on the threshold read. See resolveTop20MajorDrawSegment for the tie rule.
+    const top20 = await resolveTop20MajorDrawSegment();
+    if (!top20) {
+      return { totalCount: 0, byState: [], byPackage: [], bySubscriptionStatus: [], segment: TOP20_MAJOR_DRAW_SEGMENT };
     }
-    const countMap = new Map<string, number>();
-    for (const entry of currentMajorDraw.entries as Array<{
-      userId: { toString: () => string } | string;
-      totalEntries?: number;
-      quantity?: number;
-    }>) {
-      const uid = typeof entry.userId === "string" ? entry.userId : entry.userId.toString();
-      const count = entry.totalEntries || entry.quantity || 0;
-      if (count > 0) countMap.set(uid, (countMap.get(uid) || 0) + count);
-    }
-    const entryCounts = Array.from(countMap.entries()).map(([uid, count]) => ({ uid, count }));
-    entryCounts.sort((a, b) => b.count - a.count);
-    const takeCount = Math.max(1, Math.ceil(entryCounts.length * 0.2));
-    const thresholdCount = entryCounts[takeCount - 1]?.count ?? 0;
-    const topUserIds = entryCounts.filter((e) => e.count >= thresholdCount).map((e) => e.uid);
+    const topUserIds = top20.userIds;
     docs = (await User.find({ _id: { $in: topUserIds } })
       .select("_id state subscription.packageId subscription.status subscription.isActive")
       .lean()) as unknown as typeof docs;
