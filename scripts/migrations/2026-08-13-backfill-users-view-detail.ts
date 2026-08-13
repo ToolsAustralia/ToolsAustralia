@@ -25,24 +25,38 @@
  *
  * Default is DRY-RUN. Pass --apply to write.
  *
- *   npm run migrate:backfill-users-view-detail:dry
- *   npm run migrate:backfill-users-view-detail
+ *   npm run migrate:backfill-users-view-detail:dry        # local, dry
+ *   npm run migrate:backfill-users-view-detail            # local, apply
+ *   npm run migrate:backfill-users-view-detail:prod:dry   # production, dry
+ *   npm run migrate:backfill-users-view-detail:prod       # production, apply
  */
 import dotenv from "dotenv";
 import path from "node:path";
-dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+
+/**
+ * Which env file to load. Defaults to `.env.local`; `--production` targets `.env.production`.
+ *
+ * MUST be resolved and loaded before importing anything that reads MONGODB_URI —
+ * `src/lib/mongodb.ts` resolves the URI from `process.env` at import time and throws if unset.
+ * Matches the sibling migrations.
+ */
+const ENV_FILE = process.argv.includes("--production") ? ".env.production" : ".env.local";
+dotenv.config({ path: path.resolve(process.cwd(), ENV_FILE) });
 
 import mongoose from "mongoose";
 import connectDB from "../../src/lib/mongodb";
 import Role from "../../src/models/Role";
 
 const APPLY = process.argv.includes("--apply");
+const IS_PRODUCTION = process.argv.includes("--production");
 
 const VIEW = "users.view";
 const VIEW_DETAIL = "users.viewDetail";
 
 async function run() {
-  console.log(`\nBackfill ${VIEW_DETAIL} (${APPLY ? "APPLY" : "DRY-RUN"})\n`);
+  console.log(
+    `\nBackfill ${VIEW_DETAIL} — target=${IS_PRODUCTION ? "PRODUCTION" : "local"} (${APPLY ? "APPLY" : "DRY-RUN"})\n`
+  );
   await connectDB();
 
   const totalRoles = await Role.countDocuments({});

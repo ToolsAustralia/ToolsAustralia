@@ -378,6 +378,8 @@
     "migrate:create-norm": "tsx scripts/migrations/2026-05-20-create-norm-user-and-role.ts",
     "migrate:backfill-users-view-detail:dry": "tsx scripts/migrations/2026-08-13-backfill-users-view-detail.ts",
     "migrate:backfill-users-view-detail": "tsx scripts/migrations/2026-08-13-backfill-users-view-detail.ts --apply",
+    "migrate:backfill-users-view-detail:prod:dry": "tsx scripts/migrations/2026-08-13-backfill-users-view-detail.ts --production",
+    "migrate:backfill-users-view-detail:prod": "tsx scripts/migrations/2026-08-13-backfill-users-view-detail.ts --production --apply",
     "migrate:rename-additional-flag": "tsx scripts/migrations/2026-07-01-rename-membership-package-is-additional.ts",
     "migrate:rename-additional-flag:apply": "tsx scripts/migrations/2026-07-01-rename-membership-package-is-additional.ts --apply",
     "migrate:partial-build-prize-indexes:dry": "tsx scripts/migrations/2026-07-29-partial-build-prize-indexes.ts",
