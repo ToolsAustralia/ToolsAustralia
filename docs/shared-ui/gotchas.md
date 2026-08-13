@@ -256,18 +256,18 @@ On `/promotions`, the bottom-right floating controls now lift above the full-wid
 
 ## `.promo-dock-supersedes` — how the promo bottom dock stands the corner controls down (2026-08-13)
 
-Below `lg`, a promo **prize** page (`/promotions/[slug]` and the toolset landings) now mounts
+A promo **prize** page (`/promotions/[slug]` and the toolset landings) now mounts
 [`PromoBottomDock`](../../src/components/sections/promo/PromoBottomDock.tsx) — one bar that owns the
 whole bottom band: menu, Cobber and the entry CTA. The three separately-docked controls documented
-in the entries above must not also render there, or the phone gets two of everything.
+in the entries above must not also render there, or the page gets two of everything.
 
 The mechanism is **CSS keyed on an attribute**, not props:
 
 1. `PromoBottomDock` stamps `data-promo-dock` on `<html>` while mounted (removed on unmount, so a
    client transition to `/promotions` — the Spotlight gallery, which mounts no dock — restores the
    controls).
-2. `globals.css` hides `html[data-promo-dock] .promo-dock-supersedes` under
-   `@media (max-width: 1023.98px)` and reserves the bar's height via `body { padding-bottom }`.
+2. `globals.css` hides `html[data-promo-dock] .promo-dock-supersedes` at every viewport and
+   reserves the bar's height via `body { padding-bottom }` (taller from `lg`).
 3. Four elements carry the class: [`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx),
    [`PromotionsAccountButton`](../../src/components/sections/promo/PromotionsAccountButton.tsx),
    [`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx) and
@@ -278,10 +278,13 @@ The mechanism is **CSS keyed on an attribute**, not props:
 `SupportChatWidgetMount`), not by the page — a page-level prop can never reach them, and threading
 one through the layout would apply it to `/promotions` too, which has no dock.
 
-**The breakpoint is duplicated and must stay in step.** The CSS says `max-width: 1023.98px`; the dock
-says `lg:hidden`. They are the same line (Tailwind `lg` = 1024px) expressed twice. Move one without
-the other and a viewport band gets either two docks or none. A `display:none` element has a zero
-rect, so the dodge hook above correctly ignores the hidden floaters — no extra wiring needed.
+A `display:none` element has a zero rect, so the dodge hook above correctly ignores the hidden
+floaters — no extra wiring needed.
+
+_(The rule was originally gated to `max-width: 1023.98px`, matching an `lg:hidden` on the dock.
+The gate came off on 2026-08-13 when the dock was extended to desktop; if the dock is ever
+scoped back to one breakpoint, the CSS gate has to come back WITH it — a mismatch gives a
+viewport band either two docks or none.)_
 
 ## Floating dock: every corner-docked control shares one baseline (2026-08-10)
 

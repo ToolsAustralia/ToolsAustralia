@@ -53,6 +53,11 @@ interface DragState {
  * `FullscreenImageViewer`, which is a plain swipe-through lightbox and is still the right
  * component for the winners strips that use it.
  *
+ * Lives in `components/ui/` (moved out of the mini-draw route on 2026-08-13) because the
+ * major-draw prize builder now opens the same viewer over its combination + gallery. Two
+ * callers, one inspection experience — and a route-private folder was never an importable
+ * home for shared UI.
+ *
  * One pointer-event set drives every gesture; direction is resolved per drag by `|dy| > |dx|`
  * so a diagonal swipe commits cleanly to one axis:
  *   - tap (moved < 7px)      → zoom to 2.5× centred on the tapped point, or reset if zoomed

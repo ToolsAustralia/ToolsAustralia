@@ -261,12 +261,19 @@ odds/chance framing appears anywhere on either page.
 
 ### PrizeImageViewer — fullscreen zoom/pan viewer (2026-08-13)
 
-[`src/app/(site)/mini-draws/[id]/components/PrizeImageViewer.tsx`](../../src/app/(site)/mini-draws/[id]/components/PrizeImageViewer.tsx)
-replaces the shared `FullscreenImageViewer` **on the mini-draw detail page only**. The shared
+[`src/components/ui/PrizeImageViewer.tsx`](../../src/components/ui/PrizeImageViewer.tsx)
+replaces the shared `FullscreenImageViewer` on the mini-draw detail page. The older shared
 component is a plain swipe-through lightbox and stays the right tool for the winners strips in
 `MembershipModal`; it has no zoom, and zoom is the entire point here — a buyer is deciding
 whether to spend money on a tool they can only see in a photo, so they need to get close to the
 finish, the display and the fittings.
+
+**It moved out of this route on 2026-08-13** (was
+`src/app/(site)/mini-draws/[id]/components/PrizeImageViewer.tsx`). The major-draw prize builder
+now opens the same viewer over its combination + gallery, and a route-private folder was never
+an importable home for shared UI — importing app-route internals into `src/components` is the
+layering violation `.cursorrules` forbids. Behaviour is unchanged for the mini-draw page; only
+the import path moved. See [promo/frontend.md](../promo/frontend.md) for the second caller.
 
 Opened by the expand button **or** by tapping/clicking the main gallery image (`cursor: zoom-in`).
 

@@ -3683,29 +3683,31 @@ html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
 }
 
 /* ==========================================================================
-   Promotions mobile bottom dock (PromoBottomDock)
+   Promotions bottom dock (PromoBottomDock)
    ==========================================================================
-   Below `lg`, a promo prize page docks ONE bar to the bottom of the viewport that owns the
-   menu, Cobber and the entry CTA. `PromoBottomDock` stamps `data-promo-dock` on <html> for
-   as long as it is mounted; the two rules below are what make the old, separately-docked
-   controls stand down and what stops the bar covering the end of the page.
+   A promo prize page docks ONE bar to the bottom of the viewport that owns the menu, Cobber
+   and the entry CTA. `PromoBottomDock` stamps `data-promo-dock` on <html> for as long as it
+   is mounted; the two rules below are what make the old, separately-docked controls stand
+   down and what stops the bar covering the end of the page.
 
    An attribute on <html> rather than props: two of the superseded controls (the guest theme
    toggle and the Cobber launcher) are mounted by the promotions LAYOUT, not by the page, so
    the page has no way to pass them anything. It also means /promotions (the gallery, which
    mounts no dock) keeps every control exactly as it was.
 
-   The breakpoint here MUST stay in step with the `lg:hidden` on the dock itself — 1024px is
-   Tailwind's `lg`. If one moves without the other, a viewport band gets either two docks or
-   none. */
-@media (max-width: 1023.98px) {
-  html[data-promo-dock] .promo-dock-supersedes {
-    display: none !important;
-  }
-  /* Reserve the bar's height so the last section and the footer can still be scrolled clear
-     of it. `env()` matches the bar's own safe-area padding. */
+   No breakpoint gate: the dock renders at every viewport (owner call, 2026-08-13 — desktop
+   was still showing the old three-floater arrangement), so its stand-down must too. */
+html[data-promo-dock] .promo-dock-supersedes {
+  display: none !important;
+}
+/* Reserve the bar's height so the last section and the footer can still be scrolled clear of
+   it. `env()` matches the bar's own safe-area padding; the bar is taller on desktop. */
+html[data-promo-dock] body {
+  padding-bottom: calc(92px + env(safe-area-inset-bottom));
+}
+@media (min-width: 1024px) {
   html[data-promo-dock] body {
-    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+    padding-bottom: 116px;
   }
 }
 

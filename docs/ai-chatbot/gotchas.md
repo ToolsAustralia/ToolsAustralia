@@ -91,15 +91,18 @@ The `SupportChatWidget` "Workshop" redesign replaced the old fixed **orange** wi
 - **Semantics are FIXED regardless of brand** (do NOT wire these to the accent, or they vanish into a same-hue brand): **green** Online dot, **amber** notices (rate-limit / busy / captcha — heading amber, body neutral-ink for contrast), **red** hard error. On green/yellow brands the notices stay distinct via border + label, not colour alone.
 - Other changes: messages are **grouped** by run (one `CobberMini` avatar per assistant run, warm sand bubbles, `motion-safe` slide-in), a crafted **welcome/empty state**, slimmer header, and the existing **cobber.png** avatar is kept (DRY'd into `CobberMini` + `COBBER_AVATAR`). **Source-citation chips were designed but NOT built** — the citation data isn't streamed to the client yet (a separate backend task).
 
-## The launcher is suppressed on promo prize pages below `lg` (2026-08-13)
+## The launcher is suppressed on promo prize pages (2026-08-13)
 
 `/promotions/[slug]` and the toolset landings mount
-[`PromoBottomDock`](../../src/components/sections/promo/PromoBottomDock.tsx) on phones — one bar that
-owns the bottom band. Its **right tab is the Cobber launcher there**, so the corner bubble would be a
+[`PromoBottomDock`](../../src/components/sections/promo/PromoBottomDock.tsx) — one bar that owns the
+bottom band. Its **right tab is the Cobber launcher there**, so the corner bubble would be a
 duplicate affordance. [`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx)
 therefore carries `promo-dock-supersedes`, a class that is **inert everywhere else** and only bites
-under `html[data-promo-dock]` below 1024px (rule in `globals.css`; full write-up in
+under `html[data-promo-dock]` (rule in `globals.css`; full write-up in
 [shared-ui/gotchas.md](../shared-ui/gotchas.md) § `.promo-dock-supersedes`).
+
+The tab stays visible even where the rest of the bar collapses — in the hero the dock is only its
+two tabs — so there is no scroll depth on those pages with no way to reach support.
 
 Two things that make this safe rather than a second chat surface:
 

@@ -301,12 +301,16 @@ export function getContentsChips(toolbox: ToolboxOption, toolset: ToolsetOption)
 /* "What's in this prize" preview grid                                        */
 /* -------------------------------------------------------------------------- */
 
-/** Tiles per row in the preview grid. */
+/** Tiles per row in the preview grid from `sm` up. */
 export const PREVIEW_COLUMNS = 6;
+/** Tiles per row on a phone — six would render ~48px thumbnails, which read as noise. */
+export const PREVIEW_COLUMNS_MOBILE = 4;
 /** The grid is capped at two rows so it never pushes the CTA below the fold. */
 export const PREVIEW_MAX_ROWS = 2;
 
 const PREVIEW_MAX_CELLS = PREVIEW_COLUMNS * PREVIEW_MAX_ROWS;
+/** Phone cap — same two rows, fewer columns, so the grid never grows a third row. */
+export const PREVIEW_MAX_CELLS_MOBILE = PREVIEW_COLUMNS_MOBILE * PREVIEW_MAX_ROWS;
 
 /**
  * Marketing/platform tokens that carry no product meaning in a 2-word caption.
@@ -393,11 +397,17 @@ export interface ContentsPreview {
 export function buildContentsPreview(
   gallery: readonly PrizeMedia[],
   toolset: ToolsetOption,
-  comboImage: string
+  comboImage: string,
+  /**
+   * Cell budget for the grid. Defaults to the wide grid (6 × 2); the phone grid passes
+   * {@link PREVIEW_MAX_CELLS_MOBILE} (4 × 2) so it stays two rows there too instead of
+   * growing a third and pushing the CTA down.
+   */
+  maxCells: number = PREVIEW_MAX_CELLS
 ): ContentsPreview {
   const items = gallery.filter((media) => media.src !== comboImage && media.src !== toolset.image);
 
-  if (items.length <= PREVIEW_MAX_CELLS) {
+  if (items.length <= maxCells) {
     return {
       tiles: items.map((media) => ({
         src: media.src,
@@ -408,7 +418,7 @@ export function buildContentsPreview(
     };
   }
 
-  const shown = PREVIEW_MAX_CELLS - 1; // last cell becomes the "+N more" tile
+  const shown = maxCells - 1; // last cell becomes the "+N more" tile
   return {
     tiles: items.slice(0, shown).map((media) => ({
       src: media.src,

@@ -8,7 +8,7 @@ import type { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { FullscreenTriggerButton } from "@/components/ui/FullscreenImageViewer";
 import { EmblaCarouselButton } from "@/components/ui/embla/EmblaCarouselButton";
-import PrizeImageViewer from "./PrizeImageViewer";
+import PrizeImageViewer from "@/components/ui/PrizeImageViewer";
 
 interface MiniDrawImageGalleryProps {
   images: string[];
