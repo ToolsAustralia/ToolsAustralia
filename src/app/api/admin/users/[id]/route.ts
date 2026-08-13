@@ -44,7 +44,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     await connectDB();
 
     const { id: userId } = await params;
-    const guard = await requirePermissionWithAudit("users.view", request, {
+    // `users.viewDetail`, not `users.view` — this is the modal's payload (email, mobile,
+    // address, billing), a strictly deeper PII read than the roster the list route serves.
+    const guard = await requirePermissionWithAudit("users.viewDetail", request, {
       resourceType: "User",
       resourceId: userId,
     });

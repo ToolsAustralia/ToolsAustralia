@@ -452,6 +452,14 @@ export interface UserFilters {
   inActiveMajorDraw?: "yes" | "no" | "";
   /** Membership Streak: "none" = streak 0/absent; a number string ("2","6","12") = at least N consecutive paid renewals. */
   streak?: string;
+  /**
+   * Named cohort. `top20MajorDraw` = the top 20% of entry holders in the ACTIVE major draw,
+   * ties at the cut included (so it can return slightly more than 20% of holders).
+   *
+   * Same param name and segment id as the users EXPORT, resolved by the same function, so
+   * filtering the list and exporting the segment always return the same people.
+   */
+  segment?: "top20MajorDraw" | "";
   sortBy?: "createdAt" | "email" | "lastLogin" | "totalSpent" | "majorDrawEntries" | "miniDrawCount";
   sortOrder?: "asc" | "desc";
 }

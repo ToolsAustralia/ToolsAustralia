@@ -15,6 +15,68 @@ import MajorDraw from "@/models/MajorDraw";
 
 const AU_STATE_CODES = new Set(["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"]);
 
+/** Canonical id for the "top 20% of active major-draw entry holders" segment. */
+export const TOP20_MAJOR_DRAW_SEGMENT = "top20MajorDraw";
+
+export interface Top20MajorDrawSegment {
+  /** User ids in the segment, highest entry count FIRST. Callers that page must keep this order. */
+  userIds: string[];
+  /** Entry count at the 20% cut. Everyone at or above it is in — see the tie note below. */
+  thresholdCount: number;
+  /** Everyone holding at least one entry in the active draw (the population the 20% is of). */
+  totalHolders: number;
+}
+
+/**
+ * Resolve the top 20% of entry holders in the ACTIVE major draw.
+ *
+ * Returns `null` when there is no active draw, or the active draw has no entries — the caller
+ * decides whether that is a 404 (the export route) or an empty result (the list filter and the
+ * Norm aggregate).
+ *
+ * SINGLE SOURCE OF TRUTH. This logic previously existed in three hand-copied places (the admin
+ * export route, `aggregateUserExport` for Norm, and — as of this change — the list filter), and
+ * the copies had ALREADY drifted: one used `entryCounts[takeCount - 1]!.count` and the other
+ * `?.count ?? 0`. Two features both labelled "top 20%" returning different user sets is the kind
+ * of bug nobody reports, because each looks plausible alone.
+ *
+ * TIES ARE INCLUDED, so the segment can exceed 20% of holders. With 100 holders the cut is the
+ * 20th-highest count; if 15 people are tied on that count the segment returns 34, not 20.
+ * Deliberate — excluding half a tied group is arbitrary, and the alternative (cut at exactly 20)
+ * makes membership depend on Mongo's document order, which is not stable.
+ */
+export async function resolveTop20MajorDrawSegment(): Promise<Top20MajorDrawSegment | null> {
+  const activeDraw = await MajorDraw.findOne({ status: "active" }).select("entries").lean();
+  if (!activeDraw?.entries || activeDraw.entries.length === 0) return null;
+
+  // Sum per user: one holder can appear as several entry rows.
+  const countMap = new Map<string, number>();
+  for (const entry of activeDraw.entries as Array<{
+    userId: mongoose.Types.ObjectId | string;
+    totalEntries?: number;
+    quantity?: number;
+  }>) {
+    const uid = typeof entry.userId === "string" ? entry.userId : entry.userId.toString();
+    const count = entry.totalEntries || entry.quantity || 0;
+    if (count > 0) countMap.set(uid, (countMap.get(uid) || 0) + count);
+  }
+  if (countMap.size === 0) return null;
+
+  const entryCounts = Array.from(countMap.entries()).map(([uid, count]) => ({ uid, count }));
+  entryCounts.sort((a, b) => b.count - a.count);
+
+  // `Math.max(1, ...)` so a tiny draw still yields the single top holder rather than an empty
+  // segment; `entryCounts` is non-empty here, so the index read below always hits.
+  const takeCount = Math.max(1, Math.ceil(entryCounts.length * 0.2));
+  const thresholdCount = entryCounts[takeCount - 1]!.count;
+
+  return {
+    userIds: entryCounts.filter((e) => e.count >= thresholdCount).map((e) => e.uid),
+    thresholdCount,
+    totalHolders: entryCounts.length,
+  };
+}
+
 /**
  * Stripe subscription statuses that count as a current paying/entitled membership for admin metrics
  * (includes trial: same access and renewal semantics as the rest of the app).
@@ -103,6 +165,12 @@ export async function buildUserFilter(
     inActiveMajorDraw?: string;
     /** Membership Streak: "none" = streak 0/absent; a number string = at least N consecutive paid renewals */
     streak?: string;
+    /**
+     * Named cohort, currently only `top20MajorDraw`. Composes WITH the other filters rather than
+     * replacing them (unlike the export route's segment branch, which ignores filters), so
+     * "top 20% in VIC" is a valid query.
+     */
+    segment?: string;
   }
 ): Promise<Record<string, unknown>> {
   const {
@@ -117,6 +185,7 @@ export async function buildUserFilter(
     states,
     inActiveMajorDraw,
     streak,
+    segment,
   } = filters;
 
   // Initialize filter object
@@ -440,6 +509,18 @@ export async function buildUserFilter(
       if (!filter.$and) filter.$and = [];
       (filter.$and as Array<Record<string, unknown>>).push({ _id: { $nin: oidList } });
     }
+  }
+
+  // Top 20% of active major-draw entry holders. Pushed onto `$and` like every other `_id`
+  // constraint above, so it INTERSECTS with search / state / package rather than replacing them.
+  // An empty `$in` when there is no active draw is deliberate: the filter is on, so it must
+  // return nothing rather than silently falling back to "all users", which would look like the
+  // filter had been ignored.
+  if (segment === TOP20_MAJOR_DRAW_SEGMENT) {
+    const top20 = await resolveTop20MajorDrawSegment();
+    const oidList = (top20?.userIds ?? []).map((id) => new mongoose.Types.ObjectId(id));
+    if (!filter.$and) filter.$and = [];
+    (filter.$and as Array<Record<string, unknown>>).push({ _id: { $in: oidList } });
   }
 
   // Membership Streak filter: "none" = no streak banked (field missing or 0);

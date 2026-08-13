@@ -353,6 +353,77 @@ async function main() {
   );
 
   await run(
+    "getAggregatedByBuiltPrize: chosenRate = interactedBuilders/builders*100, and a 0-builders row is 0 not NaN",
+    async () => {
+      const restoreVisit = stubAggregate(PromoAnalyticsVisit, [
+        [
+          // The whole point of the column: near-identical exposure, opposite preference. This
+          // mirrors real production data — milwaukee-kincrome was chosen by 48.9% on
+          // /promotions/milwaukee but 2.0% on /promotions/milwaukee-kincrome, where it is the
+          // page default. Ranking on `builders` alone cannot tell these two apart.
+          { _id: "dewalt-kincrome", builders: 200, interactedBuilders: 150 },
+          { _id: "milwaukee-milwaukee", builders: 200, interactedBuilders: 4 },
+          // Built by nobody in-window, but converted — exercises the divide-by-zero guard.
+          { _id: "hikoki-gearwrench", builders: 0, interactedBuilders: 0 },
+        ],
+      ]);
+      const restoreUser = stubAggregate(User, [[]]);
+      const restorePayment = stubAggregate(PaymentEvent, [
+        [{ _id: "hikoki-gearwrench", conversions: 1, revenue: 20 }],
+      ]);
+      try {
+        const summary = await promoAnalyticsRepository.getAggregatedByBuiltPrize(START, END);
+        const byslug = (s: string) => {
+          const row = summary.byBuiltPrize.find((r) => r.builtPrizeSlug === s);
+          if (!row) throw new Error(`${s} must appear in byBuiltPrize`);
+          return row;
+        };
+
+        // Hard-coded, not recomputed — a wrong formula must fail HERE, not tautologically pass.
+        assert.equal(byslug("dewalt-kincrome").interactedBuilders, 150);
+        assert.equal(
+          byslug("dewalt-kincrome").chosenRate,
+          75,
+          "chosenRate = interactedBuilders/builders*100 = 150/200*100 = 75"
+        );
+        assert.equal(
+          byslug("milwaukee-milwaukee").chosenRate,
+          2,
+          "same 200 builders, 4/200*100 = 2 — identical exposure, 37.5x apart on preference. If chosenRate were ever computed against a different denominator (e.g. total builders across all rows) these two would stop being comparable, which is the ONLY thing this column is for."
+        );
+
+        // The F-002 guard, extended to the new rate: 0 builders must give 0, never NaN.
+        const zero = byslug("hikoki-gearwrench");
+        assert.equal(zero.builders, 0);
+        assert.equal(zero.interactedBuilders, 0);
+        assert.equal(
+          zero.chosenRate,
+          0,
+          "chosenRate must be 0 when builders is 0 — 0/0*100 is NaN, which renders as 'NaN%' in the admin table and fails the Norm response schema's z.number() at runtime (a 500 tsc cannot catch)"
+        );
+
+        // Bounds: this is a subset over its own population, so it can never exceed 100%. Both
+        // operands come from ONE aggregation scan specifically so this stays true — the 250%
+        // switched-away column (F-013) came from dividing two separately-scanned populations.
+        for (const row of summary.byBuiltPrize) {
+          assert.ok(
+            row.chosenRate >= 0 && row.chosenRate <= 100,
+            `chosenRate out of bounds for ${row.builtPrizeSlug}: ${row.chosenRate}`
+          );
+          assert.ok(
+            row.interactedBuilders <= row.builders,
+            `interactedBuilders (${row.interactedBuilders}) must never exceed builders (${row.builders}) for ${row.builtPrizeSlug}`
+          );
+        }
+      } finally {
+        restoreVisit();
+        restoreUser();
+        restorePayment();
+      }
+    }
+  );
+
+  await run(
     "getAggregatedByBuiltPrize: final order is builders DESCENDING, builtPrizeSlug ASCENDING as tie-break",
     async () => {
       const restoreVisit = stubAggregate(PromoAnalyticsVisit, [

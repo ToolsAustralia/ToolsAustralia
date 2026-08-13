@@ -21,6 +21,80 @@ the subscriber sits on its fallback until the visitor happens to touch a reel �
 Do NOT "fix" this by lifting the builder's state into a store: `PrizeShowcase` is embedded on the
 homepage and `/my-account` too, and none of those surfaces want the coupling.
 
+## `utmBasis` was silently dropped for its entire life — the THIRD field-by-field rebuild bug (2026-08-13)
+
+`PromoAnalyticsVisit.utmBasis` (added 2026-07-31 to record whether UTM came from the durable
+first-touch `_ta_attr` cookie or the landing URL) was **never written**. Measured on production:
+`null` on all **253,727** rows, including that day's.
+
+The core set it. The service spread it through. `PromoAnalyticsRepository.createVisit` declared
+its **own inline parameter type** that simply did not mention it, and its `create()` call
+enumerated fields by hand — so the value was dropped at the last hop. `tsc` could not see it:
+the argument is a variable, so excess-property checking never applies.
+
+**This is the third time this exact shape has landed in this feature:**
+1. the dropped `interacted` flag (the tracking route rebuilt the payload and lost it, so every
+   row read as "engaged" and `builds` measured exposure while being labelled engagement),
+2. the `range` / `dateRange` key drift (every requested date range silently returned today),
+3. this.
+
+**The fix is structural, not a one-line add:** `createVisit` now takes
+**`PromoVisitRecordPayload`** — the same type the functional core builds — so a future field
+added to the model and the core becomes a **compile error** here instead of a column of nulls
+nobody notices. Do not re-inline that parameter type.
+
+**Backfill is impossible.** The value was never captured, so history stays null; only rows
+written after this deploy carry a basis.
+
+## "Builders" is EXPOSURE — the Built-prize table ranks traffic unless you read the right column
+
+The build beacon fires on **unload**, not on interaction, and reports whatever combination was
+on screen (F-018 — it must, or `builders` and `signups` count different populations and
+`signups / builders` can exceed 100%). So **landing on `/promotions/milwaukee-milwaukee` and
+leaving without touching anything increments `builders[milwaukee-milwaukee]`.**
+
+Measured on production 2026-08-13 (a snapshot — these drift daily; re-measure, don't quote):
+
+| | builders | chose it | |
+|---|---|---|---|
+| `milwaukee-milwaukee` (all pages) | 17,430 | **980 (5.6%)** | top by exposure |
+| `makita-kincrome` | 117 | **112 (95.7%)** | genuine preference |
+| **all combinations** | **29,942** | **3,188 (10.6%)** | |
+
+Ranked by `builders` alone the table answers *"which landing page got traffic"*, not *"which
+prize do people want"* — the top row is 94% people who never touched the builder.
+
+**The sharpest proof is the same combination on two different pages:**
+
+| combination | landing page | builders | chose it |
+|---|---|---|---|
+| `milwaukee-kincrome` | `/promotions/milwaukee` | 558 | **273 (48.9%)** |
+| `milwaukee-kincrome` | `/promotions/milwaukee-kincrome` | 546 | **11 (2.0%)** |
+
+Near-identical `builders`, 25× apart on preference. On `/promotions/milwaukee` the visitor had
+to *switch to* kincrome; on `/promotions/milwaukee-kincrome` it was already on screen. Same
+combination, same volume, opposite meaning — which is exactly what `builders` alone hides. The row now
+carries **`interactedBuilders`** + **`chosenRate`** beside it ("Chose it" in the UI) so the two
+readings are visible at once. The sort stays on `builders` deliberately: signups, conversions
+and revenue are all counted over the builder population, so sorting by a different column would
+put the sort and the funnel on different footings.
+
+## "Unique visitors" is per-BROWSER, not per-person
+
+`PromoAnalyticsVisit.userId` is set on **0** rows — `linkVisitToUser` / `linkVisitsToUser` have
+no callers anywhere in `src/`. `VISITOR_ID_EXPR` therefore always falls through to
+`anonymousId`, so one human on a phone and a laptop is two visitors.
+
+**Wiring the existing linker would not fix that** — it stamps one anonymousId's rows with one
+userId, leaving the grouping identical. It buys attribution, not dedup. Person-level counting
+needs the visit **beacon** to resolve the session and write `userId` at insert time, which puts
+a session read on the highest-traffic path in the product — an owner decision, not a silent fix.
+
+Separately, rows with **neither** id (57.9% of all history, concentrated before the `ta_anon_id`
+cookie was reliably minted) each count as their own visitor, because the expression falls back
+to a per-row placeholder. Recent days run 97–99.5% cookie-bearing, so **forward accuracy is
+fine and wide historical ranges read high** — the wider the range, the more inflated.
+
 ## Promo-visit recording is a dep-injected functional core
 
 `recordPromoVisit` (`src/utils/promo-analytics/record-promo-visit.ts`) holds the visit-recording orchestration: dedup (when an anonymousId is present) → resolve UTM/referrer attribution → persist. Its side effects (`hasRecentVisit`, `recordVisit`) are **injected** by the caller — the `/api/tracking/promo-page-visit` route wires the real Mongo-backed deps inside `after()` (the injected `hasRecentVisit` calls `connectDB()` first — mongoose never auto-connects, and on a cold instance a bare query would buffer ~10s and lose the visit). This keeps the route thin and makes the logic unit-testable with no DB (`npm run test:promo-visit`). Dedup **fails open**: if the dedup read throws (timeout / connection error), the visit is recorded anyway — at worst one duplicate row inside the 60s window beats a silently dropped visit. UTM resolution order is (since 2026-07-31): **first-touch `_ta_attr` cookie** → explicit body value → URL `utm_*` → (utmCampaign only) `fb_<campaign_id>` fallback for Facebook ads that omit `utm_campaign`. The raw slug is passed to `recordVisit` (which lowercases on write); the dedup query uses the normalized slug. See [docs/tracking/gotchas.md](../tracking/gotchas.md) for why it runs in `after()`.

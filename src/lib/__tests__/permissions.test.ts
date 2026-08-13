@@ -48,7 +48,21 @@ test("PERMISSIONS contains exactly one entry per (area, action) pair", () => {
 test("Users area has the destructive + financial sub-actions", () => {
   assert.deepEqual(
     [...AREA_ACTIONS.users],
-    ["view", "edit", "export", "charge", "cancelSubscription", "refund", "delete"]
+    ["view", "viewDetail", "edit", "export", "charge", "cancelSubscription", "refund", "delete"]
+  );
+});
+
+test("users.view and users.viewDetail are separate — customer PII is its own grant", () => {
+  // Regression guard for the 2026-08-13 split. `users.view` gated BOTH the roster and the
+  // detail modal, so every role that could browse customers could read every customer's email,
+  // mobile, address and payment history. Collapsing these back into one action silently
+  // re-widens PII access across every existing role, with nothing else in CI to catch it.
+  assert.ok(AREA_ACTIONS.users.includes("view"), "the customer list grant");
+  assert.ok(AREA_ACTIONS.users.includes("viewDetail"), "the customer-record (PII) grant");
+  assert.notEqual(
+    AREA_ACTIONS.users.indexOf("view"),
+    AREA_ACTIONS.users.indexOf("viewDetail"),
+    "view and viewDetail must be distinct actions, not aliases"
   );
 });
 

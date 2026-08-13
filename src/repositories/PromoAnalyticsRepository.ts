@@ -13,6 +13,9 @@ import {
   getPageDefaultPrizeSlug,
 } from "@/config/promo-landing-slugs";
 import { getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
+// Type-only. Shared with the functional core so the write path cannot silently lose a field
+// again — see the note on `createVisit`.
+import type { PromoVisitRecordPayload } from "@/utils/promo-analytics/record-promo-visit";
 import mongoose from "mongoose";
 import type { PromoPageType } from "@/models/PromoAnalyticsVisit";
 import type {
@@ -80,8 +83,26 @@ export interface PromoAnalyticsByChannelSummary {
 
 export interface BuiltPrizeMetrics {
   builtPrizeSlug: string;
-  /** Unique visitors who built this combination, across every landing page. */
+  /**
+   * Unique visitors who ENDED on this combination, across every landing page — EXPOSURE, not
+   * preference. The builder reports whatever was on screen when the visitor left, so a visitor
+   * who lands on `/promotions/milwaukee-milwaukee` and leaves without touching anything counts
+   * here. That is deliberate (F-018): `signups` records the page default for those visitors
+   * too, so gating this would divide two different populations.
+   */
   builders: number;
+  /**
+   * Of `builders`, those who actually CHANGED the build — the preference signal.
+   *
+   * Read this, not `builders`, to answer "which combination do people want". Measured
+   * 2026-08-13: only 10.7% of all builders changed anything, and the top row by exposure
+   * (`milwaukee-milwaukee`, 17,332 builders) was chosen by just 5.6% of them, because it is
+   * the default on the highest-traffic evergreen page. Ranking by `builders` alone ranks
+   * traffic.
+   */
+  interactedBuilders: number;
+  /** `interactedBuilders / builders` as a percent. 0 when nobody built this combination. */
+  chosenRate: number;
   /** New accounts whose signupAttribution.builtPrizeSlug is this combination. */
   signups: number;
   /** Purchases whose PaymentEvent.data.builtPrizeSlug is this combination. */
@@ -218,15 +239,24 @@ function getAllPromoSlugs(): { pageType: PromoPageType; slug: string }[] {
 }
 
 export class PromoAnalyticsRepository {
-  async createVisit(data: {
-    pageType: PromoPageType;
-    slug: string;
-    anonymousId?: string;
-    referrer?: string;
-    utmSource?: string;
-    utmMedium?: string;
-    utmCampaign?: string;
-  }): Promise<void> {
+  /**
+   * Persist one visit row.
+   *
+   * ⚠️ The parameter is typed as `PromoVisitRecordPayload` — the SAME type the functional core
+   * builds and the service forwards — deliberately, and it must stay that way.
+   *
+   * It used to re-declare its own inline shape, and that silently dropped `utmBasis` for the
+   * field's entire life: the core set it, the service spread it through, and this method's
+   * hand-written type simply did not mention it, so it never reached Mongo. Measured
+   * 2026-08-13 on production — `utmBasis` was null on all 253,727 rows, including that day's.
+   * `tsc` could not see it because the argument is a variable, so excess-property checking
+   * never applies.
+   *
+   * That is the THIRD time this exact shape of bug has landed in this feature (the dropped
+   * `interacted` flag, the `range`/`dateRange` key drift, now this). Sharing the type is what
+   * makes the next one a compile error instead of a column of nulls nobody notices.
+   */
+  async createVisit(data: PromoVisitRecordPayload): Promise<void> {
     await connectDB();
     await PromoAnalyticsVisit.create({
       pageType: data.pageType,
@@ -236,6 +266,10 @@ export class PromoAnalyticsRepository {
       utmSource: data.utmSource,
       utmMedium: data.utmMedium,
       utmCampaign: data.utmCampaign,
+      // The audit column that records WHICH basis the UTM values came from (the durable
+      // first-touch `_ta_attr` cookie, or the landing URL). Without it a channel shift after a
+      // deploy cannot be told apart from a real traffic change — the only reason it exists.
+      utmBasis: data.utmBasis,
       timestamp: new Date(),
     });
   }
@@ -291,6 +325,22 @@ export class PromoAnalyticsRepository {
     return result != null;
   }
 
+  /**
+   * ⚠️ CURRENTLY UNCALLED, AND WIRING IT WOULD NOT IMPROVE THE VISITOR COUNT.
+   *
+   * Verified 2026-08-13 on production: `userId` is set on 0 of 253,727 visit rows, because
+   * neither this nor its service wrapper has a caller anywhere in `src/`. So `VISITOR_ID_EXPR`
+   * always falls through to `anonymousId`, and "unique visitors" is a per-BROWSER count.
+   *
+   * Before reaching for this as the fix: it stamps the rows of ONE anonymousId with one userId,
+   * which leaves the grouping identical — the same rows still collapse to the same single
+   * visitor. It buys attribution (which account a visit belonged to), NOT deduplication.
+   *
+   * Making "unique visitors" person-level needs the visit BEACON to resolve the session and
+   * write `userId` at insert time, so a member's phone and laptop collapse to one person. That
+   * is a deliberate trade — `/promotions/*` is the highest-traffic path in the product and the
+   * beacon is built to stay off the hot path — so it is an owner decision, not a silent fix.
+   */
   async linkVisitToUser(anonymousId: string, userId: string): Promise<number> {
     await connectDB();
     const result = await PromoAnalyticsVisit.updateMany(
@@ -705,7 +755,16 @@ export class PromoAnalyticsRepository {
     // failure mode: MongoDB rejects a hint naming an index that is not present (fresh deploy
     // before the background build finishes, a restore, a dropped index), which 500s this whole
     // route. Make the index partial before hinting it again.
-    const buildAgg = await PromoAnalyticsVisit.aggregate<{ _id: string; builders: number }>(
+    // `interactedBuilders` is summed in the SAME scan rather than filtered in the `$match`, so
+    // both numbers come from one population by construction — the shape `getAggregatedByToolbox`
+    // and the per-page build breakdown already use. `$max` makes engagement sticky per visitor:
+    // someone who changed the build on one landing and accepted the default on another is one
+    // engaged builder for that combination, not half of one.
+    const buildAgg = await PromoAnalyticsVisit.aggregate<{
+      _id: string;
+      builders: number;
+      interactedBuilders: number;
+    }>(
       [
         {
           $match: {
@@ -713,13 +772,26 @@ export class PromoAnalyticsRepository {
             builtPrizeSlug: { $exists: true, $ne: "" },
           },
         },
-        { $group: { _id: "$builtPrizeSlug", visitorIds: { $addToSet: VISITOR_ID_EXPR } } },
-        { $project: { _id: 1, builders: { $size: "$visitorIds" } } },
+        {
+          $group: {
+            _id: { k: "$builtPrizeSlug", v: VISITOR_ID_EXPR },
+            interacted: { $max: BUILD_INTERACTED_FLAG },
+          },
+        },
+        {
+          $group: {
+            _id: "$_id.k",
+            builders: { $sum: 1 },
+            interactedBuilders: { $sum: "$interacted" },
+          },
+        },
       ]
     ).exec();
 
-    const buildersMap = new Map<string, number>();
-    for (const r of buildAgg) buildersMap.set(r._id, r.builders);
+    const buildersMap = new Map<string, { builders: number; interactedBuilders: number }>();
+    for (const r of buildAgg) {
+      buildersMap.set(r._id, { builders: r.builders, interactedBuilders: r.interactedBuilders });
+    }
 
     // 2. Signups from User.signupAttribution.builtPrizeSlug
     const signupAgg = await User.aggregate<{ _id: string; signups: number }>([
@@ -770,7 +842,9 @@ export class PromoAnalyticsRepository {
 
     const byBuiltPrize: BuiltPrizeMetrics[] = [];
     for (const builtPrizeSlug of allSlugs) {
-      const builders = buildersMap.get(builtPrizeSlug) ?? 0;
+      const build = buildersMap.get(builtPrizeSlug);
+      const builders = build?.builders ?? 0;
+      const interactedBuilders = build?.interactedBuilders ?? 0;
       const signups = signupMap.get(builtPrizeSlug) ?? 0;
       const conv = conversionMap.get(builtPrizeSlug);
       const conversions = conv?.conversions ?? 0;
@@ -779,6 +853,10 @@ export class PromoAnalyticsRepository {
       byBuiltPrize.push({
         builtPrizeSlug,
         builders,
+        interactedBuilders,
+        // Share of this combination's builders who CHOSE it rather than being shown it.
+        // Both operands come from the one scan above, so this cannot exceed 100%.
+        chosenRate: builders > 0 ? (interactedBuilders / builders) * 100 : 0,
         signups,
         conversions,
         revenue,
@@ -789,6 +867,14 @@ export class PromoAnalyticsRepository {
     }
 
     // Deterministic order: builders descending, builtPrizeSlug ascending as a tie-break.
+    //
+    // Still sorted by BUILDERS (exposure), not by `interactedBuilders`, on purpose: this table's
+    // other columns — signups, conversions, revenue — are all counted over the builder
+    // population, so ranking by a different column would put the sort and the funnel on
+    // different footings. `interactedBuilders` + `chosenRate` are shown BESIDE it so the reader
+    // can see which rows are genuine preference and which are just the page's default: measured
+    // 2026-08-13, `milwaukee-milwaukee` had 17,430 builders of whom only 980 (5.6%) chose it,
+    // while `makita-kincrome` had 117 of whom 112 (95.7%) did.
     byBuiltPrize.sort((a, b) => b.builders - a.builders || (a.builtPrizeSlug < b.builtPrizeSlug ? -1 : 1));
 
     return { byBuiltPrize };

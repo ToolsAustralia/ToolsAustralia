@@ -273,7 +273,8 @@ a corrected API. Backend rationale for every item: [docs/promo/backend.md](../pr
 
 **Table counts after this change: 34 `<th>` / 34 `<td>`** — Channel Attribution 8/8, per-page
 **10/10** (was 11/11: `Cross-visits` removed, `Switched away % of Builds` replaced 1-for-1 by
-`Changed %`), By Built Prize 8/8, By Toolbox 8/8. The new
+`Changed %`), By Built Prize 8/8, By Toolbox 8/8. _(By Built Prize is **9/9** and the total **35/35**
+as of 2026-08-13 — see "Chose it" below.)_ The new
 [`PrizeBuildBreakdownTable`](../../src/components/admin/promo-analytics/PrizeBuildBreakdownTable.tsx)
 adds **8/8** inside `PromoPageDetailModal` — Combination · Builders · Changed · Signups · Conv ·
 Rev · B→S · Conv %, the first six sortable (`builders` descending by default), the last two
@@ -326,6 +327,32 @@ column stays hidden here (`showSourceColumn={false}`) since it would repeat the 
 
 **h) `UTMCampaignBreakdownTable` takes the shared `UTMCampaignMetrics` type** from
 `@/types/promo-analytics` instead of a local `CampaignRow`, and keys rows on `row.channel`.
+
+## Page Analytics — "Chose it" column + honest dedup copy (2026-08-13)
+
+Two accuracy fixes in [`PromoAnalyticsManagement.tsx`](../../src/components/admin/PromoAnalyticsManagement.tsx),
+both about numbers that were **correct but read as something they were not**.
+
+**a) By Built Prize gained a "Chose it" column (9 `<th>` / 9 `<td>`; page total 35/35).** It renders
+`interactedBuilders` with `chosenRate` as a sub-label, beside the existing `builders`. The build
+beacon fires at **unload** and reports whatever combination was on screen touched or not (F-018 —
+it must, or `builders` and `signups` count different populations), so `builders` is **exposure**:
+on production only 10.6% of builders had changed anything, and the top row by exposure
+(`milwaukee-milwaukee`) was chosen by 5.6% because it is the default on the busiest evergreen page.
+Ranked by `builders` alone the table answered *"which page got traffic"* while being read as
+*"which prize do people want"*. **The sort stays on `builders`** — signups, conversions and revenue
+are all counted over the builder population, so sorting on a column scoped differently would put
+the sort and the funnel on different footings. See
+[promo/gotchas.md](../promo/gotchas.md#builders-is-exposure--the-built-prize-table-ranks-traffic-unless-you-read-the-right-column)
+for the same-combination-two-pages proof (48.9% vs 2.0% at near-identical builder counts).
+
+**b) Dedup copy corrected in two places** — the visits column `title` and the `totalVisits`
+MetricCard `hint` claimed uniqueness was per *browser or signed-in user*. `PromoAnalyticsVisit.userId`
+is set on **0** rows (`linkVisitToUser` has no callers), so it is per **browser** (`ta_anon_id`),
+full stop: one person on a phone and a laptop is two visitors. Both strings now say so and warn
+that ranges reaching before ~2026-08 read high, because 57.9% of all-time rows predate reliable
+cookie minting and each falls back to a per-row placeholder visitor. Recent days are 97–99.5%
+cookie-bearing, so **forward accuracy is fine; wide historical ranges inflate**.
 
 ## Pages
 
@@ -589,6 +616,42 @@ A synthetic **"Other / Unknown"** row appears only when a classified subscriptio
 ### Removed (this refactor) — components left on disk for potential reuse
 
 The following components are **no longer referenced** by `UserMetricsView` but were not deleted: `SignupSourceChart.tsx`, `MembershipLifecycleChart.tsx`, `DailyUserMetricsTable.tsx`, `ComparisonModeToggle.tsx`, `MajorDrawSelector.tsx`, `MetricsDateFilter.tsx`, `CustomDateRangeModal.tsx`. If you reintroduce date-scoped or comparison views, prefer reviving these over rebuilding.
+
+## Admin > Users — "Top 20%" filter + `users.viewDetail` row gating (2026-08-13)
+
+**a) Top 20% of major-draw entry holders is now a FILTER, not export-only.** A `Top holders`
+dropdown sits beside the `Major draw` one in
+[UsersManagement.tsx](../../src/components/admin/UsersManagement.tsx), backed by a new
+`UserFilters.segment` (`"top20MajorDraw" | ""`). It reuses the **same `segment` param name and the
+same segment id** the users export already used — so "filter the list, then export" and "export the
+segment" resolve to the identical people, which is the whole point of not coining a second name.
+
+Three things worth knowing:
+
+- **It composes; the export's version replaces.** The filter is pushed onto `$and` inside
+  `buildUserFilter` like every other `_id` constraint, so *top 20% in VIC on the Tradie package* is
+  a valid query. The **export** route's segment branch still deliberately ignores the other filters
+  (documented in its own header) — that asymmetry is pre-existing, not introduced here.
+- **Ties at the cut are included**, so the segment can return slightly over 20% of holders. With
+  100 holders and 15 people tied on the 20th-highest entry count, it returns 34. Cutting at exactly
+  20 would make membership depend on Mongo's document order, which is not stable.
+- **No active draw ⇒ empty result, not "all users".** The filter pushes `{ _id: { $in: [] } }`.
+  Falling back to unfiltered would read as the filter being ignored.
+
+The logic behind it lives in **one** place now — `resolveTop20MajorDrawSegment()` in
+[userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts). It previously existed as two
+hand-copies (the export route and `aggregateUserExport` for Norm) which had **already drifted** on
+the threshold read (`entryCounts[takeCount - 1]!.count` vs `?.count ?? 0`); adding a third copy for
+this filter would have meant three features labelled "top 20%" able to disagree about who that is.
+
+**b) Rows only open when the viewer holds `users.viewDetail`.** `users.view` now grants the roster
+only; the detail modal is a separate grant (see
+[auth/permissions-catalog.md](../auth/permissions-catalog.md#viewdetail--splitting-pii-depth-out-of-view-2026-08-13)).
+Without it the `<tr>` drops its `onClick` and `cursor-pointer` and carries a `title` explaining why,
+rather than opening a modal that then 403s on its own fetch.
+[`ClickableUserDisplay`](../../src/components/admin/ClickableUserDisplay.tsx) — the modal's *other*
+entry point, rendered on overview, promo analytics, affiliates and draw surfaces — falls back to
+plain text under the same check. Both are presentation only; the endpoints enforce independently.
 
 ## UsersManagement header (Admin > Users) — 2026-05-04
 

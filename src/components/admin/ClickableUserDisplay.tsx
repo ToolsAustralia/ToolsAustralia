@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { cn } from "@/utils/cn";
 
 interface ClickableUserDisplayProps {
@@ -12,8 +13,12 @@ interface ClickableUserDisplayProps {
 }
 
 /**
- * Displays user name/email. When userId is provided, renders as clickable and opens User Detail modal on click.
- * When userId is absent (e.g. guest users), renders as plain text.
+ * Displays user name/email. When userId is provided AND the viewer holds `users.viewDetail`,
+ * renders as clickable and opens the User Detail modal on click. Otherwise renders as plain text.
+ *
+ * This component is the modal's OTHER entry point — it appears on the overview, promo analytics,
+ * affiliates and draw surfaces, so gating only the users table would leave the modal reachable
+ * from half a dozen other places. Presentation only; the endpoints enforce the same permission.
  */
 export default function ClickableUserDisplay({
   displayText,
@@ -22,6 +27,7 @@ export default function ClickableUserDisplay({
   className = "",
 }: ClickableUserDisplayProps) {
   const { openUserModal } = useAdminUserModal();
+  const { has } = usePermissions();
 
   // When callers pass text size (e.g. text-2xs sm:text-xs), use it as the full typography
   // token set — do not merge a default text-sm or Tailwind may pick the wrong winner.
@@ -35,7 +41,7 @@ export default function ClickableUserDisplay({
   // `dark:` fallback.
   const baseTextColor = "text-gray-900 dark:text-gray-100";
 
-  if (userId) {
+  if (userId && has("users.viewDetail")) {
     return (
       <button
         type="button"
