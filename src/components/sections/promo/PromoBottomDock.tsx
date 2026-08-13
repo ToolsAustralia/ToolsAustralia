@@ -371,14 +371,17 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
           {/* ── The bar ─────────────────────────────────────────────── */}
           {expanded ? (
             <div
-              className="relative z-[3] border-t border-white/10 px-3.5 pt-2.5 backdrop-blur-[10px] lg:px-10 lg:pt-5"
+              className="relative z-[3] border-t border-white/10 px-3.5 pt-2.5 backdrop-blur-[10px] motion-safe:animate-[promo-dock-rise_0.3s_cubic-bezier(0.22,1,0.36,1)] lg:px-10 lg:pt-5"
               style={{
                 background: barBackground,
                 paddingBottom: "calc(env(safe-area-inset-bottom) + 0.625rem)",
               }}
             >
               <div className="flex items-center gap-2.5 lg:mx-auto lg:max-w-[1200px] lg:gap-5 lg:pb-2.5">
-                <div className="min-w-0 flex-1">
+                {/* The bar MOUNTS on expand, so these animations play on arrival with no state
+                    to track — and replay if the visitor scrolls back into the hero and out
+                    again, which is the moment the reminder is worth repeating. */}
+                <div className="min-w-0 flex-1 motion-safe:animate-[promo-dock-pop_0.34s_cubic-bezier(0.22,1,0.36,1)_both]">
                   <div className="flex items-center gap-[7px]">
                     <span className="min-w-0 truncate font-mono text-3xs font-medium text-gray-400 lg:text-[10px]">
                       {build.combo}
@@ -403,7 +406,7 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
                 {/* Desktop puts the entries line in its own column — the design's three-stacked
                     lines look cramped in a 1200px bar. */}
                 <p
-                  className="hidden flex-none text-right font-sans text-xs font-semibold lg:block"
+                  className="hidden flex-none text-right font-sans text-xs font-semibold lg:block motion-safe:animate-[promo-dock-pop_0.34s_cubic-bezier(0.22,1,0.36,1)_0.05s_both]"
                   style={{ color: theme.primaryLight }}
                 >
                   {defaultPack
@@ -411,7 +414,9 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
                     : "Free entries included"}
                 </p>
 
-                <div className="relative flex-none">
+                {/* Wrapper scales, so the hanging multiplier badge rides in with the button
+                    instead of sitting there while the button grows under it. */}
+                <div className="relative flex-none motion-safe:animate-[promo-dock-cta-pop_0.46s_cubic-bezier(0.22,1,0.36,1)_0.06s_both]">
                   {badgeSrc && (
                     <Image
                       src={badgeSrc}

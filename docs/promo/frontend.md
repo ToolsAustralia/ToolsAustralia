@@ -13,8 +13,8 @@ components.
 | Surface | File | What changed on mobile |
 |---|---|---|
 | How it works | [`GiveawayDetails.tsx`](../../src/components/sections/promo/GiveawayDetails.tsx) | Six equal logistics cards → a **3-step timeline** ("Pick a pack" / "Your entries land" / "Drawn live") + a 2×2 fact grid + the ABN/permit line |
-| Become a member | [`PartnerBenefitsPromoSection.tsx`](../../src/components/sections/promo/PartnerBenefitsPromoSection.tsx) | Eyebrow is now **"Become a member"** (was "Why Subscribe") in BOTH layouts. Mobile is a new pitch: accumulation chart, four benefit tiles, then the /membership hero's **tier deck** (Tradie/Foreman/Boss fan with `AccessRing`) |
-| FAQ | [`PromoFAQs.tsx`](../../src/components/sections/promo/PromoFAQs.tsx) | Flat edge-to-edge accordion under a plain **"FAQ"** heading, closed by an **"Ask Cobber"** row; desktop keeps the shared `FAQSection` |
+| Become a member | [`PartnerBenefitsPromoSection.tsx`](../../src/components/sections/promo/PartnerBenefitsPromoSection.tsx) | Eyebrow is now **"Become a member"** (was "Why Subscribe") in BOTH layouts. Mobile is a new pitch: accumulation chart, four benefit tiles, then the /membership hero's **tier deck** (Tradie/Foreman/Boss fan with `AccessRing`) — and it is **full-bleed** on a phone (see below) |
+| FAQ | [`PromoFAQs.tsx`](../../src/components/sections/promo/PromoFAQs.tsx) | Flat edge-to-edge accordion under the same **"Frequently Asked Questions"** title desktop uses, closed by an **"Ask Cobber"** row; desktop keeps the shared `FAQSection` |
 | Build your prize | [`prize-selection/*`](../../src/components/sections/promo/prize-selection/) | "What's in this prize" tiles now **swap the combo stage**; the stage opens the **fullscreen viewer**; the grid is 4 × 2 on a phone (was hidden below `sm`) |
 | Floating chrome | [`PromoBottomDock.tsx`](../../src/components/sections/promo/PromoBottomDock.tsx) | **New.** One bottom bar replaces three separate floaters |
 
@@ -75,6 +75,18 @@ which is right when it opens from the PAGE — a caller opening it from inside a
 something above that modal (this one passes `Z_INDEX.MODAL_NESTED`) or the viewer paints behind the
 sheet that opened it.
 
+### Phone sections are BANDS, not cards
+
+"Become a member" was an inset rounded card (gutter + radius + its own vertical margin) inside a
+full-width section. On a phone that read as an ad slot dropped into the scroll rather than part of
+the page, and it did not match How It Works immediately above it — which is full-bleed. Below `sm`
+the section now drops its horizontal padding, radius, vertical padding and border ring, so the
+workshop background reaches both edges and butts against its neighbours. From `sm` it is the inset
+card it always was, ring included.
+
+The border ring is `hidden sm:block` for the same reason: a ring on all four sides draws a box
+around a band that has no edges.
+
 ### The bottom dock
 
 `PromoBottomDock` owns the whole bottom band **at every viewport** (desktop was added on owner
@@ -93,6 +105,14 @@ reads as a second, competing page surface.
 - **Enter now opens the membership modal**, via the shared `openEntryFlow({ openLocalModal: false })`
   — identical to the hero CTA. It used to scroll to `#packages`, which asked the visitor to do
   the choosing twice.
+- **The expansion is animated.** The bar slides up (`promo-dock-rise`), the pack line scales in
+  (`promo-dock-pop`) and the CTA overshoots slightly (`promo-dock-cta-pop`, 6% over then settle) —
+  the collapsed state exists so that this arrival is a moment worth noticing, and a plain fade next
+  to a moving bar reads as a render glitch. **No state tracks this**: the bar MOUNTS on expand, so
+  the CSS animations play on arrival for free, and replay if the visitor scrolls back into the hero
+  and out again — which is exactly when the reminder is worth repeating. All three are
+  `motion-safe:`, so reduced-motion gets the final state with no override. The CTA's wrapper is
+  what scales, not the button, so the hanging multiplier badge rides in with it.
 - **The middle names the pack, not the draw date.** Membership tab → the RECOMMENDED tier
   (Foreman, resolved through `getRecommendedSubscriptionPlan()` so it is the same object a
   Foreman card tap uses); One-Time tab → the bottom of the ladder (Apprentice Pack). The active

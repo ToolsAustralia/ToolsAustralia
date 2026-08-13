@@ -3723,3 +3723,35 @@ html[data-promo-dock] body {
     transform: translateY(0) scale(1);
   }
 }
+
+/* The dock's content arriving as the visitor clears the hero. It is the first time the bar
+   says anything, so the pack line and the CTA scale in rather than simply appearing — the
+   whole point of the collapsed state is that the expansion is a moment worth noticing.
+   Both are applied with `motion-safe:` at the call site, so reduced-motion gets the final
+   state with no override needed here. */
+@keyframes promo-dock-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* The CTA overshoots slightly on the way in — a plain fade next to a moving bar reads as a
+   render glitch, and this is the element the bar exists for. */
+@keyframes promo-dock-cta-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  62% {
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

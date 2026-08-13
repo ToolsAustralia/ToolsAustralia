@@ -189,7 +189,12 @@ interface SupportChatWidgetProps {
 
 export default function SupportChatWidget({ side = "right", open, onClose }: SupportChatWidgetProps) {
   // Horizontal dock — same inset on either side so the panel lines up with the launcher.
-  const sideClass = side === "left" ? "left-5" : "right-5";
+  // Corner dock applies from `lg` only — below that the panel is a full-bleed sheet (see the
+  // panel's className), so a horizontal inset there would fight the `inset-x-0`. BOTH sides are
+  // written literally (and the opposite one reset to `auto`) because Tailwind's JIT scans source
+  // text: a class assembled from an expression is never generated.
+  const sideClass =
+    side === "left" ? "lg:left-5 lg:right-auto" : "lg:right-5 lg:left-auto";
   const {
     messages,
     status,
@@ -315,7 +320,12 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
           // photography and dark page chrome far more often than not, and the old
           // white/neutral-900 fork made it read as a different product depending on where you
           // opened it. The accent band, avatar and hazard stripe already assumed a dark ground.
-          className={`fixed bottom-24 ${sideClass} w-[22rem] max-w-[calc(100vw-2.5rem)] bg-[#111318] rounded-2xl shadow-2xl flex flex-col border border-white/10 overflow-hidden`}
+          // Below `lg` the panel is a FULL-BLEED sheet sitting on the bottom dock: a 22rem card
+          // floating in a phone viewport wasted the horizontal space the conversation needed,
+          // and read as a widget parked over the page rather than a surface the page handed you.
+          // It keeps its rounded TOP corners and drops the side/bottom borders so it reads as
+          // rising out of the bar. From `lg` it is the corner-docked card it has always been.
+          className={`fixed bottom-24 inset-x-0 w-auto rounded-t-2xl rounded-b-none border-x-0 border-b-0 ${sideClass} lg:w-[22rem] lg:max-w-[calc(100vw-2.5rem)] lg:rounded-2xl lg:border-x lg:border-b bg-[#111318] shadow-2xl flex flex-col border border-white/10 overflow-hidden`}
           style={{
             zIndex: Z_INDEX.MODAL_BASE - 1000,
             height: "min(560px, calc(100svh - 8rem))",

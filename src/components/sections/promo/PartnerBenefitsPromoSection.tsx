@@ -148,9 +148,12 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
   if (!shouldShow) return null;
 
   return (
-    <section className="w-full px-3 sm:px-6 lg:px-8 py-10 sm:py-14 lg:py-20">
+    /* Full-bleed on a phone (no gutter, no radius, no vertical gap) so this reads as a BAND of
+       the page like How It Works, not a card sitting on it — an inset card here made the section
+       look like an ad slot dropped into the scroll. From `sm` it is the inset card it was. */
+    <section className="w-full px-0 py-0 sm:px-6 sm:py-14 lg:px-8 lg:py-20">
       <div className="max-w-6xl mx-auto">
-        <div className="relative rounded-xl sm:rounded-2xl overflow-hidden">
+        <div className="relative overflow-hidden sm:rounded-2xl">
           {/* Background */}
           <div className="absolute inset-0 z-0">
             <Image
@@ -593,9 +596,10 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
             </div>
           </div>
 
-          {/* Border */}
+          {/* Border — only around the inset card. Full-bleed on a phone, a ring on all four
+              sides would draw a box around a band that has no edges. */}
           <div
-            className="absolute inset-0 rounded-xl sm:rounded-2xl pointer-events-none z-20"
+            className="pointer-events-none absolute inset-0 z-20 hidden sm:block sm:rounded-2xl"
             style={{ border: `1px solid ${theme.borderRgba}` }}
           />
         </div>

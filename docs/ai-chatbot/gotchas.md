@@ -91,6 +91,20 @@ The `SupportChatWidget` "Workshop" redesign replaced the old fixed **orange** wi
 - **Semantics are FIXED regardless of brand** (do NOT wire these to the accent, or they vanish into a same-hue brand): **green** Online dot, **amber** notices (rate-limit / busy / captcha — heading amber, body neutral-ink for contrast), **red** hard error. On green/yellow brands the notices stay distinct via border + label, not colour alone.
 - Other changes: messages are **grouped** by run (one `CobberMini` avatar per assistant run, warm sand bubbles, `motion-safe` slide-in), a crafted **welcome/empty state**, slimmer header, and the existing **cobber.png** avatar is kept (DRY'd into `CobberMini` + `COBBER_AVATAR`). **Source-citation chips were designed but NOT built** — the citation data isn't streamed to the client yet (a separate backend task).
 
+## The panel is a full-bleed sheet below `lg` (2026-08-13)
+
+Below `lg` the panel spans the viewport (`inset-x-0`, rounded TOP corners only, no side or
+bottom border) and sits on the bottom dock; from `lg` it is the 22rem corner-docked card it has
+always been. A 22rem card floating in a phone viewport wasted the horizontal space the
+conversation needed and read as a widget parked over the page rather than a surface the page
+handed you.
+
+**The `side` prop is now `lg:`-scoped.** `sideClass` emits `lg:left-5 lg:right-auto` /
+`lg:right-5 lg:left-auto` — the corner dock only applies where there IS a corner, and the
+opposite side has to be reset to `auto` or `inset-x-0` keeps it pinned. Both variants are
+written as literals: Tailwind's JIT scans source text, so a class assembled from an expression
+(`lg:${side}-5`) is never generated.
+
 ## The panel is DARK in both site themes (2026-08-13)
 
 The design handoff's Cobber is a dark panel (`#111318` shell, `#1b1f26` bubbles), and
