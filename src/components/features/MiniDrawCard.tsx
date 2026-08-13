@@ -182,12 +182,12 @@ export default function MiniDrawCard({
       <m.div variants={cardVariants} initial="hidden" animate="visible">
         <div className="group flex overflow-hidden rounded-2xl border border-[#F0F1F4] bg-white shadow-[0_4px_16px_-12px_rgba(15,23,42,.35)] transition-shadow duration-300 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900">
           <div className="w-[104px] shrink-0 sm:w-[136px]">
-            <CardShell onSelect={onSelect} href={detailHref} className="relative block h-full min-h-[104px] overflow-hidden bg-[#F4F5F7]">
+            <CardShell onSelect={onSelect} href={detailHref} className="relative block h-full min-h-[104px] overflow-hidden bg-white dark:bg-neutral-950">
               <Image
                 src={miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}
                 alt={miniDraw.prize.name}
                 fill
-                className="object-cover transition-transform duration-500 group-hover:scale-105"
+                className="object-contain p-2 transition-transform duration-500 group-hover:scale-[1.04]"
                 sizes="(max-width: 640px) 104px, 136px"
               />
             </CardShell>
@@ -241,15 +241,18 @@ export default function MiniDrawCard({
     return (
       <m.div variants={cardVariants} initial="hidden" animate="visible" className="h-full">
         <div className="group flex h-full flex-col overflow-hidden rounded-[18px] border border-[#F0F1F4] bg-white dark:border-neutral-800 dark:bg-neutral-900">
-          <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-[#F4F5F7]">
+          <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-neutral-950">
             <Image
               src={miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}
               alt={miniDraw.prize.name}
               fill
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              className="object-contain p-2.5 pb-6 transition-transform duration-500 group-hover:scale-[1.04]"
               sizes="(max-width: 640px) 50vw, 25vw"
             />
-            <span className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-1 text-center text-[9.5px] font-semibold text-white/90">
+            {/* black/75, not the handoff's /60: with `contain` the strip now sits on WHITE
+                rather than on a photo, and /60 over white is rgb(102,102,102) — ~3.9:1 against
+                white 9.5px text, under the 4.5:1 floor. /75 restores it to ~7:1. */}
+            <span className="absolute inset-x-0 bottom-0 bg-black/75 px-1.5 py-1 text-center text-[9.5px] font-semibold text-white">
               {entriesRemaining > 0 ? `${entriesRemaining.toLocaleString()} entries remaining` : "Entries closed"}
             </span>
           </CardShell>
@@ -282,17 +285,18 @@ export default function MiniDrawCard({
   return (
     <m.div variants={cardVariants} initial="hidden" animate="visible" className="h-full">
       <div className="group flex h-full flex-col overflow-hidden rounded-[18px] border border-[#F0F1F4] bg-white shadow-[0_4px_16px_-10px_rgba(15,23,42,.35)] transition-shadow duration-300 hover:shadow-lg lg:border-[#EAECEF] lg:shadow-[0_6px_20px_-16px_rgba(15,23,42,.5)] dark:border-neutral-800 dark:bg-neutral-900">
-        <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-[#F4F5F7]">
+        {/* PRIZE IMAGES ARE PRODUCT SHOTS ON WHITE — `contain`, not `cover`.
+            `cover` cropped a tall tool chest top-and-bottom and beheaded the dial indicator,
+            and the old bottom scrim greyed out the lower half of every white photo (it only
+            ever existed to make a white logo overlay legible; the brand chip carries its own
+            ring now). Padding keeps the product off the card edge. */}
+        <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-neutral-950">
           <Image
             src={miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}
             alt={miniDraw.prize.name}
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            className="object-contain p-2 transition-transform duration-500 group-hover:scale-[1.04] lg:p-4"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-          />
-          <span
-            aria-hidden
-            className="absolute inset-0 bg-[linear-gradient(180deg,transparent_45%,rgba(0,0,0,.45)_100%)] lg:bg-[linear-gradient(180deg,transparent_50%,rgba(0,0,0,.45)_100%)]"
           />
 
           {/* The buyer's own entries — kept from the previous card, it is the only place
@@ -317,8 +321,10 @@ export default function MiniDrawCard({
             </span>
           )}
 
+          {/* ring + shadow, because the chip now sits on a near-white photo rather than on a
+              dark scrim — a plain white pill would dissolve into the product background. */}
           {brandMeta && (
-            <span className="absolute bottom-1.5 right-1.5 flex h-[22px] items-center rounded-md bg-white/[.94] px-[7px] text-[9.5px] font-extrabold uppercase tracking-[0.03em] text-[#111827] lg:bottom-2.5 lg:right-2.5 lg:h-6 lg:rounded-[7px] lg:px-2.5 lg:text-[10.5px]">
+            <span className="absolute bottom-1.5 right-1.5 flex h-[22px] items-center rounded-md bg-white/95 px-[7px] text-[9.5px] font-extrabold uppercase tracking-[0.03em] text-[#111827] shadow-sm ring-1 ring-black/[0.06] backdrop-blur-[2px] lg:bottom-2.5 lg:right-2.5 lg:h-6 lg:rounded-[7px] lg:px-2.5 lg:text-[10.5px] dark:bg-neutral-900/90 dark:text-white dark:ring-white/10">
               {brandMeta.name}
             </span>
           )}

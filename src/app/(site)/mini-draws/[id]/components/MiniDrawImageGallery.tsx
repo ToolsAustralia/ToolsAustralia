@@ -138,7 +138,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
   if (!images || images.length === 0) {
     return (
       <div className="relative overflow-hidden rounded-[20px] border border-[#EFF0F3] bg-white lg:border-[#EAECEF] dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="relative aspect-square bg-[#FBFBFC] lg:aspect-[4/3] dark:bg-neutral-950">
+        <div className="relative aspect-square bg-white lg:aspect-[4/3] dark:bg-neutral-950">
           <Image
             src="/images/placeholder-product.jpg"
             alt="No image available"
@@ -168,7 +168,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={`slide-${index}`}
-                    className="relative aspect-square lg:aspect-[4/3] bg-[#FBFBFC] dark:bg-neutral-950 cursor-zoom-in"
+                    className="relative aspect-square lg:aspect-[4/3] bg-white dark:bg-neutral-950 cursor-zoom-in"
                     initial={prefersReduced ? {} : { opacity: 0.7 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3 }}
