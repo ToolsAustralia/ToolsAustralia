@@ -13,6 +13,17 @@ must run in an environment before any TikTok sync writes there.
 | --- | --- | --- |
 | [`2026-07-29-platform-scope-ad-destinations.ts`](../../scripts/migrations/2026-07-29-platform-scope-ad-destinations.ts) | `metaaddestinations` | stamps `platform:"meta"`, drops the globally-unique `adId_1`, creates unique `{platform, adId}` |
 | [`2026-07-29-platform-scope-landing-page-metrics.ts`](../../scripts/migrations/2026-07-29-platform-scope-landing-page-metrics.ts) | `landingpagemetricsdailies` | stamps `platform:"meta"`, swaps the unique index to `{platform, adAccountId, date, canonicalUrl}` |
+| [`2026-08-13-backfill-users-view-detail.ts`](../../scripts/migrations/2026-08-13-backfill-users-view-detail.ts) | `roles` | grants `users.viewDetail` to every role already holding `users.view` (`npm run migrate:backfill-users-view-detail[:dry]`) |
+
+**`2026-08-13-backfill-users-view-detail` must run in every environment that has roles, including
+production, and ideally before or with the deploy.** `users.viewDetail` was carved OUT of
+`users.view` to gate the customer detail modal, and a new catalog action is deliberately NOT
+auto-granted to existing custom roles — so until this runs, every staff role loses the modal it
+could already open. Deliberately a **one-shot**, not part of the re-runnable
+`migrate:seed-staff-roles`: after an operator removes `users.viewDetail` from a role, that role
+still holds `users.view`, so a re-seed would match it again and silently re-grant what they just
+revoked. Dry-run by default.
+
 
 ```bash
 npx tsx scripts/migrations/2026-07-29-platform-scope-ad-destinations.ts          # dry-run

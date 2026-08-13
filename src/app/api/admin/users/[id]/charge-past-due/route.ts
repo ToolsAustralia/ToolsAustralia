@@ -90,7 +90,9 @@ async function listOpenInvoicesForCustomer(customerId: string): Promise<Stripe.I
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id: userId } = await params;
-    const guard = await requirePermissionWithAudit("users.view", _request, {
+    // Modal-only preview of a member's open invoices → `users.viewDetail`. The POST below
+    // still needs `users.charge`; this only relaxes nothing, it tightens the read.
+    const guard = await requirePermissionWithAudit("users.viewDetail", _request, {
       resourceType: "User",
       resourceId: userId,
     });
