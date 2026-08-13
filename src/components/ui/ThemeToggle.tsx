@@ -67,7 +67,9 @@ export function PromotionsGuestThemeToggle() {
 
   return (
     <div
-      className="fixed z-[55] pointer-events-auto bottom-5 left-5 transition-[bottom] duration-300 ease-out"
+      // `promo-dock-supersedes`: hidden below `lg` while PromoBottomDock is mounted — its
+      // drawer carries the Dark mode switch there. See globals.css.
+      className="promo-dock-supersedes fixed z-[55] pointer-events-auto bottom-5 left-5 transition-[bottom] duration-300 ease-out"
       style={dodgeBottom > 0 ? { bottom: dodgeBottom } : undefined}
     >
       <ThemeToggleButton />

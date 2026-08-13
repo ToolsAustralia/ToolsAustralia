@@ -92,7 +92,7 @@ function groupMessages(messages: UIMessage[]): MessageGroup[] {
 function DisclosureNotice({ onAcknowledge }: { onAcknowledge: () => void }) {
   return (
     <div className="flex-1 flex items-center justify-center px-4 py-4">
-      <div className="rounded-2xl border border-[#E7D3B8] dark:border-[#463617] bg-[#F6ECDC] dark:bg-[#2C2314] p-4 text-sm text-gray-800 dark:text-gray-200 space-y-3">
+      <div className="rounded-2xl border border-[#E7D3B8] bg-[#F6ECDC] p-4 text-sm text-gray-800 space-y-3 dark:border-white/[0.09] dark:bg-[#1b1f26] dark:text-[#c3c9d1]">
         <p className="flex items-center gap-2 font-extrabold text-[#7A5A2E] dark:text-[#E7C58C]">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -116,7 +116,7 @@ function DisclosureNotice({ onAcknowledge }: { onAcknowledge: () => void }) {
             person.
           </li>
         </ul>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
+        <p className="text-xs text-gray-500 dark:text-[#8a9099]">
           Read our{" "}
           <a
             href="/privacy"
@@ -131,7 +131,7 @@ function DisclosureNotice({ onAcknowledge }: { onAcknowledge: () => void }) {
         <button
           type="button"
           onClick={onAcknowledge}
-          className="w-full mt-1 rounded-xl bg-gray-900 hover:bg-black dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white text-white text-sm font-semibold py-2 px-4 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+          className="w-full mt-1 rounded-xl bg-gray-900 text-white hover:bg-black text-sm font-semibold py-2.5 px-4 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-400 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
         >
           Got it — start chatting
         </button>
@@ -161,7 +161,7 @@ function extractText(msg: UIMessage): string {
 // Small cobber avatar disc reused for each assistant turn.
 function CobberMini() {
   return (
-    <div className="mt-0.5 w-7 h-7 rounded-full overflow-hidden bg-[#F1DDC2] dark:bg-[#2C2314] ring-1 ring-black/5 dark:ring-white/10 shrink-0">
+    <div className="mt-0.5 w-7 h-7 rounded-full overflow-hidden bg-[#F1DDC2] ring-1 ring-black/5 dark:ring-white/10 shrink-0">
       <Image
         src={COBBER_AVATAR}
         alt={COBBER_ALT}
@@ -189,7 +189,12 @@ interface SupportChatWidgetProps {
 
 export default function SupportChatWidget({ side = "right", open, onClose }: SupportChatWidgetProps) {
   // Horizontal dock — same inset on either side so the panel lines up with the launcher.
-  const sideClass = side === "left" ? "left-5" : "right-5";
+  // Corner dock applies from `lg` only — below that the panel is a full-bleed sheet (see the
+  // panel's className), so a horizontal inset there would fight the `inset-x-0`. BOTH sides are
+  // written literally (and the opposite one reset to `auto`) because Tailwind's JIT scans source
+  // text: a class assembled from an expression is never generated.
+  const sideClass =
+    side === "left" ? "lg:left-5 lg:right-auto" : "lg:right-5 lg:left-auto";
   const {
     messages,
     status,
@@ -311,7 +316,19 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
           (ChatBubbleButton); this lazy component renders the panel only. */}
       {open && !dashboardSheetOpen && (
         <div
-          className={`fixed bottom-24 ${sideClass} w-[22rem] max-w-[calc(100vw-2.5rem)] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl flex flex-col border border-gray-200 dark:border-neutral-700 overflow-hidden`}
+          // Dark in BOTH site themes (design handoff, 2026-08-13). Cobber sits over prize
+          // photography and dark page chrome far more often than not, and the old
+          // white/neutral-900 fork made it read as a different product depending on where you
+          // opened it. The accent band, avatar and hazard stripe already assumed a dark ground.
+          // Below `lg` the panel is a FULL-BLEED sheet sitting on the bottom dock: a 22rem card
+          // floating in a phone viewport wasted the horizontal space the conversation needed,
+          // and read as a widget parked over the page rather than a surface the page handed you.
+          // It keeps its rounded TOP corners and drops the side/bottom borders so it reads as
+          // rising out of the bar. From `lg` it is the corner-docked card it has always been.
+          // `promo-dock-stacks-above` is inert everywhere except a promo page, where it swaps
+          // `bottom-24` for the dock's measured height so the panel sits ON the bar instead of
+          // floating above it with a gap. See globals.css + PromoBottomDock.
+          className={`promo-dock-stacks-above fixed bottom-24 inset-x-0 w-auto rounded-t-2xl rounded-b-none border-x-0 border-b-0 ${sideClass} lg:w-[22rem] lg:max-w-[calc(100vw-2.5rem)] lg:rounded-2xl lg:border-x lg:border-b bg-white dark:bg-[#111318] shadow-2xl flex flex-col border border-gray-200 dark:border-white/10 overflow-hidden`}
           style={{
             zIndex: Z_INDEX.MODAL_BASE - 1000,
             height: "min(560px, calc(100svh - 8rem))",
@@ -384,39 +401,65 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
           <div className={`flex-1 overflow-y-auto px-3.5 py-4 flex flex-col gap-4 ${disclosureAcked === false ? "hidden" : ""}`}>
             {/* Welcome / empty state — one block: big cobber, greeting, quick-reply chips */}
             {showIntro && !captchaRequired && (
-              <div className="flex flex-col items-center text-center px-2 pt-3 pb-1">
-                <div className="w-[76px] h-[76px] rounded-full overflow-hidden bg-[#F1DDC2] dark:bg-[#2C2314] ring-4 ring-[#F6ECDC] dark:ring-[#2C2314] shadow-sm mb-3">
-                  <Image
-                    src={COBBER_AVATAR}
-                    alt={COBBER_ALT}
-                    width={76}
-                    height={76}
-                    className="w-full h-full object-cover"
-                  />
+              /* The greeting arrives as Cobber's FIRST MESSAGE (design handoff), not as a
+                 centred splash. It is the same shape every later reply takes, so the panel
+                 opens already looking like a conversation rather than a landing page — and
+                 the quick replies below read as answers to it. */
+              <div className="flex flex-col">
+                <div className="flex items-start gap-2.5">
+                  <div className="h-[30px] w-[30px] shrink-0 overflow-hidden rounded-full bg-[#F1DDC2] ring-1 ring-black/5 dark:ring-white/10">
+                    <Image
+                      src={COBBER_AVATAR}
+                      alt={COBBER_ALT}
+                      width={30}
+                      height={30}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="rounded-[14px] rounded-bl-[4px] border border-gray-200 bg-gray-50 px-3.5 py-3 dark:border-white/[0.07] dark:bg-[#1b1f26]">
+                      <h3 className="text-sm font-extrabold text-gray-900 dark:text-white">
+                        G&apos;day, I&apos;m <span className="text-[var(--cob-acc)]">Cobber</span>
+                      </h3>
+                      <p className="mt-1.5 text-xs leading-[1.55] text-gray-600 dark:text-[#c3c9d1]">
+                        Your Tools Australia support mate. I can help with memberships, draws,
+                        entries and more. For complex issues I&apos;ll connect you to our team,
+                        who reply within one business day.
+                      </p>
+                    </div>
+                    <p className="mt-1 font-mono text-[9px] text-gray-400 dark:text-[#5d646e]">Just now</p>
+                  </div>
                 </div>
-                <h3 className="text-lg font-extrabold text-gray-900 dark:text-gray-100">
-                  G&apos;day, I&apos;m{" "}
-                  <span className="text-[var(--cob-acc)]">Cobber</span>
-                </h3>
-                <p className="mt-1 max-w-[32ch] text-[13.5px] text-gray-500 dark:text-gray-400">
-                  Your Tools Australia support mate. I can help with memberships,
-                  draws, entries and more. For complex issues I&apos;ll connect
-                  you to our team, who reply within one business day.
-                </p>
-                <p className="mt-4 mb-2 text-xs text-gray-500 dark:text-gray-400">
-                  Pick a question to get started
-                </p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {QUICK_REPLIES.map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => handleQuickReply(q)}
-                      disabled={isStreaming}
-                      className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--cob-acc)] bg-[color-mix(in_srgb,var(--cob-acc)_12%,transparent)] text-[var(--cob-acc)] hover:bg-[var(--cob-acc)] hover:text-[var(--cob-acc-ink)] transition-colors disabled:opacity-50"
-                    >
-                      {q}
-                    </button>
-                  ))}
+
+                <div className="mt-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.11em] text-gray-500 dark:text-[#8a9099]">
+                      Pick a question to get started
+                    </span>
+                    <span className="h-px flex-1 bg-gray-200 dark:bg-white/[0.08]" />
+                  </div>
+                  {/* Full-width rows, not wrapped pills: five questions in a 22rem panel
+                      wrapped into a ragged block nobody scanned. */}
+                  <div className="flex flex-col gap-1.5">
+                    {QUICK_REPLIES.map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => handleQuickReply(q)}
+                        disabled={isStreaming}
+                        // `cob-quick-ink` (globals.css) carries the LABEL colour, because it has
+                        // to fork by theme AND derive from the accent: dark ink on the pale tint
+                        // in light mode, the accent tinted toward white (the handoff's #ffb3aa,
+                        // per-brand) on the dark one. A Tailwind arbitrary value can't express
+                        // the dark half, and an inline style can't fork at all.
+                        className="cob-quick-ink flex items-center justify-between gap-2.5 rounded-[11px] border border-[color-mix(in_srgb,var(--cob-acc)_45%,transparent)] bg-[color-mix(in_srgb,var(--cob-acc)_10%,transparent)] px-3.5 py-2.5 text-left text-[11.5px] font-semibold leading-snug transition-colors hover:bg-[color-mix(in_srgb,var(--cob-acc)_18%,transparent)] disabled:opacity-50"
+                      >
+                        <span>{q}</span>
+                        <span aria-hidden className="font-extrabold text-[var(--cob-acc)]">
+                          ›
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -453,7 +496,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                       ) : (
                         <div
                           key={m.id}
-                          className={`w-fit max-w-full rounded-2xl first:rounded-tl-sm px-3 py-2 text-sm leading-relaxed bg-[#FBF6F0] dark:bg-[#2A211A] text-gray-900 dark:text-gray-100 border border-[#E7DCD1] dark:border-[#372B21] shadow-sm [&_a]:text-[var(--cob-acc)] ${BUBBLE_RISE}`}
+                          className={`w-fit max-w-full rounded-2xl first:rounded-tl-sm px-3 py-2 text-sm leading-relaxed bg-gray-50 text-gray-900 border border-gray-200 shadow-sm dark:bg-[#1b1f26] dark:text-[#e6e9ee] dark:border-white/[0.07] [&_a]:text-[var(--cob-acc)] ${BUBBLE_RISE}`}
                         >
                           <ChatMarkdown>{m.text}</ChatMarkdown>
                         </div>
@@ -467,7 +510,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
             {isStreaming && (
               <div className="flex items-start gap-2">
                 <CobberMini />
-                <div className="bg-[#FBF6F0] dark:bg-[#2A211A] border border-[#E7DCD1] dark:border-[#372B21] rounded-2xl rounded-tl-sm px-3 py-2.5 shadow-sm">
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl dark:bg-[#1b1f26] dark:border-white/[0.07] rounded-tl-sm px-3 py-2.5 shadow-sm">
                   <div className="flex gap-1 items-center h-4">
                     <span
                       className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
@@ -610,10 +653,10 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
           {/* Input area — hidden until disclosure acknowledged */}
           <form
             onSubmit={(e) => void handleSubmit(e)}
-            className={`px-3.5 pb-3 pt-2.5 shrink-0 border-t border-gray-100 dark:border-neutral-800 ${disclosureAcked === false ? "hidden" : ""}`}
+            className={`px-3.5 pb-3 pt-2.5 shrink-0 border-t border-gray-200 dark:border-white/[0.09] ${disclosureAcked === false ? "hidden" : ""}`}
           >
             {/* Persistent PII micro-hint — always visible above the input */}
-            <p className="flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-gray-500 mb-1.5 leading-snug">
+            <p className="flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-[#6b7280] mb-1.5 leading-snug">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="w-3 h-3 shrink-0"
@@ -646,7 +689,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                 }
                 disabled={inputBlocked}
                 rows={1}
-                className={`flex-1 resize-none text-sm bg-gray-50 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-xl px-3 py-2 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[var(--cob-acc)] max-h-24 overflow-auto${inputBlocked ? " opacity-50 cursor-not-allowed" : ""}`}
+                className={`flex-1 resize-none text-sm bg-gray-100 border border-gray-200 rounded-full px-4 py-2.5 text-gray-900 placeholder-gray-400 dark:bg-white/[0.05] dark:border-white/[0.12] dark:text-white dark:placeholder-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[var(--cob-acc)] max-h-24 overflow-auto${inputBlocked ? " opacity-50 cursor-not-allowed" : ""}`}
                 style={{ lineHeight: "1.5" }}
               />
               {/* Stop button — shown while streaming (dark) */}
@@ -655,7 +698,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                   type="button"
                   onClick={stop}
                   aria-label="Stop generating"
-                  className="shrink-0 w-9 h-9 rounded-xl bg-gray-900 hover:bg-black text-white flex items-center justify-center transition-transform active:scale-95"
+                  className="shrink-0 w-10 h-10 rounded-full bg-gray-900 hover:bg-black text-white flex items-center dark:bg-white/10 dark:hover:bg-white/20 justify-center transition-transform active:scale-95"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -672,10 +715,11 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                   type="submit"
                   disabled={!input.trim() || inputBlocked}
                   aria-label="Send message"
-                  className="shrink-0 w-9 h-9 rounded-xl text-[var(--cob-acc-ink)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-transform active:scale-95"
+                  className="shrink-0 w-10 h-10 rounded-full text-[var(--cob-acc-ink)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition-transform active:scale-95"
                   style={{
                     background:
                       "linear-gradient(180deg, var(--cob-acc), var(--cob-acc-deep))",
+                    boxShadow: "0 4px 14px color-mix(in srgb, var(--cob-acc) 40%, transparent)",
                   }}
                 >
                   <svg
@@ -704,7 +748,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
                 type="button"
                 onClick={() => void handleDeleteHistory()}
                 disabled={deleteState === "deleting" || isStreaming}
-                className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="text-[11px] text-gray-400 dark:text-[#6b7280] hover:text-red-500 dark:hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {deleteState === "confirming"
                   ? "Tap again to confirm delete"

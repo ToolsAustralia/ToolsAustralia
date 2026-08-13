@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import type { PrizeMedia } from "@/config/prize-summaries";
+import PrizeImageViewer from "@/components/ui/PrizeImageViewer";
 import { cn } from "@/utils/cn";
 import { ComboHero } from "./ComboHero";
 import { PrizeBuilderCta } from "./PrizeBuilderCta";
@@ -22,6 +23,8 @@ import {
   getComboPresentation,
   getContentsChips,
   resolveAccent,
+  PREVIEW_MAX_CELLS_MOBILE,
+  type PreviewTile,
 } from "./prize-builder-model";
 
 export interface PrizeBuilderCardProps {
@@ -89,6 +92,47 @@ export function PrizeBuilderCard({
     () => buildContentsPreview(gallery, activeToolset, combo.image),
     [gallery, activeToolset, combo.image]
   );
+  const previewMobile = useMemo(
+    () => buildContentsPreview(gallery, activeToolset, combo.image, PREVIEW_MAX_CELLS_MOBILE),
+    [gallery, activeToolset, combo.image]
+  );
+
+  /**
+   * Everything the fullscreen viewer pages through: the assembled combination first, then
+   * every gallery image — including the ones the capped grid could not show, which is the
+   * whole point of "+N more" landing here rather than in the specs modal.
+   */
+  const viewerImages = useMemo(() => {
+    const rest = gallery.map((media) => media.src).filter((src) => src !== combo.image);
+    return [combo.image, ...rest];
+  }, [gallery, combo.image]);
+
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+  /**
+   * The single item currently on the stage, if any.
+   *
+   * Deliberately LOCAL rather than lifted to the owner alongside the two lanes: it is
+   * ephemeral view state, not part of the build. Putting it in the URL (or in the owner's
+   * state, which mirrors to the URL) would make "I tapped a drill thumbnail" a shareable,
+   * back-button-able, analytics-visible fact about the prize the visitor configured — which
+   * it is not.
+   *
+   * Cleared whenever the combination changes: the tile came from the previous prize's
+   * gallery, so leaving it up would show a Makita drill on a Milwaukee stage.
+   */
+  const [previewTile, setPreviewTile] = useState<PreviewTile | null>(null);
+  useEffect(() => {
+    setPreviewTile(null);
+    setViewerIndex(null);
+  }, [combo.image]);
+
+  /** Open the viewer on whatever the stage is currently showing. */
+  const openViewerOnStage = () => {
+    const src = previewTile?.src ?? combo.image;
+    const at = viewerImages.indexOf(src);
+    setViewerIndex(at >= 0 ? at : 0);
+  };
 
   return (
     <div
@@ -164,15 +208,26 @@ export function PrizeBuilderCard({
           accent={accent}
           drawLabel={drawLabel}
           priority={priorityHero}
+          previewTile={previewTile}
+          onClearPreview={() => setPreviewTile(null)}
+          onOpenViewer={openViewerOnStage}
           className="lg:col-start-1 lg:row-start-1"
         />
 
         {!isCash && (
           <PrizeContentsStrip
             preview={preview}
+            previewMobile={previewMobile}
             chips={chips}
             accent={accent}
             onOpenDetails={onOpenDetails}
+            onSelectTile={(tile) =>
+              // Tapping the tile that is already on the stage puts the full prize back, so the
+              // thumbnail is a toggle rather than a one-way trip to the chip in the corner.
+              setPreviewTile((current) => (current?.src === tile.src ? null : tile))
+            }
+            onOpenViewer={() => setViewerIndex(viewerImages.length > 1 ? 1 : 0)}
+            selectedSrc={previewTile?.src ?? null}
             className="lg:col-start-1 lg:row-start-2 lg:-mt-0.5"
           />
         )}
@@ -186,6 +241,21 @@ export function PrizeBuilderCard({
           className="lg:col-start-2 lg:row-start-2 lg:self-start"
         />
       </div>
+
+      {/* Fullscreen inspection — the SAME viewer the mini-draw detail page uses, so
+          "let me actually look at the gear" behaves identically on both prize surfaces.
+          Rendered only once opened: it portals to the body and installs a scroll lock, and
+          there is no reason to carry that on a page nobody has asked to zoom on. */}
+      {viewerIndex !== null && (
+        <PrizeImageViewer
+          open
+          images={viewerImages}
+          index={viewerIndex}
+          onIndexChange={setViewerIndex}
+          onClose={() => setViewerIndex(null)}
+          title={combo.title}
+        />
+      )}
     </div>
   );
 }

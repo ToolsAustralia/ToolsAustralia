@@ -17,6 +17,13 @@ interface PrizeImageViewerProps {
   onClose: () => void;
   /** Shown under the PRIZE GALLERY eyebrow. */
   title: string;
+  /**
+   * Stacking order of the overlay. Defaults to just under the modal layer, which is right
+   * when the viewer opens from the PAGE. A caller that opens it from INSIDE a modal must
+   * pass something above that modal (see `PrizeSpecificationsModal`), or the viewer paints
+   * behind the sheet that opened it.
+   */
+  zIndex?: number;
 }
 
 const MIN_ZOOM = 1;
@@ -53,6 +60,11 @@ interface DragState {
  * `FullscreenImageViewer`, which is a plain swipe-through lightbox and is still the right
  * component for the winners strips that use it.
  *
+ * Lives in `components/ui/` (moved out of the mini-draw route on 2026-08-13) because the
+ * major-draw prize builder now opens the same viewer over its combination + gallery. Two
+ * callers, one inspection experience — and a route-private folder was never an importable
+ * home for shared UI.
+ *
  * One pointer-event set drives every gesture; direction is resolved per drag by `|dy| > |dx|`
  * so a diagonal swipe commits cleanly to one axis:
  *   - tap (moved < 7px)      → zoom to 2.5× centred on the tapped point, or reset if zoomed
@@ -67,6 +79,7 @@ export default function PrizeImageViewer({
   onIndexChange,
   onClose,
   title,
+  zIndex = 9600,
 }: PrizeImageViewerProps) {
   const prefersReduced = useReducedMotion();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -319,8 +332,8 @@ export default function PrizeImageViewer({
       role="dialog"
       aria-modal="true"
       aria-label="Prize gallery"
-      className="fixed inset-0 z-[9600] overflow-hidden motion-safe:animate-[fadeIn_.18s_ease]"
-      style={{ background: `rgba(6,7,10,${backdropAlpha})` }}
+      className="fixed inset-0 overflow-hidden motion-safe:animate-[fadeIn_.18s_ease]"
+      style={{ background: `rgba(6,7,10,${backdropAlpha})`, zIndex }}
     >
       {/* Gesture surface spans the whole viewport so a drag started on the chrome gradient
           still reaches it — the chrome itself is pointer-events:none apart from its controls. */}

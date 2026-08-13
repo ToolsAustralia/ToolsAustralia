@@ -12,6 +12,9 @@ import BrandsShowcase from "@/components/sections/promo/BrandsShowcase";
 import FloatingGetEntriesButton from "@/components/sections/promo/FloatingGetEntriesButton";
 import PromotionsAccountButton from "@/components/sections/promo/PromotionsAccountButton";
 import PromoTrustBar from "@/components/sections/promo/PromoTrustBar";
+// Phone-only chrome. Below `lg` this one bar owns the menu, Cobber and the entry CTA, and the
+// three separate floating controls below stand down there. See PromoBottomDock.tsx.
+import PromoBottomDock from "@/components/sections/promo/PromoBottomDock";
 
 // Lazy load below-fold components for better performance
 const PromoPackages = dynamic(() => import("@/components/sections/promo/PromoPackages"), {
@@ -273,6 +276,7 @@ export default async function PromotionsPage({ params }: PromotionsPageProps) {
               </Suspense>
             </main>
 
+          <PromoBottomDock prizeSlug={prize.slug} />
           <FloatingGetEntriesButton />
           <Suspense fallback={null}>
             <PromotionsAccountButton />

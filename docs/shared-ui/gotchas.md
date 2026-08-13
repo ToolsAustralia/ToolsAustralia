@@ -254,6 +254,38 @@ hamburger, and the one-to-one morph is the whole idea. Add it back only if you a
 
 On `/promotions`, the bottom-right floating controls now lift above the full-width floating **Enter Now** bar ([`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx)) when it scrolls in, and settle back when it's gone — the same collision-dodge the Cobber launcher uses, via `useDodgeFloatingObstacles("right", enabled, cornerPx)` ([hook](../../src/components/support-chat/useDodgeFloatingObstacles.ts)) applied as an inline `bottom` with a `transition-[bottom]`. It's wired in **two** places because the two audiences are mutually exclusive: **guests** → [`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx) (sun only); **authenticated** → [`PromotionsAccountButton`](../../src/components/sections/promo/PromotionsAccountButton.tsx) (one stack = sun toggle **+** account button). Both dock at the shared `bottom-5 right-5` (see the next entry). The Enter Now bar carries `data-floating-widget`, so it's the obstacle; the hook only lifts for obstacles that reach the right corner (full-width bars), not narrow centered ones. The dodge hook is generic geometry (not chat-specific) despite living under `support-chat/` — reused as-is rather than relocated.
 
+## `.promo-dock-supersedes` — how the promo bottom dock stands the corner controls down (2026-08-13)
+
+A promo **prize** page (`/promotions/[slug]` and the toolset landings) now mounts
+[`PromoBottomDock`](../../src/components/sections/promo/PromoBottomDock.tsx) — one bar that owns the
+whole bottom band: menu, Cobber and the entry CTA. The three separately-docked controls documented
+in the entries above must not also render there, or the page gets two of everything.
+
+The mechanism is **CSS keyed on an attribute**, not props:
+
+1. `PromoBottomDock` stamps `data-promo-dock` on `<html>` while mounted (removed on unmount, so a
+   client transition to `/promotions` — the Spotlight gallery, which mounts no dock — restores the
+   controls).
+2. `globals.css` hides `html[data-promo-dock] .promo-dock-supersedes` at every viewport and
+   reserves the bar's height via `body { padding-bottom }` (taller from `lg`).
+3. Four elements carry the class: [`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx),
+   [`PromotionsAccountButton`](../../src/components/sections/promo/PromotionsAccountButton.tsx),
+   [`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx) and
+   [`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx).
+
+**Why not props.** Two of those four are mounted by the promotions **layout**
+(`PromotionsGuestThemeToggle` via `PromotionsLayoutShell`, `ChatBubbleButton` via
+`SupportChatWidgetMount`), not by the page — a page-level prop can never reach them, and threading
+one through the layout would apply it to `/promotions` too, which has no dock.
+
+A `display:none` element has a zero rect, so the dodge hook above correctly ignores the hidden
+floaters — no extra wiring needed.
+
+_(The rule was originally gated to `max-width: 1023.98px`, matching an `lg:hidden` on the dock.
+The gate came off on 2026-08-13 when the dock was extended to desktop; if the dock is ever
+scoped back to one breakpoint, the CSS gate has to come back WITH it — a mismatch gives a
+viewport band either two docks or none.)_
+
 ## Floating dock: every corner-docked control shares one baseline (2026-08-10)
 
 The three floating controls on `/promotions` — the Cobber launcher (bottom-**left**), and in the bottom-**right** corner the theme toggle + account FAB — were each positioned by their own hard-coded offsets and visibly failed to line up. Four independent mismatches:

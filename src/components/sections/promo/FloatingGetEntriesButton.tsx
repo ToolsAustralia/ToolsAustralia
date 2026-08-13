@@ -137,7 +137,9 @@ export default function FloatingGetEntriesButton() {
             damping: 20,
             duration: 0.5,
           }}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-0 right-0 flex justify-center z-50 pointer-events-none"
+          // `promo-dock-supersedes`: hidden below `lg` while PromoBottomDock is mounted — the
+          // dock's own "Enter now" button replaces this pill there. See globals.css.
+          className="promo-dock-supersedes fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-0 right-0 flex justify-center z-50 pointer-events-none"
         >
           <m.button
             // The obstacle contract goes on the PILL, not the full-width centering wrapper.

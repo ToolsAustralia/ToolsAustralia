@@ -1,5 +1,26 @@
 # Promo — Gotchas
 
+## `replaceState` fires no event, so the URL cannot be a live channel (2026-08-13)
+
+The prize builder mirrors its two lanes into `?toolbox=` / `?toolset=` with
+`window.history.replaceState` — deliberately, because `router.replace` resets scroll (see
+[frontend.md](./frontend.md)). But `replaceState` dispatches **nothing**: no `popstate`, no
+`hashchange`, and `useSearchParams()` does not refresh from it. Anything outside the builder that
+must REACT to the build (today: `PromoBottomDock`) therefore cannot read the URL — it would show
+whatever the build was at mount and never move again.
+
+The builder publishes instead: `publishPrizeSelection()` in
+[`prize-selection/utils.ts`](../../src/components/sections/promo/prize-selection/utils.ts) fires a
+`CustomEvent` **and retains the last snapshot in the module**. The retention is the part that is
+easy to skip and breaks silently: subscribers can mount AFTER the builder (the dock renders below
+`<main>`, so its effect runs second), so an event-only channel means the first publish is missed and
+the subscriber sits on its fallback until the visitor happens to touch a reel — which looks like
+"the dock is just wrong" rather than "the dock missed one event". Seed from
+`getPublishedPrizeSelection()` before subscribing.
+
+Do NOT "fix" this by lifting the builder's state into a store: `PrizeShowcase` is embedded on the
+homepage and `/my-account` too, and none of those surfaces want the coupling.
+
 ## `utmBasis` was silently dropped for its entire life — the THIRD field-by-field rebuild bug (2026-08-13)
 
 `PromoAnalyticsVisit.utmBasis` (added 2026-07-31 to record whether UTM came from the durable

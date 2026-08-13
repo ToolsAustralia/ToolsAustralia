@@ -3,7 +3,7 @@
 import Image from "next/image";
 import type { CSSProperties } from "react";
 import { cn } from "@/utils/cn";
-import type { ComboPresentation } from "./prize-builder-model";
+import type { ComboPresentation, PreviewTile } from "./prize-builder-model";
 
 interface ComboHeroProps {
   combo: ComboPresentation;
@@ -13,6 +13,15 @@ interface ComboHeroProps {
   drawLabel: string | null;
   /** Whether the first paint should eagerly fetch the hero art (above-the-fold instances). */
   priority?: boolean;
+  /**
+   * A single item from "What's in this prize", shown INSTEAD of the assembled combination.
+   * Null shows the combination. See {@link PrizeContentsStrip}.
+   */
+  previewTile?: PreviewTile | null;
+  /** Return the stage to the assembled prize. */
+  onClearPreview?: () => void;
+  /** Open the fullscreen inspection viewer on whatever the stage is showing. */
+  onOpenViewer?: () => void;
   className?: string;
 }
 
@@ -23,8 +32,23 @@ interface ComboHeroProps {
  *
  * The image key changes with the selection so the cross-fade replays — the
  * animation is CSS (`.pbc-fade`) and is disabled under reduced motion.
+ *
+ * The stage doubles as the viewer for a single item: tapping a thumbnail in the
+ * contents strip passes `previewTile` here and the corner chip becomes "back to full
+ * prize" (design handoff, 2026-08-13). Everything below the stage — caption, draw chip,
+ * cash flag — keeps describing the WHOLE prize while an item is previewed, because that
+ * is still what the visitor wins; only the stage and its chip change.
  */
-export function ComboHero({ combo, accent, drawLabel, priority = false, className }: ComboHeroProps) {
+export function ComboHero({
+  combo,
+  accent,
+  drawLabel,
+  priority = false,
+  previewTile = null,
+  onClearPreview,
+  onOpenViewer,
+  className,
+}: ComboHeroProps) {
   return (
     <div className={cn("relative flex min-w-0 flex-col", className)}>
       {/* Accent bloom behind the stage (alpha swaps by theme — see .pbc-glow in globals.css) */}
@@ -52,29 +76,59 @@ export function ComboHero({ combo, accent, drawLabel, priority = false, classNam
         {/* Fixed --pbc-cash-dark ink, NOT the theme-flipping --pbc-cash-ink: this chip's
             bg is white/90 in BOTH themes, and the previous #0f8a3f was 4.45:1 — a hair
             under the 4.5:1 small-text bar. */}
-        <span className="absolute left-[11px] top-[11px] z-[2] inline-block whitespace-nowrap rounded-full border border-[#18a94d]/50 bg-white/90 px-2.5 py-[5px] font-poppins text-[8px] font-bold leading-none tracking-[0.14em] text-[var(--pbc-cash-dark)] shadow-[0_4px_12px_-4px_rgba(0,0,0,.3)]">
-          ✓ THIS IS WHAT YOU WIN
-        </span>
+        {previewTile ? (
+          <button
+            type="button"
+            onClick={onClearPreview}
+            className="absolute left-[11px] top-[11px] z-[2] inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-[var(--pbc-text)] bg-[var(--pbc-text)] px-2.5 py-[5px] font-poppins text-[8px] font-bold leading-none tracking-[0.14em] text-[var(--pbc-panel)] shadow-[0_4px_12px_-4px_rgba(0,0,0,.3)] transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pbc-accent)]"
+          >
+            ‹ BACK TO FULL PRIZE
+          </button>
+        ) : (
+          <span className="absolute left-[11px] top-[11px] z-[2] inline-block whitespace-nowrap rounded-full border border-[#18a94d]/50 bg-white/90 px-2.5 py-[5px] font-poppins text-[8px] font-bold leading-none tracking-[0.14em] text-[var(--pbc-cash-dark)] shadow-[0_4px_12px_-4px_rgba(0,0,0,.3)]">
+            ✓ THIS IS WHAT YOU WIN
+          </span>
+        )}
 
-        <div
-          className="ta-product-stage relative flex aspect-[4/3] w-full items-center justify-center rounded-[10px] lg:aspect-[16/10]"
+        {/* The stage is a button so the whole image opens the fullscreen viewer — the
+            affordance a visitor reaches for first is the picture itself, not a corner icon. */}
+        <button
+          type="button"
+          onClick={onOpenViewer}
+          aria-label={`View ${previewTile?.alt ?? combo.imageAlt} full screen`}
+          className="ta-product-stage relative flex aspect-[4/3] w-full cursor-zoom-in items-center justify-center rounded-[10px] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pbc-accent)] lg:aspect-[16/10]"
           style={{ ["--ta-stage-bloom" as string]: `${accent}30` } as CSSProperties}
         >
           <Image
-            key={combo.image}
-            src={combo.image}
-            alt={combo.imageAlt}
+            key={previewTile?.src ?? combo.image}
+            src={previewTile?.src ?? combo.image}
+            alt={previewTile?.alt ?? combo.imageAlt}
             fill
-            priority={priority}
+            // A previewed item is never the LCP candidate — the combination is what paints first.
+            priority={previewTile ? false : priority}
             sizes="(max-width: 767px) 92vw, (max-width: 1279px) 46vw, 560px"
             className="pbc-fade object-contain object-center"
           />
-        </div>
+          <span
+            aria-hidden
+            className="absolute right-[11px] top-[11px] z-[2] flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[rgba(18,16,15,.6)] text-white"
+          >
+            <ZoomIcon />
+          </span>
+        </button>
+
+        {/* Single-item captions sit ON the stage so the block below keeps describing the
+            whole prize — two competing titles read as "the prize changed". */}
+        {previewTile && (
+          <span className="absolute bottom-[11px] left-[11px] z-[2] inline-block max-w-[70%] truncate rounded-full border border-[var(--pbc-border)] bg-[var(--pbc-panel2)] px-2.5 py-[5px] font-poppins text-[8.5px] font-bold leading-none text-[var(--pbc-text)]">
+            {previewTile.alt}
+          </span>
+        )}
 
         {/* Pill bg is --pbc-cash-dark, not --pbc-cash: white 8.5px text on #18a94d is
             3.08:1 (axe violation); on the dark cash green it's 5.4:1. The shadow keeps
             the vivid brand green — it's decorative. */}
-        {combo.showCashFlag && (
+        {combo.showCashFlag && !previewTile && (
           <span className="absolute bottom-[11px] right-[11px] z-[2] inline-block rounded-full bg-[var(--pbc-cash-dark)] px-[11px] py-1.5 font-poppins text-[8.5px] font-extrabold leading-none tracking-[0.1em] text-white shadow-[0_8px_20px_-8px_#18a94d]">
             + $5,000 CASH INCLUDED
           </span>
@@ -103,6 +157,15 @@ export function ComboHero({ combo, accent, drawLabel, priority = false, classNam
         <p className="mt-0.5 text-[11px] leading-[1.5] text-[var(--pbc-sub)]">{combo.sub}</p>
       </div>
     </div>
+  );
+}
+
+function ZoomIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5M11 8v6M8 11h6" />
+    </svg>
   );
 }
 

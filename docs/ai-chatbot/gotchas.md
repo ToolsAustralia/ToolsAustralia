@@ -91,6 +91,75 @@ The `SupportChatWidget` "Workshop" redesign replaced the old fixed **orange** wi
 - **Semantics are FIXED regardless of brand** (do NOT wire these to the accent, or they vanish into a same-hue brand): **green** Online dot, **amber** notices (rate-limit / busy / captcha — heading amber, body neutral-ink for contrast), **red** hard error. On green/yellow brands the notices stay distinct via border + label, not colour alone.
 - Other changes: messages are **grouped** by run (one `CobberMini` avatar per assistant run, warm sand bubbles, `motion-safe` slide-in), a crafted **welcome/empty state**, slimmer header, and the existing **cobber.png** avatar is kept (DRY'd into `CobberMini` + `COBBER_AVATAR`). **Source-citation chips were designed but NOT built** — the citation data isn't streamed to the client yet (a separate backend task).
 
+## The panel is a full-bleed sheet below `lg` (2026-08-13)
+
+Below `lg` the panel spans the viewport (`inset-x-0`, rounded TOP corners only, no side or
+bottom border) and sits on the bottom dock; from `lg` it is the 22rem corner-docked card it has
+always been. A 22rem card floating in a phone viewport wasted the horizontal space the
+conversation needed and read as a widget parked over the page rather than a surface the page
+handed you.
+
+**The `side` prop is now `lg:`-scoped.** `sideClass` emits `lg:left-5 lg:right-auto` /
+`lg:right-5 lg:left-auto` — the corner dock only applies where there IS a corner, and the
+opposite side has to be reset to `auto` or `inset-x-0` keeps it pinned. Both variants are
+written as literals: Tailwind's JIT scans source text, so a class assembled from an expression
+(`lg:${side}-5`) is never generated.
+
+## The panel follows the site theme (2026-08-13)
+
+The design handoff's Cobber is a dark panel (`#111318` shell, `#1b1f26` bubbles). It briefly
+shipped dark in BOTH themes on that basis, and that was wrong — on a light page it read as a black
+slab. [`SupportChatWidget`](../../src/components/support-chat/SupportChatWidget.tsx) keeps the
+handoff's SHAPE but forks its surface: light panel / gray-50 bubbles / dark ink in light mode, the
+handoff's dark palette under `.dark`. The accent header band, the avatar and the hazard stripe are
+theme-independent and unchanged.
+
+Two things worth knowing when editing it:
+
+- **Accent-derived colours cannot be plain Tailwind classes.** The quick-reply LABEL has to derive
+  from `--cob-acc` *and* fork by theme — the chip's ground is a 10% accent tint, near-white in
+  light mode and near-black in dark, so no single colour reads on both. That lives in
+  `.cob-quick-ink` (globals.css): a dark neutral by default, `color-mix(accent 30%, white)` under
+  `.dark`, with a flat fallback for browsers without `color-mix`. An inline style cannot fork by
+  theme; a Tailwind arbitrary value containing `color-mix(...)` with nested commas is fragile to
+  parse. The send button's glow is the accent at 40% and stays inline (no fork needed).
+- **The panel stacks ON the promo dock.** It carries `promo-dock-stacks-above`, which is inert
+  everywhere except under `html[data-promo-dock]`, where it swaps `bottom-24` for the dock's
+  measured height (`--promo-dock-h`, published by `PromoBottomDock`). Without it the panel floats
+  with a visible gap above the bar, because `bottom-24` was tuned for the old corner launcher.
+
+The welcome state is also no longer a centred splash: the greeting renders as Cobber's FIRST
+MESSAGE (avatar + bubble + "Just now"), and the quick replies are full-width rows under a
+"Pick a question to get started" rule. Five questions wrapped as pills in a 22rem panel produced a
+ragged block nobody scanned.
+
+## The launcher is suppressed on promo prize pages (2026-08-13)
+
+`/promotions/[slug]` and the toolset landings mount
+[`PromoBottomDock`](../../src/components/sections/promo/PromoBottomDock.tsx) — one bar that owns the
+bottom band. Its **right tab is the Cobber launcher there**, so the corner bubble would be a
+duplicate affordance. [`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx)
+therefore carries `promo-dock-supersedes`, a class that is **inert everywhere else** and only bites
+under `html[data-promo-dock]` (rule in `globals.css`; full write-up in
+[shared-ui/gotchas.md](../shared-ui/gotchas.md) § `.promo-dock-supersedes`).
+
+The tab stays visible even where the rest of the bar collapses — in the hero the dock is only its
+two tabs — so there is no scroll depth on those pages with no way to reach support.
+
+Two things that make this safe rather than a second chat surface:
+
+- **The dock does not implement chat.** Its tab calls `openSupportChat()` — the same
+  `OPEN_SUPPORT_CHAT_EVENT` contract the dashboard's Ask Cobber card uses — which trips the
+  `hasOpened` latch in [`SupportChatWidgetMount`](../../src/components/support-chat/SupportChatWidgetMount.tsx)
+  and opens the one real lazy panel. Conversation state, budget and audit are untouched.
+- **Only the LAUNCHER is hidden, never the panel.** The panel is a separate element at
+  `Z_INDEX.MODAL_BASE - 1000`, well above the dock's `z-60`.
+
+This is the same shape as the existing `/my-account` suppression (the dashboard's Ask Cobber card is
+the entry point there and the bubble is hidden) — a surface that provides its own Cobber affordance
+hides the bubble and opens the panel by event. Any future surface doing this must do BOTH; hiding
+the bubble without an event-based opener leaves the page with no way to reach support.
+
 ## Launcher placement — collision-aware, not per-page hardcoding (2026-07-07)
 
 The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (the draw countdown banner `FloatingCountdownBanner`, the promotions "get entries" bar `FloatingGetEntriesButton`, the upsell gift `FloatingGiftIcon`). Researched pattern (Intercom/Zendesk/Material): keep a persistent corner FAB and **lift it above** the obstacle — never hide it, never move it into a menu.
