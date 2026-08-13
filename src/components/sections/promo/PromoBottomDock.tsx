@@ -6,12 +6,11 @@ import Link from "next/link";
 import { Gift, LayoutDashboard, LogIn, Menu, Moon, X } from "lucide-react";
 
 import { useUserContext } from "@/contexts/UserContext";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useMajorDrawEntryCta } from "@/hooks/useMajorDrawEntryCta";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { multiplierBadgeSrc } from "@/utils/membership/tier-visuals";
-import { hexToRgbaString } from "@/utils/package-colors/packageColorScheme";
 import { addRAFScrollListener } from "@/utils/dom/listenerHelpers";
 import {
   MEMBERSHIP_PACKAGES_QUERY_PARAM,
@@ -89,6 +88,19 @@ export interface PromoBottomDockProps {
 
 export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockProps) {
   const theme = usePromoTheme();
+  const currentSlug = usePromoThemeStore((s) => s.slug);
+  /**
+   * Some brand accents are LIGHT fills — Ryobi's neon lime, DeWalt's yellow — and white ink on
+   * them is invisible (reported on Ryobi: the dock's Enter now button read as an empty green
+   * slab). This is the same test `PromoHero` and `FloatingGetEntriesButton` run, reused verbatim
+   * so all three CTAs flip together: `preferDarkBackground` covers Ryobi, and DeWalt needs the
+   * explicit slug check because the store only sets the flag for Ryobi.
+   */
+  const accentNeedsDarkInk =
+    (theme.preferDarkBackground ?? false) || (currentSlug ?? "").startsWith("dewalt-");
+  const accentInk = accentNeedsDarkInk ? "#000000" : "#ffffff";
+  /** Accent drawn ON a white plate (the tab discs) — same problem, so the same flag decides. */
+  const iconAccent = accentNeedsDarkInk ? "#12100f" : theme.primary;
   const { isAuthenticated, loading: userLoading } = useUserContext();
   const themeMode = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
@@ -226,14 +238,20 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
   const boosted = multiplier != null && multiplier > 1;
   const badgeSrc = boosted ? multiplierBadgeSrc(multiplier) : null;
 
-  // The dock stays dark in BOTH site themes: it sits over prize photography and the hero art
-  // at every scroll depth, and a light bar there reads as a second, competing page surface.
-  const barBackground = "rgba(10,11,13,0.97)";
-  const panelBackground = "#111318";
+  /**
+   * The dock FOLLOWS THE SITE THEME (owner call, 2026-08-13 — it shipped dark-only and read as a
+   * black slab stuck to the bottom of a light page). Expressed as Tailwind `dark:` variants
+   * rather than a JS branch on `themeMode`, so the first paint is already correct: the theme
+   * bootstrap sets `html.dark` before hydration, whereas a JS read renders the light surface
+   * and then flips.
+   */
+  const barSurface = "bg-white/[0.97] dark:bg-[rgba(10,11,13,0.97)]";
+  const panelSurface = "bg-white dark:bg-[#111318]";
+  const hairline = "border-black/10 dark:border-white/10";
   const tabBase =
     // `-mb-px` overlaps the bar's top border so the tab reads as part of the bar, not as a
     // chip floating 1px above it.
-    "absolute bottom-full z-[1] -mb-px flex items-center border border-white/10 border-b-0 shadow-[0_-8px_20px_rgba(0,0,0,0.35)]";
+    `absolute bottom-full z-[1] -mb-px flex items-center border ${hairline} border-b-0 shadow-[0_-8px_20px_rgba(0,0,0,0.18)] dark:shadow-[0_-8px_20px_rgba(0,0,0,0.35)]`;
 
   return (
     <>
@@ -252,25 +270,37 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
           {/* ── Menu drawer ─────────────────────────────────────────── */}
           {menuOpen && (
             <div
-              className="absolute inset-x-0 bottom-full z-[2] rounded-t-[20px] border border-b-0 border-white/10 px-4 pb-[18px] pt-3.5 shadow-[0_-18px_44px_rgba(0,0,0,0.5)] motion-safe:animate-[promo-dock-rise_0.3s_cubic-bezier(0.22,1,0.36,1)] lg:bottom-[calc(100%+12px)] lg:left-6 lg:right-auto lg:w-[340px] lg:rounded-2xl lg:border-b"
-              style={{ background: panelBackground }}
+              className={`absolute inset-x-0 bottom-full z-[2] rounded-t-[20px] border border-b-0 ${hairline} ${panelSurface} px-4 pb-[18px] pt-3.5 shadow-[0_-18px_44px_rgba(0,0,0,0.25)] dark:shadow-[0_-18px_44px_rgba(0,0,0,0.5)] motion-safe:animate-[promo-dock-rise_0.3s_cubic-bezier(0.22,1,0.36,1)] lg:bottom-[calc(100%+12px)] lg:left-6 lg:right-auto lg:w-[340px] lg:rounded-2xl lg:border-b`}
               role="dialog"
               aria-label="Promotions menu"
             >
-              <span aria-hidden className="mx-auto mb-3.5 block h-1 w-[38px] rounded-full bg-white/30 lg:hidden" />
+              <span
+                aria-hidden
+                className="mx-auto mb-3.5 block h-1 w-[38px] rounded-full bg-black/20 dark:bg-white/30 lg:hidden"
+              />
               <div className="mb-1.5 flex items-center justify-between">
+                {/* The white-text lockup only works on the dark panel; light mode takes the
+                    primary logo. */}
                 <Image
-                  src="/images/Tools Australia Logo/White-Text Logo.webp"
+                  src="/images/Tools Australia Logo/Primary Logo.webp"
                   alt="Tools Australia"
                   width={104}
                   height={20}
-                  className="h-5 w-auto object-contain"
+                  className="h-5 w-auto object-contain dark:hidden"
+                />
+                <Image
+                  src="/images/Tools Australia Logo/White-Text Logo.webp"
+                  alt=""
+                  aria-hidden
+                  width={104}
+                  height={20}
+                  className="hidden h-5 w-auto object-contain dark:block"
                 />
                 <button
                   type="button"
                   onClick={() => setMenuOpen(false)}
                   aria-label="Close menu"
-                  className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-white/[0.16] text-gray-400"
+                  className={`flex h-[30px] w-[30px] items-center justify-center rounded-full border ${hairline} text-gray-500 dark:text-gray-400`}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -302,14 +332,18 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
                 aria-pressed={!isLightSite}
                 className="flex w-full items-center justify-between gap-2.5 px-0.5 py-3.5 text-left"
               >
-                <span className="flex flex-none items-center justify-center rounded-[10px] border border-white/[0.09] bg-white/[0.06] p-[8.5px]">
-                  <Moon className="h-[17px] w-[17px]" style={{ color: theme.primary }} />
+                <span
+                  className={`flex flex-none items-center justify-center rounded-[10px] border ${hairline} bg-black/[0.04] p-[8.5px] dark:bg-white/[0.06]`}
+                >
+                  <Moon className="h-[17px] w-[17px]" style={{ color: iconAccent }} />
                 </span>
-                <span className="min-w-0 flex-1 font-sans text-sm font-semibold text-white">Dark mode</span>
+                <span className="min-w-0 flex-1 font-sans text-sm font-semibold text-gray-900 dark:text-white">
+                  Dark mode
+                </span>
                 <span
                   aria-hidden
-                  className={`flex h-6 w-[42px] flex-none rounded-full p-[3px] shadow-[inset_0_1px_3px_rgba(0,0,0,0.45)] transition-colors duration-200 ${
-                    isLightSite ? "justify-start bg-white/[0.14]" : "justify-end"
+                  className={`flex h-6 w-[42px] flex-none rounded-full p-[3px] shadow-[inset_0_1px_3px_rgba(0,0,0,0.25)] transition-colors duration-200 dark:shadow-[inset_0_1px_3px_rgba(0,0,0,0.45)] ${
+                    isLightSite ? "justify-start bg-black/[0.12] dark:bg-white/[0.14]" : "justify-end"
                   }`}
                   style={isLightSite ? undefined : { background: theme.primary }}
                 >
@@ -321,8 +355,8 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
                 <Link
                   href="/login"
                   onClick={() => setMenuOpen(false)}
-                  className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-3.5 font-sans text-[13px] font-extrabold uppercase tracking-[0.05em] text-white"
-                  style={{ background: theme.primary }}
+                  className="mt-3.5 flex w-full items-center justify-center gap-2 rounded-[10px] px-4 py-3.5 font-sans text-[13px] font-extrabold uppercase tracking-[0.05em]"
+                  style={{ background: theme.primary, color: accentInk }}
                 >
                   <LogIn className="h-4 w-4" />
                   Log in
@@ -337,14 +371,14 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}
             aria-label={menuOpen ? "Close menu" : "Open menu"}
-            className={`${tabBase} left-0 rounded-tr-[14px] border-l-0 pb-2.5 pl-3 pr-[11px] pt-[7px] lg:pb-3 lg:pl-5 lg:pr-4 lg:pt-2.5`}
-            style={{ background: menuOpen ? panelBackground : barBackground }}
+            className={`${tabBase} ${menuOpen ? panelSurface : barSurface} left-0 rounded-tr-[14px] border-l-0 pb-2.5 pl-3 pr-[11px] pt-[7px] lg:pb-2.5 lg:pl-5 lg:pr-4 lg:pt-2`}
           >
-            <span
-              className="flex h-[22px] w-[22px] items-center justify-center rounded-full"
-              style={{ background: hexToRgbaString(theme.primary, 0.16) }}
-            >
-              <Menu className="h-[13px] w-[13px]" style={{ color: theme.primary }} />
+            {/* SOLID disc, not a 16% accent tint: on the dark bar a red icon over a red-tinted
+                dark disc was barely visible. White gives every accent a consistent, high-contrast
+                plate — and a light accent (Ryobi lime, DeWalt yellow) is illegible on white too,
+                so those take dark ink by the same rule the CTA uses. */}
+            <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)]">
+              <Menu className="h-[13px] w-[13px]" style={{ color: iconAccent }} />
             </span>
           </button>
 
@@ -352,8 +386,7 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
             type="button"
             onClick={handleCobber}
             aria-label="Open AI support chat"
-            className={`${tabBase} right-0 rounded-tl-[14px] border-r-0 pb-2.5 pl-[11px] pr-3 pt-[7px] lg:pb-3 lg:pl-4 lg:pr-5 lg:pt-2.5`}
-            style={{ background: barBackground }}
+            className={`${tabBase} ${barSurface} right-0 rounded-tl-[14px] border-r-0 pb-2.5 pl-[11px] pr-3 pt-[7px] lg:pb-2.5 lg:pl-4 lg:pr-5 lg:pt-2`}
           >
             <span className="relative block h-[22px] w-[22px]">
               <Image
@@ -364,33 +397,32 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
                 className="h-[22px] w-[22px] rounded-full bg-[#F1DDC2] object-cover"
                 style={{ boxShadow: `0 0 0 1.5px ${theme.primary}` }}
               />
-              <span className="absolute -bottom-px -right-px h-[7px] w-[7px] rounded-full bg-green-500 ring-[1.5px] ring-[rgba(10,11,13,0.97)]" />
+              <span className="absolute -bottom-px -right-px h-[7px] w-[7px] rounded-full bg-green-500 ring-[1.5px] ring-white dark:ring-[rgba(10,11,13,0.97)]" />
             </span>
           </button>
 
           {/* ── The bar ─────────────────────────────────────────────── */}
           {expanded ? (
             <div
-              className="relative z-[3] border-t border-white/10 px-3.5 pt-2.5 backdrop-blur-[10px] motion-safe:animate-[promo-dock-rise_0.3s_cubic-bezier(0.22,1,0.36,1)] lg:px-10 lg:pt-5"
-              style={{
-                background: barBackground,
-                paddingBottom: "calc(env(safe-area-inset-bottom) + 0.625rem)",
-              }}
+              // Desktop was ~90px of mostly empty bar. `lg:pt-3` + no extra bottom padding on the
+              // row brings it to ~72px — enough for the CTA plus its hanging badge, no more.
+              className={`relative z-[3] border-t ${hairline} ${barSurface} px-3.5 pt-2.5 backdrop-blur-[10px] motion-safe:animate-[promo-dock-rise_0.3s_cubic-bezier(0.22,1,0.36,1)] lg:px-10 lg:pt-3`}
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.625rem)" }}
             >
-              <div className="flex items-center gap-2.5 lg:mx-auto lg:max-w-[1200px] lg:gap-5 lg:pb-2.5">
+              <div className="flex items-center gap-2.5 lg:mx-auto lg:max-w-[1200px] lg:gap-5 lg:pb-1">
                 {/* The bar MOUNTS on expand, so these animations play on arrival with no state
                     to track — and replay if the visitor scrolls back into the hero and out
                     again, which is the moment the reminder is worth repeating. */}
                 <div className="min-w-0 flex-1 motion-safe:animate-[promo-dock-pop_0.34s_cubic-bezier(0.22,1,0.36,1)_both]">
                   <div className="flex items-center gap-[7px]">
-                    <span className="min-w-0 truncate font-mono text-3xs font-medium text-gray-400 lg:text-[10px]">
+                    <span className="min-w-0 truncate font-mono text-3xs font-medium text-gray-500 dark:text-gray-400 lg:text-[10px]">
                       {build.combo}
                     </span>
-                    <span className="flex-none whitespace-nowrap rounded-full bg-green-500/20 px-1.5 py-[3px] font-sans text-3xs font-bold text-green-400">
+                    <span className="flex-none whitespace-nowrap rounded-full bg-green-500/15 px-1.5 py-[3px] font-sans text-3xs font-bold text-green-700 dark:bg-green-500/20 dark:text-green-400">
                       {build.cash}
                     </span>
                   </div>
-                  <p className="mt-[3px] truncate font-sans text-[12.5px] font-bold text-white lg:mt-[5px] lg:text-[15px]">
+                  <p className="mt-[3px] truncate font-sans text-[12.5px] font-bold text-gray-900 dark:text-white lg:mt-[5px] lg:text-[15px]">
                     {defaultPack ? `${defaultPack.name} — ${defaultPack.price}` : "Choose your pack"}
                   </p>
                   <p
@@ -432,8 +464,12 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
                   <button
                     type="button"
                     onClick={handleEnterNow}
-                    className="block rounded-[10px] px-[18px] py-[13px] font-sans text-[12.5px] font-extrabold uppercase tracking-[0.04em] text-white lg:rounded-[11px] lg:px-[26px] lg:py-[15px] lg:text-sm"
-                    style={{ background: theme.primary, boxShadow: `0 6px 18px ${theme.shadowRgba}` }}
+                    className="block rounded-[10px] px-[18px] py-[13px] font-sans text-[12.5px] font-extrabold uppercase tracking-[0.04em] lg:rounded-[11px] lg:px-[26px] lg:py-[14px] lg:text-sm"
+                    style={{
+                      background: theme.primary,
+                      color: accentInk,
+                      boxShadow: `0 6px 18px ${theme.shadowRgba}`,
+                    }}
                   >
                     Enter now
                   </button>

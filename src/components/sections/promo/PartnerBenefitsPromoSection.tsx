@@ -7,7 +7,7 @@ import { Check, Layers, Zap, ShieldCheck, Percent } from "lucide-react";
 import MetallicButton from "@/components/ui/MetallicButton";
 import AccessRing from "@/components/ui/AccessRing";
 import { useUserContext } from "@/contexts/UserContext";
-import { usePromoTheme } from "@/stores/usePromoThemeStore";
+import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
 import { hexToRgbaString } from "@/utils/package-colors/packageColorScheme";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
@@ -80,6 +80,12 @@ const DECK_ORDER = ["tradie", "foreman", "boss"] as const;
 export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }: PartnerBenefitsPromoSectionProps) {
   const { isAuthenticated, hasActiveSubscription, loading } = useUserContext();
   const theme = usePromoTheme();
+  const currentSlug = usePromoThemeStore((s) => s.slug);
+  /** Light accents (Ryobi lime, DeWalt yellow) swallow white ink — see `PromoBottomDock`. */
+  const accentInk =
+    (theme.preferDarkBackground ?? false) || (currentSlug ?? "").startsWith("dewalt-")
+      ? "#000000"
+      : "#ffffff";
   const { subscriptionPackages } = useMemberships();
   const membershipMultiplier = useResolvedMultiplier("membership-packages", "display") ?? 1;
 
@@ -284,8 +290,12 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
               <button
                 type="button"
                 onClick={handleViewPackages}
-                className="mt-3.5 w-full rounded-full px-4 py-3.5 font-sans text-xs font-extrabold uppercase tracking-[0.06em] text-white"
-                style={{ background: theme.primary, boxShadow: `0 0 22px ${theme.shadowRgba}` }}
+                className="mt-3.5 w-full rounded-full px-4 py-3.5 font-sans text-xs font-extrabold uppercase tracking-[0.06em]"
+                style={{
+                  background: theme.primary,
+                  color: accentInk,
+                  boxShadow: `0 0 22px ${theme.shadowRgba}`,
+                }}
               >
                 Become a member
               </button>

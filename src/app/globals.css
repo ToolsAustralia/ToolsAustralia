@@ -3707,7 +3707,8 @@ html[data-promo-dock] body {
 }
 @media (min-width: 1024px) {
   html[data-promo-dock] body {
-    padding-bottom: 116px;
+    /* Measured bar height at `lg` is 75px; the rest is breathing room under the last section. */
+    padding-bottom: 96px;
   }
 }
 
