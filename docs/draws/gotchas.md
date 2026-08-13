@@ -237,3 +237,37 @@ the comment above it or a lint/format pass will read it as dead and remove it.
 `tsc` cannot see it, and the bug only reproduces on a cold start, so it will not show up in local
 dev. Any route that populates a ref must import every referenced model itself rather than relying on
 another route having loaded it.
+
+## Prize images are product shots on white — `cover` crops them, and a scrim greys them (2026-08-13)
+
+The redesign handoff specified `object-fit: cover` plus a
+`linear-gradient(180deg, transparent 45%, rgba(0,0,0,.45) 100%)` scrim on the mini-draw card
+image. Both were correct against the prototype's imagery and wrong against production's: the
+handoff itself flags its sample shots as **placeholder only** — real images come from
+`miniDraw.prize.images` in Mongo, and those are studio product shots on a white background.
+
+What that combination did on the live grid:
+
+- **`cover` cropped the product.** A tall tool chest lost its top and bottom, and the Mitutoyo
+  dial indicator was reduced to a slice of the dial with the stem cut off. The one thing a
+  browse card exists to show — what you might win — was the thing being cropped away.
+- **The scrim greyed the lower half of every photo.** Over a white background a 45%-black
+  gradient reads as haze or a dirty print, not depth. It only ever existed to make a white
+  logo overlay legible, and that overlay is gone.
+
+Now: `object-contain` with padding, on a **white** container (`bg-white`, not `#FBFBFC` —
+against a near-white photo background the 1-step-off grey shows as a visible rectangle seam
+inside the card), and no scrim. Applies to all three `MiniDrawCard` view modes, the detail
+gallery slide, and the quick-enter sheet's 52px thumbnail.
+
+Two knock-on fixes that the change forced, both worth keeping in mind for any overlay that
+moves from "on a photo" to "on white":
+
+1. The brand chip was `bg-white/[.94]` with no border — legible only because of the scrim
+   behind it. It now carries `ring-1 ring-black/[0.06]` + `shadow-sm`.
+2. The compact card's entries strip was `bg-black/60`. Over white that computes to
+   `rgb(102,102,102)`, which is **~3.9:1** against white 9.5px text — under the 4.5:1 floor.
+   Raised to `black/75` (~7:1).
+
+**Lesson: a fidelity spec written against placeholder imagery is a spec about the placeholder.**
+Check any `cover`/scrim instruction against the real asset class before shipping it.

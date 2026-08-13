@@ -277,7 +277,11 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
               grid item collapses it to content height and never engages. */}
           <div className="lg:self-stretch">
             <div className="lg:sticky lg:top-24">
-              <MiniDrawImageGallery images={miniDrawData.prize.images} prizeName={miniDrawData.prize.name} />
+              <MiniDrawImageGallery
+                images={miniDrawData.prize.images}
+                prizeName={miniDrawData.prize.name}
+                drawName={miniDrawData.name}
+              />
             </div>
           </div>
 
