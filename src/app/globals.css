@@ -3773,9 +3773,14 @@ html[data-promo-dock] body {
 
 /* Anything that must STACK ON the promo bottom dock rather than float over it — today the
    Cobber panel, which otherwise sat at its own `bottom-24` and left a gap above the bar.
-   `--promo-dock-h` is written by PromoBottomDock from its measured height (it changes with the
-   collapsed/expanded state and the breakpoint, so a constant would drift). The fallback keeps
-   the panel where it has always been on pages with no dock. */
+
+   `--promo-dock-h` is written by PromoBottomDock from its measured BAR height (not the dock's
+   full extent: the corner tabs overhang the bar's top edge, and a panel resting above THEM
+   leaves the menu + Cobber icons stranded in a strip between the two). Sitting on the bar means
+   the panel covers the tabs, which is exactly what the menu drawer does — the two rise out of
+   the same bar and must share one geometry.
+
+   The fallback keeps the panel where it has always been on pages with no dock. */
 html[data-promo-dock] .promo-dock-stacks-above {
   bottom: var(--promo-dock-h, 6rem);
 }

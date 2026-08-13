@@ -164,24 +164,26 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
   }, []);
 
   /**
-   * Publish the dock's occupied height as `--promo-dock-h` so anything that must sit ON it
-   * rather than float over it can (today: the Cobber panel, which otherwise left a gap above
-   * the bar). It cannot be a constant — the height changes with the collapsed/expanded state,
-   * the breakpoint and the safe-area inset — and the TABS are the dock's highest point, so the
-   * measurement takes the topmost of the container and the tab, not just the bar.
+   * Publish the BAR's height as `--promo-dock-h` so a panel can sit flush on top of it — the
+   * menu drawer's own geometry, which anything else rising out of the dock has to match (today
+   * the Cobber panel).
    *
-   * `useLayoutEffect` so the value lands before paint on the frame the bar expands; otherwise
-   * an open panel visibly jumps.
+   * Deliberately the bar, NOT the dock's full occupied height. The corner tabs overhang the
+   * bar's top edge, and a panel resting above THEM leaves the two icons stranded in a strip
+   * between the panel and the bar. The drawer covers them; so should everything else. The tabs
+   * are `absolute`, so they never extend this container — measuring it gives the bar alone for
+   * free.
+   *
+   * Measured rather than a constant: it changes with the collapsed/expanded state, the
+   * breakpoint and the safe-area inset. `useLayoutEffect` so the value lands before paint on
+   * the frame the bar expands; otherwise an already-open panel visibly jumps.
    */
   const dockRef = useRef<HTMLDivElement>(null);
-  const menuTabRef = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
     const write = () => {
-      const tops: number[] = [];
-      if (dockRef.current) tops.push(dockRef.current.getBoundingClientRect().top);
-      if (menuTabRef.current) tops.push(menuTabRef.current.getBoundingClientRect().top);
-      if (tops.length === 0) return;
-      const height = Math.max(0, Math.round(window.innerHeight - Math.min(...tops)));
+      const el = dockRef.current;
+      if (!el) return;
+      const height = Math.max(0, Math.round(window.innerHeight - el.getBoundingClientRect().top));
       document.documentElement.style.setProperty("--promo-dock-h", `${height}px`);
     };
     write();
@@ -405,7 +407,6 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
 
           {/* ── Corner tabs, attached to the bar's top edge ──────────── */}
           <button
-            ref={menuTabRef}
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}

@@ -130,11 +130,13 @@ reads as a second, competing page surface.
 - **It follows the site theme** (white surface / black hairline / dark ink in light mode) via
   Tailwind `dark:` variants rather than a JS read of `themeMode` — the theme bootstrap sets
   `html.dark` before hydration, so the first paint is already right instead of painting light and
-  flipping. It also **publishes its measured height as `--promo-dock-h`** on `<html>`, which is
-  what lets the Cobber panel sit flush ON the bar (`.promo-dock-stacks-above`). Measured, not a
-  constant: the height changes with the collapsed/expanded state, the breakpoint and the
-  safe-area inset, and the TABS are the dock's highest point, so it takes the topmost of the
-  container and the tab.
+  flipping. It also **publishes its measured BAR height as `--promo-dock-h`** on `<html>`, which
+  is what lets the Cobber panel sit flush ON the bar (`.promo-dock-stacks-above`). Measured, not
+  a constant: it changes with the collapsed/expanded state, the breakpoint and the safe-area
+  inset. Deliberately the bar and NOT the dock's full extent — the corner tabs overhang the
+  bar's top edge, and a panel resting above THEM strands the menu + Cobber icons in a strip
+  between the two. The drawer covers them; anything else rising out of the dock must match that
+  geometry.
 - **Light brand accents take dark ink.** Ryobi's neon and DeWalt's yellow swallow white text — the
   CTA read as an empty lime slab on Ryobi. The dock reuses the exact test `PromoHero` and
   `FloatingGetEntriesButton` run (`preferDarkBackground`, plus an explicit dewalt-slug check
