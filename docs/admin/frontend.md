@@ -273,7 +273,8 @@ a corrected API. Backend rationale for every item: [docs/promo/backend.md](../pr
 
 **Table counts after this change: 34 `<th>` / 34 `<td>`** — Channel Attribution 8/8, per-page
 **10/10** (was 11/11: `Cross-visits` removed, `Switched away % of Builds` replaced 1-for-1 by
-`Changed %`), By Built Prize 8/8, By Toolbox 8/8. The new
+`Changed %`), By Built Prize 8/8, By Toolbox 8/8. _(By Built Prize is **9/9** and the total **35/35**
+as of 2026-08-13 — see "Chose it" below.)_ The new
 [`PrizeBuildBreakdownTable`](../../src/components/admin/promo-analytics/PrizeBuildBreakdownTable.tsx)
 adds **8/8** inside `PromoPageDetailModal` — Combination · Builders · Changed · Signups · Conv ·
 Rev · B→S · Conv %, the first six sortable (`builders` descending by default), the last two
@@ -326,6 +327,32 @@ column stays hidden here (`showSourceColumn={false}`) since it would repeat the 
 
 **h) `UTMCampaignBreakdownTable` takes the shared `UTMCampaignMetrics` type** from
 `@/types/promo-analytics` instead of a local `CampaignRow`, and keys rows on `row.channel`.
+
+## Page Analytics — "Chose it" column + honest dedup copy (2026-08-13)
+
+Two accuracy fixes in [`PromoAnalyticsManagement.tsx`](../../src/components/admin/PromoAnalyticsManagement.tsx),
+both about numbers that were **correct but read as something they were not**.
+
+**a) By Built Prize gained a "Chose it" column (9 `<th>` / 9 `<td>`; page total 35/35).** It renders
+`interactedBuilders` with `chosenRate` as a sub-label, beside the existing `builders`. The build
+beacon fires at **unload** and reports whatever combination was on screen touched or not (F-018 —
+it must, or `builders` and `signups` count different populations), so `builders` is **exposure**:
+on production only 10.6% of builders had changed anything, and the top row by exposure
+(`milwaukee-milwaukee`) was chosen by 5.6% because it is the default on the busiest evergreen page.
+Ranked by `builders` alone the table answered *"which page got traffic"* while being read as
+*"which prize do people want"*. **The sort stays on `builders`** — signups, conversions and revenue
+are all counted over the builder population, so sorting on a column scoped differently would put
+the sort and the funnel on different footings. See
+[promo/gotchas.md](../promo/gotchas.md#builders-is-exposure--the-built-prize-table-ranks-traffic-unless-you-read-the-right-column)
+for the same-combination-two-pages proof (48.9% vs 2.0% at near-identical builder counts).
+
+**b) Dedup copy corrected in two places** — the visits column `title` and the `totalVisits`
+MetricCard `hint` claimed uniqueness was per *browser or signed-in user*. `PromoAnalyticsVisit.userId`
+is set on **0** rows (`linkVisitToUser` has no callers), so it is per **browser** (`ta_anon_id`),
+full stop: one person on a phone and a laptop is two visitors. Both strings now say so and warn
+that ranges reaching before ~2026-08 read high, because 57.9% of all-time rows predate reliable
+cookie minting and each falls back to a per-row placeholder visitor. Recent days are 97–99.5%
+cookie-bearing, so **forward accuracy is fine; wide historical ranges inflate**.
 
 ## Pages
 

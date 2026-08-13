@@ -1393,7 +1393,9 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
   }>,
   byBuiltPrize: Array<{                      // grouped by the BUILT combination itself, across EVERY landing page (not per-page) — answers "which combinations get built more than landed on" and "do Kincrome-box builders convert better than Milwaukee-box builders"
     builtPrizeSlug: string,
-    builders: number,                        // unique visitors who assembled this combination, on any landing page
+    builders: number,                        // ⚠️ EXPOSURE, not preference. Unique visitors who ENDED on this combination on any landing page — INCLUDING those who never touched the builder (the beacon reports what was on screen at unload). Do NOT answer "which prize do people want" with this.
+    interactedBuilders: number,              // of builders, those who actually CHANGED the build — THIS is the preference signal
+    chosenRate: number,                      // interactedBuilders / builders as a percent (0-100)
     signups: number,                         // new accounts whose signupAttribution.builtPrizeSlug is this combination
     conversions: number,                     // purchases whose PaymentEvent.data.builtPrizeSlug is this combination
     revenue: number,                         // AUD
@@ -1405,7 +1407,25 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
 ```
 `byPage` covers every valid promo slug (evergreen prize landing pages + toolset landing pages) — pages with zero activity still appear with zero counters (`buildVisitors: 0, builds: 0, buildChangeRate: 0, topBuiltPrize: null, buildDistribution: []`). `byPage` is sorted by `visits` descending. `byChannel` is sorted paid channels first, then owned, then `direct`/`other`, with signups descending inside each tier. `byBuiltPrize` covers the union of every combination seen anywhere in the range via a builder row, a signup, or a conversion (a combination can appear with `builders: 0` if it was built before the window but converted inside it), sorted by `builders` descending with `builtPrizeSlug` ascending as a deterministic tie-break.
 
-**Reporting this endpoint accurately — four things that are easy to get wrong:**
+**Reporting this endpoint accurately — six things that are easy to get wrong:**
+
+0. **NEVER answer "which prize combination do people want / performs best" with `byBuiltPrize[].builders`.**
+   That column is exposure. The build beacon fires at unload and reports whatever was on screen,
+   touched or not, so landing on `/promotions/milwaukee-milwaukee` and leaving increments
+   `builders[milwaukee-milwaukee]`. Measured 2026-08-13: **only 10.6% of all builders changed
+   anything**, and the top row by exposure (`milwaukee-milwaukee`, 17,430 builders) was chosen by
+   **5.6%** — it is simply the default on the busiest evergreen page. Use **`interactedBuilders`**
+   / **`chosenRate`** for preference, and say which one you used. The clearest illustration:
+   `milwaukee-kincrome` was chosen by **48.9%** on `/promotions/milwaukee` but **2.0%** on
+   `/promotions/milwaukee-kincrome`, at near-identical builder counts — on the second page it was
+   already on screen. The array stays sorted by `builders` because signups/conversions/revenue are
+   all counted over the builder population; sorting is not a ranking of preference.
+0b. **"Unique visitors" is per BROWSER, not per person.** `PromoAnalyticsVisit.userId` is set on
+   **0** rows (the linker has no callers), so dedup falls back to the `ta_anon_id` cookie: one
+   person on a phone and a laptop is two visitors. Rows with neither id — **57.9% of all history**,
+   concentrated before the cookie was reliably minted — each count as their own visitor. Recent
+   days run 97–99.5% cookie-bearing, so **recent ranges are accurate and wide historical ranges
+   read HIGH**. Never present a long-range visitor total as a person count.
 
 1. **`builds` before 2026-07-31 measured EXPOSURE, not engagement.** The field existed and was
    labelled "engagement", but the tracking route never forwarded the interaction flag, so the
@@ -4192,6 +4212,14 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-08-13` — **`/v1/promo-analytics` — `byBuiltPrize` gains `interactedBuilders` + `chosenRate` (additive, no endpoint-count change), and two interpretation warnings.**
+
+- **`builders` is exposure and was being read as preference.** The build beacon fires at **unload** and reports whatever combination is on screen, touched or not — required, or `builders` and `signups` would count different populations (F-018). So a visitor who lands on `/promotions/milwaukee-milwaukee` and leaves increments `builders[milwaukee-milwaukee]`. Production 2026-08-13: **10.6% of all builders changed anything**; the top row by exposure (`milwaukee-milwaukee`, 17,430 builders) was chosen by **5.6%**. The proof that this is a page-default artefact and not a taste signal: `milwaukee-kincrome` was chosen by **48.9%** on `/promotions/milwaukee` vs **2.0%** on `/promotions/milwaukee-kincrome` at near-identical builder counts. Both new fields carry ⚠️ `describe()` text; the endpoint notes gained rule **0** telling Norm never to answer "which prize do people want" with `builders`. Nothing changed about `builders` itself — no figure previously reported was arithmetically wrong, but any *preference* claim made from it was.
+- **`interactedBuilders` needed a pipeline change, not a projection.** It is a per-visitor **sticky** boolean (one interacted row among three makes that visitor interacted), which `$addToSet` + `$size` cannot express. `getAggregatedByBuiltPrize` converted to the two-stage `$group` with a `$max` accumulator on the inner stage — same scan count. See `docs/mongodb/patterns.md` P8.
+- **`utmBasis` had never been written** — `null` on all **253,727** production rows since it was added on 2026-07-31. `PromoAnalyticsRepository.createVisit` declared its own inline parameter type that omitted the field and enumerated `create()` fields by hand, so the value died at the last hop, invisible to `tsc` (non-literal argument = no excess-property check). This is the **third** field-by-field-rebuild drop in this feature (after the `interacted` flag and the `range`/`dateRange` drift), so the fix is structural: `createVisit` now takes the shared `PromoVisitRecordPayload`, making a future missed field a compile error. **No backfill is possible** — the value was never captured. Rows written after this deploy carry a basis; `utmBasis` is not exposed on any Norm response.
+- **"Unique visitors" is per BROWSER.** `PromoAnalyticsVisit.userId` is set on **0** rows — `linkVisitToUser` has no callers anywhere in `src/`. Wiring it would NOT fix this (it stamps one anonymousId's rows with one userId, leaving the grouping identical); person-level counting needs the visit beacon to resolve the session at insert time, which is an owner decision, not a silent change. Additionally **57.9% of all-time rows have neither id** and fall back to a per-row placeholder visitor, so wide historical ranges read HIGH while recent days (97–99.5% cookie-bearing) are accurate. Endpoint note **0b** added.
+- No PII in either new field — counts and a percentage.
 
 `2026-07-31` — **All three `/v1/promo-analytics*` endpoints rebuilt (no endpoint-count change; several BREAKING response-shape changes).** Seven defects, fixed together. **Treat every figure these endpoints returned before this date as suspect.**
 
