@@ -61,7 +61,7 @@ export default function MiniDrawQuickEnterSheet({ miniDraw, onClose }: MiniDrawQ
         <div className="flex items-center gap-3 px-4 pb-3 pt-3">
           {/* `contain` on white, like the cards — a 52px `cover` crop of a product shot on
               white is usually an unrecognisable slice of one tool. */}
-          <span className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-black/[0.06] dark:bg-neutral-950 dark:ring-white/10">
+          <span className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-xl bg-white ring-1 ring-black/[0.06]">
             <Image src={thumb} alt={miniDraw.prize.name} fill className="object-contain p-1" sizes="52px" />
           </span>
           <span className="flex min-w-0 flex-col gap-0.5">

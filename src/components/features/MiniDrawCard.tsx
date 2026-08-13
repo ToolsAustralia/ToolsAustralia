@@ -182,7 +182,7 @@ export default function MiniDrawCard({
       <m.div variants={cardVariants} initial="hidden" animate="visible">
         <div className="group flex overflow-hidden rounded-2xl border border-[#F0F1F4] bg-white shadow-[0_4px_16px_-12px_rgba(15,23,42,.35)] transition-shadow duration-300 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900">
           <div className="w-[104px] shrink-0 sm:w-[136px]">
-            <CardShell onSelect={onSelect} href={detailHref} className="relative block h-full min-h-[104px] overflow-hidden bg-white dark:bg-neutral-950">
+            <CardShell onSelect={onSelect} href={detailHref} className="relative block h-full min-h-[104px] overflow-hidden bg-white">
               <Image
                 src={miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}
                 alt={miniDraw.prize.name}
@@ -241,7 +241,7 @@ export default function MiniDrawCard({
     return (
       <m.div variants={cardVariants} initial="hidden" animate="visible" className="h-full">
         <div className="group flex h-full flex-col overflow-hidden rounded-[18px] border border-[#F0F1F4] bg-white dark:border-neutral-800 dark:bg-neutral-900">
-          <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-neutral-950">
+          <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-white">
             <Image
               src={miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}
               alt={miniDraw.prize.name}
@@ -290,7 +290,7 @@ export default function MiniDrawCard({
             and the old bottom scrim greyed out the lower half of every white photo (it only
             ever existed to make a white logo overlay legible; the brand chip carries its own
             ring now). Padding keeps the product off the card edge. */}
-        <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-neutral-950">
+        <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-white">
           <Image
             src={miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}
             alt={miniDraw.prize.name}
@@ -324,7 +324,7 @@ export default function MiniDrawCard({
           {/* ring + shadow, because the chip now sits on a near-white photo rather than on a
               dark scrim — a plain white pill would dissolve into the product background. */}
           {brandMeta && (
-            <span className="absolute bottom-1.5 right-1.5 flex h-[22px] items-center rounded-md bg-white/95 px-[7px] text-[9.5px] font-extrabold uppercase tracking-[0.03em] text-[#111827] shadow-sm ring-1 ring-black/[0.06] backdrop-blur-[2px] lg:bottom-2.5 lg:right-2.5 lg:h-6 lg:rounded-[7px] lg:px-2.5 lg:text-[10.5px] dark:bg-neutral-900/90 dark:text-white dark:ring-white/10">
+            <span className="absolute bottom-1.5 right-1.5 flex h-[22px] items-center rounded-md bg-white/95 px-[7px] text-[9.5px] font-extrabold uppercase tracking-[0.03em] text-[#111827] shadow-sm ring-1 ring-black/[0.06] backdrop-blur-[2px] lg:bottom-2.5 lg:right-2.5 lg:h-6 lg:rounded-[7px] lg:px-2.5 lg:text-[10.5px]">
               {brandMeta.name}
             </span>
           )}

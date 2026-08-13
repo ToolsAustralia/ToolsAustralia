@@ -6,15 +6,15 @@ import useEmblaCarousel from "embla-carousel-react";
 import ClassNames from "embla-carousel-class-names";
 import type { EmblaCarouselType, EmblaOptionsType } from "embla-carousel";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import FullscreenImageViewer, {
-  FullscreenTriggerButton,
-  type FullscreenImageItem,
-} from "@/components/ui/FullscreenImageViewer";
+import { FullscreenTriggerButton } from "@/components/ui/FullscreenImageViewer";
 import { EmblaCarouselButton } from "@/components/ui/embla/EmblaCarouselButton";
+import PrizeImageViewer from "./PrizeImageViewer";
 
 interface MiniDrawImageGalleryProps {
   images: string[];
   prizeName: string;
+  /** Title for the fullscreen viewer. Falls back to the prize name. */
+  drawName?: string;
 }
 
 interface PaginationDotsProps {
@@ -58,19 +58,13 @@ function PaginationDots({ api, active }: PaginationDotsProps) {
   );
 }
 
-export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImageGalleryProps) {
+export default function MiniDrawImageGallery({ images, prizeName, drawName }: MiniDrawImageGalleryProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
-  const [fullscreenStartIndex, setFullscreenStartIndex] = useState(0);
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
   const prefersReduced = useReducedMotion();
-
-  const fullscreenImages: FullscreenImageItem[] = images.map((image, index) => ({
-    src: image,
-    alt: `${prizeName} view ${index + 1}`,
-  }));
 
   // Main carousel
   const mainOptions = useMemo<EmblaOptionsType>(
@@ -113,8 +107,13 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
     [mainApi]
   );
 
+  /**
+   * The viewer reads `activeIndex` rather than holding its own copy, and every viewer-side
+   * navigation scrolls this carousel — so closing the viewer leaves the inline gallery on
+   * whatever image the user was last looking at, in both directions.
+   */
   const openFullscreenAtIndex = (index: number) => {
-    setFullscreenStartIndex(index);
+    mainApi?.scrollTo(index);
     setIsFullscreenOpen(true);
   };
 
@@ -138,7 +137,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
   if (!images || images.length === 0) {
     return (
       <div className="relative overflow-hidden rounded-[20px] border border-[#EFF0F3] bg-white lg:border-[#EAECEF] dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="relative aspect-square bg-white lg:aspect-[4/3] dark:bg-neutral-950">
+        <div className="relative aspect-square bg-white lg:aspect-[4/3]">
           <Image
             src="/images/placeholder-product.jpg"
             alt="No image available"
@@ -168,7 +167,7 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={`slide-${index}`}
-                    className="relative aspect-square lg:aspect-[4/3] bg-white dark:bg-neutral-950 cursor-zoom-in"
+                    className="relative aspect-square lg:aspect-[4/3] bg-white cursor-zoom-in"
                     initial={prefersReduced ? {} : { opacity: 0.7 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.3 }}
@@ -241,10 +240,10 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
                   className={`embla__thumb flex-[0_0_auto] !h-[62px] !w-[62px] lg:!h-[92px] lg:!w-[92px]`}
                 >
                   <div
-                    className={`relative h-full w-full overflow-hidden rounded-[13px] border-2 bg-white transition-all duration-300 lg:rounded-[15px] dark:bg-neutral-900 ${
+                    className={`relative h-full w-full overflow-hidden rounded-[13px] border-2 bg-white transition-all duration-300 lg:rounded-[15px] ${
                       isActive
                         ? "border-red-600 shadow-[0_6px_14px_-8px_rgba(238,0,0,.8)]"
-                        : "border-[#E9EAEE] hover:border-[#D8DAE0] dark:border-neutral-700 dark:hover:border-neutral-600"
+                        : "border-[#E9EAEE] hover:border-[#D8DAE0]"
                     }`}
                   >
                     <Image
@@ -262,12 +261,13 @@ export default function MiniDrawImageGallery({ images, prizeName }: MiniDrawImag
         </div>
       ) : null}
 
-      <FullscreenImageViewer
-        isOpen={isFullscreenOpen}
-        images={fullscreenImages}
-        initialIndex={fullscreenStartIndex}
+      <PrizeImageViewer
+        open={isFullscreenOpen}
+        images={images}
+        index={activeIndex}
+        onIndexChange={(i) => mainApi?.scrollTo(i)}
         onClose={() => setIsFullscreenOpen(false)}
-        title={prizeName}
+        title={drawName || prizeName}
       />
     </div>
   );
