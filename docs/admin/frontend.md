@@ -1520,3 +1520,37 @@ optional for that reason. UI gating is not the boundary: the routes enforce it i
 
 Full rationale, and why this shipped with a backfill migration rather than as a plain new
 permission: [auth/permissions-catalog.md](../auth/permissions-catalog.md).
+
+## Mini draws: sort + brand filter (2026-08-13)
+
+The page had a search box and four status chips and nothing else — no way to ask
+"which draws are earning?" or "which are about to fill and need a winner queued?".
+Both now run through `DrawsToolbar`'s existing dropdown mechanism, which
+`MiniDrawManagement` previously passed no-ops to.
+
+| Dropdown | Options |
+|---|---|
+| **Sort** | Display order · Most entries · Fewest entries · Closest to capacity · Furthest from capacity · Name (A–Z) |
+| **Brand** | `All brands` + only the brands present in the lineup |
+
+Four rules that keep it honest:
+
+1. **"Display order" is the default and must stay first.** It is the drag-ordered
+   lineup the customer site renders, and the only order reorder mode can safely
+   write back.
+2. **Reorder mode pins the grid to display order and hides the dropdowns.** The
+   guard is in `filteredMiniDraws` (`if (isReorderMode || sortKey === "order") return rows`),
+   not only on entry, so picking a sort *while already reordering* can't desync it
+   either. See the gotcha below for what this prevents.
+3. **The Brand dropdown is derived from the data** and renders only when the
+   lineup actually holds more than one brand — no dead options, no pointless
+   control on a single-brand lineup.
+4. **Ties on fill % break by raw entries**, so a wall of 0% draws still ranks
+   usefully instead of falling back to insertion order.
+
+A "Showing N of M · sorted by …" line plus one **Clear filters** button appears
+whenever anything is active. Sort and brand are far less visible than the status
+chips (which carry their own counts), so without it an operator can be looking at
+a subset without realising. The empty state's reset routes through the same
+`clearFilters` — clearing only search + status would leave a brand filter on and
+the button would appear not to work.
