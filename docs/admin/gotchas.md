@@ -273,3 +273,33 @@ That produced a silent contradiction: the headline **Ad Spend KPI counted the sp
 Caught on localhost, where the dev DB has ad spend but little attributed revenue: the headline read **$20,945.78** while the table listed only `direct`. It is not a dev-only bug — any production window where attribution has a gap (or a channel genuinely converts nothing) hits it, and **the worst-performing channel is exactly the one that disappears**.
 
 The skip test now includes `spend > 0`. Pinned by `npm run test:advertising-card-model` ("spend-with-no-return still renders"). When adding a new reason a row should exist, extend that condition — never assume revenue implies presence.
+
+## Sorting the mini-draw grid would have corrupted the lineup order (2026-08-13)
+
+Caught while adding sort to `/admin/mini-draws`, and it applies to any drag-ordered
+list that also offers filters.
+
+`handleDragEnd` finds both indices in the **full** `miniDraws` array and
+`handleSaveOrder` posts `miniDraws.map(_id)` — the whole lineup. The grid, however,
+renders `filteredMiniDraws`. So the thing you drag and the thing you save are two
+different arrays, and they only agree when the view is unfiltered and unsorted.
+
+Sort by "Most entries", drag card A above card B, hit Save, and you write a
+`displayOrder` derived from positions in the display-ordered array while looking at
+an entry-ordered one — a scrambled customer-facing lineup, with no error and nothing
+to undo it. (The same hazard already existed with search + status filters, just less
+reachably.)
+
+**The fix is to make the two arrays identical whenever reordering is possible**, not
+to make the drag handler filter-aware:
+
+- `filteredMiniDraws` returns unsorted rows whenever `isReorderMode` — so a sort
+  picked *during* reorder can't take effect either.
+- Entering reorder mode clears search, status, brand and sort, with a toast saying
+  so. Resetting beats disabling the Reorder button: it is one click and there is
+  nothing to undo.
+- The sort/brand dropdowns are hidden entirely while reordering.
+
+**General rule: a drag-to-reorder list must render exactly the array it writes.** If
+a view can filter or sort it, reordering has to be gated on that view being the
+identity view.

@@ -11,7 +11,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
-import { Plus, Move, Trophy, AlertTriangle } from "lucide-react";
+import { Plus, Move, Trophy, AlertTriangle, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
@@ -69,6 +69,40 @@ const CHIP_LABEL: Record<StatusChip, string> = {
   completed: "Completed",
 };
 
+/**
+ * Sort orders for the card grid.
+ *
+ * "Display order" is the DEFAULT and is the drag-ordered lineup the customer
+ * site renders — it must stay first and stay the default, because it is the only
+ * order that reorder mode can safely write back (see `enterReorderMode`).
+ *
+ * The rest are read-only lenses for managing the lineup: which draws are earning,
+ * which are about to fill and need a winner queued, which are stalling.
+ */
+const SORT_LABEL = {
+  order: "Display order",
+  "entries-desc": "Most entries",
+  "entries-asc": "Fewest entries",
+  "fill-desc": "Closest to capacity",
+  "fill-asc": "Furthest from capacity",
+  "name-asc": "Name (A–Z)",
+} as const;
+
+type SortKey = keyof typeof SORT_LABEL;
+
+const SORT_OPTIONS = Object.values(SORT_LABEL);
+const SORT_KEY_BY_LABEL = Object.fromEntries(
+  (Object.entries(SORT_LABEL) as Array<[SortKey, string]>).map(([key, label]) => [label, key])
+) as Record<string, SortKey>;
+
+const ALL_BRANDS = "All brands";
+
+/** Percentage of the entry threshold reached. 0 when no threshold is set. */
+const fillPercent = (draw: { totalEntries?: number; minimumEntries?: number }) =>
+  (draw.minimumEntries ?? 0) > 0
+    ? Math.min(100, Math.round(((draw.totalEntries ?? 0) / (draw.minimumEntries ?? 1)) * 100))
+    : 0;
+
 export default function MiniDrawManagement() {
   const { data: session } = useSession();
   const { showToast } = useToast();
@@ -94,6 +128,10 @@ export default function MiniDrawManagement() {
   // "Top mini draws" card). Read once on mount — the user can edit/clear after.
   const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("search") ?? "");
+  const [sortKey, setSortKey] = useState<SortKey>("order");
+  const [brandFilter, setBrandFilter] = useState<string>(ALL_BRANDS);
+  /** Which toolbar dropdown is open — only one at a time, owned here per DrawsToolbar's contract. */
+  const [openFilterKey, setOpenFilterKey] = useState<string | null>(null);
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [isOrderDirty, setIsOrderDirty] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
@@ -338,22 +376,95 @@ export default function MiniDrawManagement() {
   // The design filters cards by product name, brand AND status; the old filter
   // matched name only.
   const query = searchTerm.trim().toLowerCase();
-  const filteredMiniDraws = useMemo(
-    () =>
-      miniDraws.filter((draw) => {
-        const matchesStatus =
-          selectedStatus === "all"
-            ? true
-            : selectedStatus === "at-capacity"
-              ? isAtCapacity(draw)
-              : draw.status === selectedStatus;
-        if (!matchesStatus) return false;
-        if (!query) return true;
-        const brandLabel = getBrandMeta(draw.brandId)?.name ?? "";
-        return `${draw.name} ${brandLabel} ${draw.status}`.toLowerCase().includes(query);
-      }),
-    [miniDraws, selectedStatus, query]
-  );
+  const filteredMiniDraws = useMemo(() => {
+    const rows = miniDraws.filter((draw) => {
+      const matchesStatus =
+        selectedStatus === "all"
+          ? true
+          : selectedStatus === "at-capacity"
+            ? isAtCapacity(draw)
+            : draw.status === selectedStatus;
+      if (!matchesStatus) return false;
+
+      const brandLabel = getBrandMeta(draw.brandId)?.name ?? "";
+      if (brandFilter !== ALL_BRANDS && brandLabel !== brandFilter) return false;
+
+      if (!query) return true;
+      return `${draw.name} ${brandLabel} ${draw.status}`.toLowerCase().includes(query);
+    });
+
+    // Reorder mode ALWAYS renders the stored display order. Dragging a card
+    // computes its new index against the full `miniDraws` array and Save posts
+    // that array, so sorting the view by anything else would let the operator
+    // drag against one order and write a different one. Forcing it here (rather
+    // than only resetting on entry) also covers picking a sort while already in
+    // reorder mode.
+    if (isReorderMode || sortKey === "order") return rows;
+
+    const sorted = [...rows];
+    switch (sortKey) {
+      case "entries-desc":
+        sorted.sort((a, b) => (b.totalEntries || 0) - (a.totalEntries || 0));
+        break;
+      case "entries-asc":
+        sorted.sort((a, b) => (a.totalEntries || 0) - (b.totalEntries || 0));
+        break;
+      // Fill ties are broken by raw entries so a wall of 0% draws still ranks
+      // usefully instead of falling back to insertion order.
+      case "fill-desc":
+        sorted.sort((a, b) => fillPercent(b) - fillPercent(a) || (b.totalEntries || 0) - (a.totalEntries || 0));
+        break;
+      case "fill-asc":
+        sorted.sort((a, b) => fillPercent(a) - fillPercent(b) || (a.totalEntries || 0) - (b.totalEntries || 0));
+        break;
+      case "name-asc":
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+    }
+    return sorted;
+  }, [miniDraws, selectedStatus, brandFilter, query, sortKey, isReorderMode]);
+
+  /** Only brands that actually appear in the lineup — no dead options. */
+  const brandOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const draw of miniDraws) {
+      const name = getBrandMeta(draw.brandId)?.name;
+      if (name) names.add(name);
+    }
+    return [ALL_BRANDS, ...Array.from(names).sort((a, b) => a.localeCompare(b))];
+  }, [miniDraws]);
+
+  const isFiltered =
+    query.length > 0 || selectedStatus !== "all" || brandFilter !== ALL_BRANDS || sortKey !== "order";
+
+  const clearFilters = useCallback(() => {
+    setSearchTerm("");
+    setSelectedStatus("all");
+    setBrandFilter(ALL_BRANDS);
+    setSortKey("order");
+    setOpenFilterKey(null);
+  }, []);
+
+  /**
+   * Entering reorder mode clears every filter and sort first.
+   *
+   * You can only safely drag what you can fully see: a drag computes indices
+   * against the WHOLE list, so reordering a filtered subset moves cards past
+   * hidden neighbours and Save writes an order the operator never saw. Resetting
+   * (rather than disabling the button) keeps it one click with nothing to undo.
+   */
+  const enterReorderMode = useCallback(() => {
+    if (isFiltered) {
+      clearFilters();
+      showToast({
+        type: "info",
+        title: "Filters cleared for reordering",
+        message: "Reordering applies to the full lineup, so the list was reset to display order.",
+      });
+    }
+    setIsReorderMode(true);
+    setIsOrderDirty(false);
+  }, [isFiltered, clearFilters, showToast]);
 
   const counts = useMemo(
     () => ({
@@ -392,9 +503,25 @@ export default function MiniDrawManagement() {
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}
         searchPlaceholder="Search by name, brand or status…"
-        openFilterKey={null}
-        onToggleFilter={() => {}}
-        onPickFilter={() => {}}
+        // Hidden in reorder mode: the grid is pinned to display order there, so
+        // offering a sort that cannot apply would just read as broken.
+        filters={
+          isReorderMode
+            ? []
+            : [
+                { key: "sort", label: "Sort", value: SORT_LABEL[sortKey], options: SORT_OPTIONS },
+                ...(brandOptions.length > 2
+                  ? [{ key: "brand", label: "Brand", value: brandFilter, options: brandOptions }]
+                  : []),
+              ]
+        }
+        openFilterKey={openFilterKey}
+        onToggleFilter={setOpenFilterKey}
+        onPickFilter={(key, option) => {
+          if (key === "sort") setSortKey(SORT_KEY_BY_LABEL[option] ?? "order");
+          if (key === "brand") setBrandFilter(option);
+          setOpenFilterKey(null);
+        }}
         actions={[
           ...(canEditMini
             ? [{ label: "New mini draw", icon: Plus, onClick: () => setIsModalOpen(true) }]
@@ -405,10 +532,7 @@ export default function MiniDrawManagement() {
             variant: "secondary" as const,
             onClick: () => {
               if (isReorderMode) void handleCancelReorder();
-              else {
-                setIsReorderMode(true);
-                setIsOrderDirty(false);
-              }
+              else enterReorderMode();
             },
           },
         ]}
@@ -441,6 +565,34 @@ export default function MiniDrawManagement() {
           })}
         </div>
       </DrawsToolbar>
+
+      {/* Result count + a single reset. A sort or brand filter is far less visible
+          than the status chips (which carry their own counts), so without this an
+          operator can be looking at a subset and not realise it. */}
+      {!isReorderMode && !isLoading && isFiltered && (
+        <div className="flex flex-wrap items-center justify-between gap-[8px] px-[2px]">
+          <p className="text-[12px] text-[var(--text2)]">
+            Showing{" "}
+            <span data-figure className="font-semibold text-[var(--text)]">
+              {filteredMiniDraws.length}
+            </span>{" "}
+            of{" "}
+            <span data-figure className="font-semibold text-[var(--text)]">
+              {miniDraws.length}
+            </span>{" "}
+            mini draws
+            {sortKey !== "order" && ` · sorted by ${SORT_LABEL[sortKey].toLowerCase()}`}
+          </p>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="flex h-[var(--m-btn-sm)] items-center gap-[6px] rounded-[8px] border border-[var(--line)] bg-[var(--panel)] px-[10px] text-[12px] font-semibold text-[var(--text2)] hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
+          >
+            <X className="h-[13px] w-[13px]" />
+            Clear filters
+          </button>
+        </div>
+      )}
 
       {isReorderMode && (
         <div className="flex flex-wrap items-center justify-between gap-[10px] rounded-[var(--m-radius)] border border-[var(--warn-line)] bg-[var(--warn-bg)] px-[14px] py-[10px]">
@@ -494,14 +646,15 @@ export default function MiniDrawManagement() {
           <p className="mt-[6px] max-w-[330px] text-[12.5px] leading-[1.6] text-[var(--text2)] text-pretty">
             {query
               ? "Nothing matches that product name, brand or status. Try a shorter term, or clear the search."
-              : "Nothing sits under the status you picked. Switch back to All to see every mini draw."}
+              : brandFilter !== ALL_BRANDS
+                ? `No mini draws under ${brandFilter} with the status you picked.`
+                : "Nothing sits under the status you picked. Switch back to All to see every mini draw."}
           </p>
+          {/* Routes through the shared reset — clearing only search + status would
+              leave a brand filter on and the button would appear not to work. */}
           <button
             type="button"
-            onClick={() => {
-              setSearchTerm("");
-              setSelectedStatus("all");
-            }}
+            onClick={clearFilters}
             className="mt-[15px] flex h-[var(--m-btn-h)] items-center rounded-[9px] border border-[var(--line)] bg-[var(--panel)] px-[15px] text-[12.5px] font-semibold text-[var(--text)] hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
           >
             {query ? "Clear search" : "Show all"}
