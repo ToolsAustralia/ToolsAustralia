@@ -199,7 +199,12 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
   // Mini Draws
   "miniDraws.view": {
     label: "View",
-    description: "See the mini-draw list, individual draw detail, full-capacity counts, and exports.",
+    description: "See the mini-draw list, individual draw detail, and full-capacity counts. Does NOT reveal who entered; that needs 'View participants'.",
+  },
+  "miniDraws.viewParticipants": {
+    label: "View participants",
+    description: "See who entered a mini draw — name, email, mobile, state and entry count — and download the CSV / Excel export. Treat as sensitive: it is the same personal data either way. Grant 'View' without this for a role that manages draws but must not read entrant details.",
+    danger: true,
   },
   "miniDraws.edit": {
     label: "Edit",

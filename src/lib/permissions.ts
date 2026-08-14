@@ -25,7 +25,15 @@ export const AREA_ACTIONS = {
   facebookAds: ["view", "edit"],
   pageAnalytics: ["view"],
   submissions: ["view", "edit", "delete"],
-  miniDraws: ["view", "edit", "selectWinner", "delete"],
+  // `viewParticipants` splits the ENTRANT PII away from the draw list, the same way
+  // `users.viewDetail` splits it away from the customer roster. `view` grants the draw cards
+  // (name, prize, capacity, status); `viewParticipants` grants entrant names, emails, mobiles
+  // and states — both the in-app list AND the CSV/Excel export, which dump identical data and
+  // must therefore be gated identically. As with `users.viewDetail`, this is NOT auto-granted
+  // to existing custom roles, so a migration backfills it onto every role that already had
+  // `view` (scripts/migrations/2026-08-13-backfill-mini-draws-view-participants.ts) — without
+  // that, the deploy silently revokes export access that roles already had.
+  miniDraws: ["view", "viewParticipants", "edit", "selectWinner", "delete"],
   majorDraw: ["view", "edit", "selectWinner"],
   drawResults: ["view"],
   upcomingDraws: ["view"],

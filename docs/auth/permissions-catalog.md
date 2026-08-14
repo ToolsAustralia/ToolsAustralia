@@ -52,7 +52,7 @@ When deciding whether to add a sub-action instead of reusing `edit`, ask: *would
 | `selectWinner` | Irreversible prize/winner declaration | `majorDraw.selectWinner`, `abTesting.selectWinner` |
 | `processPayout` | Money **out** to a third party | `affiliates.processPayout` |
 | `end` | Permanently closing a live entity | `promos.end` |
-| `viewDetail` | A **deeper read** of the same entity — personal data behind a list | `users.viewDetail` |
+| `viewDetail` / `viewParticipants` | A **deeper read** of the same entity — personal data behind a list | `users.viewDetail`, `miniDraws.viewParticipants` |
 
 ### `viewDetail` — splitting PII depth out of `view` (2026-08-13)
 
@@ -87,18 +87,51 @@ UI gating alone is not the boundary: both modal entry points (the users table ro
 The Norm registry entries that mirror those routes (`users.get`, `users.deletion-summary`,
 `users.payment-events.list`, `users.charge-past-due.preview`) moved in lockstep (CLAUDE.md rule 10).
 
+### `miniDraws.viewParticipants` — the same split, for entrants (2026-08-13)
+
+The second application of the pattern above, and the more urgent one: `miniDraws.view` gated the
+mini-draw list **and** `GET /api/admin/mini-draw/[id]/export`, which streams a CSV/Excel of every
+entrant's name, email, mobile and state. Any role that could see the lineup could download the
+whole entrant database.
+
+| Permission | Grants |
+|---|---|
+| `miniDraws.view` | The draw list, individual draw detail, full-capacity counts — no entrant data |
+| `miniDraws.viewParticipants` | `GET /api/admin/mini-draw/[id]/participants` (the in-app roster) **and** `GET /api/admin/mini-draw/[id]/export` |
+
+**Both endpoints move together, always.** They return byte-for-byte the same personal data; the
+only difference is pagination. Gating the roster while leaving the export on `view` would be a
+lock on the front door with the back one open — if you ever add a third read of this data, it
+takes this permission too.
+
+Ships with `npm run migrate:backfill-mini-draws-participants` for the same reason as
+`users.viewDetail`: this is a **removal** for existing roles, so the backfill grants it to every
+role already holding `miniDraws.view` and the split lands as a no-op. Narrow it per role
+afterwards in Settings → Roles.
+
+Marked `danger: true` in `permission-descriptions.ts` — not because it writes anything, but
+because the data-leakage risk is what the flag exists to signal (same treatment as
+`users.export`).
+
+**Norm is deliberately NOT moved in lockstep here.** The `mini-draw.export` registry entry keeps
+`requiredPermission: "miniDraws.view"` because the Norm projection is *aggregate-only* —
+participant counts and a per-state breakdown, no per-user PII (see
+`NormMiniDrawExportAggregateSchema`). It is a different read with a different risk profile that
+happens to share a URL shape; raising its gate would restrict a route that exposes nothing
+personal. If that projection ever gains per-user fields, it moves to `viewParticipants`.
+
 ## Areas
 
 | Area | Actions | Notes |
 |---|---|---|
 | `overview` | view, edit | Admin dashboard landing. `edit` covers upsell multipliers and Klaviyo draw-reset execute. |
-| `users` | view, edit, charge, cancelSubscription, refund, delete | Customer user management. `edit` = profile + status actions only; financial/destructive actions are their own permission. |
+| `users` | view, viewDetail, edit, export, charge, cancelSubscription, refund, delete | Customer user management. `edit` = profile + status actions only; financial/destructive actions are their own permission. `viewDetail` gates the PII modal — see the split above. |
 | `promos` | view, edit, end | Promo CRUD lives under `edit`. Ending a live promo is irreversible. |
 | `facebookAds` | view, edit | Insights + sync. |
 | `pageAnalytics` | view | Read-only dashboards: the **Page Analytics** (`promo-analytics`) tab and its three API routes, plus the **Repeat Purchases** tab and its routes. |
 | `submissions` | view | Contact form submissions (no admin writes today). |
-| `miniDraws` | view | Currently unused area; mini-draw write routes are gated under `majorDraw.*`. |
-| `majorDraw` | view, edit, selectWinner | Covers mini-draws too. `selectWinner` is irreversible. |
+| `miniDraws` | view, viewParticipants, edit, selectWinner, delete | Mini-draw lineup + entrants. `viewParticipants` gates the entrant roster AND the CSV/Excel export (identical PII) — see the split above. `selectWinner` is irreversible. |
+| `majorDraw` | view, edit, selectWinner | Major draw only — mini draws have had their own area since the actions above were added. `selectWinner` is irreversible. |
 | `drawResults` | view | Past draw results admin view. |
 | `upcomingDraws` | view | Upcoming draws calendar. |
 | `affiliates` | view, edit, processPayout, delete | `processPayout` moves money to an affiliate; gate separately. |

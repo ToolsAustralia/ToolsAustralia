@@ -20,6 +20,7 @@ import {
   WinnerSelectionModal,
   WinnerEditModal,
   MiniDrawEditModal,
+  ParticipantsModal,
   type WinnerSelectionData,
   type AdminMiniDrawSummary,
   type MiniDrawEditPayload,
@@ -75,6 +76,9 @@ export default function MiniDrawManagement() {
   const canEditMini = has("miniDraws.edit");
   const canDeleteMini = has("miniDraws.delete");
   const canSelectMiniWinner = has("miniDraws.selectWinner");
+  /** Entrant PII — the roster and the export are the same data, so they share one gate. */
+  const canViewParticipants = has("miniDraws.viewParticipants");
+  const [participantsDraw, setParticipantsDraw] = useState<MiniDraw | null>(null);
   const [miniDraws, setMiniDraws] = useState<MiniDraw[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -522,7 +526,8 @@ export default function MiniDrawManagement() {
                         }
                       : undefined
                   }
-                  onExportCsv={() => handleExport(draw._id, draw.name, "csv")}
+                  onExportCsv={canViewParticipants ? () => handleExport(draw._id, draw.name, "csv") : undefined}
+                  onViewParticipants={canViewParticipants ? () => setParticipantsDraw(draw) : undefined}
                   onEditLatestWinner={canEditMini ? () => void openMiniWinnerEdit(draw) : undefined}
                   isSelectingWinner={isSelectingWinner}
                   isExporting={isExporting}
@@ -532,6 +537,19 @@ export default function MiniDrawManagement() {
             </div>
           </SortableContext>
         </DndContext>
+      )}
+
+      {/* Entry pool — the in-app answer to "who entered?", so staff don't have to download a
+          spreadsheet of everyone's personal details to check one person. Mounted only while a
+          draw is picked so the modal's fetch is always keyed to a real id. */}
+      {participantsDraw && (
+        <ParticipantsModal
+          isOpen
+          onClose={() => setParticipantsDraw(null)}
+          drawId={participantsDraw._id}
+          drawName={participantsDraw.name}
+          drawType="mini"
+        />
       )}
 
       {/* Create Modal */}

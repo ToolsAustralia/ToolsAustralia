@@ -861,3 +861,51 @@ is a real `String` field on `User` (and was already in the route's `.select(...)
 participants modal advertises "search by name / email / mobile", so it is now matched with
 the same case-insensitive regex. Admins commonly paste an unspaced mobile, so the raw stored
 value is matched as-is rather than normalised.
+
+## `GET /api/admin/mini-draw/[id]/participants` (2026-08-13)
+
+The read behind the mini-draw **People** modal — the entry-pool roster, paginated and searchable,
+so staff can answer "did this person enter?" without downloading a spreadsheet of every entrant's
+personal details.
+
+**Permission: `miniDraws.viewParticipants`** (not `miniDraws.view`). The sibling
+`GET /api/admin/mini-draw/[id]/export` moved to the same gate in the same change — the two return
+byte-for-byte the same PII and differ only in pagination, so they must never diverge. See
+[auth/permissions-catalog.md](../auth/permissions-catalog.md) for the split and its backfill.
+
+| Query param | Default | Notes |
+|---|---|---|
+| `page` | `1` | Clamped to ≥ 1 |
+| `limit` | `20` | Clamped to 1–100 |
+| `search` | — | Matches `firstName`, `lastName`, `email`, `mobile`, and the concatenated full name |
+
+```jsonc
+{
+  "success": true,
+  "data": {
+    "participants": [
+      { "userId": "…", "firstName": "…", "lastName": "…", "email": "…",
+        "mobile": "…", "state": "…", "totalEntries": 200,
+        "firstAddedDate": "…", "lastUpdatedDate": "…" }
+    ],
+    "pagination": { "currentPage": 1, "totalPages": 1, "totalCount": 5,
+                    "limit": 20, "hasNextPage": false, "hasPrevPage": false },
+    "miniDraw": { "_id": "…", "name": "…", "totalEntries": 293, "minimumEntries": 1000 }
+  }
+}
+```
+
+Three deliberate choices:
+
+1. **The envelope matches `/api/admin/major-draw/participants` exactly.** One shared
+   `ParticipantsModal` consumes both, so a divergence shows up as a broken modal rather than a
+   compile error. Change one, change the other.
+2. **Sort happens BEFORE the slice.** `entries` is sorted by `totalEntries` desc and *then*
+   paginated. Sorting the page instead would make page 1 "the first N in insertion order, then
+   sorted" rather than the top N — the exact bug that was fixed in the major-draw route.
+3. **No `entriesBySource`.** Mini-draw entry is package-only (no membership / referral / upsell
+   sources), so there is no breakdown to report; the field is major-draw-only and optional on the
+   shared client type.
+
+Search resolves against `User` first and then filters the embedded `entries` array, because the
+searchable fields live on the user document, not on the entry. The regex is escaped before use.

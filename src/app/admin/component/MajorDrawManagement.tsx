@@ -657,8 +657,9 @@ export default function MajorDrawManagement() {
       <ParticipantsModal
         isOpen={isParticipantsModalOpen}
         onClose={() => setIsParticipantsModalOpen(false)}
-        majorDrawId={majorDraw._id || ""}
-        majorDrawName={majorDraw.name || ""}
+        drawId={majorDraw._id || ""}
+        drawName={majorDraw.name || ""}
+        drawType="major"
       />
 
       {/* Export pool. The old page had two bare CSV/Excel buttons; the design

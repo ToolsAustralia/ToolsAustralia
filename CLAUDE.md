@@ -310,7 +310,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-08-12",
+  "lastModified": "2026-08-14",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -608,12 +608,13 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/api-auth-permissions.ts",
         "src/lib/permissions.ts",
         "src/lib/permission-descriptions.ts",
+        "src/lib/__tests__/permissions.test.ts",
         "src/hooks/usePermissions.ts",
         "src/models/Role.ts",
         "scripts/migrate-seed-staff-roles.ts",
         "src/contexts/UserContext.tsx"
       ],
-      "lastVerified": "2026-08-07"
+      "lastVerified": "2026-08-14"
     },
     "email": {
       "docs": "docs/email/",
@@ -774,7 +775,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-08-12"
+      "lastVerified": "2026-08-14"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -850,7 +851,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-08-11"
+      "lastVerified": "2026-08-14"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
@@ -928,7 +929,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/connect-ops-db.ts",
         "scripts/check-env.mjs"
       ],
-      "lastVerified": "2026-08-11"
+      "lastVerified": "2026-08-14"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",
@@ -946,7 +947,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/wt-*.sh",
         "scripts/codemods/**"
       ],
-      "lastVerified": "2026-08-10"
+      "lastVerified": "2026-08-14"
     },
     "config-and-data": {
       "docs": "docs/config-and-data/",
