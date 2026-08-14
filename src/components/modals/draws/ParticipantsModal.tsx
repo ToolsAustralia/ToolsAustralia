@@ -17,7 +17,11 @@ interface Participant {
   mobile?: string;
   state?: string;
   totalEntries: number;
-  entriesBySource: {
+  /**
+   * Major draws only. Mini-draw entry is package-only, so there is no source split to report
+   * and that route omits the field entirely.
+   */
+  entriesBySource?: {
     membership?: number;
     "one-time-package"?: number;
     upsell?: number;
@@ -41,25 +45,39 @@ interface ParticipantsResponse {
       hasNextPage: boolean;
       hasPrevPage: boolean;
     };
-    majorDraw: {
-      _id: string;
-      name: string;
-      totalEntries: number;
-    };
   };
 }
 
 interface ParticipantsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  majorDrawId: string;
-  majorDrawName?: string;
+  /** Which draw's entry pool to read. */
+  drawId: string;
+  drawName?: string;
+  /**
+   * Picks the endpoint. Both return the SAME envelope by design — see the header comment
+   * on /api/admin/mini-draw/[id]/participants — so only the URL differs here.
+   */
+  drawType?: "major" | "mini";
 }
 
 /** The design specifies 8 per page for this list. */
 const PAGE_SIZE = 8;
 
-export default function ParticipantsModal({ isOpen, onClose, majorDrawId, majorDrawName }: ParticipantsModalProps) {
+/**
+ * Entry-pool roster for a major OR mini draw.
+ *
+ * One component, two sources: the two APIs were written to a single response envelope
+ * precisely so this did not have to fork. A `MiniDrawParticipantsModal` copy would drift the
+ * moment either side gained a column.
+ */
+export default function ParticipantsModal({
+  isOpen,
+  onClose,
+  drawId,
+  drawName,
+  drawType = "major",
+}: ParticipantsModalProps) {
   const { openUserModal } = useAdminUserModal();
   const [searchQuery, setSearchQuery] = useState("");
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -84,14 +102,22 @@ export default function ParticipantsModal({ isOpen, onClose, majorDrawId, majorD
 
       try {
         const searchParams = new URLSearchParams({
-          majorDrawId: majorDrawId,
           page: page.toString(),
           limit: String(PAGE_SIZE),
         });
-
+        // Major draw takes the id as a query param; mini draw takes it in the path.
+        if (drawType === "major") searchParams.set("majorDrawId", drawId);
         if (search.trim()) searchParams.append("search", search.trim());
 
-        const response = await fetch(`/api/admin/major-draw/participants?${searchParams.toString()}`);
+        const endpoint =
+          drawType === "mini"
+            ? `/api/admin/mini-draw/${drawId}/participants`
+            : "/api/admin/major-draw/participants";
+
+        const response = await fetch(`${endpoint}?${searchParams.toString()}`);
+        if (response.status === 403) {
+          throw new Error("You don't have permission to view participants for this draw");
+        }
         if (!response.ok) throw new Error("Failed to fetch participants");
 
         const data: ParticipantsResponse = await response.json();
@@ -107,15 +133,15 @@ export default function ParticipantsModal({ isOpen, onClose, majorDrawId, majorD
         setIsLoading(false);
       }
     },
-    [majorDrawId]
+    [drawId, drawType]
   );
 
   // Search resets to page 1 — a page-3 query would otherwise land on an empty page.
   useEffect(() => {
-    if (isOpen && majorDrawId) {
+    if (isOpen && drawId) {
       fetchParticipants(debouncedSearchQuery, 1);
     }
-  }, [isOpen, majorDrawId, debouncedSearchQuery, fetchParticipants]);
+  }, [isOpen, drawId, debouncedSearchQuery, fetchParticipants]);
 
   // Reset search when modal closes
   useEffect(() => {
@@ -146,7 +172,7 @@ export default function ParticipantsModal({ isOpen, onClose, majorDrawId, majorD
       isOpen={isOpen}
       onClose={onClose}
       size="2xl"
-      eyebrow={majorDrawName ? `${majorDrawName} · entry pool` : "Entry pool"}
+      eyebrow={drawName ? `${drawName} · entry pool` : "Entry pool"}
       title="Participants"
       secondaryLabel="Close"
       footer={

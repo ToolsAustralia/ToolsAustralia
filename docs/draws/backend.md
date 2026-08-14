@@ -76,3 +76,25 @@ When a payment is refunded, [src/utils/draws/remove-draw-entries.ts](../../src/u
 [src/app/api/mini-draw/purchase/route.ts](../../src/app/api/mini-draw/purchase/route.ts) resolves attribution at the top of `POST` via `resolveAttributionAtEdge(request)` (from [src/services/attribution/resolveAtEdge.ts](../../src/services/attribution/resolveAtEdge.ts)) and passes the resulting `metadata` into both `handleOneClickPurchase` and `handlePaymentIntentCreation` as `resolvedAttrMetadata`. Each sub-handler spreads `...(resolvedAttrMetadata ?? {})` into its PaymentIntent metadata object alongside `buildAttributionMetadata(attribution)`. This ensures all mini-draw PaymentIntents carry resolved attribution regardless of payment path.
 
 The same `POST` also builds `requestContext` as `{ ...extractRequestContext(request), ...extractTikTokContext(request) }` and both sub-handlers write the ad-platform click ids into PaymentIntent metadata: `capi_fbc`/`capi_fbp` (Meta) and `capi_ttclid`/`capi_ttp` (TikTok, added 2026-07-29). The Stripe webhook has no cookies, so this metadata is the only way the server-side Purchase event gets a click id — see [docs/tracking/TIKTOK_EVENTS_API_IMPLEMENTATION.md](../tracking/TIKTOK_EVENTS_API_IMPLEMENTATION.md). Both sub-handlers take `requestContext` as a positional param typed to include `ttclid`/`ttp`; keep the two in step if a third payment path is added.
+
+## Mini-draw entrant reads are gated on `miniDraws.viewParticipants` (2026-08-13)
+
+Two admin routes expose mini-draw entrant PII (name, email, mobile, state, entry count):
+
+| Route | Returns |
+|---|---|
+| `GET /api/admin/mini-draw/[id]/participants` | Paginated + searchable roster (the admin "People" modal) |
+| `GET /api/admin/mini-draw/[id]/export` | The same data as CSV / Excel |
+
+**Both require `miniDraws.viewParticipants`, never `miniDraws.view`.** The export was on `view`
+until this change, which meant every role that could see the mini-draw lineup could download the
+entire entrant list. They differ only in pagination, so they must stay on the same gate — if a
+third read of this data ever appears, it takes this permission too.
+
+`miniDraws.view` remains the gate for the lineup itself (list, detail, full-capacity counts),
+which carries no entrant data.
+
+The Norm mirror `mini-draw.export` deliberately stays on `miniDraws.view`: its projection is
+aggregate-only (participant counts + a per-state breakdown, no per-user PII). Same URL shape,
+different risk profile. Full rationale in
+[auth/permissions-catalog.md](../auth/permissions-catalog.md).

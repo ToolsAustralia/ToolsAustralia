@@ -1293,7 +1293,7 @@ barrel. Pure relocation — no behaviour changed. The convention is documented i
 |---|---|
 | `WinnerSelectionModal` | Major Draw, Mini Draws card, Draw Results row |
 | `WinnerEditModal` | Major Draw, Mini Draws card, Draw Results |
-| `ParticipantsModal` | Major Draw → View participants |
+| `ParticipantsModal` | Major Draw → View participants; Mini Draws card → **People** (2026-08-13) |
 | `ExportModal` | Draw Results row → Export |
 | `AdminMajorDrawModal` | Overview → Quick actions (create) |
 | `MajorDrawEditModal` | Draw Results, Upcoming Draws (edit) |
@@ -1474,3 +1474,49 @@ Draw Results and Upcoming Draws no longer expose a Sort control. Results is alwa
 newest-draw-first and Upcoming soonest-first — the only orders those screens are read in — so
 the dropdown cost toolbar width without earning it. `sortBy` / `sortOrder` are still sent to
 the API, fixed as `DEFAULT_SORT_BY` / `DEFAULT_SORT_ORDER` in each container.
+
+## Mini draws: view participants in place, and jump to the live page (2026-08-13)
+
+Two additions to the `/admin/mini-draws` card, both answering questions staff previously had to
+leave the admin to answer.
+
+### "People" — the entry-pool roster
+
+Checking whether one person had entered meant **downloading a CSV of every entrant**, opening it,
+and searching it. That is a spreadsheet of live customer PII on a laptop to answer a yes/no
+question, and it happens most on draw night.
+
+The card's **People** action now opens the same
+[`ParticipantsModal`](../../src/components/modals/draws/ParticipantsModal.tsx) the Major Draw page
+uses — searchable by name / email / mobile, 8 per page, rows drilling through to the admin user
+record via `useAdminUserModal`.
+
+**One component, two sources.** `ParticipantsModal` took `majorDrawId` / `majorDrawName`; it now
+takes `drawId` / `drawName` / `drawType: "major" | "mini"` and picks the endpoint. The two APIs
+were written to an identical response envelope specifically so this did not fork — a
+`MiniDrawParticipantsModal` copy would drift the first time either side gained a column. The only
+shape difference is `entriesBySource`, which is optional and major-draw-only: mini-draw entry is
+package-only, so there is no source split to report.
+
+The modal is mounted only while a draw is selected (`participantsDraw && <ParticipantsModal …>`),
+so its fetch is always keyed to a real id rather than an empty-string placeholder.
+
+Backed by `GET /api/admin/mini-draw/[id]/participants` — see [api.md](api.md).
+
+### The external-link button
+
+The card image tile carries a small `ExternalLink` button (top-right) that opens
+`/mini-draws/{id}` — the live customer-facing page — in a new tab. It sits on the tile rather than
+in the footer because it is navigation, not a draw action, and the footer is already four items
+wide on a five-across grid. It `stopPropagation`s so it does not also fire the card's edit
+handler, and it is hidden in reorder mode along with the rest of the actions.
+
+### Permission gating
+
+Both the roster and the CSV export are gated on **`miniDraws.viewParticipants`**, not
+`miniDraws.view` — they return identical personal data, so `onViewParticipants` and `onExportCsv`
+are both `undefined` without it and the buttons do not render. `MiniDrawCard` types both as
+optional for that reason. UI gating is not the boundary: the routes enforce it independently.
+
+Full rationale, and why this shipped with a backfill migration rather than as a plain new
+permission: [auth/permissions-catalog.md](../auth/permissions-catalog.md).

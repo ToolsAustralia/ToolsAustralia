@@ -66,6 +66,21 @@ test("users.view and users.viewDetail are separate — customer PII is its own g
   );
 });
 
+test("miniDraws.view and miniDraws.viewParticipants are separate — entrant PII is its own grant", () => {
+  // Same split, same reason (2026-08-13). `miniDraws.view` gated the draw list AND the
+  // CSV/Excel export — a full dump of every entrant's name, email, mobile and state. The new
+  // action gates the export and the in-app roster together, because they return identical
+  // data; collapsing them back into `view` silently re-widens PII access to every role that
+  // can merely see the mini-draw lineup.
+  assert.ok(AREA_ACTIONS.miniDraws.includes("view"), "the draw-list grant");
+  assert.ok(AREA_ACTIONS.miniDraws.includes("viewParticipants"), "the entrant (PII) grant");
+  assert.notEqual(
+    AREA_ACTIONS.miniDraws.indexOf("view"),
+    AREA_ACTIONS.miniDraws.indexOf("viewParticipants"),
+    "view and viewParticipants must be distinct actions, not aliases"
+  );
+});
+
 test("Promos area has the 'end' sub-action", () => {
   assert.ok(AREA_ACTIONS.promos.includes("end"));
 });

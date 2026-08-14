@@ -51,3 +51,25 @@ Use this to validate that the dashboard KPI card matches raw DB counts. See [adm
 **`npm run find:klaviyo-legacy-fields`** enumerates Klaviyo templates/flows/segments via GET and reports any that still reference the legacy camelCase properties `first_name` / `last_name` / `user_id`. Add a `--json` flag when the output may feed another tool.
 
 **`npm run find:direct-attribution`** (`scripts/find-direct-attribution.ts`) — classifies the "direct" conversion bucket: for every non-renewal `BenefitsGranted` with `convertingPlatform` `direct`/null in the window, checks the persisted touch evidence (event `data.utmSource` → `user.signupAttribution`) through the resolver's own `normalizeUtmToPlatform` and buckets it as `paid-touch-in-window` (the real leak — cookies lost to ITP/cross-device), `paid/klaviyo-touch-expired` (correctly direct under the window model), `unrecognized-source`, `organic-no-signal`, or `null-unstamped`. Options: `--days=N` (default 35), `--env=FILE` (e.g. `--env=.env.production` for a prod read), `--verbose` (per-row lines, userId only — no PII), `--limit=N`. Read-only; prints counts/percentages + median expired-touch age.
+
+## `migrate:backfill-mini-draws-participants` (2026-08-13)
+
+`scripts/migrations/2026-08-13-backfill-mini-draws-view-participants.ts` grants
+`miniDraws.viewParticipants` to every role that already holds `miniDraws.view`.
+
+Second instance of the **carve-out backfill** pattern (after
+`2026-08-13-backfill-users-view-detail.ts`). The shape is fixed and worth reusing verbatim
+whenever a permission is split out of an existing one:
+
+- **Dry-run by default**, `--apply` to write, `--production` to target `.env.production`.
+  `dotenv.config()` must run *before* importing anything that reads `MONGODB_URI` — `src/lib/mongodb.ts`
+  resolves it at import time and throws if unset.
+- **`$all: [VIEW], $nin: [NEW]`** to select, `$addToSet` to write — idempotent and re-runnable
+  within a single deploy window.
+- **It must NOT go in `migrate-seed-staff-roles.ts`.** That script is re-runnable by design; this
+  one is not. Once an operator deliberately revokes the new permission from a role, that role
+  still holds the old one, so a re-seed would match it again and silently re-grant what they just
+  removed — a routine re-seed becoming a privacy regression.
+
+Run it **with** the deploy that adds the permission, not after: until it runs, every custom role
+loses the access the carve-out took away.
