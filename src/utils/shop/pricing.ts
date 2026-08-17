@@ -1,83 +1,107 @@
 /**
  * Shop cart pricing — the single source of the money math.
  *
- * The cart drawer, the summary endpoint and the PaymentIntent all read from
+ * The cart drawer, the summary endpoints and the PaymentIntent all read from
  * here, so a figure can never drift between what a customer is quoted and what
- * they are charged. Before this module the flat-shipping rule existed in three
- * places and GST in one, and they disagreed.
+ * they are charged. The flat-shipping rule previously existed in seven places.
  *
- * ALL PRICES ARE GST-INCLUSIVE. Australian retail is quoted inclusive, and every
- * price entered in the admin catalog assumes it. GST is therefore reported as a
- * COMPONENT of the total (`total / 11`) and is never added on top — the previous
- * `/api/cart/summary` added 10% to an already-inclusive price, overcharging by
- * exactly that much.
+ * TWO RULES THIS MODULE EXISTS TO ENFORCE
  *
- * Shipping is inside the GST component too: under ATO ruling GSTD 2002/3 a
- * delivery charge supplied with taxable goods is itself a taxable supply.
+ * 1. Money is INTEGER CENTS, never a float. `0.1 + 0.2 !== 0.3`, and Stripe
+ *    charges in cents anyway, so dollars-with-rounding is a conversion bug
+ *    waiting to happen. Callers convert to dollars only at a display or
+ *    API-response boundary, via `centsToDollars`.
+ *
+ * 2. Prices are GST-INCLUSIVE. Every price in the admin catalog is entered
+ *    inclusive, so GST is reported as the component already inside the total
+ *    (`total / 11`) and is NEVER added. The previous code added 10% on top,
+ *    overcharging every cart by exactly that much.
  */
+import { GST_DIVISOR, SHOP_CONFIG } from "@/config/shop";
 
 export interface CartLine {
-  price: number;
+  /** Unit price in integer cents. */
+  priceCents: number;
   quantity: number;
 }
 
 export interface PriceCartOptions {
   /** Member tier shop discount: Tradie 5, Foreman 10, Boss 20. Guests and packs 0. */
   shopDiscountPercent?: number;
-  /** Order value at or above which shipping is free. */
-  freeShippingThreshold?: number;
-  flatShipping?: number;
+  freeShippingThresholdCents?: number;
+  flatShippingRateCents?: number;
 }
 
 export interface CartTotals {
-  subtotal: number;
-  discount: number;
-  shipping: number;
-  total: number;
-  /** The GST already inside `total`. Display only — never add it to anything. */
-  gstComponent: number;
+  subtotalCents: number;
+  discountCents: number;
+  shippingCents: number;
+  totalCents: number;
+  /** GST already INSIDE totalCents. Display only — never add it to anything. */
+  gstCents: number;
   totalItems: number;
 }
 
-/** GST-inclusive price / 11 = the GST component (10% of the ex-GST base). */
-export const GST_DIVISOR = 11;
-export const DEFAULT_FREE_SHIPPING_THRESHOLD = 100;
-export const DEFAULT_FLAT_SHIPPING = 10;
-
-const money = (n: number): number => Math.round(n * 100) / 100;
+export const dollarsToCents = (dollars: number): number => Math.round(dollars * 100);
+export const centsToDollars = (cents: number): number => cents / 100;
 
 export function priceCart(lines: readonly CartLine[], opts: PriceCartOptions = {}): CartTotals {
   const {
     shopDiscountPercent = 0,
-    freeShippingThreshold = DEFAULT_FREE_SHIPPING_THRESHOLD,
-    flatShipping = DEFAULT_FLAT_SHIPPING,
+    freeShippingThresholdCents = SHOP_CONFIG.freeShippingThresholdCents,
+    flatShippingRateCents = SHOP_CONFIG.flatShippingRateCents,
   } = opts;
 
-  const subtotal = money(lines.reduce((sum, l) => sum + l.price * l.quantity, 0));
+  const subtotalCents = lines.reduce((sum, l) => sum + l.priceCents * l.quantity, 0);
   const totalItems = lines.reduce((sum, l) => sum + l.quantity, 0);
 
-  // An empty cart costs nothing. Without this the threshold comparison (0 >= 100
-  // is false) charges the flat shipping fee on a cart with nothing in it.
+  // An empty cart costs nothing. Without this the threshold comparison
+  // (0 >= 10000 is false) charges flat shipping on a cart with nothing in it.
   if (totalItems === 0) {
-    return { subtotal: 0, discount: 0, shipping: 0, total: 0, gstComponent: 0, totalItems: 0 };
+    return {
+      subtotalCents: 0,
+      discountCents: 0,
+      shippingCents: 0,
+      totalCents: 0,
+      gstCents: 0,
+      totalItems: 0,
+    };
   }
 
-  const discount = money(subtotal * (shopDiscountPercent / 100));
-  const discounted = money(subtotal - discount);
+  const discountCents = Math.round(subtotalCents * (shopDiscountPercent / 100));
+  const discountedCents = subtotalCents - discountCents;
 
   // The threshold is tested against the DISCOUNTED value — what the customer
   // actually pays. Testing the pre-discount subtotal would ship a $90 order free
   // against a $100 threshold and quietly lose the fee on every discounted cart.
-  const shipping = discounted >= freeShippingThreshold ? 0 : flatShipping;
+  const shippingCents = discountedCents >= freeShippingThresholdCents ? 0 : flatShippingRateCents;
 
-  const total = money(discounted + shipping);
+  const totalCents = discountedCents + shippingCents;
 
   return {
-    subtotal,
-    discount,
-    shipping,
-    total,
-    gstComponent: money(total / GST_DIVISOR),
+    subtotalCents,
+    discountCents,
+    shippingCents,
+    totalCents,
+    gstCents: Math.round(totalCents / GST_DIVISOR),
     totalItems,
+  };
+}
+
+/**
+ * Dollar view of the totals, for API responses and display.
+ *
+ * The cart endpoints have long returned dollars, and their clients still expect
+ * that shape — this is the one place the conversion happens.
+ */
+export function toDollarSummary(totals: CartTotals) {
+  return {
+    totalItems: totals.totalItems,
+    subtotal: centsToDollars(totals.subtotalCents),
+    discount: centsToDollars(totals.discountCents),
+    shipping: centsToDollars(totals.shippingCents),
+    totalAmount: centsToDollars(totals.totalCents),
+    /** GST already INSIDE totalAmount. Display only. */
+    tax: centsToDollars(totals.gstCents),
   };
 }

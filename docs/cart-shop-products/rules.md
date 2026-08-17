@@ -55,3 +55,35 @@ Shipping sits inside the GST component: under ATO ruling GSTD 2002/3 a delivery 
 with taxable goods is itself a taxable supply.
 
 Tests: `npm run test:shop-pricing`.
+
+### R7a — Money is integer cents (2026-08-17)
+
+`priceCart` works in **integer cents** and returns cents. `0.1 + 0.2 !== 0.3`, Stripe charges in
+cents anyway, and a `Math.round(n * 100) / 100` helper is a band-aid over the float rather than a
+fix. Convert at display and API-response boundaries only, via `centsToDollars` / `toDollarSummary`.
+
+The cart endpoints still *return* dollars because their clients expect that shape — `toDollarSummary`
+is the single conversion point.
+
+Config lives in [src/config/shop.ts](../../src/config/shop.ts) (`SHOP_CONFIG`, `GST_DIVISOR`).
+It deliberately holds **only** commerce knobs — legal identity (licence, ABN, notification number)
+stays in `src/constants/legal.ts`. The unmerged `claude/shop-setup` branch has a `src/config/business.ts`
+carrying `license: "TP/04720"`, which is **stale** — the live value is `NSW_LICENSE = "TP/05113"`.
+Do not adopt that file wholesale.
+
+### Prior art: the `claude/shop-setup` branch
+
+An unmerged branch from ~3 months ago (`claude/shop-setup`, 2 commits) contains a fuller shop
+implementation worth reading before extending this domain:
+
+| File | Why it matters |
+|---|---|
+| `src/services/shop/finalizeShopOrder.service.ts` | **Atomic stock decrement** (`findOneAndUpdate({_id, stock:{$gte:qty}}, {$inc:{stock:-qty}})`), revert-on-partial-failure, and an **automatic Stripe refund + apology email** when stock is lost after payment |
+| `src/services/shop/cartValidation.service.ts` | Per-item validation returning structured `{reason, message}` errors rather than a bare throw |
+| `src/services/shop/createShopPurchasePaymentIntent.service.ts` | Stripe customer resolution incl. guest → returning-customer by email |
+| `src/models/Order.ts` | `addressLine1/2`, phone, **AU state enum**, delivery instructions, guest-order fields |
+| `src/components/payment/ShopCheckoutPaymentElement.tsx` | Payment Element wiring for the shop |
+
+Two things it does that we deliberately do **not** copy: it writes the Order from Stripe metadata
+(a 500-char-per-value cap that limits cart size), and it changes the *subscription* return URL to
+`/my-account` — an unrelated behaviour change.

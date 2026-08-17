@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { CartSummary } from "@/hooks/queries/useCartQueries";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
-import { priceCart } from "@/utils/shop/pricing";
+import { priceCart, dollarsToCents, toDollarSummary } from "@/utils/shop/pricing";
 
 // Define CartItem type locally to match our needs
 interface CartItem {
@@ -120,15 +120,12 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
  * shows the undiscounted price until the server responds.
  */
 const calculateSummary = (items: CartItem[]): CartSummary => {
-  const totals = priceCart(items.map((i) => ({ price: i.price, quantity: i.quantity })));
+  const totals = priceCart(
+    items.map((i) => ({ priceCents: dollarsToCents(i.price), quantity: i.quantity }))
+  );
 
   return {
-    totalItems: totals.totalItems,
-    totalAmount: totals.total,
-    subtotal: totals.subtotal,
-    tax: totals.gstComponent,
-    shipping: totals.shipping,
-    discount: totals.discount,
+    ...toDollarSummary(totals),
     membershipDiscount: 0,
     partnerDiscount: 0,
   };

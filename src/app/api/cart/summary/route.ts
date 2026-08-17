@@ -3,7 +3,7 @@ import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import MiniDraw from "@/models/MiniDraw";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
-import { priceCart } from "@/utils/shop/pricing";
+import { priceCart, dollarsToCents, toDollarSummary } from "@/utils/shop/pricing";
 
 export async function GET() {
   try {
@@ -42,16 +42,14 @@ export async function GET() {
     // priceCart only needs the money, and this preserves the total exactly.
     // An empty cart must pass NO lines — a synthetic `quantity: 1` line would
     // miss priceCart's empty-cart guard and charge flat shipping on nothing.
-    const totals = priceCart(totalItems === 0 ? [] : [{ price: subtotal, quantity: 1 }]);
+    const totals = priceCart(
+      totalItems === 0 ? [] : [{ priceCents: dollarsToCents(subtotal), quantity: 1 }]
+    );
 
     const summary = {
+      ...toDollarSummary(totals),
+      // The synthetic single line above collapses quantities, so report the real count.
       totalItems,
-      totalAmount: totals.total,
-      subtotal: totals.subtotal,
-      /** GST already INSIDE totalAmount. Display only — never add it. */
-      tax: totals.gstComponent,
-      shipping: totals.shipping,
-      discount: totals.discount,
       membershipDiscount: 0,
       partnerDiscount: 0,
     };

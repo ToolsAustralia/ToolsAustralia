@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Types } from "mongoose";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
 import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
-import { priceCart } from "@/utils/shop/pricing";
+import { priceCart, dollarsToCents, toDollarSummary } from "@/utils/shop/pricing";
 
 // Define the cart item type from the User model
 type CartItem = {
@@ -151,19 +151,16 @@ export async function PUT(request: NextRequest) {
     // math and added 10% on top of an already-inclusive price, so a cart quoted
     // here disagreed with the same cart quoted by /api/cart/summary.
     const totals = priceCart(
-      transformedItems.map((item) => ({ price: item.price, quantity: item.quantity }))
+      transformedItems.map((item) => ({
+        priceCents: dollarsToCents(item.price),
+        quantity: item.quantity,
+      }))
     );
 
     const response = {
       items: transformedItems,
       summary: {
-        totalItems: totals.totalItems,
-        totalAmount: totals.total,
-        subtotal: totals.subtotal,
-        /** GST already INSIDE totalAmount. Display only — never add it. */
-        tax: totals.gstComponent,
-        shipping: totals.shipping,
-        discount: totals.discount,
+        ...toDollarSummary(totals),
         membershipDiscount: 0,
         partnerDiscount: 0,
       },
