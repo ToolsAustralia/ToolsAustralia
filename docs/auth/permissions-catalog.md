@@ -138,8 +138,37 @@ personal. If that projection ever gains per-user fields, it moves to `viewPartic
 | `errorReports` | view, edit, delete | `edit` = status changes / individual PATCH; `delete` = bulk archive. |
 | `abTesting` | view, edit, selectWinner, delete | `selectWinner` declares an experiment winner. |
 | `rewards` | view, edit, delete | Milestone rewards + monthly coupon campaigns. `edit` covers create/update/toggle and target-user previews; `delete` removes a milestone reward or soft-deactivates a campaign with existing issuances. |
+| `receipts` | view, export | The Receipts ledger (Billing tab) — every payment received, joined to the customer who paid. `view` gates the tab + `GET /api/admin/receipts`; `export` additionally gates `?format=csv`. See the split below. |
 | `settings` | view, edit | Admin Settings tab (Roles & Staff sub-screens). |
 | `audit` | view | Staff activity log (audit trail of staff mutations). |
+
+## `receipts` is a new area, not a reuse of `settings.view` (2026-08-17)
+
+The Receipts tab sits in the sidebar's **Billing** group, where every other tab
+(Blocked Transactions, Past-Due Charges, Webhook Queue) is gated on `settings.view`. Receipts
+does not join them.
+
+That surface is the complete revenue picture — every payment the business has ever taken —
+joined to customer identity (name, email) and to Stripe. This repo's precedent is to carve
+those out into their own grant rather than fold them into a broad one: `users.viewDetail` and
+`miniDraws.viewParticipants` both exist for exactly this reason. Folding it into
+`settings.view` would have meant anyone who could see the webhook queue could also read the
+company's entire revenue history against named customers.
+
+`export` is split from `view` on the same logic as `users.export`: reading the table on
+screen and downloading a CSV of revenue + full names + emails are different risks, and only
+the split lets a role have the first without the second. It is marked `danger: true`.
+
+**Backfill.** A new catalog action is not auto-granted to existing custom roles, so
+`npm run migrate:backfill-receipts-view[:prod]`
+(`scripts/migrations/2026-08-17-backfill-receipts-view.ts`) grants `receipts.view` to every
+role that already holds `settings.view` — so the deploy lands as a no-op rather than as a
+Billing tab that silently vanished for staff. Then narrow it deliberately in Settings → Roles.
+`receipts.export` is **not** backfilled: it starts off everywhere and is handed out on purpose.
+
+Like the other one-shot permission backfills, it is deliberately NOT in
+`migrate-seed-staff-roles.ts` — that script is re-runnable, and a re-run would silently
+re-grant a permission an operator had just revoked.
 
 ## `promoAnalytics.view` was retired (2026-07-31)
 

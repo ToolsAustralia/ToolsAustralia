@@ -85,6 +85,11 @@ export const AREA_META: Record<Area, AreaMeta> = {
     label: "Rewards",
     description: "Milestone rewards and monthly coupon campaigns — issuance rules, targeting, and the redeemable codes they generate.",
   },
+  receipts: {
+    label: "Receipts",
+    description:
+      "The revenue ledger — every payment received, who paid it, and its Stripe record.",
+  },
   settings: {
     label: "Settings",
     description: "The Settings tab itself — Roles + Staff sub-screens.",
@@ -315,6 +320,19 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
   "rewards.delete": {
     label: "Delete",
     description: "Delete a milestone reward or monthly coupon campaign. Campaigns with issuances are soft-deactivated instead of hard-deleted; rewards are removed when no issuances exist.",
+    danger: true,
+  },
+
+  // Receipts
+  "receipts.view": {
+    label: "View",
+    description:
+      "Open the Receipts ledger — every payment received with the customer's name and email, the package, the amount, refund state, and links into Stripe. A complete revenue picture attached to customer identity; grant it deliberately.",
+  },
+  "receipts.export": {
+    label: "Export",
+    description:
+      "Download the filtered ledger as CSV — revenue joined to full names and emails, in a file that leaves the admin panel. Treat as sensitive: same data-leakage risk as 'Users → Export'.",
     danger: true,
   },
 

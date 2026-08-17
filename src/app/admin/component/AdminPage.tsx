@@ -27,6 +27,7 @@ import KlaviyoAnalyticsManagement from "@/components/admin/KlaviyoAnalyticsManag
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
+import ReceiptsManagement from "./ReceiptsManagement";
 import PastDueChargeHistory from "./PastDueChargeHistory";
 import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
@@ -170,6 +171,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "chatbot" && "Cobber AI chatbot — availability, daily spend, deflection rate, usage, and conversation transcripts"}
                   {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
+                  {selectedTab === "receipts" && "Every payment received — source, customer, amount, refund state, and its Stripe record"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}
                   {selectedTab === "stripe-webhook-queue" && "Async Stripe webhook processing queue — replay failed events"}
@@ -226,6 +228,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* BLOCKED TRANSACTIONS TAB */}
           {selectedTab === "blocked-transactions" && <BlockedTransactionsManagement />}
+
+          {/* RECEIPTS TAB */}
+          {selectedTab === "receipts" && <ReceiptsManagement />}
 
           {/* PAST-DUE CHARGE HISTORY TAB */}
           {selectedTab === "past-due-history" && <PastDueChargeHistory />}

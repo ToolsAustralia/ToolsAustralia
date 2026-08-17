@@ -134,6 +134,39 @@ Two constraints when adding it:
 
 Full write-up: [docs/tracking/TIKTOK_EVENTS_API_IMPLEMENTATION.md](../tracking/TIKTOK_EVENTS_API_IMPLEMENTATION.md).
 
+## Stripe dashboard deep-links
+
+`src/utils/billing/stripeDashboardUrl.ts` builds admin-facing links into the Stripe dashboard.
+Added 2026-08-17 for the admin [Receipts](../admin/receipts.md) ledger; reusable by any admin
+surface that wants to hand an operator a link to the underlying Stripe object.
+
+**It must be called server-side.** Live-vs-test mode is only inferrable from the
+`STRIPE_SECRET_KEY` prefix (`sk_live_` / `sk_test_`), which is a server secret the browser
+cannot read — so the URL is built in the service and shipped in the response payload. Do not
+rebuild it client-side, and do not introduce a `NEXT_PUBLIC_STRIPE_MODE` var to work around
+it. `resolveStripeDashboardMode` fails safe toward `test` when the key is unset or is a
+restricted (`rk_…`) key.
+
+⚠️ **The id you pass is polymorphic.** `PaymentEvent.paymentIntentId` holds a real
+PaymentIntent (`pi_…`) for one-off payments but a **prefixed invoice id** (`invoice_in_…`)
+for subscription renewals — one field, two Stripe object types. Every consumer has to branch
+on the prefix:
+
+| Stored id | Link |
+|---|---|
+| `pi_…` | `…/payments/pi_…` |
+| `invoice_in_…` (or bare `in_…`) | `…/invoices/in_…` — the `invoice_` storage prefix is stripped |
+| `cus_…` | `…/customers/cus_…` |
+| anything else | `null` — never a guessed path |
+
+Test mode inserts `/test` before the object segment.
+
+`src/utils/affiliate/affiliate-attribution.ts` documents the same storage convention for
+commission **lookups** (`normalizeStripePaymentIntentKeyForCommission`,
+`stripeInvoiceIdLookupVariants`). This helper is deliberately a separate, display-side twin
+rather than a reuse of those, so a change to commission lookup keys can never silently
+repoint admin links. Covered by `npm run test:receipts`.
+
 ## Cursor agent boundary
 
 The Cursor `.cursor/agents/stripe-billing.md` subagent owns this domain. Read its boundary description before non-trivial changes — the orchestrator rule (`.cursor/rules/orchestrator.mdc`) requires QA review for changes touching payments. Cursor-only; not invocable from Claude Code.
