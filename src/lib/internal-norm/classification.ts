@@ -131,6 +131,7 @@ import {
   NormUsersRecoverPastDueInvoicePreviewSchema,
   NormUsersSearchSchema,
 } from "./schemas/users";
+import { NormReceiptsListSchema } from "./schemas/receipts";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -1567,6 +1568,17 @@ export const NORM_ENDPOINTS = {
     path: "/v1/users/:id/payment-events/:eventId/reverse",
     method: "POST",
     summary: "Reverse a single payment event (refund-class money movement)",
+  },
+
+  // ─── Receipts (the revenue ledger) ────────────────────────────────────
+  "receipts.list": {
+    tier: "read",
+    requiredPermission: "receipts.view",
+    path: "/v1/receipts",
+    method: "GET",
+    summary:
+      "Paged ledger of every payment received in a date range, across memberships, packs, mini draws, upsells and shop orders, with per-row refund state and filter-wide totals net of refunds (PII-safe projection: firstName + opaque userId only)",
+    responseSchema: NormReceiptsListSchema,
   },
 
   // ─── Winners (wired get; update/delete roadmap) ───────────────────────
