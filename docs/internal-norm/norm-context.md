@@ -866,7 +866,9 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 
 ### `GET /v1/receipts`
 
-**Returns**: Paged ledger of every payment received in a date range — one row per payment, newest first — across memberships (new + renewal), one-time and additional packs, mini draws, upsells, and shop orders. Each row carries its refund state; the totals cover the whole filter, not just the page. **PII-safe projection** — `firstName` + opaque `userId` only (lastName / email / Stripe customer id stripped).
+**Returns**: Paged ledger of every payment received in a date range — one row per payment, newest first — across memberships (new + renewal), one-time and additional packs, mini draws, upsells, and shop orders. Each row carries its refund state; the totals cover the whole filter, not just the page.
+
+⚠️ **This endpoint returns customer `email`** — a deliberate widening of the usual Norm projection (owner decision, 2026-08-17), so a named customer's payment history can be answered without a second lookup. `lastName` and the Stripe **customer** id remain stripped. Treat `email` as personal data: use it to answer the operator's question, do not repeat it into any external system or message unless they asked for it specifically.
 ```ts
 {
   dateRange: { range, start: ISO8601, end: ISO8601 },
@@ -890,7 +892,8 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
     netAmount: number,                       // amount − refundedAmount, floored at 0
     refundedAt: ISO8601 | null,
     userId: string | null,                   // opaque Mongo User._id; usable with the users.* endpoints
-    firstName: string,
+    firstName: string,                       // last name is NOT exposed
+    email: string,                           // ⚠️ personal data — see the note above
     stripeObjectId: string | null            // pi_… for one-off payments, in_… for subscription renewals
   }>,
   pagination: { currentPage, totalPages, totalCount, limit, hasNextPage, hasPrevPage }
@@ -904,6 +907,9 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 | `start` | only for `custom` | — | ISO date string |
 | `end` | only for `custom` | — | ISO date string |
 | `category` | no | — | One of the seven category values; omit for all |
+| `status` | no | — | `none` (paid) \| `refunded` \| `partially-refunded` |
+| `packageName` | no | — | Exact package-name match, e.g. `Tradie` |
+| `search` | no | — | Free text over the customer's first name, last name and email. A full email is exact; a broad term matching more than 1,000 customers returns a subset and sets `searchTruncated: true` |
 | `page` | no | `1` | 1-indexed |
 | `limit` | no | `50` | Max 200 |
 
@@ -919,7 +925,9 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 
 0c. **`refundedAmount` reflects `RefundProcessed` / `RefundPartial` rows on this ledger only.** A refund issued directly in the Stripe dashboard that never reached the webhook would leave a row reading `refundStatus: "none"`. Do not present refund totals as a reconciled figure against Stripe.
 
-0d. **Shop rows are structurally supported but currently always empty** — the shop has not launched (0 `Order` documents in production as of 2026-08-17). An empty `shop-order` filter is expected, not an error.
+0d. **`searchTruncated: true` means the numbers are incomplete.** A broad `search` term resolves to at most 1,000 customers, so both `rows` and `totals` become a subset. Say so rather than reporting the figure; re-run with an exact email for a definitive answer.
+
+0e. **Shop rows are structurally supported but currently always empty** — the shop has not launched (0 `Order` documents in production as of 2026-08-17). An empty `shop-order` filter is expected, not an error.
 
 ---
 
@@ -4271,6 +4279,12 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-08-17` — **`/v1/receipts` gains `email`, `status` / `packageName` / `search` filters, and `searchTruncated` (no endpoint-count change).**
+
+- ⚠️ **`email` is now returned per row — a deliberate widening of the Norm PII boundary**, made by explicit owner decision. CLAUDE.md rule 10 otherwise holds Norm projections to "firstName + opaque userId only", which is what `dashboard.revenue-details.by-platform` and `winners.get` still do. The reason is practical: answering "what has this customer paid" needed a second lookup without it. `lastName` and the Stripe **customer** id remain stripped. Recorded here, in `src/lib/internal-norm/schemas/receipts.ts` and in BUSINESS.md so it stays a visible decision rather than drift — to tighten it again, remove `email` from that schema first (the route maps fields explicitly, so the schema is the control point).
+- Three new filters, matching the admin tab: `status` (paid / refunded / partially-refunded), `packageName` (exact), and `search` (free text over first name, last name, email).
+- **`searchTruncated`** is returned because a broad `search` resolves to at most 1,000 customers, making both `rows` and `totals` a subset. It is surfaced specifically so a partial result can never be reported as a complete figure.
 
 `2026-08-17` — **New endpoint: `GET /v1/receipts` (96 endpoints, up from 95).**
 

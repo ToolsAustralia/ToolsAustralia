@@ -123,6 +123,32 @@ async function run() {
     `Ledger: ${grants.length.toLocaleString()} BenefitsGranted · ${existingRefunds.length} refund rows already recorded.\n`
   );
 
+  // ⚠️ IDEMPOTENCY, and why it cannot rely on the amount match.
+  //
+  // The correlation is (customer, amount, closest-preceding purchase). If a member made TWO
+  // identical purchases and one was refunded, a second run finds the first purchase already
+  // refunded, happily matches the SAME Stripe refund to the second one, and writes a
+  // duplicate — under-reporting revenue again. The `claimed` set only guards within a run.
+  //
+  // So idempotency is keyed on the Stripe refund id we stamped on the row, not on the
+  // matching heuristic: a refund this script has already filed is never reconsidered.
+  const backfilled = await PaymentEvent.find({
+    eventType: "RefundProcessed",
+    "data.stripeRefundId": { $exists: true },
+  })
+    .select("data.stripeRefundId")
+    .lean();
+  const backfilledRefundIds = new Set(
+    backfilled
+      .map((r) => (r.data as { stripeRefundId?: unknown })?.stripeRefundId)
+      .filter((id): id is string => typeof id === "string")
+  );
+  if (backfilledRefundIds.size > 0) {
+    console.log(
+      `${backfilledRefundIds.size} refund(s) were filed by a previous run of this script — they will be skipped.\n`
+    );
+  }
+
   // stripeCustomerId → userId
   const users = await User.find({ stripeCustomerId: { $exists: true, $ne: null } })
     .select("stripeCustomerId")
@@ -154,6 +180,13 @@ async function run() {
   const claimed = new Set<string>(); // one BenefitsGranted can only absorb one refund
 
   for (const refund of [...refunds].sort((a, b) => +a.created - +b.created)) {
+    // Already filed by a previous run — checked FIRST, before any amount matching, or the
+    // heuristic will re-attach it to a different purchase and duplicate it (see above).
+    if (backfilledRefundIds.has(refund.id)) {
+      alreadyCovered.push(refund);
+      continue;
+    }
+
     // Direct hit: a one-off payment whose PI the ledger stored verbatim.
     if (refund.paymentIntentId && alreadyRefunded.has(refund.paymentIntentId)) {
       alreadyCovered.push(refund);

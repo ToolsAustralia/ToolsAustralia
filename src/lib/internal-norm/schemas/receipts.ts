@@ -2,16 +2,24 @@
 //
 // Norm projection of the admin Receipts ledger (src/services/admin/receipts.ts).
 //
-// ⚠️ PII BOUNDARY. The admin table shows first name, last name, email and the Stripe
-// CUSTOMER id. This projection deliberately carries **firstName + opaque userId only** —
-// the same boundary `dashboard.revenue-details.by-platform` and `winners.get` hold. Do not
-// widen it: `lastName`, `email` and `stripeCustomerId` must never appear here.
+// ⚠️ PII BOUNDARY — WIDER HERE THAN ELSEWHERE, BY EXPLICIT OWNER DECISION (2026-08-17).
 //
-// The Stripe OBJECT id (the payment / invoice the money moved through) IS exposed, matching
-// `users.payment-events.list`, which already returns `paymentIntentId` / `stripeChargeId`.
-// It identifies a transaction, not a person. The dashboard URLs the admin UI renders are
-// omitted — they are an operator-console affordance and carry the live/test mode of the
-// server key.
+// CLAUDE.md rule 10 says to keep Norm projections to "firstName + opaque userId only", which
+// is what `dashboard.revenue-details.by-platform` and `winners.get` hold. **This endpoint
+// also returns `email`**, at the owner's explicit request, so Norm can answer questions about
+// a named customer's payments without a second lookup.
+//
+// That is a deliberate widening, not an oversight: it makes every customer's email address
+// reachable by the external assistant across the entire revenue history. It is recorded here,
+// in docs/internal-norm/norm-context.md and in BUSINESS.md so it stays a visible decision.
+// Anyone tightening the boundary again should remove `email` here first — the route maps
+// fields explicitly, so the schema is the control point.
+//
+// `lastName` and the Stripe CUSTOMER id remain excluded. The Stripe OBJECT id (the payment /
+// invoice the money moved through) IS exposed, matching `users.payment-events.list` which
+// already returns `paymentIntentId` / `stripeChargeId` — it identifies a transaction, not a
+// person. The dashboard URLs the admin UI renders are omitted: an operator-console affordance
+// that also leaks the live/test mode of the server key.
 
 import { z } from "zod";
 import { NormDateRangeSchema } from "./common";
@@ -37,7 +45,12 @@ const NormReceiptRowSchema = z.object({
   netAmount: z.number().describe("amount − refundedAmount, floored at 0. AUD dollars"),
   refundedAt: z.string().nullable().describe("ISO 8601 UTC; null when refundStatus is 'none'"),
   userId: z.string().nullable().describe("Opaque user id — usable with the users.* endpoints"),
-  firstName: z.string().describe("First name only. Last name and email are NOT exposed"),
+  firstName: z.string().describe("First name only — last name is NOT exposed"),
+  email: z
+    .string()
+    .describe(
+      "Customer email. Exposed by explicit owner decision (2026-08-17) — a deliberate widening of the usual firstName-only Norm boundary. Treat as personal data: do not repeat it into any external system or message unless the operator asked for it specifically",
+    ),
   stripeObjectId: z
     .string()
     .nullable()
@@ -57,6 +70,11 @@ export const NormReceiptsListSchema = z.object({
       ),
     count: z.number().int().nonnegative().describe("Payments in the whole filter"),
   }),
+  searchTruncated: z
+    .boolean()
+    .describe(
+      "True when `search` matched more customers than the query expands to, so rows AND totals are a subset of reality. When true, say so — never present these figures as complete. Re-run with an exact email to get a definitive answer",
+    ),
   rows: z.array(NormReceiptRowSchema),
   pagination: z.object({
     currentPage: z.number().int().positive(),

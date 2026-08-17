@@ -9,7 +9,7 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { apiGet } from "@/lib/queries";
-import type { ReceiptCategory, ReceiptsData } from "@/utils/admin/receipts";
+import type { ReceiptCategory, ReceiptRefundStatus, ReceiptsData } from "@/utils/admin/receipts";
 
 export interface ReceiptsFilter {
   /** Preset name understood by `resolveRevenueDetailsRange`. */
@@ -18,6 +18,10 @@ export interface ReceiptsFilter {
   startDate?: string;
   endDate?: string;
   category?: ReceiptCategory;
+  status?: ReceiptRefundStatus;
+  packageName?: string;
+  /** Free text over customer name + email. Debounce before putting it in here — it is the cache key. */
+  search?: string;
   page: number;
   limit?: number;
 }
@@ -33,6 +37,9 @@ export function buildReceiptsQueryString(
   if (filter.startDate) params.set("startDate", filter.startDate);
   if (filter.endDate) params.set("endDate", filter.endDate);
   if (filter.category) params.set("category", filter.category);
+  if (filter.status) params.set("status", filter.status);
+  if (filter.packageName) params.set("packageName", filter.packageName);
+  if (filter.search) params.set("search", filter.search);
   params.set("page", String(filter.page));
   if (filter.limit) params.set("limit", String(filter.limit));
   for (const [key, value] of Object.entries(extra ?? {})) params.set(key, value);

@@ -160,6 +160,13 @@ New area: `receipts: ["view", "export"]`.
 - `receipts.view` gates the tab (`adminTabs.ts`) and the list route.
 - `receipts.export` additionally gates `?format=csv`.
 
+⚠️ **The Norm mirror returns `email`.** CLAUDE.md rule 10 holds Norm projections to
+"firstName + opaque userId only" and every other Norm read does. `GET /v1/receipts` is an
+explicit, owner-approved exception (2026-08-17) so a named customer's payment history is
+answerable in one call. `lastName` and the Stripe customer id are still withheld. The control
+point is `src/lib/internal-norm/schemas/receipts.ts` — the route maps fields explicitly, so
+removing `email` there tightens the boundary again.
+
 It does **not** reuse the `settings.view` that the other Billing-group tabs share, because
 this surface is the complete revenue picture joined to customer identity — the repo already
 carves those out (`users.viewDetail`, `miniDraws.viewParticipants`). `export` is split from
@@ -210,6 +217,47 @@ Last run (production, all time, 2026-08-17):
 | Renewals total | $651,360.00 → **delta − renewals = $0.00 ✓** |
 
 All five shared categories matched to the cent.
+
+## Filters
+
+Three, all server-side so pagination and the totals stay honest — a client-side filter would
+page over pre-filter rows and report the wrong count.
+
+| Filter | Param | Notes |
+|---|---|---|
+| Category | `category` | The seven `ReceiptCategory` values. |
+| Status | `status` | `none` (Paid) · `refunded` · `partially-refunded`. |
+| Package | `packageName` | Exact match on the stored `packageName`. Free text by necessity — package names come from the catalogue, not a closed enum — so the route bounds it to 200 chars. |
+| Customer | `search` | Free text over first name, last name and email (debounced 300 ms client-side). |
+
+**Search resolves to userIds first.** The searchable fields live on `User` while the ledger
+lives on `PaymentEvent` / `Order`, so the term is resolved to ids and pushed into the *source*
+`$match` — where it uses the `{ userId: 1, timestamp: -1 }` index — rather than filtering after
+the union. The regex is escaped; the box is free text from a human.
+
+⚠️ **A broad term is capped at 1,000 customers** and sets `searchTruncated`, which the UI
+renders as a warning and the Norm endpoint returns as a field. A truncated search must never
+read as "no more results" — the totals are a subset too. A full email is exact.
+
+**Status is derived, not stored**, so it can't be a plain `$match` on a field. `statusClause()`
+expresses it as set membership over the refund index, which is already loaded before the
+aggregation runs — no extra query.
+
+**The package list comes back with the data** (`packageOptions`: name + row count, top 100).
+It is computed inside its own `$facet` branch that applies date + category + status but
+**deliberately not the package filter itself** — otherwise choosing a package would collapse
+the dropdown to that one option and strand the user. The client also holds the last non-empty
+list across refetches so the menu doesn't blank mid-interaction.
+
+All three are mirrored on the Norm endpoint.
+
+### The dropdowns are not native `<select>`s
+
+`src/components/admin/ui/FilterDropdown.tsx`. A native `<select>` renders the OS control,
+which ignores the admin theme and looks nothing like `DateRangeDropdown` sitting beside it in
+the same bar. `FilterDropdown` is the same trigger-button + `Popover` + option-list pattern
+that component already uses, lifted into the kit so filter bars don't each grow their own copy.
+It supports an optional per-row hint (used for the package row counts) and a reset row.
 
 ## ⚠️ `amount` is the LIST price, not cash collected
 
@@ -324,6 +372,33 @@ refunds** — a bug in the audit, not the data. Correlation must go through
 lives in exactly one place (`scripts/backfill-missing-refund-events.ts`). The audit script
 reports counts and defers to it rather than keeping a second copy that could disagree.
 
+### Why the 171 have no purchase — and what it means for historical revenue
+
+Confirmed in code, not inferred. `deleteUserWithCascade`
+([src/utils/admin/delete-user-cascade.ts](../../src/utils/admin/delete-user-cascade.ts)) hard-deletes
+the customer's payment history along with the account:
+
+```ts
+const paymentEventsResult = await PaymentEvent.deleteMany({ userId: userObjectId }, { session });
+const ordersResult       = await Order.deleteMany({ user: userObjectId }, { session });
+```
+
+So when an account is deleted, its `BenefitsGranted` rows go with it. The Stripe customer and
+its refunds survive in Stripe forever; the ledger side vanishes. That is precisely the 171 —
+refunds with no purchase to attach to, and **no revenue overstated**, because the payment was
+erased from the books at the same time.
+
+⚠️ **The wider consequence: deleting a user retroactively rewrites historical revenue.** Every
+figure computed from `PaymentEvent` — Receipts, the dashboard's net and acquisition revenue,
+MER, the daily snapshots — drops for **past** periods when an account is deleted today. A
+customer exercising a deletion request removes their money from the books, and a
+previously-reported month quietly changes.
+
+If you ever need books that don't move, the fix is to anonymise the payment rows on deletion
+(null the PII, keep `userId` as an opaque tombstone) rather than delete them — a change to the
+cascade, not to Receipts. Flagged here because Receipts is where the discrepancy becomes
+visible.
+
 ### Repairing the 87
 
 `npm run backfill:missing-refunds:prod` writes the missing `RefundProcessed` rows so revenue
@@ -333,7 +408,22 @@ would rewrite settled draw history to fix a reporting number. Rows it writes car
 `data.backfilledFromStripe: true` + `data.stripeRefundId` and `processedBy: "admin"`, so they
 are distinguishable from webhook-written rows forever.
 
-**Not yet run against production** — dry-run only.
+**Run against production 2026-08-17**: 87 rows written, 0 duplicates. Refunded moved
+$7,414.91 → $10,344.91 (+$2,930.00 exactly as predicted) and net revenue restated
+$1,197,077.78 → $1,194,415.28. Dashboard net still equals Receipts net to the cent afterwards,
+so both surfaces moved together.
+
+⚠️ **Idempotency is keyed on `data.stripeRefundId`, NOT on the amount match.** The first
+production run exposed this: re-running the dry afterwards still reported 50 "missing" refunds.
+Cause — the correlation is (customer, amount, closest-preceding purchase), so for a member with
+**two identical purchases and one refund**, a second run finds the first purchase already
+refunded and cheerfully matches the same Stripe refund to the second one. The in-run `claimed`
+set only guards within a single execution. A re-run would therefore have written ~50 duplicate
+refunds and under-reported revenue a second time.
+
+The script now loads every `stripeRefundId` it has previously filed and skips those refunds
+**before** any amount matching. Verified: a re-run reports `0 missing`, `170 already on the
+ledger`, `171 unmatched`. Do not remove that check.
 
 ## Gotchas
 
