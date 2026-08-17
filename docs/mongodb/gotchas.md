@@ -142,3 +142,15 @@ Two practical consequences when writing that migration:
 - **Drop-then-let-autoIndex-rebuild is only safe when the old index is not load-bearing.** It was
   safe here because the index being dropped provably narrowed nothing. When the old index *is*
   serving queries, create the new one first and drop second.
+
+## Connection diagnostics must use `console.error` (2026-08-17)
+
+`next.config.ts` `compiler.removeConsole` strips `console.log` / `info` / `debug` / `warn` from production builds. Every diagnostic in [src/lib/mongodb.ts](../../src/lib/mongodb.ts) used a stripped level, so the connection path — the code most likely to be failing when a route mysteriously times out — was **silent in the only environment where it fails**. Six consecutive `/api/admin/metrics/users` 504s produced zero output.
+
+The retry warning in `connectWithRetry`, the unhealthy-cache-clear, and the `disconnected` handler are now `console.error`. The success line stays `console.log` (noise, not signal).
+
+## A route's `maxDuration` must exceed its connection-failure path
+
+`connectDB` uses `serverSelectionTimeoutMS: 10000` + `connectTimeoutMS: 10000`, and `connectWithRetry` retries TLS failures on a `[1000, 2000, 4000]` backoff — **7 seconds of sleeps** across up to four attempts. `minPoolSize: 0` on Vercel means every cold container opens a fresh TLS connection.
+
+So a route running under the `api/**` catch-all `maxDuration: 10` **cannot ever report a connection error** — the platform kills it first and you get an opaque 504. When adding a route that does real DB work, give it a `maxDuration` in `vercel.json` with headroom above this ladder (the admin/metrics routes use 60), or you are guaranteeing an undiagnosable failure mode.

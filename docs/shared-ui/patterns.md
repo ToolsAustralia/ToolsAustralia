@@ -593,3 +593,15 @@ draw") rather than the generic failure, because the mini-draw route is gated on
 `miniDraws.viewParticipants` and a role can legitimately lack it while still seeing the draw list.
 
 **When adding a third draw type, extend the union — do not copy the file.**
+
+## UserSetupModal — an optional field among required ones (2026-08-17)
+
+Step 2 (`Step2Demographics`) now collects **gender** alongside state / profession / date of birth, but it is the only optional field there. Three things keep it that way, and all three must hold together:
+
+1. It is **not** in `stepsNeeded` — step 2 fires on missing state/profession/birthdate only, so gender alone never summons the modal.
+2. It is **not** in the step-2 validation or the `Next disabled` condition — "Continue" stays enabled with gender empty.
+3. Its `Dropdown` gets no `required` and no error slot, and is rendered **last** so the three fields that do gate progress read as the ask.
+
+`isGenderDropdownOpen` joins `isStep2OverlayOpen`; without it the last field on the step gets clipped when its menu opens.
+
+The `/my-account/settings` **ProfileTab** mirrors this: gender is the one field there with **no amber "Required" chip** and is excluded from the `missing` completeness list — badging an optional field as required would be a lie. It always POSTs the key (as `""` when unset) so clearing works.

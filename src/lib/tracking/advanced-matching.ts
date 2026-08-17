@@ -1,6 +1,7 @@
 // src/lib/tracking/advanced-matching.ts
 import { hashPII } from "./canonical-event";
 import { normalizePhoneE164 } from "@/utils/tracking/tiktok-helpers";
+import { genderToMetaGe } from "@/data/genders";
 
 /**
  * Meta `ph` normalization: E.164 digits WITH country code, no `+`, no leading zero —
@@ -20,7 +21,6 @@ export function metaPhoneDigits(phone: string): string {
  * Reference: https://developers.facebook.com/docs/meta-pixel/advanced/advanced-matching
  *
  * Fields we deliberately don't collect today (and so don't send):
- * - ge (gender)
  * - ct (city) — not on user record
  * - zp (zip / postcode) — not always present
  */
@@ -30,6 +30,12 @@ export interface AdvancedMatchingFields {
   ln?: string;
   ph?: string;
   db?: string;
+  /**
+   * Gender. Meta's spec: "Single lowercase letter, `f` or `m`, if unknown, leave blank."
+   * Our `User.gender` is optional and only ever holds `male`/`female`, so most users produce
+   * NO `ge` at all — omitting is Meta's own prescribed behaviour for unknown, not a fallback.
+   */
+  ge?: string;
   st?: string;
   country?: string;
   external_id?: string;
@@ -44,6 +50,8 @@ export interface AdvancedMatchingInput {
   mobile?: string;
   state?: string;
   birthdate?: string;
+  /** `"male"` | `"female"` | anything else/absent → no `ge` is sent. */
+  gender?: string;
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -101,6 +109,12 @@ export function buildAdvancedMatching(input: AdvancedMatchingInput): AdvancedMat
 
   const dob = toYYYYMMDD(input.birthdate);
   if (dob) result.db = hashPII(dob);
+
+  // Gender → Meta's single-letter `ge`. Omitted entirely when unknown: hashing "" would send
+  // a real hash of an empty string, which Meta would treat as a value and which would differ
+  // from the server-side path if that one omitted it — silently WORSENING match quality.
+  const ge = genderToMetaGe(input.gender);
+  if (ge) result.ge = hashPII(ge);
 
   // Tools Australia ships only to AU. If we ever support multi-country, accept
   // an optional `country` field on input.

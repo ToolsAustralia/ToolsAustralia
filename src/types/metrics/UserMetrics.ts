@@ -26,6 +26,8 @@ export interface UserMetrics {
   profession: Record<string, number>;
   state: Record<string, number>;
   ageGroup: Record<AgeGroupLabel, number>;
+  /** Buckets are `Male` | `Female` | `Not set` (see GENDER_BUCKET_ORDER in src/data/genders.ts). */
+  gender: Record<string, number>;
   membershipStatus: {
     active: number;
     cancelled: number;

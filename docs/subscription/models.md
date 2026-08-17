@@ -365,3 +365,11 @@ The `upsellPurchases` array on `User` (upsell-domain data, but it lives on this 
 ## 2026-07-31 — `User.partnerDiscountConsent` added
 
 New optional embedded record on [User.ts](../../src/models/User.ts): `{ scopeVersion, acceptedAt, fields[] }` — the customer's agreement to share their details with the MyRewards partner portal. **No default**: absent means "never consented", the fail-closed state the SSO gate relies on. Owned by the **partner** domain — schema rationale and the re-consent/scope-version mechanism are in [docs/partner/models.md](../partner/models.md); the rules that keep it honest are [docs/partner/rules.md R4–R6](../partner/rules.md). No subscription behaviour changed.
+
+### `User.gender` (added 2026-08-17)
+
+`gender?: "male" | "female"` — **optional**, validated by a validator rather than a Mongoose `enum` so an empty string passes (same treatment as `state` and `mobile`, where `""` means "not provided" rather than invalid). Stored lowercase via `lowercase: true`.
+
+**Unset means unknown**, and deliberately covers both "declined to answer" and "was never asked": there is no "prefer not to say" option because the field is never required anywhere. No consumer may infer anything about members with no value — see `genderBucketFor()` / `genderToMetaGe()` in [src/data/genders.ts](../../src/data/genders.ts), which are the only sanctioned readers.
+
+No migration was needed (absent = unset). Captured optionally in `UserSetupModal` step 2 (never gates "Continue") and editable at `/my-account/settings`; also added to `MY_ACCOUNT_USER_FIELDS` so it reaches the client.

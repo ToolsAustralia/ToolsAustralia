@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { GENDER_VALUES } from "@/data/genders";
 
 export interface IUser extends Document {
   _id: string; // Explicitly define _id as string
@@ -9,6 +10,7 @@ export interface IUser extends Document {
   mobile?: string;
   state?: string; // Australian state/territory code (e.g., "NSW", "VIC", "ACT")
   profession?: string; // User's profession (e.g., "Builder", "Electrician", "Other", or custom value)
+  gender?: "male" | "female"; // Optional. Unset = unknown (covers "declined" AND "never asked")
   birthdate?: Date; // User's date of birth (required for setup; used for age-based eligibility)
   profileSetupCompleted?: boolean; // Flag to track if user has completed profile setup
   role: "user" | "admin";
@@ -414,6 +416,21 @@ const UserSchema = new Schema<IUser>(
       type: String,
       trim: true,
       maxlength: [100, "Profession cannot be more than 100 characters"],
+    },
+    gender: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      // Optional by design — a member who is neither, or who would rather not say, leaves it
+      // blank. Validator (not `enum`) so an empty string passes, matching how `state` and
+      // `mobile` treat "" as "not provided" rather than as an invalid value.
+      validate: {
+        validator: function (v: string) {
+          if (!v || v === "") return true; // Allow empty (optional field)
+          return GENDER_VALUES.includes(v as (typeof GENDER_VALUES)[number]);
+        },
+        message: "Gender must be either 'male' or 'female', or left blank",
+      },
     },
     birthdate: {
       type: Date,

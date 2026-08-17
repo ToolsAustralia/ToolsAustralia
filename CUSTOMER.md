@@ -94,7 +94,7 @@ Two **ghost states** ride on top of the enum without being in it: `pendingChange
 | Register (guest bridge) | Step-1 register creates a passwordless guest — **no login, no membership**. Registering with an existing guest's email/mobile updates that plain account; registering with a **staff/admin** email/mobile is rejected (`400`, "please log in") — privileged accounts are never created or mutated via public register (marker: `roleId`/`userType`, not `role`) | §4a, §4b · [docs/auth/gotchas.md](docs/auth/gotchas.md) |
 | Login | password / email sign-in code / Google / post-payment auto-login (a scaffolded **SMS** sign-in code also exists but is **not live** — no SMS provider configured; when enabled, `send-otp` delivers the code only to the mobile **on file** for the account, never a number supplied in the request — see [docs/auth/gotchas.md](docs/auth/gotchas.md)) | §4c–§4f |
 | First payment & activation | Full price at signup; webhook grants membership. Card declines return a 400 with the decline reason, and checkout shows short per-decline-code guidance (e.g. "Not enough funds on this card. Try another card."); sensitive codes (lost/stolen/fraud) get a generic "card declined" message | §5.1 · [BUSINESS.md §9, §10g](BUSINESS.md) · [payment-error-messages.ts](src/utils/payment/stripe/payment-error-messages.ts) |
-| Post-purchase setup | UserSetupModal captures profession/state + email-verify prompt | [BUSINESS.md §10g](BUSINESS.md) · [docs/USER_SETUP_MODAL.md](docs/USER_SETUP_MODAL.md) |
+| Post-purchase setup | UserSetupModal captures profession/state/DOB (all required) **+ gender (optional, never gates "Continue")** + email-verify prompt | [BUSINESS.md §10g](BUSINESS.md) · [docs/USER_SETUP_MODAL.md](docs/USER_SETUP_MODAL.md) |
 | Upsell offer | Post-success offer; per-trigger dedup | §2i · [docs/upsell/](docs/upsell/) · [BUSINESS.md §5](BUSINESS.md) |
 | Member dashboard | The ROI surface at `/my-account` | §9a · [BUSINESS.md §10h](BUSINESS.md) |
 | Renewal (anchor-24) | Monthly renew; 25th–27th joiners anchored to the 24th | §5.2 · [BUSINESS.md §9b](BUSINESS.md) · [BILLING_ANCHOR_24.md](docs/BILLING_ANCHOR_24.md) |
@@ -128,7 +128,8 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 | `lastName` | string (req, ≤50) | Family name ([User.ts:6](src/models/User.ts#L6)) | **PII** |
 | `state` | string (opt) | AU state/territory code; validated against NSW/VIC/QLD/WA/SA/TAS/ACT/NT ([User.ts:10](src/models/User.ts#L10)) | **PII** (coarse) |
 | `profession` | string (opt, ≤100) | e.g. Builder, Electrician, Other ([User.ts:11](src/models/User.ts#L11)) | — |
-| `birthdate` | Date (opt) | DOB; drives age-based eligibility; cannot be future ([User.ts:12](src/models/User.ts#L12)) | **PII** |
+| `gender` | "male" \| "female" (opt) | Optional; **unset = unknown** and deliberately covers both "declined" and "never asked" — there is no opt-out option because the field is never required ([User.ts:12](src/models/User.ts#L12), [src/data/genders.ts](src/data/genders.ts)) | **PII** (coarse) |
+| `birthdate` | Date (opt) | DOB; drives age-based eligibility; cannot be future ([User.ts:13](src/models/User.ts#L13)) | **PII** |
 | `profileSetupCompleted` | boolean (def false) | Whether profile setup is done ([User.ts:13](src/models/User.ts#L13)) | — |
 | `role` | "user" \| "admin" (def "user") | Legacy coarse role marker ([User.ts:14](src/models/User.ts#L14)) | — |
 
@@ -711,7 +712,7 @@ Before persisting, the webhook runs a **persisted-UTM reconcile** ([reconcilePer
 
 | Category | Properties |
 |---|---|
-| Identity / account | `user_id`, `created_at`, `last_login`, `is_active`, `role`, `state`, `profession`, `is_email_verified`, `is_mobile_verified`, `profile_setup_completed`, `app_accepts_promotional_email` |
+| Identity / account | `user_id`, `created_at`, `last_login`, `is_active`, `role`, `state`, `profession`, `gender` (omitted entirely when unset — no "unknown" sentinel), `is_email_verified`, `is_mobile_verified`, `profile_setup_completed`, `app_accepts_promotional_email` |
 | Subscription | `has_active_subscription`, `subscription_tier`, `subscription_start/end_date`, `subscription_auto_renew`, `subscription_status`, `subscription_has_pending_upgrade`, `subscription_previous_tier`, `subscription_last_upgrade/downgrade_date`, `past_due_renewal_entries`, `membership_status`, `membership_active_duration_months`, `next_renewal_date` |
 | Entries / points / spend | `accumulated_entries`, `rewards_points`, `entries_purchased`, `giveaways_entered`, `member/one_time/upsell/mini_draw_entries`, `lifetime_value`, `total_spent`, `first/last_purchase_date`, `total_one_time/mini_draw_packages` |
 | Upsell engagement | `total_upsells_purchased`, `upsell_total_shown/accepted/declined`, `upsell_conversion_rate`, `upsell_last_interaction` |
@@ -749,7 +750,8 @@ Hashing is plain SHA-256 of lowercased+trimmed input; **phones are first normali
 
 ### 8e. PII flowing to third parties — flags
 
-- **Klaviyo receives raw, unhashed PII** — email, first/last name, mobile (E.164), state, profession, plus the full behavioral/spend profile. **This is the largest clear-text PII export.**
+- **Klaviyo receives raw, unhashed PII** — email, first/last name, mobile (E.164), state, profession, gender (when set), plus the full behavioral/spend profile. **This is the largest clear-text PII export.**
+- **Meta receives gender as a hashed `ge` parameter** (SHA-256 of the single letter `m`/`f`, per Meta's spec) on both the browser pixel's Advanced Matching and the server-side CAPI mirror, alongside the existing hashed email/name/phone/DOB/state. Members with no gender set send **no `ge` field at all** — not a hash of an empty string, which would otherwise act as a shared identifier for every unanswered member. **Open compliance item: [/privacy](src/app/(site)/privacy/page.tsx) discloses that gender is *collected*; it has not been verified to disclose *sharing* it with advertising platforms.**
 - **Meta/TikTok/Snapchat receive PII only as SHA-256 hashes** (email, phone, name, location, DOB, user `_id`), but **raw** click IDs, browser IDs, IP, and user agent. A SHA-256 email is a stable pseudonymous identifier, **not** anonymization.
 - **Public disclosure (2026-07-24, panel F-012):** the privacy policy's Cookies & Tracking section now names **TikTok** alongside Facebook (Marketing Cookies example + third-party providers list) and discloses the **server-side conversion sharing to Meta and TikTok with hashed identifiers** — previously it named Facebook Pixel only, understating the tracking footprint documented in §8d.
 - **No consent banner — deliberate (2026-07-24, panel F-019).** Tools Australia does **not** ask for cookie/pixel consent: the pixels load and the CAPIs fire for every visitor. `hasPixelConsent()` hard-returns `true` ("auto-accept mode"). The dead `PixelConsentModal` — unreachable (`isOpen={false}`) and with a Decline button that gated nothing — was deleted rather than left implying a control the visitor never had. Rationale + what a real consent gate would require: [docs/tracking/rules.md R9](docs/tracking/rules.md).

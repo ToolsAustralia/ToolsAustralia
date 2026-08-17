@@ -1,13 +1,13 @@
 /**
  * User Metrics Service
- * 
+ *
  * Business logic for aggregating user analytics and metrics.
  */
 
 import User from "@/models/User";
 import {
   aggregateNetCountWithMatch,
-  fetchNetBenefitsGrantedInRange,
+  aggregateNetBenefitsSummaryWithMatch,
 } from "@/utils/payment/payment-event-net-queries";
 import ReferralEvent from "@/models/ReferralEvent";
 import connectDB from "@/lib/mongodb";
@@ -17,50 +17,109 @@ import MembershipDailySnapshot from "@/models/MembershipDailySnapshot";
 import { getAgeGroup, AGE_GROUP_ORDER, type AgeGroupLabel } from "@/utils/metrics/age-grouping";
 import { normalizeProfession, bucketUnmatched } from "@/utils/metrics/profession-normalize";
 import { membershipPackages } from "@/data/membershipPackages";
+import { GENDER_BUCKET_ORDER, genderBucketFor } from "@/data/genders";
+
+/**
+ * Emit a stage breakdown when a request is slow enough to matter.
+ *
+ * `console.error` deliberately — next.config.ts `removeConsole` strips log/info/debug/warn from
+ * production builds, and production is the only place this endpoint has ever been slow. Six
+ * consecutive 504s on /api/admin/metrics/users produced zero diagnostic output precisely because
+ * every timing/diagnostic line in this path used a stripped level.
+ *
+ * A healthy request logs nothing.
+ */
+const SLOW_REQUEST_MS = 2000;
 
 export class UserMetricsService {
   /**
    * Get aggregated user metrics
    */
   async getUserMetrics(query: UserMetricsQuery = {}): Promise<UserMetrics> {
-    await connectDB();
+    const requestStartedAt = Date.now();
+    const stageMs: Record<string, number> = {};
+    const timed = async <T>(stage: string, fn: () => Promise<T>): Promise<T> => {
+      const startedAt = Date.now();
+      try {
+        return await fn();
+      } finally {
+        stageMs[stage] = Date.now() - startedAt;
+      }
+    };
+
+    await timed("connectDB", () => connectDB());
 
     const startDate = query.startDate || new Date(0); // Beginning of time if not specified
     const endDate = query.endDate || new Date(); // Now if not specified
     const asOfDate = query.asOfDate ?? null;
 
-    // Get all users created in the date range
-    const users = await User.find({
-      createdAt: {
-        $gte: startDate,
-        $lte: endDate,
-      },
-    })
-      .select("_id affiliateReferral referral profession subscription createdAt birthdate state")
-      .lean()
-      .exec();
+    // Four independent branches. Only the users → referralEvents pair is a genuine dependency
+    // (the second needs the first's ids), so it runs as a chain inside the fan-out rather than
+    // forcing everything behind it. Previously all five queries awaited sequentially.
+    const [{ users, referredUserIds }, snapshotRows, purchaseSummary, renewedCount] = await Promise.all([
+      timed("users+referrals", async () => {
+        // Get all users created in the date range
+        const users = await User.find({
+          createdAt: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+        })
+          .select("_id affiliateReferral referral profession subscription createdAt birthdate state gender")
+          .lean()
+          .exec();
 
-    // Get all referral events for users in this date range
-    // This tells us who was referred by whom (excluding self-referrals)
-    const userIds = users.map((u) => u._id);
-    const referralEvents = await ReferralEvent.find({
-      inviteeUserId: { $in: userIds },
-      status: { $in: ["pending", "converted"] }, // Only count valid referrals
-    })
-      .select("inviteeUserId referrerId")
-      .lean()
-      .exec();
+        // Get all referral events for users in this date range
+        // This tells us who was referred by whom (excluding self-referrals)
+        const userIds = users.map((u) => u._id);
+        const referralEvents = await ReferralEvent.find({
+          inviteeUserId: { $in: userIds },
+          status: { $in: ["pending", "converted"] }, // Only count valid referrals
+        })
+          .select("inviteeUserId referrerId")
+          .lean()
+          .exec();
 
-    // Create a set of user IDs who were referred by someone else (not themselves)
-    const referredUserIds = new Set<string>();
-    referralEvents.forEach((event) => {
-      const inviteeId = event.inviteeUserId?.toString();
-      const referrerId = event.referrerId?.toString();
-      // Only count if referrer is different from invitee (exclude self-referrals)
-      if (inviteeId && referrerId && inviteeId !== referrerId) {
-        referredUserIds.add(inviteeId);
-      }
-    });
+        // Create a set of user IDs who were referred by someone else (not themselves)
+        const referredUserIds = new Set<string>();
+        referralEvents.forEach((event) => {
+          const inviteeId = event.inviteeUserId?.toString();
+          const referrerId = event.referrerId?.toString();
+          // Only count if referrer is different from invitee (exclude self-referrals)
+          if (inviteeId && referrerId && inviteeId !== referrerId) {
+            referredUserIds.add(inviteeId);
+          }
+        });
+
+        return { users, referredUserIds };
+      }),
+
+      // Snapshot rows are only consulted in snapshot mode; skip the round-trip entirely otherwise.
+      timed("membershipSnapshot", async () => {
+        if (!asOfDate) return [];
+        const dateKey = formatInTimeZone(asOfDate, "Australia/Sydney", "yyyy-MM-dd");
+        return MembershipDailySnapshot.find({ date: dateKey }).lean();
+      }),
+
+      // Counts computed by MongoDB. This used to fetch every matching PaymentEvent document
+      // just to sum a price and tally packageType in JS.
+      timed("purchaseSummary", () =>
+        aggregateNetBenefitsSummaryWithMatch({
+          timestamp: { $gte: startDate, $lte: endDate },
+        })
+      ),
+
+      timed("renewals", () =>
+        aggregateNetCountWithMatch({
+          packageType: "membership",
+          "data.billingReason": "subscription_cycle",
+          timestamp: {
+            $gte: startDate,
+            $lte: endDate,
+          },
+        })
+      ),
+    ]);
 
     // Aggregate signup sources
     const signupSource = {
@@ -92,6 +151,17 @@ export class UserMetricsService {
         return acc;
       },
       {} as Record<AgeGroupLabel, number>
+    );
+
+    // Aggregate gender — initialize every bucket so empty buckets render as 0.
+    // "Not set" is the catch-all: the field is optional, so it holds both members who declined
+    // and members who were never asked. Nothing downstream may infer anything about them.
+    const gender: Record<string, number> = GENDER_BUCKET_ORDER.reduce(
+      (acc, label) => {
+        acc[label] = 0;
+        return acc;
+      },
+      {} as Record<string, number>
     );
 
     // Aggregate membership status
@@ -128,7 +198,7 @@ export class UserMetricsService {
 
     for (const user of users) {
       const userId = user._id.toString();
-      
+
       // Determine signup source
       // Priority: Affiliate > Referral (by someone else) > Direct
       if (user.affiliateReferral?.affiliateId) {
@@ -155,6 +225,9 @@ export class UserMetricsService {
       // Aggregate age group from birthdate
       const ageGroupLabel = getAgeGroup(user.birthdate as Date | undefined);
       ageGroup[ageGroupLabel]++;
+
+      // Aggregate gender — anything not exactly male/female (incl. missing) lands in "Not set"
+      gender[genderBucketFor(user.gender)]++;
 
       // Check membership status (flat totals + per-package breakdown)
       if (user.subscription) {
@@ -210,58 +283,36 @@ export class UserMetricsService {
       }
     }
 
-    if (asOfDate) {
-      const dateKey = formatInTimeZone(asOfDate, "Australia/Sydney", "yyyy-MM-dd");
-      const snapshotRows = await MembershipDailySnapshot.find({ date: dateKey }).lean();
-      if (snapshotRows.length > 0) {
-        const totals = snapshotRows.reduce(
-          (acc, r) => {
-            acc.active += r.activeCount;
-            acc.cancelled += r.cancelledCount + r.scheduledCancelCount;
-            acc.pastDue += r.pastDueCount;
-            return acc;
-          },
-          { active: 0, cancelled: 0, pastDue: 0 }
-        );
-        membershipStatus.active = totals.active;
-        membershipStatus.cancelled = totals.cancelled;
-        membershipStatus.pastDue = totals.pastDue;
-        // membershipStatus.renewed stays as-is — it's a range-driven delta from PaymentEvent.
-      }
+    // Snapshot mode overrides the standing counts only. If no snapshot row exists for the date,
+    // the live values computed above survive (graceful degradation).
+    if (asOfDate && snapshotRows.length > 0) {
+      const totals = snapshotRows.reduce(
+        (acc, r) => {
+          acc.active += r.activeCount;
+          acc.cancelled += r.cancelledCount + r.scheduledCancelCount;
+          acc.pastDue += r.pastDueCount;
+          return acc;
+        },
+        { active: 0, cancelled: 0, pastDue: 0 }
+      );
+      membershipStatus.active = totals.active;
+      membershipStatus.cancelled = totals.cancelled;
+      membershipStatus.pastDue = totals.pastDue;
+      // membershipStatus.renewed stays as-is — it's a range-driven delta from PaymentEvent.
     }
-
-    const paymentEvents = await fetchNetBenefitsGrantedInRange(startDate, endDate, {
-      packageType: 1,
-      data: 1,
-    });
 
     const purchaseHistory = {
-      totalPurchases: paymentEvents.length,
-      totalRevenue: 0,
+      totalPurchases: purchaseSummary.count,
+      totalRevenue: purchaseSummary.totalRevenue,
       averageOrderValue: 0,
-      byPackageType: {} as Record<string, number>,
+      byPackageType: purchaseSummary.byPackageType,
     };
-
-    for (const event of paymentEvents) {
-      const price = event.data?.price || 0;
-      purchaseHistory.totalRevenue += price;
-      
-      const packageType = event.packageType || "unknown";
-      purchaseHistory.byPackageType[packageType] = (purchaseHistory.byPackageType[packageType] || 0) + 1;
-    }
 
     if (purchaseHistory.totalPurchases > 0) {
       purchaseHistory.averageOrderValue = purchaseHistory.totalRevenue / purchaseHistory.totalPurchases;
     }
 
-    membershipStatus.renewed = await aggregateNetCountWithMatch({
-      packageType: "membership",
-      "data.billingReason": "subscription_cycle",
-      timestamp: {
-        $gte: startDate,
-        $lte: endDate,
-      },
-    });
+    membershipStatus.renewed = renewedCount;
 
     const membershipByPackage = Array.from(perPackage.entries())
       .map(([packageId, { name, counts }]) => ({
@@ -278,11 +329,22 @@ export class UserMetricsService {
 
     const bucketedProfession = bucketUnmatched(profession, 5);
 
+    const totalMs = Date.now() - requestStartedAt;
+    if (totalMs >= SLOW_REQUEST_MS) {
+      // See SLOW_REQUEST_MS above for why this is console.error.
+      console.error(
+        `[UserMetricsService] slow request ${totalMs}ms ` +
+          `(range=${startDate.toISOString()}..${endDate.toISOString()}, asOfDate=${asOfDate ? "set" : "null"}, ` +
+          `users=${users.length}) stages=${JSON.stringify(stageMs)}`
+      );
+    }
+
     return {
       signupSource,
       profession: bucketedProfession,
       state,
       ageGroup,
+      gender,
       membershipStatus,
       membershipByPackage,
       purchaseHistory,
@@ -293,4 +355,3 @@ export class UserMetricsService {
     };
   }
 }
-

@@ -95,6 +95,8 @@
     "src/app/api/admin/invoices/recover-past-due/route.ts": { "maxDuration": 300 },
     "src/app/api/admin/dashboard/recent-activities/route.ts": { "maxDuration": 60 },
     "src/app/api/admin/dashboard/stats/route.ts": { "maxDuration": 60 },
+    "src/app/api/admin/metrics/users/route.ts": { "maxDuration": 60 },
+    "src/app/api/internal/norm/v1/metrics/users/route.ts": { "maxDuration": 60 },
     "src/app/api/admin/activity-log/route.ts": { "maxDuration": 60 },
     "src/app/api/cron/major-draw-transition/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/process-partner-discount-queues/route.ts": { "maxDuration": 300 },

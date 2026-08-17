@@ -41,6 +41,7 @@ export const MY_ACCOUNT_USER_FIELDS = [
   "mobile",
   "state",
   "profession",
+  "gender",
   "birthdate",
   "profileSetupCompleted",
   "role",

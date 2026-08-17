@@ -13,6 +13,7 @@
 
 import { hashData } from "@/lib/facebook-hash";
 import { metaPhoneDigits } from "@/lib/tracking/advanced-matching";
+import { genderToMetaGe } from "@/data/genders";
 
 /**
  * Cookie storing the click-capture timestamp for the current fbclid.
@@ -209,6 +210,7 @@ export function prepareUserData(userData?: {
   country?: string;
   externalId?: string;
   birthdate?: string | Date;
+  gender?: string;
 }): Record<string, string> {
   const hashedData: Record<string, string> = {};
 
@@ -271,6 +273,14 @@ export function prepareUserData(userData?: {
     if (yyyymmdd) {
       hashedData.db = hashData(yyyymmdd);
     }
+  }
+
+  // Gender (Meta ge parameter — single lowercase letter "m"/"f", hashed). Uses the shared
+  // mapper so this legacy path, buildAdvancedMatching and the CAPI provider all agree; a
+  // divergence would make Meta read one person as several and reduce match quality.
+  const ge = genderToMetaGe(userData.gender);
+  if (ge) {
+    hashedData.ge = hashData(ge);
   }
 
   return hashedData;

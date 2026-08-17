@@ -667,5 +667,19 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "Yes. Every Major Draw winner is published on our [Draw Results](/draw-results) page, shown as their first name and last initial (like \"John D.\") along with their state and the prize they took — plus the verification link from randomdraws.com.au, the independent service that picks the winner. Winners are also contacted directly by our team, and the draw itself is streamed live on [Facebook](https://www.facebook.com/toolsaust). We don't share any more of a winner's details than that. I can't look results up from here, so head to [Draw Results](/draw-results) for the latest.",
       category: "ALL QUESTIONS",
     },
+    {
+      id: "82",
+      question: "Do I have to tell you my gender? Can I leave it blank or remove it?",
+      answer:
+        "It's completely optional — leave it blank and nothing changes. You'll see a Gender field on [My Account → Settings](/my-account/settings) alongside your trade, state and date of birth, but unlike those it never has to be filled in, and you can clear it again from that same page whenever you like. It has no effect on your free entries, your eligibility for a draw, what you pay, or anything you receive. We only offer Male and Female, so if you're neither — or you'd simply rather not say — just leave it empty.",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "83",
+      question: "Why do you ask for my gender — what do you use it for?",
+      answer:
+        "Only to understand who our members are as a group, so we can make our advertising more relevant and stop showing ads to people they don't suit. It's never used to decide anything about you personally — not your free entries, not your eligibility, not your pricing. It's optional, you can leave it blank or clear it at any time from [My Account → Settings](/my-account/settings), and how we handle your personal information is set out in our [Privacy Policy](/privacy).",
+      category: "ALL QUESTIONS",
+    },
   ];
 }

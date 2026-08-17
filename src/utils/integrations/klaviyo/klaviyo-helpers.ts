@@ -254,6 +254,10 @@ export async function userToKlaviyoProfile(
       role: user.role,
       state: user.state ? getStateByCode(user.state)?.name : undefined,
       profession: user.profession || undefined,
+      // Optional field — `undefined` is stripped by cleanProperties, so members who never
+      // answered simply have no `gender` property rather than a "unknown" sentinel that would
+      // pollute segments. Lowercase name matches `state` / `profession` above.
+      gender: user.gender || undefined,
 
       // Verification status
       is_email_verified: user.isEmailVerified || false,
