@@ -158,6 +158,10 @@ export const queryKeys = {
     metrics: {
       userMetrics: (startDate?: Date, endDate?: Date) => ["admin", "metrics", "users", startDate, endDate] as const,
     },
+    // The Receipts ledger. `filterKey` is the serialised query string (date range +
+    // category + page), so changing any filter is a new cache entry rather than a
+    // stale table under a new heading.
+    receipts: (filterKey: string) => ["admin", "receipts", filterKey] as const,
     allowlist: {
       blockedCards: (filterKey: string) =>
         ["admin", "allowlist", "blocked-cards", filterKey] as const,

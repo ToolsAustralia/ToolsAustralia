@@ -488,3 +488,42 @@ silently disabled all client-side UTM capture. Full write-up:
 against an over-long URL-derived attribution value exceeding Stripe's 500-character metadata
 limit, which would fail the charge. Rationale:
 [docs/tracking/gotchas.md](../tracking/gotchas.md).
+
+## `test:receipts` + `verify:receipts-reconciliation` added (2026-08-17)
+
+`package.json` gained four script families for the admin Receipts ledger:
+
+| Script | Kind | Notes |
+|---|---|---|
+| `test:receipts` | pure unit | `src/services/admin/__tests__/receipts.test.ts`. Mongoose-free — runs on `tsx` with no env vars. |
+| `verify:receipts-reconciliation[:prod]` | live, **read-only** | `scripts/verify-receipts-reconciliation.ts`. Proves the ledger's totals against the dashboard's. Exit 0 = reconciled, 1 = mismatch (a real bug), 2 = the run failed. Safe against production — performs no writes. |
+| `migrate:backfill-receipts-view[:dry\|:prod:dry\|:prod]` | one-shot migration | `scripts/migrations/2026-08-17-backfill-receipts-view.ts`. Dry-run by default; `--apply` writes. Grants `receipts.view` to every role already holding `settings.view`. |
+
+The migration follows the established four-variant shape of the other permission backfills
+(`:dry` / apply / `:prod:dry` / `:prod`) and loads its env file **before** importing anything
+that reads `MONGODB_URI` — `src/lib/mongodb.ts` resolves the URI at import time and throws if
+unset, so the `dotenv.config()` call sits between the import groups on purpose.
+
+Rationale: [docs/admin/receipts.md](../admin/receipts.md),
+[docs/auth/permissions-catalog.md](../auth/permissions-catalog.md).
+
+## Refund-accuracy scripts added (2026-08-17)
+
+Two more read-only-by-default operational scripts, both supporting the admin Receipts ledger:
+
+| Script | Kind | Notes |
+|---|---|---|
+| `audit:receipts-refunds[:prod]` | live, **read-only** | `scripts/audit-receipts-refund-accuracy.ts`. Internal consistency of the refund ledger: orphans, duplicates, full-refund amount vs granted price, conflicting refund kinds, plus a Stripe count comparison. Exit 0 = clean, 1 = discrepancies, 2 = run failed. |
+| `backfill:missing-refunds[:dry\|:prod:dry\|:prod]` | one-shot backfill | `scripts/backfill-missing-refund-events.ts`. Correlates Stripe refunds to ledger purchases **through the customer** (the id-based join is impossible — see below) and writes the missing `RefundProcessed` rows. Dry-run by default; progress-logged per the ops-script convention. |
+
+⚠️ **Why correlation goes through the customer.** A Stripe refund carries a PaymentIntent; the
+ledger keys a subscription payment by its invoice (`invoice_in_…`). In Stripe API v18.5.0
+`charge.invoice`, `invoice.payment_intent`, `invoice.charge` and `invoice.payments` are all
+absent, so the two ids cannot be joined directly. Matching on the PaymentIntent alone reports
+every subscription refund as missing — a false positive that the first version of the audit
+produced. That correlation exists in exactly one place (the backfill script); the audit script
+reports counts and defers to it.
+
+`backfill:missing-refunds --apply` repairs **revenue only** — it does not reverse entries or
+benefits, because the affected draws have already been run. Rationale:
+[docs/admin/receipts.md § Refund accuracy](../admin/receipts.md#refund-accuracy--audited-2026-08-17).

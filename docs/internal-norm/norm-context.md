@@ -864,6 +864,65 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 
 ---
 
+### `GET /v1/receipts`
+
+**Returns**: Paged ledger of every payment received in a date range — one row per payment, newest first — across memberships (new + renewal), one-time and additional packs, mini draws, upsells, and shop orders. Each row carries its refund state; the totals cover the whole filter, not just the page. **PII-safe projection** — `firstName` + opaque `userId` only (lastName / email / Stripe customer id stripped).
+```ts
+{
+  dateRange: { range, start: ISO8601, end: ISO8601 },
+  category: string | null,                   // echo of the filter; null when unfiltered
+  totals: {                                  // across the WHOLE filter, not just this page
+    gross: number,                           // AUD before refunds
+    refunded: number,                        // AUD returned to customers
+    net: number,                             // gross − refunded
+    count: number                            // payments in the filter
+  },
+  rows: Array<{
+    id: string,                              // PaymentEvent._id, or Order._id for a shop row
+    timestamp: ISO8601,
+    category: "membership-purchase" | "membership-renewal"
+            | "one-time-purchase" | "additional-one-time"
+            | "mini-draw" | "upsell" | "shop-order",
+    packageName: string,                     // falls back to packageId
+    amount: number,                          // AUD gross
+    refundStatus: "none" | "refunded" | "partially-refunded",
+    refundedAmount: number,                  // AUD; equals `amount` on a full refund
+    netAmount: number,                       // amount − refundedAmount, floored at 0
+    refundedAt: ISO8601 | null,
+    userId: string | null,                   // opaque Mongo User._id; usable with the users.* endpoints
+    firstName: string,
+    stripeObjectId: string | null            // pi_… for one-off payments, in_… for subscription renewals
+  }>,
+  pagination: { currentPage, totalPages, totalCount, limit, hasNextPage, hasPrevPage }
+}
+```
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `range` | no | `today` | `today \| yesterday \| current-draw \| last-draw \| all-time \| custom` |
+| `start` | only for `custom` | — | ISO date string |
+| `end` | only for `custom` | — | ISO date string |
+| `category` | no | — | One of the seven category values; omit for all |
+| `page` | no | `1` | 1-indexed |
+| `limit` | no | `50` | Max 200 |
+
+**Data source**: `PaymentEvent` rows with `eventType: "BenefitsGranted"`, unioned with the `Order` collection (shop), via `getReceipts` in `src/services/admin/receipts.ts` — the same service the admin Receipts tab calls, so the two cannot drift. Refund state is joined from `RefundProcessed` / `RefundPartial` rows on `paymentIntentId`.
+
+**Constraints**: `read` tier. `requiredPermission: receipts.view`. Read-only.
+
+**Interpretation notes:**
+
+0. **`net` here is not the same basis as `dashboard/revenue-details/by-platform`.** This endpoint's `net` **includes membership renewals**; the platform breakdown is *acquisition* revenue and excludes them. Against the same window the difference between the two is exactly the `membership-renewal` total. `net` does reconcile to the cent with the dashboard's all-category net revenue.
+
+0b. **`amount` is the package LIST price, not necessarily cash collected.** `PaymentEvent.data.price` is written from the package catalogue, and no Stripe discount is reflected in it. Members who accepted the `discount_50_2mo` cancellation-flow retention offer (102 accepted as of 2026-08-17) renew at 50% off in Stripe while this field still reports full price. Treat `gross` / `net` as *billed at list*, not as bank receipts, and do not use this endpoint to answer "how much cash did we actually take". The same caveat applies to every revenue figure derived from `data.price`, including the dashboard endpoints.
+
+0c. **`refundedAmount` reflects `RefundProcessed` / `RefundPartial` rows on this ledger only.** A refund issued directly in the Stripe dashboard that never reached the webhook would leave a row reading `refundStatus: "none"`. Do not present refund totals as a reconciled figure against Stripe.
+
+0d. **Shop rows are structurally supported but currently always empty** — the shop has not launched (0 `Order` documents in production as of 2026-08-17). An empty `shop-order` filter is expected, not an error.
+
+---
+
 ### `GET /v1/dashboard/upcoming-renewals`
 
 **Returns**: Paged list of subscriptions whose `subscription.endDate` falls within the selected window. **PII-safe projection** — `customerEmail` / `customerName` / `amountFormatted` stripped, only opaque IDs + the numeric amount in cents.
@@ -4223,6 +4282,13 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-08-17` — **New endpoint: `GET /v1/receipts` (96 endpoints, up from 95).**
+
+- The **revenue ledger** — one row per payment received, across memberships (new + renewal), one-time and additional packs, mini draws, upsells, and shop orders, with per-row refund state and filter-wide totals. Wraps the same `getReceipts` service as the admin Receipts tab, so the two surfaces cannot drift. New permission area: `receipts.view` gates it (`receipts.export` gates the admin CSV and has no Norm equivalent).
+- **PII boundary**: `firstName` + opaque `userId` only. `lastName`, `email` and the Stripe **customer** id are stripped. The Stripe **object** id (`pi_…` / `in_…`) IS exposed — it identifies a transaction, not a person, matching `users.payment-events.list`.
+- **Two accuracy caveats were documented rather than papered over**, and they apply to every `data.price`-derived revenue figure in this document, not just this endpoint: (a) `amount` is the package **list price**, and Stripe-side discounts are invisible in it — 102 members hold the `discount_50_2mo` retention coupon and still report full price; (b) refund state reflects only `RefundProcessed` / `RefundPartial` rows on the ledger, so a refund issued directly in Stripe that missed the webhook reads as unrefunded. Neither is introduced by this endpoint; both were pre-existing properties of `PaymentEvent` that the ledger view made visible.
+- Overlap note: `net` here **includes** membership renewals; `dashboard/revenue-details/by-platform` is acquisition-only and excludes them. The difference over the same window is exactly the `membership-renewal` total, and `net` reconciles to the cent with the dashboard's all-category net revenue.
 
 `2026-08-13` — **`/v1/promo-analytics` — `byBuiltPrize` gains `interactedBuilders` + `chosenRate` (additive, no endpoint-count change), and two interpretation warnings.**
 
