@@ -84,6 +84,13 @@ export const NormUserMetricsSchema = z.object({
       z.number().int().nonnegative()
     )
     .describe("Age bucket → count; under-18 / missing falls into 'Unknown'"),
+  gender: z
+    .record(z.enum(["Male", "Female", "Not set"]), z.number().int().nonnegative())
+    .describe(
+      "Gender bucket → count. Optional profile field: 'Not set' means unknown and conflates " +
+        "'declined to answer' with 'never asked' — do not report it as a gender or infer anything " +
+        "about those members."
+    ),
   membershipStatus: MembershipStatusSchema,
   membershipByPackage: z.array(MembershipByPackageRowSchema),
   purchaseHistory: PurchaseHistorySchema,

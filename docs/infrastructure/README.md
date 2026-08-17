@@ -89,3 +89,16 @@ New npm script → `src/utils/partner-discounts/__tests__/discount-catalogue.tes
 layer behind the public `/discount` page (bands, the wall, the gate copy, and the two unlock
 routes at all 11 access levels). Standalone `tsx`, no runner. Detail:
 [docs/partner/testing.md](../partner/testing.md).
+
+## `vercel.json` — admin metrics routes raised to `maxDuration: 60` (2026-08-17)
+
+`src/app/api/admin/metrics/users/route.ts` and `src/app/api/internal/norm/v1/metrics/users/route.ts` now have explicit entries. Previously both inherited the `src/app/api/**/route.ts` catch-all of **10s**, while `src/lib/mongodb.ts` is configured with a 10s server-selection timeout plus a 7s TLS retry ladder — i.e. **the function budget was smaller than its own connection-failure path**, so a connection problem could only ever surface as an opaque 504. See `docs/mongodb/gotchas.md`.
+
+When adding an API route that does real database work, check its effective `maxDuration` against that ladder rather than assuming the catch-all is enough.
+
+## New scripts (2026-08-17)
+
+| Script | Purpose |
+|---|---|
+| `npm run verify:user-metrics` | **Read-only.** Times each query `UserMetricsService` runs, for the ranges the admin UI actually requests, with collection-size denominators and the live `PaymentEvent` index list. `-- --service` drives the real service through Mongoose (so the measurement includes `connectDB` + model init, which a raw-driver timing misses), asserts `purchaseHistory` parity between the new `$group` path and the legacy document loop, and validates the live output against the Norm `responseSchema` (a mismatch there is a runtime 500 `tsc` cannot catch). |
+| `npm run migrate:payment-event-eventtype-index[:prod][:dry]` | Creates `{ eventType: 1, timestamp: -1 }` on `paymentevents`. Idempotent, `background: true`, dry-run by default. |

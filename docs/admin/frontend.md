@@ -1554,3 +1554,20 @@ chips (which carry their own counts), so without it an operator can be looking a
 a subset without realising. The empty state's reset routes through the same
 `clearFilters` — clearing only search + status would leave a brand filter on and
 the button would appear not to work.
+
+## Users breakdown — gender block + answered denominators (2026-08-17)
+
+[`UsersBreakdownSection`](../../src/app/admin/component/overview/UsersBreakdownSection.tsx) now renders **four** blocks (`md:grid-cols-2 lg:grid-cols-4`): Age · State · Profession · **Gender**.
+
+Every block states an **answered denominator** above its bars — `N of M answered (P%)` — because all four are driven by *optional* profile fields. Without it, a 12-person bar reads as 12 of every member when it is really 12 of however many answered. `M` is computed the same way the API's `meta.totalUsers` is (sum of `signupSource`) so the two cannot drift.
+
+**The `answered` figure is not uniform across the four**, and this is deliberate:
+
+| Block | Excluded bucket | Is the excluded bucket an answer? |
+|---|---|---|
+| Age | `Unknown` | No — no birthdate on record |
+| State | `Unknown` | No — missing/unrecognised |
+| Profession | `Other` | **Yes** — it is the long-tail bucket from `bucketUnmatched()`. Members with no profession are dropped by the service entirely, so the block's `grandTotal` is *already* the answered population |
+| Gender | `Not set` | No — and it conflates "declined" with "never asked" |
+
+**Why the bars are scoped this way rather than filtering the endpoint.** The request was to leave incomplete-profile users out of the breakdown. That is applied at **chart level only**. `signupSource`, `membershipStatus`, `membershipByPackage` and `purchaseHistory` still count **every** member, because the same `users` array feeds them: filtering the query would drop an active paying member who never set a birthdate out of the **active-member count**, and `meta.totalUsers` is the sum of `signupSource`, so the reported total would silently fall too — making `/admin` disagree with every other dashboard. A user-document filter would also not have helped performance meaningfully (the two `PaymentEvent` queries don't read that array at all, and the user query measures ~150ms for all 927 users).

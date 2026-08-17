@@ -25,3 +25,9 @@ The dashboard reads from many feature domains:
 - [metrics-analytics](../metrics-analytics/) — user metrics, daily stats
 
 This domain is the **consumer view**, not a feature owner. Most logic lives in the source domains.
+
+## `gender` reaches the client via the projection (2026-08-17)
+
+`MY_ACCOUNT_USER_FIELDS` in [my-account-projection.ts](../../src/utils/dashboard/my-account-projection.ts) is an explicit **include-list**, so a new `User` field is invisible to the account UI until it is added there. `gender` was added for the Settings → Profile tab.
+
+This is the same include-list guarded by `npm run test:my-account-projection` (bans wire-bloat arrays and auth secrets); `gender` is a short scalar and passes. It also flows to `UserContext` → `useUserQueries.UserData`, which is what makes gender available to Meta browser Advanced Matching without a second fetch.

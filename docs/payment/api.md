@@ -45,3 +45,17 @@ The actual Payment Intent and Setup Intent creation lives in [billing-stripe](..
 All payment routes require an authenticated session (NextAuth). Admin-only payment operations (refund replay, payment-event listing) live under `/api/admin/**` in the [admin](../admin/) domain.
 
 3DS return-URL handling: the `return_url` passed to `confirmPayment()` should always be a same-origin path. Cross-origin returns risk losing the session cookie on Safari (third-party cookie restrictions).
+
+## `aggregateNetBenefitsSummaryWithMatch()` (added 2026-08-17)
+
+[src/utils/payment/payment-event-net-queries.ts](../../src/utils/payment/payment-event-net-queries.ts)
+
+Returns `{ count, totalRevenue, byPackageType }` for net (refund-excluded) `BenefitsGranted` events in **one** round-trip, with the counting done by MongoDB via `$group` on `packageType`.
+
+Added because `UserMetricsService` was calling `fetchNetBenefitsGrantedInRange()` and looping in JS purely to sum a price and tally package types — 2,304 documents across the wire to produce three numbers.
+
+**Additive by design.** `fetchNetBenefitsGrantedInRange()` is unchanged: `revenue-breakdown`, `MembershipAnalyticsService` and `PaymentEventRepository` all need its document output.
+
+**Parity is asserted, not assumed.** The JS original used `event.packageType || "unknown"` and `event.data?.price || 0`, so an empty-string `packageType` folded into `"unknown"`. A bare `$ifNull` would **not** reproduce that (it preserves `""`), so the `$group` key uses an explicit `$cond` over `[null, "", undefined]`. `npm run verify:user-metrics -- --service` computes both paths on the same range and fails non-zero on any divergence (verified equal: 2,304 events, $113,852.70, identical per-package counts).
+
+Also added `PaymentEvent` index `{ eventType: 1, timestamp: -1 }` — no existing index led with `eventType`, so every `$match: { eventType, timestamp: {range} }` range-scanned `timestamp` and discarded non-matching types in memory. Created via `npm run migrate:payment-event-eventtype-index:prod` (dry-run default), **not** by the `schema.index()` declaration alone: there is no `autoIndex` override, so the declaration would have production build the index at runtime inside the request path.

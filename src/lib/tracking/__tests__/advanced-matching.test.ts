@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { buildAdvancedMatching, metaPhoneDigits } from "../advanced-matching";
+import { hashPII } from "../canonical-event";
 
 function isHexHash64(value: unknown): boolean {
   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
@@ -95,7 +96,40 @@ async function testEmptyStringTreatedAsMissing() {
   assert.ok(am.ln, "non-empty lastName should be hashed");
 }
 
+/**
+ * Meta's `ge` spec is "single lowercase letter, f or m, if unknown leave blank". The value that
+ * gets hashed must therefore be the LETTER, not our stored word — hashing "male" instead of "m"
+ * would produce a hash Meta cannot match against anything.
+ */
+async function testGenderMapsToMetaLetterAndHashes() {
+  const male = buildAdvancedMatching({ _id: "u", gender: "male" });
+  assert.equal(male.ge, hashPII("m"), "male must hash the letter 'm', not the word 'male'");
+
+  const female = buildAdvancedMatching({ _id: "u", gender: "female" });
+  assert.equal(female.ge, hashPII("f"), "female must hash the letter 'f'");
+
+  // Case/whitespace tolerance — the stored value is lowercased by the schema, but legacy or
+  // hand-edited rows must not silently produce a wrong hash.
+  const messy = buildAdvancedMatching({ _id: "u", gender: "  MALE " });
+  assert.equal(messy.ge, hashPII("m"), "gender should be trimmed + lowercased before mapping");
+}
+
+/**
+ * The field is optional and has only two values, so MOST members produce no `ge` at all.
+ * Omitting must mean ABSENT — never a hash of "" and never a hash of a sentinel, either of
+ * which Meta would treat as a real value shared by every unanswered member.
+ */
+async function testUnknownGenderOmitsGeEntirely() {
+  for (const gender of [undefined, "", "   ", "non-binary", "unknown", "x"]) {
+    const am = buildAdvancedMatching({ _id: "u", gender });
+    assert.equal(am.ge, undefined, `gender=${JSON.stringify(gender)} must omit ge entirely`);
+    assert.ok(!("ge" in am), `gender=${JSON.stringify(gender)} must not even set the ge key`);
+  }
+}
+
 async function run() {
+  await testGenderMapsToMetaLetterAndHashes();
+  await testUnknownGenderOmitsGeEntirely();
   await testHashesAllProvidedFields();
   await testNormalizationMatchesServerHashPII();
   await testPhoneStripsNonDigits();

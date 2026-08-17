@@ -11,6 +11,8 @@ import { apiGet, apiPut, apiPost } from "@/lib/queries";
 
 // Types
 export interface UserData {
+  /** Optional profile field. Unset = unknown; see src/data/genders.ts. */
+  gender?: string;
   _id: string;
   firstName: string;
   lastName: string;

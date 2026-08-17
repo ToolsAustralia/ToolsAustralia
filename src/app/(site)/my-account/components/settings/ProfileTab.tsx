@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { PROFESSIONS } from "@/data/professions";
+import { GENDERS } from "@/data/genders";
 import { useToast } from "@/components/ui/Toast";
 import { queryKeys } from "@/lib/queryKeys";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
@@ -25,6 +26,7 @@ interface ProfileTabProps {
     state?: string;
     profession?: string;
     birthdate?: string;
+    gender?: string;
   };
 }
 
@@ -64,6 +66,7 @@ export default function ProfileTab({ user }: ProfileTabProps) {
   const [state, setState] = useState(user.state || "");
   const [profession, setProfession] = useState(user.profession || "");
   const [birthdate, setBirthdate] = useState(user.birthdate ? String(user.birthdate).slice(0, 10) : "");
+  const [gender, setGender] = useState(user.gender || "");
   const [isSaving, setIsSaving] = useState(false);
 
   // Keep an out-of-list saved profession selectable.
@@ -100,6 +103,9 @@ export default function ProfileTab({ user }: ProfileTabProps) {
           state: state ? state.toUpperCase() : undefined,
           profession: profession?.trim() || undefined,
           birthdate: birthdate?.trim() || undefined,
+          // Always sent (even as "") so clearing a previously-set gender persists — the route
+          // keys off the property being present, not off it being truthy.
+          gender: gender?.trim() || "",
         }),
       });
       const data = await res.json();
@@ -215,6 +221,22 @@ export default function ProfileTab({ user }: ProfileTabProps) {
           <div>
             <FieldLabel htmlFor="state" incomplete={!state.trim()}>State</FieldLabel>
             <SelectMenu id="state" value={state} onChange={setState} options={stateOptions} placeholder="Select state" />
+          </div>
+
+          {/* Gender is the one OPTIONAL field on this form, so it deliberately gets no
+              `incomplete` chip and is excluded from `missing` above — an amber "Required"
+              badge on a field nobody has to fill would be a lie. */}
+          <div>
+            <FieldLabel htmlFor="gender">
+              Gender <span className="font-normal text-muted-token">(optional)</span>
+            </FieldLabel>
+            <SelectMenu
+              id="gender"
+              value={gender}
+              onChange={setGender}
+              options={GENDERS}
+              placeholder="Prefer not to say"
+            />
           </div>
 
           {ineligible && (

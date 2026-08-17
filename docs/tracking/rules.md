@@ -129,4 +129,13 @@ An **empty array** is the healthy state (this component is the only source). Any
 ArtificialPageview / HistoryChange entry means the double-count is back — disable that snippet in
 the Tag Configurator rather than deleting the client-side push. Incident detail:
 [gotchas.md](./gotchas.md#contentsquare-double-counted-every-spa-navigation-tag-side-cstc--client-push-2026-08-07).
-
+
+## R-GE. Meta `ge` (gender) — all sites or none, and omit when unknown
+
+`User.gender` is an **optional** field holding only `"male"` / `"female"`. It feeds Meta's Advanced Matching `ge` parameter, whose spec is *"single lowercase letter, `f` or `m`, if unknown, leave blank"* — so the value hashed is the **letter**, never our stored word.
+
+**One shared mapper.** `genderToMetaGe()` in [src/data/genders.ts](../../src/data/genders.ts) is the only place the mapping lives. Every Meta hash site imports it: `buildAdvancedMatching` (browser AM), the CAPI provider `capiSend`, and the legacy `prepareUserData` in `facebook-helpers.ts`. Duplicating the `male→"m"` logic inline is how browser and server hashes drift apart, and Meta then reads one person as several.
+
+**Omission must mean absent.** When gender is unknown the `ge` key is **not set at all**. Never hash `""` and never substitute a sentinel — either would produce one identical hash shared by every unanswered member, which Meta would treat as a real, extremely common identifier. Guarded by `npm run test:advanced-matching`.
+
+**Coverage starts at zero.** The field is new and optional, so expect no immediate Event Match Quality movement; it grows only as members fill it in. Note that a site *omitting* `ge` is a missed opportunity, not a hash mismatch — the harmful case is two sites sending *different* values for the same person.
