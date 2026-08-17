@@ -508,3 +508,30 @@ So `/ad/get/` is a **mandatory bridge**, not a fallback — it is the only endpo
 **Unusable URLs are rejected, not stored** (`isUsableLandingUrl`): a macro in the PATH (`/promotions/__X__`) would canonicalize into a phantom landing page carrying real spend and matching no prize slug; a non-http scheme likewise. Macros in the QUERY are harmless — canonicalization drops the query entirely, which is why TikTok's `__CAMPAIGN_ID__`/`__AID_NAME__` utm params need no special handling.
 
 **Run it:** `npm run sync:tiktok-destinations:dry` (reports coverage, distinct landing paths, the packages-focus tally and the multi-URL count without writing), then `npm run sync:tiktok-destinations`. The run **fails below 50% coverage** — a silent drop to zero is exactly what a changed id bridge looks like, and it would otherwise present as "no TikTok URL data" rather than as an error. First live run: **31/31 ads, 100%, 3 distinct landing paths, 0 multi-URL ads.**
+
+## Merchandise is excluded from ad-revenue analytics (`revenueAggregator.ts`, 2026-08-17)
+
+Rows with `packageType: "shop"` `continue` out of the loop in
+[revenueAggregator.ts](../../src/services/admin/dashboard-stats/revenueAggregator.ts) before any
+accumulation.
+
+This is not a preference — it was a **defect regardless of the business answer**. Platform
+accumulation (`byPlatform[…].newRevenue += price`, `conversions += 1`) runs for all non-refunded
+rows *"regardless of bucket classification"*, while `classifyRevenueBucket()`
+([snapshotSchema.ts](../../src/services/admin/dashboard-stats/snapshotSchema.ts)) returns `null`
+for an unrecognised `packageType` and the row is dropped from `buckets` **and** from `total`. Left
+alone, merch money would inflate per-platform new revenue, conversion counts and TRUE ROAS while
+being absent from the headline — so the platform breakdown would silently stop reconciling with
+the total it sits beneath.
+
+There is a second reason to keep it out: a merch price includes **shipping and GST**, which no
+package price does, so it is not comparable to the other rows in a ROAS figure.
+
+Giving merchandise its own revenue bucket is a defensible alternative, but that is an analytics
+decision (does merch belong in ad ROAS at all?) rather than a bug fix — hence exclusion rather
+than an invented bucket. **Still open and deliberately not decided in code:**
+`aggregateNetRevenueSum` / `aggregateNetSalesCount`
+([payment-event-net-queries.ts](../../src/utils/payment/payment-event-net-queries.ts)) have no
+`packageType` filter and feed A/B experiment revenue and daily user metrics. Nothing stops
+reconciling there either way, so it is a genuine product question. `packageType` is stored on each
+row, so history can be re-split after the fact whichever way it is answered.

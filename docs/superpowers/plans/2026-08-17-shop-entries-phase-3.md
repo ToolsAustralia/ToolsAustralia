@@ -258,6 +258,33 @@ higher than the spec assumed.
 
 **Do #11 first.** Without it, none of the other ten can be confirmed fixed in production.
 
+### Status — fixed 2026-08-17
+
+| # | Status | What was done |
+|---|---|---|
+| 11 | **Fixed** | Real `console.error` restored with the full failure context. The `fs.appendFileSync` was **deleted rather than repaired** — it never worked in the environment that matters and was actively masking the real error. `fs`/`path` imports dropped with it |
+| 3 | **Fixed** | `allowStreakIssuance: packageData.packageType !== "shop"`. The invariant is coupled to a paid **membership** month, not to any payment |
+| 4 + 5 | **Fixed, one change** | Shop PIs are no longer appended to `processedPayments`. Verified this costs no idempotency: `isPaymentProcessed()` reads `PaymentEvent` `BenefitsGranted-{pi}` (`payment-processing.ts:2722`), not this array, and shop has its own gate in `markPaid` |
+| 6 | **Fixed** | Merch exempted from `checkMajorDrawActiveForNewPurchases`, alongside renewals. Every other gated path is also blocked up-front at checkout; shop is not and must not be |
+| 7 | **Fixed** | Shop rows `continue` out of `revenueAggregator` before any accumulation. This one was a **defect regardless of the business answer** — platform revenue accrued "regardless of bucket classification" while the row was dropped from `total`, so the breakdown stopped reconciling with the headline above it |
+| 1, 2, 10 | **Open — belong to Task 4** | All three are about the *ordering* of the grant relative to `markPaid` / stock / the webhook short-circuit. They cannot be fixed before the grant exists |
+| 8, 9 | **Open — your decision, not mine** | See below |
+
+### Two questions that are business calls, deliberately not decided in code
+
+**#8 — should merchandise count as "net revenue"?** `aggregateNetRevenueSum` / `aggregateNetSalesCount`
+feed A/B experiment revenue and daily user metrics. Unlike #7 there is no internal inconsistency
+here — nothing stops reconciling either way. It is genuinely "is a t-shirt part of the number we
+optimise the funnel on?". Left untouched. Note merch price carries shipping and GST, which no
+package price does. Recoverable either way: `packageType` is stored on the row, so history can be
+re-split after the fact.
+
+**#9 — partial refunds.** The spec decided "entries stay", correctly, for indivisible packages.
+A shop order is multi-line, so a customer returning one shirt of three keeps all the entries from
+all three — and the `RefundPartial` row is invisible to `excludeRefundedBenefitsGrantedStages`, so
+the refunded money keeps counting as revenue too. This is on the client-facing docket, not just
+here.
+
 ---
 
 ### Task 4: Grant the entries from the shop webhook

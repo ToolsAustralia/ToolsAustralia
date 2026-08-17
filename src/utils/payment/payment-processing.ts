@@ -4,8 +4,6 @@ import MajorDraw, { IMajorDraw } from "@/models/MajorDraw";
 import MiniDraw, { IMiniDraw } from "@/models/MiniDraw";
 import connectDB from "@/lib/mongodb";
 import mongoose from "mongoose";
-import fs from "fs";
-import path from "path";
 import { klaviyo } from "@/lib/klaviyo";
 import { trackAffiliateSignup } from "@/lib/affiliate";
 import {
@@ -339,7 +337,20 @@ async function processPaymentBenefitsInternal(
       const isSubscriptionRenewal =
         packageData.packageType === "membership" && billingReason === "subscription_cycle";
 
-      if (!routesToMiniDrawOnly && !isSubscriptionRenewal) {
+      // Merchandise is exempt for the same reason renewals are: the gate exists to
+      // stop someone BUYING INTO a draw that is closing, and every gated path is
+      // also blocked up-front at checkout so the customer never pays. Shop checkout
+      // has no such pre-gate and must not gain one — a hoodie has to stay buyable
+      // during the four-hour freeze.
+      //
+      // Without this exemption the shop takes the money, ships the garment, and
+      // returns GATES_CLOSED here — granting nothing, with no rollback and no
+      // retry. getTargetMajorDraw() already handles the freeze correctly by
+      // routing the entries to the next queued draw, which is the behaviour we
+      // want; this gate would prevent it from ever being reached.
+      const isMerchandise = packageData.packageType === "shop";
+
+      if (!routesToMiniDrawOnly && !isSubscriptionRenewal && !isMerchandise) {
         const { checkMajorDrawActiveForNewPurchases } = await import("@/utils/draws/major-draw-helpers");
         const gate = await checkMajorDrawActiveForNewPurchases();
         if (!gate.ok) {
@@ -663,7 +674,22 @@ async function processPaymentBenefitsInternal(
       // ✅ CRITICAL: Persist processed payment idempotently using canonical invoice id and $addToSet
       // Store the payment ID as-is to match webhook expectations
       // For invoice payments, keep the invoice_ prefix for consistency
-      await User.updateOne({ _id: userId }, { $addToSet: { processedPayments: paymentIntentId } });
+      //
+      // Merchandise is excluded, because this array is NOT the idempotency gate —
+      // isPaymentProcessed() reads PaymentEvent `BenefitsGranted-{pi}` (:2722), and
+      // shop has its own gate in ShopOrderService.markPaid. Its only functional
+      // readers treat a non-empty array as "this customer has already bought
+      // something": lib/referral.ts:160 refuses a referral code to anyone with
+      // length > 0, and the first-purchase referral reward fires only at
+      // count === 1 (stripe-webhook-handlers/index.ts:1311, :4360).
+      //
+      // Appending a t-shirt here would therefore permanently bar that customer
+      // from ever redeeming a referral code, and rob their referrer of the reward
+      // on the membership they buy later. A merch sale is a purchase; it is not
+      // the "first purchase" those two rules exist to recognise.
+      if (packageData.packageType !== "shop") {
+        await User.updateOne({ _id: userId }, { $addToSet: { processedPayments: paymentIntentId } });
+      }
       // console.log(`✅ Added to processedPayments: ${paymentIntentId}`);
 
       // console.log(`✅ Benefits granted and recorded for payment ${paymentIntentId} via ${processedBy}`);
@@ -728,7 +754,15 @@ async function processPaymentBenefitsInternal(
       try {
         // Paid-payment path — the ONLY surface allowed to create new streak-months
         // issuances (payment-coupled grants; see checkAndIssueMilestones docs).
-        const milestoneResult = await MilestoneService.checkAndIssueMilestones(userId, { allowStreakIssuance: true });
+        //
+        // But NOT for merchandise. The invariant that flag protects is "a member
+        // must never gain draw entries in a month they paid nothing" — and it is
+        // coupled to a paid MEMBERSHIP invoice, not to any payment at all. A
+        // t-shirt is a payment; it is not a month of membership. Leaving this true
+        // for shop would let an ex-member with a stale streakMonths counter buy
+        // merch and be issued streak entries for months they never paid for.
+        const allowStreakIssuance = packageData.packageType !== "shop";
+        const milestoneResult = await MilestoneService.checkAndIssueMilestones(userId, { allowStreakIssuance });
         if (milestoneResult.issuanceIds.length > 0) {
           await addMilestoneIssuanceIds(benefitsGrantedEventId(paymentIntentId), milestoneResult.issuanceIds);
         }
@@ -738,28 +772,27 @@ async function processPaymentBenefitsInternal(
 
       return { success: true, alreadyProcessed: false };
     } catch (error) {
-      // console.error(`❌ Error processing payment ${paymentIntentId} (attempt ${retryCount + 1}):`, error);
-      // console.error(`❌ Error details:`, {
-      //   error: error instanceof Error ? error.message : "Unknown error",
-      //   stack: error instanceof Error ? error.stack : undefined,
-      //   paymentIntentId,
-      //   userId,
-      //   packageData,
-      //   processedBy,
-      //   attempt: retryCount + 1,
-      // });
-
-      // Log to file for debugging
-      try {
-        const logPath = path.join(process.cwd(), "webhook-debug.log");
-        const timestamp = new Date().toISOString();
-        const logMessage = `[${timestamp}] ❌ processPaymentBenefits failed for ${paymentIntentId} (attempt ${
-          retryCount + 1
-        }): ${error instanceof Error ? error.message : "Unknown error"}\n`;
-        fs.appendFileSync(logPath, logMessage);
-      } catch (_logError) {
-        console.error("Failed to write to log file:", _logError);
-      }
+      // Restored 2026-08-17. Every console.error on this path had been commented
+      // out, and the only surviving write was fs.appendFileSync to a path that is
+      // READ-ONLY on Vercel — so the append threw, its catch swallowed it, and the
+      // single line that reached production logs was "Failed to write to log file".
+      // The actual reason a grant failed was unobtainable in production, for every
+      // payment type. The file write is gone rather than fixed: it never worked in
+      // the environment that matters and it was actively masking the real error.
+      //
+      // console.error is deliberate — next.config.ts `removeConsole` strips
+      // log/info/debug/warn from production builds but keeps `error`.
+      console.error(`❌ processPaymentBenefits failed for ${paymentIntentId} (attempt ${retryCount + 1})`, {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        paymentIntentId,
+        userId,
+        packageType: packageData.packageType,
+        packageId: packageData.packageId,
+        entries: packageData.entries,
+        processedBy,
+        attempt: retryCount + 1,
+      });
 
       // No transaction to abort since we're using atomic operations
 
@@ -831,10 +864,16 @@ async function checkAndApplyBonusEntryPromo(
   packageId?: string
 ): Promise<number> {
   try {
-    // Merchandise gets no bonus-entry promo. This MUST return before the cast
-    // below: that cast is unchecked, so "shop" would be laundered into the promo
-    // vocabulary and then fall through the promoType ternary to "mini-packages" —
-    // a merch sale silently reading a mini-draw promo, with no error anywhere.
+    // Merchandise gets no bonus-entry promo — stated once, here, rather than
+    // being inferred from a fallthrough.
+    //
+    // Without this the outcome is still SAFE, not corrupt: the unchecked cast
+    // below launders "shop" into effectivePackageType, but the promoType ternary
+    // ends in `: null` and the !promoType guard returns 0. So the cost of omitting
+    // this line is a spurious warn (stripped from production builds) rather than a
+    // merch sale reading a mini-draw promo. Keeping it because "shop earns no
+    // bonus entries" should be a decision someone can grep for, not an accident of
+    // ternary ordering that a future edit could quietly reverse.
     if (packageType === "shop") return 0;
 
     // ✅ For upsells, use the original package type for promo checks

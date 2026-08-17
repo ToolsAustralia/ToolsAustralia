@@ -216,3 +216,46 @@ Reporting is best-effort and never masks the payment error. The route no longer 
 
 **If you add another purchase entry point, call this helper.** `success: true` from a purchase
 route does not mean the money moved.
+
+## `processPaymentBenefits`' failure path was invisible in production (fixed 2026-08-17)
+
+Every `console.error` in the `catch` of `processPaymentBenefitsInternal` had been commented out.
+The only surviving write was `fs.appendFileSync(process.cwd() + "/webhook-debug.log", …)` — and
+**that filesystem is read-only on Vercel**, so the append threw, its own catch swallowed it, and
+the single line that reached production logs was `"Failed to write to log file"`. The actual
+reason a grant failed was unobtainable in production, for every payment type, for as long as this
+was in place.
+
+The file write was **deleted rather than repaired**: it never worked in the environment that
+matters and was actively masking the real error. `fs` and `path` imports went with it — they had
+no other use in the file. Failures now emit a real `console.error` with message, stack,
+`paymentIntentId`, `userId`, `packageType`, `packageId`, `entries`, `processedBy` and attempt
+number.
+
+`console.error` is deliberate: `next.config.ts` `removeConsole` strips `log`/`info`/`debug`/`warn`
+from production builds but keeps `error`. A `console.warn` here would have been just as invisible.
+
+## Merchandise is exempt from three things that look like they should apply to it
+
+All three are `packageType === "shop"` guards in `payment-processing.ts`, and all three are
+decisions rather than oversights:
+
+- **`checkMajorDrawActiveForNewPurchases`** — exempt, alongside subscription renewals. That gate
+  exists to stop someone *buying into* a draw that is closing, and every gated path is **also**
+  blocked up-front at checkout so the customer never pays. Shop checkout has no pre-gate and must
+  not gain one; a hoodie has to stay buyable during the freeze. Without the exemption the shop
+  takes the money, ships the garment, and returns `GATES_CLOSED` — granting nothing, with no
+  rollback and no retry. `getTargetMajorDraw()` already routes freeze-window entries to the next
+  queued draw, which is the wanted behaviour, and this gate would stop it being reached.
+- **`MilestoneService.checkAndIssueMilestones({ allowStreakIssuance })`** — `false` for shop. The
+  invariant that flag protects is *"a member must never gain draw entries in a month they paid
+  nothing"*, and it is coupled to a paid **membership** invoice, not to any payment. A t-shirt is a
+  payment; it is not a month of membership. Leaving it `true` would let an ex-member with a stale
+  `streakMonths` counter buy merch and be issued streak entries for months they never paid for.
+- **`$addToSet: { processedPayments }`** — skipped for shop. This array is **not** the idempotency
+  gate (`isPaymentProcessed()` reads `PaymentEvent` `BenefitsGranted-{pi}`, and shop has its own
+  gate in `ShopOrderService.markPaid`). Its only functional readers treat a non-empty array as
+  *"this customer has already bought something"*: `lib/referral.ts:160` refuses a referral code to
+  anyone with `length > 0`, and the first-purchase referral reward fires only at `count === 1`.
+  Appending a t-shirt would permanently bar that customer from ever redeeming a referral code, and
+  rob their referrer of the reward on the membership they buy later.
