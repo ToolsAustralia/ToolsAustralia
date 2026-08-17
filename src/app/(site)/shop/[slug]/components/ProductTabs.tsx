@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Star, Check, Truck, Shield, RotateCcw, Package, Award, Clock } from "lucide-react";
+import { Star, Check, Truck, Shield, RotateCcw, Award, Clock } from "lucide-react";
 import { ProductData } from "@/data";
 import { getContactEmail } from "@/lib/email/sender-identities";
+import { FREE_SHIPPING_THRESHOLD_LABEL, FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
 
 interface ProductTabsProps {
   product: ProductData;
@@ -266,25 +267,32 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                     Shipping Information
                   </h3>
                   <div className="space-y-4">
+                    {/*
+                      These two lines are the ONLY shipping outcomes checkout can
+                      produce: priceCart charges flatShippingRateCents below the
+                      threshold and nothing at or above it. The figures are imported
+                      rather than typed — this block previously promised free
+                      shipping "over $99" while the code charged below $100 (so a
+                      $99.50 order was billed $10 at checkout), plus Express at $15
+                      and Same Day at $25 in three cities, neither of which exists
+                      anywhere in the pricing path.
+                    */}
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 text-green-500 mt-0.5" />
                       <div>
                         <div className="font-medium text-gray-900 dark:text-neutral-100">Free Standard Shipping</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">On orders over $99 (3-5 business days)</div>
+                        <div className="text-sm text-gray-600 dark:text-neutral-400">
+                          On orders of {FREE_SHIPPING_THRESHOLD_LABEL} or more
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Clock className="w-5 h-5 text-blue-500 mt-0.5" />
                       <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Express Shipping</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">$15 flat rate (1-2 business days)</div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Package className="w-5 h-5 text-purple-500 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Same Day Delivery</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Available in Sydney, Melbourne, Brisbane ($25)</div>
+                        <div className="font-medium text-gray-900 dark:text-neutral-100">Standard Shipping</div>
+                        <div className="text-sm text-gray-600 dark:text-neutral-400">
+                          {FLAT_SHIPPING_RATE_LABEL} flat rate on orders under {FREE_SHIPPING_THRESHOLD_LABEL}
+                        </div>
                       </div>
                     </div>
                   </div>

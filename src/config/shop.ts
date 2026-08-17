@@ -27,3 +27,21 @@ export const SHOP_CONFIG = {
 export const GST_DIVISOR = 11;
 
 export type ShopConfig = typeof SHOP_CONFIG;
+
+/**
+ * The free-shipping threshold formatted for customer-facing copy — `"$100"`.
+ *
+ * Exists so no page hard-codes the number. Two places said "over $99" while
+ * `priceCart` charged flat shipping on anything under $100, so a $99.50 order was
+ * promised free delivery and billed $10 at checkout. Copy that restates a config
+ * value drifts from it; import this instead of typing the figure.
+ *
+ * Whole dollars when the threshold is whole, cents only when it is not.
+ */
+const dollarLabel = (cents: number) =>
+  cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`;
+
+export const FREE_SHIPPING_THRESHOLD_LABEL = dollarLabel(SHOP_CONFIG.freeShippingThresholdCents);
+
+/** The flat domestic rate formatted for customer-facing copy — `"$10"`. */
+export const FLAT_SHIPPING_RATE_LABEL = dollarLabel(SHOP_CONFIG.flatShippingRateCents);

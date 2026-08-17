@@ -16,6 +16,19 @@ export interface Product {
   isFeatured: boolean;
   tags: string[];
   slug: string;
+  /**
+   * Free entries included with one unit of this product — a free inclusion with
+   * the item, never sold and never priced per unit (CLAUDE.md rule 11).
+   *
+   * This is the BASE count. What a customer actually receives is
+   * `includedEntries × quantity × the current one-time promo multiplier`, so any
+   * surface rendering it must apply the multiplier too or it understates the
+   * offer during a promo.
+   *
+   * `0` (the default) means the product includes no entries and the promise must
+   * not be rendered at all.
+   */
+  includedEntries?: number;
   createdAt: Date;
   updatedAt: Date;
 }

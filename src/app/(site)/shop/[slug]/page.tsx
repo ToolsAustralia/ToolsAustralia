@@ -15,6 +15,7 @@ import { Product as ProductType } from "@/types/product";
 import { ProductJsonLd, BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import { getNonce } from "@/utils/security/getNonce";
+import { FREE_SHIPPING_THRESHOLD_LABEL } from "@/config/shop";
 
 // nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
 // (see docs/security-csp/architecture.md "Route classes").
@@ -77,7 +78,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     title: `${product.name} - ${product.brand} | Tools Australia`,
     description:
       product.description ||
-      `${product.brand} ${product.name} - Professional grade tools with ${product.rating}/5 rating. Starting at $${product.price}. Free shipping on orders over $99.`,
+      `${product.brand} ${product.name} - Professional grade tools with ${product.rating}/5 rating. Starting at $${product.price}. Free shipping on orders of ${FREE_SHIPPING_THRESHOLD_LABEL} or more.`,
     keywords: [
       product.name,
       product.brand,

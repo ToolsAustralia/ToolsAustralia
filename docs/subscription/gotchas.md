@@ -341,3 +341,20 @@ right token where you specifically want the bright accent.)_
 **Only those two stylesheets were fixed.** `PackageDetailModal/styles.module.css`,
 `ReferFriendModal/styles.module.css` and `SubscriptionExplainerModal.tsx` still define
 `--tier-color-deep` light-only, so the original caveat still applies there.
+
+## `/terms` §5.2 described entries as sold (fixed 2026-08-17)
+
+The Mini Draw entry-threshold clause read *"a capped entry threshold based solely on Mini Pack
+**entries sold**"*. Entries are never sold — the customer buys the **pack** and the entries are a
+free inclusion (CLAUDE.md rule 11.2). The threshold genuinely is counted in entries, so the fix
+preserves the meaning rather than the phrasing: *"a capped entry threshold, counting only the free
+entries included with Mini Pack purchases."*
+
+**This predates the merchandise work** and is unrelated to it — it was found by a rule-11 sweep of
+the Terms page while adding merchandise as a fourth entry method. Flagged for legal review rather
+than treated as settled: it is customer-facing terms copy on a legally constrained point.
+
+Worth noting for future sweeps: `/terms` and `/competition-term-majordraw` are **not** in the e2e
+legal-copy scan's `PAGES` list, so nothing automated would have caught this. Both pages also
+reference Gambling Help 1800 858 858 — that is deliberate responsible-play signposting and a
+lawyer's decision, not a rule-11 violation to "fix".

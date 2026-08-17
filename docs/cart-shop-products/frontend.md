@@ -156,3 +156,56 @@ the grid would either guess a variant or create an unbuyable line.
 
 > `/shop` and `/shop/[slug]` are both `force-dynamic` (nonce-CSP route class). Never add
 > `generateStaticParams` — that exact mistake already shipped once on `/shop/brand/[brand]`.
+
+## The free-entry badge on a product page (2026-08-17)
+
+`ProductInteractions` renders "Includes N free entries" above the stock line, where
+**N = includedEntries × quantity × the current one-time promo multiplier** — it updates live as
+the customer changes quantity.
+
+**Why the multiplier is in the displayed number.** The grant multiplies too, so a page printing
+the bare `includedEntries` would understate the offer during a promo (page says 8, buyer receives
+40) and overstate it if the promo lapsed between add-to-cart and payment. Both sides resolve
+through the *same* server chain, so they cannot disagree:
+
+```
+page  → useResolvedMultiplier("one-time-packages")
+      → /api/promo/alternating-multiplier/current
+      → getEffectiveMultipliers() → getResolvedMultiplierWithSource()
+grant → getActivePromoMultiplier("one-time") → resolveMultiplierForPayment()
+      → getResolvedMultiplierWithSource()      ← same function
+```
+
+**Do not "fix" the hook to honour its `context` argument.** `useResolvedMultiplier(type, context)`
+ignores `context` entirely; the body always reads the effective-multiplier endpoint. That is
+correct here. The function it *looks* like it should call, `resolveMultiplierForDisplay`, stops at
+active-promo → alternating and never reaches the `derived-from-membership` branch — during a
+membership-only promo it returns `null` while the payment path returns 5.
+
+Two further traps, both verified: `applyPromoToPackage` (`src/data/membershipPackages.ts`) reads
+exactly like the shared helper this wanted and has **zero callers** — do not wire money math to
+it. And the client's rendered number is display only; it is never an input to a grant.
+
+**Nothing renders at `includedEntries: 0`** — the state the feature ships in until the permit
+lands. No badge, no promise, no copy to retract.
+
+The route is `force-dynamic` (for the nonce-CSP route class, not for us), so the count cannot be
+frozen into cached HTML across the start or end of a promo. If a future perf pass removes that,
+the entry count silently freezes with it.
+
+Rule 11: the badge states a free **inclusion** with the product. Never add a per-entry figure or
+a dollar-to-entry rate. `/shop` is now in the e2e legal-copy scan's `PAGES` list — it was not
+before, so a per-entry price on a product page would have passed every automated guard in the
+repo purely because the list did not mention it.
+
+## Shipping copy is derived from config, not typed (2026-08-17)
+
+`FREE_SHIPPING_THRESHOLD_LABEL` and `FLAT_SHIPPING_RATE_LABEL` (`src/config/shop.ts`) exist so no
+page restates a money figure. The product page previously promised free shipping **"over $99"**
+while `priceCart` charges flat shipping on anything under **$100** — a $99.50 order was told
+delivery was free and billed $10 at checkout.
+
+The same block advertised **Express Shipping $15** and **Same Day Delivery $25** in three cities.
+Neither exists anywhere in the pricing path: checkout can only ever produce $0 or the flat rate.
+Both were removed rather than reworded — they were template copy promising services the business
+does not sell.

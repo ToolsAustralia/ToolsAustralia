@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ShoppingCart, Minus, Plus } from "lucide-react";
+import { ShoppingCart, Minus, Plus, Ticket } from "lucide-react";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { ProductData } from "@/data";
 import { useCart } from "@/contexts/CartContext";
 import { useSession } from "next-auth/react";
@@ -148,8 +149,56 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
   // "out of stock" for them — the printer makes each one on demand.
   const isOutOfStock = trackInventory && product.stock === 0;
 
+  // Merchandise inherits the ONE-TIME pack multiplier, never its own promo type.
+  //
+  // Use THIS hook, not resolveMultiplierForDisplay: despite the name, the hook
+  // reads the effective-multiplier endpoint, which resolves through
+  // getResolvedMultiplierWithSource — the same chain resolveMultiplierForPayment
+  // uses, derived-from-membership branch included. resolveMultiplierForDisplay
+  // stops at active-promo -> alternating and would print a number the grant does
+  // not honour. (The hook's `context` parameter is dead; the body ignores it.)
+  //
+  // null means no promo and must read as 1x, never 0.
+  const entryMultiplier = useResolvedMultiplier("one-time-packages") ?? 1;
+  // `product` is a union of the static ProductData fixtures and the DB shape;
+  // only the latter carries includedEntries, so read it defensively rather than
+  // widening a type that legitimately does not have the field.
+  const rawEntries = (product as { includedEntries?: unknown }).includedEntries;
+  const baseEntries = typeof rawEntries === "number" && rawEntries > 0 ? rawEntries : 0;
+  const entriesForQuantity = baseEntries * quantity * entryMultiplier;
+
   return (
     <div className="space-y-6">
+      {/* Free entries included with this item.
+
+          The count shown is base x quantity x the CURRENT one-time promo
+          multiplier, resolved from the same server chain the grant uses
+          (useResolvedMultiplier -> /api/promo/alternating-multiplier/current ->
+          getResolvedMultiplierWithSource), so the page and the webhook cannot
+          disagree. This route is force-dynamic, so the number is never frozen
+          into cached HTML across the start or end of a promo.
+
+          Rendered only when there is something to promise: at includedEntries 0
+          — the state the feature ships in until the permit lands — nothing
+          appears at all.
+
+          Rule 11: entries are a free INCLUSION with the product, never sold and
+          never priced per unit. Do not add a per-entry figure here. */}
+      {entriesForQuantity > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-950/30">
+          <Ticket className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+          <div>
+            <div className="font-medium text-gray-900 dark:text-neutral-100">
+              Includes {entriesForQuantity} free {entriesForQuantity === 1 ? "entry" : "entries"}
+            </div>
+            <div className="text-sm text-gray-600 dark:text-neutral-400">
+              Into this month&apos;s major prize draw
+              {entryMultiplier > 1 ? ` — ${entryMultiplier}× promo applied` : ""}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stock Status */}
       <div className="flex items-center gap-3">
         <div

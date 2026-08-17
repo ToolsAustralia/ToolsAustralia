@@ -212,9 +212,9 @@ export default function TermsPage() {
                 <ul className="list-inside list-disc space-y-2">
                   <li>Entry limits specified in each competition&apos;s terms and conditions</li>
                   <li>
-                    Mini Draws have a capped entry threshold based solely on Mini Pack entries sold. Once the maximum
-                    entry threshold for a Mini Draw is reached, Mini Pack purchases for that specific Mini Draw are
-                    disabled and the draw is conducted
+                    Mini Draws have a capped entry threshold, counting only the free entries included with Mini Pack
+                    purchases. Once the maximum entry threshold for a Mini Draw is reached, Mini Pack purchases for
+                    that specific Mini Draw are disabled and the draw is conducted
                   </li>
                   <li>Maximum entries per member may apply as specified in competition-specific terms.</li>
                 </ul>
