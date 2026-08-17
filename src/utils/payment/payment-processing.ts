@@ -184,7 +184,7 @@ export async function processPaymentBenefits(
   paymentIntentId: string,
   userId: string,
   packageData: {
-    packageType: "one-time" | "membership" | "upsell" | "mini-draw";
+    packageType: "one-time" | "membership" | "upsell" | "mini-draw" | "shop";
     packageId?: string;
     packageName?: string;
     entries: number;
@@ -285,7 +285,7 @@ async function processPaymentBenefitsInternal(
   paymentIntentId: string,
   userId: string,
   packageData: {
-    packageType: "one-time" | "membership" | "upsell" | "mini-draw";
+    packageType: "one-time" | "membership" | "upsell" | "mini-draw" | "shop";
     packageId?: string;
     packageName?: string;
     entries: number;
@@ -818,7 +818,7 @@ async function processPaymentBenefitsInternal(
  * @returns Number of bonus entries to grant (0 if no active promo)
  */
 async function checkAndApplyBonusEntryPromo(
-  packageType: "one-time" | "membership" | "upsell" | "mini-draw",
+  packageType: "one-time" | "membership" | "upsell" | "mini-draw" | "shop",
   paymentMetadata?: {
     created?: number;
     type?: string;
@@ -831,6 +831,12 @@ async function checkAndApplyBonusEntryPromo(
   packageId?: string
 ): Promise<number> {
   try {
+    // Merchandise gets no bonus-entry promo. This MUST return before the cast
+    // below: that cast is unchecked, so "shop" would be laundered into the promo
+    // vocabulary and then fall through the promoType ternary to "mini-packages" —
+    // a merch sale silently reading a mini-draw promo, with no error anywhere.
+    if (packageType === "shop") return 0;
+
     // ✅ For upsells, use the original package type for promo checks
     let effectivePackageType: "membership" | "one-time" | "mini-draw" = packageType as
       | "membership"
@@ -950,7 +956,7 @@ async function checkAndApplyBonusEntryPromo(
  */
 async function checkAndApplyPromoLink(
   user: UserDocument,
-  packageType: "one-time" | "membership" | "upsell" | "mini-draw",
+  packageType: "one-time" | "membership" | "upsell" | "mini-draw" | "shop",
   paymentMetadata?: PaymentMetadata,
   packageId?: string
 ): Promise<{ bonusEntries: number; promoLinkId?: string; code?: string }> {
@@ -974,7 +980,11 @@ async function checkAndApplyPromoLink(
     const isMembershipPurchase = packageType === "membership" || memberOnlyOneTime;
     const isOneTimePurchase = packageType === "one-time" && !memberOnlyOneTime;
 
-    if (packageType === "mini-draw" || packageType === "upsell") {
+    // "shop" is listed deliberately, not by omission: promo links are a package
+    // mechanic, and without this a merch sale would reach redeem() with BOTH
+    // isMembershipPurchase and isOneTimePurchase false — an undefined case.
+    // Revisit if promo codes should ever apply to merchandise.
+    if (packageType === "mini-draw" || packageType === "upsell" || packageType === "shop") {
       return { bonusEntries: 0 };
     }
 
@@ -1083,7 +1093,7 @@ async function checkAndRedeemCampaign(
 async function grantBenefits(
   user: UserDocument,
   packageData: {
-    packageType: "one-time" | "membership" | "upsell" | "mini-draw";
+    packageType: "one-time" | "membership" | "upsell" | "mini-draw" | "shop";
     packageId?: string;
     packageName?: string;
     entries: number;
@@ -1462,8 +1472,18 @@ async function grantBenefits(
   // ✅ CRITICAL: Skip Facebook tracking for subscription renewals (billingReason === "subscription_cycle")
   // Renewals should NOT be sent as Purchase events to Facebook per best practices
   const isRenewal = billingReason === "subscription_cycle";
-  
-  if (!isRenewal) {
+
+  // Shop orders already fire their Purchase pixel from the browser on the
+  // checkout success page, deduped on orderNumber
+  // (CheckoutSuccessClient.tsx → purchase-pixel-fired-storage). Firing the
+  // server-side CAPI half from here would use a DIFFERENT event id
+  // (paymentIntentId), so Meta could not dedup them and every merch sale would
+  // be counted twice. Server-side CAPI for shop belongs on the shop path,
+  // sharing the browser's orderNumber event id — a separate piece of work.
+  // Written inline rather than via a `const isShopOrder` so TypeScript narrows
+  // packageData.packageType inside the block — the tracking payload's union is
+  // the 4-member one, and a boolean const does not carry the narrowing.
+  if (!isRenewal && packageData.packageType !== "shop") {
     // Only track new purchases to Facebook (not renewals)
     const trackingId = paymentIntentId?.trim() || "unknown";
     if (!paymentIntentId?.trim()) {
@@ -1692,7 +1712,7 @@ async function grantBenefits(
 function trackKlaviyoEvent(
   user: UserDocument,
   packageData: {
-    packageType: "one-time" | "membership" | "upsell" | "mini-draw";
+    packageType: "one-time" | "membership" | "upsell" | "mini-draw" | "shop";
     packageId?: string;
     packageName?: string;
     entries: number;
@@ -1703,6 +1723,15 @@ function trackKlaviyoEvent(
   billingReason?: string // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason, and gates Invoice Generated
 ): void {
   try {
+    // Merchandise does not emit package-shaped Klaviyo events from here. Every
+    // payload below is built from packageId / packageName / entriesGranted /
+    // pointsEarned — a t-shirt has none of those, so it would arrive as
+    // "Unknown Package" and pollute revenue metrics with a fake package.
+    // Shop revenue events, if wanted, belong on the shop path with order-shaped
+    // data (order number, line items, sizes). Flagged as an open question, not
+    // silently dropped.
+    if (packageData.packageType === "shop") return;
+
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
     // console.log(`📊 Package data:`, packageData);
     // console.log(`📊 Billing reason: ${billingReason || "not provided"}`);
@@ -2195,7 +2224,8 @@ async function addToMajorDraw(
       | "upsell"
       | "mini-draw"
       | "bonus-entry-promo"
-      | "promo-link";
+      | "promo-link"
+      | "shop";
     if (sourceTypeOverride) {
       sourceType = sourceTypeOverride as typeof sourceType;
     } else {
@@ -2211,6 +2241,9 @@ async function addToMajorDraw(
           break;
         case "mini-draw":
           sourceType = "mini-draw";
+          break;
+        case "shop":
+          sourceType = "shop";
           break;
         default:
           sourceType = "membership"; // Default fallback
@@ -2261,6 +2294,7 @@ async function addToMajorDraw(
         "promo-link": 0,
         "cancellation-upsell": 0,
         streak: 0,
+        shop: 0,
       };
       freshEntriesBySource[sourceType] = entriesAmount;
 

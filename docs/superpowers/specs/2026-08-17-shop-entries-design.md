@@ -31,6 +31,7 @@ SA/ACT or under-18 customer, or any customer-facing string that prices entries p
 | Where the grant runs | Through `processPaymentBenefits` as a new `packageType: "shop"` | Inherits the idempotency gate and the reversal ledger. Rejected: a new grant function — four copy-pasted `addToMajorDraw` variants already exist and only one is atomic |
 | Source key | `entriesBySource.shop` | Matches repo vocabulary |
 | Which pool | Major Draw only, never Mini Draw | Separate pools; Terms states the distinction to customers `[D BUSINESS.md]` |
+| Promo multipliers | **Merch inherits the one-time pack multiplier** | Both move together, so the ratio never changes and merch cannot overtake the packs during a promo. `resolveMultiplierForPayment("one-time")` already exists, so this needs **no new promo type, enum value or admin surface** — a merch-specific promo category would have needed all four. Decided by the owner 2026-08-17, reversing an earlier "no multiplier" recommendation whose fairness and margin arguments were both wrong |
 | Ineligible customers | Sell the garment, skip the entries, say so at point of sale | Lawful to sell to SA/ACT; not lawful to grant them an entry |
 | Returns | Entries stay granted; state it in Terms | Matches existing partial-refund behaviour — the system deliberately skips reversal because it "cannot safely undo half an entry" `[D BUSINESS.md]` |
 | Freeze window | Sell continuously; entries route to the next draw | Refusing apparel sales for 4 hours a month is the wrong trade |
@@ -53,19 +54,66 @@ SA/ACT or under-18 customer, or any customer-facing string that prices entries p
 
 ## 4. Design
 
-`Product.includedEntries: Number` — authored per product, never derived from price.
+`Product.includedEntries: Number` — authored per product, never derived from price. This is the
+**base** count; the number actually granted is `base × qty × multiplier`.
 
 Grant happens in the webhook, at payment, **not** at fulfilment — so a printing delay never
 delays a customer's entries.
 
 ```
-webhook → processPaymentBenefits({ packageType: "shop", entries: includedEntries × qty })
+webhook → resolveMultiplierForPayment("one-time")            ← merch inherits, never its own type
+        → processPaymentBenefits({ packageType: "shop", entries: base × qty × (multiplier ?? 1) })
         → grantBenefits → addToMajorDraw(sourceTypeOverride: "shop")
         → pushDrawGrant({ kind: "major", drawId, sourceKey: "shop", entries })
 ```
 
 The ledger row is what makes a refund reversible; without it, reversal falls back to a legacy
 walk that has corrupted totals before `[D src/utils/draws/remove-draw-entries.ts]`.
+
+### The multiplier, and the display trap it creates
+
+`resolveMultiplierForPayment` takes `PackageTypeShort` and `convertPackageType` accepts exactly
+`membership` / `one-time` / `mini-draw`, throwing on anything else
+`[V src/services/admin/PromoMultiplierResolverService.ts:54-65, :303]`. Passing `"one-time"`
+therefore works **today with no enum change** — that is the whole reason this option is cheap.
+
+Better still, **do not call the resolver directly.** `getActivePromoMultiplier(packageType)` is a
+local helper in the very file the shop branch lives in
+`[V src/services/stripe-webhook-handlers/index.ts:311-322]`. It wraps the resolver and already
+does both things the edge-case table demands: `resolved ?? 1` `[V :317]` and `catch → return 1`
+`[V :318-321]`. The one-time path calls it at `[V :1195-1196]` as
+`entriesCount * promoMultiplier`. The shop branch calls the identical helper with `"one-time"`.
+**No new multiplier code on either side of this feature.**
+
+Merch also inherits the `derived-from-membership` branch, which only fires for
+`one-time-packages` (10→5, 5→3, 3/2→2) `[V :37-49, :175-181]`. So a membership promo lifts merch
+automatically, at the reduced one-time rate, without anyone configuring a second thing.
+
+**The trap:** the product page prints a fixed `includedEntries` while the granted number is
+multiplied. During a 5× promo the page says 8 and the buyer receives 40. Displayed and granted
+counts must come from the **same resolver call**, and the page must therefore be dynamic, not
+statically prerendered — a cached "8" outlives the promo in both directions.
+
+**The client side needs no new plumbing at all.** `useResolvedMultiplier("one-time-packages")`
+reads `/api/promo/alternating-multiplier/current` `[V src/hooks/queries/usePromoQueries.ts:154-167]`,
+which calls `getEffectiveMultipliers()` → `getResolvedMultiplierWithSource()`
+`[V src/app/api/promo/alternating-multiplier/current/route.ts:14; PromoMultiplierResolverService.ts:201]`
+— **the same chain `resolveMultiplierForPayment` uses** `[V :304]`, derived-from-membership
+included. Page and grant therefore agree by construction, and the shop page reuses an existing
+hook with **zero file changes**. Rejected: adding a `"shop-packages"` promo type, which the union
+closes at three members across **34 files** plus four Mongoose enums and two Norm Zod schemas.
+
+**One real trap, one false one.** `resolveMultiplierForDisplay` is a genuine trap — it stops at
+active-promo → alternating and never reaches the derived branch `[V :278-293]`, so calling it
+server-side would print 8 while the buyer receives 40. But it is **not** what the hook uses: the
+hook's `_context: "display" | "payment"` parameter is **dead**, ignored by the body
+`[V usePromoQueries.ts:156, :160-167]`. Do not "fix" the hook to honour it.
+
+Two further landmines found in recon: `applyPromoToPackage`
+`[V src/data/membershipPackages.ts:404-423]` reads exactly like the shared helper this needed and
+has **zero callers** — do not wire money math to it. And the grant multiplier must be resolved
+**server-side at fulfilment**; the client's rendered number is display only and must never be
+trusted as input.
 
 ### Edge and failure states
 
@@ -78,6 +126,11 @@ walk that has corrupted totals before `[D src/utils/draws/remove-draw-entries.ts
 | Full refund | Ledger replayed backward, entries removed |
 | Partial refund (one item of several) | Entries **stay** — the decided policy, must be in Terms |
 | Multi-item cart | Entries summed across lines, one grant call |
+| Resolver returns `null` | Read as **1×**, not 0. A `?? 1` — an `\|\| 1` would also swallow a genuine 0 |
+| Resolver throws / DB down mid-webhook | Grant the **base** count and log. Never fail the webhook over a promo lookup, and never grant 0 because a promo lookup failed |
+| Promo **starts** between add-to-cart and payment | Buyer gets the higher count. Payment time is the resolution time — same rule the packs use |
+| Promo **ends** between add-to-cart and payment | Buyer gets the base count, having been shown more. Mitigated by resolving at render *and* showing the promo's end time, not by freezing a stale number |
+| Multiplier is fractional or absurd | It is admin-authored and shared with the packs. Not separately validated here; a bad value is already a site-wide problem |
 
 ## 5. Threading checklist
 
@@ -95,6 +148,9 @@ silent ones** — Mongoose strict mode drops unknown keys without error.
 | 7 | `packageType` union — 5 sites + `PaymentEvent` enum | Grant throws at runtime | loud |
 | 8 | `addToMajorDraw` sourceType switch `[V :2204]` | **Shop entries credited to the membership bucket.** No error, wrong analytics, wrong refunds | **silent** |
 | 9 | `GATES_CLOSED` exemption `[V :344]` | Hoodie unbuyable during the freeze | loud |
+| 10 | Product page entry count must call `resolveMultiplierForPayment("one-time")` | Page prints 8 during a 5× promo, buyer receives 40. **We advertised less than we gave, or more** | **silent** |
+| 11 | Shop routes must stay dynamic. **Already true** — all three carry `export const dynamic = "force-dynamic"` `[V src/app/(site)/shop/page.tsx:10; [slug]/page.tsx:21; brand/[brand]/page.tsx:15]`, for the nonce-CSP route class rather than for us | No edit needed; needs a **guard** so a future perf pass that removes it does not silently freeze the entry count | **silent** |
+| 12 | `null` multiplier coerced with `?? 1` | `\|\| 1` looks identical and behaves identically here — but silently rewrites a real 0 if one ever appears | **silent** |
 
 ## 6. Tests
 
@@ -113,6 +169,11 @@ Every silent row above needs an assertion, because nothing else will catch it.
 | Declined payment grants nothing | money path |
 | Ineligible (SA / ACT / under-18) buyer gets `entriesGranted: 0` | eligibility |
 | A purchase during the freeze lands on the **next** draw's id | 9 |
+| With a 5× one-time promo active, a 2-entry item × 3 qty grants **30** | 10 |
+| **The number the product page renders equals the number granted**, asserted against one shared resolver call — the only assertion that actually catches the display trap | 10 |
+| A membership-only 10× promo grants merch **5×**, proving the derived branch is reached and `resolveMultiplierForDisplay` was not used | 10 |
+| A `null` multiplier grants the base count, not zero | 12 |
+| A resolver **throw** still grants the base count and does not fail the webhook | 12 |
 
 New file `src/utils/payment/__tests__/shop-entry-grant.test.ts` + a `test:shop-entries` script.
 
@@ -122,7 +183,7 @@ One phase. It does not split usefully — a half-threaded entry source is worse 
 
 | # | Ships | User-visible win |
 |---|---|---|
-| **1** | `shop` source threaded through all 9 rows, eligibility split, Terms + competition terms + Cobber + product copy, `/shop` added to the legal-copy scan | Buying merch credits free entries |
+| **1** | `shop` source threaded through all 12 rows, multiplier inherited from one-time on both the grant and the page, eligibility split, Terms + competition terms + Cobber + product copy, `/shop` added to the legal-copy scan | Buying merch credits free entries |
 
 ## 8. Legal — the hard constraint
 
@@ -149,7 +210,14 @@ notification variation.
 
 **Kill switch:** set `includedEntries: 0` on every product in admin. No deploy, no code path
 change — the grant call computes zero and writes nothing, and the copy that renders the entry
-count is driven from the same field, so the promise disappears with the grant.
+count is driven from the same field, so the promise disappears with the grant. A running promo
+cannot resurrect it, because the multiplier is applied to the base: `0 × 5 = 0`.
+
+**This is also how the feature ships while the permit answer is outstanding.** Build and merge
+with every product at `includedEntries: 0` — the code is live, the promise is not made, and
+nothing customer-facing claims an entry. Flipping the number on is an admin edit on the day the
+permit lands, not a deploy. The Terms and Cobber copy is the exception: it must land *with* the
+flip, not before, or the site describes an entry route customers cannot get.
 
 **In-flight:** entries already granted stay granted. Reversing them retroactively would
 contradict the returns policy we just wrote into Terms.
@@ -167,3 +235,9 @@ contradict the returns policy we just wrote into Terms.
 | Terms + competition-terms wording review | DJ + lawyer | 2026-08-17 | — | Launch, not build |
 
 If the permit answer is no, spec 1 still ships a working shop; this spec is simply not built.
+
+**The permit gates the launch, not the build.** Because the kill switch is a data value rather
+than a code path, phase 1 can be written, tested and merged with every product at
+`includedEntries: 0` before the answer arrives. What must NOT ship ahead of the permit is the
+customer-facing promise: Terms, competition terms, Cobber and any product copy asserting free
+entries. Those land in the same branch and stay unpublished until the flip.

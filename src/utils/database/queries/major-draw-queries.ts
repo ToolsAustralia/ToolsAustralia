@@ -148,7 +148,12 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       (userEntry.entriesBySource.referral || 0) +
       (userEntry.entriesBySource["bonus-entry-promo"] || 0) +
       (userEntry.entriesBySource["cancellation-upsell"] || 0) +
-      (userEntry.entriesBySource["promo-link"] || 0);
+      (userEntry.entriesBySource["promo-link"] || 0) +
+      // Free entries included with a merchandise order. Folded into this bucket
+      // rather than given its own, matching how every non-membership, non-streak
+      // source is already grouped — the load-bearing property is that the sum
+      // agrees with userEntry.totalEntries, which is read straight off the doc.
+      (userEntry.entriesBySource["shop"] || 0);
     // Membership Streak auto-grants — a distinct bucket (NOT folded into
     // one-time) so the wallet can render it as its own line (P3).
     const streakEntries = userEntry.entriesBySource["streak"] || 0;
@@ -282,7 +287,12 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
       (userEntry.entriesBySource.referral || 0) +
       (userEntry.entriesBySource["bonus-entry-promo"] || 0) +
       (userEntry.entriesBySource["cancellation-upsell"] || 0) +
-      (userEntry.entriesBySource["promo-link"] || 0);
+      (userEntry.entriesBySource["promo-link"] || 0) +
+      // Free entries included with a merchandise order. Folded into this bucket
+      // rather than given its own, matching how every non-membership, non-streak
+      // source is already grouped — the load-bearing property is that the sum
+      // agrees with userEntry.totalEntries, which is read straight off the doc.
+      (userEntry.entriesBySource["shop"] || 0);
     // Membership Streak auto-grants — a distinct bucket (NOT folded into
     // one-time) so the wallet can render it as its own line (P3).
     const streakEntries = userEntry.entriesBySource["streak"] || 0;

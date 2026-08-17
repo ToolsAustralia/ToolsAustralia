@@ -49,6 +49,12 @@ The `cancellation-upsell` key was added to fix exactly this — entries from `/a
 
 **2026-07-07 (Streak P2):** two keys added — **`streak`** (Membership Streak auto-grants; load-bearing because `DrawGrantService` writes via `.save()`, the strictest drop path) and **`promo-link`** (pre-existing drift: it was summed by `major-draw-queries` and seeded by `addToMajorDraw` but absent from the schema). The full consumer checklist when adding a source key: MajorDraw schema + TS interface → both summations in `major-draw-queries.ts` (note `streak` is returned as its own `streakEntries`, NOT folded into `oneTimeEntries`) → `freshEntriesBySource` in `payment-processing.ts` → the fresh-row shape in `DrawGrantService` → `MajorDrawSourceType` in `remove-draw-entries.ts` → reversal source in `RedemptionService.unredeemMilestoneRedemption` (streak-months issuances reverse from `streak`).
 
+**2026-08-17 (merchandise):** **`shop`** added to the schema and the TS interface — free entries included with a merchandise purchase (the customer buys the garment; the entries are an unpriced inclusion, CLAUDE.md rule 11). Load-bearing for the same reason as `streak`: the intended grant path is `addToMajorDraw`, which `$push`es a fresh row, so an undeclared key would be dropped.
+
+**Nothing produces a `shop` source yet — this change is inert at runtime.** The schema key, `MajorDrawSourceType`, the `payment-processing.ts` `case "shop"` + `freshEntriesBySource` slot, and the refund arms all exist, but no caller passes `packageType: "shop"`. The grant itself is a later task, gated on a trade-promotion permit variation. Assume zero `shop` entries exist in production; the plumbing landed first so the grant can't be written against a bucket Mongoose would silently drop.
+
+The same change also added **`referral`** to `MajorDrawSourceType` in [`remove-draw-entries.ts`](../../src/utils/draws/remove-draw-entries.ts) — pre-existing drift, fixed rather than left sitting next to a new key. That union's own doc comment claims it matches the schema, and it did not: `referral` has been a MajorDraw bucket since long before the shop work. Type-level only (the runtime `$inc` builds its path from a template literal), so it changes no behaviour — it just makes an untrue comment true.
+
 
 
 ## Major-draw transitions

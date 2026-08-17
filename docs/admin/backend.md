@@ -440,6 +440,21 @@ Some services under `src/services/admin/` expose secondary "projection" methods 
 - **Admin streak visibility (2026-07-15, owner-requested):** the user-detail route + `UserAdminQueryService` (list AND detail) project `subscription.streakMonths` (+ `streakGeneration` on detail); `UserDetailModal`'s Current Subscription grid shows a "Membership Streak" cell (flame + `N renewals`, `· gen G` when > 1); the users page has a **Streak filter** (1+/2+/4+/6+/8+/10+/12+ (Founding) / No streak) wired through the shared `buildUserFilter` (`streak` param: `"none"` = missing-or-0, numeric = `$gte` on `subscription.streakMonths`) so the list, the CSV/XLSX export, and Norm's export counts all honour it; the export field registry gained `subscription.streakMonths` ("Membership Streak (renewals)"). Norm lockstep done in the same change: `users` list + `users/[id]` schemas/routes carry `streakMonths` (+ `streakGeneration` on detail), manifest rebuilt, both routes smoke-tested 200.
 - **Known admin gaps (deliberate, P4 scope):** the user-detail entries-by-source breakdowns do not list the streak bucket, the users LIST table has no streak column (filter + detail modal only), and there is no manual streak-adjustment tool (support uses the repair script `backfill:membership-streaks`).
 
+### Merchandise (`shop`) entry bucket (2026-08-17)
+
+`MajorDrawParticipantSafe.entriesBySource` and `zeroEntriesBySource()` in
+[`MajorDrawService.ts`](../../src/services/admin/MajorDrawService.ts) both gained a `shop` bucket —
+free entries included with a merchandise order. The two are **tsc-linked**: `zeroEntriesBySource()`
+is typed as the interface's `entriesBySource`, so a key added to one without the other fails
+`type-check`. They cannot drift.
+
+**Nothing grants this source yet.** The bucket is declared so every participant row carries it (and
+so the Norm mirror `major-draw.participants` projects it rather than silently dropping the key —
+see [internal-norm/gotchas.md](../internal-norm/gotchas.md)), but no code path writes a `shop`
+entry. Every admin participants row reads `shop: 0` today; the grant is a later task gated on a
+trade-promotion permit variation. Do not present merchandise entries as a live earning path in
+admin UI or CS scripts until that lands.
+
 ### Signups per acquisition platform (2026-07-24)
 
 [`src/services/admin/signupsByPlatform.ts`](../../src/services/admin/signupsByPlatform.ts) — `getSignupsByPlatform(startDate, endDate)` counts accounts created in the window, grouped by acquisition platform, for the Advertising card's per-platform **signup** figure (the companion to revenue/conversions: how many *accounts* a channel created, not just how much revenue it converted).

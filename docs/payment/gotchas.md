@@ -47,6 +47,10 @@ Rules for this block:
 
 For the legacy fallback path (originalEvent has no `grants.drawGrants` — pre-ledger event), `removeMajorDrawEntries` is intentionally called without a `drawId` because none is available. The function logs `[refund-reversal] no drawGrants ledger — falling back to legacy walk` so these cases are visible during local `stripe listen` debugging.
 
+**The legacy walk's `source` ternary needs an arm per `packageType` (2026-08-17).** In that fallback the source key is picked by a ternary chain whose final `: "mini-draw"` is a **fallback, not a match** — any `packageType` not explicitly named above it lands there. So when `packageType: "shop"` was introduced, a merchandise refund would have removed entries from the user's **`mini-draw`** bucket, via the drawId-less multi-draw walk: the over-removal pattern above, aimed at the wrong source. `shop` now has an explicit arm; add one for every new `packageType`, because the default is silently wrong rather than merely imprecise. (Nothing produces `packageType: "shop"` yet — see [backend.md](./backend.md) — so this is a trap disarmed ahead of the grant, not a fixed production bug.)
+
+The inline `row.sourceKey as …` union in the ledger path was completed in the same change (6 keys → 10: `referral`, `cancellation-upsell`, `streak`, `shop`). It is an unchecked `as` on a `string` field, so it gates nothing at runtime — it is documentation, and it had drifted three keys behind the schema. Don't read it as a guarantee.
+
 ## Refund reversal must pass `invoiceId` to the affiliate reversal
 
 `processRefundReversal` resolves both the real `paymentIntentId` and (for

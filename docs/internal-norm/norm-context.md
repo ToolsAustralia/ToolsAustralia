@@ -2299,7 +2299,8 @@ Cancelled draws are excluded — only `queued | active | frozen | completed` dra
       "bonus-entry-promo": number,
       "cancellation-upsell": number,           // retention-offer entries
       "promo-link": number,                    // promo-link bonus entries
-      streak: number                           // Membership Streak auto-grants (rungs at renewals 2/4/6/8/10/12, annual repeat)
+      streak: number,                          // Membership Streak auto-grants (rungs at renewals 2/4/6/8/10/12, annual repeat)
+      shop: number                             // free entries included with a merchandise order — declared but ALWAYS 0 today; nothing grants this source yet
     },
     firstAddedDate: ISO8601,
     lastUpdatedDate: ISO8601

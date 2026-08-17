@@ -14,6 +14,10 @@ Key types written:
 
 Idempotency: each row's natural key is `${type}-${paymentIntentId}` (e.g. `BenefitsGranted-invoice_in_xxx`). Webhook retries find the existing row and bail.
 
+`packageType`: `"one-time" | "membership" | "upsell" | "mini-draw" | "shop"`. **This union is declared twice** — once on the `IPaymentEvent` TS interface and once as the Mongoose `enum` — and the two must be widened together. Widening only the interface leaves `tsc` green and throws a Mongoose `ValidationError` at `save()`; widening only the enum leaves `tsc` rejecting the write. Neither half fails in a way the other one warns you about.
+
+`"shop"` (merchandise orders, added 2026-08-17) is **declared but unused** — no code path writes a `PaymentEvent` with this `packageType` yet, so no such row exists. It is wired ahead of a grant gated on a trade-promotion permit variation. Note that revenue aggregations which enumerate package types explicitly (see [admin/backend.md](../admin/backend.md) — the `packageType ∈ {one-time, mini-draw, upsell}` renewal-exclusion query, `classifyRevenueBucket`) do **not** include `"shop"`; whoever lands the grant must decide how merchandise revenue buckets rather than assume it flows through.
+
 Attribution fields (denormalized from Stripe metadata for ad-level aggregation):
 - `attributionAdId: string | null` (indexed) — Facebook ad ID extracted from Stripe metadata
 - `attributionAdsetId: string | null` (indexed) — Facebook ad set ID extracted from Stripe metadata
