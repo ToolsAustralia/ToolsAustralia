@@ -24,7 +24,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if ("errorResponse" in auth) return auth.errorResponse;
     const userId = auth.session.user.id;
 
-    const order = await Order.findOne({ _id: id, user: userId }).populate("products.productId").lean();
+    const order = await Order.findOne({ _id: id, user: userId }).populate("products.product").lean();
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });

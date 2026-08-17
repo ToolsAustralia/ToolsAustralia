@@ -58,6 +58,7 @@
     "test:chat-faqs": "tsx src/data/__tests__/faqs.test.ts",
     "test:shop-variants": "tsx src/utils/shop/__tests__/variants.test.ts",
     "test:shop-pricing": "tsx src/utils/shop/__tests__/pricing.test.ts",
+    "test:shop-order": "tsx src/services/shop/__tests__/order-number.test.ts",
     "test:discount-visit": "tsx src/utils/partner-discounts/__tests__/record-discount-visit.test.ts",
     "test:norm-user-service-account": "tsx src/models/__tests__/User.serviceAccount.test.ts",
     "test:norm-call-log": "tsx src/models/__tests__/NormCallLog.test.ts",

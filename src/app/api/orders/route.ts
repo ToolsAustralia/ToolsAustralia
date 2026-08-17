@@ -32,7 +32,7 @@ export async function GET() {
     if ("errorResponse" in auth) return auth.errorResponse;
     const { user } = auth;
 
-    const orders = await Order.find({ user: user._id }).populate("products.productId").sort({ createdAt: -1 }).lean();
+    const orders = await Order.find({ user: user._id }).populate("products.product").sort({ createdAt: -1 }).lean();
 
     return NextResponse.json({ orders });
   } catch (error) {
