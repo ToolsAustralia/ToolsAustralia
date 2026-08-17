@@ -324,6 +324,33 @@ refunds** — a bug in the audit, not the data. Correlation must go through
 lives in exactly one place (`scripts/backfill-missing-refund-events.ts`). The audit script
 reports counts and defers to it rather than keeping a second copy that could disagree.
 
+### Why the 171 have no purchase — and what it means for historical revenue
+
+Confirmed in code, not inferred. `deleteUserWithCascade`
+([src/utils/admin/delete-user-cascade.ts](../../src/utils/admin/delete-user-cascade.ts)) hard-deletes
+the customer's payment history along with the account:
+
+```ts
+const paymentEventsResult = await PaymentEvent.deleteMany({ userId: userObjectId }, { session });
+const ordersResult       = await Order.deleteMany({ user: userObjectId }, { session });
+```
+
+So when an account is deleted, its `BenefitsGranted` rows go with it. The Stripe customer and
+its refunds survive in Stripe forever; the ledger side vanishes. That is precisely the 171 —
+refunds with no purchase to attach to, and **no revenue overstated**, because the payment was
+erased from the books at the same time.
+
+⚠️ **The wider consequence: deleting a user retroactively rewrites historical revenue.** Every
+figure computed from `PaymentEvent` — Receipts, the dashboard's net and acquisition revenue,
+MER, the daily snapshots — drops for **past** periods when an account is deleted today. A
+customer exercising a deletion request removes their money from the books, and a
+previously-reported month quietly changes.
+
+If you ever need books that don't move, the fix is to anonymise the payment rows on deletion
+(null the PII, keep `userId` as an opaque tombstone) rather than delete them — a change to the
+cascade, not to Receipts. Flagged here because Receipts is where the discrepancy becomes
+visible.
+
 ### Repairing the 87
 
 `npm run backfill:missing-refunds:prod` writes the missing `RefundProcessed` rows so revenue
@@ -333,7 +360,22 @@ would rewrite settled draw history to fix a reporting number. Rows it writes car
 `data.backfilledFromStripe: true` + `data.stripeRefundId` and `processedBy: "admin"`, so they
 are distinguishable from webhook-written rows forever.
 
-**Not yet run against production** — dry-run only.
+**Run against production 2026-08-17**: 87 rows written, 0 duplicates. Refunded moved
+$7,414.91 → $10,344.91 (+$2,930.00 exactly as predicted) and net revenue restated
+$1,197,077.78 → $1,194,415.28. Dashboard net still equals Receipts net to the cent afterwards,
+so both surfaces moved together.
+
+⚠️ **Idempotency is keyed on `data.stripeRefundId`, NOT on the amount match.** The first
+production run exposed this: re-running the dry afterwards still reported 50 "missing" refunds.
+Cause — the correlation is (customer, amount, closest-preceding purchase), so for a member with
+**two identical purchases and one refund**, a second run finds the first purchase already
+refunded and cheerfully matches the same Stripe refund to the second one. The in-run `claimed`
+set only guards within a single execution. A re-run would therefore have written ~50 duplicate
+refunds and under-reported revenue a second time.
+
+The script now loads every `stripeRefundId` it has previously filed and skips those refunds
+**before** any amount matching. Verified: a re-run reports `0 missing`, `170 already on the
+ledger`, `171 unmatched`. Do not remove that check.
 
 ## Gotchas
 
