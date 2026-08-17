@@ -39,6 +39,7 @@ import {
   type ReceiptCategory,
   type ReceiptRefundIndex,
   type ReceiptRefundRecord,
+  type ReceiptRefundStatus,
   type ReceiptRow,
   type ReceiptSource,
   type ReceiptsData,
@@ -69,6 +70,10 @@ export interface ReceiptsInput {
   endDate: Date;
   /** Omit for every category. */
   category?: ReceiptCategory;
+  /** Omit for every refund state. */
+  status?: ReceiptRefundStatus;
+  /** Exact `packageName` match. Omit for every package. */
+  packageName?: string;
   page: number;
   limit: number;
 }
@@ -235,6 +240,30 @@ interface ReceiptsFacet {
   totals: Array<{ gross: number; count: number }>;
   /** Only the in-range rows whose payment has a refund — at most a few hundred docs. */
   refunded: Array<{ paymentIntentId?: string | null; amount?: number }>;
+  packages: Array<{ _id?: string | null; count: number }>;
+}
+
+/**
+ * Mongo clause for a refund state.
+ *
+ * `refundStatus` is derived, not stored — so filtering on it has to be expressed as set
+ * membership over the refund index, which is already loaded before the aggregation runs.
+ * Doing it in the query (rather than filtering the page in JS) is what keeps pagination and
+ * the totals honest: a JS filter would page over pre-filter rows and report the wrong count.
+ */
+function statusClause(
+  status: ReceiptRefundStatus | undefined,
+  refunds: ReceiptRefundIndex
+): Record<string, unknown> | null {
+  if (!status) return null;
+  const full: string[] = [];
+  const partial: string[] = [];
+  for (const [paymentIntentId, record] of refunds) {
+    (record.kind === "full" ? full : partial).push(paymentIntentId);
+  }
+  if (status === "refunded") return { paymentIntentId: { $in: full } };
+  if (status === "partially-refunded") return { paymentIntentId: { $in: partial } };
+  return { paymentIntentId: { $nin: [...full, ...partial] } };
 }
 
 /**
@@ -245,22 +274,42 @@ interface ReceiptsFacet {
  * the figure on the summary card cannot disagree with the rows beneath it.
  */
 export async function getReceipts(input: ReceiptsInput): Promise<ReceiptsData> {
-  const { startDate, endDate, category, page, limit } = input;
+  const { startDate, endDate, category, status, packageName, page, limit } = input;
   const skip = (page - 1) * limit;
 
   const refundIndex = await loadRefundIndex();
   const refundedIds = [...refundIndex.keys()];
+
+  // Status and package are applied INSIDE the facet branches rather than in the shared
+  // prefix, so the `packages` branch can see the un-package-filtered set (see
+  // `packageOptions` on the DTO). Status still narrows it — a package with no rows in the
+  // chosen refund state shouldn't be offered.
+  // `$facet` branches accept a narrower stage set than a top-level pipeline, and Mongoose
+  // enforces it — so these are typed to that set rather than cast past the check.
+  const status$ = statusClause(status, refundIndex);
+  const package$ = packageName ? { packageName } : null;
+  const rowFilter: PipelineStage.FacetPipelineStage[] =
+    status$ || package$ ? [{ $match: { ...(status$ ?? {}), ...(package$ ?? {}) } }] : [];
+  const packageFilter: PipelineStage.FacetPipelineStage[] = status$ ? [{ $match: status$ }] : [];
 
   const tail: PipelineStage[] = [
     // `_id` breaks ties so paging stays stable when several payments share a timestamp.
     { $sort: { timestamp: -1, _id: -1 } },
     {
       $facet: {
-        rows: [{ $skip: skip }, { $limit: limit }],
-        totals: [{ $group: { _id: null, gross: { $sum: "$amount" }, count: { $sum: 1 } } }],
+        rows: [...rowFilter, { $skip: skip }, { $limit: limit }],
+        totals: [...rowFilter, { $group: { _id: null, gross: { $sum: "$amount" }, count: { $sum: 1 } } }],
         refunded: [
+          ...rowFilter,
           { $match: { paymentIntentId: { $in: refundedIds } } },
           { $project: { _id: 0, paymentIntentId: 1, amount: 1 } },
+        ],
+        packages: [
+          ...packageFilter,
+          { $match: { packageName: { $nin: [null, ""] } } },
+          { $group: { _id: "$packageName", count: { $sum: 1 } } },
+          { $sort: { count: -1, _id: 1 } },
+          { $limit: 100 },
         ],
       },
     },
@@ -379,6 +428,9 @@ export async function getReceipts(input: ReceiptsInput): Promise<ReceiptsData> {
       net: roundCurrency(gross - refundedTotal),
       count: totalCount,
     },
+    packageOptions: (facet?.packages ?? [])
+      .filter((p): p is { _id: string; count: number } => typeof p._id === "string" && p._id.length > 0)
+      .map((p) => ({ packageName: p._id, count: p.count })),
     pagination: {
       currentPage: page,
       totalPages,

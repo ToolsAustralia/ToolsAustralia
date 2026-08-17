@@ -1,18 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { format, subDays } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import {
   ArrowLeft,
   ArrowRight,
+  CircleDot,
   Download,
   ExternalLink,
+  Layers,
+  Package,
   Receipt,
   RotateCcw,
   Wallet,
 } from "lucide-react";
+import { FilterDropdown } from "@/components/admin/ui/FilterDropdown";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { type DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
@@ -30,6 +34,8 @@ import { downloadReceiptsCsv, useReceipts } from "@/hooks/queries/admin/useRecei
 import {
   RECEIPT_CATEGORIES,
   RECEIPT_CATEGORY_LABELS,
+  RECEIPT_REFUND_STATUS_LABELS,
+  RECEIPT_REFUND_STATUSES,
   type ReceiptCategory,
   type ReceiptRefundStatus,
   type ReceiptRow,
@@ -134,6 +140,8 @@ export default function ReceiptsManagement() {
   const [endDate, setEndDate] = useState<string>(initialRange.end);
   const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
   const [category, setCategory] = useState<ReceiptCategory | "">("");
+  const [status, setStatus] = useState<ReceiptRefundStatus | "">("");
+  const [packageName, setPackageName] = useState<string>("");
   const [page, setPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
@@ -176,10 +184,12 @@ export default function ReceiptsManagement() {
       startDate,
       endDate,
       category: category || undefined,
+      status: status || undefined,
+      packageName: packageName || undefined,
       page,
       limit: PAGE_SIZE,
     }),
-    [dateRange, startDate, endDate, category, page]
+    [dateRange, startDate, endDate, category, status, packageName, page]
   );
 
   // Draw presets resolve to "" until the draw dates load; querying before then would ask
@@ -190,6 +200,12 @@ export default function ReceiptsManagement() {
   const rows = data?.rows ?? [];
   const totals = data?.totals;
   const pagination = data?.pagination;
+  // Held across refetches so the Package dropdown doesn't empty itself mid-interaction
+  // (the list is not narrowed by the package filter, so the last non-empty one stays valid).
+  const [packageOptions, setPackageOptions] = useState<{ packageName: string; count: number }[]>([]);
+  useEffect(() => {
+    if (data?.packageOptions) setPackageOptions(data.packageOptions);
+  }, [data?.packageOptions]);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -312,25 +328,65 @@ export default function ReceiptsManagement() {
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
         <div className="flex flex-col gap-3 border-b border-gray-200 px-4 py-3 dark:border-neutral-700 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <label htmlFor="receipts-category" className="sr-only">
-              Category
-            </label>
-            <select
-              id="receipts-category"
+            <FilterDropdown
+              ariaLabel="Category"
+              icon={Layers}
+              allLabel="All categories"
               value={category}
-              onChange={(e) => {
-                setCategory(e.target.value as ReceiptCategory | "");
+              onChange={(v) => {
+                setCategory(v);
                 setPage(1);
               }}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs font-semibold text-gray-700 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
-            >
-              <option value="">All categories</option>
-              {RECEIPT_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {RECEIPT_CATEGORY_LABELS[c]}
-                </option>
-              ))}
-            </select>
+              options={RECEIPT_CATEGORIES.map((c) => ({
+                value: c,
+                label: RECEIPT_CATEGORY_LABELS[c],
+              }))}
+            />
+            <FilterDropdown
+              ariaLabel="Status"
+              icon={CircleDot}
+              allLabel="All statuses"
+              width={220}
+              value={status}
+              onChange={(v) => {
+                setStatus(v);
+                setPage(1);
+              }}
+              options={RECEIPT_REFUND_STATUSES.map((s) => ({
+                value: s,
+                label: RECEIPT_REFUND_STATUS_LABELS[s],
+              }))}
+            />
+            <FilterDropdown
+              ariaLabel="Package"
+              icon={Package}
+              allLabel="All packages"
+              width={300}
+              value={packageName}
+              onChange={(v) => {
+                setPackageName(v);
+                setPage(1);
+              }}
+              options={packageOptions.map((p) => ({
+                value: p.packageName,
+                label: p.packageName,
+                hint: p.count.toLocaleString(),
+              }))}
+            />
+            {(category || status || packageName) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCategory("");
+                  setStatus("");
+                  setPackageName("");
+                  setPage(1);
+                }}
+                className="text-xs font-semibold text-gray-500 underline-offset-2 hover:text-red-600 hover:underline dark:text-neutral-400 dark:hover:text-red-400"
+              >
+                Clear filters
+              </button>
+            )}
             {pagination && pagination.totalCount > 0 && (
               <span className="text-xs text-gray-500 dark:text-neutral-400">
                 {pagination.totalCount.toLocaleString()} payment

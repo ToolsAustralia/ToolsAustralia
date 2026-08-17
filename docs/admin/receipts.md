@@ -211,6 +211,37 @@ Last run (production, all time, 2026-08-17):
 
 All five shared categories matched to the cent.
 
+## Filters
+
+Three, all server-side so pagination and the totals stay honest — a client-side filter would
+page over pre-filter rows and report the wrong count.
+
+| Filter | Param | Notes |
+|---|---|---|
+| Category | `category` | The seven `ReceiptCategory` values. |
+| Status | `status` | `none` (Paid) · `refunded` · `partially-refunded`. |
+| Package | `packageName` | Exact match on the stored `packageName`. Free text by necessity — package names come from the catalogue, not a closed enum — so the route bounds it to 200 chars. |
+
+**Status is derived, not stored**, so it can't be a plain `$match` on a field. `statusClause()`
+expresses it as set membership over the refund index, which is already loaded before the
+aggregation runs — no extra query.
+
+**The package list comes back with the data** (`packageOptions`: name + row count, top 100).
+It is computed inside its own `$facet` branch that applies date + category + status but
+**deliberately not the package filter itself** — otherwise choosing a package would collapse
+the dropdown to that one option and strand the user. The client also holds the last non-empty
+list across refetches so the menu doesn't blank mid-interaction.
+
+All three are mirrored on the Norm endpoint.
+
+### The dropdowns are not native `<select>`s
+
+`src/components/admin/ui/FilterDropdown.tsx`. A native `<select>` renders the OS control,
+which ignores the admin theme and looks nothing like `DateRangeDropdown` sitting beside it in
+the same bar. `FilterDropdown` is the same trigger-button + `Popover` + option-list pattern
+that component already uses, lifted into the kit so filter bars don't each grow their own copy.
+It supports an optional per-row hint (used for the package row counts) and a reset row.
+
 ## ⚠️ `amount` is the LIST price, not cash collected
 
 `PaymentEvent.data.price` is written from the package catalogue. **No Stripe-side discount is

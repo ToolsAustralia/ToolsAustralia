@@ -6,7 +6,7 @@ import {
   RECEIPTS_DEFAULT_LIMIT,
   RECEIPTS_MAX_LIMIT,
 } from "@/services/admin/receipts";
-import { RECEIPT_CATEGORIES } from "@/utils/admin/receipts";
+import { RECEIPT_CATEGORIES, RECEIPT_REFUND_STATUSES } from "@/utils/admin/receipts";
 import { resolveNormDateRange, type NormRangeKey } from "@/utils/admin/resolveNormDateRange";
 
 const QuerySchema = z.object({
@@ -16,6 +16,8 @@ const QuerySchema = z.object({
   start: z.string().optional(),
   end: z.string().optional(),
   category: z.enum(RECEIPT_CATEGORIES as [string, ...string[]]).optional(),
+  status: z.enum(RECEIPT_REFUND_STATUSES as [string, ...string[]]).optional(),
+  packageName: z.string().max(200).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(RECEIPTS_MAX_LIMIT).default(RECEIPTS_DEFAULT_LIMIT),
 });
@@ -40,7 +42,7 @@ export const GET = withNorm(
       return ctx.error(400, "bad_query", "Invalid query params", parsed.error.issues);
     }
 
-    const { range, start, end, category, page, limit } = parsed.data;
+    const { range, start, end, category, status, packageName, page, limit } = parsed.data;
 
     let startDate: Date;
     let endDate: Date;
@@ -54,6 +56,8 @@ export const GET = withNorm(
       startDate,
       endDate,
       category: category as (typeof RECEIPT_CATEGORIES)[number] | undefined,
+      status: status as (typeof RECEIPT_REFUND_STATUSES)[number] | undefined,
+      packageName,
       page,
       limit,
     });

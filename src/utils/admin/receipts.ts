@@ -49,6 +49,12 @@ export function isReceiptCategory(value: string): value is ReceiptCategory {
 export type ReceiptRefundStatus = "none" | "refunded" | "partially-refunded";
 export type ReceiptSource = "payment-event" | "order";
 
+export const RECEIPT_REFUND_STATUSES: ReceiptRefundStatus[] = [
+  "none",
+  "refunded",
+  "partially-refunded",
+];
+
 export const RECEIPT_REFUND_STATUS_LABELS: Record<ReceiptRefundStatus, string> = {
   none: "Paid",
   refunded: "Refunded",
@@ -95,9 +101,21 @@ export interface ReceiptsTotals {
   count: number;
 }
 
+/** One selectable package in the Package filter, with its row count in the current window. */
+export interface ReceiptPackageOption {
+  packageName: string;
+  count: number;
+}
+
 export interface ReceiptsData {
   rows: ReceiptRow[];
   totals: ReceiptsTotals;
+  /**
+   * Packages present in the current date + category + status filter, most common first.
+   * Deliberately NOT narrowed by the package filter itself — otherwise choosing one would
+   * collapse the dropdown to that single option and strand the user.
+   */
+  packageOptions: ReceiptPackageOption[];
   pagination: {
     currentPage: number;
     totalPages: number;

@@ -11,7 +11,11 @@ import {
   RECEIPTS_DEFAULT_LIMIT,
   RECEIPTS_MAX_LIMIT,
 } from "@/services/admin/receipts";
-import { isReceiptCategory } from "@/utils/admin/receipts";
+import {
+  isReceiptCategory,
+  RECEIPT_REFUND_STATUSES,
+  type ReceiptRefundStatus,
+} from "@/utils/admin/receipts";
 
 const VALID_DATE_RANGES: RevenueDetailsDateRange[] = [
   "today",
@@ -73,10 +77,20 @@ export async function GET(request: NextRequest) {
     }
     const category = categoryParam && isReceiptCategory(categoryParam) ? categoryParam : undefined;
 
+    const statusParam = searchParams.get("status");
+    if (statusParam && !RECEIPT_REFUND_STATUSES.includes(statusParam as ReceiptRefundStatus)) {
+      return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
+    }
+    const status = (statusParam as ReceiptRefundStatus | null) ?? undefined;
+
+    // Free text by necessity — package names come from the catalogue, not a closed enum.
+    // Bounded so a pathological query string can't reach the query planner.
+    const packageName = searchParams.get("packageName")?.trim().slice(0, 200) || undefined;
+
     const { startDate, endDate } = range.value;
 
     if (wantsCsv) {
-      const result = await getReceiptsExport({ startDate, endDate, category });
+      const result = await getReceiptsExport({ startDate, endDate, category, status, packageName });
       const filename = `receipts-${startDate.toISOString().slice(0, 10)}-to-${endDate
         .toISOString()
         .slice(0, 10)}.csv`;
@@ -102,7 +116,7 @@ export async function GET(request: NextRequest) {
       )
     );
 
-    const data = await getReceipts({ startDate, endDate, category, page, limit });
+    const data = await getReceipts({ startDate, endDate, category, status, packageName, page, limit });
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
