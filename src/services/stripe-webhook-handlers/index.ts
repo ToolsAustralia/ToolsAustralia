@@ -78,6 +78,7 @@ import {
   retrieveStripeSubscription,
   shouldAdoptPaidSubscriptionOverStored,
 } from "@/services/subscription/SubscriptionReferenceService";
+import { finalizeShopOrder } from "@/services/shop/finalizeShopOrder";
 
 /**
  * Optimized logging system with environment-aware verbosity
@@ -849,7 +850,17 @@ async function handlePaymentSuccess(
     }
 
     // Process ONLY non-subscription payments (explicit types)
-    if (paymentType === "upsell") {
+    if (paymentType === "shop") {
+      // Shop orders grant NO entries and deliberately do not touch
+      // processPaymentBenefits — merchandise entries are a separate, permit-gated
+      // feature. This branch only marks the order paid, takes stock and clears
+      // the cart. Without it the dispatcher's final `else` silently skips the
+      // event and a paid order never leaves `pending`.
+      webhookLog("info", `Processing shop payment: ${paymentIntent.id}`);
+      const result = await finalizeShopOrder(paymentIntent);
+      webhookLog("info", `Shop payment ${result.status}: ${result.orderNumber ?? "unknown order"}`);
+      return result.status === "fulfilled" || result.status === "already_processed";
+    } else if (paymentType === "upsell") {
       webhookLog("info", `Processing upsell payment: ${paymentIntent.id}`);
       await handleUpsellWebhook(user, paymentIntent, eventCreatedUnixSeconds);
     } else if (paymentType === "mini-draw") {
