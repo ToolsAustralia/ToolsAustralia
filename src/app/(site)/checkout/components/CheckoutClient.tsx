@@ -65,6 +65,7 @@ export default function CheckoutClient() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [serverTotals, setServerTotals] = useState<ServerTotals | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [itemErrors, setItemErrors] = useState<string[]>([]);
@@ -110,6 +111,7 @@ export default function CheckoutClient() {
       setClientSecret(data.data.clientSecret);
       setServerTotals(data.data.totals);
       setOrderNumber(data.data.orderNumber);
+      setOrderId(data.data.orderId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start checkout");
     } finally {
@@ -231,7 +233,7 @@ export default function CheckoutClient() {
               <ShopCheckoutPaymentElement
                 clientSecret={clientSecret}
                 totalLabel={money(totals.total)}
-                onPaid={() => router.push("/checkout/success")}
+                onPaid={() => router.push(`/checkout/success?orderId=${orderId}`)}
               />
             </section>
           )}

@@ -191,17 +191,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       setError(null);
 
+      // Snapshot which operations the server response can possibly account for.
+      // Anything queued AFTER this point is newer than the response and must
+      // survive it — the load used to clear the queue wholesale, so an
+      // add-to-cart during the ~500ms initial fetch was silently discarded and
+      // the item never reached the server. Nothing errored; it just vanished.
+      const inFlightAtLoadStart = new Set(pendingOperationsRef.current.map((op) => op.id));
+
       const items = await fetchServerCartItems();
 
-      setCartState((prev) => ({
-        ...prev,
-        items,
-        summary: calculateSummary(items),
-        isDirty: false,
-        lastSyncTime: Date.now(),
-        pendingOperations: [], // Clear pending operations on successful load
-        failedOperations: [], // Clear failed operations on successful load
-      }));
+      setCartState((prev) => {
+        const survivors = prev.pendingOperations.filter((op) => !inFlightAtLoadStart.has(op.id));
+        // Operations queued mid-load are not reflected in `items`, so the cart
+        // stays dirty and the drain is rescheduled for them.
+        return {
+          ...prev,
+          items,
+          summary: calculateSummary(items),
+          isDirty: survivors.length > 0,
+          lastSyncTime: Date.now(),
+          pendingOperations: survivors,
+          failedOperations: [], // Clear failed operations on successful load
+        };
+      });
     } catch (error) {
       console.error("Failed to load cart:", error);
       setError(error instanceof Error ? error.message : "Failed to load cart");

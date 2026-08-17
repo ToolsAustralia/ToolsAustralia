@@ -5,8 +5,11 @@ import { z } from "zod";
 import { requireAuthenticatedUser } from "@/lib/api-auth";
 import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 
+// A Mongo ObjectId, not any non-empty string. `Order.findOne({_id: "ORD-2024-001"})`
+// throws a CastError, which surfaced as a 500 — the checkout success page's
+// placeholder id did exactly that. A malformed id is a 404, not a server fault.
 const paramsSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().regex(/^[0-9a-fA-F]{24}$/, "Not a valid order id"),
 });
 
 const updateOrderSchema = z.object({
@@ -32,6 +35,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     return NextResponse.json({ order });
   } catch (error) {
+    // A malformed id is the caller's problem, not a server fault. Returning 500
+    // here made the success page's placeholder id look like an outage, and the
+    // e2e QA watchdog rightly failed the run on it.
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
     console.error("Error fetching order:", error);
     return NextResponse.json({ error: "Failed to fetch order" }, { status: 500 });
   }

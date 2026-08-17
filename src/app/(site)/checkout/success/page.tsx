@@ -21,7 +21,10 @@ interface CheckoutSuccessPageProps {
 
 export default async function CheckoutSuccessPage({ searchParams }: CheckoutSuccessPageProps) {
   const resolvedSearchParams = await searchParams;
-  const orderId = resolvedSearchParams.orderId || "ORD-2024-001";
+  // No fabricated fallback. "ORD-2024-001" was a placeholder that reached
+  // /api/orders/[id] and 500d on a CastError, making a missing query param look
+  // like an outage. An absent id now renders the page's own not-found state.
+  const orderId = resolvedSearchParams.orderId ?? "";
 
   return (
     <Suspense

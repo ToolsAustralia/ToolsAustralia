@@ -33,7 +33,11 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const { addToCart, isAddingToCart: isProductAdding } = useCart();
-  const { data: session } = useSession();
+  // `status` matters as much as `session`: useSession returns null data while
+  // it is still "loading", so treating null as "signed out" tells an already
+  // signed-in customer to log in if they click before hydration finishes.
+  const { data: session, status: sessionStatus } = useSession();
+  const isSessionLoading = sessionStatus === "loading";
   const { trackAddToCart } = usePixelTracking();
   const { trackAddToCart: trackKlaviyoAddToCart } = useKlaviyoTracking();
   const { isAuthenticated: _isAuthenticated } = useUserContext();
@@ -78,6 +82,11 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
   };
 
   const handleAddToCart = async () => {
+    // Never mistake "still loading" for "signed out". The button is disabled
+    // while loading, so this is a belt-and-braces guard for a race where the
+    // click lands in the same tick as hydration.
+    if (isSessionLoading) return;
+
     if (!session?.user?.id) {
       alert("Please log in to add items to cart");
       return;
@@ -226,9 +235,9 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       <div className="flex gap-2 sm:gap-4">
         <button
           onClick={handleAddToCart}
-          disabled={!canAddSelected || isAddingToCart || isPendingForThisProduct}
+          disabled={!canAddSelected || isSessionLoading || isAddingToCart || isPendingForThisProduct}
           className={`w-full py-2 px-4 sm:py-3 sm:px-6 rounded-lg font-semibold text-sm sm:text-lg transition-all duration-300 flex items-center justify-center gap-1 sm:gap-2 ${
-            !canAddSelected || isAddingToCart || isPendingForThisProduct
+            !canAddSelected || isSessionLoading || isAddingToCart || isPendingForThisProduct
               ? "bg-gray-300 text-gray-500 dark:bg-neutral-800 dark:text-neutral-400 cursor-not-allowed"
               : addedToCart
               ? "bg-green-600 text-white"
@@ -241,6 +250,10 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
             : /* Say why the button is dead rather than leaving it silently inert. */
             hasVariants && !selectedSku
             ? "Choose an option"
+            : /* Signed-in state is still resolving — say so instead of letting the
+                 click fall through to a "Please log in" alert. */
+            isSessionLoading
+            ? "Loading…"
             : isAddingToCart || isPendingForThisProduct
             ? "Adding..."
             : addedToCart

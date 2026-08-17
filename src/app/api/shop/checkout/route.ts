@@ -7,6 +7,7 @@ import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
 import { ShopOrderService, CheckoutValidationError } from "@/services/shop/ShopOrderService";
 import { resolveShopDiscountPercent } from "@/utils/shop/member-discount";
+import { resolveStripeCustomerId } from "@/services/shop/resolveStripeCustomer";
 
 /**
  * Start a shop purchase.
@@ -69,11 +70,16 @@ export async function POST(request: NextRequest) {
       shopDiscountPercent: resolveShopDiscountPercent(user),
     });
 
+    // Never pass the stored id straight through: a deleted or placeholder
+    // customer makes paymentIntents.create throw `No such customer`, which the
+    // buyer sees as a 500 at checkout with no way forward.
+    const stripeCustomerId = await resolveStripeCustomerId(user);
+
     const config = createPaymentIntentConfig({
       amount: totalCents,
       currency: "aud",
       paymentType: "shop",
-      customer: user.stripeCustomerId || undefined,
+      customer: stripeCustomerId,
       description: `Tools Australia shop order ${order.orderNumber}`,
       metadata: {
         type: "shop",
