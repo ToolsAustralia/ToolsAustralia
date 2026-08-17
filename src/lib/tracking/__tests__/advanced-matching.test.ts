@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { buildAdvancedMatching, metaPhoneDigits } from "../advanced-matching";
 import { hashPII } from "../canonical-event";
+import { prepareUserData } from "@/utils/tracking/facebook-helpers";
+import { genderToMetaGe } from "@/data/genders";
 
 function isHexHash64(value: unknown): boolean {
   return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
@@ -127,9 +129,50 @@ async function testUnknownGenderOmitsGeEntirely() {
   }
 }
 
+/**
+ * Cross-site parity. Meta matches a person by comparing hashes, so if the browser pixel and the
+ * server-side paths hash gender differently, Meta reads ONE person as SEVERAL and match quality
+ * gets worse rather than better. This is invisible to `tsc` and to any single-site test — it only
+ * shows up as a silently degraded EMQ score weeks later.
+ *
+ * `buildAdvancedMatching` (browser AM) and `prepareUserData` (legacy CAPI path) are asserted
+ * directly. The CAPI provider builds `user_data` inline, so the expression it uses is reproduced
+ * here; if that provider ever stops routing through `genderToMetaGe`, this drifts and fails.
+ */
+async function testGenderHashIsIdenticalAcrossEveryMetaSite() {
+  const user = {
+    _id: "user-abc",
+    email: "tradie@example.com",
+    firstName: "Dave",
+    lastName: "Smith",
+    mobile: "0412345678",
+    state: "NSW",
+    birthdate: "1988-04-12",
+    gender: "male",
+  };
+
+  const browserAm = buildAdvancedMatching(user);
+  const legacy = prepareUserData({
+    email: user.email,
+    phone: user.mobile,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    state: user.state,
+    birthdate: user.birthdate,
+    gender: user.gender,
+    externalId: user._id,
+  });
+  const capiProviderGe = genderToMetaGe(user.gender) ? hashPII(genderToMetaGe(user.gender)!) : undefined;
+
+  assert.equal(browserAm.ge, hashPII("m"), "browser AM must hash the letter 'm'");
+  assert.equal(legacy.ge, browserAm.ge, "legacy prepareUserData ge must match browser AM exactly");
+  assert.equal(capiProviderGe, browserAm.ge, "CAPI provider ge must match browser AM exactly");
+}
+
 async function run() {
   await testGenderMapsToMetaLetterAndHashes();
   await testUnknownGenderOmitsGeEntirely();
+  await testGenderHashIsIdenticalAcrossEveryMetaSite();
   await testHashesAllProvidedFields();
   await testNormalizationMatchesServerHashPII();
   await testPhoneStripsNonDigits();
