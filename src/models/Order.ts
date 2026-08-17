@@ -12,6 +12,13 @@ export interface IOrder extends Document {
     sku?: string;
     /** Snapshot of the product name at purchase time; the catalog may be renamed. */
     name?: string;
+    /**
+     * Free entries included with ONE unit of this line, snapshotted at checkout
+     * for the same reason `price` is: an admin editing the catalog between
+     * checkout and the webhook must not change what the customer was promised.
+     * This is the BASE count — the promo multiplier is applied at fulfilment.
+     */
+    includedEntries?: number;
     quantity: number;
     price: number;
   }[];
@@ -58,6 +65,16 @@ export interface IOrder extends Document {
   printProviderOrderId?: string;
   printProviderStatus?: string;
   submittedAt?: Date;
+  /**
+   * Free entries actually credited for this order, AFTER the promo multiplier.
+   * Written by the webhook once the grant lands.
+   *
+   * `undefined` and `0` mean different things and support will ask: `undefined`
+   * is "the grant has not run" (in flight, or failed and awaiting the reconcile
+   * cron); `0` is "it ran and this order was worth no entries" — which is the
+   * normal state while the feature ships dark at `includedEntries: 0`.
+   */
+  entriesGranted?: number;
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -86,6 +103,10 @@ const OrderSchema = new Schema<IOrder>(
         // history, and the printer is told which size to make from `sku`.
         sku: { type: String, trim: true },
         name: { type: String, trim: true },
+        // Base free-entry count for one unit, frozen at checkout. Not derived
+        // from price — there is no dollar-to-entry rate in this system, by law
+        // (CLAUDE.md rule 11).
+        includedEntries: { type: Number, default: 0, min: 0 },
         quantity: {
           type: Number,
           required: true,
@@ -193,6 +214,9 @@ const OrderSchema = new Schema<IOrder>(
     printProviderOrderId: { type: String, trim: true },
     printProviderStatus: { type: String, trim: true },
     submittedAt: { type: Date },
+    // No `default: 0` on purpose — see IOrder: absent must stay distinguishable
+    // from a granted zero, or a failed grant looks identical to a zero-entry order.
+    entriesGranted: { type: Number, min: 0 },
     trackingNumber: {
       type: String,
       trim: true,

@@ -851,14 +851,26 @@ async function handlePaymentSuccess(
 
     // Process ONLY non-subscription payments (explicit types)
     if (paymentType === "shop") {
-      // Shop orders grant NO entries and deliberately do not touch
-      // processPaymentBenefits — merchandise entries are a separate, permit-gated
-      // feature. This branch only marks the order paid, takes stock and clears
-      // the cart. Without it the dispatcher's final `else` silently skips the
-      // event and a paid order never leaves `pending`.
+      // Marks the order paid, takes stock, clears the cart, and credits the free
+      // entries included with the garment. Without this branch the dispatcher's
+      // final `else` silently skips the event and a paid order never leaves
+      // `pending`.
+      //
+      // Merchandise inherits the ONE-TIME pack multiplier — deliberately, so the
+      // two move together and merch can never become better value per entry than
+      // the packs during a promo. Resolved here rather than inside the service
+      // because this helper (with its `?? 1` and catch → 1) already lives in this
+      // file and is what the one-time path uses; a copy in the shop service would
+      // be the third of an identical wrapper.
       webhookLog("info", `Processing shop payment: ${paymentIntent.id}`);
-      const result = await finalizeShopOrder(paymentIntent);
-      webhookLog("info", `Shop payment ${result.status}: ${result.orderNumber ?? "unknown order"}`);
+      const entryMultiplier = await getActivePromoMultiplier("one-time");
+      const result = await finalizeShopOrder(paymentIntent, { entryMultiplier });
+      webhookLog(
+        "info",
+        `Shop payment ${result.status}: ${result.orderNumber ?? "unknown order"} · ${
+          result.entriesGranted ?? "no"
+        } entries (${entryMultiplier}x)`
+      );
       return result.status === "fulfilled" || result.status === "already_processed";
     } else if (paymentType === "upsell") {
       webhookLog("info", `Processing upsell payment: ${paymentIntent.id}`);

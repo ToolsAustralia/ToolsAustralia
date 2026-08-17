@@ -86,6 +86,14 @@ export async function POST(request: NextRequest) {
         orderId: String(order._id),
         orderNumber: order.orderNumber,
         userId: String(user._id),
+        // The webhook resolves the buyer by stripeCustomerId first, then falls
+        // back to this email. Shop was the only payment type not sending it, so
+        // a customer id that did not match at webhook time left the handler with
+        // no way to identify the buyer — and it treats that as "processed", not
+        // "retry", so the paid order and its entries were both lost silently.
+        // resolveStripeCustomerId persists the id best-effort with a swallowed
+        // catch, so that mismatch is reachable, not theoretical.
+        userEmail: user.email,
       },
     });
 

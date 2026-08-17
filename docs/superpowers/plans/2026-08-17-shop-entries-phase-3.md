@@ -307,7 +307,7 @@ The money assertions, all at the database level:
 // Multiplier inherited, not invented: 2 base × 3 qty × 5 promo = 30
 // Replay grants exactly once — markPaid's status:"pending" filter is the gate
 // A declined payment grants nothing
-// An SA/ACT or under-18 buyer gets entriesGranted: 0 and still gets the garment
+// An SA/ACT buyer IS granted entries — exclusion happens at winner selection
 // A resolver throw still grants the BASE count and does not fail the webhook
 // includedEntries: 0 grants nothing even at 5x  (the kill switch)
 ```
@@ -326,7 +326,7 @@ const base = order.products.reduce((n, p) => n + (p.includedEntries ?? 0) * p.qu
 const entries = base * multiplier;
 ```
 
-Eligibility: `isGiveawayIneligible(state?, birthdate?)` at `src/utils/giveaway-eligibility.ts:17` **fails open** — a missing birthdate is treated as *not* ineligible. That is the correct default here (we sell to everyone and filter at draw time per the export), but it must be a written decision, not an accident.
+**No eligibility check here — deliberately.** Do not call `isGiveawayIneligible`. Entries are granted to every buyer; SA/ACT exclusion is applied by the Major Draw export before a winner is picked (`src/app/api/admin/major-draw/export/route.ts:120-131`), which is where every other entry source is filtered too. A point-of-sale skip would be a second, weaker copy of a working filter, and would silently withhold entries from anyone whose state or birthdate is merely missing.
 
 Wrap the grant so it cannot fail the webhook: money is already taken, and `addToMajorDraw` already logs an `ErrorReport` without rethrowing so the reconcile cron can heal it.
 

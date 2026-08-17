@@ -60,6 +60,8 @@ interface ResolvedLine extends CartLine {
   productId: mongoose.Types.ObjectId;
   sku?: string;
   name: string;
+  /** Base free entries for one unit, read from the catalog and frozen onto the order. */
+  includedEntries: number;
 }
 
 /**
@@ -156,6 +158,10 @@ async function resolveLines(items: readonly CheckoutLineInput[]): Promise<Resolv
       name: product.name,
       // Price is read from the database, never from the request.
       priceCents: dollarsToCents(product.price),
+      // Same rule for entries: the catalog decides, the client never asserts a
+      // count. Frozen here so an admin edit between checkout and webhook cannot
+      // change what this buyer was promised.
+      includedEntries: product.includedEntries ?? 0,
       quantity: item.quantity,
     });
   }
@@ -197,6 +203,7 @@ export const ShopOrderService = {
         product: l.productId,
         sku: l.sku,
         name: l.name,
+        includedEntries: l.includedEntries,
         quantity: l.quantity,
         price: centsToDollars(l.priceCents),
       })),

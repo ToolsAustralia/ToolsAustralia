@@ -78,3 +78,82 @@ The shop branch deliberately does **not** call `processPaymentBenefits` and does
 > **The failure mode to remember:** the dispatcher's final `else` logs and skips any
 > `paymentType` it does not recognise. A missing branch therefore means paid orders silently
 > never leave `pending` — no error, no alert.
+
+## Merchandise free entries — the grant (2026-08-17)
+
+A paid shop order credits the free entries included with the garment. Entries are **never
+sold**; the customer buys the product and the entries come with it (CLAUDE.md rule 11).
+
+**Base count is snapshotted at checkout.** `Order.products[].includedEntries` is copied from the
+catalog in `ShopOrderService.createPendingOrder`, for the same reason `price` and `name` are: an
+admin editing the catalog between checkout and webhook must not change what the buyer was
+promised. The client never asserts a count — it sends product ids, skus and quantities.
+
+**The multiplier is applied at fulfilment, and merchandise inherits the ONE-TIME pack
+multiplier.** Resolved in the webhook shop branch via `getActivePromoMultiplier("one-time")` —
+the helper already in that file, with `?? 1` and `catch → 1` — and passed into
+`finalizeShopOrder` as a **required** option. It is required rather than optional so a future
+caller cannot silently grant at 1×, and resolved by the caller so the shop service does not
+become a third copy of that wrapper (the webhook handler and the upsell purchase route already
+hold two). Both sides move together, so merch can never become better value per entry than the
+packs during a promo.
+
+### Ordering inside `finalizeShopOrder` — all three constraints are load-bearing
+
+`markPaid` → stock → clear cart → **grant**.
+
+- **The grant runs LAST.** A successful grant writes a `BenefitsGranted-{pi}` `PaymentEvent`, and
+  `handlePaymentSuccess` short-circuits on `isPaymentProcessed()` *before* it reaches the shop
+  branch. Anything sequenced after the grant would therefore never get a retry.
+- **The grant runs only on the fulfilled path.** The stock-loss branch refunds the customer in
+  full and returns. Granting before that check would leave a fully refunded order holding its
+  entries, and the refund reversal cannot clean it up — it fails closed when the
+  `BenefitsGranted` row is not yet committed.
+- **`already_processed` no longer returns early.** It retries the grant when `entriesGranted` is
+  absent, because that redelivery is the only retry a failed grant will ever get. Safe:
+  `processPaymentBenefits` is idempotent on the same `PaymentEvent` id. Skipped when the order is
+  `cancelled` (auto-refunded), so a refunded order is never granted against.
+
+### Two fields that carry meaning in their absence
+
+- `Order.entriesGranted` has **no schema default**. `undefined` = the grant has not run (in
+  flight, or failed and awaiting the reconcile cron); `0` = it ran and the order was worth no
+  entries. A `default: 0` would make a failed grant indistinguishable from a zero-entry order,
+  and neither support nor the cron could tell them apart.
+- A zero total short-circuits **before** `processPaymentBenefits`, so no `PaymentEvent` is
+  written at all. That is what lets the feature ship dark at `includedEntries: 0` with genuinely
+  zero behaviour change, and it survives any promo — `0 × 10 = 0`.
+
+### No eligibility check, deliberately
+
+Entries are granted to every buyer. SA/ACT exclusion is applied by the Major Draw export when a
+winner is picked (`src/app/api/admin/major-draw/export/route.ts:120-131`), which is where every
+other entry source is filtered. A point-of-sale skip would be a second, weaker copy of a working
+filter, and would silently withhold entries from anyone whose state or birthdate is merely
+missing.
+
+### `userEmail` in the PaymentIntent metadata
+
+Shop was the only payment type not sending it. The webhook resolves the buyer by
+`stripeCustomerId` first and falls back to `metadata.userEmail`; with neither available it logs
+"will be retried" and returns `undefined` — which `dispatchStripeEvent` treats as **processed**,
+not retry, so the paid order and its entries were both lost silently. `resolveStripeCustomer`
+persists the customer id best-effort with a swallowed catch, so that mismatch is reachable rather
+than theoretical.
+
+**Still open (shared, not shop-specific):** that `return undefined` path marks events permanently
+processed across every payment type despite its log claiming a retry. Fixing it changes webhook
+retry semantics globally, so it is flagged rather than changed here.
+
+### Test
+
+`npm run test:shop-entries` (`src/utils/payment/__tests__/shop-entry-grant.test.ts`) runs against
+`E2E_MONGODB_URI`, never the dev database, and cleans up after itself. It covers the silent
+failures: both schema round-trips, the absent-vs-zero distinction, the arithmetic, the kill
+switch under a promo, and the ladder property at 1/2/5/10×. It includes a **control** assertion
+that writes an undeclared source key and confirms Mongoose drops it — without that, "shop
+persisted" would also pass on a schema with strict mode off.
+
+**Not covered, and listed in the phase-3 plan rather than claimed:** the end-to-end grant through
+`processPaymentBenefits`, webhook replay idempotency, the `already_processed` retry path, and
+refund reversal of a shop grant.

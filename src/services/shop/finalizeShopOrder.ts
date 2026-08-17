@@ -1,8 +1,9 @@
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import User from "@/models/User";
-import Order from "@/models/Order";
+import Order, { type IOrder } from "@/models/Order";
 import { ShopOrderService } from "@/services/shop/ShopOrderService";
+import { processPaymentBenefits } from "@/utils/payment/payment-processing";
 
 /**
  * Fulfil a paid shop order.
@@ -31,10 +32,114 @@ export type FinalizeShopOrderStatus =
 export interface FinalizeShopOrderResult {
   status: FinalizeShopOrderStatus;
   orderNumber?: string;
+  /** Entries actually credited, after the multiplier. `undefined` = the grant did not run. */
+  entriesGranted?: number;
+}
+
+export interface FinalizeShopOrderOptions {
+  /**
+   * Promo multiplier to apply to the order's base entry count.
+   *
+   * Required rather than optional, and resolved by the CALLER, on purpose.
+   * Merchandise inherits the one-time pack multiplier, and the webhook already
+   * owns a helper that resolves it with the right fallbacks — passing it in
+   * avoids a third copy of that wrapper (there are already two: the webhook
+   * handler and the upsell purchase route). Making it required means a future
+   * caller cannot silently forget it and grant at 1×.
+   */
+  entryMultiplier: number;
+}
+
+/**
+ * Credit the order's free entries.
+ *
+ * Entries are a free inclusion with the garment — never sold, never priced per
+ * unit (CLAUDE.md rule 11). The base count is snapshotted per line at checkout,
+ * so an admin editing the catalog mid-flight cannot change what this buyer was
+ * promised; the multiplier is applied here, at fulfilment, exactly as the
+ * one-time pack path does it.
+ *
+ * No eligibility check, deliberately. Entries are granted to every buyer; SA/ACT
+ * exclusion is applied by the Major Draw export when a winner is picked, which is
+ * where every other entry source is filtered. A point-of-sale skip would be a
+ * second, weaker copy of a working filter and would silently withhold entries
+ * from anyone whose profile data is merely incomplete.
+ */
+async function grantShopEntries(
+  order: IOrder,
+  paymentIntentId: string,
+  entryMultiplier: number
+): Promise<number | undefined> {
+  const baseEntries = order.products.reduce(
+    (sum, line) => sum + (line.includedEntries ?? 0) * line.quantity,
+    0
+  );
+  const entries = baseEntries * entryMultiplier;
+
+  // Zero is the normal state while the feature ships dark. Returning before
+  // processPaymentBenefits matters: no PaymentEvent is written, so nothing about
+  // the webhook's behaviour changes at all until an admin sets a real count.
+  if (entries <= 0) {
+    order.entriesGranted = 0;
+    await order.save().catch((err) => {
+      console.error("[shop] failed to record entriesGranted: 0", { orderNumber: order.orderNumber, err });
+    });
+    return 0;
+  }
+
+  try {
+    const result = await processPaymentBenefits(
+      paymentIntentId,
+      order.user.toString(),
+      {
+        packageType: "shop",
+        packageId: order.orderNumber,
+        packageName: `Merchandise order ${order.orderNumber}`,
+        entries,
+        points: 0,
+        price: order.totalAmount,
+      },
+      "webhook"
+    );
+
+    if (!result.success) {
+      // Money is taken and the garment is on its way. Do NOT throw — failing the
+      // webhook would retry the whole fulfilment, not just the grant. Leaving
+      // entriesGranted undefined is what makes this findable: the reconcile cron
+      // and a human both distinguish "never ran" from a granted zero.
+      console.error("[shop] entry grant failed — order fulfilled, entries owed", {
+        orderNumber: order.orderNumber,
+        paymentIntentId,
+        entries,
+        code: result.code,
+        error: result.error,
+      });
+      return undefined;
+    }
+
+    order.entriesGranted = entries;
+    await order.save().catch((err) => {
+      console.error("[shop] entries granted but recording them on the order failed", {
+        orderNumber: order.orderNumber,
+        entries,
+        err,
+      });
+    });
+    return entries;
+  } catch (err) {
+    console.error("[shop] entry grant threw — order fulfilled, entries owed", {
+      orderNumber: order.orderNumber,
+      paymentIntentId,
+      entries,
+      err,
+    });
+    return undefined;
+  }
 }
 
 export async function finalizeShopOrder(
-  paymentIntent: Stripe.PaymentIntent
+  paymentIntent: Stripe.PaymentIntent,
+  { entryMultiplier }: FinalizeShopOrderOptions
 ): Promise<FinalizeShopOrderResult> {
   const orderId = paymentIntent.metadata?.orderId;
   if (!orderId) {
@@ -49,7 +154,7 @@ export async function finalizeShopOrder(
   // no second cart clear.
   const order = await ShopOrderService.markPaid(orderId, paymentIntent.id);
   if (!order) {
-    const existing = await Order.findById(orderId).select("orderNumber status");
+    const existing = await Order.findById(orderId);
     if (!existing) {
       console.error("[shop] order referenced by a paid PaymentIntent does not exist", {
         orderId,
@@ -57,7 +162,30 @@ export async function finalizeShopOrder(
       });
       return { status: "order_not_found" };
     }
-    return { status: "already_processed", orderNumber: existing.orderNumber };
+
+    // This redelivery is the ONLY retry a failed grant will ever get, so it does
+    // not return early any more.
+    //
+    // Once a grant succeeds it writes a `BenefitsGranted-{pi}` PaymentEvent, and
+    // handlePaymentSuccess short-circuits on isPaymentProcessed() BEFORE it ever
+    // reaches the shop branch — so no later delivery gets here at all. The window
+    // this covers is the one in between: a previous delivery marked the order paid
+    // and then died (or the grant itself failed), leaving money taken and entries
+    // owed with nothing to re-run them.
+    //
+    // Retrying is safe: processPaymentBenefits is idempotent on that same
+    // PaymentEvent id, and a grant that already landed is a no-op.
+    if (existing.status === "cancelled") {
+      // Auto-refunded for lost stock. Never grant against a refunded order.
+      return { status: "already_processed", orderNumber: existing.orderNumber };
+    }
+
+    const entriesGranted =
+      existing.entriesGranted === undefined
+        ? await grantShopEntries(existing, paymentIntent.id, entryMultiplier)
+        : existing.entriesGranted;
+
+    return { status: "already_processed", orderNumber: existing.orderNumber, entriesGranted };
   }
 
   // Stock is taken AFTER payment, because a print-to-order catalog mostly has
@@ -112,5 +240,17 @@ export async function finalizeShopOrder(
     });
   });
 
-  return { status: "fulfilled", orderNumber: order.orderNumber };
+  // Entries LAST, and only on the fulfilled path.
+  //
+  // Last, because a successful grant writes a PaymentEvent that makes every later
+  // redelivery short-circuit before this function runs. Anything sequenced after
+  // the grant would therefore lose its only retry.
+  //
+  // Only on the fulfilled path, because the stock-loss branch above refunds the
+  // customer in full and returns — granting before that check would leave a fully
+  // refunded order holding its entries, and the refund reversal cannot clean it
+  // up (it fails closed when the BenefitsGranted row is not yet committed).
+  const entriesGranted = await grantShopEntries(order, paymentIntent.id, entryMultiplier);
+
+  return { status: "fulfilled", orderNumber: order.orderNumber, entriesGranted };
 }

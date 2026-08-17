@@ -16,12 +16,11 @@ entries** into the monthly Major Draw, and merch should too — that is what tur
 a margin product into part of the membership offer.
 
 **Done means** buying a merch item credits its stated free entries to the buyer's Major Draw
-total, exactly once, visible on the dashboard, reversible on a full refund, and skipped for
-customers who are not eligible to enter. **Number that says it worked:** entries credited
+total, exactly once, visible on the dashboard, and reversible on a full refund.
+ **Number that says it worked:** entries credited
 equals entries owed for the first 50 orders, with no reconciliation cron corrections.
 
-**Failure** is any of: entries credited to the wrong bucket, credited twice, credited to an
-SA/ACT or under-18 customer, or any customer-facing string that prices entries per dollar.
+**Failure** is any of: entries credited to the wrong bucket, credited twice, credited to the wrong buyer, or any customer-facing string that prices entries per dollar.
 
 ## 2. Decisions
 
@@ -32,7 +31,7 @@ SA/ACT or under-18 customer, or any customer-facing string that prices entries p
 | Source key | `entriesBySource.shop` | Matches repo vocabulary |
 | Which pool | Major Draw only, never Mini Draw | Separate pools; Terms states the distinction to customers `[D BUSINESS.md]` |
 | Promo multipliers | **Merch inherits the one-time pack multiplier** | Both move together, so the ratio never changes and merch cannot overtake the packs during a promo. `resolveMultiplierForPayment("one-time")` already exists, so this needs **no new promo type, enum value or admin surface** — a merch-specific promo category would have needed all four. Decided by the owner 2026-08-17, reversing an earlier "no multiplier" recommendation whose fairness and margin arguments were both wrong |
-| Ineligible customers | Sell the garment, skip the entries, say so at point of sale | Lawful to sell to SA/ACT; not lawful to grant them an entry |
+| Ineligible customers | **Grant the entries to everyone. Filter at draw time, not at point of sale** | Corrected by the owner 2026-08-17, reversing an invented carve-out. There is no reliable way to know a buyer's state or age at checkout, and the platform already solves this at the other end: the Major Draw export excludes SA/ACT before a winner is picked `[V src/app/api/admin/major-draw/export/route.ts:120-131]`. Adding a point-of-sale skip would be a second, weaker copy of a filter that already works — and would silently withhold entries from anyone whose profile data is merely missing |
 | Returns | Entries stay granted; state it in Terms | Matches existing partial-refund behaviour — the system deliberately skips reversal because it "cannot safely undo half an entry" `[D BUSINESS.md]` |
 | Freeze window | Sell continuously; entries route to the next draw | Refusing apparel sales for 4 hours a month is the wrong trade |
 
@@ -48,7 +47,7 @@ SA/ACT or under-18 customer, or any customer-facing string that prices entries p
 | The sourceType switch falls through to `default: "membership"` | `[V src/utils/payment/payment-processing.ts:2204]` |
 | `getTargetMajorDraw()` already handles frozen / paid-during-freeze / gap → next queued draw | `[V src/utils/draws/major-draw-helpers.ts:34]` |
 | New purchases are gated by `checkMajorDrawActiveForNewPurchases()`, which exempts only mini-draw and subscription renewals | `[V src/utils/payment/payment-processing.ts:344]` |
-| `isGiveawayIneligible(state, birthdate)` exists and is exported — SA/ACT + under 18 | `[V src/utils/giveaway-eligibility.ts]` |
+| `isGiveawayIneligible(state, birthdate)` exists — but is **not used by this feature**. Exclusion is applied by the draw export, not at point of sale | `[V src/utils/giveaway-eligibility.ts:17; src/app/api/admin/major-draw/export/route.ts:120-131]` |
 | `/shop` is **not** in the e2e legal-copy scanned page list | `[V e2e/specs/marketing/legal-copy.spec.ts:32-37]` |
 | Cobber asserts the shop is "coming soon"; corpus size is pinned | `[V src/data/supportChatFaqs.ts:141; src/data/__tests__/faqs.test.ts:159]` |
 
@@ -119,7 +118,7 @@ trusted as input.
 
 | Case | Behaviour |
 |---|---|
-| Buyer is SA/ACT or under 18 | Garment ships; entries skipped; `entriesGranted: 0` recorded |
+| Buyer is SA/ACT or under 18 | Garment ships **and entries are granted**. Exclusion happens when a winner is drawn, not when the money is taken — same as every other entry source |
 | Purchase lands during the 8pm–midnight freeze | `getTargetMajorDraw()` routes to the next queued draw |
 | No queued draw exists during a gap | `getTargetMajorDraw` throws `[V major-draw-helpers.ts:34]` — must be caught so the Order still writes |
 | Draw credit fails | `addToMajorDraw` logs an ErrorReport and **does not rethrow** `[V payment-processing.ts]` — money taken, entries missing, healed by the reconcile cron |
@@ -167,7 +166,7 @@ Every silent row above needs an assertion, because nothing else will catch it.
 | **Shop grant increments `shop`, and leaves `membership` unchanged** — the switch-fallthrough guard | 8 |
 | Replayed webhook grants exactly once | idempotency |
 | Declined payment grants nothing | money path |
-| Ineligible (SA / ACT / under-18) buyer gets `entriesGranted: 0` | eligibility |
+| An SA/ACT buyer IS granted entries, and the Major Draw export still excludes them from winner selection — the two halves of the corrected decision, asserted together | eligibility |
 | A purchase during the freeze lands on the **next** draw's id | 9 |
 | With a 5× one-time promo active, a 2-entry item × 3 qty grants **30** | 10 |
 | **The number the product page renders equals the number granted**, asserted against one shared resolver call — the only assertion that actually catches the display trap | 10 |
@@ -183,7 +182,7 @@ One phase. It does not split usefully — a half-threaded entry source is worse 
 
 | # | Ships | User-visible win |
 |---|---|---|
-| **1** | `shop` source threaded through all 12 rows, multiplier inherited from one-time on both the grant and the page, eligibility split, Terms + competition terms + Cobber + product copy, `/shop` added to the legal-copy scan | Buying merch credits free entries |
+| **1** | `shop` source threaded through all 12 rows, multiplier inherited from one-time on both the grant and the page, Terms + competition terms + Cobber + product copy, `/shop` added to the legal-copy scan | Buying merch credits free entries |
 
 ## 8. Legal — the hard constraint
 
