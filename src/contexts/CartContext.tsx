@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { CartSummary } from "@/hooks/queries/useCartQueries";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
+import { priceCart } from "@/utils/shop/pricing";
 
 // Define CartItem type locally to match our needs
 interface CartItem {
@@ -105,20 +106,29 @@ export interface CartContextType extends OptimisticCartState {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 // Helper functions for cart calculations
+/**
+ * Optimistic client-side totals.
+ *
+ * Delegates to `priceCart` so the drawer can never quote a different figure from
+ * /api/cart/summary or the PaymentIntent — the flat-shipping rule used to live
+ * here AND in two other files, and the GST here was additive on an already
+ * GST-inclusive price.
+ *
+ * `tax` keeps its name for the existing consumers but now carries the GST
+ * *component already inside* `totalAmount`. It must never be added to anything.
+ * The member tier discount is resolved server-side, so this optimistic figure
+ * shows the undiscounted price until the server responds.
+ */
 const calculateSummary = (items: CartItem[]): CartSummary => {
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const tax = subtotal * 0.1;
-  const shipping = subtotal >= 100 ? 0 : 10;
-  const totalAmount = subtotal + tax + shipping;
+  const totals = priceCart(items.map((i) => ({ price: i.price, quantity: i.quantity })));
 
   return {
-    totalItems,
-    totalAmount,
-    subtotal,
-    tax,
-    shipping,
-    discount: 0,
+    totalItems: totals.totalItems,
+    totalAmount: totals.total,
+    subtotal: totals.subtotal,
+    tax: totals.gstComponent,
+    shipping: totals.shipping,
+    discount: totals.discount,
     membershipDiscount: 0,
     partnerDiscount: 0,
   };

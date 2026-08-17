@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Types } from "mongoose";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
 import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
+import { priceCart } from "@/utils/shop/pricing";
 
 // Define the cart item type from the User model
 type CartItem = {
@@ -146,22 +147,23 @@ export async function PUT(request: NextRequest) {
       miniDraw: item.miniDraw,
     }));
 
-    // Calculate summary
-    const subtotal = transformedItems.reduce((total, item) => total + item.price * item.quantity, 0);
-    const tax = subtotal * 0.1;
-    const shipping = subtotal >= 100 ? 0 : 10;
-    const totalAmount = subtotal + tax + shipping;
-    const totalItems = transformedItems.reduce((count, item) => count + item.quantity, 0);
+    // Prices are GST-INCLUSIVE. This route carried its own copy of the money
+    // math and added 10% on top of an already-inclusive price, so a cart quoted
+    // here disagreed with the same cart quoted by /api/cart/summary.
+    const totals = priceCart(
+      transformedItems.map((item) => ({ price: item.price, quantity: item.quantity }))
+    );
 
     const response = {
       items: transformedItems,
       summary: {
-        totalItems,
-        totalAmount,
-        subtotal,
-        tax,
-        shipping,
-        discount: 0,
+        totalItems: totals.totalItems,
+        totalAmount: totals.total,
+        subtotal: totals.subtotal,
+        /** GST already INSIDE totalAmount. Display only — never add it. */
+        tax: totals.gstComponent,
+        shipping: totals.shipping,
+        discount: totals.discount,
         membershipDiscount: 0,
         partnerDiscount: 0,
       },
