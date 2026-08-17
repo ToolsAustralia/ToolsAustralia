@@ -24,6 +24,7 @@ import {
   LayoutDashboard,
   LineChart,
   Mail,
+  Package,
   Megaphone,
   MessageSquare,
   Repeat,
@@ -101,6 +102,7 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
     label: "Operations",
     groupIcon: ClipboardList,
     tabs: [
+      { id: "products", label: "Products", icon: Package, requires: "shop.view" },
       { id: "submissions", label: "Submissions", icon: FileTextIcon, requires: "submissions.view" },
       { id: "error-reports", label: "Error Reports", icon: Bug, requires: "errorReports.view" },
       { id: "activity-log", label: "Activity Log", icon: ScrollText, requires: "settings.view" },

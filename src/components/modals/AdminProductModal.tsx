@@ -1,550 +1,408 @@
 "use client";
 
-import React, { useState } from "react";
-import { Package, DollarSign, Warehouse, Tag, FileText } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import {
   ModalContainer,
   ModalHeader,
   ModalContent,
+  FormSection,
   Input,
   Textarea,
-  Select,
-  Button,
   Checkbox,
-  FormSection,
-} from "./ui";
-import ImageUpload from "@/components/upload/ImageUpload";
+  Button,
+  ImageUpload,
+} from "@/components/modals/ui";
+
+export interface ProductVariantFormItem {
+  sku: string;
+  size?: string;
+  colour?: string;
+  gtin?: string;
+  isActive: boolean;
+}
+
+export interface ProductFormItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  images: string[];
+  category: string;
+  brand: string;
+  variants: ProductVariantFormItem[];
+  includedEntries: number;
+  trackInventory: boolean;
+  stock: number;
+  isActive: boolean;
+  isFeatured: boolean;
+  tags: string[];
+}
 
 interface AdminProductModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit?: (data: ProductFormData) => void;
+  onSuccess?: () => void;
+  editingProduct?: ProductFormItem | null;
 }
 
-interface ProductFormData {
-  name: string;
-  brand: string;
-  description: string;
-  shortDescription: string;
-  price: number;
-  originalPrice?: number;
-  category: string;
-  subcategory: string;
-  sku: string;
-  stock: number;
-  weight: number;
-  dimensions: {
-    length: number;
-    width: number;
-    height: number;
-  };
-  images: File[]; // Files to be uploaded to Cloudinary
-  uploadedImageUrls: string[]; // URLs after upload
-  specifications: string;
-  warranty: string;
-  status: "active" | "inactive" | "draft";
-  featured: boolean;
-  onSale: boolean;
-  freeShipping: boolean;
-  tags: string;
-}
+const emptyVariant = (): ProductVariantFormItem => ({
+  sku: "",
+  size: "",
+  colour: "",
+  gtin: "",
+  isActive: true,
+});
 
-const AdminProductModal: React.FC<AdminProductModalProps> = ({ isOpen, onClose, onSubmit }) => {
-  const [formData, setFormData] = useState<ProductFormData>({
-    name: "",
-    brand: "",
-    description: "",
-    shortDescription: "",
-    price: 0,
-    originalPrice: undefined,
-    category: "",
-    subcategory: "",
-    sku: "",
-    stock: 0,
-    weight: 0,
-    dimensions: {
-      length: 0,
-      width: 0,
-      height: 0,
-    },
-    images: [],
-    uploadedImageUrls: [],
-    specifications: "",
-    warranty: "",
-    status: "active",
-    featured: false,
-    onSale: false,
-    freeShipping: false,
-    tags: "",
-  });
+export default function AdminProductModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  editingProduct,
+}: AdminProductModalProps) {
+  const isEdit = Boolean(editingProduct);
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState(0);
+  const [includedEntries, setIncludedEntries] = useState(0);
+  const [category, setCategory] = useState("");
+  const [brand, setBrand] = useState("");
+  const [images, setImages] = useState<(File | string)[]>([]);
+  const [variants, setVariants] = useState<ProductVariantFormItem[]>([emptyVariant()]);
+  const [trackInventory, setTrackInventory] = useState(false);
+  const [stock, setStock] = useState(0);
+  const [isFeatured, setIsFeatured] = useState(false);
+  const [tags, setTags] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Category options
-  const categoryOptions = [
-    { value: "power-tools", label: "Power Tools" },
-    { value: "hand-tools", label: "Hand Tools" },
-    { value: "safety-equipment", label: "Safety Equipment" },
-    { value: "tool-storage", label: "Tool Storage" },
-    { value: "accessories", label: "Accessories" },
-    { value: "outdoor-tools", label: "Outdoor Tools" },
-    { value: "automotive", label: "Automotive Tools" },
-    { value: "electronics", label: "Electronics" },
-    { value: "hardware", label: "Hardware" },
-    { value: "measuring", label: "Measuring Tools" },
-  ];
-
-  // Brand options
-  const brandOptions = [
-    { value: "dewalt", label: "DeWalt" },
-    { value: "makita", label: "Makita" },
-    { value: "milwaukee", label: "Milwaukee" },
-    { value: "bosch", label: "Bosch" },
-    { value: "ryobi", label: "Ryobi" },
-    { value: "stanley", label: "Stanley" },
-    { value: "kincrome", label: "Kincrome" },
-    { value: "sidchrome", label: "Sidchrome" },
-    { value: "festool", label: "Festool" },
-    { value: "black-decker", label: "Black & Decker" },
-    { value: "other", label: "Other" },
-  ];
-
-  // Status options
-  const statusOptions = [
-    { value: "active", label: "Active" },
-    { value: "inactive", label: "Inactive" },
-    { value: "draft", label: "Draft" },
-  ];
-
-  // Handle form input changes
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-
-    // Safety check for name property
-    if (!name) return;
-
-    if (name.includes(".")) {
-      // Handle nested properties (dimensions)
-      const [parent, child] = name.split(".");
-      if (parent === "dimensions") {
-        setFormData((prev) => ({
-          ...prev,
-          dimensions: {
-            ...prev.dimensions,
-            [child]: type === "number" ? parseFloat(value) || 0 : value,
-          },
-        }));
-      }
+  useEffect(() => {
+    if (!isOpen) return;
+    setError(null);
+    if (editingProduct) {
+      setName(editingProduct.name);
+      setDescription(editingProduct.description);
+      setPrice(editingProduct.price);
+      setIncludedEntries(editingProduct.includedEntries ?? 0);
+      setCategory(editingProduct.category);
+      setBrand(editingProduct.brand);
+      setImages(editingProduct.images ?? []);
+      setVariants(
+        editingProduct.variants?.length ? editingProduct.variants : [emptyVariant()]
+      );
+      setTrackInventory(editingProduct.trackInventory ?? false);
+      setStock(editingProduct.stock ?? 0);
+      setIsFeatured(editingProduct.isFeatured ?? false);
+      setTags((editingProduct.tags ?? []).join(", "));
     } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]:
-          type === "number"
-            ? parseFloat(value) || 0
-            : type === "checkbox"
-            ? (e.target as HTMLInputElement).checked
-            : value,
-      }));
+      setName("");
+      setDescription("");
+      setPrice(0);
+      setIncludedEntries(0);
+      setCategory("");
+      setBrand("");
+      setImages([]);
+      setVariants([emptyVariant()]);
+      setTrackInventory(false);
+      setStock(0);
+      setIsFeatured(false);
+      setTags("");
     }
+  }, [isOpen, editingProduct]);
 
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }));
-    }
+  const updateVariant = (index: number, patch: Partial<ProductVariantFormItem>) => {
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, ...patch } : v)));
   };
 
-  // Handle checkbox changes specifically
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: checked,
-    }));
-  };
-
-  // Validate form
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.name.trim()) newErrors.name = "Product name is required";
-    if (!formData.brand.trim()) newErrors.brand = "Brand is required";
-    if (!formData.description.trim()) newErrors.description = "Description is required";
-    if (formData.price <= 0) newErrors.price = "Price must be greater than 0";
-    if (!formData.category.trim()) newErrors.category = "Category is required";
-    if (!formData.sku.trim()) newErrors.sku = "SKU is required";
-    if (formData.stock < 0) newErrors.stock = "Stock cannot be negative";
-    if (formData.uploadedImageUrls.length === 0) newErrors.images = "Product image is required";
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
-    if (validateForm()) {
-      onSubmit?.(formData);
-      handleClose();
+    // Images are uploaded to Cloudinary by ImageUpload, so anything left as a
+    // File means an upload is still pending — submitting now would drop it.
+    const uploadedImages = images.filter((img): img is string => typeof img === "string");
+    if (uploadedImages.length === 0) {
+      setError("Add at least one product image.");
+      return;
     }
-  };
 
-  // Handle modal close
-  const handleClose = () => {
-    setFormData({
-      name: "",
-      brand: "",
-      description: "",
-      shortDescription: "",
-      price: 0,
-      originalPrice: undefined,
-      category: "",
-      subcategory: "",
-      sku: "",
-      stock: 0,
-      weight: 0,
-      dimensions: {
-        length: 0,
-        width: 0,
-        height: 0,
-      },
-      images: [],
-      uploadedImageUrls: [],
-      specifications: "",
-      warranty: "",
-      status: "active",
-      featured: false,
-      onSale: false,
-      freeShipping: false,
-      tags: "",
-    });
-    setErrors({});
-    onClose();
+    const cleanedVariants = variants
+      .map((v) => ({
+        sku: v.sku.trim(),
+        size: v.size?.trim() || undefined,
+        colour: v.colour?.trim() || undefined,
+        gtin: v.gtin?.trim() || undefined,
+        isActive: v.isActive,
+      }))
+      .filter((v) => v.sku.length > 0);
+
+    if (cleanedVariants.length === 0) {
+      setError("Add at least one variant with a SKU. The variant is what a customer selects.");
+      return;
+    }
+
+    const skus = cleanedVariants.map((v) => v.sku);
+    if (new Set(skus).size !== skus.length) {
+      setError("Variant SKUs must be unique within a product.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        name: name.trim(),
+        description: description.trim(),
+        price,
+        images: uploadedImages,
+        category: category.trim(),
+        brand: brand.trim(),
+        variants: cleanedVariants,
+        includedEntries,
+        trackInventory,
+        stock: trackInventory ? stock : 0,
+        isFeatured,
+        tags: tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+      };
+
+      const response = await fetch(
+        isEdit ? `/api/admin/products/${editingProduct?.id}` : "/api/admin/products",
+        {
+          method: isEdit ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.error || "Failed to save product");
+      }
+
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save product");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={handleClose} size="4xl" height="fixed" closeOnBackdrop={false}>
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
       <ModalHeader
-        title="Add New Product"
-        subtitle="Create a new product listing for your store"
-        onClose={handleClose}
+        title={isEdit ? "Edit Product" : "Create Product"}
+        onClose={onClose}
         showLogo={false}
       />
-
       <ModalContent>
-        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
-          {/* Basic Information */}
-          <FormSection title="Basic Information" icon={Package}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4">
-              <Input
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                label="Product Name"
-                placeholder="e.g., DeWalt 20V Max Cordless Drill Kit"
-                required
-                error={errors.name}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-
-              <Select
-                id="brand"
-                name="brand"
-                value={formData.brand}
-                onChange={handleInputChange}
-                label="Brand"
-                options={brandOptions}
-                placeholder="Select a brand"
-                required
-                error={errors.brand}
-              />
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-200">
+              {error}
             </div>
+          )}
 
-            <Textarea
-              id="description"
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              label="Full Description"
-              placeholder="Provide a detailed description of the product, its features, and benefits..."
-              required
-              error={errors.description}
-              rows={4}
-              className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-            />
-
-            <Textarea
-              id="shortDescription"
-              name="shortDescription"
-              value={formData.shortDescription}
-              onChange={handleInputChange}
-              label="Short Description"
-              placeholder="Brief description for product cards and listings..."
-              rows={2}
-              className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-            />
-          </FormSection>
-
-          {/* Product Image */}
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200">
-              Product Image <span className="text-red-500">*</span>
-            </label>
-            <ImageUpload
-              onUpload={(urls) => {
-                setFormData((prev) => ({ ...prev, uploadedImageUrls: urls }));
-              }}
-              onError={(error) => console.error("Upload error:", error)}
-              maxFiles={1}
-              maxSize={10}
-              className="w-full"
-            />
-            {errors.images && <p className="text-sm text-red-600">{errors.images}</p>}
-          </div>
-
-          {/* Pricing & Inventory */}
-          <FormSection title="Pricing & Inventory" icon={DollarSign}>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-4">
-              <Input
-                id="price"
-                name="price"
-                type="number"
-                value={formData.price}
-                onChange={handleInputChange}
-                label="Price ($)"
-                placeholder="299.99"
-                icon={DollarSign}
-                min={0}
-                step={0.01}
-                required
-                error={errors.price}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-
-              <Input
-                id="originalPrice"
-                name="originalPrice"
-                type="number"
-                value={formData.originalPrice || ""}
-                onChange={handleInputChange}
-                label="Original Price ($)"
-                placeholder="399.99"
-                icon={DollarSign}
-                min={0}
-                step={0.01}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-
-              <Input
-                id="stock"
-                name="stock"
-                type="number"
-                value={formData.stock}
-                onChange={handleInputChange}
-                label="Stock Quantity"
-                placeholder="100"
-                icon={Warehouse}
-                min={0}
-                required
-                error={errors.stock}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-
-              <Input
-                id="sku"
-                name="sku"
-                value={formData.sku}
-                onChange={handleInputChange}
-                label="SKU"
-                placeholder="DW20V-DRILL-001"
-                icon={Tag}
-                required
-                error={errors.sku}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-            </div>
-          </FormSection>
-
-          {/* Categories & Classification */}
-          <FormSection title="Categories & Classification" icon={Tag}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4">
-              <Select
-                id="category"
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                label="Category"
-                options={categoryOptions}
-                placeholder="Select a category"
-                required
-                error={errors.category}
-              />
-
-              <Input
-                id="subcategory"
-                name="subcategory"
-                value={formData.subcategory}
-                onChange={handleInputChange}
-                label="Subcategory"
-                placeholder="e.g., Cordless Drills"
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-            </div>
-
+          <FormSection title="Details">
             <Input
-              id="tags"
-              name="tags"
-              value={formData.tags}
-              onChange={handleInputChange}
-              label="Tags"
-              placeholder="cordless, drill, 20v, battery, professional (comma separated)"
-              className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
+              label="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              maxLength={200}
+            />
+            <Textarea
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              required
+              maxLength={2000}
+            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Input
+                label="Brand"
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                required
+              />
+              <Input
+                label="Category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                required
+              />
+            </div>
+          </FormSection>
+
+          {/*
+            Price and included entries sit side by side deliberately. They are
+            authored independently — an entry count must never be derived from
+            price — so a repricing edit has to show both in one glance or the
+            two drift apart silently.
+          */}
+          <FormSection title="Price and included entries">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Input
+                label="Price (AUD, GST inclusive)"
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(Number(e.target.value))}
+                min={0}
+                step={0.01}
+                required
+              />
+              <Input
+                label="Free entries included"
+                type="number"
+                value={includedEntries}
+                onChange={(e) => setIncludedEntries(Number(e.target.value))}
+                min={0}
+                step={1}
+              />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-neutral-400">
+              Entries are a free inclusion with the item and are authored per product, never
+              calculated from the price. Leave at 0 until entries are live.
+            </p>
+          </FormSection>
+
+          <FormSection title="Images">
+            <ImageUpload
+              images={images}
+              onImagesChange={setImages}
+              maxImages={8}
+              uploadToCloudinary
+              label="Product images"
             />
           </FormSection>
 
-          {/* Physical Properties */}
-          <FormSection title="Physical Properties" icon={Package}>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-4">
-              <Input
-                id="weight"
-                name="weight"
-                type="number"
-                value={formData.weight}
-                onChange={handleInputChange}
-                label="Weight (kg)"
-                placeholder="2.5"
-                min={0}
-                step={0.1}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-
-              <Input
-                id="dimensions.length"
-                name="dimensions.length"
-                type="number"
-                value={formData.dimensions.length}
-                onChange={handleInputChange}
-                label="Length (cm)"
-                placeholder="30"
-                min={0}
-                step={0.1}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-
-              <Input
-                id="dimensions.width"
-                name="dimensions.width"
-                type="number"
-                value={formData.dimensions.width}
-                onChange={handleInputChange}
-                label="Width (cm)"
-                placeholder="25"
-                min={0}
-                step={0.1}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-
-              <Input
-                id="dimensions.height"
-                name="dimensions.height"
-                type="number"
-                value={formData.dimensions.height}
-                onChange={handleInputChange}
-                label="Height (cm)"
-                placeholder="20"
-                min={0}
-                step={0.1}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
+          <FormSection title="Variants">
+            <div className="space-y-3">
+              {variants.map((variant, index) => (
+                <div
+                  key={index}
+                  className="rounded-lg border border-gray-200 p-3 dark:border-neutral-700"
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                    <Input
+                      label="SKU"
+                      value={variant.sku}
+                      onChange={(e) => updateVariant(index, { sku: e.target.value })}
+                      required
+                    />
+                    <Input
+                      label="Size"
+                      value={variant.size ?? ""}
+                      onChange={(e) => updateVariant(index, { size: e.target.value })}
+                    />
+                    <Input
+                      label="Colour"
+                      value={variant.colour ?? ""}
+                      onChange={(e) => updateVariant(index, { colour: e.target.value })}
+                    />
+                    <Input
+                      label="GTIN"
+                      value={variant.gtin ?? ""}
+                      onChange={(e) => updateVariant(index, { gtin: e.target.value })}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <Checkbox
+                      label="Active"
+                      checked={variant.isActive}
+                      onChange={(e) => updateVariant(index, { isActive: e.target.checked })}
+                    />
+                    {variants.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setVariants((prev) => prev.filter((_, i) => i !== index))}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 text-xs font-semibold text-red-700 hover:bg-red-100 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-300"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setVariants((prev) => [...prev, emptyVariant()])}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-800 hover:bg-gray-50 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add variant
+              </button>
+              <p className="text-xs text-gray-500 dark:text-neutral-400">
+                GTIN is the print provider&apos;s blank identifier. Leave it blank until the
+                supplier gives us one — it is only needed to submit an order for printing.
+              </p>
             </div>
           </FormSection>
 
-          {/* Additional Details */}
-          <FormSection title="Additional Details" icon={FileText}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4">
-              <Textarea
-                id="specifications"
-                name="specifications"
-                value={formData.specifications}
-                onChange={handleInputChange}
-                label="Specifications"
-                placeholder="Technical specifications, features, included accessories..."
-                rows={4}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
+          <FormSection title="Inventory">
+            <Checkbox
+              label="Track stock for this product"
+              checked={trackInventory}
+              onChange={(e) => setTrackInventory(e.target.checked)}
+            />
+            <p className="text-xs text-gray-500 dark:text-neutral-400">
+              Leave off for print-to-order items — the printer makes them on demand, so stock
+              is meaningless and would only block sales.
+            </p>
+            {trackInventory && (
+              <Input
+                label="Stock"
+                type="number"
+                value={stock}
+                onChange={(e) => setStock(Number(e.target.value))}
+                min={0}
+                step={1}
               />
-
-              <Textarea
-                id="warranty"
-                name="warranty"
-                value={formData.warranty}
-                onChange={handleInputChange}
-                label="Warranty Information"
-                placeholder="3-year manufacturer warranty, terms and conditions..."
-                rows={4}
-                className="text-xs sm:text-sm px-2 py-1.5 sm:px-4 sm:py-3"
-              />
-            </div>
+            )}
           </FormSection>
 
-          {/* Status & Options */}
-          <FormSection title="Status & Options">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <Select
-                  id="status"
-                  name="status"
-                  value={formData.status}
-                  onChange={handleInputChange}
-                  label="Product Status"
-                  options={statusOptions}
-                />
-              </div>
-
-              <div className="space-y-4">
-                <Checkbox
-                  id="featured"
-                  name="featured"
-                  checked={formData.featured}
-                  onChange={handleCheckboxChange}
-                  label="Featured Product"
-                  description="Show on homepage and featured sections"
-                />
-
-                <Checkbox
-                  id="onSale"
-                  name="onSale"
-                  checked={formData.onSale}
-                  onChange={handleCheckboxChange}
-                  label="On Sale"
-                  description="Display sale badge and use original price"
-                />
-
-                <Checkbox
-                  id="freeShipping"
-                  name="freeShipping"
-                  checked={formData.freeShipping}
-                  onChange={handleCheckboxChange}
-                  label="Free Shipping"
-                  description="Eligible for free shipping promotion"
-                />
-              </div>
-            </div>
+          <FormSection title="Merchandising">
+            <Checkbox
+              label="Featured"
+              checked={isFeatured}
+              onChange={(e) => setIsFeatured(e.target.checked)}
+            />
+            <Input
+              label="Tags (comma separated)"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+            />
           </FormSection>
 
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200">
-            <Button type="button" onClick={handleClose} variant="secondary" fullWidth>
+          <div className="flex gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              className="flex-1"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" fullWidth icon={Package} iconPosition="left">
-              Add Product
+            <Button type="submit" size="md" className="flex-1" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving…
+                </span>
+              ) : isEdit ? (
+                "Save changes"
+              ) : (
+                "Create product"
+              )}
             </Button>
           </div>
         </form>
       </ModalContent>
     </ModalContainer>
   );
-};
-
-export default AdminProductModal;
+}

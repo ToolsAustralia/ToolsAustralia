@@ -8,6 +8,38 @@
 > deliberately keeps a static `@/config/prizes` import (admin-chunk only, never in the landing
 > graph). See [config-and-data architecture](../config-and-data/architecture.md) "Prize catalog split".
 
+## Products tab (2026-08-17)
+
+Shop catalog management — the first admin surface for `Product`. Lives under
+**Operations → Products**, gated on `shop.view`.
+
+| File | Role |
+|---|---|
+| [ProductManagement.tsx](../../src/components/admin/ProductManagement.tsx) | List panel: cards, feedback banner, per-row action lock |
+| [AdminProductModal.tsx](../../src/components/modals/AdminProductModal.tsx) | Create / edit form incl. the repeatable variant editor |
+
+Follows `MilestoneRewardsPanel` exactly — plain `fetch` + `useState`/`useCallback`, **not**
+TanStack Query, a `feedback` banner rather than toasts, `actionProductId` to disable one row's
+buttons mid-request, and a sibling `Admin*Modal`. Match that panel, not the TanStack ones, if
+you extend this.
+
+**Three things that are deliberate, not accidents:**
+
+1. **Price and "Free entries included" sit side by side in the form.** They are authored
+   independently — an entry count must never be derived from price (rule 11) — so a repricing
+   edit has to show both in one glance, or the two drift apart silently. This is the drift
+   mitigation named in the entries spec.
+2. **`trackInventory` defaults OFF in the create form** even though the schema default is
+   `true`. New products here are print-to-order merch; a stocked product is the exception. The
+   stock field only appears when the box is ticked.
+3. **Edit/Delete buttons are hidden via `usePermissions().has(...)`, not just gated server-side**
+   — per [rules.md](rules.md) R6, staff without the permission should never click into a 403.
+   The tab itself is filtered out of the sidebar by `requires: "shop.view"`.
+
+The modal refuses to submit while an image is still a `File` rather than a Cloudinary URL —
+`ImageUpload` uploads on drop, so a pending upload would otherwise be dropped from the payload
+on save.
+
 ## Repeat Purchases tab (2026-07-09)
 
 `repeat-purchases` — a new **Analytics** group tab (`RepeatPurchaseAnalytics`, `src/components/admin/RepeatPurchaseAnalytics.tsx`), gated by `pageAnalytics.view`. Measures one-time-package buyers who came back and bought again (the one-time equivalent of renewal analytics). Structure mirrors `AllPlatformsManagement`: a right-aligned `AdminDateRangeToolbar` (default `all-time`; cohort filter = first-purchase date) → a 6-tile `MetricCard` KPI grid (one-time buyers / repeat buyers / repeat rate / median days to return / repeat revenue / became members) → a `BarList` of first→second-purchase gap buckets + a "return rate by window" table (matured denominators) → a Users `Card` with a `Segmented` (All / Returned / Not yet returned) + bucket chips + `DataTable` whose User cell is a `ClickableUserDisplay` opening the shared User Detail modal. Loading = `MetricCard` skeletons + pulse bars; empty/error = inline messages. All styling is paired light/`dark:` Tailwind from the `@/components/admin/ui` kit (no chart library). Registered in `adminTabs.ts` (Analytics group), rendered + subtitled in `AdminPage.tsx`, and added to `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` so the date dropdown portals into the mobile header. Data via `useRepeatPurchaseSummary` / `useRepeatPurchaseUsers` (see [client-state](../client-state/patterns.md)).

@@ -26,6 +26,7 @@ import SnapchatAdsManagement from "@/components/admin/SnapchatAdsManagement";
 import KlaviyoAnalyticsManagement from "@/components/admin/KlaviyoAnalyticsManagement";
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
+import ProductManagement from "@/components/admin/ProductManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
 import PastDueChargeHistory from "./PastDueChargeHistory";
 import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
@@ -169,6 +170,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "repeat-purchases" && "One-time buyers who came back — repeat rate, time-to-return, and the fetchable cohort"}
                   {selectedTab === "chatbot" && "Cobber AI chatbot — availability, daily spend, deflection rate, usage, and conversation transcripts"}
                   {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
+                  {selectedTab === "products" && "Shop catalog — products, variants and included free entries"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}
@@ -222,6 +224,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           {selectedTab === "ab-testing" && <ABTestingManagement />}
 
           {/* ERROR REPORTS TAB */}
+          {selectedTab === "products" && <ProductManagement />}
           {selectedTab === "error-reports" && <ErrorReportsManagement />}
 
           {/* BLOCKED TRANSACTIONS TAB */}
