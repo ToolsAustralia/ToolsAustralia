@@ -12,6 +12,8 @@ type CartItem = {
   type: "product" | "ticket";
   productId?: Types.ObjectId;
   miniDrawId?: Types.ObjectId;
+  /** Chosen variant. Part of a product line's identity — see findCartItem. */
+  sku?: string;
   quantity: number;
   price?: number;
 };
@@ -21,6 +23,7 @@ type CartItemWithDetails = {
   type: "product" | "ticket";
   productId?: string;
   miniDrawId?: string;
+  sku?: string;
   quantity: number;
   price?: number;
   product?: {
@@ -50,6 +53,7 @@ const addToCartSchema = z
     type: z.enum(["product", "ticket"]),
     productId: z.string().min(1).optional(),
     miniDrawId: z.string().min(1).optional(),
+    sku: z.string().trim().min(1).max(64).optional(),
     quantity: z.number().int().min(1),
   })
   .refine(
@@ -68,6 +72,7 @@ const updateCartSchema = z
     type: z.enum(["product", "ticket"]),
     productId: z.string().min(1).optional(),
     miniDrawId: z.string().min(1).optional(),
+    sku: z.string().trim().min(1).max(64).optional(),
     quantity: z.number().int().min(0),
   })
   .refine(
@@ -86,6 +91,7 @@ const removeFromCartSchema = z
     type: z.enum(["product", "ticket"]),
     productId: z.string().min(1).optional(),
     miniDrawId: z.string().min(1).optional(),
+    sku: z.string().trim().min(1).max(64).optional(),
   })
   .refine(
     (data) => {
@@ -98,14 +104,26 @@ const removeFromCartSchema = z
     }
   );
 
-// Helper function to find cart item
-function findCartItem(cart: CartItem[], type: "product" | "ticket", id: string): number {
+/**
+ * Find a cart line.
+ *
+ * A product line's identity is `(productId, sku)`, not `productId` alone — two
+ * sizes of the same hoodie are two lines. Matching is exact on both sides, so a
+ * request without a sku matches only a line without one (i.e. a line added
+ * before variants existed), and never collapses into a variant line.
+ */
+function findCartItem(
+  cart: CartItem[],
+  type: "product" | "ticket",
+  id: string,
+  sku?: string
+): number {
   return cart.findIndex((item: CartItem) => {
     if (type === "product") {
-      return item.type === "product" && item.productId?.toString() === id;
-    } else {
-      return item.type === "ticket" && item.miniDrawId?.toString() === id;
+      if (item.type !== "product" || item.productId?.toString() !== id) return false;
+      return (item.sku ?? undefined) === (sku ?? undefined);
     }
+    return item.type === "ticket" && item.miniDrawId?.toString() === id;
   });
 }
 
@@ -134,6 +152,7 @@ export async function GET() {
           type: item.type,
           productId: item.productId?.toString(),
           miniDrawId: item.miniDrawId?.toString(),
+          sku: item.sku,
           quantity: item.quantity,
           price: item.price,
           product: product,
@@ -188,12 +207,38 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Product not found" }, { status: 404 });
       }
 
-      if (product.stock < validatedData.quantity) {
+      // Print-to-order products carry stock 0 forever — the printer makes them
+      // on demand — so only gate on stock when the product actually tracks it.
+      if (product.trackInventory && product.stock < validatedData.quantity) {
         return NextResponse.json({ error: "Insufficient stock" }, { status: 400 });
       }
 
-      // Check if product is already in cart
-      const existingItemIndex = findCartItem(user.cart, "product", validatedData.productId!);
+      // A variant-bearing product must be added as a specific variant, and that
+      // variant has to exist and be active. Never trust a client-supplied sku.
+      const variants: Array<{ sku: string; isActive: boolean }> = product.variants ?? [];
+      if (variants.length > 0) {
+        if (!validatedData.sku) {
+          return NextResponse.json(
+            { error: "Please choose a size or colour before adding to cart" },
+            { status: 400 }
+          );
+        }
+        const variant = variants.find((v) => v.sku === validatedData.sku);
+        if (!variant) {
+          return NextResponse.json({ error: "Variant not found" }, { status: 404 });
+        }
+        if (!variant.isActive) {
+          return NextResponse.json({ error: "That option is unavailable" }, { status: 400 });
+        }
+      }
+
+      // Identity is (productId, sku) — two sizes are two lines.
+      const existingItemIndex = findCartItem(
+        user.cart,
+        "product",
+        validatedData.productId!,
+        validatedData.sku
+      );
 
       if (existingItemIndex > -1) {
         // Update quantity
@@ -203,6 +248,7 @@ export async function POST(request: NextRequest) {
         user.cart.push({
           type: "product",
           productId: new Types.ObjectId(validatedData.productId),
+          sku: validatedData.sku,
           quantity: validatedData.quantity,
           price: product.price,
         });
@@ -285,7 +331,8 @@ export async function PUT(request: NextRequest) {
     const itemIndex = findCartItem(
       user.cart,
       validatedData.type,
-      validatedData.type === "product" ? validatedData.productId! : validatedData.miniDrawId!
+      validatedData.type === "product" ? validatedData.productId! : validatedData.miniDrawId!,
+      validatedData.sku
     );
 
     if (itemIndex === -1) {
@@ -334,9 +381,15 @@ export async function DELETE(request: NextRequest) {
 
     const id = validatedData.type === "product" ? validatedData.productId! : validatedData.miniDrawId!;
 
+    // Remove the matching LINE, not every line for the product. Without the sku
+    // check, removing the Large would also remove the Medium.
     user.cart = user.cart.filter((item: CartItem) => {
       if (validatedData.type === "product") {
-        return !(item.type === "product" && item.productId?.toString() === id);
+        const sameLine =
+          item.type === "product" &&
+          item.productId?.toString() === id &&
+          (item.sku ?? undefined) === (validatedData.sku ?? undefined);
+        return !sameLine;
       } else {
         return !(item.type === "ticket" && item.miniDrawId?.toString() === id);
       }

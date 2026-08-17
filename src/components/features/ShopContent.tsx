@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import ProductCard from "@/components/ui/ProductCard";
 import ProductFilters from "@/components/features/ProductFilters";
@@ -46,6 +47,7 @@ export default function ShopContent({
   totalProducts: initialTotalProducts,
   defaultBrand,
 }: ShopContentProps) {
+  const router = useRouter();
   // State management for shop page
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -116,11 +118,13 @@ export default function ShopContent({
     });
   }, [defaultBrand]);
 
-  // Handle add to cart
+  // Grid cards go to the product page rather than adding directly. Apparel is
+  // sold by variant — size and colour — and the card has nowhere to choose one,
+  // so adding from here would either guess or add an unbuyable line.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleAddToCart = (product: any) => {
-    // TODO: Implement add to cart functionality
-    console.log("Add to cart:", product);
+    const id = product?.id ?? product?._id;
+    if (id) router.push(`/shop/${id}`);
   };
 
   // Handle search input change

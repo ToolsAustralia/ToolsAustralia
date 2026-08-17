@@ -11,6 +11,11 @@ interface CartItem {
   type: "product" | "ticket";
   productId?: string;
   miniDrawId?: string;
+  /**
+   * Chosen variant. Part of a product line's identity: two sizes of the same
+   * product are two lines. Undefined on tickets and on legacy lines.
+   */
+  sku?: string;
   quantity: number;
   price: number;
   product?: {
@@ -67,13 +72,19 @@ export interface CartContextType extends OptimisticCartState {
   addToCart: (item: {
     productId?: string;
     miniDrawId?: string;
+    sku?: string;
     quantity: number;
     price: number;
     product?: CartItem["product"];
     miniDraw?: CartItem["miniDraw"];
   }) => Promise<void>;
-  updateCartItem: (item: { productId?: string; miniDrawId?: string; quantity: number }) => Promise<void>;
-  removeFromCart: (itemId: string, itemType?: "product" | "ticket") => Promise<void>;
+  updateCartItem: (item: {
+    productId?: string;
+    miniDrawId?: string;
+    sku?: string;
+    quantity: number;
+  }) => Promise<void>;
+  removeFromCart: (itemId: string, itemType?: "product" | "ticket", sku?: string) => Promise<void>;
   clearCart: () => Promise<void>;
 
   // Retry failed operations
@@ -350,6 +361,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     async (item: {
       productId?: string;
       miniDrawId?: string;
+      sku?: string;
       quantity: number;
       price: number;
       product?: CartItem["product"];
@@ -371,6 +383,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         : {
             type: "product" as const,
             productId: item.productId,
+            sku: item.sku,
             quantity: item.quantity,
           };
 
@@ -379,8 +392,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // would otherwise both build on the same stale list, and the later one would erase the
       // earlier one's item.
       setCartState((prev) => {
+        // Product lines are keyed on (productId, sku) so two sizes stay separate.
+        // Mirrors findCartItem in /api/cart — keep the two in step.
         const existingItemIndex = prev.items.findIndex((cartItem) =>
-          isTicket ? cartItem.miniDrawId === item.miniDrawId : cartItem.productId === item.productId
+          isTicket
+            ? cartItem.miniDrawId === item.miniDrawId
+            : cartItem.productId === item.productId &&
+              (cartItem.sku ?? undefined) === (item.sku ?? undefined)
         );
 
         const optimisticItems: CartItem[] =
@@ -404,6 +422,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
                   type: isTicket ? ("ticket" as const) : ("product" as const),
                   productId: isTicket ? undefined : item.productId,
                   miniDrawId: isTicket ? item.miniDrawId : undefined,
+                  sku: isTicket ? undefined : item.sku,
                   quantity: item.quantity,
                   price: item.price,
                   product: isTicket
@@ -454,7 +473,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const updateCartItem = useCallback(
-    async (item: { productId?: string; miniDrawId?: string; quantity: number }) => {
+    async (item: { productId?: string; miniDrawId?: string; sku?: string; quantity: number }) => {
       const operationId = generateOperationId();
       const timestamp = Date.now();
 
@@ -471,6 +490,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         : {
             type: "product" as const,
             productId: item.productId,
+            sku: item.sku,
             quantity: item.quantity,
           };
 
@@ -479,7 +499,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setCartState((prev) => {
         const optimisticItems = prev.items
           .map((cartItem) => {
-            const matches = isTicket ? cartItem.miniDrawId === item.miniDrawId : cartItem.productId === item.productId;
+            const matches = isTicket
+              ? cartItem.miniDrawId === item.miniDrawId
+              : cartItem.productId === item.productId &&
+                (cartItem.sku ?? undefined) === (item.sku ?? undefined);
 
             return matches ? { ...cartItem, quantity: item.quantity } : cartItem;
           })
@@ -506,21 +529,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const removeFromCart = useCallback(
-    async (itemId: string, itemType?: "product" | "ticket") => {
+    async (itemId: string, itemType?: "product" | "ticket", sku?: string) => {
       const operationId = generateOperationId();
       const timestamp = Date.now();
 
       // Determine item type if not provided
       const type = itemType || (cartState.items.find((item) => item.productId === itemId) ? "product" : "ticket");
 
+      // A product line is (productId, sku), so removing the Large must not also
+      // remove the Medium. Matching is exact on both sides.
+      const matchesLine = (cartItem: CartItem) =>
+        type === "product"
+          ? cartItem.productId === itemId && (cartItem.sku ?? undefined) === (sku ?? undefined)
+          : cartItem.miniDrawId === itemId;
+
       // Find the item being removed for tracking
-      const itemToRemove = cartState.items.find((cartItem) => {
-        if (type === "product") {
-          return cartItem.productId === itemId;
-        } else {
-          return cartItem.miniDrawId === itemId;
-        }
-      });
+      const itemToRemove = cartState.items.find(matchesLine);
 
       // Track RemoveFromCart event
       if (itemToRemove) {
@@ -549,19 +573,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // Prepare data for API call
       const apiData =
         type === "product"
-          ? { type: "product" as const, productId: itemId }
+          ? { type: "product" as const, productId: itemId, sku }
           : { type: "ticket" as const, miniDrawId: itemId };
 
       // Update UI immediately (optimistic update), filtering `prev` so a removal cannot
       // reinstate items that another action removed in the same debounce window.
       setCartState((prev) => {
-        const optimisticItems = prev.items.filter((cartItem) => {
-          if (type === "product") {
-            return cartItem.productId !== itemId;
-          } else {
-            return cartItem.miniDrawId !== itemId;
-          }
-        });
+        const optimisticItems = prev.items.filter((cartItem) => !matchesLine(cartItem));
 
         return {
           ...prev,

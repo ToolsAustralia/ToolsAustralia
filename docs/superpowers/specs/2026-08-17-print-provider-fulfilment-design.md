@@ -60,8 +60,45 @@ routing: no GraphQL handler is mounted. Also verified `[V]`:
 - The portal's Settings has no "API Keys" tab (Profile / Share access / Invoices /
   Certificates only), though the docs describe one. The UID is on the Profile page.
 
-**Conclusion `[A]`:** the GraphQL API is documented but not deployed at that hostname, or needs
-per-account enabling. Only the supplier can resolve it — more probing will not.
+### Why: our account is a customer *under* the enterprise, not the enterprise
+
+`[V]` `app.teeprintcentre.com.au` is **not a system that integrates with Riverr — it is Riverr**,
+white-labelled by hostname:
+
+- Its Firebase config is `projectId: "riverr-enterprise-user"`, Riverr's own project
+  (`authDomain: riverr-enterprise-user.firebaseapp.com`, `messagingSenderId: 1032772938785`).
+- `app.riverr.app` serves the **byte-identical bundle** — same filename `main.5c588d98.js`,
+  same 1,566,990 bytes. One application, themed per domain.
+- Hence our TeePrintCentre login *is* a Riverr account, which is why its Firebase UID
+  authenticates at `api.riverr.app`. **There is no second account to create** — registering at
+  `accounts.riverr.app` would produce a different UID with no enterprise and no products.
+
+`[V]` The Settings navigation defined in that bundle has five groups:
+
+| Group | Items |
+|---|---|
+| `account` | Profile · Shipping address · Locations · Team · Share access · Invoices · Certificates |
+| **`organization`** | Ecommerce channels · Domains · Email · **API keys** · Integrations |
+| `pos` | Stations & registers |
+| `catalog` | Blank products · Inserts and tags · PSD bulk import · Mockup marketplace · PSD uploads |
+| `inventory` | … |
+
+Our account renders **only part of `account`** (Profile, Share access, Invoices, Certificates).
+The entire `organization` group — where **API keys** lives — is absent.
+
+`[A]` The gate is one of the account flags visible in the same bundle (`isEnterpriseAdmin`,
+`planLimitLock.active`, `isProUser`). We have not traced the exact predicate through minified
+code and should not claim which.
+
+**Conclusion `[A]`:** the API surface is **enterprise-level**. Tools Australia is a seller
+account *under* the TeePrintCentre enterprise, so the API-keys surface is not ours to
+self-serve, and `/graphql` 404s consistently with the account not being provisioned for it.
+This is why the ask below is phrased in their UI's own vocabulary rather than as "your endpoint
+is broken".
+
+`[V]` Separately, Google sign-in at `accounts.riverr.app/register` fails with
+`Firebase: Error (auth/unauthorized-domain)` — that domain is not in the Firebase project's
+authorised-domains list. Riverr's misconfiguration; not actionable by us, and not on our path.
 
 ### The contract, as documented (never seen a live response)
 

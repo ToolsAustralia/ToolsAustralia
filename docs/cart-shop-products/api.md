@@ -84,6 +84,34 @@ deploy, because that panel is the grid's zero-result branch.
 `variants[]` requires at least one entry on create. A product with no variant has nothing
 purchasable, since the variant is the unit a customer selects and the printer makes.
 
+## Cart line identity — `(productId, sku)` (2026-08-17)
+
+A product cart line is keyed on **both** the product and the chosen variant. Two sizes of the
+same hoodie are two lines.
+
+Matching is **exact on both sides**: a request without a `sku` matches only a line without one
+— i.e. a line added before variants existed — and never collapses into a variant line. This
+holds in three places that must stay in step:
+
+| Where | What |
+|---|---|
+| `findCartItem` in [/api/cart](../../src/app/api/cart/route.ts) | Server-side identity, used by POST and PUT |
+| The `DELETE` filter in the same file | Removes the matching **line**, not every line for the product |
+| The optimistic matchers in [CartContext](../../src/contexts/CartContext.tsx) | `addToCart`, `updateCartItem`, `removeFromCart` |
+
+`removeFromCart(itemId, itemType?, sku?)` takes the sku as a third argument. Omitting it on a
+variant product removes the *no-sku* line, which is almost certainly not what a caller wants —
+pass the sku from the cart line being rendered.
+
+**Two server-side rules `POST /api/cart` now enforces**, neither of which existed before:
+
+1. **Stock is only checked when `trackInventory` is true.** Print-to-order products carry
+   `stock: 0` forever, so the old unconditional check would have made every merch item
+   permanently unaddable.
+2. **A variant-bearing product must be added as a specific, existing, active variant.** The
+   sku is validated against `product.variants` server-side — a client-supplied sku is never
+   trusted. Missing sku → `400`; unknown sku → `404`; inactive variant → `400`.
+
 ## Cross-domain checkout
 
 Checkout itself goes through [billing-stripe](../billing-stripe/api.md) routes:

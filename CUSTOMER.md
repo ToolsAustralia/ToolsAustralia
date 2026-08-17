@@ -196,7 +196,7 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 | `accumulatedEntries` | number (def 0) | Total entries ever received ([User.ts:129](src/models/User.ts#L129)) | — |
 | `entryWallet` | number (def 0) | **Deprecated — kept at 0** ([User.ts:130](src/models/User.ts#L130)) | — |
 | `rewardsPoints` | number (def 0) | Points earned from purchases (legacy; see §7d) ([User.ts:131](src/models/User.ts#L131)) | — |
-| `cart[]` | array | Cart items, `type: "product" \| "ticket"` with `productId?` / `miniDrawId?`, `quantity`, `price?` ([User.ts:136-142](src/models/User.ts#L136)) | — |
+| `cart[]` | array | Cart items, `type: "product" \| "ticket"` with `productId?` / `miniDrawId?`, **`sku?`**, `quantity`, `price?` ([User.ts:136-142](src/models/User.ts#L136)). **`sku` added 2026-08-17**: a product line's identity is now `(productId, sku)`, not `productId` alone — two sizes of the same garment are two lines, and removing one does not remove the other. Absent on ticket items and on product lines added before variants existed; those keep their previous behaviour exactly. Not exposed to the browser — `cart` is excluded from the `MY_ACCOUNT_USER_FIELDS` wire projection (see caveats above). | — |
 
 > **Major-draw entries are NOT on `User`.** They were removed; the single source of truth is `MajorDraw.entries` ([User.ts:133,752](src/models/User.ts#L133)). See [BUSINESS.md §3](BUSINESS.md).
 

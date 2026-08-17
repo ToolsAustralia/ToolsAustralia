@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ShoppingCart, Minus, Plus } from "lucide-react";
 import { ProductData } from "@/data";
 import { useCart } from "@/contexts/CartContext";
@@ -8,6 +8,12 @@ import { useSession } from "next-auth/react";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { useUserContext } from "@/contexts/UserContext";
+import {
+  activeVariants,
+  variantLabel,
+  isVariantPurchasable,
+  type ProductVariantLike,
+} from "@/utils/shop/variants";
 
 interface DatabaseProduct {
   _id: string;
@@ -33,6 +39,39 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
   const { isAuthenticated: _isAuthenticated } = useUserContext();
   const productIdValue = ("id" in product ? product.id : product._id) as string;
   const isPendingForThisProduct = isProductAdding(productIdValue);
+
+  // Variants are the purchasable unit for apparel. A product with none behaves
+  // exactly as before, so the existing tool catalog is unaffected.
+  //
+  // `product` is a union of the DB shape and the legacy static `ProductData`,
+  // and only the former carries these fields. One narrow cast here beats
+  // widening the union or sprinkling `any`.
+  const fields = product as unknown as {
+    trackInventory?: boolean;
+    variants?: ProductVariantLike[];
+    isActive?: boolean;
+  };
+  const trackInventory = fields.trackInventory ?? true;
+  const rawVariants = fields.variants;
+  const options = useMemo<ProductVariantLike[]>(
+    () => activeVariants({ variants: rawVariants ?? [] }),
+    [rawVariants]
+  );
+  const hasVariants = options.length > 0;
+
+  const [selectedSku, setSelectedSku] = useState<string | null>(null);
+  const selectedVariant = options.find((v) => v.sku === selectedSku) ?? null;
+
+  const variantHost = {
+    isActive: fields.isActive ?? true,
+    trackInventory,
+    stock: product.stock ?? 0,
+    variants: options,
+  };
+
+  const canAddSelected = hasVariants
+    ? Boolean(selectedVariant) && isVariantPurchasable(variantHost, selectedVariant!)
+    : !trackInventory || (product.stock ?? 0) > 0;
 
   const handleQuantityChange = (change: number) => {
     setQuantity(Math.max(1, Math.min(product.stock || 999, quantity + change)));
@@ -66,6 +105,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
 
       await addToCart({
         productId: productIdValue,
+        sku: selectedSku ?? undefined,
         quantity,
         price: product.price as number,
         product: {
@@ -95,7 +135,9 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
     }
   };
 
-  const isOutOfStock = product.stock === 0;
+  // Print-to-order items carry stock 0 forever, so stock must not read as
+  // "out of stock" for them — the printer makes each one on demand.
+  const isOutOfStock = trackInventory && product.stock === 0;
 
   return (
     <div className="space-y-6">
@@ -103,17 +145,58 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       <div className="flex items-center gap-3">
         <div
           className={`w-3 h-3 rounded-full ${
-            isOutOfStock ? "bg-red-500" : product.stock && product.stock < 10 ? "bg-orange-500" : "bg-green-500"
+            isOutOfStock ? "bg-red-500" : trackInventory && product.stock && product.stock < 10 ? "bg-orange-500" : "bg-green-500"
           }`}
         ></div>
         <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">
           {isOutOfStock
             ? "Out of Stock"
+            : !trackInventory
+            ? "Made to order"
             : product.stock && product.stock < 10
             ? `Only ${product.stock} left!`
             : "In Stock"}
         </span>
       </div>
+
+      {/* Variant picker — apparel is size x colour, so this is what the customer
+          actually chooses and what the printer is told to make. */}
+      {hasVariants && (
+        <div className="space-y-2">
+          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">
+            Choose an option:
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {options.map((variant) => {
+              const available = isVariantPurchasable(variantHost, variant);
+              const isSelected = variant.sku === selectedSku;
+              return (
+                <button
+                  key={variant.sku}
+                  type="button"
+                  onClick={() => setSelectedSku(variant.sku)}
+                  disabled={!available}
+                  aria-pressed={isSelected}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    isSelected
+                      ? "border-red-600 bg-red-600 text-white"
+                      : available
+                      ? "border-gray-300 bg-white text-gray-800 hover:border-red-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                      : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 line-through dark:border-neutral-800 dark:bg-neutral-800 dark:text-neutral-500"
+                  }`}
+                >
+                  {variantLabel(variant)}
+                </button>
+              );
+            })}
+          </div>
+          {!selectedSku && (
+            <p className="text-xs text-gray-500 dark:text-neutral-400">
+              Pick an option to continue.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Quantity Selector */}
       {!isOutOfStock && (
@@ -143,9 +226,9 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       <div className="flex gap-2 sm:gap-4">
         <button
           onClick={handleAddToCart}
-          disabled={isOutOfStock || isAddingToCart || isPendingForThisProduct}
+          disabled={!canAddSelected || isAddingToCart || isPendingForThisProduct}
           className={`w-full py-2 px-4 sm:py-3 sm:px-6 rounded-lg font-semibold text-sm sm:text-lg transition-all duration-300 flex items-center justify-center gap-1 sm:gap-2 ${
-            isOutOfStock || isAddingToCart || isPendingForThisProduct
+            !canAddSelected || isAddingToCart || isPendingForThisProduct
               ? "bg-gray-300 text-gray-500 dark:bg-neutral-800 dark:text-neutral-400 cursor-not-allowed"
               : addedToCart
               ? "bg-green-600 text-white"
@@ -155,6 +238,9 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
           <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
           {isOutOfStock
             ? "Out of Stock"
+            : /* Say why the button is dead rather than leaving it silently inert. */
+            hasVariants && !selectedSku
+            ? "Choose an option"
             : isAddingToCart || isPendingForThisProduct
             ? "Adding..."
             : addedToCart

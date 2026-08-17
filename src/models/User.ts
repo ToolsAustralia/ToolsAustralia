@@ -156,6 +156,12 @@ export interface IUser extends Document {
     type: "product" | "ticket";
     productId?: mongoose.Types.ObjectId; // For product items
     miniDrawId?: mongoose.Types.ObjectId; // For ticket entries
+    /**
+     * Chosen product variant (size / colour). Part of the cart line's identity:
+     * two sizes of the same product are two lines, not one. Absent on ticket
+     * items and on product lines added before variants existed.
+     */
+    sku?: string;
     quantity: number;
     price?: number; // Store price at time of adding to cart
   }>;
@@ -839,6 +845,12 @@ const UserSchema = new Schema<IUser>(
           required: function (this: { type: string }) {
             return this.type === "ticket";
           },
+        },
+        // Part of the line's identity — see the interface note above. Must exist
+        // on the schema or Mongoose strict mode drops it silently on save.
+        sku: {
+          type: String,
+          trim: true,
         },
         quantity: {
           type: Number,

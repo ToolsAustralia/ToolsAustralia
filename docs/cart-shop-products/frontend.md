@@ -128,3 +128,31 @@ Convention: [docs/shared-ui/frontend.md](../shared-ui/frontend.md). Mechanism:
 [docs/tracking](../tracking/). Card details need no treatment — they are entered in a
 cross-origin Stripe iframe and never enter our DOM. If you add an order-confirmation surface
 that echoes the address (a PDF, an order-history detail view), it needs the same attribute.
+
+## Variant selection on the product page (2026-08-17)
+
+Apparel is sold by variant (size × colour), so the product page — not the grid card — is where
+a customer chooses what they are buying.
+
+**[ProductInteractions.tsx](../../src/app/(site)/shop/[slug]/components/ProductInteractions.tsx)**
+renders a button-per-variant picker above the quantity selector, driven by
+`activeVariants` / `variantLabel` / `isVariantPurchasable` from
+[src/utils/shop/variants.ts](../../src/utils/shop/variants.ts). The chosen `sku` is passed to
+`addToCart`.
+
+Three behaviours worth knowing:
+
+- **A product with no variants behaves exactly as before.** The picker does not render and the
+  add-to-cart path is unchanged, so the existing tool catalog is unaffected.
+- **"Made to order" replaces "Out of Stock" when `trackInventory` is false.** Print-to-order
+  items carry `stock: 0` permanently; without this they would every one read as out of stock.
+- **The add-to-cart button says *why* it is disabled** — "Choose an option" rather than a
+  silently inert button. Unavailable variants render struck through and disabled rather than
+  being hidden, so a customer can see their size exists but is currently unavailable.
+
+**Grid cards navigate, they do not add.** `ShopContent`'s `handleAddToCart` was a `console.log`
+TODO stub; it now routes to `/shop/{id}`. A card has nowhere to choose a size, so adding from
+the grid would either guess a variant or create an unbuyable line.
+
+> `/shop` and `/shop/[slug]` are both `force-dynamic` (nonce-CSP route class). Never add
+> `generateStaticParams` — that exact mistake already shipped once on `/shop/brand/[brand]`.
