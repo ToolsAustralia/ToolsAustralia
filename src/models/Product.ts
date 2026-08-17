@@ -20,6 +20,31 @@ export interface IProduct extends Document {
   isActive: boolean;
   isFeatured: boolean;
   tags: string[];
+  variants: {
+    sku: string;
+    size?: string;
+    colour?: string;
+    /** Print-provider blank identifier. Undefined until the supplier gives us one. */
+    gtin?: string;
+    isActive: boolean;
+  }[];
+  /**
+   * Free entries included with this item. 0 = none.
+   * Authored per product and deliberately independent of `price` — publishing a
+   * dollar-to-entry ratio is prohibited (CLAUDE.md rule 11). Nothing grants from
+   * this yet; see docs/superpowers/specs/2026-08-17-shop-entries-design.md.
+   */
+  includedEntries: number;
+  printArtwork: {
+    url: string;
+    /** Print-provider placement id — "1" Front, "2" Back, "3" Left Chest. */
+    placement: string;
+    type: "printing" | "mockup";
+  }[];
+  /** false for print-to-order items. Existing stocked products keep true. */
+  trackInventory: boolean;
+  /** Reserved: which origin ships this. Merch ships from the printer, not our VIC store. */
+  originLocation?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -111,6 +136,31 @@ const ProductSchema = new Schema<IProduct>({
     trim: true,
     lowercase: true,
   }],
+  variants: [{
+    sku: { type: String, required: true, trim: true },
+    size: { type: String, trim: true },
+    colour: { type: String, trim: true },
+    gtin: { type: String, trim: true },
+    isActive: { type: Boolean, default: true },
+  }],
+  includedEntries: {
+    type: Number,
+    default: 0,
+    min: [0, 'Included entries cannot be negative'],
+  },
+  printArtwork: [{
+    url: { type: String, required: true, trim: true },
+    placement: { type: String, required: true, trim: true },
+    type: { type: String, enum: ['printing', 'mockup'], required: true },
+  }],
+  trackInventory: {
+    type: Boolean,
+    default: true,
+  },
+  originLocation: {
+    type: String,
+    trim: true,
+  },
 }, {
   timestamps: true,
 });
