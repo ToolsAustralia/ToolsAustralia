@@ -10,14 +10,13 @@ import {
   Mail,
   Phone,
   Download,
-  ArrowRight,
-  Calendar,
+  ArrowRight,
   MapPin,
   CreditCard,
 } from "lucide-react";
 import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandler";
 import { getContactEmail } from "@/lib/email/sender-identities";
-import { useOrder } from "@/hooks/queries/useOrderQueries";
+import { useOrder, isOrderPaid } from "@/hooks/queries/useOrderQueries";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
@@ -36,7 +35,9 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
   useEffect(() => {
     if (firedRef.current) return;
     if (!order) return;
-    if (order.paymentStatus !== "paid") return;
+    // No paymentStatus field exists — payment state is inferred from status,
+    // which is the only thing the webhook writes.
+    if (!isOrderPaid(order)) return;
     if (!order.totalAmount || order.totalAmount <= 0) return;
     // firedRef only survives one mount; Meta's event_id dedup only ~48h. Re-fires
     // inside that window are merged by Meta and recover a swallowed first fire —
@@ -58,7 +59,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
         customData: {
           orderId: order.orderNumber ?? orderId,
           contentType: "product",
-          numItems: order.items?.length,
+          numItems: order.products?.length,
         },
         eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
       }),
@@ -95,12 +96,14 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
     );
   }
 
-  const paymentMethodLabel = order.paymentMethod
-    ? `${order.paymentMethod.brand ?? order.paymentMethod.type} ending in ${order.paymentMethod.last4 ?? "••••"}`
-    : "Card";
+  // No payment-method snapshot is stored on the Order — Stripe is the system of
+  // record for it. A generic label beats inventing a field the schema lacks.
+  const paymentMethodLabel = "Card";
 
+  // shippingAddress is optional (a ticket-only order has none), so it must be
+  // narrowed rather than assumed present.
   const addr = order.shippingAddress;
-  const shipName = `${addr.firstName} ${addr.lastName}`.trim();
+  const shipName = addr ? `${addr.firstName ?? ""} ${addr.lastName ?? ""}`.trim() : "";
 
   return (
     <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
@@ -134,12 +137,16 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
             </div>
 
             <div className="space-y-4">
-              {order.items.map((item) => {
-                const img = item.product?.images?.[0] ?? PLACEHOLDER_IMG;
-                const name = item.product?.name ?? "Product";
-                const brand = item.product?.brand ?? "";
+              {order.products.map((item) => {
+                // `product` is an ObjectId ref the read route populates; it is a
+                // bare id string when population is skipped, so narrow before use.
+                const populated = typeof item.product === "object" ? item.product : undefined;
+                const img = populated?.images?.[0] ?? PLACEHOLDER_IMG;
+                // Prefer the snapshot — the catalog may have been renamed since.
+                const name = item.name ?? populated?.name ?? "Product";
+                const brand = populated?.brand ?? "";
                 return (
-                  <div key={`${item.productId}-${item.quantity}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div key={`${populated?._id ?? name}-${item.sku ?? ""}-${item.quantity}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                     <div className="w-16 h-16 bg-white rounded-lg overflow-hidden flex-shrink-0">
                       <Image src={img} alt={name} width={64} height={64} className="w-full h-full object-cover" sizes="64px" />
                     </div>
@@ -185,25 +192,23 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                     <strong>Shipping</strong>
                   </span>
                 </div>
-                {order.estimatedDelivery ? (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-600 dark:text-neutral-400">
-                      Estimated delivery: <strong>{new Date(order.estimatedDelivery).toLocaleDateString()}</strong>
-                    </span>
-                  </div>
-                ) : null}
+                {/* No estimated-delivery date is stored. Print-to-order turnaround
+                    is supplier-dependent and unconfirmed, so promising a date here
+                    would be a guess shown to a paying customer. */}
                 <div className="flex items-start gap-2">
                   <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
                   <div data-cs-mask className="text-sm text-gray-600 dark:text-neutral-400">
                     <div>
                       <strong>{shipName}</strong>
                     </div>
-                    <div>{addr.address}</div>
+                    {/* addressLine1 is the current field; `address` is the legacy
+                        single line kept only so pre-2026-08 orders still render. */}
+                    <div>{addr?.addressLine1 ?? addr?.address}</div>
+                    {addr?.addressLine2 ? <div>{addr.addressLine2}</div> : null}
                     <div>
-                      {addr.city}, {addr.state} {addr.postalCode}
+                      {addr?.city}, {addr?.state} {addr?.postalCode}
                     </div>
-                    <div>{addr.country}</div>
+                    <div>{addr?.country}</div>
                   </div>
                 </div>
               </div>
@@ -232,7 +237,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600 dark:text-neutral-400">Status:</span>
-                  <span className="text-sm font-medium text-green-600 capitalize">{order.paymentStatus}</span>
+                  <span className="text-sm font-medium text-green-600 capitalize">{isOrderPaid(order) ? "paid" : order.status}</span>
                 </div>
               </div>
             </div>

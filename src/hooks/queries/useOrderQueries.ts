@@ -12,56 +12,72 @@ import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
 
 // Types
 export interface OrderItem {
-  productId: string;
+  /**
+   * The schema field is `product` — an ObjectId ref, populated to an object by
+   * the order read routes. It is NOT `productId`; both order reads populated
+   * that non-existent path until 2026-08-17 and would have thrown on the first
+   * real order.
+   */
+  product?: { _id: string; name: string; images: string[]; brand: string } | string;
+  /** Chosen variant, snapshotted at purchase — this is what the printer makes. */
+  sku?: string;
+  /** Product name, snapshotted so a later catalog rename cannot rewrite history. */
+  name?: string;
   quantity: number;
   price: number;
-  product?: {
-    _id: string;
-    name: string;
-    images: string[];
-    brand: string;
-  };
 }
 
+/**
+ * The client view of an Order.
+ *
+ * This interface used to be a fiction — it declared `items`, `paymentStatus`,
+ * `paymentMethod`, `billingAddress`, `estimatedDelivery` and a `"refunded"`
+ * status, none of which exist on `src/models/Order.ts`. Nothing caught it
+ * because no Order had ever been written. It now mirrors the real schema; if you
+ * add a field here, add it to the model first.
+ */
 export interface Order {
   _id: string;
   orderNumber: string;
-  userId: string;
-  items: OrderItem[];
+  /** Line items. The schema field is `products`, NOT `items`. */
+  products: OrderItem[];
   totalAmount: number;
   subtotal: number;
-  tax: number;
-  shipping: number;
-  discount: number;
-  status: "pending" | "processing" | "shipped" | "delivered" | "cancelled" | "refunded";
-  paymentStatus: "pending" | "paid" | "failed" | "refunded";
-  shippingAddress: {
-    firstName: string;
-    lastName: string;
-    address: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
+  /** GST already INSIDE totalAmount — never add it. */
+  gstAmount: number;
+  shippingCost: number;
+  appliedDiscounts?: { type: string; amount: number; description: string }[];
+  status: "pending" | "processing" | "shipped" | "delivered" | "cancelled" | "completed";
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    addressLine1?: string;
+    /** @deprecated legacy single-line address on pre-2026-08 orders. */
+    address?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    deliveryInstructions?: string;
   };
-  billingAddress?: {
-    firstName: string;
-    lastName: string;
-    address: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  };
-  paymentMethod?: {
-    type: string;
-    last4?: string;
-    brand?: string;
-  };
+  paymentIntentId?: string;
   trackingNumber?: string;
-  estimatedDelivery?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * An order is paid once the webhook has moved it off `pending`.
+ *
+ * There is no `paymentStatus` field — payment state is inferred from `status`,
+ * which is the only thing the webhook writes.
+ */
+export function isOrderPaid(order: Pick<Order, "status">): boolean {
+  return order.status !== "pending" && order.status !== "cancelled";
 }
 
 export interface OrderFilters extends Record<string, unknown> {
@@ -90,7 +106,6 @@ export interface OrderResponse {
 export interface CreateOrderData {
   items: OrderItem[];
   shippingAddress: Order["shippingAddress"];
-  billingAddress?: Order["billingAddress"];
   paymentMethodId?: string;
   couponCode?: string;
 }
