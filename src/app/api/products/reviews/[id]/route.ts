@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { z } from "zod";
+import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
+import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 
 const paramsSchema = z.object({
   id: z.string().min(1),
 });
 
+// Identity is taken from the session, never the body. This route previously
+// accepted `userName` / `userEmail` from the caller, which let an anonymous
+// request post a review under anyone's name on a public page.
 const reviewSchema = z.object({
   rating: z.number().min(1).max(5),
   comment: z.string().min(1).max(500),
-  userName: z.string().min(1).max(100),
-  userEmail: z.string().email(),
 });
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -41,7 +44,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const csrf = requireSameOrigin(request);
+    if (csrf) return csrf;
     await connectDB();
+    const auth = await requireAuthenticatedUserDoc();
+    if ("errorResponse" in auth) return auth.errorResponse;
+    const { user } = auth;
 
     const { id } = paramsSchema.parse(await params);
     const body = await request.json();
@@ -52,12 +60,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    // Add new review
+    // Add new review. `userId` is required by the schema — writing the review
+    // without it (as this route used to) fails Mongoose validation.
     const newReview = {
+      userId: user._id,
       rating: validatedData.rating,
       comment: validatedData.comment,
-      userName: validatedData.userName,
-      userEmail: validatedData.userEmail,
       createdAt: new Date(),
     };
 
@@ -70,15 +78,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       0
     );
     product.rating = totalRating / product.reviews.length;
-    product.reviewCount = product.reviews.length;
 
     await product.save();
 
+    // `reviewCount` is not a field on the Product schema — assigning it was a
+    // silent no-op under strict mode and the response returned undefined.
     return NextResponse.json({
       message: "Review added successfully",
       review: newReview,
       averageRating: product.rating,
-      totalReviews: product.reviewCount,
+      totalReviews: product.reviews.length,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

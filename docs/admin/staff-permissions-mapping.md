@@ -181,6 +181,24 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/partner-applications/[id]` | DELETE | `users.edit` |
 | `/api/debug/check-admin` | GET | _(open to any authenticated caller — diagnostic only)_ |
 
+### Product catalog (`/api/products/**`) — gated 2026-08-17
+
+Every route in this family previously shipped with **no auth and no CSRF**. Storefront reads stay public; everything that mutates or exposes business data is now gated.
+
+| Route | Method | Permission |
+|---|---|---|
+| `/api/products` · `/[id]` · `/search` · `/categories` · `/featured` · `/bestsellers` · `/newarrivals` · `/related/[id]` | GET | _(public — storefront reads)_ |
+| `/api/products/reviews/[id]` | GET | _(public)_ |
+| `/api/products/reviews/[id]` | POST | _(customer session + `requireSameOrigin`; author taken from session)_ |
+| `/api/products/stock/[id]` | GET | _(public)_ |
+| `/api/products/stock/[id]` | PATCH | `shop.edit` |
+| `/api/products/analytics` · `/export` | GET | `shop.view` |
+| `/api/products/import` · `/duplicate/[id]` | POST | `shop.edit` |
+| `/api/products/archive-all` · `/archive/[id]` · `/restore-all` · `/restore/[id]` | PATCH | `shop.edit` |
+| `/api/products/bulk` | PATCH | `shop.edit` |
+| `/api/products/bulk` | DELETE | `shop.delete` |
+| `/api/products/delete-all` · `/delete-archived` · `/delete-low-stock` · `/delete-out-of-stock` · ten `/delete-by-*` | DELETE | `shop.delete` |
+
 ## Notes
 
 - All `/api/admin/**` routes and the non-admin routes listed above now use `requirePermission()` — the legacy `session.user.role === "admin"` pattern has been fully removed from API routes.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { z } from "zod";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 
 const paramsSchema = z.object({
   id: z.string().min(1),
@@ -39,6 +40,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const guard = await requirePermissionWithAudit("shop.edit", request, { resourceType: "product" });
+  if (guard instanceof NextResponse) return guard;
+
   try {
     await connectDB();
 

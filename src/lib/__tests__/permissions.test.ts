@@ -26,7 +26,9 @@ const test = (name: string, fn: () => void) => {
 
 test("AREAS matches AREA_ACTIONS keys exactly", () => {
   assert.deepEqual(AREAS, Object.keys(AREA_ACTIONS));
-  assert.equal(AREAS.length, 16);
+  // Bump deliberately when an area is added. 17 as of 2026-08-17 (+`shop`, which
+  // gates the previously-unauthenticated /api/products admin + destructive routes).
+  assert.equal(AREAS.length, 17);
 });
 
 test("every area declares at least a 'view' action", () => {

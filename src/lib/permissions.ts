@@ -33,6 +33,10 @@ export const AREA_ACTIONS = {
   errorReports: ["view", "edit", "delete"],
   abTesting: ["view", "edit", "selectWinner", "delete"],
   rewards: ["view", "edit", "delete"],
+  // Shop catalog + orders. `delete` is split out because the product API carries
+  // bulk-destruction routes (delete-all, delete-by-*) that wipe the catalog in one
+  // call — an operator who can edit a product should not implicitly hold those.
+  shop: ["view", "edit", "delete"],
   settings: ["view", "edit", "delete"],
   audit: ["view"],
 } as const satisfies Record<string, readonly string[]>;
