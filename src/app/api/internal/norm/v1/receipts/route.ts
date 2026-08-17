@@ -18,6 +18,7 @@ const QuerySchema = z.object({
   category: z.enum(RECEIPT_CATEGORIES as [string, ...string[]]).optional(),
   status: z.enum(RECEIPT_REFUND_STATUSES as [string, ...string[]]).optional(),
   packageName: z.string().max(200).optional(),
+  search: z.string().max(200).optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(RECEIPTS_MAX_LIMIT).default(RECEIPTS_DEFAULT_LIMIT),
 });
@@ -42,7 +43,7 @@ export const GET = withNorm(
       return ctx.error(400, "bad_query", "Invalid query params", parsed.error.issues);
     }
 
-    const { range, start, end, category, status, packageName, page, limit } = parsed.data;
+    const { range, start, end, category, status, packageName, search, page, limit } = parsed.data;
 
     let startDate: Date;
     let endDate: Date;
@@ -58,6 +59,7 @@ export const GET = withNorm(
       category: category as (typeof RECEIPT_CATEGORIES)[number] | undefined,
       status: status as (typeof RECEIPT_REFUND_STATUSES)[number] | undefined,
       packageName,
+      search,
       page,
       limit,
     });
@@ -66,8 +68,12 @@ export const GET = withNorm(
       dateRange: { range, start: startDate.toISOString(), end: endDate.toISOString() },
       category: category ?? null,
       totals: result.totals,
-      // PII boundary lives here: firstName + opaque userId, never lastName / email /
-      // stripeCustomerId. `stripe.objectLabel` is the transaction id, not a person.
+      // Surfaced so Norm can never report a truncated search as a complete figure.
+      searchTruncated: result.searchTruncated,
+      // PII boundary lives here. firstName + opaque userId + email; NOT lastName, NOT the
+      // Stripe customer id. `email` is a deliberate widening of the usual Norm boundary,
+      // made by explicit owner decision on 2026-08-17 — see schemas/receipts.ts.
+      // `stripe.objectLabel` is the transaction id, not a person.
       rows: result.rows.map((row) => ({
         id: row.id,
         timestamp: row.timestamp,
@@ -80,6 +86,7 @@ export const GET = withNorm(
         refundedAt: row.refundedAt,
         userId: row.customer.userId,
         firstName: row.customer.firstName,
+        email: row.customer.email,
         stripeObjectId: row.stripe.objectLabel,
       })),
       pagination: result.pagination,

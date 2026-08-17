@@ -14,6 +14,7 @@ import {
   Package,
   Receipt,
   RotateCcw,
+  Search,
   Wallet,
 } from "lucide-react";
 import { FilterDropdown } from "@/components/admin/ui/FilterDropdown";
@@ -30,6 +31,7 @@ import {
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
 import ClickableUserDisplay from "@/components/admin/ClickableUserDisplay";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useDebounce } from "@/hooks/useDebounce";
 import { downloadReceiptsCsv, useReceipts } from "@/hooks/queries/admin/useReceipts";
 import {
   RECEIPT_CATEGORIES,
@@ -142,7 +144,14 @@ export default function ReceiptsManagement() {
   const [category, setCategory] = useState<ReceiptCategory | "">("");
   const [status, setStatus] = useState<ReceiptRefundStatus | "">("");
   const [packageName, setPackageName] = useState<string>("");
+  const [searchInput, setSearchInput] = useState("");
+  const search = useDebounce(searchInput, 300);
   const [page, setPage] = useState(1);
+
+  // A new search term restarts paging — otherwise you land on page 7 of a 2-page result.
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
   const [isExporting, setIsExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
 
@@ -186,10 +195,11 @@ export default function ReceiptsManagement() {
       category: category || undefined,
       status: status || undefined,
       packageName: packageName || undefined,
+      search: search.trim() || undefined,
       page,
       limit: PAGE_SIZE,
     }),
-    [dateRange, startDate, endDate, category, status, packageName, page]
+    [dateRange, startDate, endDate, category, status, packageName, search, page]
   );
 
   // Draw presets resolve to "" until the draw dates load; querying before then would ask
@@ -319,6 +329,13 @@ export default function ReceiptsManagement() {
         </div>
       )}
 
+      {data?.searchTruncated && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200">
+          That search matches too many customers to resolve in full — these rows are a subset.
+          Narrow it (a full email is exact) before trusting the totals.
+        </div>
+      )}
+
       {exportNotice && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200">
           {exportNotice}
@@ -328,6 +345,17 @@ export default function ReceiptsManagement() {
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
         <div className="flex flex-col gap-3 border-b border-gray-200 px-4 py-3 dark:border-neutral-700 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400 dark:text-neutral-500" />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search name or email…"
+                aria-label="Search customer name or email"
+                className="w-56 rounded-xl border border-neutral-200 bg-white py-2 pl-8 pr-3 text-sm font-medium text-neutral-700 placeholder-neutral-400 transition hover:border-neutral-300 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:placeholder-neutral-500 dark:hover:border-neutral-600"
+              />
+            </div>
             <FilterDropdown
               ariaLabel="Category"
               icon={Layers}
@@ -373,13 +401,14 @@ export default function ReceiptsManagement() {
                 hint: p.count.toLocaleString(),
               }))}
             />
-            {(category || status || packageName) && (
+            {(category || status || packageName || searchInput) && (
               <button
                 type="button"
                 onClick={() => {
                   setCategory("");
                   setStatus("");
                   setPackageName("");
+                  setSearchInput("");
                   setPage(1);
                 }}
                 className="text-xs font-semibold text-gray-500 underline-offset-2 hover:text-red-600 hover:underline dark:text-neutral-400 dark:hover:text-red-400"

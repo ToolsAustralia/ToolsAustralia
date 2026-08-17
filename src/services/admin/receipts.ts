@@ -26,7 +26,7 @@
 //    See `classifyReceiptCategory`. That one difference is the entire expected delta when
 //    reconciling against the dashboard (`npm run verify:receipts-reconciliation`).
 
-import { type PipelineStage } from "mongoose";
+import mongoose, { type PipelineStage } from "mongoose";
 import PaymentEvent from "@/models/PaymentEvent";
 import Order from "@/models/Order";
 import User from "@/models/User";
@@ -74,8 +74,46 @@ export interface ReceiptsInput {
   status?: ReceiptRefundStatus;
   /** Exact `packageName` match. Omit for every package. */
   packageName?: string;
+  /** Free text over the customer's first name, last name and email. */
+  search?: string;
   page: number;
   limit: number;
+}
+
+/**
+ * Cap on how many customers a search may expand to before the `$in` gets unreasonable.
+ * Hitting it is reported as `searchTruncated`, never silently.
+ */
+const SEARCH_MAX_USERS = 1000;
+
+/** Escape regex metacharacters — the search box is free text from a human. */
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Resolve a search term to the userIds it matches.
+ *
+ * The ledger lives in `PaymentEvent` / `Order` but the searchable fields (name, email) live
+ * on `User`, so the term is resolved to ids first and pushed into the source `$match` — where
+ * it can use the `{ userId: 1, timestamp: -1 }` index — rather than filtering after the union.
+ */
+async function resolveSearchUserIds(
+  search: string
+): Promise<{ ids: mongoose.Types.ObjectId[]; truncated: boolean }> {
+  const pattern = new RegExp(escapeRegex(search), "i");
+  const matches = await User.find({
+    $or: [{ email: pattern }, { firstName: pattern }, { lastName: pattern }],
+  })
+    .select("_id")
+    .limit(SEARCH_MAX_USERS + 1)
+    .lean();
+
+  const truncated = matches.length > SEARCH_MAX_USERS;
+  return {
+    ids: matches.slice(0, SEARCH_MAX_USERS).map((u) => new mongoose.Types.ObjectId(String(u._id))),
+    truncated,
+  };
 }
 
 /** `PaymentEvent.packageType` enum, in full. */
@@ -114,7 +152,8 @@ function paymentEventCategoryClause(category?: ReceiptCategory): Record<string, 
 function paymentEventStages(
   startDate: Date,
   endDate: Date,
-  category?: ReceiptCategory
+  category?: ReceiptCategory,
+  searchUserIds?: mongoose.Types.ObjectId[]
 ): PipelineStage[] {
   return [
     {
@@ -122,6 +161,7 @@ function paymentEventStages(
         eventType: "BenefitsGranted",
         timestamp: { $gte: startDate, $lte: endDate },
         ...paymentEventCategoryClause(category),
+        ...(searchUserIds ? { userId: { $in: searchUserIds } } : {}),
       },
     },
     {
@@ -158,12 +198,17 @@ function paymentEventStages(
  * A `cancelled` order is a voided sale rather than money received, so it is excluded; every
  * other status (pending → completed) reflects a captured payment.
  */
-function orderStages(startDate: Date, endDate: Date): UnionablePipelineStage[] {
+function orderStages(
+  startDate: Date,
+  endDate: Date,
+  searchUserIds?: mongoose.Types.ObjectId[]
+): UnionablePipelineStage[] {
   return [
     {
       $match: {
         createdAt: { $gte: startDate, $lte: endDate },
         status: { $ne: "cancelled" },
+        ...(searchUserIds ? { user: { $in: searchUserIds } } : {}),
       },
     },
     {
@@ -274,11 +319,15 @@ function statusClause(
  * the figure on the summary card cannot disagree with the rows beneath it.
  */
 export async function getReceipts(input: ReceiptsInput): Promise<ReceiptsData> {
-  const { startDate, endDate, category, status, packageName, page, limit } = input;
+  const { startDate, endDate, category, status, packageName, search, page, limit } = input;
   const skip = (page - 1) * limit;
 
   const refundIndex = await loadRefundIndex();
   const refundedIds = [...refundIndex.keys()];
+
+  const trimmedSearch = search?.trim();
+  const searchResult = trimmedSearch ? await resolveSearchUserIds(trimmedSearch) : null;
+  const searchUserIds = searchResult?.ids;
 
   // Status and package are applied INSIDE the facet branches rather than in the shared
   // prefix, so the `packages` branch can see the un-package-filtered set (see
@@ -319,18 +368,18 @@ export async function getReceipts(input: ReceiptsInput): Promise<ReceiptsData> {
   // and unions the shop in when no category is selected.
   const facets: ReceiptsFacet[] =
     category === "shop-order"
-      ? await Order.aggregate([...orderStages(startDate, endDate), ...tail])
+      ? await Order.aggregate([...orderStages(startDate, endDate, searchUserIds), ...tail])
           .allowDiskUse(true)
           .exec()
       : await PaymentEvent.aggregate([
-          ...paymentEventStages(startDate, endDate, category),
+          ...paymentEventStages(startDate, endDate, category, searchUserIds),
           ...(category
             ? []
             : [
                 {
                   $unionWith: {
                     coll: ORDERS_COLLECTION,
-                    pipeline: orderStages(startDate, endDate),
+                    pipeline: orderStages(startDate, endDate, searchUserIds),
                   },
                 },
               ]),
@@ -431,6 +480,7 @@ export async function getReceipts(input: ReceiptsInput): Promise<ReceiptsData> {
     packageOptions: (facet?.packages ?? [])
       .filter((p): p is { _id: string; count: number } => typeof p._id === "string" && p._id.length > 0)
       .map((p) => ({ packageName: p._id, count: p.count })),
+    searchTruncated: searchResult?.truncated ?? false,
     pagination: {
       currentPage: page,
       totalPages,

@@ -86,11 +86,19 @@ export async function GET(request: NextRequest) {
     // Free text by necessity — package names come from the catalogue, not a closed enum.
     // Bounded so a pathological query string can't reach the query planner.
     const packageName = searchParams.get("packageName")?.trim().slice(0, 200) || undefined;
+    const search = searchParams.get("search")?.trim().slice(0, 200) || undefined;
 
     const { startDate, endDate } = range.value;
 
     if (wantsCsv) {
-      const result = await getReceiptsExport({ startDate, endDate, category, status, packageName });
+      const result = await getReceiptsExport({
+        startDate,
+        endDate,
+        category,
+        status,
+        packageName,
+        search,
+      });
       const filename = `receipts-${startDate.toISOString().slice(0, 10)}-to-${endDate
         .toISOString()
         .slice(0, 10)}.csv`;
@@ -116,7 +124,16 @@ export async function GET(request: NextRequest) {
       )
     );
 
-    const data = await getReceipts({ startDate, endDate, category, status, packageName, page, limit });
+    const data = await getReceipts({
+      startDate,
+      endDate,
+      category,
+      status,
+      packageName,
+      search,
+      page,
+      limit,
+    });
 
     return NextResponse.json({ success: true, data });
   } catch (error) {

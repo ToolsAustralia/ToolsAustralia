@@ -116,6 +116,11 @@ export interface ReceiptsData {
    * collapse the dropdown to that single option and strand the user.
    */
   packageOptions: ReceiptPackageOption[];
+  /**
+   * True when the search term matched more customers than the query will expand to, so the
+   * rows are a subset. Surfaced in the UI — a truncated search must never read as "no more".
+   */
+  searchTruncated: boolean;
   pagination: {
     currentPage: number;
     totalPages: number;

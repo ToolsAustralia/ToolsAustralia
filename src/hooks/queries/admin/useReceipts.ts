@@ -20,6 +20,8 @@ export interface ReceiptsFilter {
   category?: ReceiptCategory;
   status?: ReceiptRefundStatus;
   packageName?: string;
+  /** Free text over customer name + email. Debounce before putting it in here — it is the cache key. */
+  search?: string;
   page: number;
   limit?: number;
 }
@@ -37,6 +39,7 @@ export function buildReceiptsQueryString(
   if (filter.category) params.set("category", filter.category);
   if (filter.status) params.set("status", filter.status);
   if (filter.packageName) params.set("packageName", filter.packageName);
+  if (filter.search) params.set("search", filter.search);
   params.set("page", String(filter.page));
   if (filter.limit) params.set("limit", String(filter.limit));
   for (const [key, value] of Object.entries(extra ?? {})) params.set(key, value);

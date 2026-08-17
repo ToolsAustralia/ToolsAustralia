@@ -160,6 +160,13 @@ New area: `receipts: ["view", "export"]`.
 - `receipts.view` gates the tab (`adminTabs.ts`) and the list route.
 - `receipts.export` additionally gates `?format=csv`.
 
+⚠️ **The Norm mirror returns `email`.** CLAUDE.md rule 10 holds Norm projections to
+"firstName + opaque userId only" and every other Norm read does. `GET /v1/receipts` is an
+explicit, owner-approved exception (2026-08-17) so a named customer's payment history is
+answerable in one call. `lastName` and the Stripe customer id are still withheld. The control
+point is `src/lib/internal-norm/schemas/receipts.ts` — the route maps fields explicitly, so
+removing `email` there tightens the boundary again.
+
 It does **not** reuse the `settings.view` that the other Billing-group tabs share, because
 this surface is the complete revenue picture joined to customer identity — the repo already
 carves those out (`users.viewDetail`, `miniDraws.viewParticipants`). `export` is split from
@@ -221,6 +228,16 @@ page over pre-filter rows and report the wrong count.
 | Category | `category` | The seven `ReceiptCategory` values. |
 | Status | `status` | `none` (Paid) · `refunded` · `partially-refunded`. |
 | Package | `packageName` | Exact match on the stored `packageName`. Free text by necessity — package names come from the catalogue, not a closed enum — so the route bounds it to 200 chars. |
+| Customer | `search` | Free text over first name, last name and email (debounced 300 ms client-side). |
+
+**Search resolves to userIds first.** The searchable fields live on `User` while the ledger
+lives on `PaymentEvent` / `Order`, so the term is resolved to ids and pushed into the *source*
+`$match` — where it uses the `{ userId: 1, timestamp: -1 }` index — rather than filtering after
+the union. The regex is escaped; the box is free text from a human.
+
+⚠️ **A broad term is capped at 1,000 customers** and sets `searchTruncated`, which the UI
+renders as a warning and the Norm endpoint returns as a field. A truncated search must never
+read as "no more results" — the totals are a subset too. A full email is exact.
 
 **Status is derived, not stored**, so it can't be a plain `$match` on a field. `statusClause()`
 expresses it as set membership over the refund index, which is already loaded before the
