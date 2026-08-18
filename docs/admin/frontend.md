@@ -1506,3 +1506,34 @@ Draw Results and Upcoming Draws no longer expose a Sort control. Results is alwa
 newest-draw-first and Upcoming soonest-first — the only orders those screens are read in — so
 the dropdown cost toolbar width without earning it. `sortBy` / `sortOrder` are still sent to
 the API, fixed as `DEFAULT_SORT_BY` / `DEFAULT_SORT_ORDER` in each container.
+
+## Product variants — size-run quick add (2026-08-17)
+
+`AdminProductModal` adds apparel variants a size **run** at a time: pick a colour, tick the
+sizes, and rows are generated with a consistent SKU (`STAP-TEE-BLK-L`, derived from the product
+name and colour). Re-running it for a second colour keeps everything already entered and skips
+SKUs that already exist.
+
+It replaced hand-typing one row per size. A tee in five sizes meant five near-identical rows and
+getting the SKU pattern right five times — slow, and the easiest place in the form to typo.
+
+### What each variant field actually controls
+
+| Field | Owned by | Consequence of getting it wrong |
+|---|---|---|
+| `sku` | **Us.** Identifies the line on an order and the receipt; the cart keys a product line on `(productId, sku)` | Two sizes collapse into one cart line, or a duplicate is rejected on save |
+| `size` / `colour` | **Us**, but constrained by what the print provider stocks | These are what the customer picks on the product page **and** what the shop's Size/Colour filter rail is built from — an empty colour means the product never appears under a colour filter |
+| `gtin` | **The print provider.** Their catalogue decides which blanks exist | **An incorrect GTIN prints the wrong garment.** Check it against their catalogue rather than guessing. Blank is safe — it is only needed to submit an order for printing |
+
+### Where merchandise actually comes from
+
+Worth stating because it is easy to assume the reverse: **products are authored here, not
+imported from the print provider.** Name, price, images, description, included entries and which
+size/colour combinations to sell all live in our catalogue. The provider's role is fulfilment —
+we send them an order referencing a **GTIN** plus artwork we host.
+
+So the provider's catalogue constrains *which colours are possible*; it does not supply the
+product page. Changing a colour offering is an admin edit here (add or deactivate a variant),
+not a sync. See [print-provider-fulfilment spec](../superpowers/specs/2026-08-17-print-provider-fulfilment-design.md)
+— note the API is currently **enterprise-gated and unreachable**, which does not block authoring
+or selling, only automated order submission.

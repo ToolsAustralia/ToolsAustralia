@@ -111,6 +111,40 @@ export default function AdminProductModal({
     }
   }, [isOpen, editingProduct]);
 
+  // Quick-add state. Apparel is a size RUN, not a list of unrelated items: adding a
+  // tee meant hand-typing five near-identical rows and getting the SKU pattern right
+  // five times, which is both slow and the easiest place to typo.
+  const [runColour, setRunColour] = useState("Black");
+  const [runSizes, setRunSizes] = useState<string[]>(["S", "M", "L"]);
+  const SIZE_RUN = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
+
+  /** `TEE-BLK-L` — derived from the product name and colour so SKUs stay consistent. */
+  const skuFor = (colour: string, size: string) => {
+    const stem = (name || "ITEM")
+      .replace(/[^a-zA-Z0-9 ]/g, "")
+      .trim()
+      .split(/s+/)
+      .map((w) => w.slice(0, 4).toUpperCase())
+      .slice(0, 2)
+      .join("-");
+    const col = colour.replace(/[^a-zA-Z]/g, "").slice(0, 3).toUpperCase();
+    return [stem, col, size.toUpperCase()].filter(Boolean).join("-");
+  };
+
+  const addSizeRun = () => {
+    if (runSizes.length === 0) return;
+    setVariants((prev) => {
+      // Keep any row the admin already filled in; a blank starter row is noise.
+      const kept = prev.filter((v) => v.sku.trim().length > 0);
+      const existing = new Set(kept.map((v) => v.sku.trim().toUpperCase()));
+      const added = runSizes
+        .map((size) => ({ ...emptyVariant(), sku: skuFor(runColour, size), size, colour: runColour }))
+        .filter((v) => !existing.has(v.sku.toUpperCase()));
+      const next = [...kept, ...added];
+      return next.length > 0 ? next : [emptyVariant()];
+    });
+  };
+
   const updateVariant = (index: number, patch: Partial<ProductVariantFormItem>) => {
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, ...patch } : v)));
   };
@@ -280,6 +314,71 @@ export default function AdminProductModal({
 
           <FormSection title="Variants">
             <div className="space-y-3">
+              {/* Quick add a size run. One colour at a time, because that is how a garment
+                  is actually stocked — pick the colour, tick the sizes, and the rows are
+                  generated with a consistent SKU. Re-running it for a second colour keeps
+                  everything already entered. */}
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 dark:border-neutral-600 dark:bg-neutral-800/50">
+                <p className="mb-2 text-xs font-semibold text-gray-700 dark:text-neutral-200">
+                  Quick add a size run
+                </p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="w-40">
+                    <Input
+                      label="Colour"
+                      value={runColour}
+                      onChange={(e) => setRunColour(e.target.value)}
+                      placeholder="Black"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pb-1">
+                    {SIZE_RUN.map((size) => {
+                      const on = runSizes.includes(size);
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() =>
+                            setRunSizes((prev) =>
+                              prev.includes(size) ? prev.filter((v) => v !== size) : [...prev, size]
+                            )
+                          }
+                          className={`h-8 min-w-[38px] rounded-lg border px-2 text-xs font-semibold transition-colors ${
+                            on
+                              ? "border-red-600 bg-red-600 text-white"
+                              : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addSizeRun}
+                    disabled={runSizes.length === 0 || !runColour.trim()}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-gray-900 px-3 text-xs font-semibold text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add {runSizes.length || 0} variant{runSizes.length === 1 ? "" : "s"}
+                  </button>
+                </div>
+              </div>
+
+              {variants.some((v) => v.sku.trim()) && (
+                <p className="text-xs text-gray-600 dark:text-neutral-300">
+                  <span className="font-semibold">
+                    {variants.filter((v) => v.sku.trim()).length} variant
+                    {variants.filter((v) => v.sku.trim()).length === 1 ? "" : "s"}
+                  </span>
+                  {" · "}
+                  {[...new Set(variants.filter((v) => v.colour?.trim()).map((v) => v.colour))].join(", ") ||
+                    "no colour set"}
+                  {" · "}
+                  {variants.filter((v) => v.gtin?.trim()).length} with a GTIN
+                </p>
+              )}
               {variants.map((variant, index) => (
                 <div
                   key={index}
@@ -336,8 +435,19 @@ export default function AdminProductModal({
                 Add variant
               </button>
               <p className="text-xs text-gray-500 dark:text-neutral-400">
-                GTIN is the print provider&apos;s blank identifier. Leave it blank until the
-                supplier gives us one — it is only needed to submit an order for printing.
+                <strong>SKU</strong> is ours — it identifies the line on an order and on the
+                customer&apos;s receipt, and it is what the cart uses to tell two sizes apart.
+                It must be unique within this product.
+                <br />
+                <strong>Size</strong> and <strong>Colour</strong> are what the customer picks on
+                the product page, and they are what the shop filter rail is built from.
+                <br />
+                <strong>GTIN</strong> is the print provider&apos;s identifier for the blank
+                garment — their catalogue decides which colours and sizes exist, and this is the
+                code that tells them exactly which one to print. Leave it blank until the
+                supplier gives us one; it is only needed to submit an order for printing. An
+                incorrect GTIN prints the wrong garment, so check it against their catalogue
+                rather than guessing.
               </p>
             </div>
           </FormSection>
