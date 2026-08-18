@@ -506,3 +506,29 @@ The other direction still holds: a bottom-anchored **non-modal** bar (the mini-d
 "Enter draw" bar) must NOT climb above the launcher — it carries `data-floating-widget` and
 [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
 lifts Cobber clear of it instead. Modal → out-rank it; persistent chrome → dodge it.
+
+## Blocked-card advice: never lead with "just wait"
+
+Cobber's system prompt is **byte-stable** (for prompt caching) and injects **no date** — it has no way
+to know how close the next Major Draw is, and rule 105 forbids inventing draw dates. So when a
+member's card is temporarily blocked after repeated failed attempts, Cobber **cannot** work out
+whether waiting the ~3 days is safe.
+
+The HARD RULE added 2026-08-18 makes the copy structurally safe instead of computed:
+
+- **Lead with the action that works now** — add a different card on `/my-account/membership`.
+- **Waiting is the slower alternative**, only sensible if the draw is still a way off. Let the
+  member judge the timing; never assert how many days remain.
+- **Be accurate about what's at stake.** Verified against [BUSINESS.md §175](../../BUSINESS.md):
+  free entries a member has **already earned stay in the draw while past-due and are never
+  removed** — a `past_due` member's entries are still in the weighted winner pool. Only the **next**
+  grant pauses. Never imply they lose entries they already hold; that would be false.
+
+FAQ entries **84** and **85** carry the same framing, and the pre-existing renewal-failure entry was
+corrected — it previously said "the fastest fix is the in-app retry on your existing card", which is
+exactly wrong for a blocked card (retrying is what caused the block). Corpus count assertion bumped
+85 → 87.
+
+Backend counterpart: `EXCESSIVE_RETRY_COOLDOWN_DAYS` in
+[chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts). If that window changes,
+FAQ 84/85 and the member Pay-Now copy must change with it.

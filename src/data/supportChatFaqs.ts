@@ -123,7 +123,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "13",
       question: "What happens if my renewal payment fails?",
       answer:
-        "If a renewal payment fails, your membership moves to a past-due state. You will receive an email prompt and can retry the payment directly from your account dashboard. We will attempt to recover the payment — if it succeeds, your benefits and entries are reinstated immediately. You can also update your card details from your account settings at any time. The fastest fix is the in-app retry on your existing card from your dashboard — most failures are temporary.",
+        "If a renewal payment fails, your membership moves to a past-due state. You will receive an email prompt and can retry the payment directly from your account dashboard. We will attempt to recover the payment — if it succeeds, your benefits and entries are reinstated immediately. Most failures are temporary, so retrying your existing card from your dashboard is usually the quickest fix. If it keeps failing, or you're told the card is temporarily blocked, stop retrying and add a different card on your [Membership](/my-account/membership) page instead — repeated attempts on a card that's already failing make it stop going through for a few days.",
       category: "PAYMENTS",
     },
 
@@ -680,6 +680,21 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       answer:
         "Only to understand who our members are as a group, so we can make our advertising more relevant and stop showing ads to people they don't suit. It's never used to decide anything about you personally — not your free entries, not your eligibility, not your pricing. It's optional, you can leave it blank or clear it at any time from [My Account → Settings](/my-account/settings), and how we handle your personal information is set out in our [Privacy Policy](/privacy).",
       category: "ALL QUESTIONS",
+    },
+    {
+      id: "84",
+      question:
+        "My card was declined a few times and now it won't go through at all — what's happening?",
+      answer:
+        "After several failed attempts in a short space of time, our payment provider (Stripe) stops trying that card for a few days. It's an automatic protection against repeated declines — it isn't a block we've put on your account, and it clears by itself after about three days. The quicker fix is to add a different card on your [Membership](/my-account/membership) page under Payment, which applies straight away. Either way you don't lose anything you've already earned: free entries already credited to you stay in the Major Draw even while your membership is past-due. What's waiting on the payment is the **next** batch of free entries that comes with your renewal.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "85",
+      question: "Should I just wait for my card to start working again?",
+      answer:
+        "That depends on timing. Waiting is fine if there's still a while before the next Major Draw on the 27th — the block clears on its own in about three days and costs you nothing. But if the draw is close, adding a different card on your [Membership](/my-account/membership) page is the better move, because it applies immediately. To be clear about what's actually at stake: free entries you've already earned stay in that draw regardless — being past-due never removes them — but the free entries included with your renewal are only credited once the payment goes through. So the sooner the renewal succeeds, the sooner those land.",
+      category: "PAYMENTS",
     },
   ];
 }

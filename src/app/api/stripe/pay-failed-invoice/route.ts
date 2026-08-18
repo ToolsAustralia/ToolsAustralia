@@ -536,7 +536,7 @@ export async function POST(_request: NextRequest) {
                       success: false,
                       error: "Payment blocked",
                       details:
-                        "This card can't be charged right now because it was declined too many times. Add or use a different card, or try again later.",
+                        "This card is temporarily blocked after too many attempts. Use a different card, or try again in 3 days.",
                       requiresDifferentPaymentMethod: true,
                       ...(excessiveRetry.failureReason && { failureReason: excessiveRetry.failureReason }),
                     },

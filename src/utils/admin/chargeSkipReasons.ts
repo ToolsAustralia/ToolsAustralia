@@ -17,6 +17,7 @@
  */
 
 export type SkipBucketKey =
+  | "excessiveRetryCooldown"
   | "noHeldDraft"
   | "awaitingRetry"
   | "recentlyAttempted"
@@ -27,6 +28,7 @@ export type SkipBucketKey =
 
 /** Human labels for each bucket (admin UI). */
 export const SKIP_BUCKET_LABELS: Record<SkipBucketKey, string> = {
+  excessiveRetryCooldown: "Retry in 3 days",
   noHeldDraft: "No held draft (stranded)",
   awaitingRetry: "Awaiting Stripe retry",
   recentlyAttempted: "Recently attempted (6h)",
@@ -38,6 +40,7 @@ export const SKIP_BUCKET_LABELS: Record<SkipBucketKey, string> = {
 
 /** Display order — most-common / most-actionable first. */
 export const SKIP_BUCKET_ORDER: SkipBucketKey[] = [
+  "excessiveRetryCooldown",
   "noHeldDraft",
   "awaitingRetry",
   "recentlyAttempted",
@@ -49,6 +52,7 @@ export const SKIP_BUCKET_ORDER: SkipBucketKey[] = [
 
 /** Canonical `skipReason` discriminant strings that map to a named bucket. */
 export const KNOWN_SKIP_REASONS = new Set<string>([
+  "excessive_retry_cooldown",
   "no_held_draft",
   "awaiting_retry",
   "recently_attempted",
@@ -60,6 +64,8 @@ export const KNOWN_SKIP_REASONS = new Set<string>([
 /** Map a canonical `skipReason` string → bucket key. Unknown / undefined → "other". */
 export function skipReasonToBucket(reason: string | undefined | null): SkipBucketKey {
   switch (reason) {
+    case "excessive_retry_cooldown":
+      return "excessiveRetryCooldown";
     case "no_held_draft":
       return "noHeldDraft";
     case "awaiting_retry":
@@ -86,6 +92,11 @@ export function skipReasonToBucket(reason: string | undefined | null): SkipBucke
 export function classifySkipReasonFromMessage(errorMessage?: string | null): string | undefined {
   if (!errorMessage) return undefined;
   const m = errorMessage.toLowerCase();
+  // Most specific first: this phrase also contains "retry", which the
+  // awaiting_retry branch below would otherwise claim.
+  if (m.includes("excessive_retry_cooldown") || m.includes("retry in 3 days")) {
+    return "excessive_retry_cooldown";
+  }
   if (m.includes("no held draft") || m.includes("no_held_draft")) return "no_held_draft";
   if (
     m.includes("retry scheduled") ||

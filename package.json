@@ -453,7 +453,8 @@
     "migrate:promo-analytics-cleanup": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --apply",
     "migrate:promo-analytics-cleanup:prod:dry": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production",
     "migrate:promo-analytics-cleanup:prod": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production --apply",
-    "harvest:partner-instore-artwork": "tsx scripts/harvest-partner-instore-artwork.ts"
+    "harvest:partner-instore-artwork": "tsx scripts/harvest-partner-instore-artwork.ts",
+    "test:excessive-retry-cooldown": "tsx src/server/admin/__tests__/excessiveRetryCooldown.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",
