@@ -27,6 +27,7 @@ import KlaviyoAnalyticsManagement from "@/components/admin/KlaviyoAnalyticsManag
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import ProductManagement from "@/components/admin/ProductManagement";
+import FulfilmentQueue from "@/components/admin/FulfilmentQueue";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
 import PastDueChargeHistory from "./PastDueChargeHistory";
 import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
@@ -224,7 +225,14 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           {selectedTab === "ab-testing" && <ABTestingManagement />}
 
           {/* ERROR REPORTS TAB */}
-          {selectedTab === "products" && <ProductManagement />}
+          {selectedTab === "products" && (
+            <>
+              <ProductManagement />
+              {/* Fulfilment sits under the catalogue: the print provider's API is
+                  unreachable on our account, so paid orders are handed over by CSV. */}
+              <FulfilmentQueue />
+            </>
+          )}
           {selectedTab === "error-reports" && <ErrorReportsManagement />}
 
           {/* BLOCKED TRANSACTIONS TAB */}

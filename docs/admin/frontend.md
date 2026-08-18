@@ -1537,3 +1537,35 @@ product page. Changing a colour offering is an admin edit here (add or deactivat
 not a sync. See [print-provider-fulfilment spec](../superpowers/specs/2026-08-17-print-provider-fulfilment-design.md)
 — note the API is currently **enterprise-gated and unreachable**, which does not block authoring
 or selling, only automated order submission.
+
+## Send to printer — the fulfilment queue (2026-08-17)
+
+`FulfilmentQueue` sits under the catalogue on the **Products** tab. It is the manual hand-off to
+the print provider, used because their GraphQL API is enterprise-gated and unreachable on this
+account (our key authenticates; every path 404s).
+
+The loop: **Download CSV → upload it on their site → Mark as sent.**
+
+### Download and Mark are two buttons, deliberately
+
+Marking on download would hide a paid order from the next export whenever a download failed or
+was cancelled — a garment that silently never gets printed. Making the admin confirm the upload
+actually happened trades that for a possible double upload, which is visible and recoverable.
+
+`Mark as sent` stamps `submittedAt`, which is what the export filter excludes on, so it is the
+guard against printing the same garment twice. It asks for confirmation because a reprint costs a
+real garment and real freight, and it is gated on `shop.edit` (the download only needs
+`shop.view`) and audited server-side.
+
+### Missing GTINs are surfaced before the download
+
+A variant with no `gtin` exports with an empty `product_id`, which the provider cannot match. The
+panel counts those lines and names the first eight, so the gap is fixed in Products *before* the
+upload rather than discovered as a rejected file on their site. The order is still exported —
+withholding a paid order silently is the worse failure.
+
+### What it does not do
+
+Tracking does not come back automatically. "Ship through the app" means labels are created on
+their side; nothing tells this database an order shipped, so status stays `processing` until
+someone updates it. That is the next gap to close if this workflow stays.
