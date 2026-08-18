@@ -52,6 +52,31 @@ per entry (rule 11).
 | Draw eligibility | Entries are granted to **every** buyer. SA/ACT exclusion is applied by the draw export at winner selection, not at point of sale |
 | Partial refund | Entries already credited **stay**; they are withdrawn only if the whole order is refunded (stated in `/terms` §3d, §5.2 and §17) |
 
+#### How a merch order actually ships
+
+Three separate money flows, easy to conflate:
+
+| Flow | Who pays whom | Status |
+| --- | --- | --- |
+| **Customer → us** | Full order total **at checkout**, via Stripe — goods + GST + shipping ($10, or free at $100+). | Live. **There is no COD anywhere**; the order is not created as paid until Stripe confirms. |
+| **Us → print provider** | They print, buy the shipping label and send the parcel **direct to the customer**, then bill us for print + freight. | Model confirmed by their upload form; **their rate card and billing terms are still unanswered** (open dependency). |
+| **Provider ↔ customer** | **Nothing.** The customer never transacts with them and is never asked for freight. | By design. |
+
+This is **dropshipping**: the customer buys from Tools Australia and receives a parcel the printer
+sent. Their bulk-upload form offers three shipping modes — *Ship through the app* (they create the
+label), *Outside labels* (we supply carrier + tracking), and *3rd party shipping account* (billed to
+our own carrier account). The template in use is the **app-shipping** one, which carries no shipping
+columns at all — consistent with them buying the label.
+
+**We set the customer-facing fee; they set what they charge us. Nothing reconciles the two.** The
+$10 / free-over-$100 was set before any real freight invoice existed, so it is a pricing decision to
+revisit once invoices arrive, not a pass-through. Two consequences worth naming:
+
+- **Tracking does not come back automatically.** Labels are created on their side and nothing tells
+  our database an order shipped, so order status stays `processing` until a human updates it.
+- **The parcel is branded by the sender, not by us.** Packing-slip and return-address presentation
+  is theirs unless configured otherwise — worth confirming before launch.
+
 **Entries on merchandise are switched OFF at launch.** Every product ships at
 `includedEntries: 0` pending a **trade-promotion permit variation** for a fourth entry method.
 The code path is live; the promise is not made, and nothing renders on a product page at 0.
