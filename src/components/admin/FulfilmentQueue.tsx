@@ -37,6 +37,7 @@ interface QueueState {
   lineCount: number;
   orderIds: string[];
   missingProductId: MissingProductId[];
+  missingArtwork: MissingProductId[];
   rows: FulfilmentRow[];
 }
 
@@ -165,30 +166,47 @@ export default function FulfilmentQueue() {
 
             {/* A missing GTIN is the one thing that will get the file rejected, so it is
                 called out before the download rather than discovered on their site. */}
-            {queue && queue.missingProductId.length > 0 && (
-              <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/40">
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-300">
-                  <AlertTriangle className="h-4 w-4" />
-                  {queue.missingProductId.length} line
-                  {queue.missingProductId.length === 1 ? " has" : "s have"} no GTIN
-                </p>
-                <p className="mt-1 text-xs text-amber-800 dark:text-amber-200/90">
-                  These export with an empty <code>product_id</code>. Add the GTIN to the variant
-                  in Products, or fill the column in before uploading — the printer cannot match a
-                  blank.
-                </p>
-                <ul className="mt-2 space-y-0.5 text-xs text-amber-900 dark:text-amber-200">
-                  {queue.missingProductId.slice(0, 8).map((m, i) => (
-                    <li key={`${m.orderNumber}-${m.sku}-${i}`}>
-                      {m.orderNumber} · {m.productName} · {m.sku || "no sku"}
-                    </li>
-                  ))}
-                  {queue.missingProductId.length > 8 && (
-                    <li>…and {queue.missingProductId.length - 8} more</li>
-                  )}
-                </ul>
-              </div>
-            )}
+            {queue &&
+              (
+                [
+                  {
+                    key: "gtin",
+                    items: queue.missingProductId,
+                    title: (n: number) => `${n} line${n === 1 ? " has" : "s have"} no GTIN`,
+                    detail:
+                      "These export with an empty product_id. Add the GTIN to the variant in Products, or fill the column in before uploading — the printer cannot match a blank.",
+                  },
+                  {
+                    key: "artwork",
+                    items: queue.missingArtwork,
+                    title: (n: number) =>
+                      `${n} line${n === 1 ? " has" : "s have"} no print artwork`,
+                    detail:
+                      "These export with empty image columns. Add printing artwork (not a mockup) to the product — the printer has nothing to print without it.",
+                  },
+                ] as const
+              )
+                .filter((group) => group.items.length > 0)
+                .map((group) => (
+                  <div
+                    key={group.key}
+                    className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/40"
+                  >
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-300">
+                      <AlertTriangle className="h-4 w-4" />
+                      {group.title(group.items.length)}
+                    </p>
+                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-200/90">{group.detail}</p>
+                    <ul className="mt-2 space-y-0.5 text-xs text-amber-900 dark:text-amber-200">
+                      {group.items.slice(0, 8).map((m, i) => (
+                        <li key={`${m.orderNumber}-${m.sku}-${i}`}>
+                          {m.orderNumber} · {m.productName} · {m.sku || "no sku"}
+                        </li>
+                      ))}
+                      {group.items.length > 8 && <li>…and {group.items.length - 8} more</li>}
+                    </ul>
+                  </div>
+                ))}
 
             <div className="mb-5 overflow-x-auto">
               <table className="w-full min-w-[520px] text-left text-sm">

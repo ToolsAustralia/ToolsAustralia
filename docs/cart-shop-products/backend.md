@@ -210,3 +210,61 @@ an unquoted comma in an address shifts every later column by one, so postcode la
 the parcel is misrouted. Also quote-doubling, embedded newlines, an empty GTIN never serialising
 as the string `undefined`, and the header surviving an empty export (their mapper needs the header
 row to offer field mapping at all).
+
+## Shipping fees — how they are applied (2026-08-17)
+
+All money is **integer cents** through the whole path; dollars appear only at the
+API/display boundary. `priceCart` ([src/utils/shop/pricing.ts](../../src/utils/shop/pricing.ts))
+is the single place shipping is decided.
+
+### The rule
+
+| Step | What happens |
+| --- | --- |
+| 1. Subtotal | `Σ (line price × quantity)`, prices read from the database, never from the request |
+| 2. Member discount | `round(subtotal × tier%)` — Tradie 5, Foreman 10, Boss 20 |
+| 3. Discounted value | `subtotal − discount` |
+| 4. **Shipping** | **`discounted >= $100 ? $0 : $10`** |
+| 5. Total | `discounted + shipping` |
+| 6. GST | `round(total / 11)` — **already inside** the total, never added |
+
+Both figures live in `SHOP_CONFIG` (`freeShippingThresholdCents: 100_00`,
+`flatShippingRateCents: 10_00`). Customer-facing copy imports
+`FREE_SHIPPING_THRESHOLD_LABEL` / `FLAT_SHIPPING_RATE_LABEL` rather than restating them.
+
+### Three things that are easy to get wrong
+
+**The threshold is tested against the DISCOUNTED value, not the subtotal.** A Boss member
+(20%) with a $110 cart pays $88 — which is *under* $100, so they are charged $10 shipping. This
+is deliberate: testing the pre-discount subtotal would ship a $90 order free against a $100
+threshold and lose the fee on every discounted cart. It does mean a member discount can
+*introduce* a shipping charge, and the checkout quote is what the customer is actually charged,
+so the two never disagree.
+
+**GST is a component, never an addition.** Australian retail prices are quoted GST-inclusive, so
+GST is *reported* as the portion already inside the total — `total / 11`. Shipping is inside it
+too: under ATO ruling GSTD 2002/3, a delivery charge supplied with taxable goods is itself a
+taxable supply, which is why GST is computed on `total` (goods + shipping) rather than on goods
+alone.
+
+**An empty cart costs nothing.** `0 >= 10000` is false, so without an explicit zero-item guard
+the threshold comparison charges $10 shipping on a cart with nothing in it. That guard exists and
+is covered by `npm run test:shop-pricing`.
+
+### What the customer pays is not what fulfilment costs
+
+The $10 / free-over-$100 is a **customer-facing price**, not a pass-through of the printer's
+freight. The provider's CSV upload offers *"Ship through the app — create shipping labels in
+Riverr after upload"*, so they buy the label and bill us; nothing reconciles that cost against
+what the customer was charged. On a single tee ($45.95, $10 collected) the two are close; on a
+multi-item order shipped free over the threshold they are not.
+
+**No margin alert exists for this**, deliberately — it is a pricing decision, not a bug. But it
+is worth reviewing once real freight invoices arrive, because the threshold and the flat rate
+were set before any of them existed.
+
+### Order records the composition, not just a total
+
+`Order.subtotal`, `.gstAmount`, `.shippingCost`, `.totalAmount` are all persisted. An Australian
+tax invoice has to show the GST component, and a support conversation about "why was I charged
+$10" needs the breakdown rather than a single figure to re-derive.

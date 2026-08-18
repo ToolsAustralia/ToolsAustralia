@@ -12,6 +12,7 @@ import { toCsv, type FulfilmentRow } from "@/services/shop/fulfilmentExport";
 function row(over: Partial<FulfilmentRow> = {}): FulfilmentRow {
   return {
     orderNumber: "SHOP-20260818-ABC123",
+    orderDate: "2026-08-18",
     productId: "9312345678907",
     sku: "TEE-BLK-L",
     productName: "Staple Tee",
@@ -29,6 +30,13 @@ function row(over: Partial<FulfilmentRow> = {}): FulfilmentRow {
     postalCode: "3043",
     country: "Australia",
     deliveryInstructions: "",
+    decorationType: "DTG",
+    frontImage: "",
+    frontPlacement: "",
+    backImage: "https://cdn.example.com/back.png",
+    backPlacement: "Back",
+    leftChestImage: "https://cdn.example.com/chest.png",
+    leftChestPlacement: "Left Chest",
     ...over,
   };
 }
@@ -49,7 +57,9 @@ const lines = (csv: string) => csv.trimEnd().split("\r\n");
 check("header row is emitted once, with a stable column order", () => {
   const csv = toCsv([row()]);
   const head = lines(csv)[0];
-  assert.ok(head.startsWith('"order_number","product_id"'), `unexpected header: ${head}`);
+  // Order and naming mirror the provider's template so their Field Mapping step is
+  // a formality — order_id not order_number, zip not postcode.
+  assert.ok(head.startsWith('"order_id","order_date"'), `unexpected header: ${head}`);
   assert.equal(lines(csv).length, 2, "one header + one data row");
 });
 
@@ -90,7 +100,7 @@ check("a newline inside a field stays inside its quoted cell", () => {
 check("a missing GTIN exports as an empty cell, not the string undefined", () => {
   // Exporting "undefined" would be accepted by their mapper as a real product id.
   const csv = toCsv([row({ productId: "" })]);
-  assert.ok(lines(csv)[1].includes('"SHOP-20260818-ABC123","",'));
+  assert.ok(lines(csv)[1].includes('"",'), "empty product_id must serialise as an empty cell");
   assert.ok(!csv.includes("undefined"));
 });
 
@@ -102,6 +112,33 @@ check("quantity is written as a number, not a padded or localised string", () =>
 check("one row per item — three items are three records", () => {
   const csv = toCsv([row(), row({ sku: "TEE-BLK-M", size: "M" }), row({ sku: "JKT-BLK-L" })]);
   assert.equal(lines(csv).length, 4, "header + 3");
+});
+
+check("every column their template requires is present", () => {
+  // Verified against order-csv-template-app-shipping.csv, supplied by the provider.
+  const required = [
+    "order_id", "order_date", "first_name", "last_name", "address_1", "address_2",
+    "city", "state", "zip", "sku", "product_id", "quantity", "decoration_type",
+    "left_chest_image", "left_chest_placement", "back_image", "back_placement",
+  ];
+  const head = lines(toCsv([row()]))[0];
+  for (const col of required) {
+    assert.ok(head.includes('"' + col + '"'), `their template requires ${col}, and it is missing`);
+  }
+});
+
+check("artwork url and its placement label travel together", () => {
+  const csv = toCsv([row()]);
+  const data = lines(csv)[1];
+  assert.ok(data.includes('"https://cdn.example.com/chest.png","Left Chest"'));
+  assert.ok(data.includes('"https://cdn.example.com/back.png","Back"'));
+});
+
+check("a product with no artwork exports empty cells, never undefined", () => {
+  const csv = toCsv([
+    row({ frontImage: "", frontPlacement: "", backImage: "", backPlacement: "", leftChestImage: "", leftChestPlacement: "" }),
+  ]);
+  assert.ok(!csv.includes("undefined"), "an undefined artwork url would be uploaded as a literal string");
 });
 
 if (failures > 0) {
