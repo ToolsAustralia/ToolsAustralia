@@ -10,6 +10,7 @@ import type Stripe from "stripe";
 import { isOriginalInvoiceEligibleForRecovery } from "./recoverStrandedPastDuePolicy";
 import type { RecoverStrandedResult } from "./recoverStrandedPastDue";
 import { RECOVERY_DECLINE_CODES } from "@/utils/admin/chargeDeclineReasons";
+import { isStripeExcessiveRetryReason } from "@/utils/payment/stripe/stripe-excessive-retry";
 
 export type ChargeActionDecision =
   | { kind: "recover" }
@@ -155,4 +156,73 @@ export function summarizeBulkRecoveryOutcome(
     amount: fallbackAmountCents,
     errorMessage: `Skipped: recovery ${result.reason} — ${result.message}`,
   };
+}
+
+/**
+ * Days a card sits out after Stripe blocks it via Adaptive Acceptance.
+ *
+ * Stripe support's own guidance is "wait 2-3 days between retry attempts for
+ * the same transaction"; we take the top of that range. Deliberately NOT the
+ * general per-invoice window — ordinary declines keep the existing cadence.
+ */
+export const EXCESSIVE_RETRY_COOLDOWN_DAYS = 3;
+
+/** The single blocked-card fact the cooldown decision needs. */
+export type LatestBlockForCooldown = {
+  cardFingerprint: string;
+  outcomeReason?: string | null;
+  /** When WE observed the block. Never `createdAt` — that is the PaymentIntent's
+   *  creation time and can precede the block by days. */
+  capturedAt: Date;
+};
+
+export type CooldownDecision =
+  | { cooldown: false }
+  | { cooldown: true; retryAfter: Date; daysRemaining: number };
+
+/**
+ * Should this invoice sit out because the card it will charge is inside an
+ * Stripe excessive-retry block window?
+ *
+ * Scoped to the CARD, not the customer — three cases this gets right that a
+ * customer-scoped check would not:
+ *   1. Member added a new card after being blocked → fingerprints differ →
+ *      charge immediately. A customer-scoped check would wrongly freeze them.
+ *   2. Block was a Radar reason (`rule`, `highest_risk_level`) → allowlisting
+ *      DOES fix those, so no cooldown.
+ *   3. Block has aged past the window → retry normally.
+ *
+ * Pure: caller supplies the latest block row and the fingerprint the invoice
+ * will actually charge.
+ */
+export function shouldCooldownForExcessiveRetry(params: {
+  latestBlock: LatestBlockForCooldown | null | undefined;
+  /** Fingerprint of the payment method this invoice will charge. */
+  currentFingerprint: string | null | undefined;
+  now: Date;
+  cooldownDays?: number;
+}): CooldownDecision {
+  const { latestBlock, currentFingerprint, now } = params;
+  const cooldownDays = params.cooldownDays ?? EXCESSIVE_RETRY_COOLDOWN_DAYS;
+
+  if (!latestBlock || !currentFingerprint) return { cooldown: false };
+
+  // Different card than the one Stripe blocked → nothing to sit out.
+  if (latestBlock.cardFingerprint !== currentFingerprint) return { cooldown: false };
+
+  // Radar-type blocks are fixable by the allow list; only Adaptive Acceptance
+  // blocks are immune to it and therefore worth backing off from.
+  if (!isStripeExcessiveRetryReason(latestBlock.outcomeReason)) {
+    return { cooldown: false };
+  }
+
+  const windowMs = cooldownDays * 24 * 60 * 60 * 1000;
+  const retryAfter = new Date(latestBlock.capturedAt.getTime() + windowMs);
+  if (now.getTime() >= retryAfter.getTime()) return { cooldown: false };
+
+  const daysRemaining = Math.max(
+    1,
+    Math.ceil((retryAfter.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+  );
+  return { cooldown: true, retryAfter, daysRemaining };
 }

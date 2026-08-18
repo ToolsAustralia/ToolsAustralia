@@ -433,3 +433,41 @@ The package flag `isMemberOnly` was renamed to **`isAdditional`** across the cod
 ## Stripe.js loads via `@stripe/stripe-js/pure` only (2026-07-19)
 
 `src/lib/stripe-client.ts` imports `loadStripe` from the `/pure` entry — the DEFAULT `@stripe/stripe-js` entry injects https://js.stripe.com on mere import, which shipped Stripe to 100 % of guests when the modal chunk evaluated. Import `loadStripe` nowhere else (lint: `internal-norm/no-eager-stripe`); call `getStripePromise()` lazily inside components/handlers. Note: with `/pure`, Stripe's fraud-signal collection starts at first `getStripePromise()` call (payment-surface mount) instead of page load — intended.
+
+## Adaptive Acceptance blocks are NOT overridable by the Radar allow list
+
+**Confirmed by Stripe support, 2026-08-17.** `outcome.type === "blocked"` covers several
+mechanisms and the `card_fingerprint_allowlist` value list only overrides *some* of them:
+
+| `outcome.reason` | Mechanism | Allow list fixes it? |
+|---|---|---|
+| `rule`, `highest_risk_level`, `blocklist` | Radar | ✅ yes |
+| `previously_declined_do_not_retry` | **Stripe Adaptive Acceptance** | ❌ **no** |
+
+Stripe's wording: the allow list "only affects Radar rules", Adaptive Acceptance "operates
+independently of Radar rules… regardless of Radar allow lists or custom rules", and there is
+**no account-level setting** to disable it (it is automatic on IC+ pricing).
+
+**Measured on production 2026-08-17:** of 72 blocked charges in one day, **69** were
+`previously_declined_do_not_retry`, and **70 of the 72 were on cards already present on the live
+Radar list**, added 2–3 months earlier. Across the full `blockedtransactions` record,
+**835 of 1,024 (82%)** carry this reason — i.e. most of the blocked population was never
+allowlist-fixable.
+
+**It is self-inflicted.** Stripe blocks "based on prior network decline or advice codes" and
+explicitly to help merchants "avoid excessive retry penalties". A second support reply named the
+cause directly: *"too many payment attempts were made in a short time window"*, with two
+recommendations — **wait 2–3 days between retries of the same transaction**, and **spread batch
+processing over a longer window rather than submitting all at once**. A daily bulk run that fires
+its whole worklist in one burst (792 charges in 210s, measured) manufactures the blocks it then
+fails against.
+
+**It decays.** 118 of 701 blocked cards (17%) produced a successful charge after their first
+block, some 3+ months later — so the cohort must be slowed down, **not dropped**.
+
+Implementation: `isStripeExcessiveRetryReason` / `STRIPE_EXCESSIVE_RETRY_OUTCOME_REASON` in
+[stripe-excessive-retry.ts](../../src/utils/payment/stripe/stripe-excessive-retry.ts) is the single
+source of truth for the reason string (do **not** coin a parallel "adaptive acceptance" vocabulary);
+the cooldown policy is `shouldCooldownForExcessiveRetry` in
+[chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts). See
+[docs/admin/backend.md](../admin/backend.md#excessive-retry-cooldown).

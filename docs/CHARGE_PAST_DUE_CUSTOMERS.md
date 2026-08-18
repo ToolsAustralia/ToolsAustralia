@@ -385,3 +385,19 @@ A successful charge via this tool emits `invoice.payment_succeeded`, which trigg
 - [Past-Due Reanchor](./PAST_DUE_REANCHOR.md) - Future-renewal reanchor on recovery
 - Stripe Invoice API: https://stripe.com/docs/api/invoices
 - Stripe Idempotency: https://stripe.com/docs/api/idempotent_requests
+
+## Excessive-retry cooldown (2026-08-18)
+
+Cards blocked by Stripe with `previously_declined_do_not_retry` are skipped for
+**3 days** instead of being re-attempted every run. Stripe support confirmed the Radar allow list
+cannot override this block, no account setting disables it, and the trigger is retry velocity —
+so a daily re-attempt collects nothing and feeds the block. It decays on its own (17% of blocked
+cards later succeeded), so the cohort is **slowed, not dropped**.
+
+The check is scoped to the **card fingerprint**, so a member who adds a new card is charged
+immediately, and Radar-type blocks (which allowlisting does fix) are unaffected. It costs no extra
+Stripe call and fails open. Skips land in the `excessiveRetryCooldown` bucket, shown as
+**"Retry in 3 days"**.
+
+Full detail: [docs/admin/backend.md](./admin/backend.md#excessive-retry-cooldown) and
+[docs/billing-stripe/gotchas.md](./billing-stripe/gotchas.md#adaptive-acceptance-blocks-are-not-overridable-by-the-radar-allow-list).

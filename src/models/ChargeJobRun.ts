@@ -12,6 +12,8 @@ export interface ChargeJobRunSkippedBreakdown {
   noHeldDraft: number;
   /** No payable attempt right now, but Stripe still has a scheduled retry (auto-retries). */
   awaitingRetry: number;
+  /** Card is inside the Stripe excessive-retry block window — sat out, retried later. */
+  excessiveRetryCooldown: number;
   other: number;
 }
 
@@ -43,6 +45,7 @@ const SkippedBreakdownSchema = new Schema<ChargeJobRunSkippedBreakdown>(
     missingPaymentMethod: { type: Number, required: true, default: 0 },
     noHeldDraft: { type: Number, required: true, default: 0 },
     awaitingRetry: { type: Number, required: true, default: 0 },
+    excessiveRetryCooldown: { type: Number, default: 0 },
     other: { type: Number, required: true, default: 0 },
   },
   { _id: false }

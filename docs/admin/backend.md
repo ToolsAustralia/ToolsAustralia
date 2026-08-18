@@ -493,3 +493,40 @@ So `/ad/get/` is a **mandatory bridge**, not a fallback — it is the only endpo
 **Unusable URLs are rejected, not stored** (`isUsableLandingUrl`): a macro in the PATH (`/promotions/__X__`) would canonicalize into a phantom landing page carrying real spend and matching no prize slug; a non-http scheme likewise. Macros in the QUERY are harmless — canonicalization drops the query entirely, which is why TikTok's `__CAMPAIGN_ID__`/`__AID_NAME__` utm params need no special handling.
 
 **Run it:** `npm run sync:tiktok-destinations:dry` (reports coverage, distinct landing paths, the packages-focus tally and the multi-URL count without writing), then `npm run sync:tiktok-destinations`. The run **fails below 50% coverage** — a silent drop to zero is exactly what a changed id bridge looks like, and it would otherwise present as "no TikTok URL data" rather than as an error. First live run: **31/31 ads, 100%, 3 distinct landing paths, 0 multi-URL ads.**
+
+## Excessive-retry cooldown
+
+`chargeWorklistItem` sits a card out for **3 days** (`EXCESSIVE_RETRY_COOLDOWN_DAYS`) after Stripe
+blocks it with `previously_declined_do_not_retry`. Stripe support's guidance is 2–3 days between
+retries of the same transaction; the allow list cannot override this block and no setting disables
+it (see [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#adaptive-acceptance-blocks-are-not-overridable-by-the-radar-allow-list)).
+
+**Scoped to the CARD, never the customer.** `shouldCooldownForExcessiveRetry`
+([chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts)) is pure and compares
+the blocked fingerprint against the fingerprint the invoice will actually charge. Three cases it
+deliberately does **not** cool down — each one keeps collecting money that a customer-scoped check
+would have frozen:
+
+1. **Member added a new card** → different fingerprint → charged immediately.
+2. **Radar-type block** (`rule` / `highest_risk_level` / `blocklist`) → allowlisting genuinely fixes
+   those, so no back-off.
+3. **Block aged past the window** (boundary is inclusive → retryable).
+
+**Cost: zero extra Stripe calls.** The invoice retrieve now expands `default_payment_method` and
+`customer.invoice_settings.default_payment_method`, so `resolveChargedCardFingerprint` reads the
+fingerprint from objects already in hand. The block lookup is
+`findLatestBlockByFingerprint` ([blockedTransactionRepo.ts](../../src/services/allowlist/blockedTransactionRepo.ts)),
+one query on the existing `cardFingerprint` index, sorted by **`capturedAt`** — never `createdAt`,
+which holds the PaymentIntent's creation time and can precede the block by days.
+
+**Fails open.** Any lookup error, or a fingerprint that cannot be resolved, falls through to a
+normal charge attempt — retrying once too often beats silently not collecting.
+
+**Surfacing.** A held item writes a `skipped` row bucketed as `excessiveRetryCooldown`, labelled
+**"Retry in 3 days"** in the run drawer's SKIP BREAKDOWN. The bucket exists in
+`SkipBucketKey`, `ChargeJobRunSkippedBreakdown` and the drawer's client-side recompute — all three
+must stay in lockstep. Regression-guarded by `npm run test:excessive-retry-cooldown`.
+
+⚠️ **Still open:** the cooldown limits *per-invoice* velocity only. Stripe also flagged **batch**
+velocity ("spread them over a longer time window rather than submitting them all at once") — the
+run still fires its whole worklist in one burst. Cohorting / pacing is not implemented.
