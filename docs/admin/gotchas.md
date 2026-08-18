@@ -1,5 +1,19 @@
 # Admin — Gotchas
 
+## The Advertising card's "Yesterday" understated TikTok — a cron ORDERING bug (2026-08-11)
+
+**Symptom:** the overview Advertising card showed TikTok ROAS·PLATFORM `0.10x` ($386.82 spend, $40.00 revenue) for AEST 2026-08-10, while TikTok Ads Manager showed `0.219` ($410.93 / $90.00). Days *before* that matched exactly.
+
+**It was not the sync, and not a metric mismatch.** The stored `TikTokAdInsightsDaily` rows for that day are exactly right — $410.93 / $90.00 / 3 purchases / ROAS 0.2190, matching TikTok per ad set, and agreeing to 0.3% with TikTok's own `complete_payment_roas` (rounding). The derivation `value_per_complete_payment × complete_payment` is sound.
+
+**The card reads the SNAPSHOT, not the insights.** `DashboardStatsService` builds the Advertising rows from `snapshotRead.adChannels`, and that snapshot for 2026-08-10 was written at 15:01 UTC — while `sync-tiktok-ads` does not complete that day until **02:45 UTC the following day**. TikTok keeps attributing conversions for hours after midnight (7-day-click / 1-day-view), so the snapshot froze a partial figure.
+
+**Why it stayed invisible:** the snapshot writes a 90-day sliding window, so every older day gets re-derived on later runs and looks perfect. Only the *freshest* day — the one "Yesterday" points at, and the one people actually read — was ever wrong.
+
+**Fix:** a third `dashboard-stats-daily-snapshot` fire at `20 3 * * *`, after `sync-tiktok-ads` (02:45 UTC). See [infrastructure/api.md](../infrastructure/api.md#apicronsync-tiktok-ads-2026-07-16--nightly-tiktok-ad-insights-sync) for the invariant.
+
+**The general lesson:** any daily snapshot that captures a third-party ad platform must run *after* that platform's sync for the day it is recording — and a platform whose data arrives late will look correct in history while being wrong at the edge. When a spend/ROAS figure disagrees with the platform's UI, check the **snapshot's `updatedAt` against the insight rows' `syncedAt`** before suspecting the metric mapping.
+
 ## Auto-mounted admin widgets must permission-gate their fetches (2026-07-09)
 
 A widget that fetches on mount through the shared `apiGet`/`apiRequest` wrapper (`src/lib/queries.ts`) against a `requirePermission(...)`-guarded route will fire a **guaranteed 403** for every staff role that lacks that permission — the Overview renders for anyone with `overview.view`, but its cards may need *other* permissions (e.g. `TopDrawsCard` → `/api/admin/mini-draw/list` → `miniDraws.view`). Until 2026-07-09 the wrapper treated 403 as an auth failure and **force-signed-out** the viewer, so an Ads Manager staffer was auto-logged-out seconds after every login. The wrapper is fixed (403 no longer signs out — see [client-state/gotchas.md](../client-state/gotchas.md)), but the rule stands: when adding a card/widget that auto-fetches a permission-guarded route, gate it with `usePermissions().has(<the route's permission>)` — disable the query and render a quiet no-access state instead of firing a request you know will 403. `TopDrawsCard.tsx` is the reference.
@@ -259,3 +273,33 @@ That produced a silent contradiction: the headline **Ad Spend KPI counted the sp
 Caught on localhost, where the dev DB has ad spend but little attributed revenue: the headline read **$20,945.78** while the table listed only `direct`. It is not a dev-only bug — any production window where attribution has a gap (or a channel genuinely converts nothing) hits it, and **the worst-performing channel is exactly the one that disappears**.
 
 The skip test now includes `spend > 0`. Pinned by `npm run test:advertising-card-model` ("spend-with-no-return still renders"). When adding a new reason a row should exist, extend that condition — never assume revenue implies presence.
+
+## Sorting the mini-draw grid would have corrupted the lineup order (2026-08-13)
+
+Caught while adding sort to `/admin/mini-draws`, and it applies to any drag-ordered
+list that also offers filters.
+
+`handleDragEnd` finds both indices in the **full** `miniDraws` array and
+`handleSaveOrder` posts `miniDraws.map(_id)` — the whole lineup. The grid, however,
+renders `filteredMiniDraws`. So the thing you drag and the thing you save are two
+different arrays, and they only agree when the view is unfiltered and unsorted.
+
+Sort by "Most entries", drag card A above card B, hit Save, and you write a
+`displayOrder` derived from positions in the display-ordered array while looking at
+an entry-ordered one — a scrambled customer-facing lineup, with no error and nothing
+to undo it. (The same hazard already existed with search + status filters, just less
+reachably.)
+
+**The fix is to make the two arrays identical whenever reordering is possible**, not
+to make the drag handler filter-aware:
+
+- `filteredMiniDraws` returns unsorted rows whenever `isReorderMode` — so a sort
+  picked *during* reorder can't take effect either.
+- Entering reorder mode clears search, status, brand and sort, with a toast saying
+  so. Resetting beats disabling the Reorder button: it is one click and there is
+  nothing to undo.
+- The sort/brand dropdowns are hidden entirely while reordering.
+
+**General rule: a drag-to-reorder list must render exactly the array it writes.** If
+a view can filter or sort it, reordering has to be gated on that view being the
+identity view.

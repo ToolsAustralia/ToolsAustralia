@@ -407,7 +407,7 @@ export default function PromoAnalyticsManagement() {
           title={
             <MetricLabelWithHint
               label="Unique visitors"
-              hint="Sum of unique visitors per promotion page in this period. The same person browsing two different pages is counted twice here—not one global site visitor count."
+              hint="Sum of unique visitors per promotion page in this period. The same person browsing two different pages is counted twice here—not one global site visitor count. Uniqueness is per BROWSER (the ta_anon_id cookie), not per person: a phone and a laptop are two visitors. Older ranges read high because rows predating that cookie cannot be deduped."
             />
           }
           value={isLoading ? "—" : formatNumber(data?.totalVisits ?? 0)}
@@ -586,7 +586,7 @@ export default function PromoAnalyticsManagement() {
                   <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">Page</th>
                   <th
                     className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
-                    title="Unique visitors to this page (deduped by browser / user)"
+                    title="Unique visitors to this page, deduped by BROWSER (the ta_anon_id cookie) — not by person. The same human on a phone and a laptop, or after clearing cookies, counts twice. Rows from before that cookie was reliably set cannot be deduped at all and each count as one visitor, so ranges reaching back before ~2026-08 read high."
                   >
                     <button
                       onClick={() => handleSort("visits")}
@@ -755,9 +755,15 @@ export default function PromoAnalyticsManagement() {
                     <th className="text-left p-3 font-semibold text-gray-800 dark:text-neutral-100">Built prize</th>
                     <th
                       className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
-                      title="Unique visitors who ended on this combination, on any landing page — including those who never changed it"
+                      title="EXPOSURE, not preference. Unique visitors who ended on this combination on any landing page — including everyone who never touched the builder. Someone who lands on /promotions/milwaukee-milwaukee and leaves counts here, because the builder reports whatever was on screen when they left."
                     >
                       Builders
+                    </th>
+                    <th
+                      className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
+                      title="Of the builders, how many actually CHANGED the build. THIS is the 'which prize do people want' number — Builders beside it is mostly landing-page traffic. The small line below is the share who chose it."
+                    >
+                      Chose it
                     </th>
                     <th
                       className="text-right p-3 font-semibold text-gray-800 dark:text-neutral-100"
@@ -789,6 +795,15 @@ export default function PromoAnalyticsManagement() {
                       </td>
                       <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
                         {formatNumber(row.builders)}
+                      </td>
+                      {/* The preference signal, with its share underneath. A row at 5% is the
+                          page's default; a row at 95% was actively chosen. Without this pair the
+                          table ranks landing-page traffic and reads as if it ranked demand. */}
+                      <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
+                        {formatNumber(row.interactedBuilders)}
+                        <span className="block text-2xs font-normal text-gray-500 dark:text-neutral-400">
+                          {formatPercentageOrDash(row.chosenRate, row.builders)} chose
+                        </span>
                       </td>
                       <td className="p-3 text-right font-mono text-gray-900 dark:text-white tabular-nums">
                         {formatNumber(row.signups)}

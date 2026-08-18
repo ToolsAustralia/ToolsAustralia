@@ -1,0 +1,147 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
+import { useUserContext } from "@/contexts/UserContext";
+import { shouldTrackRoute } from "@/utils/tracking/should-track-route";
+import { getSessionUTMParams } from "@/utils/tracking/utm-storage";
+import { extractAttributionParams } from "@/utils/tracking/utm-helpers";
+
+/**
+ * Contentsquare dynamic variables — membership segmentation.
+ *
+ * WHY THIS EXISTS
+ * Contentsquare's analysis features (zoning, Journey Analysis, Page Comparator, funnels)
+ * are only worth the licence if you can ask "does a Boss member behave differently from a
+ * guest on /membership?". That requires member attributes on the session, which the tag
+ * cannot know by itself. `trackDynamicVariable` is the documented way to attach them:
+ *   window._uxa.push(["trackDynamicVariable", { key, value }])
+ * Values are string (<=255 chars) or integer; numeric values unlock >/< operators in
+ * segmentation, strings get auto-complete and regex. Max 40 distinct keys per pageview.
+ *
+ * WHY IT IS NOT IN ContentsquarePageTracker
+ * That component is mounted in src/app/layout.tsx OUTSIDE <Providers>, so it has no access
+ * to the session or the React Query cache — calling a membership hook there throws. This one
+ * is mounted INSIDE <Providers>, next to <KlaviyoUserIdentifier />, which is the established
+ * home for "tracking that needs to know who the user is".
+ *
+ * WHY IT RE-SENDS ON EVERY ROUTE CHANGE
+ * Dynamic variables are scoped to the CURRENT pageview, not the session. Every SPA navigation
+ * starts a fresh pageview (see ContentsquarePageTracker), which carries no variables unless we
+ * push them again — so `pathname` is a real dependency, not defensive noise. Re-pushing an
+ * unchanged value is harmless: Contentsquare keeps only the last value per key per pageview.
+ *
+ * WHAT IS DELIBERATELY NOT SENT
+ * No PII. Tier and status are plan metadata and traffic_source/medium are campaign metadata —
+ * none of it is personal information; name/email/entry history never go through here, and no
+ * click id (fbclid/ttclid) or campaign/adset/ad id is sent either, only the channel label.
+ * `identify` and `addUserProperties` are also avoided — both require the Product Analytics
+ * (heap) configuration this account does not have, so they would silently no-op.
+ *
+ * WHY traffic_source EXISTS
+ * On 2026-08-07 Contentsquare showed Prize Details (≈all TikTok) at 3.4s on page vs the
+ * Milwaukee landing (≈all Meta) at 15.5s, same device class. That gap is confounded — it
+ * could be the page or the audience, and the two demand opposite fixes. Segmenting one page
+ * by channel separates them, which no other data we hold can do.
+ *
+ * Gated at the mount site on NEXT_PUBLIC_CONTENTSQUARE_ID (rules.md R8), exactly like
+ * <ContentsquarePageTracker /> in the root layout — blank id ⇒ never mounted, so dev/e2e
+ * send nothing. `window._uxa` is typed by the `declare global` block in
+ * ContentsquarePageTracker.tsx.
+ */
+
+/** Contentsquare's cap for a dynamic-variable value. */
+const MAX_VALUE_LENGTH = 255;
+
+/**
+ * Lower-cases and trims a campaign value so one channel is one segment.
+ *
+ * This is not cosmetic. Production `promoanalyticsvisits` carries BOTH `tiktok` and `TIKTOK`
+ * as utmSource (26,799 and 3,854 visits over three days on 2026-08-07), so any grouping by
+ * raw source splits a single campaign into two rows and understates it by ~13%. Normalising
+ * here means Contentsquare never sees the split in the first place.
+ */
+function normalizeChannel(value: string | undefined): string | null {
+  const trimmed = value?.trim().toLowerCase();
+  return trimmed ? trimmed.slice(0, MAX_VALUE_LENGTH) : null;
+}
+
+type DynamicVariables = Record<string, string | number>;
+
+function pushDynamicVariables(variables: DynamicVariables) {
+  window._uxa = window._uxa || [];
+  for (const [key, value] of Object.entries(variables)) {
+    window._uxa.push([
+      "trackDynamicVariable",
+      { key, value: typeof value === "string" ? value.slice(0, MAX_VALUE_LENGTH) : value },
+    ]);
+  }
+}
+
+export default function ContentsquareDynamicVariables() {
+  const pathname = usePathname();
+  const { loading, isAuthenticated, isMember, membershipStatus } = useUserContext();
+  // Last payload actually sent, keyed by pathname, so a re-render with identical values
+  // is a no-op but a genuine navigation always re-sends.
+  const lastSentRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Membership state arrives async (TanStack Query). Pushing mid-flight would send
+    // "guest" for a signed-in member and then correct it — last-value-wins makes that
+    // survivable, but waiting avoids polluting the guest segment with real members.
+    if (loading) return;
+
+    // Internal/staff routes are excluded from Contentsquare reporting; don't attach
+    // member attributes to them either.
+    if (!shouldTrackRoute(pathname)) return;
+
+    // `membershipStatus` is the useUserMembership() result, typed `unknown` on the context.
+    // Narrow it the same way UserContext itself does rather than casting blindly.
+    const membership =
+      membershipStatus && typeof membershipStatus === "object"
+        ? (membershipStatus as {
+            membershipTier?: string;
+            hasActiveOneTimePackages?: boolean;
+          })
+        : null;
+
+    // Acquisition channel for THIS session (last-touch), not the 90-day first-touch cookie —
+    // see getSessionUTMParams for why that distinction decides whether a channel comparison
+    // is meaningful. No campaign params this session ⇒ direct/organic, which is a real answer
+    // rather than a missing one, so it gets an explicit value instead of being omitted.
+    //
+    // THE URL IS READ FIRST, AND THAT ORDER IS LOAD-BEARING.
+    // sessionStorage is written by useUTMPersistence, which lives inside PromoLinkTracker —
+    // and that component self-wraps in <Suspense>, so its effects commit AFTER ours. Reading
+    // storage alone lost the race on the landing pageview and reported `direct` for genuine
+    // TikTok traffic (verified against production 2026-08-10: storage and both cookies were
+    // correctly populated, yet the dvar payload still said direct). The landing URL carries
+    // the campaign params synchronously and needs no other component to have run, so it is
+    // the authoritative source for the pageview that matters most — the one an ad lands on.
+    //
+    // Storage remains the fallback for SPA navigations, where the URL has dropped the params
+    // but the session is unchanged. By then useUTMPersistence has long since written.
+    const fromUrl = extractAttributionParams(window.location.search);
+    const utm = fromUrl.utm_source || fromUrl.utm_medium ? fromUrl : getSessionUTMParams();
+
+    const variables: DynamicVariables = {
+      is_member: isMember ? "yes" : "no",
+      is_authenticated: isAuthenticated ? "yes" : "no",
+      // "None" for guests and for signed-in non-members — matches useUserMembership's own default.
+      membership_tier: membership?.membershipTier || "None",
+      has_one_time_pack: membership?.hasActiveOneTimePackages ? "yes" : "no",
+      traffic_source: normalizeChannel(utm?.utm_source) ?? "direct",
+      traffic_medium: normalizeChannel(utm?.utm_medium) ?? "none",
+    };
+
+    const signature = `${pathname}|${JSON.stringify(variables)}`;
+    if (lastSentRef.current === signature) return;
+    lastSentRef.current = signature;
+
+    pushDynamicVariables(variables);
+  }, [pathname, loading, isAuthenticated, isMember, membershipStatus]);
+
+  return null;
+}

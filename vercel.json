@@ -37,6 +37,10 @@
       "schedule": "0 15 * * *"
     },
     {
+      "path": "/api/cron/dashboard-stats-daily-snapshot",
+      "schedule": "20 3 * * *"
+    },
+    {
       "path": "/api/cron/reconcile-blocked-transactions",
       "schedule": "15 3 * * *"
     },
@@ -70,7 +74,11 @@
     },
     {
       "path": "/api/cron/sync-tiktok-ads",
-      "schedule": "45 2 * * *"
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-tiktok-ads",
+      "schedule": "59 12,13 * * *"
     }
   ],
   "functions": {
@@ -87,6 +95,8 @@
     "src/app/api/admin/invoices/recover-past-due/route.ts": { "maxDuration": 300 },
     "src/app/api/admin/dashboard/recent-activities/route.ts": { "maxDuration": 60 },
     "src/app/api/admin/dashboard/stats/route.ts": { "maxDuration": 60 },
+    "src/app/api/admin/metrics/users/route.ts": { "maxDuration": 60 },
+    "src/app/api/internal/norm/v1/metrics/users/route.ts": { "maxDuration": 60 },
     "src/app/api/admin/activity-log/route.ts": { "maxDuration": 60 },
     "src/app/api/cron/major-draw-transition/route.ts": { "maxDuration": 300 },
     "src/app/api/cron/process-partner-discount-queues/route.ts": { "maxDuration": 300 },

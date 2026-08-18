@@ -233,3 +233,72 @@ export function getMiniDrawPackageColorScheme(packId: string): PackageColorSchem
   if (packId.startsWith("mini-pack-")) return SCHEMES.apprentice; // electric blue
   return getElectricPackageColorScheme(packId);
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * LIGHT-SURFACE tier palette (mini-draw pack picker + pack detail sheet)
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The neon `accentHex` values above are tuned for the DARK electric cards. On a white
+ * card they either vanish (`#CCFF00` lime, `#00E5FF` cyan) or fail contrast as body
+ * text, so the light mini-draw surfaces need their own three-value ramp per tier:
+ *
+ * - `accent` — the 3px left rule and the 7px tier dot. Darkened vs `accentHex` for
+ *   Tradie (`#CCFF00` → `#B4E600`) and Foreman (`#00E5FF` → `#00C3DB`) so the rule is
+ *   actually visible on white. VIP drops the champagne gradient for a flat `#C9A227`.
+ * - `ink` — price text, tier chip text, the "Purchase now" CTA fill.
+ * - `soft` — the selected-tile tint and the chip / entries-go-to row background.
+ *
+ * `inkDark` / `softDark` exist because these surfaces still render under the site's
+ * class-based dark theme: `ink` on a `neutral-900` card is unreadable, so dark mode
+ * swaps to the raw neon accent (which is what it was designed for) over a 12% wash.
+ * Consumers wire both through CSS custom properties + a `dark:` arbitrary variant —
+ * inline styles alone cannot express a theme fork.
+ *
+ * This is deliberately NOT folded into `PackageColorScheme`: that shape drives the dark
+ * electric cards everywhere else on the site, and repointing `accentHex` for Tradie /
+ * Foreman would repaint MembershipSection, PackageSelectionModal and the discount
+ * routes as a side effect.
+ */
+export interface MiniDrawPackLightScheme {
+  /** Left rule + tier dot. */
+  accent: string;
+  /** Price / chip text + CTA fill (light theme). */
+  ink: string;
+  /** Selected-tile + chip tint (light theme). */
+  soft: string;
+  /** Price / chip text + CTA fill (dark theme). */
+  inkDark: string;
+  /** Selected-tile + chip tint (dark theme). */
+  softDark: string;
+  /** Which of the two picker groups the pack belongs to. */
+  group: "mini" | "big";
+}
+
+const MINI_PACK_LIGHT: MiniDrawPackLightScheme = {
+  accent: "#1E90FF",
+  ink: "#0B63CE",
+  soft: "#EFF6FF",
+  inkDark: "#1E90FF",
+  softDark: "rgba(30,144,255,0.12)",
+  group: "mini",
+};
+
+const BIG_PACK_LIGHT: Record<Exclude<ElectricTier, "apprentice">, MiniDrawPackLightScheme> = {
+  tradie: { accent: "#B4E600", ink: "#5E7A00", soft: "#F6FFE0", inkDark: "#B4E600", softDark: "rgba(180,230,0,0.12)", group: "big" },
+  foreman: { accent: "#00C3DB", ink: "#0E7490", soft: "#ECFEFF", inkDark: "#00C3DB", softDark: "rgba(0,195,219,0.12)", group: "big" },
+  boss: { accent: "#E0A019", ink: "#A56A00", soft: "#FFF8EC", inkDark: "#E0A019", softDark: "rgba(224,160,25,0.12)", group: "big" },
+  power: { accent: "#FF1F1F", ink: "#C70000", soft: "#FEF2F2", inkDark: "#FF1F1F", softDark: "rgba(255,31,31,0.12)", group: "big" },
+  vip: { accent: "#C9A227", ink: "#8A6B1E", soft: "#FBF7EA", inkDark: "#C9A227", softDark: "rgba(201,162,39,0.12)", group: "big" },
+};
+
+/**
+ * Light-surface palette for a mini-draw pack id.
+ * `mini-pack-1|2|3` share one blue ramp; `additional-*-pack-mini` resolve per tier.
+ */
+export function getMiniDrawPackLightScheme(packId: string): MiniDrawPackLightScheme {
+  if (packId.startsWith("mini-pack-")) return MINI_PACK_LIGHT;
+  const tier = planIdToElectricTier(packId);
+  if (tier === "apprentice") return MINI_PACK_LIGHT;
+  return BIG_PACK_LIGHT[tier];
+}

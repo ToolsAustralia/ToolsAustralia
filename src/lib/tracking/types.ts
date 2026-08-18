@@ -29,6 +29,8 @@ export interface CanonicalEvent {
     country?: string;
     externalId?: string;
     birthdate?: string | Date;
+    /** `"male"` | `"female"`. Anything else/absent → no Meta `ge` is sent. */
+    gender?: string;
     clientIpAddress?: string;
     clientUserAgent?: string;
     /** Facebook click id (cookie `_fbc`). Read by FB provider only. */

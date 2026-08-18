@@ -24,6 +24,30 @@ These are mounted in the root layout and load each provider's SDK.
 
 [src/components/tracking/](../../src/components/tracking/) — additional tracking components / wrappers.
 
+## Contentsquare PII masking — `data-cs-mask` (2026-08-07)
+
+[`ContentsquarePageTracker`](../../src/components/tracking/ContentsquarePageTracker.tsx) pushes
+`setPIISelectors` with a **single** selector: `[data-cs-mask]`. To keep an element's text out of
+session replay, put the bare `data-cs-mask` attribute on it **at the render site**. One attribute
+selector rather than a list of CSS class paths is deliberate — a renamed class silently stops
+masking, whereas a moved attribute moves with the element.
+
+Scope — what the attribute is actually for, since the tag already covers a lot:
+
+- `<input>`, `<textarea>` and contenteditable content are masked **by default**; typed text is
+  never collected, so form fields need no attribute.
+- **Automatic Personal Data Redaction** (always on, cannot be disabled) replaces email addresses,
+  JWTs, OAuth tokens and credit-card numbers found anywhere in the DOM, URLs or error strings.
+- What neither covers is **personal data rendered as a text node** — a member's name in the
+  header, a shipping address on checkout success, a date of birth, free text typed into support
+  chat. That is this attribute's job.
+
+Routes in `EXCLUDED_TRACKING_PREFIXES` (`/admin`, `/affiliate`, `/my-account/settings`) are
+excluded from replay entirely, so elements only ever rendered there need no attribute. Grep
+`data-cs-mask` for the current render sites (today: header, dashboard hero, monogram, my-account
+nav, checkout success, birthdate picker, support-chat widget, the email-verification steps,
+payment-methods settings, portal transit).
+
 ## Hooks
 
 | Hook | Purpose | Source |

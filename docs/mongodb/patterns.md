@@ -86,5 +86,20 @@ Two extra properties this shape gives you for free, both used by `PromoAnalytics
   breakdown (see [backend.md](backend.md#facet--one-scan-several-dedupes-2026-07-31)).
 
 New pipelines should use the two-stage form. Existing `$addToSet` + `$size` blocks over
-low-cardinality buckets (`getAggregatedByPage`'s per-page visits, `getAggregatedByBuiltPrize`'s
-builders) are safe today and were left alone; convert one when its bucket cardinality grows.
+low-cardinality buckets (`getAggregatedByPage`'s per-page visits) are safe today and were left
+alone; convert one when its bucket cardinality grows.
+
+**`getAggregatedByBuiltPrize` was converted on 2026-08-13** — not for the size ceiling, but for the
+first bullet above. It now needs `interactedBuilders` (of the visitors who ended on a combination,
+how many actually *changed* it), and that is a **per-visitor sticky boolean**: a visitor with three
+rows on one combination, one of them interacted, must count once as interacted. `$addToSet` +
+`$size` cannot express that — it collapses ids and discards everything else on the row. The
+`$max` accumulator on the inner group can, at no extra scan:
+
+```ts
+{ $group: { _id: { k: "$builtPrizeSlug", v: VISITOR_ID_EXPR }, interacted: { $max: BUILD_INTERACTED_FLAG } } },
+{ $group: { _id: "$_id.k", builders: { $sum: 1 }, interactedBuilders: { $sum: "$interacted" } } },
+```
+
+So reach for the two-stage form when you need **either** unbounded cardinality **or** a per-visitor
+aggregate — the second is the more common reason, and the one `$addToSet` quietly cannot serve.

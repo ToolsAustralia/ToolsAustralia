@@ -148,11 +148,20 @@ export const queryKeys = {
     // utm_source — the drill-down route takes a closed enum.
     promoChannelDetail: (channel: string, startDate: string, endDate: string) =>
       ["admin", "promo-analytics", "channel-detail", channel, startDate, endDate] as const,
+    // Rendered on the SAME Page Analytics tab as promoAnalytics, but a separate key: it is a
+    // different funnel from a different collection, and sharing a key would make one refetch
+    // silently serve the other's cached shape.
+    partnerDiscountAnalytics: (params: Record<string, string>) =>
+      ["admin", "partner-discount-analytics", params] as const,
     products: ["admin", "products"] as const,
     miniDraws: ["admin", "mini-draws"] as const,
     metrics: {
       userMetrics: (startDate?: Date, endDate?: Date) => ["admin", "metrics", "users", startDate, endDate] as const,
     },
+    // The Receipts ledger. `filterKey` is the serialised query string (date range +
+    // category + page), so changing any filter is a new cache entry rather than a
+    // stale table under a new heading.
+    receipts: (filterKey: string) => ["admin", "receipts", filterKey] as const,
     allowlist: {
       blockedCards: (filterKey: string) =>
         ["admin", "allowlist", "blocked-cards", filterKey] as const,

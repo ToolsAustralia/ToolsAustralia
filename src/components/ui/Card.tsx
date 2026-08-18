@@ -2,8 +2,26 @@ import React, { type HTMLAttributes, forwardRef } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/utils/cn";
 
+/**
+ * Surfaces are theme-paired. They were not, and the failure mode was worse than a wrong
+ * shade: the ONE consumer (StripePaymentModal's Order Summary) styles its own text with
+ * `dark:` variants, so in dark mode the labels went light-grey while this card stayed
+ * `bg-white` — light-on-light, effectively unreadable, on the final confirm step of a paid
+ * upgrade. A primitive that ignores the theme does not render "in light mode"; it renders
+ * broken against any child that does not.
+ *
+ * `neutral-900` sits one step above the modal shell's `dark:bg-neutral-950`, so the card
+ * still reads as a raised panel rather than merging into the body.
+ */
 const card = cva(
-  "bg-white rounded-xl border border-neutral-200 shadow-sm",
+  // Arbitrary values, not `bg-white dark:bg-neutral-900`, and that is load-bearing. The
+  // `.dark .modal-panel-body .bg-white` compensation rule in globals.css is a 3-class
+  // selector and out-specifies Tailwind's 2-class `.dark .dark\:bg-neutral-900`, so inside
+  // any modal body this card would lose its own dark surface and render as 40%-transparent
+  // "glass" over whatever sits behind it. globals.css prescribes exactly this escape hatch
+  // ("use bg-[#ffffff] or dark:!bg-* on popovers or they read as transparent") because an
+  // arbitrary value is not what that selector matches. #171717 IS neutral-900.
+  "bg-[#ffffff] dark:bg-[#171717] rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-sm",
   {
     variants: {
       padding: {
@@ -36,21 +54,21 @@ const CardBase = forwardRef<HTMLDivElement, CardProps>(({ className, padding, ch
 CardBase.displayName = "Card";
 
 const CardHeader: React.FC<HTMLAttributes<HTMLDivElement>> = ({ className, children, ...props }) => (
-  <div className={cn("border-b border-neutral-200 pb-3 mb-3 last:mb-0 last:border-b-0 last:pb-0", className)} {...props}>
+  <div className={cn("border-b border-neutral-200 dark:border-neutral-700 pb-3 mb-3 last:mb-0 last:border-b-0 last:pb-0", className)} {...props}>
     {children}
   </div>
 );
 CardHeader.displayName = "Card.Header";
 
 const CardBody: React.FC<HTMLAttributes<HTMLDivElement>> = ({ className, children, ...props }) => (
-  <div className={cn("text-sm text-neutral-700", className)} {...props}>
+  <div className={cn("text-sm text-neutral-700 dark:text-neutral-300", className)} {...props}>
     {children}
   </div>
 );
 CardBody.displayName = "Card.Body";
 
 const CardFooter: React.FC<HTMLAttributes<HTMLDivElement>> = ({ className, children, ...props }) => (
-  <div className={cn("border-t border-neutral-200 pt-3 mt-3 first:mt-0 first:border-t-0 first:pt-0", className)} {...props}>
+  <div className={cn("border-t border-neutral-200 dark:border-neutral-700 pt-3 mt-3 first:mt-0 first:border-t-0 first:pt-0", className)} {...props}>
     {children}
   </div>
 );

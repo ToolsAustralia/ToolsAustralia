@@ -318,6 +318,10 @@ export default async function PrivacyPolicyPage() {
                 <strong>Marketing Cookies:</strong> Enable targeted advertising (e.g., Facebook Pixel, TikTok Pixel,
                 Google Ads)
               </li>
+              <li>
+                <strong>Session Recording:</strong> Record how pages are actually used — pages viewed, clicks,
+                scrolling and mouse movement — so we can find and fix usability problems (e.g., Contentsquare)
+              </li>
             </ul>
             <p className="text-gray-300">
               In addition to browser pixels, we share conversion events (such as sign-ups and purchases) with Meta and
@@ -325,12 +329,22 @@ export default async function PrivacyPolicyPage() {
               as email address and phone number) are hashed before they are sent.
             </p>
             <p className="text-gray-300">
+              We use Contentsquare to record and replay how visitors move through our pages, to build aggregate
+              heatmaps of where people click and scroll, and to run optional on-site feedback surveys. These
+              recordings capture on-screen activity and page content, and for signed-in members the membership tier
+              held on the account. They do <strong>not</strong> capture text you type into form fields, and they do{" "}
+              <strong>not</strong> capture payment card details — card numbers are entered directly into our payment
+              provider&apos;s secure fields, which we cannot see. Personal details that appear as text on a page, such
+              as your name or a delivery address, are masked before the recording leaves your browser, and recording
+              is switched off entirely on account settings pages and staff-only pages.
+            </p>
+            <p className="text-gray-300">
               You can manage cookies through your browser settings, though disabling some may affect website
               functionality. Our website does not respond to &quot;Do Not Track&quot; signals.
             </p>
             <p className="text-gray-300">
-              Third-party cookies (Google Analytics, Facebook, TikTok, payment processors, social media plugins) are
-              subject to those providers&apos; privacy policies.
+              Third-party cookies (Google Analytics, Facebook, TikTok, Contentsquare, payment processors, social media
+              plugins) are subject to those providers&apos; privacy policies.
             </p>
           </section>
 

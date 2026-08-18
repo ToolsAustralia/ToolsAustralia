@@ -17,6 +17,7 @@ import UpcomingDraws from "./UpcomingDraws";
 import SubmissionsManagement from "./SubmissionsManagement";
 import PromoManagement from "./PromoManagement";
 import { AdminDashboardProps } from "@/types/admin";
+import { useScrollLock } from "@/hooks/useModalBlocking";
 import UsersManagement from "@/components/admin/UsersManagement";
 import AffiliatesManagement from "@/components/admin/AffiliatesManagement";
 import FacebookAdsManagement from "@/components/admin/FacebookAdsManagement";
@@ -26,12 +27,14 @@ import KlaviyoAnalyticsManagement from "@/components/admin/KlaviyoAnalyticsManag
 import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManagement";
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
+import ReceiptsManagement from "./ReceiptsManagement";
 import PastDueChargeHistory from "./PastDueChargeHistory";
 import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
+import DiscountAnalyticsSection from "@/components/admin/promo-analytics/DiscountAnalyticsSection";
 import CancellationFlowAnalytics from "@/components/admin/CancellationFlowAnalytics";
 import RepeatPurchaseAnalytics from "@/components/admin/RepeatPurchaseAnalytics";
-import ChatbotCostManagement from "@/components/admin/ChatbotCostManagement";
+import ChatbotManagement from "@/components/admin/ChatbotManagement";
 import ActivityLogManagement from "./ActivityLogManagement";
 import SettingsTab from "./SettingsTab";
 import AuditLogTab from "./internal-norm/AuditLogTab";
@@ -67,33 +70,20 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isMobileSidebarOpen]);
 
-  // Disable background scrolling when sidebar is open
-  useEffect(() => {
-    if (isMobileSidebarOpen) {
-      const scrollY = window.scrollY;
-      document.body.style.overflow = "hidden";
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = "100%";
-    } else {
-      const scrollY = document.body.style.top;
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-
-      if (scrollY) {
-        window.scrollTo(0, parseInt(scrollY || "0") * -1);
-      }
-    }
-
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-    };
-  }, [isMobileSidebarOpen]);
+  /**
+   * Background scroll lock for the mobile admin sidebar.
+   *
+   * Was the same `position: fixed` recipe, hand-rolled, and it cleared the body styles
+   * unconditionally in both its else-branch and its cleanup — so closing the sidebar while an
+   * admin modal was open released that modal's lock. Admin stacks modals routinely (a user
+   * detail modal over a list, a confirmation over that), which is exactly the case a
+   * reference count exists for.
+   *
+   * It also read the restore position back out of `body.style.top` and parsed it, which
+   * breaks the moment anything else owns that property. `useScrollLock` keeps the value it
+   * locked at instead of re-deriving it from the DOM.
+   */
+  useScrollLock(isMobileSidebarOpen);
 
   // Access gating happens in two places that are sufficient on their own:
   // - src/app/admin/layout.tsx server-side: blocks any non-staff/non-admin user.
@@ -173,14 +163,15 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "submissions" && "Partner applications and contact form submissions"}
                   {selectedTab === "users" && "User account management and administration"}
                   {selectedTab === "promos" && "Manage promotional campaigns and entry multipliers"}
-                  {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page"}
+                  {selectedTab === "promo-analytics" && "Track visits, signups, and conversions by promotion page and partner-discount surface"}
                   {selectedTab === "klaviyo" && "Klaviyo campaign & flow revenue, scheduled sends, and hourly"}
                   {selectedTab === "all-platforms" && "Combined ad effectiveness — spend, revenue, ROAS, and hourly across every platform"}
                   {selectedTab === "cancellation-flow" && "Cancellation-flow funnel, save rate, and retention analytics"}
                   {selectedTab === "repeat-purchases" && "One-time buyers who came back — repeat rate, time-to-return, and the fetchable cohort"}
-                  {selectedTab === "chatbot" && "Cobber AI chatbot — availability, daily spend, deflection rate, and usage"}
+                  {selectedTab === "chatbot" && "Cobber AI chatbot — availability, daily spend, deflection rate, usage, and conversation transcripts"}
                   {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
+                  {selectedTab === "receipts" && "Every payment received — source, customer, amount, refund state, and its Stripe record"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}
                   {selectedTab === "stripe-webhook-queue" && "Async Stripe webhook processing queue — replay failed events"}
@@ -238,6 +229,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           {/* BLOCKED TRANSACTIONS TAB */}
           {selectedTab === "blocked-transactions" && <BlockedTransactionsManagement />}
 
+          {/* RECEIPTS TAB */}
+          {selectedTab === "receipts" && <ReceiptsManagement />}
+
           {/* PAST-DUE CHARGE HISTORY TAB */}
           {selectedTab === "past-due-history" && <PastDueChargeHistory />}
 
@@ -259,15 +253,24 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           {/* ALL-PLATFORMS AGGREGATE TAB */}
           {selectedTab === "all-platforms" && <AllPlatformsManagement />}
 
-          {/* PROMO ANALYTICS TAB */}
-          {selectedTab === "promo-analytics" && <PromoAnalyticsManagement />}
+          {/* PROMO ANALYTICS TAB — promo funnel, then the partner-discount funnel beneath it.
+              Two sections rather than one merged table: they answer the same question shape
+              but over different populations, so their totals are not addable. The discount
+              section reads the date range from the URL params the promo half already owns, so
+              there is one date picker on the tab and the two can never disagree. */}
+          {selectedTab === "promo-analytics" && (
+            <>
+              <PromoAnalyticsManagement />
+              <DiscountAnalyticsSection />
+            </>
+          )}
 
           {/* CANCELLATION FLOW ANALYTICS TAB */}
           {selectedTab === "cancellation-flow" && <CancellationFlowAnalytics />}
 
           {/* REPEAT PURCHASES ANALYTICS TAB */}
           {selectedTab === "repeat-purchases" && <RepeatPurchaseAnalytics />}
-          {selectedTab === "chatbot" && <ChatbotCostManagement />}
+          {selectedTab === "chatbot" && <ChatbotManagement />}
 
           {/* ACTIVITY LOG TAB */}
           {selectedTab === "activity-log" && <ActivityLogManagement />}

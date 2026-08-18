@@ -13,6 +13,7 @@ import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-pa
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
 import { useNavNudges } from "@/hooks/useNavNudges";
+import { useScrollLock } from "@/hooks/useModalBlocking";
 // User setup store removed - using unified modal priority system
 import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
@@ -138,8 +139,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const [isMobileUserMenuOpen, setIsMobileUserMenuOpen] = useState(false);
   const { trackSearch } = usePixelTracking();
 
-  // Ref to store scroll position for proper restoration
-  const scrollPositionRef = useRef<number>(0);
   // Ref to track if we've completed at least one loading cycle (to ensure auth state is verified)
   const hasCompletedLoadingCycle = useRef<boolean>(false);
 
@@ -194,10 +193,18 @@ export default function Header({ isFixed = true }: HeaderProps) {
    * the menu and let the same tap's click immediately close it again.
    */
   const hoverCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Which menu (if any) is open BECAUSE of hover rather than a click. Without this the
+   * button's plain `!isOpen` toggle turned a click on an already-hover-opened menu into a
+   * dismissal: the pointer opens it, the user clicks the trigger, and the panel they are
+   * looking at collapses under the cursor. A click on a menu the pointer already opened is
+   * intent to KEEP it, never to close it — moving the pointer away is what closes it.
+   */
+  const hoverOpenedMenu = useRef<"giveaways" | "results" | "explore" | null>(null);
   const canHover = () =>
     typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
-  const openOnHover = useCallback((open: (v: boolean) => void) => {
+  const openOnHover = useCallback((open: (v: boolean) => void, menu: "giveaways" | "results" | "explore") => {
     if (!canHover()) return;
     if (hoverCloseTimer.current) {
       clearTimeout(hoverCloseTimer.current);
@@ -207,14 +214,35 @@ export default function Header({ isFixed = true }: HeaderProps) {
     setIsGiveawaysMenuOpen(false);
     setIsResultsMenuOpen(false);
     setIsExploreMenuOpen(false);
+    hoverOpenedMenu.current = menu;
     open(true);
   }, []);
 
-  const closeOnHover = useCallback((open: (v: boolean) => void) => {
+  const closeOnHover = useCallback((open: (v: boolean) => void, menu: "giveaways" | "results" | "explore") => {
     if (!canHover()) return;
     if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
-    hoverCloseTimer.current = setTimeout(() => open(false), 140);
+    hoverCloseTimer.current = setTimeout(() => {
+      if (hoverOpenedMenu.current === menu) hoverOpenedMenu.current = null;
+      open(false);
+    }, 140);
   }, []);
+
+  /**
+   * Trigger click. Toggles normally EXCEPT on a menu hover already opened — that first click
+   * is absorbed (and hands ownership to click, so the next one closes as expected).
+   * Keyboard and touch never set `hoverOpenedMenu`, so Enter/tap keep toggling both ways.
+   */
+  const toggleFromClick = useCallback(
+    (menu: "giveaways" | "results" | "explore", isOpen: boolean, open: (v: boolean) => void) => {
+      if (isOpen && hoverOpenedMenu.current === menu) {
+        hoverOpenedMenu.current = null;
+        return;
+      }
+      hoverOpenedMenu.current = null;
+      open(!isOpen);
+    },
+    []
+  );
 
   useEffect(() => () => {
     if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
@@ -316,7 +344,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   // Handle mobile menu close with animation
   const handleCloseMobileMenu = useCallback(() => {
-    // console.log("🔍 Closing mobile menu - Saved scroll position:", scrollPositionRef.current);
 
     setIsClosingMobileMenu(true);
     setTimeout(() => {
@@ -327,7 +354,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
   // Handle cart close with animation
   const handleCloseCart = useCallback(() => {
-    // console.log("🛒 Closing cart - Saved scroll position:", scrollPositionRef.current);
 
     setIsClosingCart(true);
     setTimeout(() => {
@@ -492,39 +518,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
     isMobileUserMenuOpen,
   ]);
 
-  // Disable background scrolling when sidebars are open
-  useEffect(() => {
-    if (isMobileMenuOpen || isCartOpen) {
-      // Save scroll position to ref
-      scrollPositionRef.current = window.scrollY;
-
-      // Disable scrolling
-      document.body.style.overflow = "hidden";
-      document.body.style.position = "fixed";
-      document.body.style.top = `-${scrollPositionRef.current}px`;
-      document.body.style.width = "100%";
-    } else {
-      // Re-enable scrolling
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-
-      // Restore scroll position from ref
-      if (scrollPositionRef.current > 0) {
-        window.scrollTo(0, scrollPositionRef.current);
-        scrollPositionRef.current = 0;
-      }
-    }
-
-    // Cleanup function to restore scrolling if component unmounts
-    return () => {
-      document.body.style.overflow = "";
-      document.body.style.position = "";
-      document.body.style.top = "";
-      document.body.style.width = "";
-    };
-  }, [isMobileMenuOpen, isCartOpen]);
+  /**
+   * Background scroll lock for the mobile menu / cart sidebars.
+   *
+   * This was the same `position: fixed` + saved-scrollY recipe, hand-rolled — but it cleared
+   * the body styles UNCONDITIONALLY, both in its else-branch and its cleanup. The Header is
+   * mounted on every page, so closing the mobile menu while ANY modal was open released that
+   * modal's lock and let the page scroll behind it. `useScrollLock` is the same recipe with a
+   * reference count, so the last holder is the one that releases.
+   *
+   * Scroll restore now comes from the hook (it re-applies the position it locked at), which
+   * is why the old scrollPositionRef is gone.
+   */
+  useScrollLock(isMobileMenuOpen || isCartOpen);
 
   const handleSignOut = () => {
     setIsTopBarHidden(false);
@@ -739,11 +745,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
             {/* Giveaways Dropdown — Major Draw (/promotions gallery) + Mini Draw (/mini-draws) */}
             <div
               className="relative giveaways-dropdown-container"
-              onMouseEnter={() => openOnHover(setIsGiveawaysMenuOpen)}
-              onMouseLeave={() => closeOnHover(setIsGiveawaysMenuOpen)}
+              onMouseEnter={() => openOnHover(setIsGiveawaysMenuOpen, "giveaways")}
+              onMouseLeave={() => closeOnHover(setIsGiveawaysMenuOpen, "giveaways")}
             >
               <button
-                onClick={() => setIsGiveawaysMenuOpen(!isGiveawaysMenuOpen)}
+                onClick={() => toggleFromClick("giveaways", isGiveawaysMenuOpen, setIsGiveawaysMenuOpen)}
                 suppressHydrationWarning
                 className={`flex items-center gap-1 text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                   isGiveawaysActive()
@@ -770,7 +776,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </button>
 
               {isGiveawaysMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-dropdown-in motion-reduce:animate-none">
                   <Link
                     href={MAJOR_DRAW_HREF}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
@@ -840,11 +846,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
             {/* Results Dropdown */}
             <div
               className="relative results-dropdown-container"
-              onMouseEnter={() => openOnHover(setIsResultsMenuOpen)}
-              onMouseLeave={() => closeOnHover(setIsResultsMenuOpen)}
+              onMouseEnter={() => openOnHover(setIsResultsMenuOpen, "results")}
+              onMouseLeave={() => closeOnHover(setIsResultsMenuOpen, "results")}
             >
               <button
-                onClick={() => setIsResultsMenuOpen(!isResultsMenuOpen)}
+                onClick={() => toggleFromClick("results", isResultsMenuOpen, setIsResultsMenuOpen)}
                 suppressHydrationWarning
                 className={`flex items-center gap-1 text-[15px] xl:text-[16px] font-medium leading-normal transition-colors duration-200 py-2 px-3 rounded-lg ${
                   isResultsActive()
@@ -859,7 +865,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </button>
 
               {isResultsMenuOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-dropdown-in motion-reduce:animate-none">
                   <Link
                     href="/draw-results"
                     className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
@@ -893,11 +899,11 @@ export default function Header({ isFixed = true }: HeaderProps) {
             {/* Explore Dropdown — Become a Partner + FAQ + Contact */}
             <div
               className="relative explore-dropdown-container"
-              onMouseEnter={() => openOnHover(setIsExploreMenuOpen)}
-              onMouseLeave={() => closeOnHover(setIsExploreMenuOpen)}
+              onMouseEnter={() => openOnHover(setIsExploreMenuOpen, "explore")}
+              onMouseLeave={() => closeOnHover(setIsExploreMenuOpen, "explore")}
             >
               <button
-                onClick={() => setIsExploreMenuOpen(!isExploreMenuOpen)}
+                onClick={() => toggleFromClick("explore", isExploreMenuOpen, setIsExploreMenuOpen)}
                 suppressHydrationWarning
                 aria-expanded={isExploreMenuOpen}
                 aria-haspopup="menu"
@@ -914,7 +920,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </button>
 
               {isExploreMenuOpen && (
-                <div className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
+                <div className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-dropdown-in motion-reduce:animate-none">
                   <Link
                     href="/partner"
                     className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors duration-150"
@@ -1072,12 +1078,12 @@ export default function Header({ isFixed = true }: HeaderProps) {
 
                   {/* User Menu Dropdown */}
                   {isDesktopUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-dropdown-in motion-reduce:animate-none">
                       <div className="px-4 py-2 border-b border-gray-100 dark:border-neutral-700">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        <p data-cs-mask className="text-sm font-medium text-gray-900 dark:text-white">
                           {formatDisplayName(userData?.firstName, userData?.lastName)}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
+                        <p data-cs-mask className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
                       </div>
                       {isStaff ? (
                         <>
@@ -1259,12 +1265,12 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 </button>
 
                 {isMobileUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-fade-in">
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-neutral-900 rounded-xl shadow-xl border border-gray-200 dark:border-neutral-700 py-2 z-[75] animate-dropdown-in motion-reduce:animate-none">
                     <div className="px-4 py-2 border-b border-gray-100 dark:border-neutral-700">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      <p data-cs-mask className="text-sm font-medium text-gray-900 dark:text-white">
                         {formatDisplayName(userData?.firstName, userData?.lastName)}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
+                      <p data-cs-mask className="text-xs text-gray-500 dark:text-neutral-400">{userData?.email}</p>
                     </div>
                     {isStaff ? (
                       <>
@@ -1459,8 +1465,8 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     <User className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900 dark:text-white">{affiliateData.name}</p>
-                    <p className="text-sm text-gray-600 dark:text-neutral-400">{affiliateData.email}</p>
+                    <p data-cs-mask className="font-semibold text-gray-900 dark:text-white">{affiliateData.name}</p>
+                    <p data-cs-mask className="text-sm text-gray-600 dark:text-neutral-400">{affiliateData.email}</p>
                   </div>
                 </div>
               </div>
@@ -1474,7 +1480,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-gray-900 dark:text-white">
+                      <p data-cs-mask className="font-semibold text-gray-900 dark:text-white">
                         {formatDisplayName(userData?.firstName, userData?.lastName)}
                       </p>
                       {(() => {

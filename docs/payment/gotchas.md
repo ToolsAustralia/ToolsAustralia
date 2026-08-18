@@ -212,3 +212,24 @@ Reporting is best-effort and never masks the payment error. The route no longer 
 
 **If you add another purchase entry point, call this helper.** `success: true` from a purchase
 route does not mean the money moved.
+
+## Excessive-retry block: customer copy
+
+When Stripe blocks a card with `outcome.reason === "previously_declined_do_not_retry"`, the member
+Pay-Now route (`/api/stripe/pay-failed-invoice`) detects it via
+`analyzePaymentIntentForExcessiveRetry` and returns `requiresDifferentPaymentMethod: true`.
+
+The copy is deliberately short and gives a concrete date horizon rather than a vague "try later" —
+the block genuinely clears on its own, so telling the member *when* is more useful than telling them
+to keep trying:
+
+> This card is temporarily blocked after too many attempts. Use a different card, or try again in 3 days.
+
+Keep the "3 days" aligned with `EXCESSIVE_RETRY_COOLDOWN_DAYS` in
+[chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts) — if the cooldown window
+changes, this string must change with it.
+
+`STRIPE_EXCESSIVE_RETRY_OUTCOME_REASON` in
+[stripe-excessive-retry.ts](../../src/utils/payment/stripe/stripe-excessive-retry.ts) is the single
+name for this concept across both the customer path and the admin cooldown. Do not introduce a
+second vocabulary for it.

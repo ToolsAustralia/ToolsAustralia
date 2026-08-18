@@ -71,7 +71,19 @@ const BuiltPrizeMetricsSchema = z.object({
     .number()
     .int()
     .nonnegative()
-    .describe("Unique visitors who assembled this combination, on any landing page"),
+    .describe(
+      "⚠️ EXPOSURE, not preference. Unique visitors who ENDED on this combination on any landing page — including those who never touched the builder. A visitor who lands on /promotions/milwaukee-milwaukee and leaves without interacting counts here, because the builder reports whatever was on screen at unload. Deliberate: signups records the page default for those visitors too, so gating this would divide two different populations. Do NOT answer 'which prize do people want' with this number — use interactedBuilders.",
+    ),
+  interactedBuilders: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe(
+      "Of builders, those who actually CHANGED the build — the preference signal, and the number to use when asked which combination performs or is most wanted. Measured 2026-08-13: only 10.6% of all builders changed anything, and the top row by exposure (milwaukee-milwaukee, 17,430 builders) was chosen by just 5.6%, because it is the default on the highest-traffic evergreen page. Same combination, different page: milwaukee-kincrome was chosen by 48.9% on /promotions/milwaukee but 2.0% on /promotions/milwaukee-kincrome, at near-identical builder counts.",
+    ),
+  chosenRate: z
+    .number()
+    .describe("interactedBuilders / builders as a percent (0-100); 0 when nobody built it"),
   signups: z.number().int().nonnegative().describe("New accounts whose signupAttribution.builtPrizeSlug is this combination"),
   conversions: z.number().int().nonnegative().describe("Purchases whose PaymentEvent.data.builtPrizeSlug is this combination"),
   revenue: z.number().nonnegative().describe("AUD dollars"),

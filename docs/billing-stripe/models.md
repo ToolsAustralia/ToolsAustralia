@@ -155,3 +155,11 @@ Writers:
 - Reconcile cron (self-healing): [src/app/api/cron/reconcile-blocked-transactions/route.ts](../../src/app/api/cron/reconcile-blocked-transactions/route.ts) — daily, 48h window, upserts any rows the live path missed.
 
 Both write paths share `buildBlockedTransactionRecord()` from [src/services/allowlist/blockedTransactionRepo.ts](../../src/services/allowlist/blockedTransactionRepo.ts) so live and historical rows are byte-identical.
+
+## `PaymentEvent` index `{ eventType: 1, timestamp: -1 }` (2026-08-17)
+
+Added because **no index led with `eventType`** (verified against the live index list), while every net-revenue / metrics aggregation opens with `$match: { eventType: "BenefitsGranted", timestamp: {range} }` — see [payment-event-net-queries.ts](../../src/utils/payment/payment-event-net-queries.ts). Those queries used the single-field `timestamp` index for the range and then discarded non-matching event types **in memory**, so cost scaled with the size of the whole collection rather than with the number of matches.
+
+**Created by migration, not by the declaration.** `src/lib/mongodb.ts` sets no `autoIndex` override, so Mongoose's default would have production build the index at runtime on first model use — inside a request. Run `npm run migrate:payment-event-eventtype-index:prod:dry` then `:prod` **before** deploying. The `schema.index()` declaration is present so fresh environments still get it.
+
+Context: this was found while investigating the `/api/admin/metrics/users` 504s. At current volume (2,304 payment events) it was **not** the cause — see `docs/metrics-analytics/backend.md` — but it is a real inefficiency that would have become one.

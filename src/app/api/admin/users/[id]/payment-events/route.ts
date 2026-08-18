@@ -15,7 +15,8 @@ const MAX_LIMIT = 50;
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const guard = await requirePermission("users.view");
+    // Modal-only read (the Activity tab's billing history) → `users.viewDetail`, not `users.view`.
+    const guard = await requirePermission("users.viewDetail");
     if (guard instanceof NextResponse) return guard;
 
     await connectDB();

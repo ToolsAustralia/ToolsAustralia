@@ -19,6 +19,11 @@ export default function GiveawayDetails() {
     entriesClose: "TBA",
     drawDate: "TBA",
     timezone: "",
+    // Short forms for the mobile fact grid — the long "Thursday, August 27, 2026 at 08:00 PM"
+    // string wraps to four lines inside a half-width tile.
+    entriesCloseShort: "TBA",
+    drawDateShort: "TBA",
+    drawDayShort: "",
   });
 
   useEffect(() => {
@@ -41,6 +46,11 @@ export default function GiveawayDetails() {
           .split(" ")
           .pop() || timezone;
 
+      const short = (d: Date) =>
+        `${d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })} · ${d
+          .toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+          .toUpperCase()}${timezoneAbbr ? ` ${timezoneAbbr}` : ""}`;
+
       setFormattedDates({
         entriesClose: freezeDate.toLocaleDateString(undefined, {
           weekday: "long",
@@ -59,12 +69,18 @@ export default function GiveawayDetails() {
           minute: "2-digit",
         }),
         timezone: timezoneAbbr,
+        entriesCloseShort: short(freezeDate),
+        drawDateShort: short(drawDate),
+        drawDayShort: drawDate.toLocaleDateString(undefined, { day: "numeric", month: "long" }),
       });
     } else {
       setFormattedDates({
         entriesClose: "TBA",
         drawDate: "TBA",
         timezone: "",
+        entriesCloseShort: "TBA",
+        drawDateShort: "TBA",
+        drawDayShort: "",
       });
     }
   }, [currentMajorDraw, isMounted]);
@@ -88,6 +104,45 @@ export default function GiveawayDetails() {
       description: "Open to all Australian residents 18+ (Excluding SA & ACT)",
     },
     { icon: IdCard, title: "License Numbers", description: `ABN: 54 690 397 061 | ${NSW_LICENSE} | ${NTP_NUMBER}` },
+  ];
+
+  const datesReady = isMounted && !isLoading;
+
+  /**
+   * Mobile rebuild (design handoff, 2026-08-13). The six equal fact cards answered "when /
+   * where / who" but never "what do I actually do" — the question a first-time visitor on a
+   * phone is asking. So the mobile surface leads with a three-step timeline and demotes the
+   * logistics to a compact fact grid underneath. Desktop keeps the six-card grid, where the
+   * two-column layout already reads at a glance.
+   *
+   * Copy note (CLAUDE.md rule 11): entries are a FREE INCLUSION of the pack — never sold,
+   * never framed as odds.
+   */
+  const steps = [
+    {
+      n: "1",
+      title: "Pick a pack",
+      body: "Every membership and one-time pack includes free entries.",
+    },
+    {
+      n: "2",
+      title: "Your entries land",
+      body: datesReady && formattedDates.drawDayShort
+        ? `They go straight into the ${formattedDates.drawDayShort} draw.`
+        : "They go straight into the next major draw.",
+    },
+    {
+      n: "3",
+      title: "Drawn live",
+      body: "Picked by randomdraws.com.au and announced live on Facebook. We call the winner on the night.",
+    },
+  ];
+
+  const facts = [
+    { label: "Entries close", value: datesReady ? formattedDates.entriesCloseShort : "TBA" },
+    { label: "Draw date", value: datesReady ? formattedDates.drawDateShort : "TBA" },
+    { label: "Delivery", value: "Australia-wide, free of charge" },
+    { label: "Eligibility", value: "Australian residents 18+ (excl. SA & ACT)" },
   ];
 
   const cardHoverStyle = {
@@ -124,8 +179,57 @@ export default function GiveawayDetails() {
           </h2>
         </div>
 
-        {/* Single column on small screens; two columns on large desktops */}
-        <div className="grid grid-cols-1 gap-2 sm:gap-3 lg:grid-cols-2 lg:gap-4">
+        {/* MOBILE — three-step timeline, then the logistics as a compact fact grid. */}
+        <div className="lg:hidden">
+          <ol className="relative list-none pl-[34px]">
+            {/* The rail stops 14px short at each end so it starts and finishes on a marker
+                rather than running past the first and last step. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute bottom-3.5 left-[13px] top-3.5 w-0.5 rounded-full"
+              style={{
+                background: `linear-gradient(180deg, ${theme.primary}, ${hexToRgbaString(theme.primary, 0.15)})`,
+              }}
+            />
+            {steps.map((step) => (
+              <li key={step.n} className="relative pb-[18px] last:pb-0">
+                <span
+                  className="absolute -left-[34px] top-0 flex h-7 w-7 items-center justify-center rounded-full border-[3px] border-slate-900 font-sans text-xs font-extrabold text-white"
+                  style={{ background: theme.primary }}
+                  aria-hidden
+                >
+                  {step.n}
+                </span>
+                <h3 className="font-sans text-[15px] font-bold leading-tight text-white">{step.title}</h3>
+                <p className="mt-1.5 font-sans text-xs leading-relaxed text-gray-400">{step.body}</p>
+              </li>
+            ))}
+          </ol>
+
+          <div className="mt-1.5 grid grid-cols-2 gap-2">
+            {facts.map((fact) => (
+              <div
+                key={fact.label}
+                className="rounded-[10px] border border-white/[0.09] bg-white/[0.04] p-3"
+              >
+                <p className="font-sans text-3xs font-semibold uppercase tracking-[0.1em] text-gray-400">
+                  {fact.label}
+                </p>
+                <p className="mt-1.5 font-sans text-xs font-bold leading-snug text-white">{fact.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3.5 flex items-center justify-center gap-1.5 border-t border-white/[0.09] pt-3.5">
+            <Shield className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+            <p className="text-center font-sans text-3xs leading-relaxed text-gray-400">
+              ABN 54 690 397 061 &middot; {NSW_LICENSE} &middot; {NTP_NUMBER}
+            </p>
+          </div>
+        </div>
+
+        {/* DESKTOP — the original six-card logistics grid. */}
+        <div className="hidden lg:grid lg:grid-cols-2 lg:gap-4">
           {details.map((detail, index) => (
             <div
               key={index}

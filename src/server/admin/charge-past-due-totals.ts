@@ -41,6 +41,7 @@ export function emptyTotals(eligibleCount: number = 0): ChargeJobRunTotals {
       missingPaymentMethod: 0,
       noHeldDraft: 0,
       awaitingRetry: 0,
+      excessiveRetryCooldown: 0,
       other: 0,
     },
     revenueCents: 0,

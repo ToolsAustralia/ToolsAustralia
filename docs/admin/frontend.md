@@ -29,6 +29,54 @@
 > client storage before ending the session (keeps `ta-admin-theme` + admin UI-layout keys). See
 > [auth/frontend.md](../auth/frontend.md#total-sign-out-2026-07-02).
 
+## Prize performance card — totals row (2026-08-11)
+
+The table now ends in a **Total** row: summed spend, revenue and conversions, plus a ROAS
+recomputed as **`total revenue ÷ total spend`**.
+
+**Not an average of the per-row ROAS values** — that would weight an $11 prize the same as a
+$276 one and produce a number matching nothing. Computed this way the footer reconciles
+exactly with the ad platform's own account-level figure, which is the point of showing it: on
+2026-08-10 the TikTok tab summed to $411 spend / $90 revenue / 3 conversions / **0.219**,
+matching TikTok Ads Manager to the cent.
+
+It renders through a new optional **`footer`** prop on the shared `DataTable`
+([`src/components/admin/ui/DataTable.tsx`](../../src/components/admin/ui/DataTable.tsx)) — a
+real `<tfoot>`, so it stays column-aligned and is announced as a footer rather than as one
+more data row, and it is **not** sorted with the body. The prop takes the `<tr>`/`<td>`s from
+the caller and deliberately computes nothing: a table's totals are rarely a plain column sum,
+as the ROAS case above shows. Optional, so every existing `DataTable` consumer is unchanged.
+
+⚠️ **The blended caveat still applies.** Under "All platforms" the revenue column adds each
+platform's OWN attribution, so a purchase claimed by both Meta and TikTok is counted twice and
+the total ROAS reads high — same warning already shown beneath the table. The per-platform tabs
+are the figures that reconcile.
+
+### The Total row is a drill-down too (2026-08-11)
+
+Clicking it opens `PrizePerformanceAdsModal` across **every** prize rather than one brand, so
+you can see the whole account's campaign → ad-set → ad tree in one place.
+
+It works because the modal already takes `canonicalUrlsByPlatform` (a per-platform URL *list*)
+and `useSpendByUrlDetailMany` sends them as repeated `canonicalUrl` params in **one** request —
+so the Total row is the same code path with a bigger URL set, not a new fetch shape. The route
+imposes no cap and dedupes server-side.
+
+Three things to preserve:
+
+- **The URL union is deduped client-side with a `Set`.** Two prizes can advertise the same URL
+  (a combo page like `/promotions/milwaukee-milwaukee` appears under more than one brand).
+  Passing it twice would double-count that URL's ads, and the drill-down would then disagree
+  with the Total row that opened it.
+- **It is built from `rows`, not the full catalogue**, so it always matches whatever the
+  platform chips are currently showing.
+- **It opens on one platform** (chips' selection, else Meta) for the same reason a mixed brand
+  row does — ad ids are only unique WITHIN a platform, so a merged tree would be ambiguous.
+
+The row carries `role="button"`, `tabIndex={0}` and an Enter/Space handler, matching how
+`DataTable` makes its body rows keyboard-reachable when `onRowClick` is set (panel F-017) —
+the footer is rendered by the card, not by `DataTable`, so it has to do that itself.
+
 ## Prize performance card — brands derived from the source of truth (2026-06-30)
 
 `PrizePerformanceCard` `PROMOTION_BRANDS` is now **derived** from `TOOLSET_LANDING_SLUGS`
@@ -225,7 +273,8 @@ a corrected API. Backend rationale for every item: [docs/promo/backend.md](../pr
 
 **Table counts after this change: 34 `<th>` / 34 `<td>`** — Channel Attribution 8/8, per-page
 **10/10** (was 11/11: `Cross-visits` removed, `Switched away % of Builds` replaced 1-for-1 by
-`Changed %`), By Built Prize 8/8, By Toolbox 8/8. The new
+`Changed %`), By Built Prize 8/8, By Toolbox 8/8. _(By Built Prize is **9/9** and the total **35/35**
+as of 2026-08-13 — see "Chose it" below.)_ The new
 [`PrizeBuildBreakdownTable`](../../src/components/admin/promo-analytics/PrizeBuildBreakdownTable.tsx)
 adds **8/8** inside `PromoPageDetailModal` — Combination · Builders · Changed · Signups · Conv ·
 Rev · B→S · Conv %, the first six sortable (`builders` descending by default), the last two
@@ -278,6 +327,32 @@ column stays hidden here (`showSourceColumn={false}`) since it would repeat the 
 
 **h) `UTMCampaignBreakdownTable` takes the shared `UTMCampaignMetrics` type** from
 `@/types/promo-analytics` instead of a local `CampaignRow`, and keys rows on `row.channel`.
+
+## Page Analytics — "Chose it" column + honest dedup copy (2026-08-13)
+
+Two accuracy fixes in [`PromoAnalyticsManagement.tsx`](../../src/components/admin/PromoAnalyticsManagement.tsx),
+both about numbers that were **correct but read as something they were not**.
+
+**a) By Built Prize gained a "Chose it" column (9 `<th>` / 9 `<td>`; page total 35/35).** It renders
+`interactedBuilders` with `chosenRate` as a sub-label, beside the existing `builders`. The build
+beacon fires at **unload** and reports whatever combination was on screen touched or not (F-018 —
+it must, or `builders` and `signups` count different populations), so `builders` is **exposure**:
+on production only 10.6% of builders had changed anything, and the top row by exposure
+(`milwaukee-milwaukee`) was chosen by 5.6% because it is the default on the busiest evergreen page.
+Ranked by `builders` alone the table answered *"which page got traffic"* while being read as
+*"which prize do people want"*. **The sort stays on `builders`** — signups, conversions and revenue
+are all counted over the builder population, so sorting on a column scoped differently would put
+the sort and the funnel on different footings. See
+[promo/gotchas.md](../promo/gotchas.md#builders-is-exposure--the-built-prize-table-ranks-traffic-unless-you-read-the-right-column)
+for the same-combination-two-pages proof (48.9% vs 2.0% at near-identical builder counts).
+
+**b) Dedup copy corrected in two places** — the visits column `title` and the `totalVisits`
+MetricCard `hint` claimed uniqueness was per *browser or signed-in user*. `PromoAnalyticsVisit.userId`
+is set on **0** rows (`linkVisitToUser` has no callers), so it is per **browser** (`ta_anon_id`),
+full stop: one person on a phone and a laptop is two visitors. Both strings now say so and warn
+that ranges reaching before ~2026-08 read high, because 57.9% of all-time rows predate reliable
+cookie minting and each falls back to a per-row placeholder visitor. Recent days are 97–99.5%
+cookie-bearing, so **forward accuracy is fine; wide historical ranges inflate**.
 
 ## Pages
 
@@ -541,6 +616,42 @@ A synthetic **"Other / Unknown"** row appears only when a classified subscriptio
 ### Removed (this refactor) — components left on disk for potential reuse
 
 The following components are **no longer referenced** by `UserMetricsView` but were not deleted: `SignupSourceChart.tsx`, `MembershipLifecycleChart.tsx`, `DailyUserMetricsTable.tsx`, `ComparisonModeToggle.tsx`, `MajorDrawSelector.tsx`, `MetricsDateFilter.tsx`, `CustomDateRangeModal.tsx`. If you reintroduce date-scoped or comparison views, prefer reviving these over rebuilding.
+
+## Admin > Users — "Top 20%" filter + `users.viewDetail` row gating (2026-08-13)
+
+**a) Top 20% of major-draw entry holders is now a FILTER, not export-only.** A `Top holders`
+dropdown sits beside the `Major draw` one in
+[UsersManagement.tsx](../../src/components/admin/UsersManagement.tsx), backed by a new
+`UserFilters.segment` (`"top20MajorDraw" | ""`). It reuses the **same `segment` param name and the
+same segment id** the users export already used — so "filter the list, then export" and "export the
+segment" resolve to the identical people, which is the whole point of not coining a second name.
+
+Three things worth knowing:
+
+- **It composes; the export's version replaces.** The filter is pushed onto `$and` inside
+  `buildUserFilter` like every other `_id` constraint, so *top 20% in VIC on the Tradie package* is
+  a valid query. The **export** route's segment branch still deliberately ignores the other filters
+  (documented in its own header) — that asymmetry is pre-existing, not introduced here.
+- **Ties at the cut are included**, so the segment can return slightly over 20% of holders. With
+  100 holders and 15 people tied on the 20th-highest entry count, it returns 34. Cutting at exactly
+  20 would make membership depend on Mongo's document order, which is not stable.
+- **No active draw ⇒ empty result, not "all users".** The filter pushes `{ _id: { $in: [] } }`.
+  Falling back to unfiltered would read as the filter being ignored.
+
+The logic behind it lives in **one** place now — `resolveTop20MajorDrawSegment()` in
+[userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts). It previously existed as two
+hand-copies (the export route and `aggregateUserExport` for Norm) which had **already drifted** on
+the threshold read (`entryCounts[takeCount - 1]!.count` vs `?.count ?? 0`); adding a third copy for
+this filter would have meant three features labelled "top 20%" able to disagree about who that is.
+
+**b) Rows only open when the viewer holds `users.viewDetail`.** `users.view` now grants the roster
+only; the detail modal is a separate grant (see
+[auth/permissions-catalog.md](../auth/permissions-catalog.md#viewdetail--splitting-pii-depth-out-of-view-2026-08-13)).
+Without it the `<tr>` drops its `onClick` and `cursor-pointer` and carries a `title` explaining why,
+rather than opening a modal that then 403s on its own fetch.
+[`ClickableUserDisplay`](../../src/components/admin/ClickableUserDisplay.tsx) — the modal's *other*
+entry point, rendered on overview, promo analytics, affiliates and draw surfaces — falls back to
+plain text under the same check. Both are presentation only; the endpoints enforce independently.
 
 ## UsersManagement header (Admin > Users) — 2026-05-04
 
@@ -929,9 +1040,20 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 
 **Client-safe constant copies.** `CancellationFlowAnalytics.tsx` declares its own module-local `CANCELLATION_REASONS` and `OFFER_TYPES` constants (identical values and order to the model) instead of importing them from `@/models/CancellationFlowEvent`. That module is a Mongoose model file — runtime-evaluating it in a client component crashes (`mongoose` is `serverExternalPackages`, so `models.CancellationFlowEvent` is undefined in the browser). The type-only imports (`import type { CancellationReason, OfferType }`) remain safe because types are fully erased at build time. Keep the local constants in sync by hand whenever the model's `CANCELLATION_REASONS` or `OFFER_TYPES` arrays change. This is the same pattern used elsewhere on this branch for the same class of crash.
 
-## Chatbot (Cobber) — availability, cost & usage (2026-06-26, updated 2026-07-08)
+## Chatbot (Cobber) — availability, cost & usage (2026-06-26, updated 2026-08-10)
 
-[src/components/admin/ChatbotCostManagement.tsx](../../src/components/admin/ChatbotCostManagement.tsx) is the **`chatbot`** tab — relocated 2026-07-08 from the Analytics group to the **Team** group (below Norm) and renamed "Chatbot Cost" → "Chatbot", since the section now toggles availability, not just reports cost. Rendered by `AdminPage` on `selectedTab === "chatbot"` (URL `/admin/chatbot`; the H1 derives from the id via `capitalize`). Gated by `overview.view`. Read-only **except** two `PATCH` controls: the Cobber availability (pause) toggle and the AI model provider toggle (see below). The component file/class keep the `ChatbotCost*` name (still primarily the cost-analytics surface). No external chart library.
+**Tab container (2026-08-10).** `AdminPage` now renders [src/components/admin/ChatbotManagement.tsx](../../src/components/admin/ChatbotManagement.tsx) on `selectedTab === "chatbot"`, not `ChatbotCostManagement` directly. It is a thin container owning one `Segmented` sub-view switch so each leaf view stays a single concern:
+
+| Sub-view | Component | Permission |
+|---|---|---|
+| **Usage & cost** (default) | `ChatbotCostManagement` | `overview.view` (the tab gate) |
+| **Conversations** | `ChatbotConversations` | **`submissions.view`** |
+
+The two sub-views deliberately differ in gate. The tab is granted by `overview.view`, which is right for aggregate cost numbers — but transcripts contain what individual customers typed. `ChatbotManagement` calls `usePermissions().has("submissions.view")` and, when absent, renders `ChatbotCostManagement` alone with **no switch at all**, so a user never clicks a sub-tab into a 403. Keep this in lockstep with the `requirePermission("submissions.view")` in both `/api/admin/chatbot-conversations` routes.
+
+### Usage & cost sub-view
+
+[src/components/admin/ChatbotCostManagement.tsx](../../src/components/admin/ChatbotCostManagement.tsx) is the **`chatbot`** tab's default view — relocated 2026-07-08 from the Analytics group to the **Team** group (below Norm) and renamed "Chatbot Cost" → "Chatbot", since the section now toggles availability, not just reports cost. Reached via `AdminPage` → `ChatbotManagement` on `selectedTab === "chatbot"` (URL `/admin/chatbot`; the H1 comes from `adminTabLabel`). Gated by `overview.view`. Read-only **except** two `PATCH` controls: the Cobber availability (pause) toggle and the AI model provider toggle (see below). The component file/class keep the `ChatbotCost*` name (still primarily the cost-analytics surface). No external chart library.
 
 **Headline KPI: Deflection rate** — the share of requests answered free (via FAQ deflection) with no LLM/AI spend. Higher = lower cost.
 
@@ -966,6 +1088,30 @@ Endpoints + aggregation rules: [api.md](./api.md#cancellation-flow-analytics).
 **Client-safe constant note.** `ChatbotCostManagement.tsx` does not import from `@/models/ChatAuditLog`; the `actorKind` literal tuple is re-declared locally with a "keep in sync" comment — same pattern as `CancellationFlowAnalytics.tsx`.
 
 Endpoint: `GET /api/admin/chatbot-cost` — see [api.md](./api.md).
+
+### Conversations sub-view — transcript browser (2026-08-10)
+
+[src/components/admin/ChatbotConversations.tsx](../../src/components/admin/ChatbotConversations.tsx) answers "what are people actually asking Cobber, and how did it reply" — the read surface for the transcripts that `ChatService` has been persisting since Cobber went live (2026-07-08). Cost analytics reads `ChatAuditLog` aggregates only and never showed message content; this view reads `ChatConversation` + `ChatMessage`.
+
+**Two screens in one component,** switched by local `selectedId` state (no routing — the tab has no URL sub-segment):
+
+**1. List.** Filter `Card` (all `Segmented`, size `sm`) + a search form, then a result `Card`:
+- **Range** 7 / 30 / 90 days (90 = the TTL ceiling; the API clamps anything higher).
+- **Status** All / Open / Escalated / Closed · **Who** Everyone / Members / Guests · **Answered by** All / FAQ only / AI answered.
+- **Search** — a *submit-on-enter* form (not debounced-as-you-type), matching redacted message content. Note it matches **assistant** messages too, so a term Cobber uses in its own replies ("entries") matches far more conversations than a term only customers type.
+- Every filter change resets `page` to 1 via a `resetAnd` wrapper — otherwise a narrowed filter can strand the user on a now-empty page 7.
+- Rows show actor + firstName, status/`FAQ only` badges, the **first user message** (the "why did they open Cobber" signal), message counts and tokens. Rows are `<button>`s, so keyboard access comes free.
+- Pagination is prev/next with `page / totalPages`, hidden when `totalPages <= 1`.
+
+**2. Detail.** Header card (actor, status, models used, tokens, escalation link, TTL-truncation warning), the message thread, then a per-turn table.
+- **Message bubbles** are role-coloured (user indigo/right, assistant amber/left, tool grey) and render two grounding affordances that are the whole point of the view: **`citations`** — the FAQ `docId`s Cobber's answer was grounded on (green chips) — and **`toolCalls`** (blue = ok, red = failed, with duration). A confidently-worded answer with **zero citations** is the signal to go fix the FAQ corpus.
+- **Per-turn table** — one row per `ChatAuditLog` entry: time, *Answered by* (Escalated / FAQ (free) / AI), model, tokens, latency, HTTP status (≥400 in red).
+
+**Data hooks:** `src/hooks/queries/admin/useChatbotConversations.ts` — `useChatbotConversations(filters)` (queryKey `["admin","chatbot-conversations",days,status,actor,kind,q,page]`, `placeholderData: keepPreviousData` so paging doesn't flash an empty table) and `useChatbotConversation(id)` (queryKey `["admin","chatbot-conversation",id]`, `enabled: Boolean(id)`). Both are read-only — there are no mutations on this surface, so nothing invalidates.
+
+**Privacy posture.** Message content was already PII-redacted at write time by `redactPII()` in `ChatService` (`[email]` / `[phone]` / `[card]`), so this layer has no raw PII to leak — verified against production: **0** stored messages match a raw email pattern. Identity is the Norm projection only: `firstName` + the opaque `userId`. Do not widen it to email/full name/phone.
+
+Endpoints: `GET /api/admin/chatbot-conversations` and `GET /api/admin/chatbot-conversations/[id]` — see [api.md](./api.md). Service: `src/services/admin/chatTranscripts.ts` (see [backend.md](./backend.md)).
 
 ## Facebook Ads Management — Health view tab (Task 29, 2026-05-27)
 
@@ -1041,7 +1187,14 @@ Cards:
 
 `TikTokAdsManagement` (`src/components/admin/`) now renders **two** views over the same `useAdminDateFilter` AEST window: the existing `PlatformHourlyRevenueSection` (attributed revenue by hour) **and** the new **`TikTokAdBreakdownTable`** below it.
 
-- **`TikTokAdBreakdownTable`** (`src/components/admin/`) — per-ad table, the TikTok analogue of the Meta "Ads" / Spend-by-URL per-ad tables. Columns: **Ad** (adName + a `campaignName · adsetName` sub-line, falling back to `Ad {adId}`) · **Spend** · **Impr.** · **Clicks** · **Conv.** · **TikTok rev.** · **ROAS** (`revenue ÷ spend`, `.toFixed(2)+"×"`), plus a totals `<tfoot>`. **Revenue is TikTok's OWN attributed value**, labelled **"TikTok rev."** exactly as the Meta table labels **"Meta rev."** — the platform's reported number, **NOT** first-party `PaymentEvent` sales. Money is `en-AU` AUD. Data via `useTikTokAdsInsights({ startDate, endDate })` ([`src/hooks/queries/admin/useTikTokAdsInsights.ts`](../../src/hooks/queries/admin/useTikTokAdsInsights.ts), mirrors `useFacebookAdsInsights`) → `GET /api/admin/tiktok-ads/insights` (gated `facebookAds.view`). **Truthful empty states** (2026-07-24, panel F-002 — driven by the response's `syncHealth`, via `emptyStateMessage()`): not configured → "TikTok Marketing API isn't connected yet…" (never surfaces raw env-var names to staff); last run errored → red "TikTok spend sync is FAILING — last attempt {AEST time}: {TikTok message} (code {N})"; last run ok but zero rows → "Synced {AEST time} — no TikTok ad spend recorded for this range."; configured with no run yet → "Waiting for the first TikTok spend sync (runs nightly)." When rows EXIST but the latest sync attempt failed, an amber banner above the table flags the figures as possibly stale. Fed nightly by the `/api/cron/sync-tiktok-ads` sync (infrastructure domain) into `TikTokAdInsightsDaily`; see [backend.md](./backend.md#tiktok-ad-level-insights-per-ad-spend-breakdown) + [api.md](./api.md#tiktok-ad-level-insights-per-ad-breakdown).
+- **`TikTokAdBreakdownTable`** (`src/components/admin/`) — spend table, the TikTok analogue of the Meta "Ads" / Spend-by-URL tables **and their level switcher**.
+
+  **Campaign / Ad set / Ad switcher (2026-08-11).** A segmented control in the section header regroups the same window; `level` is part of the React Query key, since the rows are a different grouping of identical data and sharing a key would serve campaign rows to the ad view until refetch. Three details worth preserving:
+  - The header, the first column label and the row identity all render against **`data.level` (what came back), never the selected level** — otherwise the headers flip to "Campaign" while the previous level's rows are still on screen.
+  - `rowIdentity()` derives the title and sub-line together in one function, so the two lines can never disagree about which level is being shown: at ad-set level the title is the ad set and the sub-line is its campaign; at campaign level there is no parent to show.
+  - **The totals row does not change between levels** — by construction, each stored row is one ad-day landing in exactly one bucket. Switching level changes the split, never the money.
+
+  Columns: **Ad / Ad set / Campaign** (name + a parent sub-line, falling back to `Ad {adId}`) · **Spend** · **Impr.** · **Clicks** · **Conv.** · **TikTok rev.** · **ROAS** (`revenue ÷ spend`, `.toFixed(2)+"×"`), plus a totals `<tfoot>`. **Revenue is TikTok's OWN attributed value**, labelled **"TikTok rev."** exactly as the Meta table labels **"Meta rev."** — the platform's reported number, **NOT** first-party `PaymentEvent` sales. Money is `en-AU` AUD. Data via `useTikTokAdsInsights({ startDate, endDate, level })` ([`src/hooks/queries/admin/useTikTokAdsInsights.ts`](../../src/hooks/queries/admin/useTikTokAdsInsights.ts), mirrors `useFacebookAdsInsights`) → `GET /api/admin/tiktok-ads/insights` (gated `facebookAds.view`). **Truthful empty states** (2026-07-24, panel F-002 — driven by the response's `syncHealth`, via `emptyStateMessage()`): not configured → "TikTok Marketing API isn't connected yet…" (never surfaces raw env-var names to staff); last run errored → red "TikTok spend sync is FAILING — last attempt {AEST time}: {TikTok message} (code {N})"; last run ok but zero rows → "Synced {AEST time} — no TikTok ad spend recorded for this range."; configured with no run yet → "Waiting for the first TikTok spend sync (runs nightly)." When rows EXIST but the latest sync attempt failed, an amber banner above the table flags the figures as possibly stale. Fed nightly by the `/api/cron/sync-tiktok-ads` sync (infrastructure domain) into `TikTokAdInsightsDaily`; see [backend.md](./backend.md#tiktok-ad-level-insights-per-ad-spend-breakdown) + [api.md](./api.md#tiktok-ad-level-insights-per-ad-breakdown).
 
 ## TikTok Ads tab — Ads / Spend-by-URL sub-views (2026-07-29)
 
@@ -1140,7 +1293,7 @@ barrel. Pure relocation — no behaviour changed. The convention is documented i
 |---|---|
 | `WinnerSelectionModal` | Major Draw, Mini Draws card, Draw Results row |
 | `WinnerEditModal` | Major Draw, Mini Draws card, Draw Results |
-| `ParticipantsModal` | Major Draw → View participants |
+| `ParticipantsModal` | Major Draw → View participants; Mini Draws card → **People** (2026-08-13) |
 | `ExportModal` | Draw Results row → Export |
 | `AdminMajorDrawModal` | Overview → Quick actions (create) |
 | `MajorDrawEditModal` | Draw Results, Upcoming Draws (edit) |
@@ -1321,3 +1474,100 @@ Draw Results and Upcoming Draws no longer expose a Sort control. Results is alwa
 newest-draw-first and Upcoming soonest-first — the only orders those screens are read in — so
 the dropdown cost toolbar width without earning it. `sortBy` / `sortOrder` are still sent to
 the API, fixed as `DEFAULT_SORT_BY` / `DEFAULT_SORT_ORDER` in each container.
+
+## Mini draws: view participants in place, and jump to the live page (2026-08-13)
+
+Two additions to the `/admin/mini-draws` card, both answering questions staff previously had to
+leave the admin to answer.
+
+### "People" — the entry-pool roster
+
+Checking whether one person had entered meant **downloading a CSV of every entrant**, opening it,
+and searching it. That is a spreadsheet of live customer PII on a laptop to answer a yes/no
+question, and it happens most on draw night.
+
+The card's **People** action now opens the same
+[`ParticipantsModal`](../../src/components/modals/draws/ParticipantsModal.tsx) the Major Draw page
+uses — searchable by name / email / mobile, 8 per page, rows drilling through to the admin user
+record via `useAdminUserModal`.
+
+**One component, two sources.** `ParticipantsModal` took `majorDrawId` / `majorDrawName`; it now
+takes `drawId` / `drawName` / `drawType: "major" | "mini"` and picks the endpoint. The two APIs
+were written to an identical response envelope specifically so this did not fork — a
+`MiniDrawParticipantsModal` copy would drift the first time either side gained a column. The only
+shape difference is `entriesBySource`, which is optional and major-draw-only: mini-draw entry is
+package-only, so there is no source split to report.
+
+The modal is mounted only while a draw is selected (`participantsDraw && <ParticipantsModal …>`),
+so its fetch is always keyed to a real id rather than an empty-string placeholder.
+
+Backed by `GET /api/admin/mini-draw/[id]/participants` — see [api.md](api.md).
+
+### The external-link button
+
+The card image tile carries a small `ExternalLink` button (top-right) that opens
+`/mini-draws/{id}` — the live customer-facing page — in a new tab. It sits on the tile rather than
+in the footer because it is navigation, not a draw action, and the footer is already four items
+wide on a five-across grid. It `stopPropagation`s so it does not also fire the card's edit
+handler, and it is hidden in reorder mode along with the rest of the actions.
+
+### Permission gating
+
+Both the roster and the CSV export are gated on **`miniDraws.viewParticipants`**, not
+`miniDraws.view` — they return identical personal data, so `onViewParticipants` and `onExportCsv`
+are both `undefined` without it and the buttons do not render. `MiniDrawCard` types both as
+optional for that reason. UI gating is not the boundary: the routes enforce it independently.
+
+Full rationale, and why this shipped with a backfill migration rather than as a plain new
+permission: [auth/permissions-catalog.md](../auth/permissions-catalog.md).
+
+## Mini draws: sort + brand filter (2026-08-13)
+
+The page had a search box and four status chips and nothing else — no way to ask
+"which draws are earning?" or "which are about to fill and need a winner queued?".
+Both now run through `DrawsToolbar`'s existing dropdown mechanism, which
+`MiniDrawManagement` previously passed no-ops to.
+
+| Dropdown | Options |
+|---|---|
+| **Sort** | Display order · Most entries · Fewest entries · Closest to capacity · Furthest from capacity · Name (A–Z) |
+| **Brand** | `All brands` + only the brands present in the lineup |
+
+Four rules that keep it honest:
+
+1. **"Display order" is the default and must stay first.** It is the drag-ordered
+   lineup the customer site renders, and the only order reorder mode can safely
+   write back.
+2. **Reorder mode pins the grid to display order and hides the dropdowns.** The
+   guard is in `filteredMiniDraws` (`if (isReorderMode || sortKey === "order") return rows`),
+   not only on entry, so picking a sort *while already reordering* can't desync it
+   either. See the gotcha below for what this prevents.
+3. **The Brand dropdown is derived from the data** and renders only when the
+   lineup actually holds more than one brand — no dead options, no pointless
+   control on a single-brand lineup.
+4. **Ties on fill % break by raw entries**, so a wall of 0% draws still ranks
+   usefully instead of falling back to insertion order.
+
+A "Showing N of M · sorted by …" line plus one **Clear filters** button appears
+whenever anything is active. Sort and brand are far less visible than the status
+chips (which carry their own counts), so without it an operator can be looking at
+a subset without realising. The empty state's reset routes through the same
+`clearFilters` — clearing only search + status would leave a brand filter on and
+the button would appear not to work.
+
+## Users breakdown — gender block + answered denominators (2026-08-17)
+
+[`UsersBreakdownSection`](../../src/app/admin/component/overview/UsersBreakdownSection.tsx) now renders **four** blocks (`md:grid-cols-2 lg:grid-cols-4`): Age · State · Profession · **Gender**.
+
+Every block states an **answered denominator** above its bars — `N of M answered (P%)` — because all four are driven by *optional* profile fields. Without it, a 12-person bar reads as 12 of every member when it is really 12 of however many answered. `M` is computed the same way the API's `meta.totalUsers` is (sum of `signupSource`) so the two cannot drift.
+
+**The `answered` figure is not uniform across the four**, and this is deliberate:
+
+| Block | Excluded bucket | Is the excluded bucket an answer? |
+|---|---|---|
+| Age | `Unknown` | No — no birthdate on record |
+| State | `Unknown` | No — missing/unrecognised |
+| Profession | `Other` | **Yes** — it is the long-tail bucket from `bucketUnmatched()`. Members with no profession are dropped by the service entirely, so the block's `grandTotal` is *already* the answered population |
+| Gender | `Not set` | No — and it conflates "declined" with "never asked" |
+
+**Why the bars are scoped this way rather than filtering the endpoint.** The request was to leave incomplete-profile users out of the breakdown. That is applied at **chart level only**. `signupSource`, `membershipStatus`, `membershipByPackage` and `purchaseHistory` still count **every** member, because the same `users` array feeds them: filtering the query would drop an active paying member who never set a birthdate out of the **active-member count**, and `meta.totalUsers` is the sum of `signupSource`, so the reported total would silently fall too — making `/admin` disagree with every other dashboard. A user-document filter would also not have helped performance meaningfully (the two `PaymentEvent` queries don't read that array at all, and the user query measures ~150ms for all 927 users).

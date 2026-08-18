@@ -1,5 +1,164 @@
 # Promo — Frontend
 
+## `/promotions/[slug]` mobile redesign (2026-08-13)
+
+Built from the design handoff at `Milwaukee promotions page redesign/design_handoff_promotions_page/`
+(mobile prototype, 402×874). **Scope is deliberately `< lg` only** — desktop keeps every surface it
+had. Each rebuilt section renders its phone layout under `lg:hidden` and its existing desktop layout
+under `hidden lg:*`, in the SAME component, so there is one file to read per section and no route
+fork. Both promo page types get all of it: `[slug]/page.tsx` and
+[`ToolsetLandingPage`](../../src/app/promotions/_components/ToolsetLandingPage.tsx) compose the same
+components.
+
+| Surface | File | What changed on mobile |
+|---|---|---|
+| How it works | [`GiveawayDetails.tsx`](../../src/components/sections/promo/GiveawayDetails.tsx) | Six equal logistics cards → a **3-step timeline** ("Pick a pack" / "Your entries land" / "Drawn live") + a 2×2 fact grid + the ABN/permit line |
+| Become a member | [`PartnerBenefitsPromoSection.tsx`](../../src/components/sections/promo/PartnerBenefitsPromoSection.tsx) | Eyebrow is now **"Become a member"** (was "Why Subscribe") in BOTH layouts. Mobile is a new pitch: accumulation chart, four benefit tiles, then the /membership hero's **tier deck** (Tradie/Foreman/Boss fan with `AccessRing`) — and it is **full-bleed** on a phone (see below) |
+| FAQ | [`PromoFAQs.tsx`](../../src/components/sections/promo/PromoFAQs.tsx) | Flat edge-to-edge accordion under the same **"Frequently Asked Questions"** title desktop uses, closed by an **"Ask Cobber"** row; desktop keeps the shared `FAQSection` |
+| Build your prize | [`prize-selection/*`](../../src/components/sections/promo/prize-selection/) | "What's in this prize" tiles now **swap the combo stage**; the stage opens the **fullscreen viewer**; the grid is 4 × 2 on a phone (was hidden below `sm`) |
+| Floating chrome | [`PromoBottomDock.tsx`](../../src/components/sections/promo/PromoBottomDock.tsx) | **New.** One bottom bar replaces three separate floaters |
+
+The hero's own `ENTER NOW` button is **retained** (owner call — the prototype dropped it). It sits at
+the bottom of the hero box, ~400–550px down a phone viewport, so it never collides with the dock
+pinned at the viewport bottom.
+
+The old five-icon strip under the mobile benefits copy is **deleted**: it mixed one-time packs
+(Apprentice, Power) into what is a MEMBERSHIP pitch, which is the wrong offer for that section.
+
+### Every number is derived, none typed in
+
+The mobile "Become a member" block reads `useMemberships()` + `useResolvedMultiplier("membership-packages", "display")`,
+takes partner access from `getPartnerCatalogAccessPercentForPlanId` and the offer count from
+`PARTNER_CATALOG_TOTAL`. This is not tidiness: the block it replaced hard-coded "15 / 40 / 100
+entries", so the moment a promo went live it contradicted the packages card one screen above it —
+the exact failure [`MembershipHero`](../../src/components/sections/membership/MembershipHero.tsx)
+documents. The climb chart is `month1 = base × multiplier`, then `+base` per cycle (Foreman on a 5×
+promo: 200/240/280/320/360) — the multiplier applies to the month it runs, not forever.
+
+### Build your prize — inspect what you'd actually win
+
+Three changes, all the same complaint: the card showed you twelve things you'd win and let you
+look at none of them.
+
+- **A tile swaps the stage.** Tapping a thumbnail puts that item on the combo stage; the corner
+  chip becomes "‹ BACK TO FULL PRIZE" and the tile is ringed. Tapping the same tile again
+  restores the combination, so the thumbnail is a toggle, not a one-way trip. Everything BELOW
+  the stage (title, sub, draw chip) keeps describing the whole prize — two competing titles read
+  as "the prize changed". State is local to `PrizeBuilderCard` and cleared whenever the
+  combination changes; it is view state, not part of the build, so it deliberately never reaches
+  the URL or the analytics beacon.
+- **The stage opens the fullscreen viewer** — [`PrizeImageViewer`](../../src/components/ui/PrizeImageViewer.tsx),
+  the same zoom/pan viewer the mini-draw detail page uses (moved out of that route into
+  `components/ui/` for this; see [draws/frontend.md](../draws/frontend.md)). It pages through the
+  combination FIRST and then every gallery image — including the ones the capped grid could not
+  show, which is why "+N more" opens the viewer rather than the specs modal. "View full details"
+  still opens the specs modal.
+- **The grid renders on phones, at 4 columns.** It used to be `max-sm:hidden` because six columns
+  made a ~48px thumbnail; four gives ~73px on a 402px viewport. There are **two grids**, not one
+  responsive grid: the cell budget is per-viewport (8 on a phone, 12 from `sm`) because "+N more"
+  has to be truthful about what is hidden. A single grid re-flowing 6 → 4 columns would keep 12
+  cells and silently grow a third row on the narrowest screens — exactly what the two-row cap
+  exists to prevent. Guarded by `npm run test:prize-builder`.
+- **The chip row is one row that scrolls, not a wrapping row.** The three chips (tool count,
+  storage, cash) land within ~6px of a 402px viewport's inner width, so they wrapped to a second
+  row that was 90% empty — and a longer storage name (GearWrench, Sidchrome) makes that worse.
+  `flex-nowrap overflow-x-auto` keeps one row and truncates nothing.
+
+**The same viewer is in the spec sheet.** "View full details" opens
+[`PrizeSpecificationsModal`](../../src/components/modals/PrizeSpecificationsModal/index.tsx), whose
+feature image and every spec-card photo now open `PrizeImageViewer` too — the sheet is where a
+visitor goes to actually read about a tool, so it was the one place you could see a photo and not
+enlarge it. Its image list is the combination followed by each section's item photos, **deduped**
+(the same render can appear in more than one section, and a repeated frame reads as a broken
+carousel). One gotcha worth knowing: the viewer's default `zIndex` sits just under the modal layer,
+which is right when it opens from the PAGE — a caller opening it from inside a modal must pass
+something above that modal (this one passes `Z_INDEX.MODAL_NESTED`) or the viewer paints behind the
+sheet that opened it.
+
+### Phone sections are BANDS, not cards
+
+"Become a member" was an inset rounded card (gutter + radius + its own vertical margin) inside a
+full-width section. On a phone that read as an ad slot dropped into the scroll rather than part of
+the page, and it did not match How It Works immediately above it — which is full-bleed. Below `sm`
+the section now drops its horizontal padding, radius, vertical padding and border ring, so the
+workshop background reaches both edges and butts against its neighbours. From `sm` it is the inset
+card it always was, ring included.
+
+The border ring is `hidden sm:block` for the same reason: a ring on all four sides draws a box
+around a band that has no edges.
+
+### The bottom dock
+
+`PromoBottomDock` owns the whole bottom band **at every viewport** (desktop was added on owner
+review — it was still showing the old three-floater arrangement): menu tab (left), Cobber tab
+(right), the visitor's live build plus the pack they'd be entering with in the middle, and the
+entry CTA with its `X{n}` multiplier badge on the right. The drawer carries My Account / Mini
+Draws (authenticated only), a Dark mode switch, and a Log in button for guests. It stays dark in
+both site themes — it sits over prize photography at every scroll depth, and a light bar there
+reads as a second, competing page surface.
+
+- **It collapses to its two tabs in the hero.** The hero has its own full-size ENTER NOW button
+  (retained on owner call), so a second one stacked under it is both redundant and a competing
+  target — and the bar's build/pack copy is unread at that point anyway. The threshold is
+  `scrollY > innerHeight`, the same one `FloatingGetEntriesButton` used for "past the hero", so
+  the moment the CTA appears did not move. Menu and Cobber stay reachable throughout.
+- **Enter now opens the membership modal**, via the shared `openEntryFlow({ openLocalModal: false })`
+  — identical to the hero CTA. It used to scroll to `#packages`, which asked the visitor to do
+  the choosing twice.
+- **The expansion is animated.** The bar slides up (`promo-dock-rise`), the pack line scales in
+  (`promo-dock-pop`) and the CTA overshoots slightly (`promo-dock-cta-pop`, 6% over then settle) —
+  the collapsed state exists so that this arrival is a moment worth noticing, and a plain fade next
+  to a moving bar reads as a render glitch. **No state tracks this**: the bar MOUNTS on expand, so
+  the CSS animations play on arrival for free, and replay if the visitor scrolls back into the hero
+  and out again — which is exactly when the reminder is worth repeating. All three are
+  `motion-safe:`, so reduced-motion gets the final state with no override. The CTA's wrapper is
+  what scales, not the button, so the hanging multiplier badge rides in with it.
+- **The middle names the pack, not the draw date.** Membership tab → the RECOMMENDED tier
+  (Foreman, resolved through `getRecommendedSubscriptionPlan()` so it is the same object a
+  Foreman card tap uses); One-Time tab → the bottom of the ladder (Apprentice Pack). The active
+  tab comes from `MembershipSection`'s existing `membershipTabChanged` broadcast, seeded from
+  `?packages=` — the same channel `PromoBanner` already listens on. The draw date is on the trust
+  bar and the combo card; repeating it in the dock spent the most valuable line on the page
+  saying nothing new. A membership is priced **"/giveaway"**, matching the tier list in
+  `PartnerBenefitsPromoSection` — this surface sells the draw a membership buys you into, not a
+  billing period. One-time packs take no suffix; they are not recurring.
+
+- **Cobber is the real Cobber.** The right tab dispatches `openSupportChat()` — the shared window
+  event contract — so the same lazy `SupportChatWidget` every other page uses opens here. One chat
+  implementation, one conversation state. The prototype's in-dock chat panel is a mock and was
+  deliberately NOT ported.
+- **It follows the site theme** (white surface / black hairline / dark ink in light mode) via
+  Tailwind `dark:` variants rather than a JS read of `themeMode` — the theme bootstrap sets
+  `html.dark` before hydration, so the first paint is already right instead of painting light and
+  flipping. It also **publishes its measured BAR height as `--promo-dock-h`** on `<html>`, which
+  is what lets the Cobber panel sit flush ON the bar (`.promo-dock-stacks-above`). Measured, not
+  a constant: it changes with the collapsed/expanded state, the breakpoint and the safe-area
+  inset. Deliberately the bar and NOT the dock's full extent — the corner tabs overhang the
+  bar's top edge, and a panel resting above THEM strands the menu + Cobber icons in a strip
+  between the two. The drawer covers them; anything else rising out of the dock must match that
+  geometry.
+- **Light brand accents take dark ink.** Ryobi's neon and DeWalt's yellow swallow white text — the
+  CTA read as an empty lime slab on Ryobi. The dock reuses the exact test `PromoHero` and
+  `FloatingGetEntriesButton` run (`preferDarkBackground`, plus an explicit dewalt-slug check
+  because the store only sets the flag for Ryobi) so every promo CTA flips together. The same flag
+  picks the icon colour on the tabs' white plate, since an accent illegible on white is illegible
+  for the same reason.
+- **The old floaters stand down via CSS, not props.** Mounting the dock stamps `data-promo-dock` on
+  `<html>`; one rule in `globals.css` hides anything carrying `.promo-dock-supersedes` and reserves
+  the bar's height with `body { padding-bottom }`. Two of the four
+  superseded controls ([`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx) and
+  [`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx)) are mounted by the
+  promotions **layout**, not by the page, so a prop could never reach them. `/promotions` (the
+  Spotlight gallery) mounts no dock, so nothing there changes.
+- **The live build arrives by event, not by URL.** `PrizeShowcase` owns the two lanes locally and
+  mirrors them to the URL with `history.replaceState`, which fires **no** event — so the dock cannot
+  read the URL and stay in sync. The builder publishes each change through `publishPrizeSelection()`
+  in [`prize-selection/utils.ts`](../../src/components/sections/promo/prize-selection/utils.ts) and
+  the dock subscribes. The last value is **retained** in that module because the dock renders after
+  `<main>` and its effect therefore runs after the builder's first publish; without the retained
+  snapshot the bar would sit on its fallback until the visitor happened to touch a reel. The dock
+  also takes a `prizeSlug` prop so the FIRST paint already names the page's own combination.
+
 ## /promotions — "Spotlight" showroom (2026-07-22) — SUPERSEDES the filter-grid gallery
 
 Rewritten to the design handoff at `claudeDesign/design_handoff_prize_gallery_spotlight/`. The
@@ -74,11 +233,33 @@ CTA has scrolled off and acting on it meant scrolling back up (owner). `Spotligh
 **floating twin** on `lg:hidden`, shown by an `IntersectionObserver` on the real CTA — when the
 inline one leaves the viewport the floating one fades in, and it carries the SAME accent, ink and
 live `href`, so it re-points as the selection changes. Same contract as the `[slug]` pages'
-`FloatingGetEntriesButton`: `data-floating-widget="true"` (so the Cobber launcher dodges it — see
+`FloatingGetEntriesButton`: `data-floating-widget` (so the Cobber launcher dodges it — see
 [shared-ui/frontend.md](../shared-ui/frontend.md)), `bottom-[calc(env(safe-area-inset-bottom)+1rem)]`,
 centered, `pointer-events-none` wrapper with a `pointer-events-auto` pill. It is a **CSS**
 transition, not framer — this page ships no motion library otherwise — and it takes `tabIndex={-1}`
 while hidden so it is never a phantom tab stop.
+
+**The opt-in attribute is conditional, and lives on the pill (2026-08-10).** Two corrections landed
+together, both about `data-floating-widget`:
+
+1. **It sits on the inner `Link` (the visible pill), not the `inset-x-0` centering wrapper.** The
+   wrapper spans the viewport, so measuring it made the corner controls dodge a centered pill that
+   never reaches them. Same correction was applied to `FloatingGetEntriesButton` and
+   `FloatingCountdownBanner` — see [shared-ui/frontend.md](../shared-ui/frontend.md).
+2. **It is `{ctaOffscreen ? "true" : undefined}`, not a static `"true"`.** Unlike
+   `FloatingGetEntriesButton` (framer `AnimatePresence`, which **unmounts** when hidden), this twin
+   stays mounted and parks at `opacity-0 translate-y-6` — so its rect stays non-zero and the
+   launcher's `width/height === 0` check can't see through it. With the attribute statically
+   attached, the Cobber launcher and the right-corner FABs sat lifted over a bar nobody could see at
+   the top of `/promotions`.
+
+The dodge hook's `MutationObserver` already watches this attribute, so toggling it recomputes for
+free. Any future floater that hides by fading rather than unmounting must do the same.
+
+**The floating twin has no trailing arrow (2026-08-10).** `FloatingGetEntriesButton`'s pill used to
+render a `→` glyph after the label; it was dropped for a cleaner bar (owner). The label is
+`Enter Now` alone. Note the two CTAs differ deliberately: the promo hero says `ENTER NOW` (uppercase,
+from `PromoHero`'s `ctaText`), the floating bar says `Enter Now`.
 
 ### Accessibility
 The rail is ONE `role="radiogroup"` whose 16th option is the cash tile, with a **roving tabindex** —

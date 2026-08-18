@@ -6,7 +6,14 @@
  * `PrizeShowcase` and `MajorDrawSection`.
  */
 
-import { CASH_OPTION, TOOLBOXES, TOOLSETS, type ToolboxType, type ToolsetType } from "./constants";
+import {
+  CASH_OPTION,
+  TOOLBOXES,
+  TOOLSETS,
+  type ToolboxBrand,
+  type ToolboxType,
+  type ToolsetType,
+} from "./constants";
 import { fromPrizeSlug, type PrizeSelection } from "./prize-builder-model";
 import { isToolsetLandingSlug, getDefaultPrizeForToolsetSlug } from "@/config/promo-landing-slugs";
 
@@ -107,4 +114,44 @@ export function resolveBuiltPrizeSlug(params: URLSearchParams, fallbackSlug: str
   const resolvedToolbox = (toolbox as Exclude<ToolboxType, "cash"> | null) ?? fromFallback?.toolbox;
   if (!resolvedToolset || !resolvedToolbox) return resolvedFallback;
   return `${resolvedToolset}-${resolvedToolbox}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Live selection broadcast                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What the prize builder currently has on screen.
+ *
+ * The builder owns this state locally (`PrizeShowcase`) and mirrors it to the URL, but the
+ * mobile bottom dock has to SHOW the build from outside that subtree — and `replaceState`
+ * fires no event, so reading the URL cannot keep it in sync. Rather than lift the builder's
+ * state into a store (a refactor that would touch every surface embedding the card), the
+ * builder publishes each change here and interested chrome subscribes.
+ *
+ * The last published value is retained because subscribers can mount AFTER the builder: the
+ * dock renders below `<main>`, so its effect runs after the builder's first publish and
+ * would otherwise sit empty until the visitor happened to touch a reel.
+ */
+export interface PrizeSelectionSnapshot {
+  toolbox: ToolboxBrand;
+  toolset: ToolsetType;
+  isCash: boolean;
+}
+
+/** Window event name carrying a {@link PrizeSelectionSnapshot} in `detail`. */
+export const PRIZE_SELECTION_EVENT = "promoPrizeSelectionChange";
+
+let lastPublishedSelection: PrizeSelectionSnapshot | null = null;
+
+/** Publish the current build. No-op on the server. */
+export function publishPrizeSelection(snapshot: PrizeSelectionSnapshot): void {
+  lastPublishedSelection = snapshot;
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<PrizeSelectionSnapshot>(PRIZE_SELECTION_EVENT, { detail: snapshot }));
+}
+
+/** The most recent published build, or null when no builder has mounted on this page. */
+export function getPublishedPrizeSelection(): PrizeSelectionSnapshot | null {
+  return lastPublishedSelection;
 }

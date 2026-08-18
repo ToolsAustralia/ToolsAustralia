@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Check, Gift, Star, Zap, AlertCircle, Tag, X } from "lucide-react";
 import { Z_INDEX } from "@/constants/z-index";
+import { useModalA11y } from "@/hooks/useModalBlocking";
 import { usePaymentStatus, type PaymentStatusResponse } from "@/hooks/queries/usePaymentQueries";
 import { rewardsEnabled } from "@/config/featureFlags";
 import { getPartnerDiscountBenefitTextForPackageId } from "@/utils/partner-discounts/partner-catalog-visibility";
@@ -36,6 +37,9 @@ const STEP_BY_EVENT: Record<string, number> = {
   BenefitsGranted: 3,
 };
 
+/** The trap needs an onClose it will never call — Escape is disabled for this overlay. */
+const noop = () => {};
+
 function deriveStepIndex(
   processed: boolean,
   latestEventType: string | undefined,
@@ -63,11 +67,29 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 }) => {
   const mountTo = typeof document !== "undefined" ? document.body : null;
 
+  /**
+   * This overlay portals to <body>, so it is a SIBLING of whatever modal launched it — not a
+   * descendant. That modal's ModalContainer stays mounted underneath (payment flows keep the
+   * modal open while the webhook settles), and its focus trap is still armed. Without
+   * registering here, that trap sees focus land in this overlay, decides it has escaped, and
+   * drags it back into the invisible modal behind — so the "Still processing" dismiss button,
+   * the only exit from a stuck payment, could never be focused.
+   *
+   * Claiming the top of the shared trap stack makes the lower trap inert and contains focus
+   * here instead. Escape is off deliberately: a payment mid-flight is not casually dismissable,
+   * and the panel offers explicit choices instead.
+   */
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useModalA11y(isVisible, overlayRef, noop, { closeOnEscape: false });
+
   const renderOverlay = (ui: React.ReactNode) => {
+    // The wrapper is unstyled and its children are `fixed`, so it adds no layout — it exists
+    // only to give the trap a single panel node across all four render branches.
+    const wrapped = <div ref={overlayRef}>{ui}</div>;
     if (mountTo) {
-      return createPortal(ui, mountTo);
+      return createPortal(wrapped, mountTo);
     }
-    return ui;
+    return wrapped;
   };
   const [status, setStatus] = useState<PaymentStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -276,20 +298,23 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     return renderOverlay(
       <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
         <div className="absolute inset-0 bg-black/60" />
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-auto p-6 sm:p-8 text-center">
+        {/* Theme-paired throughout. This block had no `dark:` token at all, so the 45s
+            "taking longer than usual" state punched a pure-white card into the middle of an
+            otherwise dark screen — at the worst possible moment, right after a payment. */}
+        <div className="relative bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-md mx-auto p-6 sm:p-8 text-center">
           {onStillProcessingDismiss && (
             <button
               type="button"
               onClick={onStillProcessingDismiss}
-              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors"
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-gray-800 dark:hover:text-neutral-100 transition-colors"
               aria-label="Close and stay on this page"
             >
               <X className="h-5 w-5" />
             </button>
           )}
           <AlertCircle className="w-14 h-14 text-amber-500 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Still processing</h3>
-          <p className="text-sm text-gray-600 mb-6">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-neutral-100 mb-2">Still processing</h3>
+          <p className="text-sm text-gray-600 dark:text-neutral-400 mb-6">
             Your payment is taking longer than usual to confirm. We&apos;ll email you when everything is finalised. You can
             safely leave this screen.
           </p>
@@ -298,7 +323,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
               <button
                 type="button"
                 onClick={onStillProcessingDismiss}
-                className="w-full px-4 py-3 border border-gray-300 text-gray-900 bg-white rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-neutral-700 text-gray-900 dark:text-neutral-100 bg-white dark:bg-neutral-800 rounded-lg hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors font-medium"
               >
                 Stay on this page
               </button>
@@ -308,7 +333,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
               onClick={() => {
                 window.location.href = "/my-account";
               }}
-              className="w-full px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+              className="w-full px-4 py-3 bg-gray-900 dark:bg-neutral-100 text-white dark:text-neutral-900 rounded-lg hover:bg-gray-800 dark:hover:bg-white transition-colors font-medium"
             >
               Go to dashboard
             </button>

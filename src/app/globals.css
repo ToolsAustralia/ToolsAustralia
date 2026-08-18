@@ -3681,3 +3681,106 @@ html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
   border-bottom-color: var(--dc-ln);
   box-shadow: 0 14px 26px -22px rgba(0, 0, 0, 0.9);
 }
+
+/* ==========================================================================
+   Promotions bottom dock (PromoBottomDock)
+   ==========================================================================
+   A promo prize page docks ONE bar to the bottom of the viewport that owns the menu, Cobber
+   and the entry CTA. `PromoBottomDock` stamps `data-promo-dock` on <html> for as long as it
+   is mounted; the two rules below are what make the old, separately-docked controls stand
+   down and what stops the bar covering the end of the page.
+
+   An attribute on <html> rather than props: two of the superseded controls (the guest theme
+   toggle and the Cobber launcher) are mounted by the promotions LAYOUT, not by the page, so
+   the page has no way to pass them anything. It also means /promotions (the gallery, which
+   mounts no dock) keeps every control exactly as it was.
+
+   No breakpoint gate: the dock renders at every viewport (owner call, 2026-08-13 — desktop
+   was still showing the old three-floater arrangement), so its stand-down must too. */
+html[data-promo-dock] .promo-dock-supersedes {
+  display: none !important;
+}
+/* Reserve the bar's height so the last section and the footer can still be scrolled clear of
+   it. `env()` matches the bar's own safe-area padding; the bar is taller on desktop. */
+html[data-promo-dock] body {
+  padding-bottom: calc(92px + env(safe-area-inset-bottom));
+}
+@media (min-width: 1024px) {
+  html[data-promo-dock] body {
+    /* Measured bar height at `lg` is 75px; the rest is breathing room under the last section. */
+    padding-bottom: 96px;
+  }
+}
+
+/* The drawer/Cobber tab rising out of the bar. Motion-gated at the call site with
+   `motion-safe:`, so no reduced-motion override is needed here. */
+@keyframes promo-dock-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* The dock's content arriving as the visitor clears the hero. It is the first time the bar
+   says anything, so the pack line and the CTA scale in rather than simply appearing — the
+   whole point of the collapsed state is that the expansion is a moment worth noticing.
+   Both are applied with `motion-safe:` at the call site, so reduced-motion gets the final
+   state with no override needed here. */
+@keyframes promo-dock-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* The CTA overshoots slightly on the way in — a plain fade next to a moving bar reads as a
+   render glitch, and this is the element the bar exists for. */
+@keyframes promo-dock-cta-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  62% {
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Cobber's quick-reply labels. Two requirements a Tailwind class alone cannot meet: the colour
+   derives from the live brand accent (`--cob-acc`), AND it has to fork by theme — the chip's
+   ground is a 10% accent tint, which is near-white in light mode and near-black in dark, so one
+   colour cannot read on both. Light: a dark neutral. Dark: the accent tinted toward white
+   (the handoff's #ffb3aa, per-brand). `color` on the base rule is the fallback where
+   `color-mix()` is unsupported. */
+.cob-quick-ink {
+  color: #111827;
+}
+:is(.dark) .cob-quick-ink {
+  color: rgba(255, 255, 255, 0.9);
+  color: color-mix(in srgb, var(--cob-acc) 30%, #ffffff);
+}
+
+/* Anything that must STACK ON the promo bottom dock rather than float over it — today the
+   Cobber panel, which otherwise sat at its own `bottom-24` and left a gap above the bar.
+
+   `--promo-dock-h` is written by PromoBottomDock from its measured BAR height (not the dock's
+   full extent: the corner tabs overhang the bar's top edge, and a panel resting above THEM
+   leaves the menu + Cobber icons stranded in a strip between the two). Sitting on the bar means
+   the panel covers the tabs, which is exactly what the menu drawer does — the two rise out of
+   the same bar and must share one geometry.
+
+   The fallback keeps the panel where it has always been on pages with no dock. */
+html[data-promo-dock] .promo-dock-stacks-above {
+  bottom: var(--promo-dock-h, 6rem);
+}

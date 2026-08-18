@@ -161,6 +161,65 @@ export async function aggregateNetRevenueSumWithMatch(match: Record<string, unkn
   return result[0]?.totalRevenue ?? 0;
 }
 
+/**
+ * Count + revenue + per-packageType breakdown for net BenefitsGranted matching `match`,
+ * in ONE round-trip, with the counting done by MongoDB instead of in JS.
+ *
+ * Replaces the `fetchNetBenefitsGrantedInRange(...)` + JS-loop pattern for callers that only
+ * need the aggregates: that pattern shipped every matching document across the wire purely to
+ * sum a number (2,304 documents on the all-time admin metrics range, measured 2026-08-17).
+ *
+ * Deliberately ADDITIVE — `fetchNetBenefitsGrantedInRange` is unchanged because
+ * `revenue-breakdown`, `MembershipAnalyticsService` and `PaymentEventRepository` need its
+ * document output.
+ *
+ * Grouping is by `packageType` (a handful of distinct values), so the result set is bounded and
+ * the final reduce in JS is over ~4 rows, not over every payment.
+ *
+ * Parity note: the JS original used `event.packageType || "unknown"` and `event.data?.price || 0`,
+ * so empty-string packageType folded into "unknown" and missing prices became 0. Both are
+ * reproduced exactly below — `$ifNull` alone would NOT, since it preserves `""`.
+ */
+export async function aggregateNetBenefitsSummaryWithMatch(match: Record<string, unknown>): Promise<{
+  count: number;
+  totalRevenue: number;
+  byPackageType: Record<string, number>;
+}> {
+  const rows = await PaymentEvent.aggregate<{ _id: string; c: number; revenue: number }>([
+    { $match: { eventType: "BenefitsGranted", ...match } },
+    ...excludeRefundedBenefitsGrantedStages(),
+    {
+      $group: {
+        _id: {
+          $let: {
+            vars: { pt: "$packageType" },
+            in: {
+              $cond: [
+                { $in: ["$$pt", [null, "", undefined]] },
+                "unknown",
+                "$$pt",
+              ],
+            },
+          },
+        },
+        c: { $sum: 1 },
+        revenue: { $sum: { $ifNull: ["$data.price", 0] } },
+      },
+    },
+  ]).exec();
+
+  let count = 0;
+  let totalRevenue = 0;
+  const byPackageType: Record<string, number> = {};
+  for (const row of rows) {
+    count += row.c;
+    totalRevenue += row.revenue;
+    byPackageType[row._id] = (byPackageType[row._id] || 0) + row.c;
+  }
+
+  return { count, totalRevenue, byPackageType };
+}
+
 /** Count net BenefitsGranted rows matching `match` (excluding refunded). */
 export async function aggregateNetCountWithMatch(match: Record<string, unknown>): Promise<number> {
   const result = await PaymentEvent.aggregate<{ c: number }>([

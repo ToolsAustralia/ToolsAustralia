@@ -119,3 +119,50 @@ be the last surface using a retired noun — a member who reads "partner discoun
 then hears "catalogue" from the chatbot reasonably concludes they are two different things.
 Corpus size is unchanged at 78; `npm run build:chat-knowledge-pack` re-run and
 `npm run test:chat-faqs` green.
+
+## Cobber corpus: entry accumulation, and 5 gaps real customers found (2026-08-11)
+
+Driven by a read of all 76 production conversations. Corpus is now **83 entries** (was 78 — bump
+the count assertion in `src/data/__tests__/faqs.test.ts` deliberately when adding more).
+
+### The entries contradiction — ids 4 and 39 rewritten
+
+Two live entries said opposite things, and Cobber served both:
+
+- **id 4:** "Membership entries **accumulate and carry forward** each month"
+- **id 39:** "**Each monthly draw is a fresh pool** … an active member often sees **0 entries**"
+
+**Neither was complete.** The mechanic, verified in code and against production:
+`calculateRenewalEntries` ([subscription-entries-calculator.ts:109](../../src/utils/payment/subscription-entries-calculator.ts#L109))
+is `entriesToGrant = lastAccumulated + baseEntries`, and that total **becomes** the new
+`lastMonthAccumulatedEntries`. So the number credited into each draw **compounds**. Production
+confirms it exactly — `lastMonthAccumulatedEntries` values fall on clean multiples of each tier's
+base: Tradie (15) shows 75, 90, 105, 120…; Foreman (40) shows 240, 280, 320…; Boss (100) shows 700,
+800, 1000, 1200, **1300**. (That 1300 is the member in conversation #35 who told Cobber *"I
+currently have 1300 entries just from the boss membership"* — Cobber couldn't confirm it. They were
+right.)
+
+Both entries now tell one three-part story: **(a)** the total grows every month (each renewal adds
+your tier's entries on top of the running total), **(b)** each draw is still its own pool that the
+total is credited *into*, and **(c)** crediting happens on the member's **renewal date**, so a brief
+0 between a draw and the next renewal is normal. Part (c) was id 39's real and valid point; its
+"fresh pool" phrasing wrongly implied a reset to base.
+
+### New entries 77–81 — every one a question a real customer asked and got "I don't know" for
+
+| id | Question | Fact source |
+|---|---|---|
+| 77 | Where do I watch the live draw / what's your Facebook page? | `https://www.facebook.com/toolsaust` — canonical, used in the contact page, `ResultsCTA`, mini-draw countdown and `layout.tsx` JSON-LD `sameAs` |
+| 78 | Do you have a mobile app? | **No.** Android/Play Store *planned, not started*; iOS not on the roadmap ([BUSINESS.md:714](../../BUSINESS.md), README.md:36) |
+| 79 | How many people enter / is there a cap? | **Rule-11 sensitive.** Answers without probability framing: totals aren't published, and there's no cap on entries *you* can hold. Never phrase as odds |
+| 80 | What was the cheap offer after checkout? | The post-purchase upsell — optional, one screen only, *includes* extra free entries |
+| 81 | Who won / are winners public? | Yes — first name + last initial, state, prize, plus the randomdraws.com.au verification link, on `/draw-results` |
+
+Entry 79 is the one to be careful with on future edits: customers ask it as an odds question
+("what are my chances"), and the answer must stay in entries language per CLAUDE.md rule 11.
+`npm run test:chat-faqs` enforces the banned vocabulary.
+
+**After any corpus edit:** `npm run build:chat-knowledge-pack` then `npm run test:chat-faqs`. The
+pack is regenerated into `src/generated/chatKnowledgePack.ts` and its size ceiling lives in
+`src/lib/support-chat/__tests__/knowledge-pack.test.ts` — read the comment there before raising it
+(the pack is currently ~13,375 tokens and is re-sent **uncached** on every request).

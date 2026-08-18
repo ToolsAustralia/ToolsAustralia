@@ -48,6 +48,8 @@ import ChargeJobRun, { type ChargeJobRunTotals } from "@/models/ChargeJobRun";
 import ChargeJobWorklist from "@/models/ChargeJobWorklist";
 import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import { previewChargePastDueInvoices } from "@/services/admin/previewChargePastDueInvoices";
+import { findLatestBlockByFingerprint } from "@/services/allowlist/blockedTransactionRepo";
+import { shouldCooldownForExcessiveRetry } from "./chargeOrRecoverPolicy";
 import {
   reconcileAllowlistFromBlocked,
   type ReconcileSummary,
@@ -440,6 +442,36 @@ async function recoverWorklistItem(
   }
 }
 
+/**
+ * Fingerprint of the card this invoice will actually charge, or null.
+ *
+ * Reads only from the already-expanded objects on the retrieved invoice, so it
+ * costs no extra Stripe call. Returns null when the resolved payment method was
+ * not among the expanded candidates — callers must treat null as "unknown" and
+ * proceed with the charge rather than assuming anything.
+ */
+function resolveChargedCardFingerprint(
+  invoice: Stripe.Invoice,
+  paymentMethodId: string
+): string | null {
+  const candidates: Stripe.PaymentMethod[] = [];
+
+  if (invoice.default_payment_method && typeof invoice.default_payment_method !== "string") {
+    candidates.push(invoice.default_payment_method as Stripe.PaymentMethod);
+  }
+
+  const customer = invoice.customer;
+  if (customer && typeof customer !== "string" && !(customer as Stripe.DeletedCustomer).deleted) {
+    const pm = (customer as Stripe.Customer).invoice_settings?.default_payment_method;
+    if (pm && typeof pm !== "string") candidates.push(pm as Stripe.PaymentMethod);
+  }
+
+  for (const pm of candidates) {
+    if (pm?.id === paymentMethodId) return pm.card?.fingerprint ?? null;
+  }
+  return null;
+}
+
 /** Charge a single worklist item: retrieve fresh invoice, resolve PM, delegate to the primitive. */
 async function chargeWorklistItem(
   item: { invoiceId: string; customerId: string; userId: mongoose.Types.ObjectId; amount: number },
@@ -451,7 +483,15 @@ async function chargeWorklistItem(
     // `payments` is expanded so decideBulkChargeAction can tell a truly unpayable
     // invoice (every PaymentIntent canceled) from an exhausted-but-payable one.
     invoice = (await stripe.invoices.retrieve(item.invoiceId, {
-      expand: ["customer", "payments"],
+      // The two payment-method paths are expanded so the charged card's
+      // fingerprint is available for the Stripe excessive-retry cooldown check
+      // below WITHOUT an extra paymentMethods.retrieve per worklist item.
+      expand: [
+        "customer",
+        "payments",
+        "default_payment_method",
+        "customer.invoice_settings.default_payment_method",
+      ],
     })) as Stripe.Invoice;
   } catch {
     // Invoice no longer retrievable (deleted/void). Log a skip so it counts as done.
@@ -497,6 +537,50 @@ async function chargeWorklistItem(
       chargeRunId: runId,
     });
     return;
+  }
+
+  // ---- Stripe excessive-retry cooldown ----------------------------------------
+  // Stripe blocks a card with `previously_declined_do_not_retry` based on prior
+  // retry velocity, the Radar allow list cannot override it (confirmed by Stripe
+  // support), and it decays on its own. Re-charging inside the window collects
+  // nothing AND feeds the signal that caused the block, so sit the card out.
+  //
+  // Scoped to the exact CARD, never the customer: a member who has since added a
+  // new card has a different fingerprint and is charged immediately. Radar-type
+  // blocks are excluded too — the allow list genuinely fixes those.
+  //
+  // Fails OPEN: any lookup error falls through to a normal charge attempt. We
+  // would rather retry once too often than silently stop collecting.
+  try {
+    const chargedFingerprint = resolveChargedCardFingerprint(invoice, paymentMethodId);
+    if (chargedFingerprint) {
+      const cooldown = shouldCooldownForExcessiveRetry({
+        latestBlock: await findLatestBlockByFingerprint(chargedFingerprint),
+        currentFingerprint: chargedFingerprint,
+        now: new Date(),
+      });
+      if (cooldown.cooldown) {
+        const days = cooldown.daysRemaining;
+        await InvoiceChargeLog.create({
+          invoiceId: item.invoiceId,
+          customerId: item.customerId,
+          userId: item.userId,
+          adminId: new mongoose.Types.ObjectId(adminId),
+          status: "skipped",
+          amount: invoice.amount_remaining || item.amount,
+          attemptedAt: new Date(),
+          // Phrase is load-bearing: classifySkipReasonFromMessage buckets on it.
+          errorMessage: `Skipped: excessive_retry_cooldown — Stripe is blocking this card after repeated attempts. Retry in ${days} day${days === 1 ? "" : "s"}.`,
+          chargeRunId: runId,
+        });
+        return;
+      }
+    }
+  } catch (err) {
+    console.error(
+      `[chargePastDue] do-not-retry cooldown check failed for ${item.invoiceId}; charging anyway:`,
+      err
+    );
   }
 
   // The primitive writes its own InvoiceChargeLog row and runs all guards. Wrap it so an

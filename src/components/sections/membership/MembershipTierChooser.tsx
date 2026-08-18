@@ -154,9 +154,12 @@ export default function MembershipTierChooser({
   sectionId?: string;
 }) {
   return (
+    // `scroll-mt` matches the fixed header (86px, 106px at lg) — this is the `#membership`
+    // anchor that every "Become a member" / "Get free entries" CTA on the page targets, and
+    // without it the jump buries the "Choose your tier" heading behind the header.
     <section
       id={sectionId}
-      className="relative overflow-hidden bg-page py-16 sm:py-20 lg:py-24"
+      className="relative scroll-mt-[var(--app-header-h)] overflow-hidden bg-page py-16 sm:py-20 lg:scroll-mt-[var(--app-header-h-lg)] lg:py-24"
       style={{
         background:
           "radial-gradient(720px 480px at 8% 2%, rgba(0,194,237,.12), transparent 58%),radial-gradient(860px 560px at 50% -14%, rgba(255,200,0,.1), transparent 56%),radial-gradient(760px 540px at 94% 108%, rgba(238,0,0,.1), transparent 58%)",

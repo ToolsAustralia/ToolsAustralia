@@ -171,6 +171,46 @@ export const CATEGORY_CHIPS: readonly DiscountCategoryChip[] = [
   })).sort((a, b) => b.count - a.count),
 ];
 
+/** Access-level chips: "Any" plus each rung of the 11-level ladder. */
+export interface DiscountLevelChip {
+  label: string;
+  /** null = Any level. */
+  value: number | null;
+  count: number;
+}
+
+/**
+ * The access ladder as filter chips — **EXACT rungs, multi-select**.
+ *
+ * Each chip is the set of offers that rung *itself* opens, and chips union. So one tap on
+ * 50% answers "what does 50% specifically unlock?", and tapping 5 + 10 + 15 + 25 + 40 + 50
+ * builds the "everything up to 50%" view. Both questions, one mechanism.
+ *
+ * This started out CUMULATIVE (`pct <= level`) and that was wrong for the reason the chips
+ * make obvious: cumulative makes the **100% chip a no-op** — it selects all 1,833, which is
+ * exactly what "Any" already does — and it makes every high rung nearly one, since 85%
+ * would show 1,559 of 1,833. The interesting question at the top of the ladder is "what does
+ * this tier ADD", and only exact rungs answer it.
+ *
+ * Counts are per-rung and measured off `VENDOR_ROWS`, the same way `CATEGORY_CHIPS` counts
+ * its categories — so a chip's number is exactly what selecting it returns, with no offset to
+ * explain. They therefore do NOT match `PARTNER_CATALOG_TIER_COUNTS` (which is cumulative and
+ * still what the band headers and gate panels quote); the two answer different questions and
+ * `npm run test:discount-catalogue` pins the relationship between them.
+ *
+ * Direct partners sit at `pct: 0`, which is a band key and not a real rung, so they are not
+ * chipped and are excluded whenever any rung is selected — they are "included with any
+ * membership", not unlocked at a percent.
+ */
+export const LEVEL_CHIPS: readonly DiscountLevelChip[] = [
+  { label: "Any", value: null, count: PARTNER_CATALOG_TOTAL },
+  ...DISCOUNT_LEVELS.map((pct) => ({
+    label: `${pct}%`,
+    value: pct,
+    count: VENDOR_ROWS.filter((r) => r.pct === pct).length,
+  })),
+];
+
 // ---------------------------------------------------------------------------
 // Filter + sort
 // ---------------------------------------------------------------------------
@@ -188,6 +228,17 @@ export interface DiscountFilterInput {
   category: string | null;
   /** "Only what I can use" — hides `pct > viewerPct`. Signed-in only. */
   openOnly: boolean;
+  /**
+   * Access-level filter — the EXACT rungs selected, unioned. Empty = the whole ladder.
+   *
+   * Exact rather than cumulative so the top of the ladder stays useful: `pct <= 100` selects
+   * everything, making a cumulative 100% chip identical to "Any". Multi-select is what gives
+   * back the cumulative view when it is wanted — picking 5…50 is "up to 50%".
+   *
+   * Composes with `openOnly` rather than fighting it: `openOnly` is still relative to the
+   * VIEWER, so a member who selects a rung above their own access sees it filtered back out.
+   */
+  levels: readonly number[];
   sort: DiscountSort;
   viewerPct: number;
   signedIn: boolean;
@@ -201,6 +252,7 @@ export function filterAndSortRows(
   const out = rows.filter((r) => {
     if (input.category !== null && r.cat !== input.category) return false;
     if (input.openOnly && input.signedIn && r.pct > input.viewerPct) return false;
+    if (input.levels.length > 0 && !input.levels.includes(r.pct)) return false;
     if (q && !r.haystack.includes(q)) return false;
     return true;
   });

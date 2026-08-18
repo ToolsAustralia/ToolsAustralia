@@ -17,10 +17,13 @@
  */
 
 import React from "react";
+import { createPortal } from "react-dom";
 import { Search, ArrowUpDown, Check, SlidersHorizontal, X } from "lucide-react";
+import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import {
   CATEGORY_CHIPS,
   DISCOUNT_SORTS,
+  LEVEL_CHIPS,
   fmtAu,
   type DiscountSort,
 } from "@/utils/partner-discounts/discount-catalogue";
@@ -32,6 +35,10 @@ export interface DiscountFiltersProps {
   onQueryChange: (value: string) => void;
   category: string | null;
   onCategoryChange: (value: string | null) => void;
+  /** Exact access rungs selected, unioned. Empty = the whole ladder. */
+  levels: readonly number[];
+  /** Chip tapped: `null` is the "Any" chip (clear all), a number toggles that rung. */
+  onLevelToggle: (value: number | null) => void;
   openOnly: boolean;
   onOpenOnlyChange: (value: boolean) => void;
   sort: DiscountSort;
@@ -40,6 +47,15 @@ export interface DiscountFiltersProps {
   /** How many rows the current filters return — the sheet's CTA states it. */
   resultCount: number;
   onReset: () => void;
+  /**
+   * True once the control bar has stuck to the header.
+   *
+   * Desktop then collapses to the same compact bar the phone always shows. Measured at
+   * 1440x900: docked, the header + bar ate 342px of a 900px viewport — 38% of the screen
+   * given over to chrome while reading a 1,833-row list, and 163px of that was the two chip
+   * rows alone. Collapsing them takes the bar from 241px to ~62px.
+   */
+  stuck?: boolean;
 }
 
 export default function DiscountFilters(props: DiscountFiltersProps) {
@@ -48,7 +64,10 @@ export default function DiscountFilters(props: DiscountFiltersProps) {
   const sortRef = React.useRef<HTMLDivElement | null>(null);
 
   const activeCount =
-    (props.category ? 1 : 0) + (props.openOnly ? 1 : 0) + (props.query.trim() ? 1 : 0);
+    (props.category ? 1 : 0) +
+    (props.levels.length > 0 ? 1 : 0) +
+    (props.openOnly ? 1 : 0) +
+    (props.query.trim() ? 1 : 0);
   const sortLabel = (DISCOUNT_SORTS.find((s) => s.key === props.sort) ?? DISCOUNT_SORTS[0]).label;
 
   // A dropdown that only closes on its own trigger is a trap on a page this long.
@@ -66,6 +85,10 @@ export default function DiscountFilters(props: DiscountFiltersProps) {
     };
   }, [sortOpen]);
 
+  // NOTE: this deliberately no longer force-closes on the way up to `lg`. It had to while the
+  // sheet was `lg:hidden` — the state stayed true behind a display:none panel, which with a
+  // scroll lock would have stranded the page. The sheet now renders at every width (it is the
+  // stuck-desktop filter UI too), so there is nothing to strand.
   React.useEffect(() => {
     if (!sheetOpen) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSheetOpen(false);
@@ -197,11 +220,15 @@ export default function DiscountFilters(props: DiscountFiltersProps) {
           </button>
         )}
 
-        {/* Phone: one button for everything else. */}
+        {/* Phone always; desktop once the bar has docked. Same button, same sheet — the
+            compact mode is not a second implementation. */}
         <button
           type="button"
           onClick={() => setSheetOpen(true)}
-          className="ta-dc-ib relative inline-flex flex-none items-center gap-2 font-sans font-bold lg:hidden"
+          className={cn(
+            "ta-dc-ib relative inline-flex flex-none items-center gap-2 font-sans font-bold",
+            props.stuck ? "" : "lg:hidden"
+          )}
           style={{
             height: 46,
             padding: "0 14px",
@@ -234,17 +261,28 @@ export default function DiscountFilters(props: DiscountFiltersProps) {
         </button>
       </div>
 
-      {/* Category chips — desktop only; the sheet carries them on a phone. */}
-      <div className="hidden flex-wrap gap-[7px] lg:flex">
-        {CATEGORY_CHIPS.map((c) => (
-          <CategoryChip
-            key={c.label}
-            label={c.label}
-            count={c.count}
-            on={props.category === c.value}
-            onPick={() => props.onCategoryChange(c.value)}
-          />
-        ))}
+      {/* Chip rows — desktop only; the sheet carries both on a phone. Two rows now share the
+          space, so each is labelled: unlabelled, "50%" sat beside "Beauty" as if they picked
+          from the same list. */}
+      <div className={cn("hidden flex-col gap-[9px]", props.stuck ? "" : "lg:flex")}>
+        <div className="flex flex-col gap-1.5">
+          <FieldLabel>Access level</FieldLabel>
+          <LevelChipRow levels={props.levels} onToggle={props.onLevelToggle} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <FieldLabel>Category</FieldLabel>
+          <div className="flex flex-wrap gap-[7px]">
+            {CATEGORY_CHIPS.map((c) => (
+              <CategoryChip
+                key={c.label}
+                label={c.label}
+                count={c.count}
+                on={props.category === c.value}
+                onPick={() => props.onCategoryChange(c.value)}
+              />
+            ))}
+          </div>
+        </div>
       </div>
 
       {sheetOpen && (
@@ -347,6 +385,8 @@ function CategoryChip({
 function FilterSheet({
   category,
   onCategoryChange,
+  levels,
+  onLevelToggle,
   openOnly,
   onOpenOnlyChange,
   sort,
@@ -357,9 +397,38 @@ function FilterSheet({
   onClose,
   activeCount,
 }: DiscountFiltersProps & { onClose: () => void; activeCount: number }) {
-  return (
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  useScrollLock(true);
+  useModalA11y(true, panelRef, onClose);
+
+  /**
+   * PORTALLED TO <body>, and that is load-bearing rather than tidiness.
+   *
+   * This sheet renders inside the sticky filter bar (`.ta-dc-stick`, `sticky z-20`), which is
+   * a STACKING CONTEXT. Nested inside it, the sheet's own `z-index: 10000` is meaningless
+   * against the rest of the page — it can only compete at its ancestor's z-20. The site
+   * header is `position: fixed; z-index: 40`, so it painted OVER the scrim: undimmed,
+   * unblurred and fully clickable, on a surface declaring `aria-modal="true"`.
+   * `document.elementFromPoint` at the header's centre returned the header, not the scrim.
+   *
+   * Escaping to <body> is the fix the repo already uses for exactly this (WinnersTestimony,
+   * PortalHandoff). Raising `.ta-dc-stick`'s z-index instead would float the filter bar over
+   * the header permanently.
+   */
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    // `ta-discount` must be re-applied on the portal root. The whole `/discount` skin is CSS
+    // custom properties scoped to `.ta-discount` (globals.css:3471), so escaping the page
+    // wrapper left every `--dc-*` undefined and the panel's `background: var(--dc-sf)`
+    // resolved to `rgba(0,0,0,0)` — a fully transparent sheet with the catalogue showing
+    // through it. The dark skin still works because its selector is `.dark .ta-discount` and
+    // `.dark` lives on <html>, which is still an ancestor here.
+    // `lg:hidden` is gone: this is the stuck-desktop filter UI too. At `lg` it centres and
+    // takes a max-width instead of spanning the viewport — a 1440px-wide bottom sheet reads
+    // as a mis-render, not as a panel.
     <div
-      className="fixed inset-0 flex flex-col justify-end lg:hidden"
+      className="ta-discount fixed inset-0 flex flex-col justify-end lg:items-center lg:justify-center lg:p-6"
       style={{ zIndex: Z_INDEX.MODAL_BASE }}
     >
       <button
@@ -370,20 +439,23 @@ function FilterSheet({
         style={{ background: "rgba(6,6,8,.72)", backdropFilter: "blur(5px)" }}
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Filter offers"
-        className="ta-dc-sheet ta-dc-noscroll relative flex max-h-[88%] flex-col overflow-auto"
+        className="ta-dc-sheet ta-dc-noscroll relative flex max-h-[88%] w-full flex-col overflow-auto overscroll-contain rounded-t-[24px] lg:max-h-[80vh] lg:w-[460px] lg:rounded-[20px] lg:border"
         style={{
-          borderRadius: "24px 24px 0 0",
           background: "var(--dc-sf)",
           borderTop: "1px solid var(--dc-ln2)",
+          borderColor: "var(--dc-ln2)",
           padding: "18px 14px 0",
         }}
       >
+        {/* Drag-handle affordance — a bottom-sheet signal, meaningless on a centred desktop
+            panel, so it goes away with the sheet framing. */}
         <span
           aria-hidden
-          className="absolute left-1/2 -translate-x-1/2"
+          className="absolute left-1/2 -translate-x-1/2 lg:hidden"
           style={{
             top: 7,
             width: 38,
@@ -455,7 +527,7 @@ function FilterSheet({
           )}
 
           <div className="flex flex-col gap-1.5">
-            <SheetLabel>Sort</SheetLabel>
+            <FieldLabel>Sort</FieldLabel>
             {DISCOUNT_SORTS.map((s) => (
               <button
                 key={s.key}
@@ -482,7 +554,12 @@ function FilterSheet({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <SheetLabel>Category</SheetLabel>
+            <FieldLabel>Access level</FieldLabel>
+            <LevelChipRow levels={levels} onToggle={onLevelToggle} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <FieldLabel>Category</FieldLabel>
             <div className="flex flex-wrap gap-[7px]">
               {CATEGORY_CHIPS.map((c) => (
                 <CategoryChip
@@ -520,11 +597,44 @@ function FilterSheet({
           </button>
         </div>
       </div>
+    </div>,
+    document.body
+  );
+}
+
+/**
+ * The access ladder, multi-select. Rendered identically on desktop and in the sheet.
+ *
+ * Each rung is EXACT and rungs union, so "50%" alone answers "what does 50% specifically
+ * unlock?" and 5+10+…+50 rebuilds "everything up to 50%". "Any" is the clear-all, lit only
+ * when nothing is picked — so the row always shows exactly one lit state at minimum and the
+ * user is never looking at a filter row with no visible answer to "what am I filtering by?".
+ */
+function LevelChipRow({
+  levels,
+  onToggle,
+}: {
+  levels: readonly number[];
+  onToggle: (value: number | null) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-[7px]">
+      {LEVEL_CHIPS.map((l) => (
+        <CategoryChip
+          key={l.label}
+          label={l.label}
+          count={l.count}
+          on={l.value === null ? levels.length === 0 : levels.includes(l.value)}
+          onPick={() => onToggle(l.value)}
+        />
+      ))}
     </div>
   );
 }
 
-function SheetLabel({ children }: { children: React.ReactNode }) {
+/** Small-caps section label. Named for the role, not the surface — both the sheet and the
+ *  desktop chip rows use it now that there is more than one chip group to tell apart. */
+function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <span
       className={cn("font-sans font-extrabold uppercase")}

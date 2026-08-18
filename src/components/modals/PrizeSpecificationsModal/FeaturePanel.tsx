@@ -12,6 +12,8 @@ interface FeaturePanelProps {
   stats: { tools: string; storage: string };
   /** Hidden in cash mode — there is no bundled $5,000 when the winner took the $10,000. */
   showCashBonus: boolean;
+  /** Open the fullscreen viewer on the combination. Omitted → the image is not interactive. */
+  onOpenViewer?: () => void;
   className?: string;
 }
 
@@ -27,11 +29,22 @@ export default function FeaturePanel({
   comboTitle,
   stats,
   showCashBonus,
+  onOpenViewer,
   className,
 }: FeaturePanelProps) {
+  const Frame = onOpenViewer ? "button" : "div";
   return (
     <div className={cn("flex flex-col", className)}>
-      <div className="relative aspect-[16/7] w-full overflow-hidden rounded-xl border border-[var(--pbc-tile-border)] bg-gradient-to-b from-white to-[#eef0f2] lg:aspect-[4/3]">
+      <Frame
+        {...(onOpenViewer
+          ? { type: "button" as const, onClick: onOpenViewer, "aria-label": `View ${comboTitle} full screen` }
+          : {})}
+        className={cn(
+          "relative aspect-[16/7] w-full overflow-hidden rounded-xl border border-[var(--pbc-tile-border)] bg-gradient-to-b from-white to-[#eef0f2] lg:aspect-[4/3]",
+          onOpenViewer &&
+            "cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pbc-accent)]"
+        )}
+      >
         <Image
           src={comboImage}
           alt={comboTitle}
@@ -39,12 +52,20 @@ export default function FeaturePanel({
           sizes="(max-width: 1023px) 92vw, 320px"
           className="object-contain p-2"
         />
+        {onOpenViewer && (
+          <span
+            aria-hidden
+            className="absolute right-[9px] top-[9px] flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[rgba(18,16,15,.6)] text-white"
+          >
+            <ZoomIcon />
+          </span>
+        )}
         {showCashBonus && (
           <span className="absolute bottom-[9px] right-[9px] rounded-full bg-[#18a94d] px-[9px] py-[5px] font-poppins text-[8px] font-extrabold leading-none tracking-[0.1em] text-white shadow-[0_6px_16px_-6px_#18a94d]">
             + $5,000 CASH
           </span>
         )}
-      </div>
+      </Frame>
 
       <p className="mt-3 font-poppins text-[8.5px] font-bold leading-none tracking-[0.18em] text-[#18a94d] lg:mt-3.5">
         EVERYTHING YOU&apos;D WIN
@@ -61,6 +82,15 @@ export default function FeaturePanel({
         )}
       </dl>
     </div>
+  );
+}
+
+function ZoomIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5M11 8v6M8 11h6" />
+    </svg>
   );
 }
 

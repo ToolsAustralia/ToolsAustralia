@@ -26,7 +26,10 @@ const STATE_NAMES: Record<string, string> = {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const _guard = await requirePermission("miniDraws.view");
+    // `viewParticipants`, not `view`: this dumps entrant names, emails, mobiles and states —
+    // byte-for-byte the same personal data the participants modal shows. Gating the modal but
+    // leaving the export on `view` would be a lock on the front door with the back one open.
+    const _guard = await requirePermission("miniDraws.viewParticipants");
     if (_guard instanceof NextResponse) return _guard;
 
     await connectDB();

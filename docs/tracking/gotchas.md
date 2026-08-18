@@ -328,6 +328,131 @@ Before R7's timing policy, GTM + Meta + TikTok + Klaviyo + Contentsquare (~539 K
 
 Pure `lazyOnload` for the suite LOST every queued event when a visitor bounced before browser idle — including the authed `Started Checkout` that drives the abandoned-checkout email. `KlaviyoScriptLoader` now injects the suite script on the FIRST `klaviyo`/`_klOnsite` push (patched queue push, with retry because the afterInteractive queue snippet may install after the effect) or at browser idle, whichever comes first. Tracked visitors ship events as fast as pre-split; event-less visitors keep the full deferral. Don't "simplify" back to a plain lazyOnload `<Script>`.
 
+## Contentsquare double-counted every SPA navigation (tag-side CSTC + client push, 2026-08-07)
+
+**Incident (verified live 2026-08-07):** `/membership` and `/faq` each sent **two** artificial
+pageviews per client-side navigation (`pn=2` and `pn=3`, then `pn=5` and `pn=6`). Cause: the live
+Contentsquare project config contained a **CSTC** snippet pairing the "Artificial Pageview"
+template with a **"HistoryChange"** trigger (fires on `pushState` / `replaceState` / `popstate`)
+**in addition to** our own `trackPageview` push. Contentsquare does not de-duplicate the two —
+its docs assume you use CSTC or a manual push, never both. Effect: inflated pages/session and
+phantom self-loops (`/membership` → `/membership`) in Journey Analysis.
+
+**Why code review could not catch it:** the CSTC snippet lives in the Contentsquare dashboard,
+not in this repo. Worse, `ContentsquarePageTracker`'s header comment asserted the tag "does NOT
+auto-detect History API navigations" — true when verified against the bundle on 2026-08-03, and
+silently false once the snippet was enabled. A comment about third-party dashboard state ages
+without any local signal; verify it, don't trust it.
+
+**Resolution:** the CSTC snippet was disabled and the client-side push kept — it also applies
+`shouldTrackRoute()` filtering and the 255-char cap, which the tag-side trigger does not.
+Check the (public) tag-side config with
+`curl -s https://t.contentsquare.net/settings/598444.json | jq .implementations`; an empty array
+is healthy. Full rule: [rules.md R11](./rules.md#r11-contentsquare-virtual-pageviews-come-from-the-client-push-only--never-also-from-a-tag-side-cstc-snippet).
+
+## Contentsquare replay masks form fields, not text nodes — rendered PII was unmasked until 2026-08-07
+
+Verified against the live project config on 2026-08-07: session replay ran at 100% capture with
+**no masking configured at all** (`anonymisationMethod: null`, `textVisibilityEnabled: 0`,
+`maskMedia: false`). That is less exposed than it sounds — `<input>` / `<textarea>` /
+contenteditable content is masked by default, and Automatic Personal Data Redaction (always on)
+strips emails, JWTs, OAuth tokens and card numbers from the DOM, URLs and error strings. The gap
+was **personal data rendered as a text node**: a member's name in the header, a shipping address
+on checkout success, a date of birth, free text typed into support chat.
+
+Closed by pushing `setPIISelectors` with `[data-cs-mask]` and marking those render sites — see
+[frontend.md](./frontend.md#contentsquare-pii-masking--data-cs-mask-2026-08-07). Two footguns when
+touching this: the push **must** happen before the main tag fires (Contentsquare's docs are
+explicit; a late masking rule has already lost the first pageview), and masking is driven by the
+bare attribute only — adding a class-based selector list instead would break the next time someone
+renames a class.
+
 ## GTM custom-HTML tags are blocklisted client-side (2026-07-20)
 
 `GTM_INIT_SNIPPET` pushes `{'gtm.blocklist':['html']}` before gtm.js loads. Why: container GTM-TBCCQQVZ's ONLY tag is a dead legacy Hotjar custom-HTML tag whose loader is CSP-blocked (console error on every page); the blocklist stops GTM from attempting the injection at all. If you ever add a legitimate custom-HTML tag to the container, REMOVE the blocklist key from `src/utils/security/inline-snippets.ts` (and recompute the GTM_INIT_SNIPPET hash in csp.ts — `npm run test:csp-inline-hashes` guards the pairing). Best end-state: delete the Hotjar tag in the GTM UI, then this blocklist becomes belt-and-braces.
+
+## `extractAttributionParams(window.location.search)` returned `{}` — all client-side UTM capture was dead (fixed 2026-08-10)
+
+`extractAttributionParams` branched on `urlOrParams.includes("?")` and handed the string to
+`new URL()`. A bare query string — `"?utm_source=tiktok&utm_medium=paid"`, exactly what
+`window.location.search` returns — contains a `?`, so it took that branch, `new URL()` threw
+on a relative string, the function's own outer `try` swallowed it, and it returned `{}`.
+
+**It failed closed and threw nothing.** No error, no console warning, no failing request. The
+only symptom was attribution data that quietly wasn't there.
+
+Two of the four callers passed that shape, and both are attribution-critical:
+
+| Caller | Argument | Was |
+|---|---|---|
+| `api/auth/register/route.ts` | full referer URL | fine |
+| `utils/promo-analytics/record-promo-visit.ts` | full URL | fine |
+| **`hooks/useUTMPersistence.ts`** | `window.location.search` | **broken** |
+| **`components/modals/MembershipModal/index.tsx`** | `window.location.search` | **broken** |
+
+So `_ta_attr` (first-touch, 90 days), `_ta_attr_last` and the sessionStorage UTM copy were
+**never written client-side**, and the membership modal's URL read at purchase time returned
+nothing. Verified on production 2026-08-10: landing on
+`/promotions/milwaukee-milwaukee?utm_source=TIKTOK&utm_medium=paid` left all three absent.
+
+This also resolves a confusing pair of facts. `promoanalyticsvisits` was full of campaign data
+(26,799 `tiktok` rows in three days) while the attribution cookie did not exist — because
+`record-promo-visit` passes a **full URL** and worked, while the cookie writer passed
+`window.location.search` and did not.
+
+Fixed by testing `startsWith("?")` **before** the `includes("?")` branch and parsing with
+`URLSearchParams`, which strips the leading `?` itself. Pinned by `npm run test:utm-helpers`.
+
+**The lesson worth keeping:** a parser that catches its own exceptions and returns an empty
+result cannot be trusted to tell you it is broken. When attribution looks thin, verify the
+capture path end to end on production rather than assuming the data is simply sparse.
+
+## Attribution must never fail a charge — Stripe metadata is clipped to 500 chars (2026-08-10)
+
+Directly downstream of the parser bug above. `buildAttributionMetadata` stamps raw UTM values
+into Stripe metadata as `attr_utm_source` etc., and **Stripe rejects the entire request if any
+metadata value exceeds 500 characters**. Nothing upstream capped them:
+`attributionSchema` declares plain `z.string().optional()` with no `.max()`, and the values
+originate in the URL — anyone can append `?utm_source=<600 chars>` to a landing link.
+
+Every purchase path funnels through that function — `create-subscription` (+ existing-user),
+`create-payment-intent`, `create-one-time-purchase` (+ existing-user), `mini-draw/purchase`,
+`upsell/purchase` — so an unbounded value fails the **charge**, not merely the reporting.
+
+This was unreachable while `extractAttributionParams` returned `{}` for
+`window.location.search`: the values were permanently empty, so no limit was ever tested.
+Fixing that parser is precisely what made a long UTM able to reach Stripe.
+
+**Clip, never reject.** Attribution is reporting metadata. A truncated `utm_term` costs a
+little fidelity; a refused PaymentIntent costs the sale. Do not "fix" this by adding `.max()`
+to `attributionSchema` — that turns an over-long campaign tag into a failed purchase, which is
+strictly worse. Pinned by `npm run test:attribution-metadata`.
+
+The general rule: **anything derived from a URL and forwarded to a payment provider needs a
+bound at the boundary**, because the URL is attacker-controlled and the provider's limits are
+hard failures.
+
+## `traffic_source` lost a Suspense race and reported `direct` (fixed 2026-08-10)
+
+`ContentsquareDynamicVariables` originally read the acquisition channel from the sessionStorage
+UTM copy alone. That copy is written by `useUTMPersistence`, which lives inside
+`PromoLinkTracker` — and **that component self-wraps in `<Suspense>`** (it must, because
+`useSearchParams` needs a boundary on prerendered routes). A suspended subtree commits its
+effects *after* its siblings, so the dynamic-variables push consistently ran first and read
+nothing.
+
+The symptom was maddening precisely because everything else looked right: on production,
+`sessionStorage`, `_ta_attr` and `_ta_attr_last` were all correctly populated with
+`utm_source=TIKTOK` — and the `dvar` payload still said `traffic_source: "direct"`. Storage was
+not broken; it simply had not been written *yet* at the moment we read it.
+
+Fixed by reading `window.location.search` FIRST (via `extractAttributionParams`), falling back
+to storage only when the URL carries no campaign params. The landing URL is available
+synchronously and depends on no other component having mounted, which makes it authoritative
+for the pageview that matters most — the one an ad lands on. Storage still covers SPA
+navigations, where the URL has dropped the params but the session is unchanged; by then
+`useUTMPersistence` has long since run.
+
+**The general trap:** component B reading state that component A writes in an effect is a
+race, and `<Suspense>` makes the ordering non-obvious — tree order is not effect order. If the
+value exists in the URL, read the URL.

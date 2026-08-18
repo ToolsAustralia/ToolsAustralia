@@ -32,3 +32,28 @@ Pair it with the e2e harness, not your real dev data: `npm run e2e:env` boots th
 and-seeded stack (tracking neutered, Stripe test keys) and holds it open — point the MCP
 browser at the printed localhost URL. New MCP servers load at session START; a session
 running when `.mcp.json` changed must restart to see it.
+
+## Contentsquare MCP (`.mcp.json`, added 2026-08-07)
+
+Second server alongside `playwright`, registered PROJECT-scoped as an HTTP transport:
+
+```json
+"contentsquare": { "type": "http", "url": "https://api.contentsquare.com/mcp" }
+```
+
+Equivalent CLI form: `claude mcp add contentsquare --transport http https://api.contentsquare.com/mcp`.
+
+This is Contentsquare's official remote MCP server. It lets an AI agent query Contentsquare
+data — heatmaps, session journeys, funnels, surveys, errors — without opening the
+Contentsquare UI.
+
+**It cannot be authorized in a non-interactive session.** Auth is OAuth2, browser-based on
+first connection, after which the agent refreshes the hourly access tokens automatically. So
+the first connection needs an interactive `/mcp` run (or `claude mcp`) to complete the OAuth
+flow — until that happens, every tool call fails. A headless/piped session cannot bootstrap it.
+
+Users only see the projects they already have permission for: existing Contentsquare RBAC
+carries over, the MCP server grants nothing extra.
+
+Contentsquare's Free tier includes 300 tool calls/month, so this keeps working after the paid
+trial ends.

@@ -40,6 +40,8 @@ Adding a new `afterInteractive` (or earlier) tag requires a written perf justifi
 
 Every tracker mounted from `src/app/layout.tsx` or a loader component must no-op when its id/token env var is blank — `GoogleTagManager` (`!gtmId`), `KlaviyoScriptLoader` (`!companyId`), `ConversionPixels` (per-provider `enabled()`). Contentsquare's `<Script>` was the one exception (a hardcoded `src` with no gate, loading for every visitor in every environment) until 2026-07-22, when it was extracted to `NEXT_PUBLIC_CONTENTSQUARE_ID` (blank ⇒ renders nothing, mirrors `GoogleTagManager`'s convention) — see [.env.example](../../.env.example). Never hardcode a third-party tag id directly into a `<Script src>` — always route it through a `NEXT_PUBLIC_*` var so dev/e2e/staging can disable it without a source change.
 
+The gate applies to **companion components**, not just the `<Script>`: both `<ContentsquarePageTracker />` (mounted in `src/app/layout.tsx`) and `<ContentsquareDynamicVariables />` (mounted in `src/app/providers.tsx`) are wrapped in the same `NEXT_PUBLIC_CONTENTSQUARE_ID` check at their mount sites, so a blank id means they are never mounted and nothing is pushed onto `window._uxa`.
+
 ## R9. No consent banner — pixels load for every visitor (deliberate, 2026-07-24)
 
 **Tools Australia runs without a cookie/pixel consent banner.** The tracking pixels
@@ -95,4 +97,45 @@ Consequences worth knowing, because they are not symmetrical:
 Corollary: **never** add manual `ttq.track` calls for `LandingPageView` or `EngagedSession`.
 Those are emitted by the SDK's own LPV plugin, which piggybacks on `Pageview`; a manual copy
 would double-count *and* create two more custom events.
-
+
+## R11. Contentsquare virtual pageviews come from the client push ONLY — never also from a tag-side CSTC snippet
+
+Contentsquare can emit a virtual pageview from **two** places, and it does **not** de-duplicate
+them:
+
+1. [`ContentsquarePageTracker`](../../src/components/tracking/ContentsquarePageTracker.tsx) —
+   `window._uxa.push(["trackPageview", path])` on every App Router route change (this repo).
+2. A **CSTC** snippet in the Contentsquare Tag Configurator pairing the **"Artificial Pageview"**
+   template with a **"HistoryChange"** trigger, which fires a virtual pageview on
+   `pushState` / `replaceState` / `popstate`. That is dashboard-side config, **not** in this repo,
+   and therefore invisible to code review.
+
+Contentsquare's own docs assume you use CSTC **or** a manual push, never both. Both were live
+until **2026-08-07**: `/membership` and `/faq` each sent **two** artificial pageviews per
+navigation (`pn=2` and `pn=3`, then `pn=5` and `pn=6`), inflating pages/session and putting
+phantom self-loops into Journey Analysis.
+
+**Resolution: the CSTC snippet is disabled; the client-side push stays.** The client push is the
+one worth keeping — it also applies `shouldTrackRoute()` route filtering and the 255-char path
+cap, neither of which the tag-side trigger does.
+
+The tag-side config is public, so this is checkable without dashboard access:
+
+```bash
+curl -s https://t.contentsquare.net/settings/598444.json | jq .implementations
+```
+
+An **empty array** is the healthy state (this component is the only source). Any
+ArtificialPageview / HistoryChange entry means the double-count is back — disable that snippet in
+the Tag Configurator rather than deleting the client-side push. Incident detail:
+[gotchas.md](./gotchas.md#contentsquare-double-counted-every-spa-navigation-tag-side-cstc--client-push-2026-08-07).
+
+## R-GE. Meta `ge` (gender) — all sites or none, and omit when unknown
+
+`User.gender` is an **optional** field holding only `"male"` / `"female"`. It feeds Meta's Advanced Matching `ge` parameter, whose spec is *"single lowercase letter, `f` or `m`, if unknown, leave blank"* — so the value hashed is the **letter**, never our stored word.
+
+**One shared mapper.** `genderToMetaGe()` in [src/data/genders.ts](../../src/data/genders.ts) is the only place the mapping lives. Every Meta hash site imports it: `buildAdvancedMatching` (browser AM), the CAPI provider `capiSend`, and the legacy `prepareUserData` in `facebook-helpers.ts`. Duplicating the `male→"m"` logic inline is how browser and server hashes drift apart, and Meta then reads one person as several.
+
+**Omission must mean absent.** When gender is unknown the `ge` key is **not set at all**. Never hash `""` and never substitute a sentinel — either would produce one identical hash shared by every unanswered member, which Meta would treat as a real, extremely common identifier. Guarded by `npm run test:advanced-matching`.
+
+**Coverage starts at zero.** The field is new and optional, so expect no immediate Event Match Quality movement; it grows only as members fill it in. Note that a site *omitting* `ge` is a missed opportunity, not a hash mismatch — the harmful case is two sites sending *different* values for the same person.

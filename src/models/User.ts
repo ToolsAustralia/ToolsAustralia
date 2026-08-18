@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { GENDER_VALUES } from "@/data/genders";
 
 export interface IUser extends Document {
   _id: string; // Explicitly define _id as string
@@ -9,6 +10,7 @@ export interface IUser extends Document {
   mobile?: string;
   state?: string; // Australian state/territory code (e.g., "NSW", "VIC", "ACT")
   profession?: string; // User's profession (e.g., "Builder", "Electrician", "Other", or custom value)
+  gender?: "male" | "female"; // Optional. Unset = unknown (covers "declined" AND "never asked")
   birthdate?: Date; // User's date of birth (required for setup; used for age-based eligibility)
   profileSetupCompleted?: boolean; // Flag to track if user has completed profile setup
   role: "user" | "admin";
@@ -414,6 +416,21 @@ const UserSchema = new Schema<IUser>(
       type: String,
       trim: true,
       maxlength: [100, "Profession cannot be more than 100 characters"],
+    },
+    gender: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      // Optional by design — a member who is neither, or who would rather not say, leaves it
+      // blank. Validator (not `enum`) so an empty string passes, matching how `state` and
+      // `mobile` treat "" as "not provided" rather than as an invalid value.
+      validate: {
+        validator: function (v: string) {
+          if (!v || v === "") return true; // Allow empty (optional field)
+          return GENDER_VALUES.includes(v as (typeof GENDER_VALUES)[number]);
+        },
+        message: "Gender must be either 'male' or 'female', or left blank",
+      },
     },
     birthdate: {
       type: Date,
@@ -1326,6 +1343,17 @@ UserSchema.index({ createdAt: -1 });
 UserSchema.index({ "referral.code": 1 }, { unique: true, sparse: true });
 UserSchema.index({ stripeCustomerId: 1 }, { sparse: true });
 UserSchema.index({ "signupAttribution.promotionSlug": 1, createdAt: 1 });
+// Partner-discount analytics joins a visit row to the account it produced on this field —
+// `PartnerDiscountVisit.anonymousId` -> `signupAttribution.anonymousId` — which is what lets
+// the `/discount` funnel be measured without adding a new attribution field to this model.
+//
+// PLAIN, not partial, and deliberately unlike the `builtPrizeSlug` index directly below. That
+// one is partial because its query filters `$exists: true`, whose bounds span a non-sparse
+// index's whole key range (panel F-021). This one is only ever queried as an `$in` of concrete
+// anonymousId strings — an equality match, which a plain index answers exactly. A partial
+// index would additionally depend on the planner proving the predicate implies the filter
+// expression, which buys nothing here and is a behaviour this codebase has not measured.
+UserSchema.index({ "signupAttribution.anonymousId": 1 });
 // PARTIAL, not plain (panel F-021). The built-prize signup aggregation filters
 // `"signupAttribution.builtPrizeSlug": { $exists: true }`, which a NON-sparse index cannot narrow
 // (a missing field is indexed as `null`, so the bounds span the whole key range). The plain index

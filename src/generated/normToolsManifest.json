@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-31T08:16:28.009Z",
+  "generatedAt": "2026-08-17T09:08:38.025Z",
   "endpoints": [
     {
       "registryKey": "pending-actions.status",
@@ -280,7 +280,7 @@
       "tier": "read",
       "path": "/v1/tiktok-ads/insights",
       "method": "GET",
-      "summary": "TikTok per-ad insights for a date range: per-ad spend + TikTok-reported conversions/revenue/ROAS + totals (empty until TikTok Marketing-API creds are set)"
+      "summary": "TikTok ad insights for a date range, grouped by `level` (campaign | adset | ad, default ad): spend + TikTok-reported conversions/revenue/ROAS + totals. Totals are identical at every level — only the row grouping changes. Empty until TikTok Marketing-API creds are set."
     },
     {
       "registryKey": "facebook-ads.health.insights",
@@ -507,6 +507,13 @@
       "summary": "Promo analytics for a single page: per-campaign attribution + the prize-build breakdown (which combination visitors ended on, and whether they changed it)"
     },
     {
+      "registryKey": "partner-discount-analytics.summary",
+      "tier": "read",
+      "path": "/v1/partner-discount-analytics",
+      "method": "GET",
+      "summary": "Partner-discount funnel per surface (public /discount vs the members' rewards catalogue): visitors, filter use, offer opens, locked-offer opens, access-seam reach (rate is over seamRendered, NOT visits), unlock clicks, portal hand-offs, empty searches, signups, conversions, revenue. Aggregate-only — no per-person field. Portal redemption is NOT included: the vendor sends no activity back, so the hand-off is the last observable step."
+    },
+    {
       "registryKey": "promo.active",
       "tier": "read",
       "path": "/v1/promo/active",
@@ -652,6 +659,13 @@
       "path": "/v1/users/:id/payment-events",
       "method": "GET",
       "summary": "Paged payment events for one user with refund-match flag (route is user-scoped; no PII per row beyond the package metadata)"
+    },
+    {
+      "registryKey": "receipts.list",
+      "tier": "read",
+      "path": "/v1/receipts",
+      "method": "GET",
+      "summary": "Paged ledger of every payment received in a date range, across memberships, packs, mini draws, upsells and shop orders, with per-row refund state and filter-wide totals net of refunds (PII-safe projection: firstName + opaque userId only)"
     },
     {
       "registryKey": "winners.get",

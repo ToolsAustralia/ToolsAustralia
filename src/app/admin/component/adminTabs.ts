@@ -26,6 +26,7 @@ import {
   Mail,
   Megaphone,
   MessageSquare,
+  Receipt,
   Repeat,
   ScrollText,
   Shield,
@@ -111,6 +112,9 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
     label: "Billing",
     groupIcon: AlertCircle,
     tabs: [
+      // Receipts carries its own permission rather than the `settings.view` the rest of this
+      // group shares — it is the complete revenue picture joined to customer identity.
+      { id: "receipts", label: "Receipts", icon: Receipt, requires: "receipts.view" },
       { id: "blocked-transactions", label: "Blocked Transactions", icon: AlertCircle, requires: "settings.view" },
       { id: "past-due-history", label: "Past-Due Charges", icon: ScrollText, requires: "settings.view" },
       { id: "stripe-webhook-queue", label: "Webhook Queue", icon: Activity, requires: "settings.view" },

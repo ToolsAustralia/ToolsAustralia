@@ -387,24 +387,54 @@ Two keyframes were added to `src/app/globals.css` as part of the cancellation fl
 
 `@media print` in `globals.css` hides `[data-floating-widget]`, `[data-tracking-pixel]`, `header[data-sticky="true"]`, and any `[data-print="hide"]` element, and forces black-on-white. Tag floating UI / pixel scripts with the matching `data-*` attribute when adding new ones (`RewardsFloatingWidget` and the analytics scripts already do).
 
-## MiniDrawPackages tier-aware catalog (2026-05-14)
+## MiniDrawPackages — two light tiers (rewritten 2026-08-12)
 
-[`src/components/features/MiniDrawPackages.tsx`](../../src/components/features/MiniDrawPackages.tsx) is the purchase UI rendered on the `/mini-draws/[id]` page. It now uses `getMiniDrawPackagesForViewer(hasAccess)` instead of the raw `miniDrawPackages` array to show only the tier-appropriate packages:
+[`src/components/features/MiniDrawPackages.tsx`](../../src/components/features/MiniDrawPackages.tsx) is the pack picker rendered on `/mini-draws/[id]`. The catalogue is **not tier-gated**: every visitor (signed-in or not, member or not) sees all 8 active packs from `getMiniDrawPackages()`. Login is enforced at purchase time via `LoginPromptModal`.
 
-- Guests / users without current draw entries and no active subscription → Mini Pack 1, 2, 3 (`isAdditional` absent / false).
-- Users with an active subscription OR at least one current draw entry → the five `additional-*-pack-mini` records (`isAdditional: true`).
+> _Superseded:_ the original 2026-05-14 version filtered with `getMiniDrawPackagesForViewer(hasAccess)` so guests saw only Mini Pack 1–3 and members only the `additional-*-pack-mini` records. That gate was dropped before this rewrite; the helper still exists in `miniDrawPackages.ts` but nothing on the mini-draw surfaces calls it.
 
-`hasAccess` is derived via `useUserMajorDrawStats(userData?._id)` + `hasAdditionalPackageAccess(userData, userMajorDrawStats)`, reusing the same helpers as the major-draw catalog. The `viewerPackages` computed list replaces all three in-component usages of the raw array: the grid render, the selected-package-modal lookup, and the `handlePurchase` package lookup.
+The 8 packs split into two groups, keyed off `getMiniDrawPackLightScheme(id).group`:
+
+- **Mini packs** — `mini-pack-1|2|3` ($1 / $5 / $10), a 3-column tile grid.
+- **Bigger packs** — `additional-{tradie,foreman,boss,power,vip}-pack-mini`, stacked full-width rows carrying the tier accent as a 3px left rule.
+
+Mobile shows **one group at a time** behind a segmented control (`Mini packs` / `Bigger packs`); desktop stacks **both** under uppercase labels. Tapping any pack **selects it and opens its detail sheet** in one action — the old "What's included in {pack}?" button is gone.
+
+Tiles live in [`MiniDrawPackTiles.tsx`](../../src/components/features/MiniDrawPackTiles.tsx) (`MiniPackTile`, `BigPackRow`, `PackTrustRow`, `MiniDrawPacksSheet`, `getMiniDrawPackTiers`) because **three** surfaces render the same two tiers: this picker, the browse-page quick-enter sheet, and the full "Entry packages" catalogue sheet. Forking the tile markup per surface is exactly how the old neon grid drifted out of step with its own modal.
+
+`MiniDrawPackages` also owns the **mobile sticky "Enter draw" bar** (portaled to `<body>`, `data-floating-widget`, gated behind a `showStickyBar` prop that only `/mini-draws/[id]` passes). It lives here rather than in `MiniDrawInteractions` so `selectedPackId` and the purchase state have exactly one owner.
 
 ### Post-purchase upsell trigger — segment contract (2026-05-18)
 
 `triggerUpsellModal` in `MiniDrawPackages.tsx` posts to `/api/upsell/trigger` with a `userType`. Every mini upsell record in `upsellPackages.ts` (built by `buildMiniUpsellRecords`) declares `userSegments: ["mini-draw-buyer"]`, and `getBestUpsellOfferForUser` → `filterUpsellPackagesByUserSegment` drops any offer whose segments don't include the sent `userType` (or `"all"`). Because this component **only ever sells mini-draw packs**, `userType` must always be `"mini-draw-buyer"` for `packageType === "mini-draw"` — it is now keyed off `packageType`, not an ID prefix. The previous `packageId.startsWith("mini-pack-")` check matched only the legacy `mini-pack-1|2|3` ids and silently dropped the upsell for the newer `additional-*-pack-mini` packs (Tradie→VIP), which is why only the old mini packs surfaced an upsell.
 
-### Per-tier electric theming (2026-05-18)
+### Per-tier LIGHT theming (2026-08-12 — replaces the electric treatment on mini-draw surfaces)
 
-The grid tiles, the desktop hover tooltip, and `MiniDrawPackageModal` use the **same electric visual language as `ElectricPackageCard`** (MembershipSection one-time tab), keyed per pack via `getMiniDrawPackageColorScheme(packId)` in `electricPackageScheme.ts`. Mapping: `mini-pack-1|2|3` → electric blue (one shared colour, matching the blue mini-pack upsell artwork); `additional-*-pack-mini` (Tradie→VIP) → lime / cyan / amber-gold / red / champagne-gold per tier.
+The mini-draw pack tiles and `MiniDrawPackageModal` are now **light cards on white**, keyed per pack via `getMiniDrawPackLightScheme(packId)` in `electricPackageScheme.ts`. Each tier returns five values:
 
-All three surfaces render a **dark radial body** (`radial-gradient(...accent...) , linear-gradient(180deg,#0b0c0f,#060607)`) — NOT a flat `bgGradient` fill — with an accent inner-sheen overlay, an accent border, and a layered accent glow box-shadow. VIP (`isPremium`, detected via `scheme.textGradientStyle`) gets the premium treatment used by the card: warm-black body (`#0b0a06→#050402`), a `0 0 0 1px #FFFCEB, 0 0 0 3px accent` double-rim, and the champagne-gold gradient text for title/price/big-number. Titles glow (`textShadow 0 0 14px accent80`); the modal hero entries number is white with an accent glow; the "Purchase Now" CTA mirrors the card's `ta-enter-cta` (black bg + `accent` border + `accent` text + glow), not a gradient fill. The "Partner catalog" (cyan) and "Partner access" (green) rows stay semantic — info accents, intentionally identical across all tiers and the tooltip/modal. `MiniDrawPackageModal` makes `ModalContainer` a transparent pass-through (`!bg-transparent !border-0 !shadow-none !overflow-visible`) and owns the electric body itself so the outer glow is not clipped. Section chrome ("Choose Your Pack" header, footer) is untouched; the legacy `isHighValue` yellow/amber gradient branch is removed.
+| field | used for |
+|---|---|
+| `accent` | the 3px left rule on a `BigPackRow` and the 7px tier dot on the detail chip |
+| `ink` | price text, tier chip text, the "Purchase now" CTA fill (light theme) |
+| `soft` | selected-tile tint, chip background, the "Entries go to" row (light theme) |
+| `inkDark` / `softDark` | the same two roles under the class-based dark theme |
+
+| Tier | Pack ids | accent | ink | soft |
+|---|---|---|---|---|
+| Mini | `mini-pack-1/2/3` | `#1E90FF` | `#0B63CE` | `#EFF6FF` |
+| Tradie | `additional-tradie-pack-mini` | `#B4E600` | `#5E7A00` | `#F6FFE0` |
+| Foreman | `additional-foreman-pack-mini` | `#00C3DB` | `#0E7490` | `#ECFEFF` |
+| Boss | `additional-boss-pack-mini` | `#E0A019` | `#A56A00` | `#FFF8EC` |
+| Power | `additional-power-pack-mini` | `#FF1F1F` | `#C70000` | `#FEF2F2` |
+| VIP | `additional-vip-pack-mini` | `#C9A227` | `#8A6B1E` | `#FBF7EA` |
+
+Three things to know before touching it:
+
+1. **This is a SEPARATE ramp, not a repoint of `accentHex`.** Tradie's neon `#CCFF00` and Foreman's `#00E5FF` are invisible as a 3px rule on white, so the light table darkens them to `#B4E600` / `#00C3DB` and VIP drops the champagne gradient for a flat `#C9A227`. Editing `accentHex` instead would have repainted `MembershipSection`, `PackageSelectionModal`, `PackageInclusionsSlideUp` and the discount routes as a side effect — every one of those still wants the neon-on-dark treatment.
+2. **Colour ships as CSS custom properties, not inline `style`.** These surfaces still render under the site's `dark` class, and a `dark:` variant cannot read an inline style value (see the "Inline `style={{ color }}` is invisible to `dark:`" gotcha). Each tile sets `--pk-accent/--pk-ink/--pk-ink-d/--pk-soft/--pk-soft-d` and consumes them through arbitrary values: `text-[var(--pk-ink)] dark:text-[var(--pk-ink-d)]`.
+3. **No glow, no dark tiles, no gold gradient text, no info dot** on these surfaces. `getMiniDrawPackageColorScheme` and its `textGradientStyle` / glow path are now unused by the mini-draw pages — they remain only for the membership surfaces.
+
+`MiniDrawPackageModal` moved from `ModalContainer` to [`SheetShell`](../../src/components/ui/SheetShell.tsx): bottom sheet on mobile, centred 440px modal on desktop, with scroll-lock + focus-trap for free. It takes an optional `drawName` (rendered in an "Entries go to" row, truncated to 38 chars so it never wraps) and an optional `ctaLabel` — `ReadyToEnter` opens it with **no draw bound**, where the row reads "Any active mini draw you pick" and the CTA becomes "Pick a mini draw" (there is nothing to charge against yet, so it scrolls back to the results grid instead).
 
 ## Electric package color schemes — Phase 1 (2026-05-15)
 
@@ -414,7 +444,7 @@ Six tiers are defined: `apprentice` (#1E90FF blue), `tradie` (#CCFF00 lime, blac
 
 `planIdToElectricTier(planId)` normalises any plan id — including `additional-*` prefixes and `*-member` suffixes — to a tier by substring matching. Unknown plan ids fall back to `power` (electric-red).
 
-Consumers: `ElectricPackageCard` (live `MembershipSection` one-time tab) and the mini-draw catalog (`MiniDrawPackages` grid + tooltip, `MiniDrawPackageModal`) via the `getMiniDrawPackageColorScheme(packId)` wrapper — see "Per-tier electric theming" above. Subscription/membership-tab cards keep their `getMembershipSectionColorScheme` palette and are unaffected by this module.
+Consumers: `ElectricPackageCard` (live `MembershipSection` one-time tab), `PackageSelectionModal`, `PackageInclusionsSlideUp`, `SpecialPackagesModal` and the discount routes. **The mini-draw surfaces no longer consume the dark schemes** — as of 2026-08-12 they read the separate light ramp `getMiniDrawPackLightScheme(packId)` exported from the same file (see "Per-tier LIGHT theming" above). `getMiniDrawPackageColorScheme(packId)` is kept for any surface that still wants the dark treatment for a mini pack id. Subscription/membership-tab cards keep their `getMembershipSectionColorScheme` palette and are unaffected by this module.
 
 Test: `npm run test:electric-scheme` (standalone tsx script, no DB required).
 
@@ -540,3 +570,38 @@ kills every cue at once.
 
 Reduced motion kills the `::after` entirely (`content: none`) — the OS signal is the only guard,
 per the same policy as its siblings. Full write-up: `docs/dashboard-account/frontend.md`.
+
+## `ParticipantsModal` is draw-type-agnostic (2026-08-13)
+
+[`src/components/modals/draws/ParticipantsModal.tsx`](../../src/components/modals/draws/ParticipantsModal.tsx)
+serves BOTH the major-draw and mini-draw entry pools. It takes `drawId` / `drawName` /
+`drawType: "major" | "mini"` (was `majorDrawId` / `majorDrawName`) and switches the endpoint:
+
+| `drawType` | Endpoint | Id passed as |
+|---|---|---|
+| `"major"` (default) | `/api/admin/major-draw/participants` | `?majorDrawId=` query param |
+| `"mini"` | `/api/admin/mini-draw/[id]/participants` | path segment |
+
+**The two APIs were written to one response envelope precisely so this component did not fork.**
+A second `MiniDrawParticipantsModal` would have drifted the first time either side gained a
+column, and the search / pagination / drill-through-to-user behaviour is identical either way.
+The only shape difference is `entriesBySource`, now optional — mini-draw entry is package-only, so
+there is no source split to report.
+
+`403` is surfaced as its own message ("You don't have permission to view participants for this
+draw") rather than the generic failure, because the mini-draw route is gated on
+`miniDraws.viewParticipants` and a role can legitimately lack it while still seeing the draw list.
+
+**When adding a third draw type, extend the union — do not copy the file.**
+
+## UserSetupModal — an optional field among required ones (2026-08-17)
+
+Step 2 (`Step2Demographics`) now collects **gender** alongside state / profession / date of birth, but it is the only optional field there. Three things keep it that way, and all three must hold together:
+
+1. It is **not** in `stepsNeeded` — step 2 fires on missing state/profession/birthdate only, so gender alone never summons the modal.
+2. It is **not** in the step-2 validation or the `Next disabled` condition — "Continue" stays enabled with gender empty.
+3. Its `Dropdown` gets no `required` and no error slot, and is rendered **last** so the three fields that do gate progress read as the ask.
+
+`isGenderDropdownOpen` joins `isStep2OverlayOpen`; without it the last field on the step gets clipped when its menu opens.
+
+The `/my-account/settings` **ProfileTab** mirrors this: gender is the one field there with **no amber "Required" chip** and is excluded from the `missing` completeness list — badging an optional field as required would be a lie. It always POSTs the key (as `""` when unset) so clearing works.

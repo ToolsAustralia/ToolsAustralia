@@ -114,3 +114,89 @@ never a data value — the map's standing rule).
 `chatKnowledgePack.ts` regenerated after the FAQ corpus moved from "partner catalogue" to
 "partner discounts" (see [docs/config-and-data/README.md](../config-and-data/README.md)). No
 structural change — same 8 sections, ~12.5k tokens.
+
+## Reading real conversations in admin (2026-08-10)
+
+Cobber has persisted every conversation since it went live (**8 Jul 2026**) — `ChatConversation` +
+`ChatMessage`, both on a **90-day TTL**. Until now nothing surfaced them: the admin Chatbot tab
+read `ChatAuditLog` aggregates only (cost, tokens, deflection rate), so you could see *that* Cobber
+answered 48 questions but never *what* it said.
+
+**Admin → Chatbot → Conversations** now browses those transcripts. See
+[docs/admin/frontend.md](../admin/frontend.md) for the UI and
+[docs/admin/backend.md](../admin/backend.md) for the service; the short version:
+
+- Filter by range (7/30/90d), status, member-vs-guest, and **FAQ-only vs AI-answered**; search the
+  redacted message text.
+- Open a conversation to read the full exchange, with each answer's **`citations`** (the FAQ
+  `docId`s it was grounded on) and a per-turn table of model / latency / tokens / HTTP status.
+
+**Using it to improve Cobber.** The highest-value signal is an assistant message that is
+confidently worded but carries **zero citations** — that is Cobber answering from the system prompt
+rather than from grounded knowledge, and it is exactly the hallucination risk rule 11 exists to
+prevent. When you find one, the fix is a new/edited FAQ entry in `src/data/supportChatFaqs.ts`
+followed by `npm run build:chat-knowledge-pack` + `npm run test:chat-faqs` (bump the count
+assertion in `src/data/__tests__/faqs.test.ts` deliberately). The other two signals worth scanning:
+questions that got deflected to a *wrong* FAQ, and repeated questions with no matching entry at all.
+
+**Retention is deliberately 90 days, not shorter.** All Cobber data combined is ~0.22 MB against a
+~330 MB production database (~0.07%); the `stripewebhookqueue` collection alone is 137 MB. There is
+no storage argument for shortening it, and the 90-day figure is stated to customers in the in-chat
+disclosure and in [privacy-policy-changes.md](./privacy-policy-changes.md) — changing it means
+changing customer-facing copy and `CUSTOMER.md` §9c. Members can still self-serve a delete at any
+time ("Delete my chat history" → `DELETE /api/chat/history`), and because the admin view reads live
+data, a member deletion removes it from admin too.
+
+**Known TTL asymmetry.** `ChatConversation`'s TTL is on `updatedAt` (sliding) while `ChatMessage`'s
+is on `createdAt` (fixed), so a conversation that stays active longer than 90 days can outlive its
+earliest messages. The transcript API flags this as `possiblyTruncated`. Not yet fixed — chats are
+short-lived enough that it has never bitten; aligning both onto `createdAt` is the durable fix.
+
+## Escalation was structurally impossible — fixed (2026-08-10)
+
+**The bug.** In Cobber's first month, six customers were told *"I've passed your case to our
+support team"*. Production held **zero** escalated conversations, **zero** `escalatedSubmissionId`
+values, and **zero** `toolCalls` across all 350 messages. No ticket existed for any of them.
+
+The cause was not model misbehaviour, it was a missing wire. `buildRequestHumanTool` files a
+`ContactSubmission` only when `opts.contact?.email` is present, and `contact` comes from the
+request body — which **`SupportChatWidget.tsx` has never sent**. So `execute()` always fell to the
+no-email branch, returned "please share your email", and created nothing. The user then typed their
+address as an ordinary chat message, where nothing could read it, and the model filled the gap with
+a plausible confirmation. The tell is in the transcripts: Cobber's "What's the best email address
+for our support team to reach you on?" is almost verbatim the tool's own no-email return string.
+
+**The fix has two halves.**
+
+1. **A member's email is resolved server-side.** `buildRequestHumanTool` now takes an injectable
+   `resolveMemberEmail(userId)` (default: a `User.findById().select({email:1})` lookup, lazy-imported
+   so tests stay Mongo-free). For a signed-in member the server already holds an authoritative
+   address, so escalation completes on the first call and the member is never asked for something
+   we already know. This covers ~2/3 of traffic (49 of 76 conversations were members). Identity
+   still never comes from the model: a session-resolved email is paired with the session
+   `firstName`. A missing user, an empty email, or a throwing lookup all degrade to the honest
+   no-email branch — never an escalation with a blank address.
+2. **The model cannot claim an escalation that did not happen.** The no-email return is now
+   prefixed `NOT_ESCALATED:` and explicitly forbids saying the case was passed on, backed by a new
+   HARD RULE in `systemPrompt.ts`. Because prompt rules alone already failed once here, `onFinish`
+   also *detects* the failure: if the assistant text matches `CLAIMS_ESCALATION_RE` while
+   `escalated` is false, it logs an `ErrorReport` (`action: "false-escalation-claim"`) and stamps
+   the stored message with a **failed** tool call `escalation_claim_unverified`, which renders red
+   in the admin transcript viewer. The answer has already streamed so this cannot un-say it — but a
+   detected false promise is vastly better than a silent one.
+
+**Still open — guests.** An anonymous visitor has no session email, so they still get the
+(now honest) ask, and escalation completes only if the widget sends `contact`. Wiring an
+email-capture step into `SupportChatWidget.tsx` is the remaining half; until then guest escalation
+is honest-but-unavailable rather than silently fake.
+
+**Tests:** `npm run test:chat-service` covers member-email-from-session, unresolvable email,
+throwing lookup, and the anonymous path (no lookup, still asks).
+
+## Gender field coverage (2026-08-17)
+
+Two FAQ entries (ids `82`, `83`) cover the optional profile gender field: whether it can be left blank or removed, and what it is used for. Corpus count assertion in `src/data/__tests__/faqs.test.ts` bumped **83 → 85**.
+
+The ACCOUNT SELF-SERVICE MAP in `systemPrompt.ts` gained a matching bullet (navigation only, never a data value) and its "Update profile" line now reads *trade, state, date of birth, email*.
+
+Both answers state plainly that the field is optional, clearable, and affects nothing a member receives — and that only Male/Female are offered, so anyone else leaves it blank. Rule-11 clean: no probability or purchase-of-entries framing (guarded by `npm run test:chat-faqs`).

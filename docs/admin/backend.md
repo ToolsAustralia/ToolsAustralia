@@ -308,7 +308,14 @@ Also exported here (panel F-006): **`checkTikTokAccountAssumptions()`** GETs `/a
 Fidelity audit after the first real sync (86 ad×day rows, 31 ads): stored spend/purchases/value matched the live API **exactly** ($1305.45 / 45 / $1024.93, zero row-level mismatches). Re-runnable with `npm run verify:tiktok-readpath`, which drives the real `getTikTokAdInsights` + `tiktokAdChannelProvider` and asserts they agree with the stored rows (catches writer↔reader drift). The `raw` row is still stored so a future TikTok vocabulary change stays inspectable without a code change.
 - `TikTokInsightsSyncService.ts` — `syncDateRange({ since, until }, { onProgress? })` writer, mirroring `MetaInsightsSyncService.syncDateRange`. Pulls the rows and `bulkWrite`-upserts them into `TikTokAdInsightsDaily`, **idempotent** keyed by `adAccountId` (= advertiserId) + `date` + `adId`, always `$set syncedAt` (refreshes the TTL clock). Batches at 800 ops (`ordered: false`). Returns `{ configured, rowsUpserted, adIds, dateRange, totals }` — `configured: false` is a clean no-op ONLY when creds are unset; a configured-but-failing fetch propagates the fetcher's `TikTokReportError` (the throw-loudly contract — the cron 500s so Vercel cron monitoring stays red; panel F-002/F-008, pinned by `npm run test:tiktok-sync-contract`). `totals` (window sums of clicks/conversions/revenueCents) feeds the exported pure predicate **`metricNamesSuspect(totals)`** (panel F-005): `clicks > 0 && conversions === 0 && revenueCents === 0` is the signature of a wrong metric-name guess writing confident zeros (the report API returns only the metrics you name, so `parseMetric`'s fallback keys can never appear). The cron logs `WARNING metric-names-suspect` + returns `warning: "metric-names-suspect"`; the seed script prints the same. Verify against a stored row's `raw.metrics` keys.
 - `tiktokSyncStatus.ts` (2026-07-24, panel F-002) — `recordTikTokSyncRun({...})` upserts the single `TikTokSyncRun` status doc (best-effort: its own failures are logged and swallowed so status-writing can never break the cron); `getTikTokSyncHealth()` returns `{ configured, lastRun (outcome/errorCode/errorMessage/rowsUpserted/finishedAt), lastSyncedAt (max syncedAt row write) }` — composed into the admin insights route's response as `syncHealth` so the UI can tell "failing" from "no spend yet".
-- `tiktokAdInsightsQuery.ts` — `getTikTokAdInsights({ startDate, endDate })` read. Projects with an explicit `.select()` include-list that **excludes `raw`** (panel F-023 — the aggregation never reads the stored API row, and shipping it per doc is the repo's unprojected-`.find()` footgun at 1000 ads × 60 days). Aggregates `TikTokAdInsightsDaily` per ad over the inclusive AEST date range (sums each ad's days, keeps the most-recent non-empty labels), returns `rows` sorted by spend desc + a summed `totals`, money in dollars, `roas = revenue ÷ spend` (0 when spend 0), and a `configured` flag (`isTikTokAdInsightsConfigured()`). The TikTok analogue of the Meta ad-level insights read. Read-only; powers `GET /api/admin/tiktok-ads/insights`.
+- `tiktokAdInsightsQuery.ts` — `getTikTokAdInsights({ startDate, endDate, level? })` read. Projects with an explicit `.select()` include-list that **excludes `raw`** (panel F-023 — the aggregation never reads the stored API row, and shipping it per doc is the repo's unprojected-`.find()` footgun at 1000 ads × 60 days). Aggregates `TikTokAdInsightsDaily` over the inclusive AEST date range, returns `rows` sorted by spend desc + a summed `totals`, money in dollars, `roas = revenue ÷ spend` (0 when spend 0), and a `configured` flag (`isTikTokAdInsightsConfigured()`). The TikTok analogue of the Meta ad-level insights read. Read-only; powers `GET /api/admin/tiktok-ads/insights`.
+
+  **`level` grouping (2026-08-11).** `"campaign" | "adset" | "ad"`, **default `"ad"`** — the pre-switcher behaviour, so every existing caller (including the Norm mirror) keeps its exact shape. The grouping key is the id at the requested level.
+
+  - **Rolling up is sound, not an approximation.** Each stored document is one ad-day, keyed uniquely on `adAccountId + date + adId`, so summing every ad-day in a campaign counts each spend figure exactly once. `totals` is therefore **identical at every level** — if the totals ever differ between levels, something is dropping rows.
+  - **Identity is populated for the requested level and the levels ABOVE it only.** An ad-set row still names its campaign; `adId`/`adName` are `null` above ad level, because that group spans many children and naming one of them would be a lie. This made `adId` nullable — which is why the Norm schema had to move in lockstep (see [internal-norm](../internal-norm/)).
+  - **Rows missing an id at the requested level get a visible bucket,** labelled `(no campaign reported)` / `(no ad set reported)`. `campaignId`/`adsetId` are optional on the model; dropping those rows would make the same window report different totals at different levels, and silently — the exact class of quiet disagreement that destroys trust in a spend table.
+  - Conversions and revenue stay **TikTok-reported at every level** (the platform's own attribution), unchanged from what the ad-level table always showed.
 
 - `MembershipAnalyticsService` — renewal, past-due, and cancellation metrics.
   - `getAnalyticsBundle(startDate, endDate, dateRange, options?)` — returns `MembershipAnalyticsBundle`. Accepts optional `{ membershipAsOfMode, asOfDate, precomputedRenewals }`. When `precomputedRenewals: { purchaseCount, userCount }` is passed, skips the full-range `fetchNetBenefitsGrantedInRange` scan and uses the values directly — the dashboard stats route threads `snapshotRead.revenue.buckets.membershipRenewal` through to avoid scanning the entire `paymentevents` collection twice (once inside `DashboardStatsSnapshotReader`, once here). Without it the service falls back to the live scan. The `cancellationsInRange` count is always live (delta query).
@@ -404,6 +411,22 @@ if (adminCheck) return adminCheck; // 401/403
 
 **Definitions:** countable purchase = one-time `BenefitsGranted`, refund-netted, no `processedBy`/`price>0` filter. Excludes upsell/mini-draw/membership. **Cohort = one-time buyers who were NOT an ACTIVE member when they bought** — people choosing one-time packs *instead of* a subscription (the persuade-to-subscribe target). A user is excluded only if they were an active member at their first one-time purchase (`wasActiveMemberAt(chargesAsc, anchorTs)`): active = a membership charge exists after the anchor (they renewed past it) OR the most recent membership charge is within `MEMBERSHIP_COVERAGE_DAYS` (30) before it. This **keeps** never-members, one-time buyers who *later* subscribe (`becameMember`), and **lapsed members who buy one-time after their subscription ended** (e.g. charged 9 Jun, bought 10 Jul → 31d → lapsed → included); it **excludes** active members topping up with Additional packs. Membership timeline comes from a `$group` over ALL membership `BenefitsGranted` per user (`{t, isNew}`, `isNew` = `billingReason !== "subscription_cycle"`). `daysToReturn` in AEST calendar days. `windows[]` uses **matured denominators**. Identity is per `userId`. Caveats: the 30-day coverage is an approximation of one billing cycle (no per-charge period-end stored), and a member who signed up before the paymentevents collection began (2025-11-27) may only have renewal rows. Mirrored to Norm as `analytics.repeat-purchases` (summary only — including `packages[]` — aggregate/no-PII).
 
+## Cobber transcript reads (`chatTranscripts.ts`, 2026-08-10)
+
+`src/services/admin/chatTranscripts.ts` — the admin read-side for Cobber conversation transcripts. Kept separate from `chatbotCostAnalytics.ts` on purpose: that file answers *"what is Cobber costing us"* from `ChatAuditLog` aggregates only, this one answers *"what are people asking and how did Cobber reply"* by reading the stored `ChatConversation` / `ChatMessage` documents. Read-only — no mutations on this surface.
+
+- **`listChatTranscripts(params)`** — newest-first (`updatedAt: -1`) page of conversations. `days` is clamped to `MESSAGE_TTL_DAYS` (90) because nothing older can exist; `limit` clamps to `MAX_LIMIT` (100), default 25.
+  - `actorKind` is **derived, not stored**: a conversation with a `userId` is a member, without is anonymous — hence `userId: {$ne: null}` / `userId: null` rather than a stored discriminator.
+  - `kind` maps to `modelTier`: `deflected` → `{$size: 0}` (every answer came from the FAQ decision tree, zero AI cost), `generative` → `{"modelTier.0": {$exists: true}}`. Verified on prod: the two are a true partition (28 + 48 = 76).
+  - **Search** runs first and narrows by `_id`: a regex over `ChatMessage.content` collects matching `conversationId`s. Input goes through `escapeRegex()` — without it a pasted `(` throws and a `.` matches everything. Empty match set short-circuits to an empty result rather than issuing a pointless `$in: []`. Message volume is ~10/day so the regex is cheap; revisit if Cobber traffic grows by orders of magnitude.
+  - Per-page enrichment is **two batched reads, not N+1**: one `$group` aggregate over the page's `conversationId`s for `messageCount` / `userMessageCount` / `firstUserMessage` (via `$first` + `$$REMOVE` so only user rows are considered), and one `User.find({_id: {$in}})` projecting `firstName` alone.
+- **`getChatTranscript(id)`** — one full transcript. Guards `ObjectId.isValid` first so a garbage id returns `null` (→ 404) instead of throwing a `CastError`. Fetches messages and `ChatAuditLog` turns concurrently via `Promise.all`.
+  - **`possiblyTruncated`** flags a real TTL asymmetry: `ChatConversation`'s TTL rides on `updatedAt` (sliding — it renews on every new turn) while `ChatMessage`'s rides on `createdAt` (fixed). A conversation active for longer than 90 days therefore **outlives its own earliest messages**. The flag stops the UI presenting a partial transcript as complete. Low impact today (chats are short-lived); the durable fix would be aligning both TTLs onto `createdAt`.
+- **Pure helpers** (no Mongo, unit-testable): `escapeRegex`, `buildPreview` (whitespace-collapse + 160-char ellipsis), `isDeflectedOnly`.
+- **PII boundary.** Content is already redacted at write time by `redactPII()` in `ChatService`, so this layer never handles raw PII (verified on prod: 0 stored messages match a raw email pattern). Identity is the Norm projection — `firstName` + opaque `userId`. Do not widen it.
+
+Consumed by `GET /api/admin/chatbot-conversations[/[id]]`, both gated by **`submissions.view`** (not the `overview.view` of the chatbot-cost sibling). Not currently mirrored to Norm — see the note in [rules.md](./rules.md).
+
 ## Cross-domain projection helpers
 
 Some services under `src/services/admin/` expose secondary "projection" methods consumed by the internal-norm read tier so that admin + Norm share one code path:
@@ -470,3 +493,40 @@ So `/ad/get/` is a **mandatory bridge**, not a fallback — it is the only endpo
 **Unusable URLs are rejected, not stored** (`isUsableLandingUrl`): a macro in the PATH (`/promotions/__X__`) would canonicalize into a phantom landing page carrying real spend and matching no prize slug; a non-http scheme likewise. Macros in the QUERY are harmless — canonicalization drops the query entirely, which is why TikTok's `__CAMPAIGN_ID__`/`__AID_NAME__` utm params need no special handling.
 
 **Run it:** `npm run sync:tiktok-destinations:dry` (reports coverage, distinct landing paths, the packages-focus tally and the multi-URL count without writing), then `npm run sync:tiktok-destinations`. The run **fails below 50% coverage** — a silent drop to zero is exactly what a changed id bridge looks like, and it would otherwise present as "no TikTok URL data" rather than as an error. First live run: **31/31 ads, 100%, 3 distinct landing paths, 0 multi-URL ads.**
+
+## Excessive-retry cooldown
+
+`chargeWorklistItem` sits a card out for **3 days** (`EXCESSIVE_RETRY_COOLDOWN_DAYS`) after Stripe
+blocks it with `previously_declined_do_not_retry`. Stripe support's guidance is 2–3 days between
+retries of the same transaction; the allow list cannot override this block and no setting disables
+it (see [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#adaptive-acceptance-blocks-are-not-overridable-by-the-radar-allow-list)).
+
+**Scoped to the CARD, never the customer.** `shouldCooldownForExcessiveRetry`
+([chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts)) is pure and compares
+the blocked fingerprint against the fingerprint the invoice will actually charge. Three cases it
+deliberately does **not** cool down — each one keeps collecting money that a customer-scoped check
+would have frozen:
+
+1. **Member added a new card** → different fingerprint → charged immediately.
+2. **Radar-type block** (`rule` / `highest_risk_level` / `blocklist`) → allowlisting genuinely fixes
+   those, so no back-off.
+3. **Block aged past the window** (boundary is inclusive → retryable).
+
+**Cost: zero extra Stripe calls.** The invoice retrieve now expands `default_payment_method` and
+`customer.invoice_settings.default_payment_method`, so `resolveChargedCardFingerprint` reads the
+fingerprint from objects already in hand. The block lookup is
+`findLatestBlockByFingerprint` ([blockedTransactionRepo.ts](../../src/services/allowlist/blockedTransactionRepo.ts)),
+one query on the existing `cardFingerprint` index, sorted by **`capturedAt`** — never `createdAt`,
+which holds the PaymentIntent's creation time and can precede the block by days.
+
+**Fails open.** Any lookup error, or a fingerprint that cannot be resolved, falls through to a
+normal charge attempt — retrying once too often beats silently not collecting.
+
+**Surfacing.** A held item writes a `skipped` row bucketed as `excessiveRetryCooldown`, labelled
+**"Retry in 3 days"** in the run drawer's SKIP BREAKDOWN. The bucket exists in
+`SkipBucketKey`, `ChargeJobRunSkippedBreakdown` and the drawer's client-side recompute — all three
+must stay in lockstep. Regression-guarded by `npm run test:excessive-retry-cooldown`.
+
+⚠️ **Still open:** the cooldown limits *per-invoice* velocity only. Stripe also flagged **batch**
+velocity ("spread them over a longer time window rather than submitting them all at once") — the
+run still fires its whole worklist in one burst. Cohorting / pacing is not implemented.

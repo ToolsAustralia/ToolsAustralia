@@ -212,9 +212,99 @@ Continuation of the Task-1 rule above — the remaining always-on/per-frame offe
 
 Promo/section copy is customer-facing and must follow **CLAUDE.md §11** (game-of-chance trade promotion — entries are never sold, they're a free inclusion; no odds/chance/gambling framing). `PartnerBenefitsPromoSection` showed tiers as "{entries} entries/mo · {price}/giveaway" (reads as pricing entries) → reframed to "{price}/giveaway · includes {entries} free entries/mo" so the price attaches to the membership. When adding any tier/pack/price label, lead with the product (membership/pack) and show entries as **included free**.
 
+## Promotions corners SWAPPED — controls left, Cobber right (2026-08-10)
+
+> **Read this before the two entries below**, which describe the pre-swap layout. On
+> `/promotions` the floating controls now live **bottom-LEFT** and the Cobber launcher lives
+> **bottom-RIGHT** (the site-wide default — `src/app/promotions/layout.tsx` no longer passes
+> `side="left"`). `/promotions` was the only page where chat sat on the wrong side, and that was
+> never a design choice: it was a workaround for the right corner being occupied.
+
+The member control is now a **hamburger that morphs into a vertical column of discs**
+([`PromotionsAccountButton`](../../src/components/sections/promo/PromotionsAccountButton.tsx)),
+replacing the sun-toggle + account-FAB stack and its side-flyout link menu. Guests still get
+the lone [`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx), now also
+bottom-left — the two audiences are mutually exclusive so they never stack.
+
+**Why a column and not the arc fan it was designed as.** Three 44px discs need ~96° of sweep at
+a tight radius, but only ~50° is usable: past vertical is the screen edge, and reaching
+horizontal collides with the centred floating "Enter Now" pill (x 132–257, y 16–58 at 390px).
+Forcing three discs into 50° needs a ~115px radius — *further* out, the opposite of the goal.
+A column keeps every disc in a 44px lane on the far left, clear of that pill at any height.
+**Don't "improve" this back into an arc.**
+
+**The morph is one-to-one:** the three hamburger bars *are* the three discs (`scaleX .44 /
+scaleY .075` closed → full circle open), bottom bar → bottom disc so the order never shuffles.
+Two bugs to not re-introduce, both of which made the closed button render as an empty circle:
+
+1. **Paint order.** The trigger renders after the items in DOM order, so the items need an
+   explicit `zIndex: 2` against the trigger's `1` or the trigger covers the bars.
+2. **Bar colour.** The disc's open fill is dark glass; left unchanged while collapsed it's a
+   dark bar on a dark trigger. The fill animates to the promo accent when closed.
+
+Items are `pointer-events: none` while closed so the bars can sit on the trigger's face without
+eating its click. Order bottom-to-top is My Account → Mini Draws → theme toggle (most-tapped
+nearest the thumb); reorder the `MENU_ITEMS` array to change it. Interaction-driven, so it takes
+the `prefers-reduced-motion` gate (snaps instead of travelling) but not a device-tier gate.
+
+**"Homepage" was dropped** from the menu: a fourth bar stops the closed glyph reading as a
+hamburger, and the one-to-one morph is the whole idea. Add it back only if you accept four bars.
+
 ## Promotions right-corner FABs dodge the "Enter Now" bar (2026-07-08)
 
-On `/promotions`, the bottom-right floating controls now lift above the full-width floating **Enter Now** bar ([`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx)) when it scrolls in, and settle back when it's gone — the same collision-dodge the Cobber launcher uses, via `useDodgeFloatingObstacles("right", enabled)` ([hook](../../src/components/support-chat/useDodgeFloatingObstacles.ts)) applied as an inline `bottom` with a `transition-[bottom]`. It's wired in **two** places because the two audiences are mutually exclusive: **guests** → [`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx) (sun only, `bottom-4`); **authenticated** → [`PromotionsAccountButton`](../../src/components/sections/promo/PromotionsAccountButton.tsx) (one stack = sun toggle **+** account button, `bottom-16`/`sm:bottom-4`). The Enter Now bar carries `data-floating-widget`, so it's the obstacle; the hook only lifts for obstacles that reach the right corner (full-width bars), not narrow centered ones. The dodge hook is generic geometry (not chat-specific) despite living under `support-chat/` — reused as-is rather than relocated.
+On `/promotions`, the bottom-right floating controls now lift above the full-width floating **Enter Now** bar ([`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx)) when it scrolls in, and settle back when it's gone — the same collision-dodge the Cobber launcher uses, via `useDodgeFloatingObstacles("right", enabled, cornerPx)` ([hook](../../src/components/support-chat/useDodgeFloatingObstacles.ts)) applied as an inline `bottom` with a `transition-[bottom]`. It's wired in **two** places because the two audiences are mutually exclusive: **guests** → [`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx) (sun only); **authenticated** → [`PromotionsAccountButton`](../../src/components/sections/promo/PromotionsAccountButton.tsx) (one stack = sun toggle **+** account button). Both dock at the shared `bottom-5 right-5` (see the next entry). The Enter Now bar carries `data-floating-widget`, so it's the obstacle; the hook only lifts for obstacles that reach the right corner (full-width bars), not narrow centered ones. The dodge hook is generic geometry (not chat-specific) despite living under `support-chat/` — reused as-is rather than relocated.
+
+## `.promo-dock-supersedes` — how the promo bottom dock stands the corner controls down (2026-08-13)
+
+A promo **prize** page (`/promotions/[slug]` and the toolset landings) now mounts
+[`PromoBottomDock`](../../src/components/sections/promo/PromoBottomDock.tsx) — one bar that owns the
+whole bottom band: menu, Cobber and the entry CTA. The three separately-docked controls documented
+in the entries above must not also render there, or the page gets two of everything.
+
+The mechanism is **CSS keyed on an attribute**, not props:
+
+1. `PromoBottomDock` stamps `data-promo-dock` on `<html>` while mounted (removed on unmount, so a
+   client transition to `/promotions` — the Spotlight gallery, which mounts no dock — restores the
+   controls).
+2. `globals.css` hides `html[data-promo-dock] .promo-dock-supersedes` at every viewport and
+   reserves the bar's height via `body { padding-bottom }` (taller from `lg`).
+3. Four elements carry the class: [`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx),
+   [`PromotionsAccountButton`](../../src/components/sections/promo/PromotionsAccountButton.tsx),
+   [`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx) and
+   [`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx).
+
+**Why not props.** Two of those four are mounted by the promotions **layout**
+(`PromotionsGuestThemeToggle` via `PromotionsLayoutShell`, `ChatBubbleButton` via
+`SupportChatWidgetMount`), not by the page — a page-level prop can never reach them, and threading
+one through the layout would apply it to `/promotions` too, which has no dock.
+
+A `display:none` element has a zero rect, so the dodge hook above correctly ignores the hidden
+floaters — no extra wiring needed.
+
+_(The rule was originally gated to `max-width: 1023.98px`, matching an `lg:hidden` on the dock.
+The gate came off on 2026-08-13 when the dock was extended to desktop; if the dock is ever
+scoped back to one breakpoint, the CSS gate has to come back WITH it — a mismatch gives a
+viewport band either two docks or none.)_
+
+## Floating dock: every corner-docked control shares one baseline (2026-08-10)
+
+The three floating controls on `/promotions` — the Cobber launcher (bottom-**left**), and in the bottom-**right** corner the theme toggle + account FAB — were each positioned by their own hard-coded offsets and visibly failed to line up. Four independent mismatches:
+
+| | was | now |
+|---|---|---|
+| [`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx) | `bottom-5`, `left-5`/`right-5`, 56px | unchanged |
+| [`PromotionsAccountButton`](../../src/components/sections/promo/PromotionsAccountButton.tsx) | `bottom-16 sm:bottom-4`, `right-4`, 48px | `bottom-5 right-5`, 48px |
+| [`PromotionsGuestThemeToggle`](../../src/components/ui/ThemeToggle.tsx) | `bottom-4 right-4`, 48px | `bottom-5 right-5`, 48px |
+
+Root cause of the big one: `bottom-16 sm:bottom-4` was a hand-rolled mobile lift added 2026-04-08 (`6b005ffe`) to clear the Enter Now bar. When the dodge hook was wired into the same component three months later (2026-07-08, `29d04640`) the manual lift was never removed, so mobile double-lifted — the account FAB sat **44px** above Cobber's baseline.
+
+**The rule now:** every corner-docked floating control docks at `bottom-5` + `{left,right}-5`, exported as `FLOATING_DOCK_BOTTOM_PX` / `FLOATING_DOCK_SIDE_PX` from the dodge hook. **Never hand-roll a different bottom offset to clear an obstacle** — that is exactly what `useDodgeFloatingObstacles` is for, and a manual offset stacks on top of it.
+
+Discs may differ in size (Cobber is 56px, the promo FABs 48px — a deliberate hierarchy call: Cobber is the primary affordance). They align on **bottom edges**, not centres, so different diameters still read as sitting on one floor.
+
+The hook now takes a third `cornerPx` arg (default 56). Previously it hard-coded the launcher's 56/20/20 for *all* callers, so the AABB overlap test ran against a rect the right-corner FABs didn't occupy. Pass the height of the **bottom-most** disc of a stack — bottom-anchored obstacles can't reach a higher one without also hitting it.
+
+Verified on a 390×844 viewport, `/promotions/milwaukee`: guest and authenticated both measure Cobber `bottom 20 / left 20` and the right FAB `bottom 20 / right 20` (against `documentElement.clientWidth` — `window.innerWidth` includes the desktop scrollbar and reads 10px wider). Scrolling the Enter Now bar in lifts **both** corners to the identical inset, so they stay bottom-aligned through the slide.
 
 ## `(site)/layout.tsx` is a Server Component — `ssr:false` dynamic imports must live in a Client wrapper (2026-06-25)
 
@@ -681,6 +771,15 @@ longer possible. Nothing in the app does that.
 look for a *nearer* ancestor with a non-`visible` overflow — the same rule applies at every
 level, and the fix is `clip` on that ancestor rather than anything on the element.
 
+**Hit again 2026-08-12 — the nearer ancestor was a PAGE wrapper.** The mini-draws redesign added
+a sticky mobile control bar to `/mini-draws` and a sticky gallery column to `/mini-draws/[id]`.
+Neither engaged, even though `body` had been fixed site-wide: both page roots carried
+`w-full overflow-x-hidden`, so each page's own wrapper was the scroll container. Measured: the
+bar's `getBoundingClientRect().top` read **28.8px** at `scrollY = 300` with `top: 86px` set — it
+was simply scrolling away. Swapping both wrappers to `overflow-x-clip` fixed it. The site-wide
+`body` fix does **not** immunise a page that re-introduces the same declaration one level down;
+`overflow-x-hidden` on a full-bleed page container is a common instinct, so check for it first.
+
 ## The same mutation mounted three times must fail the same way three times (2026-08)
 
 [`RewardsClaimables`](../../src/components/sections/rewards/RewardsClaimables.tsx) called
@@ -799,3 +898,265 @@ The rule's own comment prescribes the escape hatch: use arbitrary values. The ba
 `bg-[#ffffff] dark:bg-[#0a0a0a]`, which matches the scroll body's measured surface exactly and
 is not caught by the selector. **Any element inside `.modal-panel-body` that needs a genuinely
 opaque light surface must do the same** — `bg-white` there does not mean white.
+
+## An `overflow-x-auto` rail inside a grid item sizes the TRACK, not itself (2026-08-06)
+
+`MembershipPrizeChooser` rendered a giant, cropped sliver of one toolbox on every phone. The
+image is `aspect-[4/3] w-full` inside a `<div className="relative">` grid item — nothing about
+it is wide. What was wide was its **sibling**: a 20-thumbnail `overflow-x-auto` rail whose
+max-content width is ~1432px.
+
+A grid item defaults to **`min-width: auto`**, which floors it at its content's min-content
+size, and the single implicit MOBILE track is `auto`-sized. So the track resolved to 1432px
+inside a 348px grid box, the `w-full` image frame filled that 1432px, and the whole right-hand
+column (price, bullets, CTA) went with it. `overflow-x-auto` never engaged, because the rail
+got all the width it asked for.
+
+Two things made this survive review:
+
+1. **The section had `overflow-hidden`**, so it never produced a page-level horizontal
+   scrollbar — the usual tell for this bug. It just rendered wrong, quietly.
+2. **`lg:grid-cols-2` is immune**, because Tailwind's `grid-cols-*` already expands to
+   `repeat(N, minmax(0, 1fr))`. So it looked correct on the desktop the author was using and
+   broke only below `lg`, where the explicit template drops away.
+
+**The rule: any grid or flex item that CONTAINS a scrolling region needs an explicit
+`min-w-0`.** Tailwind's `grid-cols-*` gives you `minmax(0,1fr)` for free only where the
+utility applies; a single-column (or `flex`) parent gives you nothing. Verify at a phone width
+by reading `getComputedStyle(grid).gridTemplateColumns` — if the track is wider than the grid
+box, this is what you are looking at.
+
+## Inline `style={{ color }}` is invisible to `dark:` — the upgrade flow's real dark-mode bug (2026-08-06)
+
+Reported as "the upgrade flow's dark mode is not properly coded — light features in dark
+mode". A 20-agent audit traced it to **two independent causes**, and refuted a third that
+looked far more likely.
+
+**Cause 1 — light-only shared primitives.** `ui/Card.tsx` was `bg-white` with no pair, and
+`ui/Button.tsx` had **no `dark:` token at all** (its `outline` variant is `bg-white`). The
+Card failure is the instructive one: its only consumer, StripePaymentModal's Order Summary,
+themes its *own* text with `dark:`, so in dark mode the labels correctly went light-grey —
+onto a white card. **A light-only primitive does not render "in light mode"; it renders broken
+against any child that respects the theme.** `PaymentProcessingScreen`'s 45s "Still
+processing" card had the same shape (zero `dark:` tokens, pure white, mid-payment).
+
+**Cause 2 — tier inks applied as INLINE STYLES.** `UpgradeConfirmModal/ActionRow`,
+`BenefitsBody`, `StripePaymentModal/UpgradeBenefitsPreview` and `ui/UpgradeBenefitStatGrid`
+all paint tier accents via `style={{ color: theme.deep }}` or
+`style={{ color: "var(--tier-color-deep)" }}`. Those inks (`#0b7e88` teal, `#a17b00` gold,
+`#b91c1c` red) and the pastel borders beside them (sky-200 / amber-200 / red-200) are chosen
+to read on **white**, and a `dark:` utility cannot override an inline style. So they survived
+on a `neutral-950` panel at ~3:1 contrast while the text right next to them themed correctly.
+
+The fixes, in order of preference:
+1. **Fix the VARIABLE, not the consumer.** `--tier-color-deep` was set only in the light
+   `.scrollFrame[data-tier=…]` blocks — the dark ones overrode three stat vars and skipped the
+   ink — which is what stranded `BenefitsBody`'s glyphs. The first attempt patched the one
+   glyph anyone had noticed, with a `dark:text-[color:var(--tier-color)]` utility. That left
+   every OTHER reader broken, including two byte-identical call sites in
+   `DowngradeConfirmModal` that were live in the default dark theme. Giving the variable a
+   dark value in both stylesheets was six lines and fixed all of them at once.
+   **Upgrade and Downgrade are done; `PackageDetailModal`, `ReferFriendModal` and
+   `SubscriptionExplainerModal` still define it light-only.**
+2. Failing that, resolve the value in JS from `useHtmlDarkForUi()` and keep two maps.
+3. Last resort, an `!important` utility (`dark:!text-white`) — already the local idiom in
+   `UpgradeBenefitsPreview`.
+
+**What was REFUTED, and why it matters:** the obvious suspect was that six payment modals read
+`useThemeStore((s) => s.theme === "dark")` instead of `useHtmlDarkForUi()`, so Stripe's iframe
+would get the wrong `appearance.theme`. It is a real inconsistency but **not this bug**:
+the store's default is already `"dark"`, zustand's persist rehydrates synchronously from
+localStorage (so there is no pre-hydration light render), the one genuine divergence path
+(`PromoThemeExperimentGate` calling `setState` instead of `setTheme`) self-heals in a root
+`useLayoutEffect` before any modal mounts, and every `<Elements>` already carries an
+isDark-keyed remount key so it re-themes anyway. Chasing the plumbing would have cost a day
+and fixed nothing — the bug was always plain CSS.
+
+**Guard:** `Card.test.ts` now asserts every `bg-`/`text-`/`border-` token it renders has a
+`dark:` counterpart (`npm run test:ui-primitives`). That catches cause 1. Cause 2 is not
+mechanically checkable — when you reach for an inline colour, pick option 1 above.
+
+## Homepage hero photo is HIGH-KEY — the scrim is directional, not a flat wash (2026-08-10)
+
+`public/images/background/{desktopBg,mobileBg}.webp` were replaced with a real studio shot of
+the prize haul (white wall, bright concrete floor, two people centre-frame) in place of the
+dark moody render. Same filenames, so [`Hero.tsx`](../../src/components/sections/Hero.tsx) paths,
+the media-scoped preload pair, and the `<picture>` `<source>`s are all unchanged.
+
+**The scrim had to be rebuilt.** The old `bg-black/20 dark:bg-black/45` flat wash was tuned for a
+dark image; over a white wall it left the white type barely legible. What replaced it, and why
+each piece exists:
+
+**GOVERNING RULE: darken only where the words are.** This took three passes to land, and every
+wrong turn was the same mistake — a full-bleed layer trading the photo's colour for contrast it
+didn't need across most of its area. The photo *is* the point; if you're about to add a global
+wash, don't.
+
+- **Not theme-varied.** The copy is `text-white` in both themes, so the scrim must be dark in
+  both. A `dark:`-only scrim is a bug waiting to happen here.
+- **No base wash on desktop at all.** There is exactly one darkening layer: a soft ellipse over
+  the copy column, `36%/53%` radii at `27%/45%`, peaking at `0.82` and feathered to zero by 86%
+  of its radius so its edge is never a visible blob. Its peak is high *because* nothing else is
+  helping — don't pair it with a wash "for safety" and then lower it.
+- **Why not a horizontal ramp** (two earlier attempts): an edge-anchored ramp is darkest at
+  `x=0`, which is pure container margin (`lg:px-[100px]`) with no text in it — it crushed the
+  left of the prize to buy contrast nobody needed, which is precisely what the client flagged
+  ("the far left side is too tinted"). Re-centring it on the copy fixed the edge but still
+  flattened the midfield, because a linear ramp spans the full height at every x.
+- **Mobile is a BAND, not a top-weighted ramp.** The copy is vertically centred (~38–58%), so a
+  top-weighted gradient is darkest at 0% — empty wall above the title — and still heavy at 62%
+  where the prize is. Same mistake, different axis. It now runs light → dense across the copy
+  band → light over the prize → a tail for the marquee.
+- **Bottom fade** so "WIN AUSTRALIA'S TOP TOOL BRANDS" and `BrandScroller` survive the pale
+  floor. Kept short (`sm:h-32`, `from-black/55`) — the brand cards under it are opaque anyway.
+- **The stats row is the trap.** It's the lowest and widest part of the copy, so it falls near
+  the ellipse's feathered edge and lands on busy pallet/tool art. It's carried mostly by type,
+  not scrim: a tight hard shadow for edge definition plus a wide soft one for separation
+  (`0 1px 2px rgba(0,0,0,1), 0 2px 12px rgba(0,0,0,0.92)`). A single soft shadow just smudges at
+  that size. Check this row first when judging any scrim change.
+
+Copy contrast was raised to match: `text-gray-200`/`text-gray-300` → `text-white/95`/`text-white/90`,
+and the generic `drop-shadow-lg|md|sm` filters → tuned `[text-shadow:...]` values (a `drop-shadow`
+filter on text is softer than a real text-shadow at the same nominal radius). Desktop stat
+dividers went `bg-white/30` → `bg-white/45` to survive the lighter right-hand scrim.
+
+**Perf note:** desktop went 1536×1024 / **1635 KB** → 1920×1280 / **137 KB** — larger and ~12×
+lighter, because a flat studio wall compresses far better than a noisy dark render. Mobile:
+1024×1536 / 137 KB → 1200×1800 / 115 KB.
+
+**Regenerating:** the source is a 6000×4000 JPG kept outside the repo. Desktop is a straight
+`resize(1920,1280)`; mobile is `extract({left:1700,top:0,width:2667,height:4000})` (2:3, biased
+right so both people sit centred) then `resize(1200,1800)`, both `webp({quality:80,effort:6})`
+via `sharp`. **After replacing either file, delete `.next/cache/images`** — the optimizer caches
+by URL, so reusing a filename serves the stale image and looks like your change did nothing.
+
+## Homepage hero: scrim removed entirely, copy rewritten (2026-08-10, supersedes the entry above)
+
+The scrim described in the previous entry is **gone**. Once the stats row was dropped from the
+hero, what remained — an 80px headline, one paragraph, and a solid red button — carries itself
+on text-shadow alone, so [`Hero.tsx`](../../src/components/sections/Hero.tsx) now runs the photo
+at full colour with **no darkening layer at any breakpoint**. The scrim history above is kept
+because it documents what was tried and why; treat it as background, not current state.
+
+Text-shadows had to get heavier to pay for it. All hero strings use **three-layer** shadows: a
+tight hard edge (1–2px) for legibility against photographic detail, a mid for body, and a wide
+halo for separation. A single soft shadow smudges at these sizes — that was the earlier version.
+
+**If copy is ever added back BELOW the CTA, re-check contrast there first.** Every scrim
+iteration existed to serve the stats row, which sat lowest and widest, over busy pallet art.
+That zone is the hero's genuinely hard case; the headline never was.
+
+Other hero changes in the same pass:
+- **Stats row deleted** (`Australia's Best Brands` / `High-Quality Products` / `Happy Customers`)
+  from both the mobile and desktop blocks.
+- **Mobile copy is top-aligned** (`justify-start` + `pt-2`, was `justify-center`) so the centre
+  of the frame is left to the photo — the subjects were previously behind the button stack.
+- **One CTA.** "Join Membership" → **"Become a member"**; the `/shop` "Shop Now" button was
+  removed because the shop is still coming-soon. `/shop` itself is untouched and still routable,
+  and Cobber's corpus never referenced the homepage shop button, so nothing else needed syncing.
+- **Copy rewritten** to lead with membership. Two deliberate deviations from the wording as
+  first drafted, both worth preserving:
+  1. It does **not** say membership unlocks mini draws. Per BUSINESS.md §3b, Mini Packs 1–3
+     ($1/$5/$10) are explicitly audience **"Guests"** — mini draws are open to everyone, so
+     gating them in copy is both untrue and a drag on the guest funnel. The line presents them
+     as "open to everyone" instead.
+  2. It keeps **"Australia's biggest tool giveaways"** from the previous copy. Dropping the
+     stats row already removed the hero's other keyword-bearing text, and the replacement draft
+     contained neither "tools" nor "Australia". Page metadata is unchanged and still carries
+     both, but the visible `<h1>` + this paragraph are the on-page signal.
+
+  Rule-11 check: "free entries", "giveaways", "mini draws" — no odds/chance/lottery framing, and
+  entries are never priced or sold.
+
+### Mobile CTA pinned to the bottom of the frame (2026-08-12)
+
+Top-aligning the copy (above) freed the centre of the photo but left the **button** mid-frame,
+directly over the two subjects. The mobile CTA wrapper is now `mt-auto` inside a
+`flex flex-1 flex-col` content column, so it sits at the **bottom of the hero content area** —
+below the people, just above the brand marquee — with the column's `pb-8` as the only gap. Its
+old `mb-8 sm:mb-12` is gone: with `mt-auto` a bottom margin just lifts the button back up.
+
+`flex-1` needs the `min-h-[calc(100vh-200px)]` on the parent to have something to fill — if that
+min-height is ever removed, the column collapses to content height and `mt-auto` silently does
+nothing (no layout break, the button just drifts back up under the paragraph).
+
+**Mobile only** (`lg:hidden` block). The desktop hero is a left-aligned column where the button
+already reads directly under the copy and nothing sits behind it; it was left untouched.
+
+Contrast: this moves the CTA into the busy-pallet zone the note above flags as the hero's hard
+case. It survives the move because a solid red filled button carries its own contrast — the
+warning is about **text**, which is why nothing else was moved down with it.
+
+## Membership hero deck must show PROMO-BOOSTED entries (2026-08-10)
+
+[`MembershipHero`](../../src/components/sections/membership/MembershipHero.tsx)'s three deck
+cards used to render `metadata.originalEntries` — the **pre-promo base** — with the comment
+"hero deck shows BASE entries (not promo-boosted), matching the prototype". With a 5× promo
+live, that put **"15 free entries / mo"** in the hero and **"was 15 → 75"** in
+[`MembershipTierChooser`](../../src/components/sections/membership/MembershipTierChooser.tsx)
+one screen below, on the same page, for the same tier. That reads as a bug or a bait-and-switch.
+
+**The rule: any surface quoting tier entries uses `metadata.entriesCount`** (the multiplier is
+already applied upstream). `metadata.originalEntries` exists only to render the `was <s>N</s>`
+strike, and is only present while a promo is live — so `originalEntries != null && != entriesCount`
+is also the correct test for "is a promo running". The deck now mirrors the tier chooser: strike
+above, boosted number below. Verified live: 15→75, 40→200, 100→500 in both places.
+
+**Package icon medallions** were added to the deck at the same time, centred on each card's TOP
+EDGE. They are a **sibling of the `<button>`, not a child** — the button is `overflow-hidden`
+(it clips the gloss and sheen layers), so a child would have the straddling half cut off. They
+carry `pointer-events-none` (never steal the card's click) and `aria-hidden` (the button's
+`aria-label` already names the tier; the icon is decoration, not a second label). Card top
+padding went `pt-[22px]` → `pt-[30px]` to clear them. Icons come from the shared
+`getPackageIcon(plan.id)` helper, same source the tier cards use — don't add a second mapping.
+
+## `SheetShell` at `z-[120]` rendered UNDER the Cobber launcher (2026-08-12)
+
+[`SheetShell`](../../src/components/ui/SheetShell.tsx) documented its z as "above the nav +
+floating chrome but below the payment/modal layer" — but the value was `z-[120]`, and the Cobber
+chat launcher ([`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx)) docks
+at `Z_INDEX.MODAL_BASE - 1000` = **9000**. The comment and the number disagreed by two orders of
+magnitude.
+
+It never showed, because every SheetShell caller until now lived on `/my-account`, where
+`SupportChatWidgetMount` **suppresses the launcher** (the dashboard "Ask Cobber" card is the
+canonical entry point there). The first public-route SheetShell — the `/mini-draws` filter, sort,
+quick-enter, catalogue and pack-detail sheets — put the robot straight over the sheet footer,
+covering the primary CTA.
+
+Fixed by raising the overlay to `z-[9500]`: above every floating control, still below
+`Z_INDEX.MODAL_BASE` (10000) and `TOAST_LOADING` (99999, the `PaymentProcessingScreen` overlay
+that a pack purchase opens *on top of* the sheet). The lesson generalises — **a z-index chosen
+against the surfaces you can see today is untested against the ones you can't**; if a comment
+claims an ordering, the number has to be checkable against the constants in
+[`z-index.ts`](../../src/constants/z-index.ts).
+
+Related: a bottom-anchored **non-modal** bar (the mini-draw sticky "Enter draw" bar) must NOT
+climb above the launcher — it opts into `data-floating-widget` instead, and
+[`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
+lifts Cobber clear of it. Modal → out-rank it; persistent chrome → dodge it.
+
+## A hover-opened dropdown must not close on the trigger's own click (2026-08-12)
+
+The header's three desktop dropdowns (Giveaways / Results / Explore) open on hover **and** on
+click. The trigger's handler was a plain toggle:
+
+```tsx
+onClick={() => setIsGiveawaysMenuOpen(!isGiveawaysMenuOpen)}
+```
+
+With hover-to-open added on top, that reads the wrong intent. The pointer opens the panel; the
+user then clicks the trigger they are already hovering; `isOpen` is already `true`, so the toggle
+**collapses the menu under the cursor**. Every pointer user hits this — the only way to keep the
+menu was to never click the thing that looks clickable.
+
+Fixed with an ownership ref rather than by removing the toggle. `openOnHover` records which menu
+hover opened (`hoverOpenedMenu`); `toggleFromClick` absorbs the first click on a hover-opened menu
+and hands ownership to click, so the *second* click closes it normally. Keyboard (Enter) and touch
+never set the ref — `openOnHover` returns early without `(hover: hover) and (pointer: fine)` — so
+both keep toggling in each direction. Moving the pointer away still closes it via the existing
+140ms `closeOnHover` delay.
+
+**The general rule: when a surface can be opened two ways, "toggle" is not a safe default for
+either.** A click must mean "open" or "keep", never "undo what hover just did" — decide from what
+opened it, not from the boolean alone.

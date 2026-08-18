@@ -2,6 +2,8 @@
 
 6 collections own subscription state. Schemas live in [`src/models/`](../../src/models/).
 
+> **`signupAttribution.anonymousId` is now indexed (2026-08-11).** `UserSchema.index({ "signupAttribution.anonymousId": 1 })` — added for the partner-discount funnel, which joins a visit row to the account it produced on that path. **No field was added to `User`**; the field already existed and is written on every register path. The index is deliberately **plain, not partial**, unlike the `signupAttribution.builtPrizeSlug` one directly below it: that one is partial because its query filters `$exists: true` (whose bounds span a non-sparse index's whole key range — panel F-021), whereas this one is only ever queried as an `$in` of concrete anonymousId strings, which a plain index answers exactly. See [partner/analytics.md](../partner/analytics.md).
+
 ## `User.subscription` (subdocument on `User`)
 
 [src/models/User.ts](../../src/models/User.ts) — the subscription state lives as an **embedded subdocument** on `User`, not a separate collection. One subscription per user (only one active at a time).
@@ -363,3 +365,11 @@ The `upsellPurchases` array on `User` (upsell-domain data, but it lives on this 
 ## 2026-07-31 — `User.partnerDiscountConsent` added
 
 New optional embedded record on [User.ts](../../src/models/User.ts): `{ scopeVersion, acceptedAt, fields[] }` — the customer's agreement to share their details with the MyRewards partner portal. **No default**: absent means "never consented", the fail-closed state the SSO gate relies on. Owned by the **partner** domain — schema rationale and the re-consent/scope-version mechanism are in [docs/partner/models.md](../partner/models.md); the rules that keep it honest are [docs/partner/rules.md R4–R6](../partner/rules.md). No subscription behaviour changed.
+
+### `User.gender` (added 2026-08-17)
+
+`gender?: "male" | "female"` — **optional**, validated by a validator rather than a Mongoose `enum` so an empty string passes (same treatment as `state` and `mobile`, where `""` means "not provided" rather than invalid). Stored lowercase via `lowercase: true`.
+
+**Unset means unknown**, and deliberately covers both "declined to answer" and "was never asked": there is no "prefer not to say" option because the field is never required anywhere. No consumer may infer anything about members with no value — see `genderBucketFor()` / `genderToMetaGe()` in [src/data/genders.ts](../../src/data/genders.ts), which are the only sanctioned readers.
+
+No migration was needed (absent = unset). Captured optionally in `UserSetupModal` step 2 (never gates "Continue") and editable at `/my-account/settings`; also added to `MY_ACCOUNT_USER_FIELDS` so it reaches the client.

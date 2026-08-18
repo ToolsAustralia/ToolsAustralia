@@ -94,13 +94,13 @@ Two **ghost states** ride on top of the enum without being in it: `pendingChange
 | Register (guest bridge) | Step-1 register creates a passwordless guest — **no login, no membership**. Registering with an existing guest's email/mobile updates that plain account; registering with a **staff/admin** email/mobile is rejected (`400`, "please log in") — privileged accounts are never created or mutated via public register (marker: `roleId`/`userType`, not `role`) | §4a, §4b · [docs/auth/gotchas.md](docs/auth/gotchas.md) |
 | Login | password / email sign-in code / Google / post-payment auto-login (a scaffolded **SMS** sign-in code also exists but is **not live** — no SMS provider configured; when enabled, `send-otp` delivers the code only to the mobile **on file** for the account, never a number supplied in the request — see [docs/auth/gotchas.md](docs/auth/gotchas.md)) | §4c–§4f |
 | First payment & activation | Full price at signup; webhook grants membership. Card declines return a 400 with the decline reason, and checkout shows short per-decline-code guidance (e.g. "Not enough funds on this card. Try another card."); sensitive codes (lost/stolen/fraud) get a generic "card declined" message | §5.1 · [BUSINESS.md §9, §10g](BUSINESS.md) · [payment-error-messages.ts](src/utils/payment/stripe/payment-error-messages.ts) |
-| Post-purchase setup | UserSetupModal captures profession/state + email-verify prompt | [BUSINESS.md §10g](BUSINESS.md) · [docs/USER_SETUP_MODAL.md](docs/USER_SETUP_MODAL.md) |
+| Post-purchase setup | UserSetupModal captures profession/state/DOB (all required) **+ gender (optional, never gates "Continue")** + email-verify prompt | [BUSINESS.md §10g](BUSINESS.md) · [docs/USER_SETUP_MODAL.md](docs/USER_SETUP_MODAL.md) |
 | Upsell offer | Post-success offer; per-trigger dedup | §2i · [docs/upsell/](docs/upsell/) · [BUSINESS.md §5](BUSINESS.md) |
 | Member dashboard | The ROI surface at `/my-account` | §9a · [BUSINESS.md §10h](BUSINESS.md) |
 | Renewal (anchor-24) | Monthly renew; 25th–27th joiners anchored to the 24th | §5.2 · [BUSINESS.md §9b](BUSINESS.md) · [BILLING_ANCHOR_24.md](docs/BILLING_ANCHOR_24.md) |
 | Upgrade / Downgrade | Immediate charge + cycle reset vs. deferred with benefits preserved | §5.3, §5.4 · [BUSINESS.md §10c, §10d](BUSINESS.md) |
 | Auto-renew toggle | Soft-cancel shortcut (`cancel_at_period_end`) | §5.5 · [BUSINESS.md §10a](BUSINESS.md) |
-| Past-due recovery | Self-serve retry → 3DS → update card → pay overdue. **Any failed renewal — including an admin re-bill of a stranded member — fires the "Subscription Renewal Failed" dunning email**, and leaves the member unpaused / in dunning rather than re-freezing them | §3a · [BUSINESS.md §9i, §10e](BUSINESS.md) · [FAILED_RENEWAL_PAY_NOW.md](docs/FAILED_RENEWAL_PAY_NOW.md) |
+| Past-due recovery | Self-serve retry → 3DS → update card → pay overdue. **Any failed renewal — including an admin re-bill of a stranded member — fires the "Subscription Renewal Failed" dunning email**, and leaves the member unpaused / in dunning rather than re-freezing them **If Stripe has temporarily blocked the member's card after too many attempts, Pay Now returns a short, dated message — "This card is temporarily blocked after too many attempts. Use a different card, or try again in 3 days." — and the automated charge run also leaves that card alone for 3 days (it is keyed to the card, so adding a new card works straight away).** | §3a · [BUSINESS.md §9i, §10e](BUSINESS.md) · [FAILED_RENEWAL_PAY_NOW.md](docs/FAILED_RENEWAL_PAY_NOW.md) |
 | Cancellation & retention | CancellationFlowModal; five save-offers, seven reasons. **Streak-stakes step (2026-07-15, dark until streak launch):** non-past-due members see a Membership Streak stakes screen between reason and the offers — loss framing (streak ≥ 2: banked renewals + next milestone + pause-freezes-your-streak) or forward framing (streak 0/1: the ladder); "Continue cancelling" always visible; exit recorded as `stakesAction` with `streakMonthsAtStart` on the event. The pause offer card also states the streak freezes. | §5.6 · [BUSINESS.md §13c](BUSINESS.md) · [docs/subscription/cancellation-flow.md](docs/subscription/cancellation-flow.md) |
 | Reactivate vs Resubscribe | Grace-window reactivate vs. fully-expired win-back | §5.7 · [BUSINESS.md §10i](BUSINESS.md) |
 | Entries & eligibility | How entries are earned; 18+, SA/ACT excluded | §6, §6a · [BUSINESS.md §3](BUSINESS.md) |
@@ -128,7 +128,8 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 | `lastName` | string (req, ≤50) | Family name ([User.ts:6](src/models/User.ts#L6)) | **PII** |
 | `state` | string (opt) | AU state/territory code; validated against NSW/VIC/QLD/WA/SA/TAS/ACT/NT ([User.ts:10](src/models/User.ts#L10)) | **PII** (coarse) |
 | `profession` | string (opt, ≤100) | e.g. Builder, Electrician, Other ([User.ts:11](src/models/User.ts#L11)) | — |
-| `birthdate` | Date (opt) | DOB; drives age-based eligibility; cannot be future ([User.ts:12](src/models/User.ts#L12)) | **PII** |
+| `gender` | "male" \| "female" (opt) | Optional; **unset = unknown** and deliberately covers both "declined" and "never asked" — there is no opt-out option because the field is never required ([User.ts:12](src/models/User.ts#L12), [src/data/genders.ts](src/data/genders.ts)) | **PII** (coarse) |
+| `birthdate` | Date (opt) | DOB; drives age-based eligibility; cannot be future ([User.ts:13](src/models/User.ts#L13)) | **PII** |
 | `profileSetupCompleted` | boolean (def false) | Whether profile setup is done ([User.ts:13](src/models/User.ts#L13)) | — |
 | `role` | "user" \| "admin" (def "user") | Legacy coarse role marker ([User.ts:14](src/models/User.ts#L14)) | — |
 
@@ -260,6 +261,14 @@ These exist on the same collection but are RBAC / service-account machinery ([Us
 | `inviteToken` / `inviteTokenExpires` / `invitedBy` / `invitedAt` | mixed | Staff invite machinery (`inviteToken` is **Sensitive**) |
 | `tokenVersion` | number (def 0) | Permission-change counter forcing JWT re-auth |
 | `role: "admin"` | (see §2a) | Legacy admin marker — not a customer value |
+
+**Who internally can read a customer's record (2026-08-13).** Reading a customer's personal data
+is now a *separate* staff grant from browsing the customer list. `users.view` gates the roster
+(name, membership, status, entries); the new **`users.viewDetail`** gates the detail modal and its
+reads — email, mobile, address, payment history, activity, deletion summary. Previously one
+permission granted both, so any staff role that could see the customer list could read every
+customer's contact details. Nothing about what is *stored* or *shared externally* changed — this
+narrows internal access only. See [docs/auth/permissions-catalog.md](docs/auth/permissions-catalog.md#viewdetail--splitting-pii-depth-out-of-view-2026-08-13).
 
 ---
 
@@ -536,6 +545,17 @@ one needs, and at the customer's own limit a **wall** is drawn across the list �
 stops at 50% · 916 you cannot redeem yet"*. A signed-out visitor meets that wall at the very
 top, reading *"Readable below — a membership is what lets you claim them"*.
 
+**A customer can now browse the catalogue by access level (2026-08-06).** Alongside search,
+sort and the category chips, `/discount` carries an **Access level** filter — one chip per rung
+of the 11-level ladder, each stating exactly what that rung unlocks (*5% · 92*, *50% · 183*,
+*100% · 274*). Chips are **multi-select**: one tap answers "what does 100% specifically get
+me?", and tapping several (5 + 10 + … + 50) builds the "everything up to 50%" view. Tapping a
+lit chip deselects it; "Any" clears. A signed-out visitor can use it to price up the decision,
+and a member can use it to see what a level above or below their own actually contains. It
+composes with "only what I can use", so a 50% member who selects the 100% rung correctly sees
+nothing. No access rule changed — this is a way to read the same catalogue, not a change to
+what anyone can redeem.
+
 Tapping a locked offer opens a popup that names the level it needs and shows the **two cheapest
 ways to reach it** — a membership and a one-time pack — so a customer who does not want a
 subscription is never left without a route. A redeemable offer hands them to the portal by the
@@ -649,6 +669,32 @@ not the `User` record):
   nothing had written the field since. The field, its index declaration and the beacon parameter
   were all removed — **strictly less data held about the visitor**.
 
+### 8a-ii. Partner-discount page analytics (2026-08-11) — first-party only, nothing leaves
+
+Browsing either partner-discount catalogue now writes a **first-party** analytics row. It is worth
+being precise about what this does and does not mean for the customer:
+
+- **Nothing new leaves to a third party.** No Klaviyo property, no Meta/TikTok/Snapchat event, no
+  new pixel. The rows are written to our own `partnerdiscountvisits` collection and read only by
+  staff on the admin Page Analytics tab (and by Norm, which receives **aggregate counts only** —
+  its projection has no per-person field at all).
+- **What is held per visit:** which surface (`/discount` or the members' rewards catalogue), the
+  `ta_anon_id` cookie, an opaque `userId` when signed in, whether they were signed in, their
+  partner-access % (a display number, absent when their tier had not resolved), referrer, the
+  three UTM values already described in the table above, and **behaviour counters** — whether they
+  used a filter, how many offers they opened, how many of those were above their access level,
+  whether the access seam scrolled into view, whether they clicked an unlock CTA, whether they
+  crossed into the partner portal, and whether a search came back empty.
+- **What is NOT held:** no email, no name, and **not which offers or brands they looked at** —
+  only counts. A member's browsing interests inside the catalogue are deliberately not recorded.
+- **Retention: 90 days**, TTL-deleted, matching `PartnerDiscountSsoIssuance`. A visitor's rows
+  disappear on their own.
+- **Existing customer data reused, not extended:** the funnel joins a visit to the account it
+  produced via `signupAttribution.anonymousId`, which §2h already documents. **No new field was
+  added to the `User` model** — only a database index on that existing path.
+
+Detail: [docs/partner/analytics.md](docs/partner/analytics.md).
+
 ### 8b. The "converting platform" concept
 
 At purchase, `resolveAttributionAtEdge` reads the click cookies + `_ta_attr` + the last-touch `_ta_attr_last` ([resolveAtEdge.ts:19-27](src/services/attribution/resolveAtEdge.ts#L19)) and resolves a **single** converting platform via a priority+recency ladder ([resolveConvertingPlatform.ts:11-76](src/services/attribution/resolveConvertingPlatform.ts#L11)). Window durations are defined in `platformPriority.ts` (`windowDaysFor`) ([platformPriority.ts:25](src/services/attribution/platformPriority.ts#L25)):
@@ -666,7 +712,7 @@ Before persisting, the webhook runs a **persisted-UTM reconcile** ([reconcilePer
 
 | Category | Properties |
 |---|---|
-| Identity / account | `user_id`, `created_at`, `last_login`, `is_active`, `role`, `state`, `profession`, `is_email_verified`, `is_mobile_verified`, `profile_setup_completed`, `app_accepts_promotional_email` |
+| Identity / account | `user_id`, `created_at`, `last_login`, `is_active`, `role`, `state`, `profession`, `gender` (omitted entirely when unset — no "unknown" sentinel), `is_email_verified`, `is_mobile_verified`, `profile_setup_completed`, `app_accepts_promotional_email` |
 | Subscription | `has_active_subscription`, `subscription_tier`, `subscription_start/end_date`, `subscription_auto_renew`, `subscription_status`, `subscription_has_pending_upgrade`, `subscription_previous_tier`, `subscription_last_upgrade/downgrade_date`, `past_due_renewal_entries`, `membership_status`, `membership_active_duration_months`, `next_renewal_date` |
 | Entries / points / spend | `accumulated_entries`, `rewards_points`, `entries_purchased`, `giveaways_entered`, `member/one_time/upsell/mini_draw_entries`, `lifetime_value`, `total_spent`, `first/last_purchase_date`, `total_one_time/mini_draw_packages` |
 | Upsell engagement | `total_upsells_purchased`, `upsell_total_shown/accepted/declined`, `upsell_conversion_rate`, `upsell_last_interaction` |
@@ -704,7 +750,8 @@ Hashing is plain SHA-256 of lowercased+trimmed input; **phones are first normali
 
 ### 8e. PII flowing to third parties — flags
 
-- **Klaviyo receives raw, unhashed PII** — email, first/last name, mobile (E.164), state, profession, plus the full behavioral/spend profile. **This is the largest clear-text PII export.**
+- **Klaviyo receives raw, unhashed PII** — email, first/last name, mobile (E.164), state, profession, gender (when set), plus the full behavioral/spend profile. **This is the largest clear-text PII export.**
+- **Meta receives gender as a hashed `ge` parameter** (SHA-256 of the single letter `m`/`f`, per Meta's spec) on both the browser pixel's Advanced Matching and the server-side CAPI mirror, alongside the existing hashed email/name/phone/DOB/state. Members with no gender set send **no `ge` field at all** — not a hash of an empty string, which would otherwise act as a shared identifier for every unanswered member. **Open compliance item: [/privacy](src/app/(site)/privacy/page.tsx) discloses that gender is *collected*; it has not been verified to disclose *sharing* it with advertising platforms.**
 - **Meta/TikTok/Snapchat receive PII only as SHA-256 hashes** (email, phone, name, location, DOB, user `_id`), but **raw** click IDs, browser IDs, IP, and user agent. A SHA-256 email is a stable pseudonymous identifier, **not** anonymization.
 - **Public disclosure (2026-07-24, panel F-012):** the privacy policy's Cookies & Tracking section now names **TikTok** alongside Facebook (Marketing Cookies example + third-party providers list) and discloses the **server-side conversion sharing to Meta and TikTok with hashed identifiers** — previously it named Facebook Pixel only, understating the tracking footprint documented in §8d.
 - **No consent banner — deliberate (2026-07-24, panel F-019).** Tools Australia does **not** ask for cookie/pixel consent: the pixels load and the CAPIs fire for every visitor. `hasPixelConsent()` hard-returns `true` ("auto-accept mode"). The dead `PixelConsentModal` — unreachable (`isOpen={false}`) and with a Decline button that gated nothing — was deleted rather than left implying a control the visitor never had. Rationale + what a real consent gate would require: [docs/tracking/rules.md R9](docs/tracking/rules.md).
@@ -712,6 +759,9 @@ Hashing is plain SHA-256 of lowercased+trimmed input; **phones are first normali
 - **The first-touch `_ta_attr` cookie persists 90 days** and survives login/OAuth; it holds only campaign metadata, no direct PII. It does **not** hold click IDs — each platform's click ID lives in its own cookie (see §8a).
 - **Anonymous visitors are now identified to Meta/TikTok by a pseudonymous device id (2026-07-31).** Guest-fired events carry the `ta_anon_id` UUID as a hashed `external_id` (§8d), and the TikTok browser pixel sends it too, read from the `ta_anon_id_pub` mirror. No new personal data leaves — but it does mean pre-signup activity from one browser is now **linkable across events** by those platforms, where before it was not. Combined with the 7→90-day TikTok click-id retention, the honest summary is: **no new categories of customer data are shared, but existing anonymous activity is now more durably linkable.**
 - **Contentsquare session-replay capture is env-gated, prod-only** (`NEXT_PUBLIC_CONTENTSQUARE_ID`, blank ⇒ disabled — [docs/tracking/rules.md R8](docs/tracking/rules.md)): dev/e2e/staging never record a session unless the id is explicitly set.
+- **Contentsquare records the SCREEN, and until 2026-08-07 recorded it unmasked.** A live audit of the tag config (project 598444) found `replayRecordingRate: 100` with `anonymisationMethod: null`, `textVisibilityEnabled: 0` and `maskMedia: false` — i.e. every session captured, no masking configured, and no mention of Contentsquare anywhere in the privacy policy. Three things were true that softened it: the tag masks `<input>`/`<textarea>`/contenteditable content **by default** (typed text was never collected), its always-on Automatic Personal Data Redaction replaces emails, JWTs, OAuth tokens and card numbers found in the DOM, and card fields live in a cross-origin Stripe iframe. What was genuinely exposed was **PII rendered as page text** — the member's name in the header and account nav, a delivery address on checkout success, a date of birth, free text typed into support chat. Now masked via `setPIISelectors` on a `data-cs-mask` attribute applied at each render site, queued before the tag initializes. `/admin`, `/affiliate` and `/my-account/settings` remain excluded from replay entirely.
+- **Contentsquare now receives membership + channel attributes (2026-08-07, channel added 2026-08-10).** `ContentsquareDynamicVariables` pushes `is_member`, `is_authenticated`, `membership_tier`, `has_one_time_pack`, `traffic_source` and `traffic_medium` as Contentsquare dynamic variables, re-sent per pageview, suppressed on `EXCLUDED_TRACKING_PREFIXES`. `traffic_source`/`traffic_medium` are the **last-touch** channel for the current session, read from the sessionStorage UTM copy via `getSessionUTMParams()` — deliberately NOT the 90-day first-touch `_ta_attr` cookie, which would label a returning visitor with whichever campaign originally won them and silently over-credit it. No campaign params this session ⇒ `direct` / `none`. Values are lower-cased so one channel is one segment (production carried both `tiktok` and `TIKTOK`). Only the channel LABEL is sent — never a click id (`fbclid`/`ttclid`) or campaign/adset/ad id. These are **plan metadata, not personal data** — no name, email, entry history or identifier is sent, and `identify`/`addUserProperties` are deliberately unused (they need a Product Analytics configuration this account lacks, so they would silently no-op). Effect: Contentsquare can segment behaviour by tier, which is the point of the licence; it cannot resolve a session to a person from what we send.
+- **Public disclosure (2026-08-07):** the privacy policy's Cookies & Tracking section now names **Contentsquare**, adds a "Session Recording" cookie category, and states plainly what replay does and does not capture (no typed input, no card details, page-text PII masked, recording off on settings/staff pages). Before this it named Contentsquare nowhere, while recording 100% of sessions — a gap against [docs/tracking/rules.md R4](docs/tracking/rules.md)'s corollary that every tracking provider must be disclosed.
 
 ---
 
@@ -729,6 +779,8 @@ All `/my-account/*` routes require a signed-in session; an unauthenticated visit
 
 **Reaching Cobber (the AI support assistant):** everywhere on the site a customer opens Cobber via the **floating chat bubble** (`SupportChatWidget`, bottom corner). On `/my-account` that bubble is **suppressed** and the dashboard's **"Ask Cobber" support card** ("Start a chat", in the Support sheet / `/my-account/support`) is the single entry point instead — so members see one clear way to start a chat, not two. Both open the same chat panel. **Guest vs member access** is controlled by `CHAT_ALLOW_GUEST_GENERATIVE` (hCaptcha is deferred). **Off (default):** anonymous visitors get free **FAQ answers** + a "sign in to chat" nudge for anything the FAQ can't cover; **signed-in members get the full AI assistant**. **On (chosen launch posture):** anonymous visitors also get **full AI answers** — routed to the cheaper **Gemini** model (members keep the admin-toggled provider), guarded by the per-IP rate limit + daily budget. Either way members get the full bot. See [ai-chatbot/merge-to-main.md § 4g](docs/ai-chatbot/merge-to-main.md).
 
+**Getting from Cobber to a human (fixed 2026-08-10).** Cobber can hand a conversation to human support via its `request_human` tool, which files a **`ContactSubmission`** (priority `high`, with a redacted transcript summary) that staff work from the admin Submissions tab. **This was broken from launch until 2026-08-10:** the tool only files a submission when it has a contact email, and the chat widget never sent one — so no ticket was ever created, while Cobber told customers their case had been passed on. Six customers in the first month were promised a reply within one business day that was never queued. Now a **signed-in member's** email is resolved server-side from their session, so escalation completes without asking them for anything, and Cobber is barred from claiming a handoff that did not happen (a false claim is logged and flagged in the admin transcript view). **Guests are not yet covered** — an anonymous visitor is told honestly that it can't be passed on yet and pointed to [contact us](/contact), which does work; widget-side email capture is the remaining piece. A customer's own always-available route to a human is unchanged: the [contact page](/contact), replied to within one business day.
+
 ### 9b. PII footprint
 
 The `User` document (§2) holds the bulk of customer PII — identity (name, email, mobile, birthdate, state, profession), auth secrets, billing (`stripeCustomerId`, `savedPaymentMethods[]` — **only Stripe payment-method IDs, no card numbers**), activity/history, marketing consent, and attribution. The **chat** models also hold customer data, but **PII is redacted at the service layer before storage** and raw tool arguments are never stored ([ChatMessage.ts:6-9](src/models/ChatMessage.ts#L6)). *(Other collections — orders, payment events, draw entries — hold transactional references but were not exhaustively enumerated.)*
@@ -737,6 +789,7 @@ The `User` document (§2) holds the bulk of customer PII — identity (name, ema
 
 - **Chat data** — `ChatConversation` and `ChatMessage` carry a **MongoDB TTL index of 90 days** (auto-purge), aligned across both collections ([ChatConversation.ts:99-104](src/models/ChatConversation.ts#L99), [ChatMessage.ts:77-82](src/models/ChatMessage.ts#L77)). The in-chat disclosure states chats are "stored securely in Australia and automatically deleted after 90 days".
 - **Privacy-policy stated retention** ([privacy/page.tsx:213-227](src/app/(site)/privacy/page.tsx#L213)): account info — while active + 7 years; competition records — min 3 years; transaction records — 7 years; marketing opt-out records — indefinite.
+- **Who can read a customer's chat (2026-08-10).** Stored chats are now readable by staff in **Admin → Chatbot → Conversations**, gated by the `submissions.view` permission ([chatbot-conversations route](src/app/api/admin/chatbot-conversations/route.ts), service [chatTranscripts.ts](src/services/admin/chatTranscripts.ts)). This adds no new *stored* data and no new third-party sharing — it is an internal read surface over messages already persisted since Cobber launched (8 Jul 2026). What staff see is the **redacted** content (`redactPII()` masks emails/phones/card numbers at write time, before storage) plus the customer's **firstName and opaque userId only** — never email, full name, or phone. The customer's self-service "Delete my chat history" (§9d) removes it from this view too, since admin reads live data rather than a snapshot.
 
 ### 9d. Data rights
 

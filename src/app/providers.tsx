@@ -31,6 +31,7 @@ import AffiliateTracker from "@/components/tracking/AffiliateTracker";
 import ReferralTracker from "@/components/tracking/ReferralTracker";
 import PromoLinkTracker from "@/components/tracking/PromoLinkTracker";
 import KlaviyoUserIdentifier from "@/components/tracking/KlaviyoUserIdentifier";
+import ContentsquareDynamicVariables from "@/components/tracking/ContentsquareDynamicVariables";
 import ConversionPixelsAdvancedMatching from "@/components/tracking/ConversionPixelsAdvancedMatching";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import ThemeMetaSync from "@/components/system/ThemeMetaSync";
@@ -131,6 +132,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
                           <ReferralTracker />
                           <PromoLinkTracker />
                           <KlaviyoUserIdentifier />
+                          {/* Contentsquare membership segmentation. Mounted HERE rather than
+                              beside <ContentsquarePageTracker /> in the root layout because it
+                              needs the session + React Query cache, which only exist inside
+                              these providers. Env-gated on the same id as the tag itself
+                              (docs/tracking/rules.md R8) — blank ⇒ never mounted. */}
+                          {process.env.NEXT_PUBLIC_CONTENTSQUARE_ID ? <ContentsquareDynamicVariables /> : null}
                           <ConversionPixelsAdvancedMatching />
                           <UpgradeSuccessToast />
                           {children}

@@ -2,11 +2,11 @@ import { Metadata } from "next";
 import { Suspense } from "react";
 import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getNonce } from "@/utils/security/getNonce";
-import MembershipSection from "@/components/sections/MembershipSection";
 import MiniDrawsContent from "@/components/features/MiniDrawsContent";
 import { ProductCardSkeleton, Skeleton } from "@/components/loading/SkeletonLoader";
 import MiniDrawsHero from "./components/MiniDrawsHero";
 import HowMiniDrawsWork from "./components/HowMiniDrawsWork";
+import ReadyToEnter from "./components/ReadyToEnter";
 
 // nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
 // (see docs/security-csp/architecture.md "Route classes").
@@ -23,7 +23,12 @@ export default async function MiniDrawsPage() {
   const nonce = await getNonce();
 
   return (
-    <div className="min-h-screen-svh bg-white dark:bg-neutral-950 w-full overflow-x-hidden">
+    // `overflow-x-clip`, NOT `-hidden`: `overflow-x: hidden` computes `overflow-y: auto`,
+    // which makes this div the scroll container for `position: sticky` descendants — the
+    // sticky control bar then pins to a box that never scrolls, so it simply scrolls away.
+    // `clip` suppresses horizontal overflow without creating a scroll container. (The root
+    // layout already uses `overflow-x: clip` for exactly this reason.)
+    <div className="min-h-screen-svh bg-white dark:bg-neutral-950 w-full overflow-x-clip">
       <BreadcrumbJsonLd
         items={[
           { name: "Home", item: `${baseUrl}/` },
@@ -68,10 +73,9 @@ export default async function MiniDrawsPage() {
       {/* How It Works Section */}
       <HowMiniDrawsWork />
 
-      {/* Membership Section */}
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-0">
-        <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="pt-8 pb-32" titleColor="" />
-      </div>
+      {/* MembershipSection used to close this page, but it sells MAJOR-draw entries —
+          mini-draw entry is pack-only, so it pointed buyers at the wrong product. */}
+      <ReadyToEnter />
     </div>
   );
 }

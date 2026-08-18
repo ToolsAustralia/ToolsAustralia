@@ -26,6 +26,26 @@ export interface DiscountOfferListProps {
   viewerPct: number;
   signedIn: boolean;
   onOpenOffer: (row: DiscountRow) => void;
+  /**
+   * A MEANINGFUL wall marker exists in this view — page analytics' DENOMINATOR for
+   * seam-reach rate. Reported separately from `onSeamReached` for two reasons:
+   *
+   * 1. `buildBands` only draws a wall under the ACCESS sort, and never for a viewer who can
+   *    reach everything. Dividing by all visitors would count people who had no seam as
+   *    people who failed to reach it.
+   * 2. **A wall on the FIRST band is not a seam.** `reachable` is `signedIn && viewerPct >=
+   *    level`, so for a signed-out visitor every band is unreachable and the marker lands
+   *    above the very first row — "reached the seam" would then be true for essentially
+   *    everyone who saw the top of the list, and the column would read ~100% while measuring
+   *    nothing. The seam question is "did the member scroll to where their access runs out",
+   *    which only exists when something sits above it.
+   *
+   * So neither callback fires when the wall is the first band. Signed-out interest is
+   * measured by locked-offer opens and unlock clicks instead, which are meaningful for them.
+   */
+  onSeamRendered?: () => void;
+  /** The wall marker scrolled into view. Fires at most once per visit. */
+  onSeamReached?: () => void;
 }
 
 export default function DiscountOfferList({
@@ -33,12 +53,28 @@ export default function DiscountOfferList({
   viewerPct,
   signedIn,
   onOpenOffer,
+  onSeamRendered,
+  onSeamReached,
 }: DiscountOfferListProps) {
+  /**
+   * A wall on the FIRST band means everything is locked for this viewer — the signed-out
+   * case. There is nothing above it to have scrolled past, so it is not a seam and is not
+   * measured. See the prop docs above.
+   */
+  const wallIndex = bands.findIndex((b) => b.wall);
+  const seamIsMeaningful = wallIndex > 0;
+
   return (
     <div className="flex flex-col gap-[9px]">
       {bands.map((band) => (
         <div key={band.level} className="flex flex-col gap-2">
-          {band.wall && <WallMarker band={band} />}
+          {band.wall && (
+            <WallMarker
+              band={band}
+              onRendered={seamIsMeaningful ? onSeamRendered : undefined}
+              onReached={seamIsMeaningful ? onSeamReached : undefined}
+            />
+          )}
 
           {band.name && (
             <div className="flex items-center gap-2.5 px-1 py-[5px]">
@@ -98,9 +134,50 @@ export default function DiscountOfferList({
  * rhythm, because "this is where your access ends" is the single fact a member most needs
  * and the vendor's own portal never states anywhere.
  */
-function WallMarker({ band }: { band: DiscountBand }) {
+function WallMarker({
+  band,
+  onRendered,
+  onReached,
+}: {
+  band: DiscountBand;
+  onRendered?: () => void;
+  onReached?: () => void;
+}) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+
+  /**
+   * "Did the reader actually get to the seam?" — an IntersectionObserver on the marker
+   * itself, not a scroll listener.
+   *
+   * This deliberately matches the sentinel/`data-stuck` idiom the page already uses for its
+   * sticky bar, and for the same reason: the list runs to 1,833 rows, and this page's own
+   * doc-comment records at length what happens when work is coupled to scroll position here.
+   * One observer, one callback, then disconnect — nothing per frame.
+   *
+   * The callbacks are read through a ref so a parent passing an inline arrow cannot
+   * re-subscribe the observer on every render.
+   */
+  const handlers = React.useRef({ onRendered, onReached });
+  handlers.current = { onRendered, onReached };
+
+  React.useEffect(() => {
+    handlers.current.onRendered?.();
+    const node = ref.current;
+    if (!node) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        handlers.current.onReached?.();
+        io.disconnect();
+      },
+      { threshold: 0 }
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <div className="relative my-2 flex items-center justify-center sm:my-3.5">
+    <div ref={ref} className="relative my-2 flex items-center justify-center sm:my-3.5">
       <span
         aria-hidden
         className="absolute left-0 right-0 top-1/2"

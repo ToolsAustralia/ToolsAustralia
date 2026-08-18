@@ -41,7 +41,7 @@ import path from "node:path";
 // Load .env.local before importing app modules (mirrors sibling tests).
 config({ path: path.resolve(process.cwd(), ".env.local") });
 
-import { chatService, buildRequestHumanTool } from "../ChatService";
+import { chatService, buildRequestHumanTool, looksLikeComplaint } from "../ChatService";
 import type { ChatServiceDeps, PersistPort } from "../ChatService";
 import type { ChatCtx } from "@/lib/support-chat/withChatbot";
 import type { ChatActor } from "@/lib/support-chat/types";
@@ -275,6 +275,13 @@ async function testNonDeflectable() {
     // Inject a stub that always succeeds so this test verifies existing behavior
     // (the gate itself is exercised in guest-gate.test.ts).
     verifyHcaptcha: async () => true,
+    // Without this the real Mongo-backed generative limiter runs, keyed on this
+    // test's hard-coded ipKey. It allows 5 requests per 5-minute window, so
+    // running the suite more than ~3 times inside one window tripped the limit
+    // and this case failed with "streamFn called 0 times" — a flake that looks
+    // exactly like a regression in the code under test. The limiter has its own
+    // dedicated cases below; this one is about the LLM path, so stub it out.
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
   };
 
   const res = await chatService.respond(
@@ -746,6 +753,418 @@ async function testRequestHumanWithEmail() {
   pass("with-email → escalate(server actor + request contact) once, setEscalated, escalated=true; model-supplied email ignored");
 }
 
+// ─── Test: deflection guards (complaint routing + repeat suppression) ─────────
+
+/**
+ * Pins the complaint classifier against the exact production messages that
+ * were served a canned FAQ, and against the routine questions that must keep
+ * deflecting for free. Over-triggering costs one LLM call; under-triggering
+ * sends a price list to someone disputing a charge.
+ */
+async function testComplaintClassifier() {
+  console.log("\nlooksLikeComplaint — real production messages");
+
+  // Verbatim from production transcripts; each was answered with a canned FAQ.
+  const mustFlag: Array<[string, string]> = [
+    ["unauthorised charge", "You have just taken $20 from my bank account, I didn't sign up for any membership that I am aware of"],
+    ["paid but no entries", "I have made 2 $80 payments for my membership, however, there are no entries showing up on my portal home pages"],
+    ["regulator threat", "I will take this to the ombudsman/ACCC if I don't get refundd"],
+    ["refund demand", "I want my money back I paid for your bullshit compition once"],
+    ["stop taking money", "Please stop taking money from my account with out any authority"],
+    ["distressed cancel", "I want to cancel this I don't want use pulling out money without asking I need that 20 dollars"],
+    ["bare refund demand", "I need a refund"],
+  ];
+  // These must STILL deflect — they are routine lookups, not disputes.
+  const mustNotFlag: Array<[string, string]> = [
+    ["policy lookup", "Refund policy"],
+    ["cancel how-to", "How do I cancel"],
+    ["draw timing", "When is the Major Draw?"],
+    ["pricing", "What are the membership prices?"],
+    ["entries location", "Where can I see my entries?"],
+    ["more entries", "How do I get more entries?"],
+    ["delete account", "How to delete account"],
+    ["payment methods", "How to add payment method"],
+    ["eligibility", "Can SA residents enter the draw?"],
+    ["prizes", "What can I win?"],
+  ];
+
+  for (const [label, text] of mustFlag) {
+    if (!looksLikeComplaint(text)) {
+      fail(`complaint detected — ${label}`, `NOT flagged: "${text.slice(0, 60)}"`);
+      return;
+    }
+  }
+  for (const [label, text] of mustNotFlag) {
+    if (looksLikeComplaint(text)) {
+      fail(`routine question still deflects — ${label}`, `wrongly flagged: "${text}"`);
+      return;
+    }
+  }
+
+  pass(`complaint classifier: ${mustFlag.length} disputes caught, ${mustNotFlag.length} routine questions still free`);
+}
+
+/** A complaint must bypass the FAQ layer entirely and reach the model. */
+async function testComplaintSkipsDeflection() {
+  console.log("\nchatService.respond — complaint bypasses the canned FAQ");
+
+  const { ctx } = makeCtx({ kind: "member", userId: "507f1f77bcf86cd799439055", firstName: "Upset" });
+  const persist = makePersistSpy();
+  let deflectCalls = 0;
+  let streamCalls = 0;
+
+  const deps: ChatServiceDeps = {
+    // Would happily answer if consulted — the point is that it must NOT be.
+    tryDeflect: async () => {
+      deflectCalls++;
+      return { answered: true, answer: "We accept Visa, Mastercard and American Express.", sources: [{ id: "10", title: "Payments" }] };
+    },
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
+    streamFn: (args) => {
+      streamCalls++;
+      void Promise.resolve().then(() => args.onFinish?.({ text: "Let me get a human onto this.", usage: { inputTokens: 10, outputTokens: 5 } }));
+      return { toUIMessageStreamResponse: () => new Response("ok", { status: 200 }) };
+    },
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+    verifyHcaptcha: async () => true,
+  };
+
+  const res = await chatService.respond(
+    { ctx, messages: [userMessage("You have just taken $20 from my bank account, I didn't sign up for any membership")] },
+    deps
+  );
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  if (deflectCalls !== 0) {
+    fail("tryDeflect NOT consulted for a complaint", `called ${deflectCalls} times`);
+    return;
+  }
+  if (streamCalls !== 1) {
+    fail("complaint reaches the model", `streamFn called ${streamCalls} times`);
+    return;
+  }
+  if (ctx.audit.deflected !== false) {
+    fail("audit.deflected === false for a complaint", `got ${ctx.audit.deflected}`);
+    return;
+  }
+
+  pass("complaint → FAQ layer skipped entirely, model answers, deflected=false");
+}
+
+/**
+ * The production loop: a member asked "But I can't add a payment method" five
+ * times and got the identical canned answer every time. A repeat must fall
+ * through to the model instead of replaying the same text.
+ */
+async function testRepeatedDeflectionFallsThrough() {
+  console.log("\nchatService.respond — repeated canned answer falls through to the model");
+
+  const CANNED = "We accept all major credit and debit cards (Visa, Mastercard, American Express) processed securely through Stripe.";
+  const { ctx } = makeCtx({ kind: "member", userId: "507f1f77bcf86cd799439056", firstName: "Loop" });
+  const persist = makePersistSpy();
+  let streamCalls = 0;
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: true, answer: CANNED, sources: [{ id: "10", title: "Payments" }] }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
+    streamFn: (args) => {
+      streamCalls++;
+      void Promise.resolve().then(() => args.onFinish?.({ text: "Let me actually help with that.", usage: { inputTokens: 10, outputTokens: 5 } }));
+      return { toUIMessageStreamResponse: () => new Response("ok", { status: 200 }) };
+    },
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+    verifyHcaptcha: async () => true,
+  };
+
+  // History already contains the canned answer — the user is rephrasing.
+  const history: UIMessage[] = [
+    userMessage("How to add payment method"),
+    { id: "a1", role: "assistant", parts: [{ type: "text", text: CANNED }] },
+    userMessage("But I can't add a payment method"),
+  ];
+
+  const res = await chatService.respond({ ctx, messages: history }, deps);
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  if (streamCalls !== 1) {
+    fail("repeat falls through to the model", `streamFn called ${streamCalls} times`);
+    return;
+  }
+  if (ctx.audit.deflected !== false) {
+    fail("audit.deflected === false when the repeat is suppressed", `got ${ctx.audit.deflected}`);
+    return;
+  }
+
+  pass("identical canned answer suppressed → model answers instead of repeating");
+}
+
+/** A DIFFERENT canned answer after a previous one must still deflect (stay free). */
+async function testDifferentDeflectionStillFree() {
+  console.log("\nchatService.respond — a different canned answer still deflects");
+
+  const { ctx } = makeCtx({ kind: "member", userId: "507f1f77bcf86cd799439057", firstName: "Fine" });
+  const persist = makePersistSpy();
+  let streamCalls = 0;
+
+  const deps: ChatServiceDeps = {
+    tryDeflect: async () => ({ answered: true, answer: "The Major Draw runs on the 27th of every month.", sources: [{ id: "2", title: "Major Draw" }] }),
+    assertWithinBudget: async () => ({ ok: true }),
+    recordUsage: async () => {},
+    checkGenerativeLimit: async () => ({ success: true, retryAfterSeconds: 0 }),
+    streamFn: (args) => {
+      streamCalls++;
+      void Promise.resolve().then(() => args.onFinish?.({ text: "x", usage: { inputTokens: 1, outputTokens: 1 } }));
+      return { toUIMessageStreamResponse: () => new Response("ok", { status: 200 }) };
+    },
+    persist: persist.port,
+    escalateToHuman: async () => ({ submissionId: "x" }),
+    getModel: () => ({ modelId: "claude-haiku-4-5" }) as never,
+    verifyHcaptcha: async () => true,
+  };
+
+  const history: UIMessage[] = [
+    userMessage("How do I cancel"),
+    { id: "a1", role: "assistant", parts: [{ type: "text", text: "You can cancel from My Account → Membership." }] },
+    userMessage("When is the draw?"),
+  ];
+
+  const res = await chatService.respond({ ctx, messages: history }, deps);
+  await res.text();
+  await new Promise((r) => setTimeout(r, 0));
+
+  if (streamCalls !== 0) {
+    fail("different canned answer must NOT hit the model", `streamFn called ${streamCalls} times`);
+    return;
+  }
+  if (ctx.audit.deflected !== true) {
+    fail("audit.deflected === true for a genuine new deflection", `got ${ctx.audit.deflected}`);
+    return;
+  }
+
+  pass("different canned answer → still deflects free, model not called");
+}
+
+// ─── Test: member email resolved server-side (no widget contact) ──────────────
+
+/**
+ * The production bug this pins: the widget never sends `contact`, so before the
+ * fix execute() always hit the no-email branch and NO ContactSubmission was ever
+ * created — while Cobber went on telling customers their case had been passed to
+ * support. For a signed-in member the server already knows the email, so it must
+ * escalate without asking.
+ */
+async function testRequestHumanMemberEmailFromSession() {
+  console.log("\nrequest_human tool — member with NO widget contact (email from session)");
+
+  let escalateCalls = 0;
+  let escalateArgs:
+    | { actor: ChatActor; contact: { name?: string; email: string; phone?: string }; transcriptSummary: string }
+    | undefined;
+  const setEscalatedCalls: Array<{ conversationId: string; submissionId: string }> = [];
+  let escalatedFlag = false;
+  const resolveCalls: string[] = [];
+
+  const persist = makePersistSpy();
+  persist.port.setEscalated = async (conversationId, submissionId) => {
+    setEscalatedCalls.push({ conversationId, submissionId });
+  };
+
+  const serverActor: ChatActor = {
+    kind: "member",
+    userId: "507f1f77bcf86cd799439077",
+    firstName: "Matthew",
+  };
+
+  const tool = buildRequestHumanTool({
+    actor: serverActor,
+    contact: undefined, // the widget sends nothing — this is production reality
+    conversationId: "conv_member_session",
+    messages: [userMessage("I paid twice and have no entries.")],
+    persist: persist.port,
+    escalate: async (args) => {
+      escalateCalls++;
+      escalateArgs = args;
+      return { submissionId: "sub_member_001" };
+    },
+    onEscalated: () => {
+      escalatedFlag = true;
+    },
+    resolveMemberEmail: async (userId) => {
+      resolveCalls.push(userId);
+      return "matthew@example.com";
+    },
+  });
+
+  const result = await tool.execute!({ reason: "billing issue" }, fakeToolCtx);
+
+  if (resolveCalls.length !== 1 || resolveCalls[0] !== serverActor.userId) {
+    fail("resolveMemberEmail called with the session userId", `got ${JSON.stringify(resolveCalls)}`);
+    return;
+  }
+  if (escalateCalls !== 1) {
+    fail("escalate called once for a member with no widget contact", `called ${escalateCalls} times`);
+    return;
+  }
+  if (escalateArgs?.contact.email !== "matthew@example.com") {
+    fail("escalate got the session email", `got ${escalateArgs?.contact.email}`);
+    return;
+  }
+  // Session-resolved identity must use the session firstName, not a model value.
+  if (escalateArgs?.contact.name !== "Matthew") {
+    fail("escalate got the session firstName", `got ${escalateArgs?.contact.name}`);
+    return;
+  }
+  if (setEscalatedCalls.length !== 1) {
+    fail("setEscalated called", `got ${JSON.stringify(setEscalatedCalls)}`);
+    return;
+  }
+  if (!escalatedFlag) {
+    fail("audit.escalated === true", `flag=${escalatedFlag}`);
+    return;
+  }
+  if (typeof result !== "string" || /NOT_ESCALATED/.test(result)) {
+    fail("returns a success string (not NOT_ESCALATED)", `got ${JSON.stringify(result)}`);
+    return;
+  }
+
+  pass("member + no widget contact → email resolved from session, submission filed, escalated=true");
+}
+
+/**
+ * A member whose lookup yields nothing (deleted user / no email on file) must
+ * fall back to the honest branch, NOT escalate with an empty address.
+ */
+async function testRequestHumanMemberEmailMissing() {
+  console.log("\nrequest_human tool — member whose email cannot be resolved");
+
+  let escalateCalls = 0;
+  let escalatedFlag = false;
+  const persist = makePersistSpy();
+
+  const tool = buildRequestHumanTool({
+    actor: { kind: "member", userId: "507f1f77bcf86cd799439078", firstName: "Ghost" },
+    contact: undefined,
+    conversationId: "conv_member_no_email",
+    messages: [userMessage("Help me.")],
+    persist: persist.port,
+    escalate: async () => {
+      escalateCalls++;
+      return { submissionId: "should_not_be_created" };
+    },
+    onEscalated: () => {
+      escalatedFlag = true;
+    },
+    resolveMemberEmail: async () => null,
+  });
+
+  const result = await tool.execute!({}, fakeToolCtx);
+
+  if (escalateCalls !== 0) {
+    fail("escalate NOT called when email cannot be resolved", `called ${escalateCalls} times`);
+    return;
+  }
+  if (escalatedFlag) {
+    fail("audit.escalated stays false", `flag=${escalatedFlag}`);
+    return;
+  }
+  // The model must be told unambiguously that nothing was sent — this string is
+  // what stops it inventing "I've passed your case to our team".
+  if (typeof result !== "string" || !/^NOT_ESCALATED/.test(result)) {
+    fail("returns a NOT_ESCALATED-prefixed string", `got ${JSON.stringify(result)}`);
+    return;
+  }
+
+  pass("member with unresolvable email → NOT_ESCALATED, files nothing, escalated=false");
+}
+
+/**
+ * A lookup that THROWS must not take the turn down with it — it degrades to the
+ * same honest no-email branch.
+ */
+async function testRequestHumanMemberEmailLookupThrows() {
+  console.log("\nrequest_human tool — member email lookup throws");
+
+  let escalateCalls = 0;
+  const persist = makePersistSpy();
+
+  const tool = buildRequestHumanTool({
+    actor: { kind: "member", userId: "507f1f77bcf86cd799439079", firstName: "Boom" },
+    contact: undefined,
+    conversationId: "conv_member_throw",
+    messages: [userMessage("Help me.")],
+    persist: persist.port,
+    escalate: async () => {
+      escalateCalls++;
+      return { submissionId: "should_not_be_created" };
+    },
+    onEscalated: () => {},
+    resolveMemberEmail: async () => {
+      throw new Error("mongo down");
+    },
+  });
+
+  const result = await tool.execute!({}, fakeToolCtx);
+
+  if (escalateCalls !== 0) {
+    fail("escalate NOT called when lookup throws", `called ${escalateCalls} times`);
+    return;
+  }
+  if (typeof result !== "string" || !/^NOT_ESCALATED/.test(result)) {
+    fail("degrades to NOT_ESCALATED rather than throwing", `got ${JSON.stringify(result)}`);
+    return;
+  }
+
+  pass("member email lookup throws → NOT_ESCALATED, no submission, turn survives");
+}
+
+/**
+ * An ANONYMOUS actor has no session email, so nothing should be looked up and
+ * the existing ask-for-email behaviour must be preserved.
+ */
+async function testRequestHumanAnonNoSessionLookup() {
+  console.log("\nrequest_human tool — anonymous actor does NOT trigger a member lookup");
+
+  let resolveCalled = false;
+  const persist = makePersistSpy();
+
+  const tool = buildRequestHumanTool({
+    actor: { kind: "anonymous", ipKey: "1.1.1.1" },
+    contact: undefined,
+    conversationId: "conv_anon_lookup",
+    messages: [userMessage("I need a human.")],
+    persist: persist.port,
+    escalate: async () => ({ submissionId: "should_not_be_created" }),
+    onEscalated: () => {},
+    resolveMemberEmail: async () => {
+      resolveCalled = true;
+      return "leaked@example.com";
+    },
+  });
+
+  const result = await tool.execute!({}, fakeToolCtx);
+
+  if (resolveCalled) {
+    fail("resolveMemberEmail NOT called for an anonymous actor", "it was called");
+    return;
+  }
+  if (typeof result !== "string" || !/^NOT_ESCALATED/.test(result)) {
+    fail("anonymous still gets the NOT_ESCALATED ask", `got ${JSON.stringify(result)}`);
+    return;
+  }
+
+  pass("anonymous → no member lookup, still asks for an email, files nothing");
+}
+
 // ─── Test: getActiveChatProvider dep wiring ───────────────────────────────────
 
 async function testGetActiveChatProviderWiring() {
@@ -846,8 +1265,16 @@ async function run() {
   await testDeflectWinsOverBudget();
   await testGenRateLimitExceeded();
   await testGenRateLimitOk();
+  await testComplaintClassifier();
+  await testComplaintSkipsDeflection();
+  await testRepeatedDeflectionFallsThrough();
+  await testDifferentDeflectionStillFree();
   await testRequestHumanNoEmail();
   await testRequestHumanWithEmail();
+  await testRequestHumanMemberEmailFromSession();
+  await testRequestHumanMemberEmailMissing();
+  await testRequestHumanMemberEmailLookupThrows();
+  await testRequestHumanAnonNoSessionLookup();
   await testGetActiveChatProviderWiring();
 
   console.log(`\n${"─".repeat(60)}`);
@@ -865,6 +1292,9 @@ async function run() {
   console.log("           gen-rate-limit OK (model called, 200, writeAudit(200)),");
   console.log("           request_human no-email (files nothing, escalated=false),");
   console.log("           request_human with-email (server-side actor + request contact, setEscalated, escalated=true),");
+  console.log("           request_human member w/o widget contact (email resolved from session → real submission),");
+  console.log("           request_human member email missing / lookup throws (NOT_ESCALATED, files nothing),");
+  console.log("           request_human anonymous (no member lookup, still asks for email),");
   console.log("           getActiveChatProvider wiring (google provider path → model called, 200, writeAudit)");
   process.exit(0);
 }

@@ -66,3 +66,7 @@ NextAuth `<SessionProvider>` in [`src/app/providers.tsx`](../../src/app/provider
 [usePartnerDiscountSso.ts](../../src/hooks/queries/usePartnerDiscountSso.ts) used to call `window.location.assign` inside `onSuccess`. It now resolves to `{ kind: "redirect" }` or `{ kind: "consent" }` and leaves navigation to the caller (`usePortalHandoff`), because the transit takeover has to render its success state before the browser leaves.
 
 Note the pattern for the 409: **consent is a resolved value, not a thrown error.** It is a normal branch of the flow, so throwing it would light up every inline `error` renderer on four call sites with a message the member should never read. Same file also exports `usePartnerDiscountConsent`. The raw-`fetch`-not-`apiPost` reason (feature-gate 403 must not force a logout) is unchanged — see [gotchas.md](gotchas.md).
+
+## `UserData.gender` (2026-08-17)
+
+`UserData` in [useUserQueries.ts](../../src/hooks/queries/useUserQueries.ts) carries the optional `gender?: string`, sourced from the `MY_ACCOUNT_USER_FIELDS` projection. `UserContext` re-exports it, which is what lets `ConversionPixelsAdvancedMatching` pass gender to `buildAdvancedMatching` with no extra request.

@@ -38,6 +38,8 @@ import {
   REEL_METRICS,
   REEL_VISIBLE_RADIUS,
   PREVIEW_COLUMNS,
+  PREVIEW_COLUMNS_MOBILE,
+  PREVIEW_MAX_CELLS_MOBILE,
   PREVIEW_MAX_ROWS,
   buildContentsPreview,
   darken,
@@ -612,6 +614,22 @@ run("preview caps at two rows and reports the hidden remainder exactly", () => {
 
   const many = buildContentsPreview(media(40), set, "/combo.webp");
   assert.equal(many.tiles.length + many.overflowCount, 40);
+
+  // The PHONE grid is 4 columns, so it takes a smaller budget and must still be two rows —
+  // the whole point of the separate cap. A single re-flowing grid would keep 12 cells here
+  // and silently grow a third row on the narrowest screens.
+  const phone = buildContentsPreview(media(40), set, "/combo.webp", PREVIEW_MAX_CELLS_MOBILE);
+  assert.equal(phone.tiles.length, PREVIEW_MAX_CELLS_MOBILE - 1);
+  assert.equal(
+    phone.tiles.length + phone.overflowCount,
+    40,
+    "the phone grid's +N must account for everything it cannot show"
+  );
+  assert.equal(
+    PREVIEW_MAX_CELLS_MOBILE,
+    PREVIEW_COLUMNS_MOBILE * PREVIEW_MAX_ROWS,
+    "the phone cap must stay two rows wide"
+  );
 });
 
 run("preview skips the combo render and the collection shot", () => {

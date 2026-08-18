@@ -1,6 +1,5 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import MembershipSection from "@/components/sections/MembershipSection";
 import MiniDrawImageGallery from "./components/MiniDrawImageGallery";
 import MiniDrawInteractions from "./components/MiniDrawInteractions";
 import MiniDrawTabs from "./components/MiniDrawTabs";
@@ -216,9 +215,21 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
   const isSoldOut = miniDrawData.entriesRemaining <= 0 && miniDrawData.status === "active";
   const brandMeta = getBrandMeta(miniDraw.brandId);
   const brandLabel = brandMeta?.name ?? "Mini Draw";
+  const filledPercentage =
+    minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
+
+  /** Mobile-only answer to the three questions the hero no longer has room for. */
+  const keyFacts = [
+    { value: "$1", label: "Per entry", accent: false },
+    { value: entriesRemaining.toLocaleString(), label: "Entries left", accent: false },
+    { value: `${filledPercentage}%`, label: "Filled", accent: true },
+  ];
 
   return (
-    <div className="min-h-screen-svh bg-gray-50 dark:bg-neutral-950 w-full overflow-x-hidden">
+    // `overflow-x-clip`, NOT `-hidden`: `overflow-x: hidden` computes `overflow-y: auto`,
+    // which would make this div the scroll container for the sticky gallery column and stop
+    // it engaging. `clip` suppresses horizontal overflow without creating a scroll box.
+    <div className="min-h-screen-svh bg-gray-50 dark:bg-neutral-950 w-full overflow-x-clip">
       <ScrollToTopOnMount miniDrawId={miniDrawData._id} />
       <MiniDrawViewTracking miniDraw={miniDrawData} />
 
@@ -239,52 +250,69 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
         entriesRemaining={entriesRemaining}
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      {/* Key facts strip — mobile only; the desktop hero still carries the $1 Entry card. */}
+      <div className="grid grid-cols-3 gap-2 px-3.5 pb-1 pt-3 lg:hidden">
+        {keyFacts.map((fact) => (
+          <div
+            key={fact.label}
+            className="rounded-[14px] border border-[#F0F1F4] bg-white px-2 py-2.5 text-center dark:border-neutral-800 dark:bg-neutral-900"
+          >
+            <div
+              className={`text-[15px] font-extrabold leading-[1.15] ${
+                fact.accent ? "text-[#16A34A]" : "text-[#111827] dark:text-white"
+              }`}
+            >
+              {fact.value}
+            </div>
+            <div className="mt-0.5 text-[10px] font-semibold text-[#9CA3AF]">{fact.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* pb clears the mobile sticky "Enter draw" bar so it never covers the last card. */}
+      <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-[78px] pt-2.5 sm:py-8 lg:pb-8">
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10">
-          {/* Left Column - Images */}
-          <div>
-            <MiniDrawImageGallery images={miniDrawData.prize.images} prizeName={miniDrawData.prize.name} />
+          {/* Left Column — gallery. The wrapper is required: `sticky` applied directly to a
+              grid item collapses it to content height and never engages. */}
+          <div className="lg:self-stretch">
+            <div className="lg:sticky lg:top-24">
+              <MiniDrawImageGallery
+                images={miniDrawData.prize.images}
+                prizeName={miniDrawData.prize.name}
+                drawName={miniDrawData.name}
+              />
+            </div>
           </div>
 
-          {/* Right Column - Details (sticky on desktop) */}
-          <div className="lg:sticky lg:top-28 lg:self-start flex flex-col gap-5">
-            {/* Purchase Entries — shown first on mobile via order */}
-            <div className="order-first lg:order-2">
-              <MiniDrawInteractions miniDraw={miniDrawData} />
-            </div>
+          {/* Right Column — details. Scrolls past the sticky gallery, so it must NOT be sticky itself.
+              Pack card first on BOTH breakpoints: desktop used to bury it under the description. */}
+          <div className="flex flex-col gap-3 lg:gap-5">
+            <MiniDrawInteractions miniDraw={miniDrawData} />
 
             {/* Description - collapsible on mobile, always open on desktop */}
             <CollapsibleSection
-              title="About This Prize"
-              className="order-2 lg:order-1 bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 p-4 sm:p-5 shadow-sm dark:shadow-lg"
+              title="About this prize"
+              defaultOpen
+              className="bg-white dark:bg-neutral-900 rounded-[20px] border border-[#EFF0F3] dark:border-neutral-800 p-3.5 sm:p-5"
             >
               <div
-                className="text-sm text-gray-600 dark:text-neutral-300 leading-relaxed prose prose-sm dark:prose-invert max-w-none [&>p]:mb-2 last:[&>p]:mb-0"
+                className="text-[12.5px] sm:text-sm text-[#4B5563] dark:text-neutral-300 leading-[1.65] prose prose-sm dark:prose-invert max-w-none [&>p]:mb-2 last:[&>p]:mb-0"
                 dangerouslySetInnerHTML={{ __html: miniDrawData.description }}
               />
             </CollapsibleSection>
           </div>
         </div>
 
-        {/* Mini Draw Tabs - collapsible on mobile */}
-        <div className="mt-10 sm:mt-14">
-          <CollapsibleSection
-            title="Winners & Draw Rules"
-            hideDesktopTitle
-            className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm dark:shadow-lg p-4 lg:bg-transparent lg:dark:bg-transparent lg:border-0 lg:dark:border-0 lg:shadow-none lg:dark:shadow-none lg:p-0"
-          >
-            <MiniDrawTabs miniDraw={miniDrawData} />
-          </CollapsibleSection>
+        {/* Mini Draw Tabs */}
+        <div className="mt-3 sm:mt-14">
+          <MiniDrawTabs miniDraw={miniDrawData} />
         </div>
 
         {/* Related Mini Draws */}
         {serializedRelatedMiniDraws.length > 0 && (
           <RelatedMiniDraws draws={serializedRelatedMiniDraws} />
         )}
-
-        {/* Membership Section */}
-        <MembershipSection title="GET MORE ENTRIES WITH MEMBERSHIP" padding="py-8 sm:py-12 lg:pb-16 mb-16" />
       </div>
     </div>
   );

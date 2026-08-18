@@ -415,8 +415,8 @@ export default function EmailVerificationModal({
                 <p className="text-gray-600 dark:text-gray-400 font-poppins mb-2">
                   We&apos;ve sent a 6-character verification code to:
                 </p>
-                <p className="font-semibold text-gray-900 dark:text-white font-poppins">{email}</p>
-                {userName && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Hi {userName}!</p>}
+                <p data-cs-mask className="font-semibold text-gray-900 dark:text-white font-poppins">{email}</p>
+                {userName && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Hi <span data-cs-mask>{userName}</span>!</p>}
               </div>
 
               {/* Verification Code Input - 6 Card Inputs */}

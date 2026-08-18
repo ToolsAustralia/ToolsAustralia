@@ -83,6 +83,7 @@ The staging console showed 5 error classes; disposition of each:
 - **Vercel Toolbar (`vercel.live` + pusher websockets)** — injected only on preview/staging deployments; allowlisted CONDITIONALLY (`VERCEL_ENV !== "production"`), so the production policy is byte-identical.
 - **`static.hotjar.com/c/hotjar-*.js`** — the dead legacy Hotjar tag inside GTM container GTM-TBCCQQVZ; NOW ALSO neutralized in code via gtm.blocklist:['html'] in GTM_INIT_SNIPPET (2026-07-20, see docs/tracking/gotchas.md); deleting the tag in the GTM UI remains the clean end-state, NOT allowlisting — loading a second session recorder was explicitly rejected in the 2026-07 audit.
 - **`*.on.aws` / `*.run.app` `events?cee=no` beacons** — emitted by the Hotjar-by-Contentsquare module embedded in the CS bundle. Neither Contentsquare's CSP docs (`*.contentsquare.net/.com` — already allowlisted) nor Hotjar's (`*.hotjar.com/.io` — already allowlisted) document these endpoints. DELIBERATELY NOT allowlisted: wildcarding generic cloud hosts in connect-src opens a data-exfiltration channel. Resolution path: ask Contentsquare support to serve collection from their documented domains, or disable the Hotjar module in the CS admin.
+  - **Still firing, confirmed on production 2026-08-07.** A live page load showed the two blocked endpoints are `https://sl-11a463aaedf44600a99367660fd6fa70.ecs.us-east-1.on.aws/events?cee=no` and `https://bded8a3c6ae-1-1053047382554.us-central1.run.app/events?cee=no`, on every page load (4 console errors). **The decision stands** — still not allowlisted, and the resolution path above is unchanged. Two things make it more urgent: Voice of Customer is about to be enabled and it is **UNVERIFIED** whether survey responses travel over this blocked channel (test a survey submission end-to-end before relying on surveys), and the account is now on a paid plan with vendor support available, so the "ask Contentsquare to serve from documented domains" route is actionable.
 - **Acumin font 404** — placeholder @font-face url() for a file never shipped; url() source removed (local()-only) in globals.css.
 
 ## `analytics-ipv6.tiktokw.us` added to connect-src (2026-07-22, first e2e staging run)
@@ -95,3 +96,27 @@ was silently blocked on every deployed environment. ADDED (DJ-approved): a singl
 vendor host, not a generic-cloud wildcard, so the `*.on.aws`/`*.run.app` exfiltration
 objection above doesn't apply. The main event beacons to `analytics.tiktok.com` were never
 affected.
+
+## `script-src` widened to `*.contentsquare.net` — the CS tag injects a second script (2026-08-07)
+
+`script-src` previously listed only the single tag host `https://t.contentsquare.net`. It now
+lists `https://*.contentsquare.net`, in **both** branches of `buildContentSecurityPolicy`
+([csp.ts](../../src/utils/security/csp.ts)) — the nonce variant and the `'unsafe-inline'`
+fallback, which are otherwise identical for the Contentsquare/Hotjar hosts.
+
+**Why.** Contentsquare's Voice of Customer works by having the main tag **inject a second
+script**, `hotjar-{SITE_ID}.js`, served from a sibling `contentsquare.net` host — so pinning
+`t.` alone silently blocks every survey. Contentsquare's published policy
+(docs.contentsquare.com/en/web/content-security-policy/) asks for `script-src
+*.contentsquare.net`, `img-src *.contentsquare.net`, `connect-src *.contentsquare.net
+*.contentsquare.com`, plus `style-src 'unsafe-inline'` for Voice of Customer. `connect-src`,
+`img-src` and `style-src` already satisfied that; `script-src` was the only gap.
+
+**Why this grants nothing new.** The wildcard stays inside a vendor domain we **already** allow
+to execute arbitrary JS in our origin, so it confers no capability `t.contentsquare.net` did not
+already have. It is explicitly **not** a precedent for wildcarding generic cloud hosts — the
+`*.on.aws` / `*.run.app` refusal above still stands.
+
+**No other file needed changing.** `next.config.ts` and `src/middleware.ts` both call
+`buildContentSecurityPolicy()`; there is no second policy literal in the repo. `npm run
+test:csp-inline-hashes` was run after the change and passed.

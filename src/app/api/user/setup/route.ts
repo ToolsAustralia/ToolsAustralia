@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { GENDER_VALUES, type GenderValue } from "@/data/genders";
 
 // Validation schema for full setup
 const setupSchema = z.object({
@@ -35,6 +36,17 @@ const stateProfessionOnlySchema = z.object({
   state: z.string().min(1, "State is required"),
   profession: z.string().min(1, "Profession is required").max(100, "Profession cannot exceed 100 characters"),
   birthdate: birthdateSchema,
+  // OPTIONAL, unlike its neighbours here. Gender is collected in the same step-2 form for
+  // coverage, but it must never gate setup completion — `completeSetupOnly` below deliberately
+  // does NOT check it, and UserSetupModal must not add it to `stepsNeeded`.
+  gender: z
+    .string()
+    .optional()
+    .transform((val) => val?.trim().toLowerCase() || undefined)
+    .refine(
+      (val) => !val || GENDER_VALUES.includes(val as (typeof GENDER_VALUES)[number]),
+      "Gender must be either 'male' or 'female'"
+    ),
   saveStateProfessionOnly: z.literal(true),
 });
 
@@ -101,7 +113,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid input", details: validationResult.error.issues }, { status: 400 });
       }
 
-      const { state, profession, birthdate } = validationResult.data;
+      const { state, profession, birthdate, gender } = validationResult.data;
 
       // Validate state code
       const validStates = ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"];
@@ -122,6 +134,11 @@ export async function POST(request: NextRequest) {
       user.state = state.toUpperCase();
       user.profession = trimmedProfession;
       user.birthdate = new Date(birthdate);
+      // Only write gender when the member actually chose one. Skipping it when absent means a
+      // re-prompted member who ignores the optional field keeps whatever they had before.
+      if (gender) {
+        user.gender = gender as GenderValue;
+      }
       await user.save();
 
       console.log(`✅ User state, profession, and birthdate saved for: ${user.email}`);

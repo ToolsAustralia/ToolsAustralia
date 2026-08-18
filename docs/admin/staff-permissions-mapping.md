@@ -6,14 +6,16 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | Route group | HTTP methods | Permission required |
 |---|---|---|
 | `/api/admin/users` (list) | GET | `users.view` |
-| `/api/admin/users/[id]` | GET | `users.view` |
+| `/api/admin/users/[id]` | GET | `users.viewDetail` |
 | `/api/admin/users/[id]` | PATCH | `users.edit` |
 | `/api/admin/users/[id]/actions` | POST | `users.edit` |
 | `/api/admin/users/[id]/cancel-subscription` | POST | `users.cancelSubscription` |
 | `/api/admin/users/[id]/delete` | DELETE | `users.delete` |
-| `/api/admin/users/[id]/deletion-summary` | GET | `users.view` |
+| `/api/admin/users/[id]/deletion-summary` | GET | `users.viewDetail` |
 | `/api/admin/users/search` | GET | `users.view` |
 | `/api/admin/users/export` | GET | `users.export` |
+| `/api/admin/receipts` | GET | `receipts.view` |
+| `/api/admin/receipts?format=csv` | GET | `receipts.view` **+** `receipts.export` |
 | `/api/admin/promo/active` | GET | `promos.view` |
 | `/api/admin/promo/active` | POST | _(public — no auth)_ |
 | `/api/admin/promo/alternating-multiplier` | GET | `promos.view` |
@@ -44,10 +46,10 @@ Updated as each task in the user-roles migration replaces legacy `session.user.r
 | `/api/admin/promo/scheduled/apply-month` | POST | `promos.edit` |
 | `/api/admin/promo/scheduled/[id]` | PATCH | `promos.edit` |
 | `/api/admin/promo/scheduled/[id]` | DELETE | `promos.delete` |
-| `/api/admin/users/[id]/charge-past-due` | GET | `users.view` |
+| `/api/admin/users/[id]/charge-past-due` | GET | `users.viewDetail` |
 | `/api/admin/users/[id]/charge-past-due` | POST | `users.charge` |
 | `/api/admin/users/[id]/force-charge` | POST | `users.charge` |
-| `/api/admin/users/[id]/payment-events` | GET | `users.view` |
+| `/api/admin/users/[id]/payment-events` | GET | `users.viewDetail` |
 | `/api/admin/users/[id]/payment-events/[eventId]/reverse` | POST | `users.refund` |
 | `/api/admin/users/[id]/recover-past-due-invoice` | GET | `users.charge` |
 | `/api/admin/users/[id]/recover-past-due-invoice` | POST | `users.charge` |

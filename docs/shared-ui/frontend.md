@@ -1,5 +1,38 @@
 # Shared UI — Frontend
 
+## Promotions account menu — radial scrim removed (2026-08-11)
+
+`PromotionsAccountButton` (the bottom-left FAB column on `/promotions/*`) used to fade in a
+**320 × 320 radial scrim** behind the open menu — `radial-gradient(circle at 34% 76%,
+rgba(0,0,0,0.55) → transparent 70%)`, animated on `isOpen`. It has been **removed** (owner call).
+
+Its stated job was keeping the dark-glass discs readable over bright prize art, but in practice
+it rendered as a large grey smudge across the hero whenever the menu opened — more distracting
+than the contrast problem it solved. The discs keep their own `backdrop-blur-sm` and border,
+which is what actually carries their legibility.
+
+**If contrast becomes a genuine problem on a specific hero, tint that disc** rather than
+reintroducing a full-bleed circle over the artwork.
+
+## `DiscountOfferList` reports the access seam to page analytics (2026-08-11)
+
+The `WallMarker` — the dashed gold seam where a viewer's access stops — now optionally reports
+itself via `onSeamRendered` / `onSeamReached`. Three things to preserve if this component is
+touched:
+
+- **An `IntersectionObserver` on the marker, never a scroll listener.** It fires once and
+  disconnects. The list runs to 1,833 rows and this component's sibling page-client documents at
+  length what happens when work is coupled to scroll position here.
+- **A wall on the FIRST band is not a seam, and neither callback fires for it.** `reachable` is
+  `signedIn && viewerPct >= level`, so for a signed-out visitor *every* band is unreachable and
+  the marker lands above the very first row. Reporting that would make "reached the seam" true
+  for anyone who saw the top of the list — a column reading ~100% while measuring nothing.
+- **Callbacks are read through a ref** inside `WallMarker`, so a parent passing an inline arrow
+  cannot re-subscribe the observer on every render.
+
+Both props are optional; the component renders identically without them. See
+[partner/analytics.md](../partner/analytics.md).
+
 ## MembershipModal sends the visitor's built prize at signup (2026-07-28)
 
 `handleRegistration` derives `builtPrizeSlug` directly after the existing `promotionSlug`
@@ -115,7 +148,17 @@ alphas as an opacity so ONE gradient declaration serves both themes with any bra
 
 ## `data-floating-widget` — the bottom-floater coordination contract (2026-07-07)
 
-Any element that **fixes itself to the bottom of the viewport** (banners, sticky CTA bars, corner FABs) MUST carry **`data-floating-widget="true"`** on its outermost fixed node. This is the opt-in contract the Cobber support-chat launcher reads to avoid overlapping them: [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts) scans `[data-floating-widget]` and lifts the bubble above any that collide with its corner (AABB test — see [ai-chatbot/gotchas.md § Launcher placement](../ai-chatbot/gotchas.md)). Current carriers: [`FloatingCountdownBanner`](../../src/components/banners/FloatingCountdownBanner.tsx), [`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx), [`FloatingGiftIcon`](../../src/components/ui/FloatingGiftIcon.tsx). **When you add a new bottom-anchored floater, add the attribute** and the launcher dodges it automatically — no other wiring. (The attribute is cheap and inert for anything that doesn't consume it.)
+Any element that **fixes itself to the bottom of the viewport** (banners, sticky CTA bars, corner FABs) MUST carry **`data-floating-widget="true"`** on its outermost fixed node. This is the opt-in contract the Cobber support-chat launcher reads to avoid overlapping them: [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts) scans `[data-floating-widget]` and lifts the bubble above any that collide with its corner (AABB test — see [ai-chatbot/gotchas.md § Launcher placement](../ai-chatbot/gotchas.md)). Current carriers: [`FloatingCountdownBanner`](../../src/components/banners/FloatingCountdownBanner.tsx), [`FloatingGetEntriesButton`](../../src/components/sections/promo/FloatingGetEntriesButton.tsx), [`FloatingGiftIcon`](../../src/components/ui/FloatingGiftIcon.tsx), [`SpotlightPreview`](../../src/app/promotions/_components/SpotlightPreview.tsx)'s mobile CTA. **When you add a new bottom-anchored floater, add the attribute** and the launcher dodges it automatically — no other wiring. (The attribute is cheap and inert for anything that doesn't consume it.)
+
+**Dev overlays share this corner (2026-08-10).** `PromoHolidayDevToolbar` (`bottom-3 left-3`, `z-[10000]`) and `MajorDrawTestControls` (`bottom-6 left-6`, `z-[9998]`) both park in the bottom-left in development, on top of any product UI there. Both now have a ✕ that clears the corner for the current page view (in-memory; a reload restores them) — see [dev-tooling/frontend.md](../dev-tooling/frontend.md). Keep that in mind when placing new bottom-left chrome: it will look occluded in dev and fine in production.
+
+**Put the attribute on the VISIBLE element, not a full-width centering wrapper (2026-08-10).** The three centered bars (`FloatingGetEntriesButton`, `FloatingCountdownBanner`, `SpotlightPreview`'s CTA) are all built as a `fixed inset-x-0 flex justify-center pointer-events-none` wrapper around a narrow pill. The attribute used to sit on the **wrapper**, whose rect spans the whole viewport — so the AABB test reported a collision with both bottom corners on every viewport, and the corner controls lifted ~70px for a pill that visually came nowhere near them (measured: pill spans x 127→253 on a 390px screen; the right corner starts at x 322). Moving the attribute onto the pill is what makes the two documented behaviours above actually true: on mobile the countdown banner is `w-full mx-4`, still reaches the corner, still lifts; on desktop it's `max-w-4xl` centered and correctly does **not**. It also removed a visible lag — the lift was animating in late behind framer's entrance, so the FABs appeared to jump a beat after the bar arrived.
+
+**Carry the attribute only while the floater is actually VISIBLE (2026-08-10).** If your floater **unmounts** when hidden (framer `AnimatePresence`), a static `data-floating-widget="true"` is correct — it disappears with the element. But if it **stays mounted and parks itself invisible** (`opacity-0`, an offscreen translate), its rect is still non-zero, the hook's `width/height === 0` check can't see through it, and the corner controls stay lifted over a bar the user can't see. Bind the attribute to the same state that drives visibility — `data-floating-widget={shown ? "true" : undefined}` — which is what `SpotlightPreview` does. The dodge hook's `MutationObserver` already watches this exact attribute, so toggling it recomputes with no extra wiring.
+
+Do **not** try to solve that by reading computed opacity inside the hook: framer obstacles animate in *from* `opacity: 0` via rAF-written inline styles and emit no `transitionend`, so an opacity gate silently **misses a real obstacle** whenever the scroll stops right at the mount boundary. Attempted and reverted 2026-08-10 — visibility is the floater's own state to declare, not something the hook should infer.
+
+> **Known gap (pre-existing, unfixed):** a framer obstacle that finishes its entrance animation *after* the scroll has stopped isn't dodged until the next scroll event — the `MutationObserver` fires on mount, when the element is still translated out of the corner, and framer's per-frame inline styles produce neither a DOM-structure mutation nor a `transitionend`. Closing it needs an attribute-level observer bound to the obstacle elements.
 
 ## FAQ answers render markdown (2026-06-25)
 
@@ -1514,3 +1557,48 @@ accessibility floor for almost nothing.
 **Verified on the real modal** (`/dev/modals` → PackageSelectionModal), not a mock: three tiles
 at 145px each, entries row on ONE line (26px), the starburst clearing the struck value by
 36–63px, and every ribbon inside its button.
+
+## `data-cs-mask` — the session-replay masking attribute (2026-08-07)
+
+Any shared component that renders **customer PII as page text** carries a bare `data-cs-mask`
+attribute on the element holding that value. Contentsquare session replay masks everything
+matching `[data-cs-mask]`; the selector is registered once, before the tag initializes, in
+[`ContentsquarePageTracker`](../../src/components/tracking/ContentsquarePageTracker.tsx). See
+[docs/tracking](../tracking/) for the mechanism.
+
+Currently tagged in this domain: `Header.tsx` (member + affiliate name/email in the desktop
+menu, mobile menu and mobile drawer), `Monogram.tsx` (rendered initials),
+`DashboardHero.tsx` (first name, both breakpoints), `BirthdatePicker.tsx` (the DOB trigger
+label), `SettingsRedesignPayment.tsx` (cardholder name), `PortalTransit.tsx` (member name),
+`Step3EmailVerification.tsx` (echoed email).
+
+Three conventions, all load-bearing:
+
+- **Tag the tightest wrapper around the value, never the card.** Mask `{firstName}`, not the
+  greeting containing it — `DashboardHero` keeps "Good morning," visible and masks only the
+  name, because a replay where every label is bulleted is useless for UX research.
+- **An attribute, not a class list.** A renamed Tailwind class silently *stops* masking and
+  nothing fails loudly; an attribute moves with the element through refactors.
+- **Do not add it to form inputs.** Contentsquare masks `<input>`, `<textarea>` and
+  contenteditable content by default and never collects typed text, so an attribute there is
+  noise. This is strictly for text nodes.
+
+`PortalTransit.tsx` is the one imprecise case: `memberName` is `.join(" · ")`-ed with the tier
+label and catalogue %, so the whole `<span>` is masked rather than the name alone. Isolating it
+would mean restructuring the join. If you touch that line, prefer splitting the nodes.
+
+## FilterDropdown (admin UI kit, 2026-08-17)
+
+`src/components/admin/ui/FilterDropdown.tsx` — a styled single-select for admin filter bars,
+added with the Receipts tab and exported from `@/components/admin/ui`.
+
+It exists because a native `<select>` renders the **OS control**, which ignores the admin theme
+entirely and looks nothing like the `DateRangeDropdown` sitting beside it in the same bar. This
+is that component's own trigger-button + `Popover` + option-list pattern, lifted into the kit
+so each filter bar doesn't grow its own copy.
+
+Generic over the value type (`FilterDropdown<T extends string>`), with an optional `allLabel`
+reset row, an optional leading `icon`, and an optional per-option `hint` rendered right-aligned
+(Receipts uses it for per-package row counts). Closing on outside click / scroll is inherited
+from `Popover`. Used three times on the Receipts tab (category, status, package) —
+[docs/admin/receipts.md § Filters](../admin/receipts.md#filters).

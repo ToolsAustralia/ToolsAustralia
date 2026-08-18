@@ -4,7 +4,7 @@ import React from "react";
 import Image from "next/image";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Trophy, FileText, Trash2, Loader2, MessageSquare } from "lucide-react";
+import { Trophy, FileText, Trash2, Loader2, MessageSquare, Users, ExternalLink } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
@@ -36,6 +36,7 @@ export default function MiniDrawCard({
   onDelete,
   onSelectWinner,
   onExportCsv,
+  onViewParticipants,
   onEditLatestWinner,
   isSelectingWinner,
   isExporting,
@@ -47,7 +48,10 @@ export default function MiniDrawCard({
   onEdit?: () => void;
   onDelete?: () => void;
   onSelectWinner?: () => void;
-  onExportCsv: () => void;
+  /** Undefined when the viewer lacks `miniDraws.viewParticipants` — the export is the same PII. */
+  onExportCsv?: () => void;
+  /** Opens the entry-pool roster in place. Same gate as the export. */
+  onViewParticipants?: () => void;
   onEditLatestWinner?: () => void;
   isSelectingWinner: boolean;
   isExporting: boolean;
@@ -117,6 +121,23 @@ export default function MiniDrawCard({
               {isAtCapacity ? "At capacity" : "Active"}
             </span>
           </div>
+          {/* Open the live customer-facing page. Sits on the tile rather than in the footer
+              row: it is a navigation affordance, not a draw action, and the footer is already
+              four items wide on a 5-across grid. `stopPropagation` so it doesn't also fire the
+              card's edit handler. */}
+          {!reorderMode && (
+            <a
+              href={`/mini-draws/${draw._id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="Open the public mini-draw page"
+              aria-label={`Open the public page for ${draw.name} in a new tab`}
+              className="absolute right-[6px] top-[6px] z-10 flex h-[24px] w-[24px] items-center justify-center rounded-[6px] border border-[var(--line)] bg-[var(--panel)]/90 text-[var(--text2)] backdrop-blur-sm hover:border-[var(--accent-line)] hover:text-[var(--accent)]"
+            >
+              <ExternalLink className="h-[12px] w-[12px]" />
+            </a>
+          )}
           <div className="absolute bottom-[6px] right-[6px] z-10">
             <BrandLogoCard
               brand={overlayBrand}
@@ -185,19 +206,36 @@ export default function MiniDrawCard({
                   <span className="truncate">Winner</span>
                 </button>
               )}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onExportCsv();
-                }}
-                disabled={isExporting}
-                className={cardAction}
-                title="Export CSV"
-              >
-                <FileText className="h-[13px] w-[13px] shrink-0 text-[var(--ok)]" />
-                <span className="truncate">CSV</span>
-              </button>
+              {onViewParticipants && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewParticipants();
+                  }}
+                  disabled={totalEntries === 0}
+                  className={cardAction}
+                  title={totalEntries === 0 ? "No entries yet" : "View who entered this draw"}
+                >
+                  <Users className="h-[13px] w-[13px] shrink-0 text-[var(--text2)]" />
+                  <span className="truncate">People</span>
+                </button>
+              )}
+              {onExportCsv && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onExportCsv();
+                  }}
+                  disabled={isExporting}
+                  className={cardAction}
+                  title="Export CSV"
+                >
+                  <FileText className="h-[13px] w-[13px] shrink-0 text-[var(--ok)]" />
+                  <span className="truncate">CSV</span>
+                </button>
+              )}
               {onDelete && (
                 <button
                   type="button"

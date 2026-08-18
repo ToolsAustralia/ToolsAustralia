@@ -16,6 +16,7 @@
 
 import React from "react";
 import { X, Lock, Check, ArrowRight } from "lucide-react";
+import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import { DiscountAccessBar, DiscountPlate, DiscountUnlockRoutes } from "./DiscountPrimitives";
 import {
   buildGate,
@@ -62,11 +63,13 @@ export default function DiscountOfferModal({
     [gate.showRoutes, row.pct, viewerPct, signedIn]
   );
 
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // Scroll lock + focus trap + Escape + focus restore. Replaces the local Escape-only effect
+  // that used to live here: this surface declares `aria-modal="true"`, and until now nothing
+  // made that true — the catalogue scrolled behind it and Tab walked the offer tiles hidden
+  // under the scrim. See src/hooks/useModalBlocking.ts for why the lock is ref-counted.
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  useScrollLock(true);
+  useModalA11y(true, panelRef, onClose);
 
   const open = !gate.locked;
   const hasHighlight = Boolean(row.highlight && row.highlight.trim());
@@ -85,10 +88,11 @@ export default function DiscountOfferModal({
       />
 
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={row.name}
-        className="ta-dc-popup ta-dc-panel ta-dc-noscroll relative flex flex-col overflow-auto"
+        className="ta-dc-popup ta-dc-panel ta-dc-noscroll relative flex flex-col overflow-auto overscroll-contain"
         style={{
           background: "var(--dc-sf)",
           border: "1px solid var(--dc-ln2)",

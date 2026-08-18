@@ -85,6 +85,11 @@ export const AREA_META: Record<Area, AreaMeta> = {
     label: "Rewards",
     description: "Milestone rewards and monthly coupon campaigns — issuance rules, targeting, and the redeemable codes they generate.",
   },
+  receipts: {
+    label: "Receipts",
+    description:
+      "The revenue ledger — every payment received, who paid it, and its Stripe record.",
+  },
   settings: {
     label: "Settings",
     description: "The Settings tab itself — Roles + Staff sub-screens.",
@@ -108,8 +113,12 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
 
   // Users
   "users.view": {
-    label: "View",
-    description: "Browse the customer list, search, open user detail, see payment history and deletion summary.",
+    label: "View list",
+    description: "Browse and search the customer list — name, membership, status, entries. Does NOT open a customer's detail modal; that needs 'View detail'.",
+  },
+  "users.viewDetail": {
+    label: "View detail",
+    description: "Open a customer's detail modal — email, mobile, address, payment history, activity, and deletion summary. Grant 'View list' without this for a role that triages the roster but must not read personal data.",
   },
   "users.edit": {
     label: "Edit",
@@ -195,7 +204,12 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
   // Mini Draws
   "miniDraws.view": {
     label: "View",
-    description: "See the mini-draw list, individual draw detail, full-capacity counts, and exports.",
+    description: "See the mini-draw list, individual draw detail, and full-capacity counts. Does NOT reveal who entered; that needs 'View participants'.",
+  },
+  "miniDraws.viewParticipants": {
+    label: "View participants",
+    description: "See who entered a mini draw — name, email, mobile, state and entry count — and download the CSV / Excel export. Treat as sensitive: it is the same personal data either way. Grant 'View' without this for a role that manages draws but must not read entrant details.",
+    danger: true,
   },
   "miniDraws.edit": {
     label: "Edit",
@@ -306,6 +320,19 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
   "rewards.delete": {
     label: "Delete",
     description: "Delete a milestone reward or monthly coupon campaign. Campaigns with issuances are soft-deactivated instead of hard-deleted; rewards are removed when no issuances exist.",
+    danger: true,
+  },
+
+  // Receipts
+  "receipts.view": {
+    label: "View",
+    description:
+      "Open the Receipts ledger — every payment received with the customer's name and email, the package, the amount, refund state, and links into Stripe. A complete revenue picture attached to customer identity; grant it deliberately.",
+  },
+  "receipts.export": {
+    label: "Export",
+    description:
+      "Download the filtered ledger as CSV — revenue joined to full names and emails, in a file that leaves the admin panel. Treat as sensitive: same data-leakage risk as 'Users → Export'.",
     danger: true,
   },
 

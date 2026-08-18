@@ -22,8 +22,9 @@ You are **Norm**, an internal AI assistant for ToolsAustralia. You have **read-o
 - Klaviyo post-draw profile-reset preview and progress
 - Past-due charge history (decline-reason summary, batch runs, manual retries)
 - Promo-page analytics (per-page, per-**channel**, per-page-with-campaign attribution, plus per-page prize-build breakdown)
+- Partner-discount page analytics (per-surface funnel for the public `/discount` catalogue and the members' rewards catalogue: visitors, in-page engagement, access-seam reach, unlock clicks, portal hand-offs, signups, conversions, revenue)
 - Promo (currently-active toggle-system `Promo` rows; resolved effective multiplier per package type with its winning source from the priority chain `scheduled → toggle → alternating → derived-from-membership → none`; paged promo history). Plus per-sub-domain reads for the other promo-configuration collections: alternating multiplier configs, banner-text schedules + current active text, bonus-entry promos (list + currently-active by type), promo links (shareable bonus-entry codes), and scheduled promos (date-bounded multiplier phases). Overlaps the promo-analytics surface only at the slug/page-naming level — promo-analytics answers "how is each promo *page* performing in the funnel", while these endpoints answer "what *multiplier* / *bonus-entry* / *link* / *banner* is configured / in effect right now and across history". The two surfaces do NOT share underlying collections.
-- User metrics (aggregate signup/profession/state/age/membership/purchase rollup, major-draw-vs-major-draw comparison, internal debug snapshot)
+- User metrics (aggregate signup/profession/state/age/gender/membership/purchase rollup, major-draw-vs-major-draw comparison, internal debug snapshot)
 - Allowlist (audit feed of card-allowlist actions, list of currently-blocked cards, summary count of cards on the live allowlist)
 - Error reports (paged + filterable list of user-submitted and auto-captured errors with status/severity rollup; per-report detail projection)
 - Stripe webhook queue (paged list of async-processed Stripe webhook rows with per-row status/attempts/last-error)
@@ -136,10 +137,12 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 - **Klaviyo post-draw reset**: `/v1/klaviyo/draw-reset-preview` describes which users a reset *would* sync (counts + sample) without performing one; `/v1/klaviyo/draw-reset-progress` reports the in-flight progress of a manual reset on the answering process (or null when none is running). They describe the same operation at preview vs runtime.
 - **Past-due charge history**: `/v1/charge-past-due/decline-summary` returns a top-N decline-reason bucket aggregation of failed `InvoiceChargeLog` rows in a window. `/v1/charge-past-due/runs` lists `ChargeJobRun` batches (admin-triggered bulk past-due sweeps) with per-run totals. `/v1/charge-past-due/runs/{runId}` returns the per-invoice rows for one batch run. `/v1/charge-past-due/manual-retries` lists single-user retry attempts that were *not* part of a batch run (i.e. `chargeRunId == null`). These four describe the same `InvoiceChargeLog`/`ChargeJobRun` collections at different granularities: summary across all attempts, batch index, batch detail, and one-off attempts respectively.
 - **Promo analytics** (the admin **Page Analytics** tab): `/v1/promo-analytics` is the aggregate — per-page metrics (visits, build exposure/engagement, signups, conversions, revenue, conversion rates) and a parallel per-**channel** breakdown for the same window. `/v1/promo-analytics/channel-detail` drills into one channel key: which pages it drove traffic to, which campaigns inside it, and the raw `utm_source` values that folded into it. `/v1/promo-analytics/page-detail` drills into one (`pageType`, `slug`) page: per-`(channel, utmMedium, utmCampaign)` rows plus a prize-build breakdown of what visitors assembled there. Channel-detail and page-detail are orthogonal slices of the same `PromoAnalyticsVisit` + `User.signupAttribution` + `PaymentEvent.BenefitsGranted` joined dataset that summary aggregates. **All three were rebuilt on 2026-07-31** — the date filter was inert, channels bucketed by raw `utm_source` (so `Klaviyo` and `TIKTOK` reported zero signups), drill-down visit totals double-counted, `builds` measured exposure while labelled engagement, and ranges were not clamped to the 90-day visit-retention floor. Do not reuse figures pulled from these endpoints before that date.
-- **User metrics**: `/v1/metrics/users` returns a single aggregate over a date range — counts of users created in range bucketed by signup source / profession / state / age group, plus membership status (live or snapshot-derived depending on whether the window ends in the past), per-package membership breakdown, and purchase-history totals. `/v1/metrics/users/major-draw-comparison` answers a different question: pick two specific `MajorDraw` IDs (by `_id`) and the endpoint computes per-draw totals (totalUsers/newSignups/activeMemberships/purchases/revenue) plus a percent comparison between them, using each draw's `activationDate→drawDate` window. `/v1/metrics/debug` is an engineer-facing diagnostic — recent BenefitsGranted PaymentEvent count + small sample for a sliding window of days; shape may change without notice and the `paymentEvents.totalRevenue` field sums the sample only, not the full window. Some membership fields in `/v1/metrics/users` partially overlap with `/v1/dashboard/stats.users` — `dashboard/stats` is range-anchored for renewal/churn deltas and uses the central `DashboardStatsService` rollup; `metrics/users` is signup-cohort-anchored (users *created* in range) with demographic breakdowns the dashboard does not return.
+- **Partner-discount analytics** (same admin **Page Analytics** tab, below the promo tables): `/v1/partner-discount-analytics` returns one row per SURFACE — `discount` is the public `/discount` catalogue (readable signed-out; its job is converting non-members) and `catalogue` is the members-only `/my-account/rewards/catalogue`. Each row carries visitors, filter use, offer opens, locked-offer opens, access-seam reach, unlock clicks, portal hand-offs, empty searches, signups, conversions and revenue. **Every count is VISITORS, not events**, so the columns share one denominator. Three things to get right when quoting it: (1) `seamReachRate` is over `seamRendered`, **never** over `visits` — the access seam is only drawn on `/discount` under the access-level sort, and never on the members' catalogue, so dividing by visits would count people who had no seam as people who failed to reach it; (2) `totalVisits`/`totalSignups` are deduped ACROSS surfaces and are **not** the sum of `bySurface[]` — one person who used both is one visitor and one row in each; (3) **portal redemption is not in here and cannot be** — MyRewards sends no activity data back, so the hand-off is the last observable step. Joins `PartnerDiscountVisit` → `User.signupAttribution.anonymousId` → `PaymentEvent.BenefitsGranted` (renewals and refunded rows excluded), clamped to the same 90-day visit-retention floor as promo analytics. Distinct from promo analytics in population and collection; the two tables' totals are not addable. **Data starts 2026-08-11** — the surfaces shipped 2026-08-03/05 with no instrumentation, so nothing exists before this feature deployed.
+- **User metrics**: `/v1/metrics/users` returns a single aggregate over a date range — counts of users created in range bucketed by signup source / profession / state / age group / gender, plus membership status (live or snapshot-derived depending on whether the window ends in the past), per-package membership breakdown, and purchase-history totals. `/v1/metrics/users/major-draw-comparison` answers a different question: pick two specific `MajorDraw` IDs (by `_id`) and the endpoint computes per-draw totals (totalUsers/newSignups/activeMemberships/purchases/revenue) plus a percent comparison between them, using each draw's `activationDate→drawDate` window. `/v1/metrics/debug` is an engineer-facing diagnostic — recent BenefitsGranted PaymentEvent count + small sample for a sliding window of days; shape may change without notice and the `paymentEvents.totalRevenue` field sums the sample only, not the full window. Some membership fields in `/v1/metrics/users` partially overlap with `/v1/dashboard/stats.users` — `dashboard/stats` is range-anchored for renewal/churn deltas and uses the central `DashboardStatsService` rollup; `metrics/users` is signup-cohort-anchored (users *created* in range) with demographic breakdowns the dashboard does not return.
 - **Allowlist**: `/v1/allowlist/actions` returns the audit feed of recent `AllowlistAction` rows — every "added", "skipped", and "removed" decision the system has logged, with the reason and source. `/v1/allowlist/blocked-cards` returns one cursor-paged page of `BlockedTransaction` rows (cards that failed Stripe and have not yet been allowlisted), each row joined with its server-side eligibility verdict. `/v1/allowlist/stats` returns a single integer — the count of card fingerprints currently on the live allowlist (most-recent action per fingerprint is `"added"`). All three are projections of the same `AllowlistAction` + `BlockedTransaction` collections — actions is the historical audit, blocked-cards is the current backlog, stats is a single roll-up.
 - **Error reports**: `/v1/error-reports` returns one paged page of `ErrorReport` rows plus rollup counters (total, by-status, last-24h, critical-unresolved). `/v1/error-reports/{id}` returns one row's PII-redacted detail projection. The list and detail projections share the same field set — they differ only in pagination and filtering. The list endpoint accepts a wide filter surface (status / category / severity / userId / userEmail / apiEndpoint / pageUrl / date range / search), and `userEmail` is a substring match against both the authenticated `userEmail` and the `guestEmail` field on the document. Both endpoints strip stack traces, console-error dumps, hashed-IP, browser fingerprint, referrer, and email PII — they are not on the Norm projection. Use `userId` as the opaque correlation key.
 - **Snapshot health**: `/v1/health/dashboard-stats-snapshot` and `/v1/health/membership-snapshot` are diagnostic rollups over the two daily-snapshot collections that back the admin dashboard — they report which AEST date keys are missing a snapshot row. Dashboard-stats expects one row per AEST day from website launch (Nov 27 2025) up to but excluding today; membership inspects the previous 7 AEST days and reports per-day missing `packageId`s (one row expected per package per day). Both are read-only operational health checks — not business metrics. Distinct from the `/v1/health` liveness ping, which is a no-DB clock signal.
+- **TikTok ad insights**: `/v1/tiktok-ads/insights` takes `startDate`/`endDate` plus **`level`** (`campaign | adset | ad`, **default `ad`**) and returns spend + TikTok-reported conversions/revenue/ROAS grouped at that level, with totals. Three things to get right when quoting it: (1) **`totals` are identical at every level** — each stored row is one ad-day landing in exactly one bucket, so `level` changes only the split, never the money; (2) the id/name fields **above** the requested level stay populated (an ad-set row still names its campaign) while those **below** are `null`, so `adId` is null at campaign and ad-set level; (3) rows TikTok returned without an id at that level appear as a visible `(no campaign reported)` / `(no ad set reported)` bucket rather than being dropped. Revenue is **TikTok's own attributed value**, derived as `value_per_complete_payment × complete_payment` (this account exposes no total-value metric) — NOT first-party `PaymentEvent` sales, and NOT the same as the Ads Manager UI's "Purchase ROAS (all-channels)" column, which is a broader roll-up. Empty until TikTok Marketing-API creds are set.
 - **Stripe webhook queue**: `/v1/stripe-webhook-queue` returns one paged page of `StripeWebhookQueue` rows — Stripe events the receiver has handed to the async processing pipeline. Each row carries its `status` (`queued | processing | succeeded | dead`), attempt count, `nextAttemptAt`, last error, and timestamps. Filterable by status. Operational queue surface, not a business metric — used to detect stuck or dead-lettered webhook events.
 - **Affiliate**: `/v1/affiliate` returns a paged page of `Affiliate` rows with per-row unpaid-commission rollups (count + amount) computed from the `AffiliateCommission` collection. `/v1/affiliate/{id}` returns one affiliate's detail header (commission rate + lifetime totals), a paged commission ledger (`AffiliateCommission` rows joined to the referred user), a paged referred-user list (`User.affiliateReferral.affiliateId` matches), a pending-commissions summary, and a payout history (`AffiliatePayout` rows with the processing admin's userId). All monetary fields are in Stripe cents (not AUD dollars) to match the underlying storage. PII fields (email, phone, bank details, processing-admin email/name) are intentionally stripped — `affiliateCode` and `username` are the public-facing identifiers Norm gets, plus opaque User._id references on referred users.
 - **Past-due invoice charge preview**: `/v1/invoices/charge-past-due` returns what the bulk past-due charge run *would* target right now — open Stripe invoices (status `open`, collection_method `charge_automatically`) joined to MongoDB users whose `subscription.status` is `past_due`, after eligibility filters and per-customer scoping (collapse to the single invoice attached to the user's current subscription). Includes per-filter skip counters and diagnostic `debug` counts. Read-only: no Stripe charges, no Mongo writes — the eligibility math here is by-construction the same the POST run uses (shared service). The POST handler that actually charges (`trigger_human_approve`) is not yet wired.
@@ -861,6 +864,73 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 
 ---
 
+### `GET /v1/receipts`
+
+**Returns**: Paged ledger of every payment received in a date range — one row per payment, newest first — across memberships (new + renewal), one-time and additional packs, mini draws, upsells, and shop orders. Each row carries its refund state; the totals cover the whole filter, not just the page.
+
+⚠️ **This endpoint returns customer `email`** — a deliberate widening of the usual Norm projection (owner decision, 2026-08-17), so a named customer's payment history can be answered without a second lookup. `lastName` and the Stripe **customer** id remain stripped. Treat `email` as personal data: use it to answer the operator's question, do not repeat it into any external system or message unless they asked for it specifically.
+```ts
+{
+  dateRange: { range, start: ISO8601, end: ISO8601 },
+  category: string | null,                   // echo of the filter; null when unfiltered
+  totals: {                                  // across the WHOLE filter, not just this page
+    gross: number,                           // AUD before refunds
+    refunded: number,                        // AUD returned to customers
+    net: number,                             // gross − refunded
+    count: number                            // payments in the filter
+  },
+  rows: Array<{
+    id: string,                              // PaymentEvent._id, or Order._id for a shop row
+    timestamp: ISO8601,
+    category: "membership-purchase" | "membership-renewal"
+            | "one-time-purchase" | "additional-one-time"
+            | "mini-draw" | "upsell" | "shop-order",
+    packageName: string,                     // falls back to packageId
+    amount: number,                          // AUD gross
+    refundStatus: "none" | "refunded" | "partially-refunded",
+    refundedAmount: number,                  // AUD; equals `amount` on a full refund
+    netAmount: number,                       // amount − refundedAmount, floored at 0
+    refundedAt: ISO8601 | null,
+    userId: string | null,                   // opaque Mongo User._id; usable with the users.* endpoints
+    firstName: string,                       // last name is NOT exposed
+    email: string,                           // ⚠️ personal data — see the note above
+    stripeObjectId: string | null            // pi_… for one-off payments, in_… for subscription renewals
+  }>,
+  pagination: { currentPage, totalPages, totalCount, limit, hasNextPage, hasPrevPage }
+}
+```
+
+**Inputs (query params)**:
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `range` | no | `today` | `today \| yesterday \| current-draw \| last-draw \| all-time \| custom` |
+| `start` | only for `custom` | — | ISO date string |
+| `end` | only for `custom` | — | ISO date string |
+| `category` | no | — | One of the seven category values; omit for all |
+| `status` | no | — | `none` (paid) \| `refunded` \| `partially-refunded` |
+| `packageName` | no | — | Exact package-name match, e.g. `Tradie` |
+| `search` | no | — | Free text over the customer's first name, last name and email. A full email is exact; a broad term matching more than 1,000 customers returns a subset and sets `searchTruncated: true` |
+| `page` | no | `1` | 1-indexed |
+| `limit` | no | `50` | Max 200 |
+
+**Data source**: `PaymentEvent` rows with `eventType: "BenefitsGranted"`, unioned with the `Order` collection (shop), via `getReceipts` in `src/services/admin/receipts.ts` — the same service the admin Receipts tab calls, so the two cannot drift. Refund state is joined from `RefundProcessed` / `RefundPartial` rows on `paymentIntentId`.
+
+**Constraints**: `read` tier. `requiredPermission: receipts.view`. Read-only.
+
+**Interpretation notes:**
+
+0. **`net` here is not the same basis as `dashboard/revenue-details/by-platform`.** This endpoint's `net` **includes membership renewals**; the platform breakdown is *acquisition* revenue and excludes them. Against the same window the difference between the two is exactly the `membership-renewal` total. `net` does reconcile to the cent with the dashboard's all-category net revenue.
+
+0b. **`amount` is the package LIST price, not necessarily cash collected.** `PaymentEvent.data.price` is written from the package catalogue, and no Stripe discount is reflected in it. Members who accepted the `discount_50_2mo` cancellation-flow retention offer (102 accepted as of 2026-08-17) renew at 50% off in Stripe while this field still reports full price. Treat `gross` / `net` as *billed at list*, not as bank receipts, and do not use this endpoint to answer "how much cash did we actually take". The same caveat applies to every revenue figure derived from `data.price`, including the dashboard endpoints.
+
+0c. **`refundedAmount` reflects `RefundProcessed` / `RefundPartial` rows on this ledger only.** A refund issued directly in the Stripe dashboard that never reached the webhook would leave a row reading `refundStatus: "none"`. Do not present refund totals as a reconciled figure against Stripe.
+
+0d. **`searchTruncated: true` means the numbers are incomplete.** A broad `search` term resolves to at most 1,000 customers, so both `rows` and `totals` become a subset. Say so rather than reporting the figure; re-run with an exact email for a definitive answer.
+
+0e. **Shop rows are structurally supported but currently always empty** — the shop has not launched (0 `Order` documents in production as of 2026-08-17). An empty `shop-order` filter is expected, not an error.
+
+---
+
 ### `GET /v1/dashboard/upcoming-renewals`
 
 **Returns**: Paged list of subscriptions whose `subscription.endDate` falls within the selected window. **PII-safe projection** — `customerEmail` / `customerName` / `amountFormatted` stripped, only opaque IDs + the numeric amount in cents.
@@ -1390,7 +1460,9 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
   }>,
   byBuiltPrize: Array<{                      // grouped by the BUILT combination itself, across EVERY landing page (not per-page) — answers "which combinations get built more than landed on" and "do Kincrome-box builders convert better than Milwaukee-box builders"
     builtPrizeSlug: string,
-    builders: number,                        // unique visitors who assembled this combination, on any landing page
+    builders: number,                        // ⚠️ EXPOSURE, not preference. Unique visitors who ENDED on this combination on any landing page — INCLUDING those who never touched the builder (the beacon reports what was on screen at unload). Do NOT answer "which prize do people want" with this.
+    interactedBuilders: number,              // of builders, those who actually CHANGED the build — THIS is the preference signal
+    chosenRate: number,                      // interactedBuilders / builders as a percent (0-100)
     signups: number,                         // new accounts whose signupAttribution.builtPrizeSlug is this combination
     conversions: number,                     // purchases whose PaymentEvent.data.builtPrizeSlug is this combination
     revenue: number,                         // AUD
@@ -1402,7 +1474,25 @@ Filter is fixed to `chargeRunId == null` — entries from batch runs are exclude
 ```
 `byPage` covers every valid promo slug (evergreen prize landing pages + toolset landing pages) — pages with zero activity still appear with zero counters (`buildVisitors: 0, builds: 0, buildChangeRate: 0, topBuiltPrize: null, buildDistribution: []`). `byPage` is sorted by `visits` descending. `byChannel` is sorted paid channels first, then owned, then `direct`/`other`, with signups descending inside each tier. `byBuiltPrize` covers the union of every combination seen anywhere in the range via a builder row, a signup, or a conversion (a combination can appear with `builders: 0` if it was built before the window but converted inside it), sorted by `builders` descending with `builtPrizeSlug` ascending as a deterministic tie-break.
 
-**Reporting this endpoint accurately — four things that are easy to get wrong:**
+**Reporting this endpoint accurately — six things that are easy to get wrong:**
+
+0. **NEVER answer "which prize combination do people want / performs best" with `byBuiltPrize[].builders`.**
+   That column is exposure. The build beacon fires at unload and reports whatever was on screen,
+   touched or not, so landing on `/promotions/milwaukee-milwaukee` and leaving increments
+   `builders[milwaukee-milwaukee]`. Measured 2026-08-13: **only 10.6% of all builders changed
+   anything**, and the top row by exposure (`milwaukee-milwaukee`, 17,430 builders) was chosen by
+   **5.6%** — it is simply the default on the busiest evergreen page. Use **`interactedBuilders`**
+   / **`chosenRate`** for preference, and say which one you used. The clearest illustration:
+   `milwaukee-kincrome` was chosen by **48.9%** on `/promotions/milwaukee` but **2.0%** on
+   `/promotions/milwaukee-kincrome`, at near-identical builder counts — on the second page it was
+   already on screen. The array stays sorted by `builders` because signups/conversions/revenue are
+   all counted over the builder population; sorting is not a ranking of preference.
+0b. **"Unique visitors" is per BROWSER, not per person.** `PromoAnalyticsVisit.userId` is set on
+   **0** rows (the linker has no callers), so dedup falls back to the `ta_anon_id` cookie: one
+   person on a phone and a laptop is two visitors. Rows with neither id — **57.9% of all history**,
+   concentrated before the cookie was reliably minted — each count as their own visitor. Recent
+   days run 97–99.5% cookie-bearing, so **recent ranges are accurate and wide historical ranges
+   read HIGH**. Never present a long-range visitor total as a person count.
 
 1. **`builds` before 2026-07-31 measured EXPOSURE, not engagement.** The field existed and was
    labelled "engagement", but the tracking route never forwarded the interaction flag, so the
@@ -2023,6 +2113,17 @@ GET /v1/promo/history?page=1&limit=2&type=membership-packages
     "18-24": number, "25-34": number, "35-44": number,
     "45-54": number, "55-64": number, "65+": number,
     Unknown: number                            // missing birthdate, future birthdate, or age < 18
+  },
+  gender: {                                    // from the OPTIONAL User.gender field (added 2026-08-17)
+    Male: number, Female: number,
+    "Not set": number                          // NOT a gender. Means unknown, and deliberately
+                                               // conflates "declined to answer" with "never asked"
+                                               // — the field is optional and offers no opt-out
+                                               // choice. Never report "Not set" as a gender and
+                                               // never infer anything about those members. When
+                                               // quoting a split, use Male+Female as the
+                                               // denominator and say so, e.g. "of the N members
+                                               // who answered".
   },
   membershipStatus: {
     active: number,                            // isActive && status ∈ {active,trialing}
@@ -4189,6 +4290,34 @@ If an operator requests a capability not in this document and not in the current
 ---
 
 ## Last updated
+
+`2026-08-17` — **`/v1/receipts` gains `email`, `status` / `packageName` / `search` filters, and `searchTruncated` (no endpoint-count change).**
+
+- ⚠️ **`email` is now returned per row — a deliberate widening of the Norm PII boundary**, made by explicit owner decision. CLAUDE.md rule 10 otherwise holds Norm projections to "firstName + opaque userId only", which is what `dashboard.revenue-details.by-platform` and `winners.get` still do. The reason is practical: answering "what has this customer paid" needed a second lookup without it. `lastName` and the Stripe **customer** id remain stripped. Recorded here, in `src/lib/internal-norm/schemas/receipts.ts` and in BUSINESS.md so it stays a visible decision rather than drift — to tighten it again, remove `email` from that schema first (the route maps fields explicitly, so the schema is the control point).
+- Three new filters, matching the admin tab: `status` (paid / refunded / partially-refunded), `packageName` (exact), and `search` (free text over first name, last name, email).
+- **`searchTruncated`** is returned because a broad `search` resolves to at most 1,000 customers, making both `rows` and `totals` a subset. It is surfaced specifically so a partial result can never be reported as a complete figure.
+
+`2026-08-17` — **New endpoint: `GET /v1/receipts` (96 endpoints, up from 95).**
+
+- The **revenue ledger** — one row per payment received, across memberships (new + renewal), one-time and additional packs, mini draws, upsells, and shop orders, with per-row refund state and filter-wide totals. Wraps the same `getReceipts` service as the admin Receipts tab, so the two surfaces cannot drift. New permission area: `receipts.view` gates it (`receipts.export` gates the admin CSV and has no Norm equivalent).
+- **PII boundary**: `firstName` + opaque `userId` only. `lastName`, `email` and the Stripe **customer** id are stripped. The Stripe **object** id (`pi_…` / `in_…`) IS exposed — it identifies a transaction, not a person, matching `users.payment-events.list`.
+- **Two accuracy caveats were documented rather than papered over**, and they apply to every `data.price`-derived revenue figure in this document, not just this endpoint: (a) `amount` is the package **list price**, and Stripe-side discounts are invisible in it — 102 members hold the `discount_50_2mo` retention coupon and still report full price; (b) refund state reflects only `RefundProcessed` / `RefundPartial` rows on the ledger, so a refund issued directly in Stripe that missed the webhook reads as unrefunded. Neither is introduced by this endpoint; both were pre-existing properties of `PaymentEvent` that the ledger view made visible.
+- Overlap note: `net` here **includes** membership renewals; `dashboard/revenue-details/by-platform` is acquisition-only and excludes them. The difference over the same window is exactly the `membership-renewal` total, and `net` reconciles to the cent with the dashboard's all-category net revenue.
+
+`2026-08-13` — **`/v1/promo-analytics` — `byBuiltPrize` gains `interactedBuilders` + `chosenRate` (additive, no endpoint-count change), and two interpretation warnings.**
+
+- **`builders` is exposure and was being read as preference.** The build beacon fires at **unload** and reports whatever combination is on screen, touched or not — required, or `builders` and `signups` would count different populations (F-018). So a visitor who lands on `/promotions/milwaukee-milwaukee` and leaves increments `builders[milwaukee-milwaukee]`. Production 2026-08-13: **10.6% of all builders changed anything**; the top row by exposure (`milwaukee-milwaukee`, 17,430 builders) was chosen by **5.6%**. The proof that this is a page-default artefact and not a taste signal: `milwaukee-kincrome` was chosen by **48.9%** on `/promotions/milwaukee` vs **2.0%** on `/promotions/milwaukee-kincrome` at near-identical builder counts. Both new fields carry ⚠️ `describe()` text; the endpoint notes gained rule **0** telling Norm never to answer "which prize do people want" with `builders`. Nothing changed about `builders` itself — no figure previously reported was arithmetically wrong, but any *preference* claim made from it was.
+- **`interactedBuilders` needed a pipeline change, not a projection.** It is a per-visitor **sticky** boolean (one interacted row among three makes that visitor interacted), which `$addToSet` + `$size` cannot express. `getAggregatedByBuiltPrize` converted to the two-stage `$group` with a `$max` accumulator on the inner stage — same scan count. See `docs/mongodb/patterns.md` P8.
+- **`utmBasis` had never been written** — `null` on all **253,727** production rows since it was added on 2026-07-31. `PromoAnalyticsRepository.createVisit` declared its own inline parameter type that omitted the field and enumerated `create()` fields by hand, so the value died at the last hop, invisible to `tsc` (non-literal argument = no excess-property check). This is the **third** field-by-field-rebuild drop in this feature (after the `interacted` flag and the `range`/`dateRange` drift), so the fix is structural: `createVisit` now takes the shared `PromoVisitRecordPayload`, making a future missed field a compile error. **No backfill is possible** — the value was never captured. Rows written after this deploy carry a basis; `utmBasis` is not exposed on any Norm response.
+- **"Unique visitors" is per BROWSER.** `PromoAnalyticsVisit.userId` is set on **0** rows — `linkVisitToUser` has no callers anywhere in `src/`. Wiring it would NOT fix this (it stamps one anonymousId's rows with one userId, leaving the grouping identical); person-level counting needs the visit beacon to resolve the session at insert time, which is an owner decision, not a silent change. Additionally **57.9% of all-time rows have neither id** and fall back to a per-row placeholder visitor, so wide historical ranges read HIGH while recent days (97–99.5% cookie-bearing) are accurate. Endpoint note **0b** added.
+- No PII in either new field — counts and a percentage.
+
+`2026-08-13` — **Customer-record reads move from `users.view` to `users.viewDetail` (registry only; no endpoint, path or response-shape change).**
+
+- `users.view` used to gate both the customer LIST and the single-customer RECORD. It was split so a staff role can browse the roster without reading personal data (email, mobile, address, payment history). Four `read` entries moved to the new permission — **`users.get`**, **`users.deletion-summary`**, **`users.payment-events.list`**, **`users.charge-past-due.preview`** — mirroring the admin routes they wrap (CLAUDE.md rule 10). `users.list` / `users.search` stay on `users.view`; `users.export` stays on `users.export`.
+- **No behavioural change for Norm.** Reads bypass the per-permission grant (see the 2026-05-21 entry), so `requiredPermission` on a `read` entry is documentation-of-record — but it must not drift from the admin gate, or the registry stops describing the real access model. The published manifest does not carry `requiredPermission`, so `npm run build:norm-manifest` is correctly a no-op here (95 endpoints unchanged).
+- The PII boundary itself is unchanged and still lives in each endpoint's Zod projection — `users.get` remains firstName + state only, with email/lastName/mobile/address/savedPaymentMethods/orders stripped.
+- Admin-side companion: `npm run migrate:backfill-users-view-detail` grants `users.viewDetail` to every role that already held `users.view`, so the split ships as a no-op and is narrowed per role afterwards.
 
 `2026-07-31` — **All three `/v1/promo-analytics*` endpoints rebuilt (no endpoint-count change; several BREAKING response-shape changes).** Seven defects, fixed together. **Treat every figure these endpoints returned before this date as suspect.**
 

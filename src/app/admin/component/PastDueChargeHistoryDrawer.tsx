@@ -134,6 +134,7 @@ export default function PastDueChargeHistoryDrawer({
   // buckets and lumped everything into "Other").
   const skipBreakdown = useMemo(() => {
     const counts: Record<SkipBucketKey, number> = {
+      excessiveRetryCooldown: 0,
       noHeldDraft: 0,
       awaitingRetry: 0,
       recentlyAttempted: 0,

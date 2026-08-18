@@ -1,5 +1,17 @@
 # Client State — Patterns
 
+> **Two analytics reads on one admin tab need two query keys (2026-08-11).** `queryKeys.admin.partnerDiscountAnalytics(params)` sits beside `promoAnalytics(params)` because both render on the **Page Analytics** tab over the same date range. They are deliberately *not* one key: different collections, different response shapes, so sharing a key would make one refetch serve the other's cached data. The discount section reads the date range from the **URL search params** the promo half already owns rather than taking it as a prop — one source of truth, one date picker, no drift. See [partner/analytics.md](../partner/analytics.md).
+
+> **A view-shape control belongs IN the query key (2026-08-11).** The sibling case to the one
+> above. `useTikTokAdsInsights` gained a `level` param (`campaign | adset | ad`) and it is part of
+> the key: `["admin", "tiktok-ads", "insights", startDate, endDate, level]`. The rows are a
+> *different grouping of the same window*, not a filter over one result set — so sharing a key
+> across levels would hand campaign-grouped rows to the ad view and render them under the wrong
+> headers until the refetch landed. The consuming table further guards this by rendering against
+> `data.level` (what came back) rather than the selected level, so the headers can never describe
+> rows that aren't on screen yet. Same rule as any param that changes the SHAPE of the response
+> rather than narrowing it. `level` defaults to `"ad"`, matching the endpoint's own default.
+
 ## P1. Query key factory
 
 ```ts
@@ -168,3 +180,33 @@ from the response.
 ## P8. Repeat-purchase analytics hooks
 
 `src/hooks/queries/admin/useRepeatPurchaseAnalytics.ts` exposes `useRepeatPurchaseSummary(filter)` (`useQuery`) and `useRepeatPurchaseUsers(filter, options)` (`useInfiniteQuery`, 50/page) for the admin **Repeat Purchases** tab. Inline query keys `["admin","analytics","repeat-purchases","summary",filter]` / `["admin","analytics","repeat-purchases","users",{...filter,limit}]` (the dominant admin convention — see P1). Both unwrap the `{ success, data }` envelope and throw on `success === false`. The users hook returns a flattened facade `{ rows, totalCount, hasMore, fetchNextPage, isFetchingNextPage, isLoading, isError }` (the `useChargePastDueRuns` shape) for the "Load more" button. Summary `staleTime` 5 min; users list 2 min + `enabled` gating (draw presets need resolved dates). Backed by `/api/admin/analytics/repeat-purchases`, `…/users`, and `…/users/export` (see [admin/api.md](../admin/api.md)).
+
+## P9. Receipts ledger hook
+
+`src/hooks/queries/admin/useReceipts.ts` backs the admin **Receipts** tab. Unlike the P8
+sibling it uses a **centralised** query key — `queryKeys.admin.receipts(queryString)` in
+`src/lib/queryKeys.ts` — following the `useBlockedCards` precedent rather than the inline-key
+convention, and it goes through `apiGet` so 401 sign-out handling is inherited.
+
+The key *is* the serialised query string (date range + category + page), so changing any
+filter is a new cache entry rather than a stale table under a new heading. Paging uses
+`placeholderData: keepPreviousData` so the table doesn't blank between pages — a plain
+`useQuery`, not `useInfiniteQuery`, because the tab shows a total for the current filter and
+needs discrete Prev/Next pages rather than an accumulating list.
+
+**Types come from `@/utils/admin/receipts`, never from `@/services/admin/receipts`.** The
+service imports Mongoose models; pulling it into a client component would ship the data layer
+to the browser. The `no-models-in-client` lint rule only catches *direct* `@/models/**`
+imports, so this boundary is maintained by hand — see
+[admin/receipts.md](../admin/receipts.md#the-two-file-split).
+
+`enabled` gating matters here: draw presets resolve to `""` until the draw dates load, and
+firing before then sends a custom-range request with no bounds and gets a 400 back.
+
+**CSV export is not a query.** `downloadReceiptsCsv(filter)` is a plain async function that
+fetches `?format=csv`, turns the response into a blob, and triggers the synthesized
+`<a download>` click (the `UserExportModal` / RevenueDetailModal idiom). It is server-rendered
+rather than built from the loaded page because the file covers the whole filter, and because
+only the server can enforce the separate `receipts.export` permission. It reads
+`X-Receipts-Truncated` / `-Row-Count` / `-Total-Count` off the response so a capped export is
+announced in the UI instead of silently short.

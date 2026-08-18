@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { Trophy, Check, ShieldCheck, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import Seg from "@/components/ui/Seg";
@@ -8,6 +8,8 @@ import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import MetallicButton from "@/components/ui/MetallicButton";
 import { SectionContainer } from "@/components/ui/SectionContainer";
 import { usePrizeCatalog } from "@/hooks/usePrizeCatalog";
+import { fromPrizeSlug } from "@/components/sections/promo/prize-selection/prize-builder-model";
+import { getToolbox, getToolset } from "@/components/sections/promo/prize-selection/constants";
 
 type PrizePick = "setup" | "cash";
 
@@ -55,16 +57,86 @@ export default function MembershipPrizeChooser() {
   const stepCombo = (delta: number) =>
     setComboIndex((i) => (comboCount === 0 ? 0 : (i + delta + comboCount) % comboCount));
 
+  /**
+   * The keyboard half of the `listbox` role. The markup claimed the ARIA listbox pattern while
+   * implementing none of it: arrow keys did nothing (the role promises they move the
+   * selection), and because every option was a native tab stop, reaching the "Get free
+   * entries" CTA past the rail took 22 Tab presses — during which the browser scrolled the
+   * rail through all 1,432px of itself, one focus at a time.
+   *
+   * Paired with the roving `tabIndex` on each option below, this makes the rail ONE tab stop
+   * and makes the role honest. Both halves are required: the roving tabIndex alone would trap
+   * a keyboard user on a single thumbnail with no way to move.
+   */
+  const onRailKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const keys: Record<string, () => void> = {
+      ArrowRight: () => stepCombo(1),
+      ArrowLeft: () => stepCombo(-1),
+      Home: () => setComboIndex(0),
+      End: () => setComboIndex(comboCount - 1),
+    };
+    const action = keys[e.key];
+    if (!action) return;
+    e.preventDefault();
+    action();
+  };
+
+  // Keep the selected thumbnail in view. Stepping with the arrows moved the selection but
+  // never the rail, so from combo 7 on the user was looking at a rail with no highlight in
+  // it while the counter insisted something was selected.
+  //
+  // Two deliberate choices: scroll the RAIL, not `scrollIntoView` (which would also move the
+  // PAGE vertically), and jump instantly rather than `behavior:"smooth"`. Smooth loses the
+  // race against the hero <Image> remount that the same click triggers (`key={image}`) —
+  // measured stalling ~145px short of a 573px target — so the rail would settle on the wrong
+  // thumbnail. Instant also matches the image swap, which is itself instant, and sidesteps
+  // reduced-motion entirely.
+  const railRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const rail = railRef.current;
+    const thumb = rail?.children[comboIndex] as HTMLElement | undefined;
+    if (!rail || !thumb) return;
+    rail.scrollLeft = Math.max(0, thumb.offsetLeft - (rail.clientWidth - thumb.offsetWidth) / 2);
+
+    // Carry focus with the roving tabIndex, but ONLY if focus is already inside the rail.
+    // Without the guard, clicking the ‹ › arrows would yank focus off the arrow the user is
+    // clicking and onto a thumbnail, so the next click would land on nothing.
+    if (rail.contains(document.activeElement)) thumb.focus();
+  }, [comboIndex, isCash]);
+
   const activeCombo = combos[comboIndex] ?? activePrize;
   const entry = isCash ? cashPrize : activeCombo;
   const image = entry?.gallery?.[0]?.src ?? activePrize?.gallery?.[0]?.src ?? "";
   const imageAlt = entry?.gallery?.[0]?.alt ?? "This month's prize";
-  const tagLabel = isCash ? "$10,000 cash" : "The Ultimate Tradie Setup";
+
+  /**
+   * Name the combination the user is actually looking at. This pill used to read a fixed
+   * "The Ultimate Tradie Setup" for all 20 builds, so browsing changed the photo but never
+   * told a sighted user WHICH pairing they had landed on (the alt text did — screen readers
+   * knew more than the screen). `<toolset> × <toolbox>` is the established house form for a
+   * combination name, so this matches ComboRail / gallery-spotlight rather than coining one.
+   */
+  const comboName = useMemo(() => {
+    const lanes = fromPrizeSlug(activeCombo?.slug);
+    if (!lanes) return null;
+    const toolset = getToolset(lanes.toolset);
+    const toolbox = getToolbox(lanes.toolbox);
+    return toolset && toolbox ? `${toolset.name} × ${toolbox.brandName}` : null;
+  }, [activeCombo?.slug]);
+
+  const tagLabel = isCash ? "$10,000 cash" : (comboName ?? "The Ultimate Tradie Setup");
   const amount = isCash ? 10000 : 5000;
   const amountCap = isCash ? "paid straight to your bank account" : "cash on top of the gear";
 
   return (
-    <section id="prize" className="relative overflow-hidden bg-neutral-950 py-16 text-white sm:py-20 lg:py-24">
+    // `scroll-mt` because the site header is `position: fixed` (86px, 106px at lg) and so
+    // contributes nothing to layout: an anchor jump puts the section's true top under it.
+    // The section's own `py-16` (64px) is less than the header, so the gold eyebrow badge
+    // landed behind it — the first thing a #prize CTA is meant to show.
+    <section
+      id="prize"
+      className="relative scroll-mt-[var(--app-header-h)] overflow-hidden bg-neutral-950 py-16 text-white sm:py-20 lg:scroll-mt-[var(--app-header-h-lg)] lg:py-24"
+    >
       <div
         className="pointer-events-none absolute inset-0"
         style={{
@@ -96,8 +168,21 @@ export default function MembershipPrizeChooser() {
           </div>
         </div>
 
-        <div className="mt-8 grid items-center gap-10 lg:grid-cols-2">
-          <div className="relative">
+        {/* `lg:items-start`, NOT `items-center`. The thumbnail rail only renders for "The
+            setup", so switching to "The cash" shortens the left column by ~90px — and centring
+            re-centres the (unchanged) right column by half that, sliding the Seg the user just
+            clicked 45px up out from under their cursor. Toggling back then needs re-aiming.
+            Aligning to the top makes the right column's position independent of the rail. */}
+        <div className="mt-8 grid gap-10 lg:grid-cols-2 lg:items-start">
+          {/* `min-w-0` is load-bearing, not tidying. A grid item defaults to `min-width:auto`,
+              so the 20-thumbnail rail below (max-content ≈ 1432px) sized the single-column
+              MOBILE track to 1432px instead of scrolling inside it — blowing the image frame
+              and the whole right-hand column out to 1432px on a 390px phone. The section's
+              `overflow-hidden` clipped the damage, so it never showed as a page-level
+              horizontal scrollbar; it just rendered a giant cropped sliver of the toolbox.
+              (`lg:grid-cols-2` is unaffected — Tailwind's grid-cols-* already uses
+              `minmax(0,1fr)`, which is why this only ever broke below `lg`.) */}
+          <div className="relative min-w-0">
             <div className="relative aspect-[4/3] w-full overflow-hidden rounded-3xl border border-white/15 bg-white/5">
               {image && (
                 <Image
@@ -147,19 +232,31 @@ export default function MembershipPrizeChooser() {
                   column, which was the same box as the image — until the thumbnail rail was
                   added below and `bottom-3` started measuring from the bottom of the rail,
                   dropping the tag on top of the thumbnails. */}
-              <span className="absolute bottom-3 left-3 rounded-full bg-black/60 px-3 py-1.5 text-xs font-bold backdrop-blur">
+              {/* Polite live region: now that this pill names the combination, stepping the
+                  carousel announces the new pairing instead of changing the photo in silence. */}
+              <span
+                aria-live="polite"
+                className="absolute bottom-3 left-3 max-w-[calc(100%-5.5rem)] truncate rounded-full bg-black/60 px-3 py-1.5 text-xs font-bold backdrop-blur"
+              >
                 {tagLabel}
               </span>
             </div>
 
             {/* Every combination is directly selectable, not just reachable by stepping — 20
                 presses to reach the last one is not a choice, it is a chore. The rail is the
-                same hero images at thumbnail size, so what you tap is what you get. */}
+                same hero images at thumbnail size, so what you tap is what you get.
+
+                On the scrollbar classes: `.brand-scrollbar`'s dark palette is gated on a
+                `.dark` ANCESTOR, but this section is `bg-neutral-950` in every theme — so a
+                light-theme visitor got the near-white `#fef2f2` track on near-black. Pinned
+                locally rather than theme-switched, because the surface itself never switches. */}
             {!isCash && comboCount > 1 && (
               <div
-                className="brand-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1"
+                ref={railRef}
+                className="brand-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-color:#ee0000_#262626] [&::-webkit-scrollbar-track]:bg-neutral-800"
                 role="listbox"
                 aria-label="Prize combinations"
+                onKeyDown={onRailKeyDown}
               >
                 {combos.map((combo, i) => (
                   <button
@@ -167,6 +264,9 @@ export default function MembershipPrizeChooser() {
                     type="button"
                     role="option"
                     aria-selected={i === comboIndex}
+                    // Roving tabIndex: the rail is ONE tab stop, and arrow keys move within it
+                    // (see `onRailKeyDown`). Previously all 20 were tab stops.
+                    tabIndex={i === comboIndex ? 0 : -1}
                     onClick={() => setComboIndex(i)}
                     title={combo.label}
                     className={`relative h-14 w-16 flex-none overflow-hidden rounded-lg border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 sm:h-16 sm:w-20 ${

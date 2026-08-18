@@ -52,27 +52,123 @@ When deciding whether to add a sub-action instead of reusing `edit`, ask: *would
 | `selectWinner` | Irreversible prize/winner declaration | `majorDraw.selectWinner`, `abTesting.selectWinner` |
 | `processPayout` | Money **out** to a third party | `affiliates.processPayout` |
 | `end` | Permanently closing a live entity | `promos.end` |
+| `viewDetail` / `viewParticipants` | A **deeper read** of the same entity — personal data behind a list | `users.viewDetail`, `miniDraws.viewParticipants` |
+
+### `viewDetail` — splitting PII depth out of `view` (2026-08-13)
+
+The sub-action test above ("would I trust them to flip a toggle but not do this thing?") has a
+read-side twin: **would I trust this person to see the list but not the record behind it?**
+
+`users.view` used to gate both the customer roster *and* the detail modal, so any role that could
+browse customers could also read every customer's email, mobile, address and payment history —
+the catalog simply could not express a triage role. `users.viewDetail` now gates the modal:
+
+| Permission | Grants |
+|---|---|
+| `users.view` | The customer list + search: name, membership, status, entries |
+| `users.viewDetail` | `GET /api/admin/users/[id]` and the modal-only reads — `payment-events`, `deletion-summary`, `charge-past-due` preview |
+
+Two things that make this different from adding a normal permission:
+
+1. **It is a REMOVAL for existing roles, not an addition.** New catalog actions are deliberately
+   not auto-granted to custom roles (step 4 above), which is right when a permission unlocks
+   something new — and wrong when one is carved OUT of an existing grant, because the deploy then
+   silently revokes access staff already had. `npm run migrate:backfill-users-view-detail` grants
+   it to every role that already held `users.view`, so the split ships as a no-op and is narrowed
+   per role afterwards. **Any future `viewDetail`-style split needs the same backfill.**
+2. **The backfill must NOT live in `migrate-seed-staff-roles.ts`.** That script is re-runnable;
+   this operation is not. Once an operator deliberately removes `users.viewDetail` from a role,
+   that role still holds `users.view`, so a re-seed would match it again and silently re-grant the
+   permission they just revoked. It is a dated one-shot under `scripts/migrations/` for that reason.
+
+UI gating alone is not the boundary: both modal entry points (the users table row and
+`ClickableUserDisplay`, which appears on overview / promo analytics / affiliates / draws) check
+`users.viewDetail`, but the endpoints enforce it independently, so a crafted request still 403s.
+The Norm registry entries that mirror those routes (`users.get`, `users.deletion-summary`,
+`users.payment-events.list`, `users.charge-past-due.preview`) moved in lockstep (CLAUDE.md rule 10).
+
+### `miniDraws.viewParticipants` — the same split, for entrants (2026-08-13)
+
+The second application of the pattern above, and the more urgent one: `miniDraws.view` gated the
+mini-draw list **and** `GET /api/admin/mini-draw/[id]/export`, which streams a CSV/Excel of every
+entrant's name, email, mobile and state. Any role that could see the lineup could download the
+whole entrant database.
+
+| Permission | Grants |
+|---|---|
+| `miniDraws.view` | The draw list, individual draw detail, full-capacity counts — no entrant data |
+| `miniDraws.viewParticipants` | `GET /api/admin/mini-draw/[id]/participants` (the in-app roster) **and** `GET /api/admin/mini-draw/[id]/export` |
+
+**Both endpoints move together, always.** They return byte-for-byte the same personal data; the
+only difference is pagination. Gating the roster while leaving the export on `view` would be a
+lock on the front door with the back one open — if you ever add a third read of this data, it
+takes this permission too.
+
+Ships with `npm run migrate:backfill-mini-draws-participants` for the same reason as
+`users.viewDetail`: this is a **removal** for existing roles, so the backfill grants it to every
+role already holding `miniDraws.view` and the split lands as a no-op. Narrow it per role
+afterwards in Settings → Roles.
+
+Marked `danger: true` in `permission-descriptions.ts` — not because it writes anything, but
+because the data-leakage risk is what the flag exists to signal (same treatment as
+`users.export`).
+
+**Norm is deliberately NOT moved in lockstep here.** The `mini-draw.export` registry entry keeps
+`requiredPermission: "miniDraws.view"` because the Norm projection is *aggregate-only* —
+participant counts and a per-state breakdown, no per-user PII (see
+`NormMiniDrawExportAggregateSchema`). It is a different read with a different risk profile that
+happens to share a URL shape; raising its gate would restrict a route that exposes nothing
+personal. If that projection ever gains per-user fields, it moves to `viewParticipants`.
 
 ## Areas
 
 | Area | Actions | Notes |
 |---|---|---|
 | `overview` | view, edit | Admin dashboard landing. `edit` covers upsell multipliers and Klaviyo draw-reset execute. |
-| `users` | view, edit, charge, cancelSubscription, refund, delete | Customer user management. `edit` = profile + status actions only; financial/destructive actions are their own permission. |
+| `users` | view, viewDetail, edit, export, charge, cancelSubscription, refund, delete | Customer user management. `edit` = profile + status actions only; financial/destructive actions are their own permission. `viewDetail` gates the PII modal — see the split above. |
 | `promos` | view, edit, end | Promo CRUD lives under `edit`. Ending a live promo is irreversible. |
 | `facebookAds` | view, edit | Insights + sync. |
 | `pageAnalytics` | view | Read-only dashboards: the **Page Analytics** (`promo-analytics`) tab and its three API routes, plus the **Repeat Purchases** tab and its routes. |
 | `submissions` | view | Contact form submissions (no admin writes today). |
-| `miniDraws` | view | Currently unused area; mini-draw write routes are gated under `majorDraw.*`. |
-| `majorDraw` | view, edit, selectWinner | Covers mini-draws too. `selectWinner` is irreversible. |
+| `miniDraws` | view, viewParticipants, edit, selectWinner, delete | Mini-draw lineup + entrants. `viewParticipants` gates the entrant roster AND the CSV/Excel export (identical PII) — see the split above. `selectWinner` is irreversible. |
+| `majorDraw` | view, edit, selectWinner | Major draw only — mini draws have had their own area since the actions above were added. `selectWinner` is irreversible. |
 | `drawResults` | view | Past draw results admin view. |
 | `upcomingDraws` | view | Upcoming draws calendar. |
 | `affiliates` | view, edit, processPayout, delete | `processPayout` moves money to an affiliate; gate separately. |
 | `errorReports` | view, edit, delete | `edit` = status changes / individual PATCH; `delete` = bulk archive. |
 | `abTesting` | view, edit, selectWinner, delete | `selectWinner` declares an experiment winner. |
 | `rewards` | view, edit, delete | Milestone rewards + monthly coupon campaigns. `edit` covers create/update/toggle and target-user previews; `delete` removes a milestone reward or soft-deactivates a campaign with existing issuances. |
+| `receipts` | view, export | The Receipts ledger (Billing tab) — every payment received, joined to the customer who paid. `view` gates the tab + `GET /api/admin/receipts`; `export` additionally gates `?format=csv`. See the split below. |
 | `settings` | view, edit | Admin Settings tab (Roles & Staff sub-screens). |
 | `audit` | view | Staff activity log (audit trail of staff mutations). |
+
+## `receipts` is a new area, not a reuse of `settings.view` (2026-08-17)
+
+The Receipts tab sits in the sidebar's **Billing** group, where every other tab
+(Blocked Transactions, Past-Due Charges, Webhook Queue) is gated on `settings.view`. Receipts
+does not join them.
+
+That surface is the complete revenue picture — every payment the business has ever taken —
+joined to customer identity (name, email) and to Stripe. This repo's precedent is to carve
+those out into their own grant rather than fold them into a broad one: `users.viewDetail` and
+`miniDraws.viewParticipants` both exist for exactly this reason. Folding it into
+`settings.view` would have meant anyone who could see the webhook queue could also read the
+company's entire revenue history against named customers.
+
+`export` is split from `view` on the same logic as `users.export`: reading the table on
+screen and downloading a CSV of revenue + full names + emails are different risks, and only
+the split lets a role have the first without the second. It is marked `danger: true`.
+
+**Backfill.** A new catalog action is not auto-granted to existing custom roles, so
+`npm run migrate:backfill-receipts-view[:prod]`
+(`scripts/migrations/2026-08-17-backfill-receipts-view.ts`) grants `receipts.view` to every
+role that already holds `settings.view` — so the deploy lands as a no-op rather than as a
+Billing tab that silently vanished for staff. Then narrow it deliberately in Settings → Roles.
+`receipts.export` is **not** backfilled: it starts off everywhere and is handed out on purpose.
+
+Like the other one-shot permission backfills, it is deliberately NOT in
+`migrate-seed-staff-roles.ts` — that script is re-runnable, and a re-run would silently
+re-grant a permission an operator had just revoked.
 
 ## `promoAnalytics.view` was retired (2026-07-31)
 

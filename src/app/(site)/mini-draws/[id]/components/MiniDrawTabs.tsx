@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { formatWinnerName } from "@/utils/winner-name-formatter";
+import { OPEN_MINI_DRAW_PACKS_EVENT } from "@/components/features/MiniDrawPackages";
 
 interface WinnerDisplay {
   _id?: string;
@@ -47,8 +48,8 @@ interface MiniDrawTabsProps {
 }
 
 const tabs = [
-  { id: "winners" as const, label: "Recent Winners", icon: Crown },
-  { id: "rules" as const, label: "Draw Rules", icon: Shield },
+  { id: "winners" as const, label: "Recent winners", icon: Crown },
+  { id: "rules" as const, label: "Draw rules", icon: Shield },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -70,22 +71,24 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
     {
       icon: Users,
       title: "Eligibility",
-      desc: "Must be 18+ years old and an Australian resident",
+      desc: "Must be 18+ and an Australian resident",
     },
     {
+      // Mini-draw entry is package-only — no membership is required, and the old copy
+      // said otherwise. Members get free entries into the MAJOR draws, not these.
       icon: Trophy,
-      title: "Entry Methods",
-      desc: "Buy a mini pack to receive free entries (membership required)",
+      title: "Entry methods",
+      desc: "Buy a mini pack to receive free entries",
     },
     {
       icon: Sparkles,
-      title: "Winner Selection",
+      title: "Winner selection",
       desc: "Random selection using a secure random number generator",
     },
     {
       icon: Clock,
-      title: "Prize Claim",
-      desc: "Winner has 30 days to claim prize after notification",
+      title: "Prize claim",
+      desc: "Winner has 30 days to claim after notification",
     },
   ];
 
@@ -105,9 +108,9 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
   ];
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm dark:shadow-lg overflow-hidden">
+    <div className="overflow-hidden rounded-[20px] border border-[#EFF0F3] bg-white dark:border-neutral-800 dark:bg-neutral-900">
       {/* Tab Navigation */}
-      <div className="border-b border-gray-100 dark:border-neutral-800">
+      <div className="border-b border-[#F1F2F5] dark:border-neutral-800">
         <nav className="flex">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -116,22 +119,16 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative flex-1 py-3.5 sm:py-4 flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium transition-colors ${
-                  isActive
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:text-neutral-200 dark:hover:text-white"
+                className={`relative flex h-[46px] flex-1 items-center justify-center gap-1.5 text-[12.5px] font-semibold transition-colors sm:h-[62px] sm:gap-2 sm:text-[15px] ${
+                  isActive ? "text-red-600 dark:text-red-400" : "text-[#9CA3AF] hover:text-[#6B7280] dark:hover:text-neutral-300"
                 }`}
                 suppressHydrationWarning
               >
-                <Icon
-                  className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-colors ${
-                    isActive ? "text-red-600 dark:text-red-400" : "text-gray-400 dark:text-neutral-500"
-                  }`}
-                />
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 <span>{tab.label}</span>
                 {isActive && (
                   <motion.div
-                    className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-red-600 to-red-675"
+                    className="absolute bottom-0 left-0 right-0 h-[2px] bg-red-600"
                     layoutId="tab-indicator"
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
@@ -143,7 +140,7 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
       </div>
 
       {/* Tab Content */}
-      <div className="p-4 sm:p-6 lg:p-8">
+      <div className="p-3.5 sm:p-6 lg:p-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -234,21 +231,24 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                       })}
                   </div>
                 ) : (
-                  <div className="text-center py-12 sm:py-16">
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-red-600/10 to-red-675/5 dark:from-red-950/50 dark:to-red-950/20 flex items-center justify-center">
-                      <Trophy className="w-8 h-8 sm:w-10 sm:h-10 text-red-600 dark:text-red-400" />
-                    </div>
-                    <h4 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white mb-2">
-                      Are You Our Next Lucky Winner?
+                  <div className="flex flex-col items-center gap-2 px-5 py-8 text-center sm:py-12">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-red-600/[.07] text-red-600 dark:bg-red-950/40 dark:text-red-400">
+                      <Trophy className="h-6 w-6" />
+                    </span>
+                    <h4 className="mt-1 text-[15px] font-extrabold text-[#111827] dark:text-white sm:text-lg">
+                      Are you our next lucky winner?
                     </h4>
-                    <p className="text-sm sm:text-base text-gray-500 dark:text-neutral-400 max-w-sm mx-auto leading-relaxed">
-                      Secure your entries now and you could be the next name on
-                      our winners board.
+                    <p className="max-w-[250px] text-[12.5px] leading-[1.5] text-[#6B7280] text-pretty dark:text-neutral-400 sm:max-w-sm sm:text-sm">
+                      Secure your entries now and you could be the next name on our winners board.
                     </p>
-                    <div className="mt-6 inline-flex items-center gap-1.5 text-red-600 dark:text-red-400 text-sm font-semibold">
-                      <span>Get your entries</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => window.dispatchEvent(new Event(OPEN_MINI_DRAW_PACKS_EVENT))}
+                      className="mt-1.5 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-red-600 transition-colors hover:text-red-675 dark:text-red-400"
+                    >
+                      Get your entries
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 )}
               </div>
@@ -258,25 +258,23 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
             {activeTab === "rules" && (
               <div className="space-y-6 sm:space-y-8">
                 {/* Rules grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
                   {rules.map((rule, i) => {
                     const RuleIcon = rule.icon;
                     return (
                       <motion.div
                         key={i}
-                        className="flex items-start gap-3 p-3 sm:p-4 rounded-xl bg-gray-50/80 border border-gray-100 hover:border-gray-200 transition-colors"
+                        className="flex items-start gap-2.5 rounded-[13px] border border-[#F1F2F5] bg-[#FAFAFB] p-[11px] dark:border-neutral-800 dark:bg-neutral-950"
                         initial={prefersReduced ? {} : { opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.08, duration: 0.3 }}
                       >
-                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white dark:bg-neutral-900 border border-gray-100 dark:border-neutral-700 flex items-center justify-center flex-shrink-0 shadow-sm">
-                          <RuleIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
+                        <div className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-[9px] border border-[#EEF0F3] bg-white text-red-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-red-400">
+                          <RuleIcon className="h-[15px] w-[15px]" />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
-                            {rule.title}
-                          </div>
-                          <div className="text-xs sm:text-sm text-gray-500 dark:text-neutral-400 mt-0.5 leading-relaxed">
+                          <div className="text-[12.5px] font-bold text-[#111827] dark:text-white">{rule.title}</div>
+                          <div className="mt-px text-[12px] leading-[1.45] text-[#6B7280] dark:text-neutral-400">
                             {rule.desc}
                           </div>
                         </div>
@@ -286,10 +284,10 @@ export default function MiniDrawTabs({ miniDraw }: MiniDrawTabsProps) {
                 </div>
 
                 {/* Draw Flow */}
-                <div className="bg-gradient-to-br from-gray-50 to-gray-50/50 dark:from-neutral-800/80 dark:to-neutral-900/80 rounded-xl p-4 sm:p-6 border border-gray-100 dark:border-neutral-700">
-                  <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-red-600 dark:text-red-400" />
-                    How the Draw Works
+                <div className="rounded-2xl border border-[#F1F2F5] bg-[#FAFAFB] p-3.5 sm:p-6 dark:border-neutral-800 dark:bg-neutral-950">
+                  <h3 className="mb-3 flex items-center gap-1.5 text-[13px] font-extrabold text-[#111827] dark:text-white sm:text-base">
+                    <FileText className="h-[15px] w-[15px] text-red-600 dark:text-red-400" />
+                    How the draw works
                   </h3>
                   <div className="space-y-0">
                     {flowSteps.map((step, i) => (

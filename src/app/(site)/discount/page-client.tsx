@@ -31,6 +31,7 @@ import { useIsLgUp } from "@/hooks/useIsLgUp";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useMembershipModal } from "@/hooks/useMembershipModal";
 import { useMajorDrawPurchaseGate } from "@/hooks/useMajorDrawPurchaseGate";
+import { usePartnerDiscountTracking } from "@/hooks/usePartnerDiscountTracking";
 import { convertToLocalPlan } from "@/utils/membership/membership-adapters";
 import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipModal";
 import { usePortalHandoff } from "@/components/sections/rewards/PortalHandoff";
@@ -63,6 +64,7 @@ export default function DiscountPageClient() {
 
   const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState<string | null>(null);
+  const [levels, setLevels] = React.useState<number[]>([]);
   const [openOnly, setOpenOnly] = React.useState(false);
   const [sort, setSort] = React.useState<DiscountSort>("access");
   const [limit, setLimit] = React.useState(PAGE_SIZE);
@@ -79,6 +81,17 @@ export default function DiscountPageClient() {
   const membershipModal = useMembershipModal();
   const { whenGatesOpenElseGateModal } = useMajorDrawPurchaseGate();
 
+  /**
+   * Page analytics. `accessPct` is deliberately NOT `viewerPct`: that value coalesces an
+   * unresolved tier to 0, which would record a member as having no access. A signed-out
+   * visitor genuinely has 0; anyone else reports only once their tier has actually loaded,
+   * and the beacon corrects the row when they leave.
+   */
+  const track = usePartnerDiscountTracking({
+    surface: "discount",
+    accessPct: status === "unauthenticated" ? 0 : dash.partnerAccessPct,
+  });
+
   const sso = usePortalHandoff({
     memberName: dash.user?.firstName,
     tierLabel: dash.subscriptionTierLabel,
@@ -93,16 +106,51 @@ export default function DiscountPageClient() {
       filterAndSortRows(ALL_ROWS, {
         query: debouncedQuery,
         category,
+        levels,
         openOnly,
         sort,
         viewerPct,
         signedIn,
       }),
-    [debouncedQuery, category, openOnly, sort, viewerPct, signedIn]
+    [debouncedQuery, category, levels, openOnly, sort, viewerPct, signedIn]
   );
 
   // Reset paging whenever the result set changes underneath the reader.
-  React.useEffect(() => setLimit(PAGE_SIZE), [debouncedQuery, category, openOnly, sort]);
+  React.useEffect(() => setLimit(PAGE_SIZE), [debouncedQuery, category, levels, openOnly, sort]);
+
+  /**
+   * "Did they touch the controls at all?" — derived from the filter state rather than wrapped
+   * around each of the five setters, which would have meant five near-identical callbacks and
+   * a sixth to forget. Any control moving off its default counts, and `interaction()` is
+   * idempotent, so clearing a filter again does not un-count it.
+   */
+  React.useEffect(() => {
+    if (debouncedQuery || category !== null || levels.length > 0 || openOnly || sort !== "access") {
+      track.interaction();
+    }
+  }, [debouncedQuery, category, levels, openOnly, sort, track]);
+
+  /**
+   * A search that found nothing. Gated on there being a query — the empty state also renders
+   * for a filter combination with no matches, but "searched for a brand we don't list" is the
+   * specific failure this page's copy is written around and the one worth counting.
+   */
+  React.useEffect(() => {
+    if (filtered.length === 0 && debouncedQuery.trim()) track.zeroResultSearch();
+  }, [filtered.length, debouncedQuery, track]);
+
+  const stickyBarRef = React.useRef<HTMLDivElement>(null);
+
+  /** "Any" (null) clears; a rung toggles. Kept sorted so the state reads like the ladder. */
+  const toggleLevel = React.useCallback((value: number | null) => {
+    setLevels((prev) =>
+      value === null
+        ? []
+        : prev.includes(value)
+          ? prev.filter((p) => p !== value)
+          : [...prev, value].sort((a, b) => a - b)
+    );
+  }, []);
 
   const visible = React.useMemo(() => filtered.slice(0, limit), [filtered, limit]);
   const bands = React.useMemo(
@@ -189,9 +237,33 @@ export default function DiscountPageClient() {
     return () => io.disconnect();
   }, [headerBottom]);
 
+  /**
+   * NO SCROLL COMPENSATION HERE — deliberately, and it was tried.
+   *
+   * Collapsing the docked bar removes ~174px of in-flow height, so content below shifts up
+   * once at the threshold. The obvious fix is a layout effect that measures the bar across
+   * the change and `window.scrollBy`s the delta to cancel it. That was implemented, and it
+   * made things worse: the compensating scroll moves the VIEWPORT relative to the sentinel
+   * this observer watches, so it re-triggers the very transition that caused it.
+   *
+   * Measured with 20px increments across the boundary — a wheel, not a jump. With the
+   * compensation in place, content moved 194px, then -106, -154, +74 for successive 20px
+   * scrolls: the page fights the reader right where they are trying to read. Without it,
+   * every step moves content exactly 20px and `data-stuck` flips exactly once.
+   *
+   * A single one-off shift at the threshold is what every collapsing sticky header does. An
+   * unstable boundary is a bug. If the shift is ever worth removing, do it WITHOUT touching
+   * scroll position — hysteresis (separate dock/undock sentinels offset by the collapse
+   * delta) is the approach that does not feed back.
+   *
+   * A single-jump `scrollTo` test CANNOT see this — it lands past the boundary and looks
+   * clean. Verify this area with incremental scrolling only.
+   */
+
   const reset = React.useCallback(() => {
     setQuery("");
     setCategory(null);
+    setLevels([]);
     setOpenOnly(false);
     setLimit(PAGE_SIZE);
   }, []);
@@ -202,12 +274,13 @@ export default function DiscountPageClient() {
    */
   const redeem = React.useCallback(
     (row: DiscountRow) => {
+      track.portalHandoff();
       const url = buildPartnerPortalOfferUrl(row.id);
       if (url) sso.startForOffer(url);
       else sso.start();
       setOpenRow(null);
     },
-    [sso]
+    [sso, track]
   );
 
   const goToLogin = React.useCallback(() => {
@@ -229,6 +302,9 @@ export default function DiscountPageClient() {
    */
   const selectRoute = React.useCallback(
     (route: DiscountUnlockRoute) => {
+      // The unlock click: this visitor looked at something they cannot redeem and asked what
+      // opens it. It is the single strongest intent signal the public page produces.
+      track.unlockClick();
       setOpenRow(null);
       setAccessOpen(false);
       const pool = route.kind === "membership" ? subscriptionPackages : oneTimePackages;
@@ -240,7 +316,7 @@ export default function DiscountPageClient() {
         else membershipModal.openModalWithPackageSelectionFirst();
       });
     },
-    [subscriptionPackages, oneTimePackages, whenGatesOpenElseGateModal, membershipModal]
+    [subscriptionPackages, oneTimePackages, whenGatesOpenElseGateModal, membershipModal, track]
   );
 
   return (
@@ -276,6 +352,7 @@ export default function DiscountPageClient() {
               none. */}
           <div ref={sentinelRef} aria-hidden className="h-px" />
           <div
+            ref={stickyBarRef}
             className="ta-dc-stick sticky z-20 -mx-4 px-4 py-2.5 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
             style={{ top: stickyTop }}
             data-stuck={stuck}
@@ -285,6 +362,8 @@ export default function DiscountPageClient() {
               onQueryChange={setQuery}
               category={category}
               onCategoryChange={setCategory}
+              levels={levels}
+              onLevelToggle={toggleLevel}
               openOnly={openOnly}
               onOpenOnlyChange={setOpenOnly}
               sort={sort}
@@ -292,6 +371,7 @@ export default function DiscountPageClient() {
               signedIn={signedIn}
               resultCount={filtered.length}
               onReset={reset}
+              stuck={stuck}
             />
           </div>
 
@@ -303,7 +383,15 @@ export default function DiscountPageClient() {
                 bands={bands}
                 viewerPct={viewerPct}
                 signedIn={signedIn}
-                onOpenOffer={setOpenRow}
+                onOpenOffer={(row) => {
+                  // "Locked" is the SAME predicate the row itself renders against — a
+                  // signed-out visitor's every open is a locked open, which is exactly the
+                  // conversion signal this page exists to produce.
+                  track.offerOpened(!(signedIn && row.pct <= viewerPct));
+                  setOpenRow(row);
+                }}
+                onSeamRendered={track.seamRendered}
+                onSeamReached={track.seamReached}
               />
             )}
 
@@ -358,6 +446,7 @@ export default function DiscountPageClient() {
           signedIn={signedIn}
           onClose={() => setAccessOpen(false)}
           onOpenPortal={() => {
+            track.portalHandoff();
             setAccessOpen(false);
             sso.start();
           }}

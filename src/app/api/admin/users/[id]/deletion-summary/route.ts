@@ -15,7 +15,9 @@ import connectDB from "@/lib/mongodb";
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const guard = await requirePermission("users.view");
+    // Modal-only read → `users.viewDetail`. Gating only the parent detail route would leave
+    // this reachable by direct request from a role that must not read a customer's record.
+    const guard = await requirePermission("users.viewDetail");
     if (guard instanceof NextResponse) return guard;
 
     await connectDB();

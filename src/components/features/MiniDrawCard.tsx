@@ -5,9 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { m, useReducedMotion } from "framer-motion";
 import { Ticket, Flame, Zap } from "lucide-react";
-import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
-import BrandLogoCard from "@/components/ui/BrandLogoCard";
-import EntryProgressBar from "@/components/ui/EntryProgressBar";
+import { getBrandMeta } from "@/utils/brand-utils";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
 import { cn } from "@/utils/cn";
@@ -30,15 +28,21 @@ export interface MiniDrawCardData {
 interface MiniDrawCardProps {
   miniDraw: MiniDrawCardData;
   index?: number;
-  viewMode?: "grid" | "list";
+  /** `compact` is the related-draws treatment: entries strip on the image, no brand chip. */
+  viewMode?: "grid" | "list" | "compact";
   /**
    * When provided, the card opens this handler (e.g. an in-place entry sheet) instead of
    * navigating to the mini-draw detail page. Used by the dashboard Draws tab.
    */
   onSelect?: () => void;
+  /**
+   * When provided, only the CTA diverges: it opens the quick-enter sheet while the image
+   * and title still navigate to the detail page. Used by the `/mini-draws` browse grid.
+   */
+  onEnter?: () => void;
 }
 
-/** Wraps the card body in a link (navigate) OR a button (in-place `onSelect`) — module-level so the subtree never remounts. */
+/** Wraps a region in a link (navigate) OR a button (in-place `onSelect`) — module-level so the subtree never remounts. */
 function CardShell({ onSelect, href, className, children }: { onSelect?: () => void; href: string; className?: string; children: React.ReactNode }) {
   if (onSelect) {
     return (
@@ -60,17 +64,22 @@ function getUrgencyBadge(percentage: number, status: string) {
     return {
       label: "Almost Full",
       icon: Flame,
-      className:
-        "bg-gradient-to-r from-red-600 to-red-675 text-white shadow-lg shadow-red-600/30",
+      className: "bg-gradient-to-r from-red-600 to-red-675 text-white",
     };
   if (percentage >= 70)
     return {
       label: "Hot",
       icon: Zap,
-      className:
-        "bg-gradient-to-r from-amber-400 to-orange-500 text-black shadow-lg shadow-amber-400/30",
+      className: "bg-gradient-to-r from-amber-400 to-orange-500 text-[#111827]",
     };
   return null;
+}
+
+/** Same three-band rule EntryProgressBar uses, so every fill bar on the site agrees. */
+function progressFillClass(percentage: number): string {
+  if (percentage >= 85) return "from-red-600 to-red-675";
+  if (percentage >= 60) return "from-yellow-400 to-yellow-500";
+  return "from-green-500 to-green-600";
 }
 
 export default function MiniDrawCard({
@@ -78,6 +87,7 @@ export default function MiniDrawCard({
   index = 0,
   viewMode = "grid",
   onSelect,
+  onEnter,
 }: MiniDrawCardProps) {
   const prefersReduced = useReducedMotion();
   const { userData, isAuthenticated } = useUserContext();
@@ -85,29 +95,19 @@ export default function MiniDrawCard({
   const { data: liveData } = useMiniDraw(miniDraw._id);
 
   const totalEntries = liveData?.totalEntries ?? miniDraw.totalEntries ?? 0;
-  const minimumEntries =
-    liveData?.minimumEntries ?? miniDraw.minimumEntries ?? 0;
+  const minimumEntries = liveData?.minimumEntries ?? miniDraw.minimumEntries ?? 0;
   const entriesRemaining =
     liveData?.entriesRemaining ??
     miniDraw.entriesRemaining ??
     Math.max(minimumEntries - totalEntries, 0);
   const percentage =
-    minimumEntries > 0
-      ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100))
-      : 0;
+    minimumEntries > 0 ? Math.min(100, Math.round((totalEntries / minimumEntries) * 100)) : 0;
 
-  const _isActive = miniDraw.status === "active" && entriesRemaining > 0;
   const isClosed =
-    miniDraw.status === "completed" ||
-    (miniDraw.status === "active" && entriesRemaining <= 0);
+    miniDraw.status === "completed" || (miniDraw.status === "active" && entriesRemaining <= 0);
   const isCancelled = miniDraw.status === "cancelled";
 
   const brandMeta = getBrandMeta(miniDraw.brandId);
-  const brandData = brandMeta ?? defaultBrandLogo;
-  const overlayScale =
-    brandMeta?.overlayScale ?? defaultBrandLogo.overlayScale ?? 1;
-  const gradientOverride = brandMeta ? undefined : "bg-transparent";
-
   const urgencyBadge = getUrgencyBadge(percentage, miniDraw.status);
 
   const getUserEntryCount = (): number => {
@@ -119,18 +119,19 @@ export default function MiniDrawCard({
         totalEntries: number;
       }>;
     };
-    const participation =
-      userWithParticipation?.miniDrawParticipation?.find((p) => {
-        const id = p.miniDrawId;
-        return typeof id === "string"
-          ? id === currentId
-          : id?.toString() === currentId;
-      });
+    const participation = userWithParticipation?.miniDrawParticipation?.find((p) => {
+      const id = p.miniDrawId;
+      return typeof id === "string" ? id === currentId : id?.toString() === currentId;
+    });
     return participation?.totalEntries ?? 0;
   };
 
   const userEntries = getUserEntryCount();
   const detailHref = `/mini-draws/${miniDraw._id}`;
+  const statusLabel = isCancelled ? "Cancelled" : isClosed ? "Closed" : "Active";
+  const ctaLabel = isCancelled ? "Cancelled" : isClosed ? "View draw" : "Enter draw";
+  /** The CTA diverges from the card body only when a caller supplies its own handler. */
+  const ctaAction = onEnter ?? onSelect;
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -145,212 +146,236 @@ export default function MiniDrawCard({
     },
   };
 
+  const statusDot = (
+    <span
+      className={cn(
+        "h-1.5 w-1.5 shrink-0 rounded-full",
+        isCancelled ? "bg-red-500" : isClosed ? "bg-yellow-500" : "bg-[#22C55E]"
+      )}
+    />
+  );
+
+  const progressTrack = (heightClass: string) => (
+    <div className={cn("w-full overflow-hidden rounded-full bg-[#EEF0F3] dark:bg-neutral-800", heightClass)}>
+      <m.div
+        className={cn("h-full rounded-full bg-gradient-to-r", progressFillClass(percentage))}
+        initial={{ width: 0 }}
+        animate={{ width: `${percentage}%` }}
+        transition={
+          prefersReduced ? { duration: 0 } : { type: "spring", stiffness: 60, damping: 15, delay: 0.2 }
+        }
+      />
+    </div>
+  );
+
+  const ctaInner = (
+    <>
+      <span className="font-semibold opacity-65">$1</span>
+      <Ticket className="h-[13px] w-[13px] lg:h-[15px] lg:w-[15px]" />
+      {ctaLabel}
+    </>
+  );
+
   /* ── List View ── */
   if (viewMode === "list") {
     return (
       <m.div variants={cardVariants} initial="hidden" animate="visible">
-        <CardShell onSelect={onSelect} href={detailHref} className="block">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group">
-            <div className="flex">
-              <div className="relative w-28 h-28 sm:w-36 sm:h-36 flex-shrink-0 overflow-hidden">
-                <Image
-                  src={
-                    miniDraw.prize.images[0] ||
-                    "/images/placeholder-product.jpg"
-                  }
-                  alt={miniDraw.prize.name}
-                  fill
-                  className="object-cover transition-transform duration-500 group-hover:scale-105"
-                  sizes="(max-width: 640px) 112px, 144px"
-                />
-                {brandMeta && (
-                  <div className="absolute bottom-1 right-1 z-10">
-                    <BrandLogoCard
-                      brand={brandData}
-                      overlayMode="overlay"
-                      gradientOverride={gradientOverride ?? undefined}
-                      scaleOverride={overlayScale}
-                      widthClass="w-auto"
-                      heightClass="h-auto"
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 p-3 sm:p-4 flex flex-col justify-between min-w-0">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                        isCancelled
-                          ? "bg-red-500"
-                          : isClosed
-                          ? "bg-yellow-500"
-                          : "bg-green-500"
-                      }`}
-                    />
-                    <span className="text-2xs sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
-                      {isCancelled ? "Cancelled" : isClosed ? "Closed" : "Active"}
-                    </span>
-                    {urgencyBadge && (
-                      <span
-                        className={cn("text-3xs px-1.5 py-0.5 rounded-full font-bold", urgencyBadge.className)}
-                      >
-                        {urgencyBadge.label}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-sm sm:text-base font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-red-600 dark:group-hover:text-red-500 transition-colors">
-                    {miniDraw.name}
-                  </h3>
-                  <EntryProgressBar
-                    totalEntries={totalEntries}
-                    minimumEntries={minimumEntries}
-                    variant="compact"
-                  />
-                </div>
-                <div className="flex items-center justify-between mt-2">
-                  {userEntries > 0 && (
-                    <span className="text-2xs sm:text-xs font-medium text-green-600 dark:text-green-500 flex items-center gap-0.5">
-                      <Ticket className="w-3 h-3" /> {userEntries}{" "}
-                      {userEntries === 1 ? "entry" : "entries"}
-                    </span>
-                  )}
-                  <span className="ml-auto inline-flex items-center gap-1 px-3 py-1 sm:py-1.5 rounded-full text-2xs sm:text-xs font-bold bg-black text-white group-hover:bg-red-600 transition-colors">
-                    <span>$1</span>
-                    <Ticket className="w-3 h-3" />
-                    {isCancelled ? "Cancelled" : isClosed ? "View" : "Enter"}
-                  </span>
-                </div>
-              </div>
-            </div>
+        <div className="group flex overflow-hidden rounded-2xl border border-[#F0F1F4] bg-white shadow-[0_4px_16px_-12px_rgba(15,23,42,.35)] transition-shadow duration-300 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="w-[104px] shrink-0 sm:w-[136px]">
+            <CardShell onSelect={onSelect} href={detailHref} className="relative block h-full min-h-[104px] overflow-hidden bg-white">
+              <Image
+                src={miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}
+                alt={miniDraw.prize.name}
+                fill
+                className="object-contain p-2 transition-transform duration-500 group-hover:scale-[1.04]"
+                sizes="(max-width: 640px) 104px, 136px"
+              />
+            </CardShell>
           </div>
-        </CardShell>
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-2.5 sm:p-3">
+            <div className="flex items-center gap-1.5">
+              {statusDot}
+              <span className="text-[10.5px] font-semibold text-[#6B7280] dark:text-neutral-400">{statusLabel}</span>
+              {brandMeta && (
+                <span className="ml-auto rounded-[5px] bg-[#F3F4F6] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.03em] text-[#374151] dark:bg-neutral-800 dark:text-neutral-300">
+                  {brandMeta.name}
+                </span>
+              )}
+            </div>
+            <CardShell onSelect={onSelect} href={detailHref} className="block">
+              <h3 className="line-clamp-2 text-[13px] font-bold leading-[1.35] text-[#111827] transition-colors group-hover:text-red-600 dark:text-white">
+                {miniDraw.name}
+              </h3>
+            </CardShell>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[11px] font-bold text-[#111827] dark:text-white">
+                {entriesRemaining.toLocaleString()} <span className="font-medium text-[#6B7280] dark:text-neutral-400">left</span>
+              </span>
+              <span className="text-[10px] font-semibold text-[#9CA3AF]">{percentage}%</span>
+            </div>
+            {progressTrack("h-[5px]")}
+            {ctaAction ? (
+              <button
+                type="button"
+                onClick={ctaAction}
+                className="mt-0.5 inline-flex h-8 items-center gap-1.5 self-start rounded-full bg-gradient-to-r from-[#111827] to-black px-3.5 text-[11.5px] font-bold text-white transition-all hover:from-red-600 hover:to-red-675"
+              >
+                {ctaInner}
+              </button>
+            ) : (
+              <Link
+                href={detailHref}
+                className="mt-0.5 inline-flex h-8 items-center gap-1.5 self-start rounded-full bg-gradient-to-r from-[#111827] to-black px-3.5 text-[11.5px] font-bold text-white transition-all group-hover:from-red-600 group-hover:to-red-675"
+              >
+                {ctaInner}
+              </Link>
+            )}
+          </div>
+        </div>
+      </m.div>
+    );
+  }
+
+  /* ── Compact View (related draws) ── */
+  if (viewMode === "compact") {
+    return (
+      <m.div variants={cardVariants} initial="hidden" animate="visible" className="h-full">
+        <div className="group flex h-full flex-col overflow-hidden rounded-[18px] border border-[#F0F1F4] bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-white">
+            <Image
+              src={miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}
+              alt={miniDraw.prize.name}
+              fill
+              className="object-contain p-2.5 pb-6 transition-transform duration-500 group-hover:scale-[1.04]"
+              sizes="(max-width: 640px) 50vw, 25vw"
+            />
+            {/* black/75, not the handoff's /60: with `contain` the strip now sits on WHITE
+                rather than on a photo, and /60 over white is rgb(102,102,102) — ~3.9:1 against
+                white 9.5px text, under the 4.5:1 floor. /75 restores it to ~7:1. */}
+            <span className="absolute inset-x-0 bottom-0 bg-black/75 px-1.5 py-1 text-center text-[9.5px] font-semibold text-white">
+              {entriesRemaining > 0 ? `${entriesRemaining.toLocaleString()} entries remaining` : "Entries closed"}
+            </span>
+          </CardShell>
+          <div className="flex flex-1 flex-col gap-1.5 px-2.5 pb-2.5 pt-2.5">
+            <div className="flex items-center gap-1.5">
+              {statusDot}
+              <span className="text-[10px] font-semibold text-[#6B7280] dark:text-neutral-400">{statusLabel}</span>
+            </div>
+            <CardShell onSelect={onSelect} href={detailHref} className="block">
+              <h4 className="line-clamp-2 min-h-[32px] text-[12px] font-bold leading-[1.35] text-[#111827] transition-colors group-hover:text-red-600 dark:text-white">
+                {miniDraw.name}
+              </h4>
+            </CardShell>
+            <div className="mt-auto">{progressTrack("h-[5px]")}</div>
+            <Link
+              href={detailHref}
+              className="flex h-[34px] items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#111827] to-black text-[11.5px] font-bold text-white transition-all group-hover:from-red-600 group-hover:to-red-675"
+            >
+              <span className="font-semibold opacity-65">$1</span>
+              <Ticket className="h-3 w-3" />
+              {isCancelled ? "Cancelled" : isClosed ? "View" : "Enter"}
+            </Link>
+          </div>
+        </div>
       </m.div>
     );
   }
 
   /* ── Grid View ── */
   return (
-    <m.div
-      variants={cardVariants}
-      initial="hidden"
-      animate="visible"
-      className="h-full"
-    >
-      <CardShell onSelect={onSelect} href={detailHref} className="block h-full">
-        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-gray-100 dark:border-neutral-800 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group h-full flex flex-col">
-          {/* Image Section */}
-          <div className="relative">
-            <div className="relative w-full aspect-[4/3] overflow-hidden">
-              <Image
-                src={
-                  miniDraw.prize.images[0] ||
-                  "/images/placeholder-product.jpg"
-                }
-                alt={miniDraw.prize.name}
-                fill
-                className="object-cover transition-transform duration-500 group-hover:scale-105"
-                sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/5 to-transparent" />
-            </div>
+    <m.div variants={cardVariants} initial="hidden" animate="visible" className="h-full">
+      <div className="group flex h-full flex-col overflow-hidden rounded-[18px] border border-[#F0F1F4] bg-white shadow-[0_4px_16px_-10px_rgba(15,23,42,.35)] transition-shadow duration-300 hover:shadow-lg lg:border-[#EAECEF] lg:shadow-[0_6px_20px_-16px_rgba(15,23,42,.5)] dark:border-neutral-800 dark:bg-neutral-900">
+        {/* PRIZE IMAGES ARE PRODUCT SHOTS ON WHITE — `contain`, not `cover`.
+            `cover` cropped a tall tool chest top-and-bottom and beheaded the dial indicator,
+            and the old bottom scrim greyed out the lower half of every white photo (it only
+            ever existed to make a white logo overlay legible; the brand chip carries its own
+            ring now). Padding keeps the product off the card edge. */}
+        <CardShell onSelect={onSelect} href={detailHref} className="relative block aspect-[4/3] w-full overflow-hidden bg-white">
+          <Image
+            src={miniDraw.prize.images[0] || "/images/placeholder-product.jpg"}
+            alt={miniDraw.prize.name}
+            fill
+            className="object-contain p-2 transition-transform duration-500 group-hover:scale-[1.04] lg:p-4"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          />
 
-            {/* Brand Logo */}
-            {brandMeta && (
-              <div className="absolute bottom-10 right-2 z-10">
-                <BrandLogoCard
-                  brand={brandData}
-                  overlayMode="overlay"
-                  gradientOverride={gradientOverride ?? undefined}
-                  scaleOverride={overlayScale}
-                  widthClass="w-auto"
-                  heightClass="h-auto"
-                />
-              </div>
-            )}
+          {/* The buyer's own entries — kept from the previous card, it is the only place
+              the browse grid surfaces "you're already in this draw". */}
+          {userEntries > 0 && (
+            <span className="absolute left-[7px] top-[7px] inline-flex items-center gap-1 rounded-full bg-[#22C55E] px-2 py-[3px] text-[9.5px] font-extrabold text-white shadow-[0_6px_14px_-6px_rgba(0,0,0,.6)]">
+              <Ticket className="h-[11px] w-[11px]" />
+              {userEntries} {userEntries === 1 ? "entry" : "entries"}
+            </span>
+          )}
 
-            {/* User Entry Badge */}
-            {userEntries > 0 && (
-              <div className="absolute top-2 left-2 z-10">
-                <div className="bg-green-500 text-white px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-3xs sm:text-2xs font-bold shadow-md flex items-center gap-1">
-                  <Ticket className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                  {userEntries} {userEntries === 1 ? "entry" : "entries"}
-                </div>
-              </div>
-            )}
+          {urgencyBadge && (
+            <span
+              className={cn(
+                "absolute top-[7px] inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[9.5px] font-extrabold shadow-[0_6px_14px_-6px_rgba(0,0,0,.6)] lg:text-[10px]",
+                userEntries > 0 ? "right-[7px]" : "left-[7px]",
+                urgencyBadge.className
+              )}
+            >
+              <urgencyBadge.icon className="h-[11px] w-[11px] lg:h-3 lg:w-3" />
+              {urgencyBadge.label}
+            </span>
+          )}
 
-            {/* Urgency Badge */}
-            {urgencyBadge && (
-              <div
-                className={cn("absolute", userEntries > 0 ? "top-2 right-2" : "top-2 left-2", "z-10")}
-              >
-                <span
-                  className={cn("inline-flex items-center gap-0.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-3xs sm:text-2xs font-bold", urgencyBadge.className)}
-                >
-                  <urgencyBadge.icon className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                  {urgencyBadge.label}
-                </span>
-              </div>
-            )}
+          {/* ring + shadow, because the chip now sits on a near-white photo rather than on a
+              dark scrim — a plain white pill would dissolve into the product background. */}
+          {brandMeta && (
+            <span className="absolute bottom-1.5 right-1.5 flex h-[22px] items-center rounded-md bg-white/95 px-[7px] text-[9.5px] font-extrabold uppercase tracking-[0.03em] text-[#111827] shadow-sm ring-1 ring-black/[0.06] backdrop-blur-[2px] lg:bottom-2.5 lg:right-2.5 lg:h-6 lg:rounded-[7px] lg:px-2.5 lg:text-[10.5px]">
+              {brandMeta.name}
+            </span>
+          )}
+        </CardShell>
 
-            {/* Bottom overlay strip */}
-            <div className="absolute bottom-0 left-0 right-0 px-3 py-1.5 flex items-center justify-center gap-1 text-3xs sm:text-2xs text-white/90 font-medium bg-black/60 backdrop-blur-[2px]">
-              <Ticket className="w-2.5 h-2.5 sm:w-3 sm:h-3 opacity-70" />
-              {entriesRemaining > 0
-                ? `${entriesRemaining.toLocaleString()} entries remaining`
-                : "Entries Closed"}
-            </div>
+        <div className="flex flex-1 flex-col gap-[7px] px-[11px] pb-[11px] pt-2.5 lg:gap-2.5 lg:p-4">
+          <div className="flex items-center gap-1.5">
+            {statusDot}
+            <span className="text-[10.5px] font-semibold text-[#6B7280] dark:text-neutral-400 lg:text-[12px]">
+              {statusLabel}
+            </span>
           </div>
 
-          {/* Content Section */}
-          <div className="p-3 sm:p-4 flex flex-col flex-1">
-            <div className="flex-1 space-y-1.5 sm:space-y-2">
-              {/* Status dot + label */}
-              <div className="flex items-center gap-1.5">
-                <div
-                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    isCancelled
-                      ? "bg-red-500"
-                      : isClosed
-                      ? "bg-yellow-500"
-                      : "bg-green-500"
-                  }`}
-                />
-                <span className="text-2xs sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
-                  {isCancelled ? "Cancelled" : isClosed ? "Closed" : "Active"}
+          <CardShell onSelect={onSelect} href={detailHref} className="block">
+            <h3 className="line-clamp-2 min-h-[34px] text-[12.5px] font-bold leading-[1.35] text-[#111827] text-pretty transition-colors group-hover:text-red-600 dark:text-white lg:min-h-[42px] lg:text-[15.5px]">
+              {miniDraw.name}
+            </h3>
+          </CardShell>
+
+          <div className="mt-auto flex flex-col gap-1 lg:gap-1.5">
+            <div className="flex items-baseline justify-between gap-1">
+              <span className="text-[11px] font-bold text-[#111827] dark:text-white lg:text-[13px]">
+                {entriesRemaining.toLocaleString()}{" "}
+                <span className="font-medium text-[#6B7280] dark:text-neutral-400">
+                  <span className="lg:hidden">left</span>
+                  <span className="hidden lg:inline">remaining</span>
                 </span>
-              </div>
-
-              {/* Draw name */}
-              <h3 className="text-[13px] sm:text-sm lg:text-base font-bold text-gray-900 dark:text-white line-clamp-2 min-h-[2.2rem] sm:min-h-[2.5rem] group-hover:text-red-600 dark:group-hover:text-red-500 transition-colors duration-200">
-                {miniDraw.name}
-              </h3>
-
-              {/* Progress Bar */}
-              <EntryProgressBar
-                totalEntries={totalEntries}
-                minimumEntries={minimumEntries}
-                variant="compact"
-              />
-            </div>
-
-            {/* CTA Button */}
-            <div className="mt-3 sm:mt-4">
-              <span className="w-full flex items-center justify-center gap-1.5 py-2 sm:py-2.5 px-3 rounded-full text-2xs sm:text-xs font-bold text-white bg-gradient-to-r from-gray-900 to-black group-hover:from-red-600 group-hover:to-red-675 group-hover:shadow-md group-hover:shadow-red-600/20 transition-all duration-300">
-                <span className="text-2xs sm:text-2xs font-semibold opacity-70">
-                  $1
-                </span>
-                <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                {isCancelled
-                  ? "Cancelled"
-                  : isClosed
-                  ? "View Details"
-                  : "Enter Draw"}
               </span>
+              <span className="text-[10px] font-semibold text-[#9CA3AF] lg:text-[12px]">{percentage}%</span>
             </div>
+            {progressTrack("h-[5px] lg:h-1.5")}
           </div>
+
+          {ctaAction ? (
+            <button
+              type="button"
+              onClick={ctaAction}
+              className="mt-[3px] flex h-[38px] items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#111827] to-black text-[12px] font-bold text-white transition-all duration-300 hover:from-red-600 hover:to-red-675 hover:shadow-md hover:shadow-red-600/20 lg:mt-1 lg:h-[46px] lg:gap-2 lg:text-[14px]"
+            >
+              {ctaInner}
+            </button>
+          ) : (
+            <Link
+              href={detailHref}
+              className="mt-[3px] flex h-[38px] items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#111827] to-black text-[12px] font-bold text-white transition-all duration-300 group-hover:from-red-600 group-hover:to-red-675 group-hover:shadow-md group-hover:shadow-red-600/20 lg:mt-1 lg:h-[46px] lg:gap-2 lg:text-[14px]"
+            >
+              {ctaInner}
+            </Link>
+          )}
         </div>
-      </CardShell>
+      </div>
     </m.div>
   );
 }

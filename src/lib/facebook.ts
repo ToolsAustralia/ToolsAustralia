@@ -24,6 +24,7 @@ export interface FacebookEvent {
     zp?: string; // zip code hash
     country?: string; // country code
     db?: string; // date of birth hash (YYYYMMDD, hashed - for Event Match Quality)
+    ge?: string; // gender hash ("m" / "f" lowercase, hashed). Omitted entirely when unknown.
     external_id?: string; // hashed external ID (recommended for matching)
     client_ip_address?: string;
     client_user_agent?: string;
@@ -141,6 +142,7 @@ export interface BuildFacebookPurchaseEventParams {
     ln?: string;
     st?: string;
     db?: string;
+    ge?: string;
     external_id?: string;
     client_ip_address?: string;
     client_user_agent?: string;

@@ -9,6 +9,7 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/users/[id]/cancel-subscription` | [subscription](../subscription/) | Admin cancel sub |
 | `/api/admin/users/[id]/charge-past-due` | [billing-stripe](../billing-stripe/) | Single past-due retry |
 | `/api/admin/users/[id]/payment-events/[eventId]/reverse` | [billing-stripe](../billing-stripe/) | Refund replay |
+| `GET /api/admin/receipts` | admin | **The Receipts ledger** — one row per payment received, newest first, unioning `PaymentEvent` (`BenefitsGranted`) with shop `Order`s. Gated by `receipts.view`; `?format=csv` additionally requires `receipts.export`. Query: `dateRange` (`today \| yesterday \| all-time \| custom \| current-draw \| last-draw`, default `today`) + `startDate`/`endDate` for custom/draw ranges, resolved by the dashboard's own `resolveRevenueDetailsRange` so the two are comparable by construction; `category` (a `ReceiptCategory`); `page`/`limit` (default 50, max 200). Returns `{ success, data: { rows, totals: { gross, refunded, net, count }, pagination, stripeMode } }`. **Two traps:** the headline `net` is net of refunds (a fully-refunded row nets to $0, matching the dashboard's basis), and `rows[].stripe.objectId` is polymorphic — `pi_…` for one-offs, `invoice_in_…` for renewals — so the server ships pre-built `objectUrl`/`customerUrl` rather than letting the client guess. Deliberately NOT under `invoices/` (that folder means past-due *charging actions*). Full rationale: [receipts.md](./receipts.md). |
 | `/api/admin/invoices/charge-past-due` | [billing-stripe](../billing-stripe/) | Bulk past-due retry |
 | `/api/admin/invoices/recover-past-due` | admin | Bulk stranded-invoice recovery (per-invoice, max 10) |
 | `/api/admin/invoices/recover-stranded` | admin | Bulk stranded-invoice recovery via scan + preview (GET preview / POST run) |
@@ -16,15 +17,18 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/error-reports/**` | [error-reporting](../error-reporting/) | Error triage |
 | `/api/admin/contact-submissions/**` | [contact](../contact/) | Submission review |
 | `/api/admin/promo-analytics/**` | [promo](../promo/) | Promo-page analytics (the admin **Page Analytics** tab): summary, channel-detail, page-detail. All gated by `requirePermission("pageAnalytics.view")` — **changed from `promos.view` on 2026-07-31** to match the tab's own gate in `adminTabs.ts` and the `repeat-purchases` precedent (the divergence was latent: production has no "Ads Manager" role, and both Admin and Manager held `promos.view`). The three routes share `resolvePromoAnalyticsRange({ dateRange, startDate, endDate })` from `src/services/promo-analytics/PromoAnalyticsService.ts` for AEST `today \| yesterday \| custom` date resolution, kept in lockstep with the Norm read mirror under `/api/internal/norm/v1/promo-analytics/**`. **That parameter used to be named `range` while every caller passed `dateRange`, so every requested range silently returned today** — call sites now map field-by-field. The summary response carries `byPage[]` (with `buildVisitors` / `builds` / `buildChangeRate` / `buildDistribution`; `crossVisits` removed), `byChannel` (**renamed from `byUTMSource`**, keyed on the canonical `ConvertingPlatform`), `byBuiltPrize`, and a `dateRange` now carrying `visitsRetainedFrom` + `clampedToRetention`. `channel-detail` takes a closed-enum **`channel`** param (was a free-string `utmSource`) and returns `rawSources`; `page-detail` returns `buildBreakdown` in place of the removed `visitsFrom`. All of it is mirrored to Norm. Full rationale: [docs/promo/backend.md](../promo/backend.md#page-analytics-repair--2026-07-31). |
+| `GET /api/admin/partner-discount-analytics` | [partner](../partner/) | **Partner-discount funnel**, rendered on the same **Page Analytics** tab beneath the promo tables. Gated by `requirePermission("pageAnalytics.view")` — the same gate as the promo siblings; no new permission was added. Query: `dateRange` (`today \| yesterday \| custom`) + `startDate`/`endDate` for custom, resolved by `resolvePartnerDiscountAnalyticsRange` and **clamped to the 90-day visit TTL** (`clampedToRetention` is returned so the UI can say why an older range returned less). Returns `{ totalVisits, totalSignups, totalConversions, totalRevenue, bySurface[], dateRange }`. `bySurface[]` has one row per surface (`discount` = the public `/discount` catalogue, `catalogue` = `/my-account/rewards/catalogue`) carrying visitors, `interacted`, `offerOpeners`, `lockedOfferOpeners`, `seamRendered`/`seamReached`/`seamReachRate`, `unlockClickers`, `portalHandoffs`, `zeroResultSearchers`, signups, conversions, revenue and the three rates. **Two traps when reading it:** `seamReachRate` is over `seamRendered`, never `visits`; and the totals are deduped ACROSS surfaces, so the rows are not addends. Mirrored to Norm at `/v1/partner-discount-analytics`. Full rationale: [docs/partner/analytics.md](../partner/analytics.md). |
 | `/api/admin/facebook-ads/purchase-audit` | [tracking](../tracking/) | Local vs Meta revenue reconciliation (TRUE ROAS) |
 | `/api/admin/facebook-ads/health/insights` | [tracking](../tracking/) | Facebook Ads Health view — Mongo-first aggregated campaign/adset/ad insights (past days from `MetaAdInsightsDaily`, today live from Meta) with verdict engine + per-row snooze state. Server filters: `level`, `startDate`, `endDate`, `campaign`. Filters for verdict/learningStatus/minSpend/search are applied client-side in `FacebookAdsHealthView` (useMemo) — they do not appear in the query schema or TanStack queryKey. No account TRUE ROAS card — purchase-audit route handles that diagnostic separately. |
 | `GET /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Read health verdict engine settings (requires `facebookAds.view`) |
 | `PUT /api/admin/facebook-ads/health/settings` | [tracking](../tracking/) | Update health verdict engine settings (requires `facebookAds.edit`) |
 | `POST /api/admin/facebook-ads/health/snooze` | [tracking](../tracking/) | Create or update a snooze for an ad (requires `facebookAds.edit`) |
-| `GET /api/admin/tiktok-ads/insights` | [tracking](../tracking/) | Per-TikTok-ad spend/conversions/revenue/ROAS breakdown from `TikTokAdInsightsDaily` (the TikTok analogue of the Meta spend-by-URL / `facebook-ads/insights` table). Gated by `facebookAds.view`; see [§ TikTok ad-level insights](#tiktok-ad-level-insights-per-ad-breakdown). |
+| `GET /api/admin/tiktok-ads/insights` | [tracking](../tracking/) | TikTok spend/conversions/revenue/ROAS breakdown from `TikTokAdInsightsDaily`, grouped by `level` (campaign \| adset \| ad, default `ad`) — the TikTok analogue of the Meta spend-by-URL / `facebook-ads/insights` table and its level switcher. Gated by `facebookAds.view`; see [§ TikTok ad-level insights](#tiktok-ad-level-insights-per-ad-breakdown). |
 | `GET /api/admin/chatbot-cost` | admin / support-chat | Cobber chatbot cost & usage analytics. Optional `?days=N` (default 30, clamp 1–90). Gated by `overview.view`. Returns `{ data: ChatbotCostData, meta: { timestamp } }` with: `cost` (today/7d/30d USD, total tokens); `daily` (ascending day rows); `usage` (totalRequests, deflectedCount, llmCount, deflectionRatePct, escalatedCount, memberCount, anonymousCount, avgDurationMs, **`conversationsCount`** — distinct non-null `conversationId`s over the range); **`config`** (model, **activeProvider**, dailyBudgetUsd, killSwitch, generativeLimitMax, generativeLimitWindowSeconds — read server-side from env vars + DB at request time). Cache-Control: private, max-age=300. Service: `src/services/admin/chatbotCostAnalytics.ts`. |
 | `GET /api/admin/chatbot-settings` | admin / support-chat | Read the active chatbot provider (anthropic or google). Gated by `overview.view`. Returns `{ data: { activeProvider: "anthropic" \| "google" }, meta: { timestamp } }`. |
 | `PATCH /api/admin/chatbot-settings` | admin / support-chat | Switch the active chatbot provider. Gated by `overview.view`. Body: `{ activeProvider: "anthropic" \| "google" }`. Returns the updated `{ data: { activeProvider }, meta: { timestamp } }`. Invalid `activeProvider` → 400 `BAD_REQUEST`. |
+| `GET /api/admin/chatbot-conversations` | admin / support-chat | **Cobber conversation transcripts (list).** Gated by **`submissions.view`** — deliberately NOT the `overview.view` of its chatbot-cost sibling: cost is aggregate numbers, this returns what individual customers typed, and `submissions.view` is already the support-facing gate (an escalated chat lands in Submissions). Query: `?days=` (1–90, default 30 — capped at the 90-day TTL), `?status=all\|open\|escalated\|closed`, `?actor=all\|member\|anonymous`, `?kind=all\|deflected\|generative`, `?q=` (≤200 chars, free-text over redacted message content), `?page=`, `?limit=` (≤100, default 25). Returns `{ data: { rows, total, page, limit, totalPages, appliedDays }, meta }`. Each row: `id, createdAt, updatedAt, status, actorKind, userId, firstName, messageCount, userMessageCount, firstUserMessage, modelTier[], deflectedOnly, tokensIn, tokensOut`. Cache-Control: private, max-age=30. Service: `src/services/admin/chatTranscripts.ts`. |
+| `GET /api/admin/chatbot-conversations/[id]` | admin / support-chat | **One full transcript.** Same `submissions.view` gate. Returns `{ data: ChatTranscriptDetail, meta }` — conversation meta plus `messages[]` (role, content, createdAt, `citations[]` = the FAQ docIds the answer was grounded on, `toolCalls[]`) and `turns[]` (per-request `ChatAuditLog` rows: modelTier, tokensIn/Out, deflected, escalated, HTTP status, durationMs). `possiblyTruncated` flags a conversation older than the 90-day message TTL, whose earliest messages may already be purged. Unknown/invalid/TTL-expired id → 404 `NOT_FOUND` (invalid ObjectIds are handled, not thrown). |
 | `POST/PUT /api/admin/monthly-coupon/campaign[/[id]]` | [rewards-redeemables](../rewards-redeemables/) | Redeemable-campaign create/update. **Validation (2026-07-06):** `manual-users`/`csv-users` targeting requires a non-empty `segmentConfig.includeUserIds` — create rejects via zod `superRefine`; update validates the MERGED state in `CampaignService.updateCampaign` (PUT is partial). See [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md). |
 | _TODO_ | — | Affiliate, draw, other admin routes |
 
@@ -523,11 +527,19 @@ There is deliberately **no `all`** on the read endpoints. Spend is additive acro
 
 ## TikTok ad-level insights (per-ad breakdown)
 
-### `GET /api/admin/tiktok-ads/insights?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`
+### `GET /api/admin/tiktok-ads/insights?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&level=campaign|adset|ad`
 
-Gated by `requirePermission("facebookAds.view")` — the **same** paid-ads-analytics permission that already gates the whole TikTok tab + the Meta spend-by-URL breakdown (reused deliberately to avoid forking RBAC). Per-TikTok-ad breakdown (adName + spend + TikTok-reported conversions/revenue + ROAS) aggregated from `TikTokAdInsightsDaily`. The TikTok analogue of `/api/admin/facebook-ads/insights`.
+Gated by `requirePermission("facebookAds.view")` — the **same** paid-ads-analytics permission that already gates the whole TikTok tab + the Meta spend-by-URL breakdown (reused deliberately to avoid forking RBAC). TikTok spend breakdown (spend + TikTok-reported conversions/revenue + ROAS) aggregated from `TikTokAdInsightsDaily`. The TikTok analogue of `/api/admin/facebook-ads/insights`.
 
-Thin handler — validates the two required `YYYY-MM-DD` params (Zod; malformed → `400`) and composes two service reads: `getTikTokAdInsights()` in `src/services/admin/tiktok/tiktokAdInsightsQuery.ts` plus `getTikTokSyncHealth()` in `src/services/admin/tiktok/tiktokSyncStatus.ts` (see [backend.md](./backend.md#tiktok-ad-level-insights-per-ad-spend-breakdown)). Returns `{ success: true, data: { configured, rows, totals, dateRange, syncHealth } }` — `configured` is `false` when the TikTok Marketing-API creds (`TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN`) are unset; `syncHealth` (2026-07-24, panel F-002) is `{ configured, lastRun: { outcome: "ok"|"error", errorCode, errorMessage, rowsUpserted, since, until, finishedAt } | null, lastSyncedAt }` so the UI can render "sync FAILING since … (code 40001)" vs "synced, genuinely no spend" instead of one benign empty state; `rows` are per-ad, sorted by spend desc, money in dollars, `roas = revenue ÷ spend` (0 when spend 0), plus a summed `totals`. **Revenue is TikTok's own attributed value** (labelled "TikTok rev." in the UI), NOT first-party `PaymentEvent` sales. Populated nightly by the `/api/cron/sync-tiktok-ads` cron (infrastructure domain; backfill via `npm run seed:tiktok-insights`). **Norm note:** `syncHealth` is composed at the ADMIN route only — `getTikTokAdInsights()`'s return shape is unchanged, so the Norm mirror's `responseSchema` needs no update (verified no-drift); mirroring `syncHealth` to Norm is a deliberate not-yet.
+**`level` (2026-08-11) — campaign / ad-set / ad grouping.** Mirrors the Meta Health view's switcher, minus `account` (an account row would just restate `totals`). **Defaults to `ad`**, which is exactly what this endpoint returned before the switcher existed, so any caller that omits the param — including the Norm mirror — is unaffected.
+
+Three things to know when reading the result:
+
+- **Totals are IDENTICAL at every level.** Each stored document is one ad-day keyed uniquely on `adAccountId + date + adId`, so it lands in exactly one bucket whichever level is requested. Switching level never changes the money, only how it is split — if the totals ever differ between levels, something is dropping rows.
+- **The row shape follows the Facebook vocabulary,** not a generic `id`/`name`: `campaignId`/`campaignName`/`adsetId`/`adsetName`/`adId`/`adName`. Fields **above** the requested level stay populated (an ad-set row still names its campaign); fields **below** it are `null`, because that group spans many children and naming one of them would be a lie. `adId` is therefore nullable now.
+- **Rows TikTok returns without an id at the requested level get a visible bucket** — `(no campaign reported)` / `(no ad set reported)` — rather than being dropped. `campaignId`/`adsetId` are optional on the model, and silently discarding them would make the same window report different totals at different levels.
+
+Thin handler — validates the two required `YYYY-MM-DD` params (Zod; malformed → `400`) and composes two service reads: `getTikTokAdInsights()` in `src/services/admin/tiktok/tiktokAdInsightsQuery.ts` plus `getTikTokSyncHealth()` in `src/services/admin/tiktok/tiktokSyncStatus.ts` (see [backend.md](./backend.md#tiktok-ad-level-insights-per-ad-spend-breakdown)). Returns `{ success: true, data: { configured, rows, totals, dateRange, syncHealth } }` — `configured` is `false` when the TikTok Marketing-API creds (`TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN`) are unset; `syncHealth` (2026-07-24, panel F-002) is `{ configured, lastRun: { outcome: "ok"|"error", errorCode, errorMessage, rowsUpserted, since, until, finishedAt } | null, lastSyncedAt }` so the UI can render "sync FAILING since … (code 40001)" vs "synced, genuinely no spend" instead of one benign empty state; `rows` are per-ad, sorted by spend desc, money in dollars, `roas = revenue ÷ spend` (0 when spend 0), plus a summed `totals`. **Revenue is TikTok's own attributed value** (labelled "TikTok rev." in the UI), NOT first-party `PaymentEvent` sales. Populated nightly by the `/api/cron/sync-tiktok-ads` cron (infrastructure domain; backfill via `npm run seed:tiktok-insights`). **Norm note:** `syncHealth` is composed at the ADMIN route only; mirroring it to Norm is a deliberate not-yet. **This note used to say the Norm `responseSchema` needed no update because `getTikTokAdInsights()`'s shape was unchanged — that stopped being true on 2026-08-11.** The level switcher made `adId` nullable and added `campaignId`/`adsetId`/`level`, so `NormTikTokAdsInsightsSchema` and the Norm route were updated in the same change. A schema↔output mismatch there is a **runtime 500** `tsc` cannot see — verify with `npm run norm:smoke` against a running dev server.
 
 ## Klaviyo analytics
 
@@ -850,3 +862,51 @@ is a real `String` field on `User` (and was already in the route's `.select(...)
 participants modal advertises "search by name / email / mobile", so it is now matched with
 the same case-insensitive regex. Admins commonly paste an unspaced mobile, so the raw stored
 value is matched as-is rather than normalised.
+
+## `GET /api/admin/mini-draw/[id]/participants` (2026-08-13)
+
+The read behind the mini-draw **People** modal — the entry-pool roster, paginated and searchable,
+so staff can answer "did this person enter?" without downloading a spreadsheet of every entrant's
+personal details.
+
+**Permission: `miniDraws.viewParticipants`** (not `miniDraws.view`). The sibling
+`GET /api/admin/mini-draw/[id]/export` moved to the same gate in the same change — the two return
+byte-for-byte the same PII and differ only in pagination, so they must never diverge. See
+[auth/permissions-catalog.md](../auth/permissions-catalog.md) for the split and its backfill.
+
+| Query param | Default | Notes |
+|---|---|---|
+| `page` | `1` | Clamped to ≥ 1 |
+| `limit` | `20` | Clamped to 1–100 |
+| `search` | — | Matches `firstName`, `lastName`, `email`, `mobile`, and the concatenated full name |
+
+```jsonc
+{
+  "success": true,
+  "data": {
+    "participants": [
+      { "userId": "…", "firstName": "…", "lastName": "…", "email": "…",
+        "mobile": "…", "state": "…", "totalEntries": 200,
+        "firstAddedDate": "…", "lastUpdatedDate": "…" }
+    ],
+    "pagination": { "currentPage": 1, "totalPages": 1, "totalCount": 5,
+                    "limit": 20, "hasNextPage": false, "hasPrevPage": false },
+    "miniDraw": { "_id": "…", "name": "…", "totalEntries": 293, "minimumEntries": 1000 }
+  }
+}
+```
+
+Three deliberate choices:
+
+1. **The envelope matches `/api/admin/major-draw/participants` exactly.** One shared
+   `ParticipantsModal` consumes both, so a divergence shows up as a broken modal rather than a
+   compile error. Change one, change the other.
+2. **Sort happens BEFORE the slice.** `entries` is sorted by `totalEntries` desc and *then*
+   paginated. Sorting the page instead would make page 1 "the first N in insertion order, then
+   sorted" rather than the top N — the exact bug that was fixed in the major-draw route.
+3. **No `entriesBySource`.** Mini-draw entry is package-only (no membership / referral / upsell
+   sources), so there is no breakdown to report; the field is major-draw-only and optional on the
+   shared client type.
+
+Search resolves against `User` first and then filters the embedded `entries` array, because the
+searchable fields live on the user document, not on the entry. The regex is escaped before use.

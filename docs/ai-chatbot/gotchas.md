@@ -91,13 +91,85 @@ The `SupportChatWidget` "Workshop" redesign replaced the old fixed **orange** wi
 - **Semantics are FIXED regardless of brand** (do NOT wire these to the accent, or they vanish into a same-hue brand): **green** Online dot, **amber** notices (rate-limit / busy / captcha — heading amber, body neutral-ink for contrast), **red** hard error. On green/yellow brands the notices stay distinct via border + label, not colour alone.
 - Other changes: messages are **grouped** by run (one `CobberMini` avatar per assistant run, warm sand bubbles, `motion-safe` slide-in), a crafted **welcome/empty state**, slimmer header, and the existing **cobber.png** avatar is kept (DRY'd into `CobberMini` + `COBBER_AVATAR`). **Source-citation chips were designed but NOT built** — the citation data isn't streamed to the client yet (a separate backend task).
 
+## The panel is a full-bleed sheet below `lg` (2026-08-13)
+
+Below `lg` the panel spans the viewport (`inset-x-0`, rounded TOP corners only, no side or
+bottom border) and sits on the bottom dock; from `lg` it is the 22rem corner-docked card it has
+always been. A 22rem card floating in a phone viewport wasted the horizontal space the
+conversation needed and read as a widget parked over the page rather than a surface the page
+handed you.
+
+**The `side` prop is now `lg:`-scoped.** `sideClass` emits `lg:left-5 lg:right-auto` /
+`lg:right-5 lg:left-auto` — the corner dock only applies where there IS a corner, and the
+opposite side has to be reset to `auto` or `inset-x-0` keeps it pinned. Both variants are
+written as literals: Tailwind's JIT scans source text, so a class assembled from an expression
+(`lg:${side}-5`) is never generated.
+
+## The panel follows the site theme (2026-08-13)
+
+The design handoff's Cobber is a dark panel (`#111318` shell, `#1b1f26` bubbles). It briefly
+shipped dark in BOTH themes on that basis, and that was wrong — on a light page it read as a black
+slab. [`SupportChatWidget`](../../src/components/support-chat/SupportChatWidget.tsx) keeps the
+handoff's SHAPE but forks its surface: light panel / gray-50 bubbles / dark ink in light mode, the
+handoff's dark palette under `.dark`. The accent header band, the avatar and the hazard stripe are
+theme-independent and unchanged.
+
+Two things worth knowing when editing it:
+
+- **Accent-derived colours cannot be plain Tailwind classes.** The quick-reply LABEL has to derive
+  from `--cob-acc` *and* fork by theme — the chip's ground is a 10% accent tint, near-white in
+  light mode and near-black in dark, so no single colour reads on both. That lives in
+  `.cob-quick-ink` (globals.css): a dark neutral by default, `color-mix(accent 30%, white)` under
+  `.dark`, with a flat fallback for browsers without `color-mix`. An inline style cannot fork by
+  theme; a Tailwind arbitrary value containing `color-mix(...)` with nested commas is fragile to
+  parse. The send button's glow is the accent at 40% and stays inline (no fork needed).
+- **The panel stacks ON the promo dock.** It carries `promo-dock-stacks-above`, which is inert
+  everywhere except under `html[data-promo-dock]`, where it swaps `bottom-24` for the dock's
+  measured height (`--promo-dock-h`, published by `PromoBottomDock`). Without it the panel floats
+  with a visible gap above the bar, because `bottom-24` was tuned for the old corner launcher.
+
+The welcome state is also no longer a centred splash: the greeting renders as Cobber's FIRST
+MESSAGE (avatar + bubble + "Just now"), and the quick replies are full-width rows under a
+"Pick a question to get started" rule. Five questions wrapped as pills in a 22rem panel produced a
+ragged block nobody scanned.
+
+## The launcher is suppressed on promo prize pages (2026-08-13)
+
+`/promotions/[slug]` and the toolset landings mount
+[`PromoBottomDock`](../../src/components/sections/promo/PromoBottomDock.tsx) — one bar that owns the
+bottom band. Its **right tab is the Cobber launcher there**, so the corner bubble would be a
+duplicate affordance. [`ChatBubbleButton`](../../src/components/support-chat/ChatBubbleButton.tsx)
+therefore carries `promo-dock-supersedes`, a class that is **inert everywhere else** and only bites
+under `html[data-promo-dock]` (rule in `globals.css`; full write-up in
+[shared-ui/gotchas.md](../shared-ui/gotchas.md) § `.promo-dock-supersedes`).
+
+The tab stays visible even where the rest of the bar collapses — in the hero the dock is only its
+two tabs — so there is no scroll depth on those pages with no way to reach support.
+
+Two things that make this safe rather than a second chat surface:
+
+- **The dock does not implement chat.** Its tab calls `openSupportChat()` — the same
+  `OPEN_SUPPORT_CHAT_EVENT` contract the dashboard's Ask Cobber card uses — which trips the
+  `hasOpened` latch in [`SupportChatWidgetMount`](../../src/components/support-chat/SupportChatWidgetMount.tsx)
+  and opens the one real lazy panel. Conversation state, budget and audit are untouched.
+- **Only the LAUNCHER is hidden, never the panel.** The panel is a separate element at
+  `Z_INDEX.MODAL_BASE - 1000`, well above the dock's `z-60`.
+
+This is the same shape as the existing `/my-account` suppression (the dashboard's Ask Cobber card is
+the entry point there and the bubble is hidden) — a surface that provides its own Cobber affordance
+hides the bubble and opens the panel by event. Any future surface doing this must do BOTH; hiding
+the bubble without an event-based opener leaves the page with no way to reach support.
+
 ## Launcher placement — collision-aware, not per-page hardcoding (2026-07-07)
 
 The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (the draw countdown banner `FloatingCountdownBanner`, the promotions "get entries" bar `FloatingGetEntriesButton`, the upsell gift `FloatingGiftIcon`). Researched pattern (Intercom/Zendesk/Material): keep a persistent corner FAB and **lift it above** the obstacle — never hide it, never move it into a menu.
 
-**How it works:** [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts) scans `document.querySelectorAll('[data-floating-widget]')`, does an **AABB overlap test against the bubble's DEFAULT corner rect**, and returns the bubble's target `bottom` (obstacle top + 12px) when one collides, else 0. The widget applies it as an inline `bottom` (the existing `transition-all` animates the slide). Obstacles opt in **declaratively** by carrying `data-floating-widget` — no per-page wiring, no store.
+**How it works:** [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts) scans `document.querySelectorAll('[data-floating-widget]')`, does an **AABB overlap test against the caller's DEFAULT corner rect**, and returns the target `bottom` (obstacle top + 12px) when one collides, else 0. The widget applies it as an inline `bottom` (the existing `transition-all` animates the slide). Obstacles opt in **declaratively** by carrying `data-floating-widget` — no per-page wiring, no store.
+
+**Three callers, one dock (2026-08-10).** The hook is shared with the two `/promotions` right-corner FABs, so it exports the dock geometry every corner-docked control must use: `FLOATING_DOCK_BOTTOM_PX` (20 = `bottom-5`) and `FLOATING_DOCK_SIDE_PX` (20 = `left-5`/`right-5`). Those constants must stay in lockstep with each caller's Tailwind classes. The signature takes a third `cornerPx` (default 56 = the launcher's `w-14`); the promo FABs pass 48. Before this, the hook hard-coded the launcher's 56px for everyone, so the overlap test ran against a rect two of its three callers didn't occupy — and the promo FABs had drifted to their own `bottom-16`/`bottom-4` offsets, leaving them visibly unaligned with the launcher. Full write-up: [`docs/shared-ui/gotchas.md`](../shared-ui/gotchas.md) § floating dock.
 
 **Why the AABB test is load-bearing (don't "simplify" it to a boolean "banner present"):**
+_(2026-08-10: these three claims only became TRUE that day. Every centered bar had `data-floating-widget` on its full-width `inset-x-0` centering wrapper rather than on the visible pill, so the AABB test saw a viewport-wide rect and lifted on every viewport — including desktop, where the bullet below says it shouldn't. The attribute now sits on the pill in all three carriers.)_
 - **Mobile** the countdown banner is near-full-width → it reaches the corner → bubble lifts.
 - **Desktop** the same banner is centered + narrow (`max-w-4xl`) → it does NOT reach the corner → no lift (correct — a boolean would over-lift here).
 - **Top-docked** banners (the scroll-follow `PromoBanner` flips to `top-4`) never intersect the bottom rect → ignored for free.
@@ -106,7 +178,7 @@ The floating bubble mustn't overlap the site's OTHER bottom-anchored floaters (t
 - **Dodge only while the bubble is shown AND the panel is closed.** The launcher (`ChatBubbleButton`) passes `enabled = !open`; since the mount only renders the launcher OFF `/my-account` (the "Ask Cobber" card is the entry there), the old `!onDashboard` guard is now implicit. An open panel is `z-9000` and opaque — it already covers every obstacle (`z ≤ 50`), so lifting it would instead expose the banner *below* it.
 - **Corner selection stays the `side` prop** (right by default, `left` on promotions where the right corner holds the theme toggle + account FAB). The hook only decides how far UP to sit, not which corner.
 
-**Reactivity:** recomputes on scroll (rAF, banners collapse/appear), resize, and a `MutationObserver` (a banner dismissed via ✕ or mounted via AnimatePresence un-lifts the bubble immediately). When you add a NEW bottom-anchored floater, give it `data-floating-widget="true"` and the launcher dodges it automatically.
+**Reactivity:** recomputes on scroll (rAF, banners collapse/appear), resize, and a `MutationObserver` (a banner dismissed via ✕ or mounted via AnimatePresence un-lifts the bubble immediately). When you add a NEW bottom-anchored floater, give it `data-floating-widget="true"` and the launcher dodges it automatically — but attach the attribute **only while the floater is visible**. A floater that unmounts when hidden can carry it statically; one that stays mounted and fades (`opacity-0`) must bind it (`data-floating-widget={shown ? "true" : undefined}`), because a faded element still has a non-zero rect and the launcher would lift over something invisible. Reading computed opacity in the hook instead does NOT work — framer obstacles animate in from `opacity: 0` with no `transitionend`, so the gate misses real obstacles (tried and reverted 2026-08-10). See [shared-ui/frontend.md § `data-floating-widget`](../shared-ui/frontend.md).
 
 ---
 
@@ -311,3 +383,152 @@ that look like Tools Australia features but are not:
 Both entries plus the ACCOUNT SELF-SERVICE MAP bullet in
 `src/services/support-chat/systemPrompt.ts` must stay in lockstep. Full audit:
 `docs/partner/igodirect-portal-ux-audit.md`.
+
+## What the visitor types to Cobber is masked from session replay (2026-08-07)
+
+Contentsquare records 100% of sessions, and the chat widget is the one place on the site where a
+visitor types **arbitrary free text** — order numbers, email addresses, phone numbers, whatever
+they think support needs. Two elements in `SupportChatWidget.tsx` therefore carry `data-cs-mask`:
+the **user** message bubble (the `isUser` branch only) and the composer `<textarea>`. Assistant
+bubbles are deliberately left visible — Cobber's own replies are not customer data, and being
+able to read them in a replay is exactly how you debug a bad answer.
+
+Convention: [docs/shared-ui/frontend.md](../shared-ui/frontend.md). Mechanism:
+[docs/tracking](../tracking/).
+
+The `<textarea>` attribute is belt-and-braces: Contentsquare masks `<textarea>` content by
+default. The **bubble** is the one that mattered — once a message is sent it stops being form
+input and becomes ordinary page text, which nothing masks automatically. If the transcript is
+ever re-rendered somewhere else (an admin review view, an emailed transcript, a re-hydrated
+history panel), that surface needs the attribute too.
+
+## Cobber is bottom-RIGHT everywhere again, including /promotions (2026-08-10)
+
+`src/app/promotions/layout.tsx` no longer passes `side="left"` to `SupportChatWidgetMount`, so
+the launcher uses its site-wide default corner on every route. The left override existed only
+because `/promotions` had the guest theme toggle + account FAB in the bottom-right; both moved
+to bottom-left when that control became the hamburger-morph column
+([shared-ui/gotchas.md § Promotions corners SWAPPED](../shared-ui/gotchas.md)).
+
+Worth stating plainly since the `side` prop still exists: bottom-right is the convention
+(Intercom, Zendesk, Drift, Crisp, HubSpot) and the better thumb target for the most-tapped
+floating control. Only pass `side="left"` if some future route genuinely occupies the right
+corner — and prefer moving *that* control instead.
+
+## `request_human` files nothing without an email — and the widget never sends one (2026-08-10)
+
+**The trap:** `buildRequestHumanTool.execute()` creates a `ContactSubmission` **only** when it can
+resolve an email. It deliberately refuses a model-supplied address (identity must never come from
+the LLM), so its only sources are the request body's `contact` field and — as of 2026-08-10 — a
+signed-in member's account email read server-side from `actor.userId`.
+
+`SupportChatWidget.tsx` **does not send `contact`.** It never has. So for the whole first month
+every escalation attempt hit the no-email branch, filed nothing, and the model papered over it:
+six customers were told support would reach out within one business day, and no ticket existed for
+any of them. Nothing in the audit surfaced it either — `escalated` stays false when the tool
+short-circuits, so the admin "Escalations" metric read a confident `0` the entire time.
+
+**Two things to remember when touching this path:**
+
+1. **A member never needs to be asked.** `resolveMemberEmail(userId)` is authoritative; pair a
+   session-resolved email with the session `firstName`, not a widget-supplied name. Anonymous
+   actors have no session email, so they must NOT trigger the lookup (guarded + tested).
+2. **The tool's return string is load-bearing.** The no-email branch returns a `NOT_ESCALATED:`
+   prefix that explicitly forbids claiming a handoff. Do not soften it — that string, plus the
+   `systemPrompt` HARD RULE, is what stops the model inventing a confirmation. And do not rely on
+   it alone: prompt-only enforcement is exactly what failed here, which is why `onFinish` also
+   detects a claim-without-escalation, logs an `ErrorReport`, and marks the message with a failed
+   `escalation_claim_unverified` tool call (renders red in Admin → Chatbot → Conversations).
+
+**Guests are still uncovered.** Until the widget collects an email into `contact`, an anonymous
+visitor cannot be escalated at all — they now get an honest "I can't pass this on yet" instead of
+a fake promise, which is the correct failure mode but not a substitute for wiring the capture step.
+
+## The free FAQ layer was confidently wrong, twice over (2026-08-11)
+
+A read of all 76 production conversations (350 messages, 8 Jul – 9 Aug) found the deflection
+layer's two failure modes. Both are now guarded in `ChatService.respond` **before** a canned answer
+is accepted — deliberately at the call site, not inside `tryDeflect`, because both guards need
+conversation context the deflection module doesn't have.
+
+**1. It repeated itself.** The matcher is stateless, so a rephrase that lands on the same entry
+replays it verbatim. One member asked *"But I can't add a payment method"* **five times** and got
+the identical "we accept Visa, Mastercard, American Express" every single time — never helped,
+never escalated. Eleven such repeat events across 76 conversations. `isSameAsLastAssistantMessage`
+now compares the candidate answer against the previous assistant turn (whitespace-normalised) and
+falls through to the model on a match. Repetition IS the signal that the canned answer missed.
+
+**2. It answered complaints with facts.** Scoring is keyword overlap, so *"You have just taken $20
+from my bank account, I didn't sign up for any membership"* scored against the membership entry and
+the customer was served **the price list**. Same for *"I've made 2 $80 payments and have no
+entries"* and *"why don't you disclose SA residents are ineligible before they sign up"* — one of
+them replied *"That did not answer my question."* `looksLikeComplaint` now short-circuits deflection
+for unauthorised-charge, personal-refund-demand, regulator-threat, and paid-but-missing language,
+sending those turns to the model (which can escalate).
+
+**Tuning notes for `looksLikeComplaint`:** it is NOT a general sentiment classifier — it targets
+money and authorisation language, which is what every production failure had in common. A bare
+policy lookup ("Refund policy") must keep deflecting for free, so the refund branch requires a
+possessive/demand cue, not the word alone. Validated against all 176 real user messages: **13
+flagged (7.4%), 0 false positives** on the routine top-10 questions. Watch the plurals — the first
+draft used `\bpayment\b`, which does not match "payments", and missed the real transcript *"I have
+made 2 $80 payments … there are no entries showing up"*.
+
+**Cost note:** both guards trade a free canned answer for a paid LLM turn, on ~7% of traffic plus
+repeats. That is the correct trade — those were precisely the turns where the free answer did
+damage.
+
+## We were *asking* Cobber to print `[from major-draw]` (2026-08-11)
+
+Eight production replies contained internal source tags like `[from membership-tiers]` in
+customer-visible text. Not a leak — system-prompt rule 2 literally said *"Cite your source section
+when possible (e.g. `[from membership-tiers]`)"*. Nothing ever parsed those tags (generative
+citations are never extracted; only the deflection path sets `citations`, from
+`deflection.sources`), so they were pure noise. Rule 2 is now an explicit prohibition. Fix the
+variable, not the consumer — do not add an output-side stripper for this unless the prompt change
+proves insufficient, and note a stream transform would be needed since the text streams to the
+customer before `onFinish` sees it.
+
+## The launcher out-ranked `SheetShell` on public routes (2026-08-12)
+
+`ChatBubbleButton` docks at `Z_INDEX.MODAL_BASE - 1000` = **9000**;
+[`SheetShell`](../../src/components/ui/SheetShell.tsx) was at `z-[120]`. Every SheetShell caller
+until now lived on `/my-account`, where `SupportChatWidgetMount` **suppresses the launcher** (the
+dashboard "Ask Cobber" card is the canonical entry there), so nothing ever revealed the mismatch.
+The first public-route SheetShell — the `/mini-draws` filter / sort / quick-enter / catalogue /
+pack-detail sheets — put Cobber straight over the sheet's primary CTA.
+
+Fixed in `SheetShell` (raised to `z-[9500]`, still below `MODAL_BASE` 10000 and the
+`TOAST_LOADING` payment overlay), not in the chat widget: a **modal** surface should out-rank
+persistent chrome. The panel's own header comment was corrected at the same time.
+
+The other direction still holds: a bottom-anchored **non-modal** bar (the mini-draw sticky
+"Enter draw" bar) must NOT climb above the launcher — it carries `data-floating-widget` and
+[`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
+lifts Cobber clear of it instead. Modal → out-rank it; persistent chrome → dodge it.
+
+## Blocked-card advice: never lead with "just wait"
+
+Cobber's system prompt is **byte-stable** (for prompt caching) and injects **no date** — it has no way
+to know how close the next Major Draw is, and rule 105 forbids inventing draw dates. So when a
+member's card is temporarily blocked after repeated failed attempts, Cobber **cannot** work out
+whether waiting the ~3 days is safe.
+
+The HARD RULE added 2026-08-18 makes the copy structurally safe instead of computed:
+
+- **Lead with the action that works now** — add a different card on `/my-account/membership`.
+- **Waiting is the slower alternative**, only sensible if the draw is still a way off. Let the
+  member judge the timing; never assert how many days remain.
+- **Be accurate about what's at stake.** Verified against [BUSINESS.md §175](../../BUSINESS.md):
+  free entries a member has **already earned stay in the draw while past-due and are never
+  removed** — a `past_due` member's entries are still in the weighted winner pool. Only the **next**
+  grant pauses. Never imply they lose entries they already hold; that would be false.
+
+FAQ entries **84** and **85** carry the same framing, and the pre-existing renewal-failure entry was
+corrected — it previously said "the fastest fix is the in-app retry on your existing card", which is
+exactly wrong for a blocked card (retrying is what caused the block). Corpus count assertion bumped
+85 → 87.
+
+Backend counterpart: `EXCESSIVE_RETRY_COOLDOWN_DAYS` in
+[chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts). If that window changes,
+FAQ 84/85 and the member Pay-Now copy must change with it.

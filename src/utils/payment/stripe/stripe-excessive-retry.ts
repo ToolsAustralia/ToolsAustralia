@@ -24,6 +24,21 @@ export function isStripeExcessiveRetryOutcome(outcome: Stripe.Charge.Outcome | n
 }
 
 /**
+ * The `outcome.reason` string this module keys on, as a named constant so the
+ * admin cooldown can test a PERSISTED reason (BlockedTransaction.outcomeReason)
+ * against the same value the live predicate above uses. One concept, one name.
+ */
+export const STRIPE_EXCESSIVE_RETRY_OUTCOME_REASON = "previously_declined_do_not_retry";
+
+/**
+ * Same check as `isStripeExcessiveRetryOutcome`, but against a stored reason
+ * string rather than a live Stripe outcome object.
+ */
+export function isStripeExcessiveRetryReason(reason: string | null | undefined): boolean {
+  return reason === STRIPE_EXCESSIVE_RETRY_OUTCOME_REASON;
+}
+
+/**
  * True when the PI's latest charge indicates Stripe blocked due to prior declines / excessive retries.
  */
 export function paymentIntentRequiresDifferentMethodFromExpanded(pi: Stripe.PaymentIntent): boolean {

@@ -33,8 +33,15 @@ interface UsePrizeBuildTrackingArgs {
  * so a fast bouncer is still captured. Counts are CUMULATIVE, and the server `$set`s them, so a
  * double flush (debounce landing and then `pagehide`) is idempotent.
  *
- * Sends nothing until the visitor has actually switched something — an untouched page already
- * has a correct visit row and a zero-switch write would be pure noise.
+ * EVERY visitor with a resolved build is reported, touched or not (F-018) — an untouched
+ * visitor sends once at unload with both counters at 0 and `interacted: false`. That is what
+ * keeps `builders` and `signups` counting the same population; gating on interaction let
+ * `signups / builders` exceed 100%.
+ *
+ * (This paragraph previously said the opposite — "sends nothing until the visitor has actually
+ * switched something" — which survived the F-018 fix below it and described behaviour the code
+ * had already stopped having. It is the reason `builders` is exposure rather than engagement,
+ * so getting it wrong here misreads the whole Built-prize table.)
  *
  * Lives in a hook, not in `PrizeShowcase`, because components must not call APIs
  * (CLAUDE.md layering).

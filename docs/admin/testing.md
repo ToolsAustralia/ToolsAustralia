@@ -9,9 +9,14 @@
 | `npm run test:recover-stranded-past-due-policy` | `src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts` | pure helpers for stranded invoice recovery: idempotency keys, eligibility, draft-picking, 24h lock |
 | `npm run test:force-charge-policy` | `src/server/admin/__tests__/forceChargePastDuePolicy.test.ts` | pure helpers for force-charge past-due flow: idempotency key, target picker, period-paid guard, 24h success lock |
 | `npm run test:charge-or-recover-policy` | `src/server/admin/__tests__/chargeOrRecoverPolicy.test.ts` | Pure decision function — open-but-dead invoices route to recover; live opens route to pay. |
+| `npm run test:receipts` | `src/services/admin/__tests__/receipts.test.ts` | Receipts ledger pure logic: `classifyReceiptCategory` (every packageType, the `subscription_cycle` renewal case, the `additional-` split, missing-`packageId` parity with the Mongo `$not` clause); a **lockstep assertion against `classifyAcquisitionCategory`** proving renewals are the ONLY divergence — the thing that makes "Receipts − dashboard == renewals" true; `stripeDashboardUrl` for `pi_` / `invoice_in_` / `cus_` in **both** live and test mode, plus its refusal to guess an unknown prefix and its fail-safe-to-test mode resolution; `deriveReceiptRefund` (none / full / partial, cents→dollars conversion, over-refund clamp, no-payment-id); and CSV shape + quote escaping. |
 | `npm run test:cancellation-analytics` | `src/services/admin/__tests__/cancellationFlowAnalytics.test.ts` | `summarizeCancellationEvents` pure shaper: reason shares, funnel (incl. abandoned = in_progress + >1h), save rate, offers-accepted, past-due exclusion, 90-day retention split (matured vs pending), **per-offer retention split `retention90ByOffer` (Task 21 — same matured/pending cutoff, per-offer totals reconcile with overall, empty-array zeroed guard)**, divide-by-zero guards (empty array, 0-denom save rate) |
 
-`charge-past-due-totals.ts`, `recoverStrandedPastDuePolicy.ts`, `forceChargePastDuePolicy.ts`, `chargeOrRecoverPolicy.ts`, and `cancellationFlowAnalytics.ts`'s `summarizeCancellationEvents` are Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed.
+`charge-past-due-totals.ts`, `recoverStrandedPastDuePolicy.ts`, `forceChargePastDuePolicy.ts`, `chargeOrRecoverPolicy.ts`, and `cancellationFlowAnalytics.ts`'s `summarizeCancellationEvents` are Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed. So is `test:receipts`: its subject (`src/utils/admin/receipts.ts` + `src/utils/billing/stripeDashboardUrl.ts`) is the deliberately pure half of the Receipts feature, split out so the client can import it without bundling Mongoose — which also makes it unit-testable without a database.
+
+## Receipts reconciliation (live data)
+
+`npm run verify:receipts-reconciliation[:prod]` (`scripts/verify-receipts-reconciliation.ts`) is the Receipts ledger's real acceptance test and is **read-only** — safe against production. It proves Receipts net == `aggregateNetRevenueSum` exactly, that the gap to `buildByCategory`'s acquisition total is exactly the renewals total, and that all five shared categories agree to the cent. Exit 0 = reconciled, 1 = a mismatch (a classifier or query bug), 2 = the run itself failed. Unlike the unit tests it needs a live connection (`.env.local`, or `.env.production` via `:prod`). Latest figures: [receipts.md § Reconciliation](./receipts.md#reconciliation--the-real-acceptance-test).
 
 ## Dashboard stats snapshot tests
 
@@ -30,10 +35,10 @@ The first three are pure (no Mongo, no env vars) — run with just `tsx`, as is 
 | npm script | file | covers |
 |---|---|---|
 | `npm run find:stuck-paused-users` | `scripts/find-stuck-paused-users.ts` | CSV export of `past_due` users whose current Stripe sub has no chargeable invoice; accepts `--limit=N` and `--include-orphans` |
-| `npm run test:force-charge:dry` | `scripts/test-force-charge.ts` | dry-run force-charge against a single user; accepts `--email=<addr>` or `--customer=<cus_id>` |
-| `npm run test:force-charge:live` | `scripts/test-force-charge.ts --live` | live force-charge execution; requires `--email=` or `--customer=` plus `--admin-email=<admin's email>` |
-| `npm run test:recover-stranded:dry` | `scripts/test-recover-stranded-past-due.ts` | Resolves a user by email/customer, scans open invoices for a stranded candidate, prints eligibility. No writes. |
-| `npm run test:recover-stranded:live` | `scripts/test-recover-stranded-past-due.ts --live` | Runs the full void → finalize draft → pay flow against a real user. Requires `--admin-email=`. Bypasses the 6h recovery lock so devs can re-run quickly during testing. |
+| `npm run ops:force-charge:dry` | `scripts/test-force-charge.ts` | dry-run force-charge against a single user; accepts `--email=<addr>` or `--customer=<cus_id>` |
+| `npm run ops:force-charge:live` | `scripts/test-force-charge.ts --live` | live force-charge execution; requires `--email=` or `--customer=` plus `--admin-email=<admin's email>` |
+| `npm run ops:recover-stranded:dry` | `scripts/test-recover-stranded-past-due.ts` | Resolves a user by email/customer, scans open invoices for a stranded candidate, prints eligibility. No writes. |
+| `npm run ops:recover-stranded:live` | `scripts/test-recover-stranded-past-due.ts --live` | Runs the full void → finalize draft → pay flow against a real user. Requires `--admin-email=`. Bypasses the 6h recovery lock so devs can re-run quickly during testing. |
 
 Both scripts load `.env.local` via dotenv and exit with an error if `MONGODB_URI` or `STRIPE_SECRET_KEY` are missing.
 

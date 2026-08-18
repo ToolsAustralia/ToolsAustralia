@@ -13,11 +13,11 @@
 
 | Path | Schedule (UTC) | `maxDuration` | Purpose |
 |---|---|---|---|
-| `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *` and `0 15 * * *` | 300s | Re-upserts 90-day sliding window of `DashboardStatsDailySnapshot` rows. Idempotent. Second fire heals first-run failures. |
+| `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *`, `0 15 * * *` **and `20 3 * * *`** | 300s | Re-upserts 90-day sliding window of `DashboardStatsDailySnapshot` rows. Idempotent. Second fire heals first-run failures. **The third (03:20 UTC) fire is an ORDERING fix, not redundancy** — it runs after `sync-tiktok-ads` (02:45 UTC) so the day just closed is re-derived from TikTok's settled figures. See the ordering note below. |
 | `/api/cron/cancellation-retention-resume` | `0 16 * * *` | 300s | Backstop for the `paused` retention-pause state (flips `active→paused` at `pausedFrom`; **payment-gated** restore `paused→active` when Stripe has resumed — only restores to `active` on a confirmed PAID resume invoice, mirrors `past_due`/`unpaid`) + clears stale `pauseReason="retention"` metadata after the pause window (next cycle boundary) elapses. Webhook is the primary driver; this catches missed events. See [architecture.md](./architecture.md#vercel-cron-schedules). |
 | `/api/cron/cancellation-retention-maturity` | `0 17 * * *` | 300s | Matures saved cancellation-flow events ≥90 days old: sets `retention90` to `retained`/`churned` based on the member's CURRENT subscription state. Read-only on user/subscription. Idempotent. See [architecture.md](./architecture.md#vercel-cron-schedules). |
 | `/api/cron/reconcile-major-draw-entries` | `30 16 * * *` | 300s | Self-heals membership renewals that failed to credit the active `MajorDraw` (the swallowed-`addToMajorDraw` bug). Delegates to [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts). Heals only confirmed gaps (latest in-window renewal has empty `drawGrants` + active sub + not refunded + draw < actual grant), idempotent. Runs after the ~14:00–15:00 UTC anchor-billing spike. See `docs/draws/gotchas.md`. |
-| `/api/cron/sync-tiktok-ads` | `45 2 * * *` | 300s | Nightly re-sync of a trailing 8-day window of the **full** TikTok spend-by-URL pipeline — insights → ad→landing-URL destinations → per-URL daily aggregates (delegates to `runSpendByUrlSync`; the TikTok analogue of `sync-meta-ads`). Bearer `CRON_SECRET` gate. No-ops (`200 { skipped: true, reason: "env" }`) when the TikTok Marketing-API env (`TIKTOK_ADVERTISER_ID` / `TIKTOK_MARKETING_ACCESS_TOKEN`) is unset. See below. |
+| `/api/cron/sync-tiktok-ads` | `0 * * * *` + `59 12,13 * * *` (gated to Sydney-local 3-hourly slots + 23:59, **as of 2026-08-11**; was `45 2 * * *` nightly) | 300s | 3-hourly re-sync of a trailing 8-day window of the **full** TikTok spend-by-URL pipeline — insights → ad→landing-URL destinations → per-URL daily aggregates (delegates to `runSpendByUrlSync`; the TikTok analogue of `sync-meta-ads`). Bearer `CRON_SECRET` gate. No-ops (`200 { skipped: true, reason: "env" }`) when the TikTok Marketing-API env (`TIKTOK_ADVERTISER_ID` / `TIKTOK_MARKETING_ACCESS_TOKEN`) is unset. See below. |
 
 See [architecture.md](./architecture.md#vercel-cron-schedules) for the full cron table.
 
@@ -150,5 +150,26 @@ Runs `runMetaSpendByUrlSync` over a trailing 7-day window so the admin Prize-per
 ## `/api/cron/sync-tiktok-ads` (2026-07-16) — Nightly TikTok ad-insights sync
 
 `GET /api/cron/sync-tiktok-ads` — `src/app/api/cron/sync-tiktok-ads/route.ts`. Scheduled `45 2 * * *` (`maxDuration: 300s`). The TikTok analogue of `sync-meta-ads`: re-pulls a trailing 8-day window (`since = now - 7d`, `until = now`, `Australia/Sydney`-formatted) and runs the **full spend-by-URL pipeline** via `runSpendByUrlSync(tiktokSpendByUrlDescriptor(), …)` — insights into `TikTokAdInsightsDaily`, then ad→landing-URL destinations into `AdDestination`, then the per-URL daily rebuild into `LandingPageMetricsDaily`. The wide re-pull captures TikTok's later revisions to recent days.
+
+> **⚠️ ORDERING INVARIANT (2026-08-11): `dashboard-stats-daily-snapshot` must run AFTER this.**
+> An AEST day ends at 14:00 UTC and the snapshot fires at 14:00/15:00 UTC — but this sync does
+> not run until **02:45 UTC the next day**, ~12¾ hours later, and TikTok keeps attributing
+> conversions well past midnight (these ad sets are 7-day-click / 1-day-view). So the 14:00
+> snapshot always captured TikTok **mid-attribution** and froze a partial number, which the
+> overview Advertising card then showed as "Yesterday".
+>
+> Measured on production for AEST 2026-08-10 — the snapshot said spend **$386.82** / revenue
+> **$40.00** / ROAS **0.103**, while the actual settled TikTok data was **$410.93** / **$90.00** /
+> **0.219** (an exact match to TikTok Ads Manager, per ad set). Every OLDER day matched exactly;
+> only the freshest one was short, which is what made this invisible — the history looked right.
+>
+> Fixed by adding a third `dashboard-stats-daily-snapshot` fire at **`20 3 * * *`** (35 min after
+> this sync starts; `maxDuration` is 300s). Safe because that write is an idempotent 90-day
+> sliding window whose `mergeAdChannels` prefers a successful fetch and only preserves the stored
+> value when a provider *errors*.
+>
+> **If you reschedule this cron, reschedule the snapshot with it.** Do NOT instead move this sync
+> earlier: before 14:00 UTC the AEST day has not closed, so an earlier sync would record a
+> genuinely incomplete day rather than a settled one. Later is the only correct direction.
 
 **It ran insights-only until 2026-07-29**, which meant `LandingPageMetricsDaily` stayed permanently empty for TikTok in production: the Ad Spend drill-down and Prize Performance read the rollup rather than the raw insights, so TikTok rendered `$0` everywhere with no error anywhere. The pipeline is now shared with Meta, so the two cannot drift again. The response gained `destinationsUpserted` / `destinationCoverage` / `aggregateRowsWritten` in its log line; sub-80% destination coverage `console.error`s (spend filed under `unknown://tiktok-ad/<id>` reaches no `/promotions` page). Auth: `Authorization: Bearer ${CRON_SECRET}` (skipped when `CRON_SECRET` is unset, local dev). Returns `200 { ok: false, skipped: true, reason: "env" }` when `isTikTokAdInsightsConfigured()` is false (TikTok Marketing-API creds `TIKTOK_ADVERTISER_ID` / `TIKTOK_MARKETING_ACCESS_TOKEN` absent), else `{ ok: true, rowsUpserted, adIds, durationMs }`. **Status recording (2026-07-24, panel F-002):** every run upserts the single `TikTokSyncRun` doc (`recordTikTokSyncRun` — outcome ok/error + TikTok's errorCode/errorMessage from `TikTokReportError` + window + duration; best-effort, never throws) so the admin UI can render a truthful "failing since…" state; API failures still return `500` (Vercel cron monitoring stays red). **Metric-name tripwire (panel F-005):** when a successful sync's window totals show clicks but zero conversions AND zero revenue (`metricNamesSuspect`), the route logs `WARNING metric-names-suspect` and adds `warning: "metric-names-suspect"` to the JSON — the signature of the assumed metric names not matching this account, which would otherwise persist as confident zeros. The contract (throw-on-failure + the tripwire) is pinned by `npm run test:tiktok-sync-contract`. **Account-assumption guard (panel F-006):** after a successful sync the route calls `checkTikTokAccountAssumptions()` and, on a mismatch, logs it and adds `assumptionsWarning` to the JSON — the sync stores spend as AUD cents and buckets hours as Australia/Sydney, so a currency or reporting-timezone change would silently corrupt every figure. Best-effort and post-sync: it needs a scope the report call doesn't, and must never block or fail the sync. **History/backfill:** the cron only reaches 8 days back — anything older is captured once via `npm run seed:tiktok-insights -- --days=N` (`scripts/seed-tiktok-insights.ts`, clone of `seed-meta-insights.ts`; `:dry` variant fetches + reports without writing and prints the live `raw` metric keys for the F-005 metric-name check). Run `--days=60` on token day.

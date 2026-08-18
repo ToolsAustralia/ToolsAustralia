@@ -31,6 +31,12 @@ const eslintConfig = [
       "internal-norm/norm-must-import-service": "error",
       // loadStripe/getStripePromise must not run at module scope — see src/lib/stripe-client.ts.
       "internal-norm/no-eager-stripe": "error",
+      // WARN, not error, deliberately: 57 pre-existing hand-rolled locks remain (Header,
+      // AdminPage, RewardsFloatingWidget, WinnersTestimony, the */Shell.tsx family, the admin
+      // filter drawers). The rule earns its keep by flagging NEW ones in review and in-editor;
+      // flipping it to "error" is the last step of the migration, not the first. Sweeping 57
+      // call sites in one unverifiable pass is the blast radius this rule exists to argue against.
+      "internal-norm/no-adhoc-scroll-lock": "warn",
       // Server-only Mongoose imports must never land in a "use client" component (runtime crash / bundle bloat).
       "local/no-models-in-client": "error",
     },

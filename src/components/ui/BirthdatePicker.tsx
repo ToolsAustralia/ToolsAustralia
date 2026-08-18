@@ -229,7 +229,7 @@ export default function BirthdatePicker({
         ) : (
           <Calendar className="w-4 h-4 text-gray-400 dark:text-neutral-500 flex-shrink-0" />
         )}
-        <span className={selectedDate ? "" : "text-gray-500 dark:text-neutral-400"}>
+        <span data-cs-mask className={selectedDate ? "" : "text-gray-500 dark:text-neutral-400"}>
           {displayLabel}
         </span>
         <ChevronDown

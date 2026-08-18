@@ -18,6 +18,7 @@
 
 import React from "react";
 import { X, ArrowUp, ArrowDown, ArrowRight } from "lucide-react";
+import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import { DiscountUnlockRoutes } from "./DiscountPrimitives";
 import {
   DISCOUNT_LEVELS,
@@ -62,11 +63,13 @@ export default function DiscountAccessModal({
   // misrepresent what the member is being shown.
   React.useEffect(() => setTarget(startLevel), [startLevel]);
 
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // Scroll lock + focus trap + Escape + focus restore — replaces the local Escape-only
+  // effect. Matters most here for the keyboard path: this modal steps a ladder up and down,
+  // so without focus restore a member who closes it lands on <body> and has to tab from the
+  // top of the document back to the meter CTA they opened it from.
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  useScrollLock(true);
+  useModalA11y(true, panelRef, onClose);
 
   const up = target !== null ? (DISCOUNT_LEVELS.find((p) => p > target) ?? null) : null;
   const down =
@@ -113,10 +116,11 @@ export default function DiscountAccessModal({
       />
 
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="ta-dc-popup ta-dc-panel ta-dc-panel-gold ta-dc-noscroll relative flex flex-col gap-3.5 overflow-auto"
+        className="ta-dc-popup ta-dc-panel ta-dc-panel-gold ta-dc-noscroll relative flex flex-col gap-3.5 overflow-auto overscroll-contain"
         style={{
           padding: 16,
           background: "linear-gradient(150deg,#19150f,#0b0a08 58%,#15101a)",

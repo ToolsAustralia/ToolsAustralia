@@ -217,9 +217,23 @@ export default function ChatbotCostManagement() {
   const cost = data?.cost;
   const usage = data?.usage;
 
-  // Active provider — show the value we're switching TO while the PATCH is in
-  // flight (optimistic), otherwise the server truth from config.
-  const activeProvider: ChatProvider = config?.activeProvider ?? "anthropic";
+  // Active provider — read from the DEDICATED settings query, NOT from the
+  // cost-analytics `config`.
+  //
+  // `/api/admin/chatbot-cost` responds `Cache-Control: private, max-age=300`.
+  // Invalidating its query after the PATCH does trigger a refetch, but fetch()
+  // consults the browser HTTP cache first, so for up to five minutes it returns
+  // the OLD body — and because `isPending` clears as soon as the PATCH resolves,
+  // the optimistic value falls straight back to that stale provider. The switch
+  // visibly snapped back to Claude Haiku while the DB (and the actual server-side
+  // resolution, which reads ChatSettings per request with no cache) had already
+  // moved to Gemini. The backend was right; this display was lying.
+  //
+  // `/api/admin/chatbot-settings` sets no cache header, so it always reflects
+  // the DB. The Cobber availability toggle below already reads it for exactly
+  // this reason — the provider toggle simply never got the same treatment.
+  const activeProvider: ChatProvider =
+    settings?.activeProvider ?? config?.activeProvider ?? "anthropic";
   const displayedProvider: ChatProvider =
     setProvider.isPending && setProvider.variables
       ? setProvider.variables

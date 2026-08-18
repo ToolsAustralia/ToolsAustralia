@@ -173,7 +173,7 @@ export default function DashboardHero({
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-semibold" style={{ color: soft }}>{isGuest ? "Welcome," : `${greeting(hour)},`}</div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
-            <span className="font-poppins text-2xl font-extrabold">{name}</span>
+            <span data-cs-mask className="font-poppins text-2xl font-extrabold">{name}</span>
             {profileWarnEl}
             {acct !== "onetime" && ChipEl}
           </div>
@@ -189,7 +189,7 @@ export default function DashboardHero({
           <div className="min-w-0 flex-1">
             <div className="text-xs font-semibold" style={{ color: soft }}>{isGuest ? "Welcome," : `${greeting(hour)},`}</div>
             <div className="mt-1 flex items-center gap-1.5">
-              <span className="font-poppins text-[19px] font-extrabold">{name}</span>
+              <span data-cs-mask className="font-poppins text-[19px] font-extrabold">{name}</span>
               {profileWarnEl}
             </div>
           </div>

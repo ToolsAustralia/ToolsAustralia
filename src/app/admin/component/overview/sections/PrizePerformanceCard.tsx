@@ -240,6 +240,63 @@ export default function PrizePerformanceCard({
   /** True when at least one visible row actually mixes platforms — drives the ROAS caveat. */
   const hasBlendedRow = rows.some((r) => (r.platforms as SpendByUrlPlatform[]).length > 1);
 
+  /**
+   * Column totals for the footer.
+   *
+   * ROAS is recomputed as `total revenue ÷ total spend`, NOT averaged across the rows —
+   * averaging per-prize ROAS would weight an $11 prize the same as a $276 one and produce a
+   * number that matches nothing. Computed this way the footer reconciles exactly with the ad
+   * platform's own account-level figure, which is the whole point of showing it.
+   */
+  const totals = useMemo(() => {
+    const spend = rows.reduce((sum, r) => sum + r.spend, 0);
+    const revenue = rows.reduce((sum, r) => sum + r.revenue, 0);
+    const conversions = rows.reduce((sum, r) => sum + r.conversions, 0);
+    return { spend, revenue, conversions, roas: spend > 0 ? revenue / spend : 0 };
+  }, [rows]);
+
+  /**
+   * Every landing URL behind the visible rows, per platform — what the Total row drills into.
+   *
+   * Deduped with a Set because two prizes can legitimately advertise the same URL (a combo
+   * page such as `/promotions/milwaukee-milwaukee` appears under more than one brand). Passing
+   * it twice would make the modal fetch and then double-count that URL's ads, so the drill-down
+   * would disagree with the Total row that opened it.
+   *
+   * Built from `rows`, NOT from the full catalogue, so it always matches whatever the platform
+   * chips are currently showing.
+   */
+  const allUrlsByPlatform = useMemo(() => {
+    const meta = new Set<string>();
+    const tiktok = new Set<string>();
+    for (const r of rows) {
+      const byPlatform = r.canonicalUrlsByPlatform as Record<SpendByUrlPlatform, string[]>;
+      for (const u of byPlatform.meta ?? []) meta.add(u);
+      for (const u of byPlatform.tiktok ?? []) tiktok.add(u);
+    }
+    return { meta: [...meta], tiktok: [...tiktok] } as Record<SpendByUrlPlatform, string[]>;
+  }, [rows]);
+
+  /**
+   * Which platform the Total drill-down opens on. Follows the chips when one is selected;
+   * falls back to Meta under "All platforms" for the same reason a mixed row does — ad ids
+   * are only unique WITHIN a platform, so a per-ad tree has to name one.
+   */
+  const totalDrilldownPlatform: SpendByUrlPlatform =
+    platformFilter === "tiktok" ? "tiktok" : "meta";
+
+  const openTotalDrilldown = () => {
+    if (rows.length === 0) return;
+    setSelectedBrand({
+      brand: platformFilter === "all" ? "All prizes" : `All prizes — ${platformFilter === "tiktok" ? "TikTok" : "Meta"}`,
+      // `slug` is unused by the modal (it takes `_slug`), but the field is required by the
+      // state shape; a sentinel makes it obvious in a debugger that this is not one brand.
+      slug: "__all__",
+      canonicalUrlsByPlatform: allUrlsByPlatform,
+      platform: totalDrilldownPlatform,
+    });
+  };
+
   const [selectedBrand, setSelectedBrand] = useState<{
     brand: string;
     slug: string;
@@ -376,6 +433,50 @@ export default function PrizePerformanceCard({
             columns={COLUMNS}
             rows={rows}
             renderCell={renderCell}
+            footer={
+              <tr
+                onClick={openTotalDrilldown}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault(); // Space must activate, not scroll the page
+                    openTotalDrilldown();
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label="Ad breakdown across all prizes"
+                className="border-t border-neutral-200 dark:border-neutral-700 font-semibold cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400"
+              >
+                <td className="py-2.5 px-2 text-left text-xs sm:text-sm text-neutral-700 dark:text-neutral-300">
+                  Total
+                  <span className="ml-1.5 font-normal text-2xs text-neutral-400 dark:text-neutral-500">
+                    all ads
+                  </span>
+                </td>
+                <td className="py-2.5 px-2 text-right">
+                  <span
+                    className={`num text-xs sm:text-sm font-semibold ${
+                      totals.roas >= 3
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-amber-600 dark:text-amber-500"
+                    }`}
+                  >
+                    {totals.roas.toFixed(2)}x
+                  </span>
+                </td>
+                <td className="py-2.5 px-2 text-right">
+                  <span className="num text-xs sm:text-sm">{fmtCompact(totals.spend)}</span>
+                </td>
+                <td className="py-2.5 px-2 text-right">
+                  <span className="num text-xs sm:text-sm">{fmtCompact(totals.revenue)}</span>
+                </td>
+                <td className="py-2.5 px-2 text-right">
+                  <span className="num text-xs sm:text-sm">
+                    {formatNumber(totals.conversions)}
+                  </span>
+                </td>
+              </tr>
+            }
             onRowClick={(row) => {
               const platforms = row.platforms as SpendByUrlPlatform[];
               setSelectedBrand({

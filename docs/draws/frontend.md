@@ -5,6 +5,7 @@
 | Path | Purpose |
 |---|---|
 | `src/app/(site)/major-draw/page.tsx` | Current major draw landing — hero, countdown, entry CTA |
+| `src/app/(site)/mini-draws/` | Mini-draw browse + filter — hero, sticky mobile control bar (search / filter / sort + brand chip rail) or desktop sidebar, card grid, `HowMiniDrawsWork`, `ReadyToEnter` (redesigned 2026-08-12) |
 | `src/app/(site)/mini-draws/[id]/` | Individual mini-draw detail page |
 | `src/app/(site)/mini-draw-success/` | Post-purchase success for mini-draw entry |
 | `src/app/(site)/draw-results/` | Draw Results & Winners — hero, the register (all/major/mini), the wall (winners-board grid), how-chosen, CTA (redesigned 2026-06-10) |
@@ -17,6 +18,9 @@
 | `src/app/(site)/mini-draws/[id]/components/MiniDrawCountdown.tsx` | Countdown timer to mini-draw end |
 | `src/app/(site)/mini-draws/[id]/components/ShareButton.tsx` | Social-share for mini-draw |
 | `src/app/(site)/mini-draws/[id]/components/MiniDrawImageGallery.tsx` | Prize-image carousel: main slide + thumbnail strip + pagination dots + nav chevrons + image counter, with click-to-fullscreen via `FullscreenImageViewer`. |
+| `src/app/(site)/mini-draws/components/ReadyToEnter.tsx` | Closing block on `/mini-draws` — replaced `MembershipSection` there 2026-08-12. Explains the order of operations (pick a draw → choose a pack on that draw) and opens the pack catalogue with **no draw bound**. Deliberately NOT a purchasable grid. |
+| `src/components/features/MiniDrawPackTiles.tsx` | Shared light pack tiles (`MiniPackTile`, `BigPackRow`), the `PackTrustRow`, and the full "Entry packages" sheet (`MiniDrawPacksSheet`). One source for the three surfaces that render the two pack tiers. |
+| `src/components/features/MiniDrawQuickEnterSheet.tsx` | Browse-page "buy without leaving the list" sheet, opened by a card's **Enter draw** CTA. Mounted per draw so `useMiniDrawPurchase` is always keyed to a real id. |
 | _other major-draw components_ | _TODO: enumerate from src/components/ that map to draws (per the manifest, draws-domain components are not pulled out separately — they live near pages)._ |
 
 ### MiniDrawImageGallery
@@ -196,3 +200,117 @@ Components in this domain were touched by the sitewide `font-'[Poppins]'` → `f
 codemod (`npm run sweep:font-poppins`). Their Poppins-classed text now renders **real Poppins**
 instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
+
+## Mini-draws redesign — browse + detail (2026-08-12)
+
+Both public mini-draw surfaces were rebuilt from a design handoff. Three problems it set out to fix,
+and what replaced each:
+
+| Problem | Fix |
+|---|---|
+| Mobile filtering was buried in a 320px left drawer with a 13-item scrolling list | Sticky control bar (search + filter + sort) with a horizontal **brand chip rail**, plus a filter **bottom sheet** whose brand list is a 2-column grid |
+| The pack picker was 8 neon-glow tiles ~76px wide in a 4-column grid | Two clearly-labelled tiers of clean light cards — see [shared-ui/patterns.md](../shared-ui/patterns.md#minidrawpackages--two-light-tiers-rewritten-2026-08-12) |
+| `MembershipSection` closed both pages — it sells **major-draw** entries, which do nothing here | Removed from both; `/mini-draws` gets `ReadyToEnter` instead, `/mini-draws/[id]` ends at Related draws |
+
+### Browse (`/mini-draws`)
+
+- **Sticky control bar** (below `lg`) pinned at `top-[var(--app-header-h)]`: 42px search, 42px filter
+  button with a live selected-brand count badge, 42px sort button, then the chip rail
+  (`All brands` → Sidchrome, Milwaukee, Makita, KINCROME, DEWALT, Knipex → a dashed `+ More` that
+  opens the filter sheet). `All brands` renders "on" when no brand is selected.
+- **Desktop (`lg+`)** keeps the sidebar (`MiniDrawsFilters isMobile={false}`, sticky at `top-24`) plus
+  a control card with search, grid/list toggle and a 250px sort **dropdown** (a popover — it asserts
+  `aria-expanded`, so it must NOT lock scroll; it closes on outside pointer-down, not `useModalA11y`).
+- **Sheets** — filter, sort and quick-enter all use [`SheetShell`](../../src/components/ui/SheetShell.tsx)
+  rather than a fourth hand-rolled overlay, so scroll-lock, focus trap, Escape and the portal come from
+  one place. `MiniDrawsFilters` in mobile mode returns a **fragment** (pinned search + scrolling grid) so
+  the sheet's own header and sticky `Show {n} draws` footer are siblings in the panel's flex column —
+  the footer count is live and filter-aware, and the button only dismisses (selection already applied).
+- **Card CTA divergence.** `MiniDrawCard` gained an optional `onEnter`: the image and title still
+  navigate to `/mini-draws/{id}`, but the CTA opens `MiniDrawQuickEnterSheet` for that draw. Only the
+  browse grid passes it — the homepage grid, `RelatedMiniDraws` and the dashboard keep their existing
+  behaviour. `viewMode` also gained a third value, `"compact"`, used by `RelatedMiniDraws`.
+
+### Detail (`/mini-draws/[id]`)
+
+- **Key facts strip** (mobile only) under the hero: `$1 / Per entry`, `{n} / Entries left`,
+  `{pct}% / Filled`. The `$1 Entry` pill stays desktop-only — on mobile the sticky bar carries the price.
+- **Sticky gallery column** on `lg+`. The gallery sits in a wrapper `div` that stretches to the grid row
+  height, with `sticky top-24` on an inner div; `sticky` applied directly to a grid item collapses to
+  content height and never engages. The right column's old `lg:sticky lg:top-28` is gone — two sticky
+  columns fight.
+- **Sticky "Enter draw" bar** (mobile only) is owned by `MiniDrawPackages`, portaled to `<body>`, and
+  reflects the **currently selected pack**; tapping it opens that pack's detail sheet, not the list. The
+  page container carries `pb-[78px]` so it never covers the last card. It opts into
+  `data-floating-widget` so [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
+  lifts the Cobber launcher above it.
+- **Pack card first on both breakpoints.** Desktop previously ordered "About this prize" above the
+  buy card via `lg:order-1/2`; those overrides are removed.
+- **Winners & rules** is no longer wrapped in `CollapsibleSection` — the tabs are their own affordance.
+  The empty-winners "Get your entries" link dispatches the `OPEN_MINI_DRAW_PACKS_EVENT` window event
+  (exported from `MiniDrawPackages`), the same decoupling `useOpenMembershipModalListener` uses, so the
+  tabs never need a reference to the picker.
+
+### Copy corrections shipped with it
+
+`MiniDrawTabs` listed **"Buy a mini pack to receive free entries (membership required)"** under Entry
+methods. Mini-draw entry is **package-only** — no membership is required, and members' free entries go
+to the *major* draws. Now reads "Buy a mini pack to receive free entries". Everything customer-facing
+here follows CLAUDE.md §11: the purchasable unit is the pack, entries are a free inclusion, and no
+odds/chance framing appears anywhere on either page.
+
+### PrizeImageViewer — fullscreen zoom/pan viewer (2026-08-13)
+
+[`src/components/ui/PrizeImageViewer.tsx`](../../src/components/ui/PrizeImageViewer.tsx)
+replaces the shared `FullscreenImageViewer` on the mini-draw detail page. The older shared
+component is a plain swipe-through lightbox and stays the right tool for the winners strips in
+`MembershipModal`; it has no zoom, and zoom is the entire point here — a buyer is deciding
+whether to spend money on a tool they can only see in a photo, so they need to get close to the
+finish, the display and the fittings.
+
+**It moved out of this route on 2026-08-13** (was
+`src/app/(site)/mini-draws/[id]/components/PrizeImageViewer.tsx`). The major-draw prize builder
+now opens the same viewer over its combination + gallery, and a route-private folder was never
+an importable home for shared UI — importing app-route internals into `src/components` is the
+layering violation `.cursorrules` forbids. Behaviour is unchanged for the mini-draw page; only
+the import path moved. See [promo/frontend.md](../promo/frontend.md) for the second caller.
+
+Opened by the expand button **or** by tapping/clicking the main gallery image (`cursor: zoom-in`).
+
+**Index is lifted.** The viewer takes `index` + `onIndexChange` rather than owning a copy, and
+`onIndexChange` calls `mainApi.scrollTo(i)` on the inline Embla. That keeps the two in sync in
+BOTH directions — swipe three images deep in the viewer, close it, and the inline gallery is on
+that image. Verified live: viewer 1/10 → swipe → 2/10 → close → inline gallery reads 2/10.
+
+**One pointer-event set drives every gesture** (`pointerdown`/`move`/`up`/`cancel` with
+`setPointerCapture`); direction resolves per drag by `|dy| > |dx|` so a diagonal commits cleanly
+to one axis:
+
+| Gesture | Behaviour |
+|---|---|
+| Tap (moved < 7px) | 1× → **2.5× centred on the tapped point** (`ox = (w/2 − px) × z`); zoomed → reset |
+| Drag while zoomed | Pan, clamped to `±((zoom − 1) × w / 2)` so the image can't leave the frame |
+| Horizontal drag at 1× | Live-tracks; commits to prev/next past **60px**, else springs back |
+| Vertical drag at 1× | Drag-to-dismiss; backdrop fades `.97 → .97 − min(.45, dy/420)`, commits past **110px** |
+| `←` `→` | Change image, **only at 1×** — while zoomed they'd swap the photo out from under a pan |
+| `+` `−` | Zoom in 0.75 steps, clamped 1×–4× |
+| `Esc` | Close (owned by `useModalA11y`, which also traps focus and restores it to the expand button) |
+
+Three implementation details that are load-bearing:
+
+1. **The measured box is an untransformed sizing div**, not the transformed one. Measuring the
+   scaled element means dividing the live `scale` back out of every pan delta and every
+   tap-zoom origin; a separate `inset-[…]` box that never transforms makes the maths exact.
+   The remaining `rect.width / offsetWidth` divisor covers an ancestor CSS transform, without
+   which panning drifts faster than the finger.
+2. **`touch-action: none` on the gesture surface**, or the browser claims the pan/swipe first.
+3. **The transform transition is disabled while `dragging`** — otherwise panning lags the finger
+   by the 280ms ease.
+
+Chrome is gradient overlays *on top of* the image (not layout rows) so the image gets the whole
+frame; both containers are `pointer-events: none` with `auto` on their controls, so a drag that
+starts on the gradient still reaches the stage. While zoomed the header/footer drop to
+`opacity: .25` on mobile and the arrows unmount entirely.
+
+`z-[9600]`: above the sticky buy bar (60), the header (40) and `SheetShell` (9500), still below
+`Z_INDEX.MODAL_BASE`. `useReducedMotion()` keeps the transforms and drops the transitions.

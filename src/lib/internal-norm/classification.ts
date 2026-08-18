@@ -39,6 +39,7 @@ import {
   NormPromoAnalyticsPageDetailSchema,
   NormPromoAnalyticsSummarySchema,
 } from "./schemas/promo-analytics";
+import { NormPartnerDiscountAnalyticsSummarySchema } from "./schemas/partner-discount-analytics";
 import {
   NormMetricsDebugSchema,
   NormUserMajorDrawComparisonSchema,
@@ -130,6 +131,7 @@ import {
   NormUsersRecoverPastDueInvoicePreviewSchema,
   NormUsersSearchSchema,
 } from "./schemas/users";
+import { NormReceiptsListSchema } from "./schemas/receipts";
 
 // "forbidden" is NOT a tier — endpoints not in the registry are simply unreachable.
 // Tier and Permission are orthogonal axes: tier = orchestration shape; permission = "is Norm allowed?".
@@ -701,7 +703,7 @@ export const NORM_ENDPOINTS = {
     path: "/v1/tiktok-ads/insights",
     method: "GET",
     summary:
-      "TikTok per-ad insights for a date range: per-ad spend + TikTok-reported conversions/revenue/ROAS + totals (empty until TikTok Marketing-API creds are set)",
+      "TikTok ad insights for a date range, grouped by `level` (campaign | adset | ad, default ad): spend + TikTok-reported conversions/revenue/ROAS + totals. Totals are identical at every level — only the row grouping changes. Empty until TikTok Marketing-API creds are set.",
     rateLimit: { perMinute: 10 },
     responseSchema: NormTikTokAdsInsightsSchema,
   },
@@ -1156,6 +1158,17 @@ export const NORM_ENDPOINTS = {
     responseSchema: NormPromoAnalyticsPageDetailSchema,
   },
 
+  // ─── Partner-discount page analytics (wired) ──────────────────────────
+  "partner-discount-analytics.summary": {
+    tier: "read",
+    requiredPermission: "pageAnalytics.view",
+    path: "/v1/partner-discount-analytics",
+    method: "GET",
+    summary:
+      "Partner-discount funnel per surface (public /discount vs the members' rewards catalogue): visitors, filter use, offer opens, locked-offer opens, access-seam reach (rate is over seamRendered, NOT visits), unlock clicks, portal hand-offs, empty searches, signups, conversions, revenue. Aggregate-only — no per-person field. Portal redemption is NOT included: the vendor sends no activity back, so the hand-off is the last observable step.",
+    responseSchema: NormPartnerDiscountAnalyticsSummarySchema,
+  },
+
   // ─── Promo — core (roadmap) ───────────────────────────────────────────
   "promo.active": {
     tier: "read",
@@ -1459,7 +1472,10 @@ export const NORM_ENDPOINTS = {
   },
   "users.get": {
     tier: "read",
-    requiredPermission: "users.view",
+    // Mirrors the admin route: the single-user record is `users.viewDetail`, a deeper read than
+    // the `users.view` roster. Norm reads bypass the per-permission grant, so this is
+    // documentation-of-record — but it must not drift from the admin gate (CLAUDE.md rule 10).
+    requiredPermission: "users.viewDetail",
     path: "/v1/users/:id",
     method: "GET",
     summary: "Single-user detail with statistics counts + membership signals: subscription (incl. cancelledAt, nextRenewalEntries — what the next renewal grants — and renewalLandsInCurrentDraw — whether that grant lands in the current draw or a future one) and partnerAccessRing (partner-catalogue access % + state). PII-safe: firstName + state only; email/lastName/mobile/address/savedPaymentMethods/orders array stripped",
@@ -1481,7 +1497,7 @@ export const NORM_ENDPOINTS = {
   },
   "users.deletion-summary": {
     tier: "read",
-    requiredPermission: "users.view",
+    requiredPermission: "users.viewDetail",
     path: "/v1/users/:id/deletion-summary",
     method: "GET",
     summary: "Counts-only preview of what would be deleted with a user (entry counts, payment-event count, winner-draw names) — no per-row PII",
@@ -1503,7 +1519,7 @@ export const NORM_ENDPOINTS = {
   },
   "users.charge-past-due.preview": {
     tier: "read",
-    requiredPermission: "users.view",
+    requiredPermission: "users.viewDetail",
     path: "/v1/users/:id/charge-past-due",
     method: "GET",
     summary: "Preview eligible past-due Stripe invoices for a single user (same eligibility rules as the bulk past-due job; no per-invoice email)",
@@ -1540,7 +1556,7 @@ export const NORM_ENDPOINTS = {
   },
   "users.payment-events.list": {
     tier: "read",
-    requiredPermission: "users.view",
+    requiredPermission: "users.viewDetail",
     path: "/v1/users/:id/payment-events",
     method: "GET",
     summary: "Paged payment events for one user with refund-match flag (route is user-scoped; no PII per row beyond the package metadata)",
@@ -1552,6 +1568,17 @@ export const NORM_ENDPOINTS = {
     path: "/v1/users/:id/payment-events/:eventId/reverse",
     method: "POST",
     summary: "Reverse a single payment event (refund-class money movement)",
+  },
+
+  // ─── Receipts (the revenue ledger) ────────────────────────────────────
+  "receipts.list": {
+    tier: "read",
+    requiredPermission: "receipts.view",
+    path: "/v1/receipts",
+    method: "GET",
+    summary:
+      "Paged ledger of every payment received in a date range, across memberships, packs, mini draws, upsells and shop orders, with per-row refund state and filter-wide totals net of refunds (PII-safe projection: firstName + opaque userId only)",
+    responseSchema: NormReceiptsListSchema,
   },
 
   // ─── Winners (wired get; update/delete roadmap) ───────────────────────
