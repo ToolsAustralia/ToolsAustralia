@@ -436,7 +436,8 @@
     "migrate:promo-analytics-cleanup:prod:dry": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production",
     "migrate:promo-analytics-cleanup:prod": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production --apply",
     "harvest:partner-instore-artwork": "tsx scripts/harvest-partner-instore-artwork.ts",
-    "test:shop-entries": "tsx src/utils/payment/__tests__/shop-entry-grant.test.ts"
+    "test:shop-entries": "tsx src/utils/payment/__tests__/shop-entry-grant.test.ts",
+    "test:fulfilment-export": "tsx src/services/shop/__tests__/fulfilment-export.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",

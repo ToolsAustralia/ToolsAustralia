@@ -157,3 +157,56 @@ persisted" would also pass on a schema with strict mode off.
 **Not covered, and listed in the phase-3 plan rather than claimed:** the end-to-end grant through
 `processPaymentBenefits`, webhook replay idempotency, the `already_processed` retry path, and
 refund reversal of a shop grant.
+
+## Manual fulfilment hand-off — CSV export (2026-08-17)
+
+Paid shop orders are handed to the print provider by **exporting a CSV and uploading it to their
+bulk screen**, not by an API call.
+
+**Why.** Their documented GraphQL API is enterprise-gated and unreachable on this account: our key
+authenticates (a bogus key 403s, ours gets past the gateway) but every path returns
+`404 Cannot POST /graphql`, and their own portal does not use it — it talks to Firestore. Their
+portal *does* have a working CSV upload. The owner chose the manual path rather than keep waiting
+on API access.
+
+The service boundary is the same one an API adapter would sit behind, so switching later changes
+`fulfilmentExport.ts` and not its callers.
+
+### Column names deliberately do not match their template
+
+Their upload screen has a **Field Mapping** step (`Product ID* → Select Field`, and so on), so the
+admin maps our headers to their fields once. That makes explicit, unambiguous headers
+(`product_id`, `address_line_1`, `postcode`) the right choice rather than guessing at their
+template's exact spelling — a guess would silently mis-map.
+
+### One row per item
+
+Their `Product ID` identifies a single garment, so a three-item order is three rows carrying the
+same order number and address. That is their template's shape, not a flattening bug.
+
+### `product_id` is the variant's GTIN
+
+Looked up from `Product.variants[].gtin` by the order line's `sku`. A variant with no GTIN still
+exports, with an empty cell, and is listed separately in `missingProductId` — withholding a paid
+order silently is worse than surfacing a row the admin must complete before upload.
+
+### Export and "mark submitted" are two steps, on purpose
+
+`GET /api/admin/shop/fulfilment` is **read-only** and never stamps anything.
+`POST` with `orderIds` sets `submittedAt`, which is what the export filter excludes on.
+
+Marking on download would hide a paid order from the next export whenever a download failed or was
+cancelled — a garment that silently never gets printed. The split trades that for a possible
+double upload if the admin forgets to mark, which is visible and recoverable. `submittedAt` is the
+guard against printing twice, and `markSubmitted` is idempotent because an admin will click twice.
+
+The POST is audited (`requirePermissionWithAudit`) since it is the record that a customer's order
+reached the printer.
+
+### Test
+
+`npm run test:fulfilment-export` — pure, no database. It covers the failure that does not throw:
+an unquoted comma in an address shifts every later column by one, so postcode lands in state and
+the parcel is misrouted. Also quote-doubling, embedded newlines, an empty GTIN never serialising
+as the string `undefined`, and the header surviving an empty export (their mapper needs the header
+row to offer field mapping at all).
