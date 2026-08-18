@@ -200,6 +200,33 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 
 > **Major-draw entries are NOT on `User`.** They were removed; the single source of truth is `MajorDraw.entries` ([User.ts:133,752](src/models/User.ts#L133)). See [BUSINESS.md §3](BUSINESS.md).
 
+**Merchandise is a fourth way a customer can hold entries (2026-08-17).** Buying an eligible shop
+item credits free entries into the **Major Draw only** — never a Mini Draw — under the source key
+`entriesBySource.shop`. What the customer receives is
+`includedEntries × quantity × the current one-time promo multiplier`; merchandise deliberately
+inherits the one-time pack multiplier so the two move together.
+
+Three customer-visible consequences worth knowing:
+
+- **Entries are granted to every buyer**, including SA/ACT residents and anyone whose birthdate we
+  do not hold. There is no eligibility check at point of sale — exclusion is applied by the draw
+  export when a winner is selected, exactly as it is for every other entry source. A customer in an
+  excluded state can therefore buy the garment and see the entries, and is excluded only from
+  winner selection.
+- **Returning one item from a multi-item order does not remove entries.** They are withdrawn only
+  if the whole order is refunded. Stated in `/terms` §3d, §5.2 and §17.
+- **An account is required to buy** — `Order.user` is mandatory, so there is no guest checkout in
+  the shop. A guest must register before paying, which is also what gives the entries somewhere to
+  attach.
+
+**Currently switched off.** Every product ships at `includedEntries: 0` pending a trade-promotion
+permit variation, and nothing renders on a product page at 0 — so no customer is promised entries
+until it is enabled.
+
+The order itself records `Order.entriesGranted`: **absent** means the grant has not run (in
+flight, or failed and awaiting the reconcile cron); **0** means it ran and the order was worth no
+entries. Support needs that distinction.
+
 ### 2f. Saved payment methods (PCI note)
 
 | Field | Type | Meaning | PII |
@@ -216,6 +243,12 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 | `partnerDiscountConsent` | object (opt, **no default**) | **New 2026-07-31.** The customer's recorded agreement to share their details with the rewards portal: `scopeVersion, acceptedAt, fields[]`. `fields[]` is what they actually **saw** when they agreed — the legal artefact. **Absent = never consented** (fail-closed); a `scopeVersion` older than the current one also re-prompts, which is how "we ask again if what we share changes" is enforced. Re-consent overwrites, so this is current state, not history. | — |
 | `referral` | subdoc (opt) | This user's code: `code` (unique sparse index), `successfulConversions` (def 0), `totalEntriesAwarded` (def 0) ([User.ts:224-228](src/models/User.ts#L224)) | — |
 | `affiliateReferral` | subdoc (opt) | Link to the Affiliate who referred this user: `affiliateId (ref Affiliate), affiliateCode, referredAt, firstPurchaseCompleted (def false), membershipTied (def false)` ([User.ts:232-238](src/models/User.ts#L232)) | — |
+
+**Shop discount (live 2026-08-17).** A member's tier carries a shop discount — Tradie 5%, Foreman
+10%, Boss 20% — resolved by `resolveShopDiscountPercent` and applied at checkout before shipping
+is assessed. It is not stored on `User`; it is derived from the active subscription tier at
+purchase time, so it follows upgrades, downgrades and lapses automatically. It was hidden from the
+tier benefit lists while the shop was pre-launch and is now shown.
 
 ### 2h. Attribution / marketing snapshot
 

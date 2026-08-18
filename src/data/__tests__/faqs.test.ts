@@ -156,7 +156,7 @@ function main() {
   // reads zero for everyone) and its editable profile copy (edits there never reach us).
   // Both were live to members with no grounded answer, so Cobber's nearest matches were the
   // TA rewards-points and TA profile entries — i.e. a confidently wrong answer.
-  assert.strictEqual(entries.length, 83, `Expected 83 FAQ entries, got ${entries.length}`);
+  assert.strictEqual(entries.length, 84, `Expected 84 FAQ entries, got ${entries.length}`);
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).

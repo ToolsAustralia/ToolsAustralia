@@ -138,7 +138,19 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "15",
       question: "Is the online shop available?",
       answer:
-        "Our member shop is coming soon. When it launches, members will receive a shop discount based on their tier — Tradie 5%, Foreman 10%, Boss 20%. We will announce the launch date to all members.",
+        "Yes — you can browse and buy from the shop at [/shop](/shop). Members get a discount based on tier: Tradie 5%, Foreman 10%, Boss 20%, applied automatically at checkout. Shipping is free on orders of $100 or more, otherwise a $10 flat rate. You'll need an account to check out, so your order and delivery details stay attached to you.",
+      category: "REWARDS",
+    },
+    {
+      id: "84",
+      question: "Do I get free entries when I buy merchandise?",
+      // Deliberately conditional ("where an item includes"). Entries on merchandise
+      // are gated on a trade-promotion permit variation and ship switched off, so
+      // this must read true BOTH before and after they are enabled. Do not rewrite
+      // it into a flat promise until the permit is confirmed — and if the answer is
+      // no, this entry stays correct as written.
+      answer:
+        "Where a shop item includes free entries, the number is shown right on the product page before you buy, and again on your order confirmation. The entries are a free inclusion with the item — you're buying the product itself, never the entries. Any included entries go into the monthly major prize draw and are credited as soon as your payment clears. If a promotion is running, the product page shows the boosted total before you check out. See [/terms](/terms) for the full conditions.",
       category: "REWARDS",
     },
 

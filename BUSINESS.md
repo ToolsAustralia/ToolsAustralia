@@ -33,7 +33,29 @@ There are **three families** of packages:
 | Foreman | $40/mo  | 40              | 75% of catalog          | 10%            |
 | Boss    | $80/mo  | 100             | 100% of catalog         | 20%            |
 
-\* Shop discount is built into the data model but **commented out as "Shop coming soon"** until the shop launches.
+\* Shop discount is **live** — applied at checkout by `resolveShopDiscountPercent` and shown in each tier's benefit list. It was hidden while the shop was pre-launch.
+
+### 2a-i. Merchandise (shop)
+
+The shop sells physical goods (apparel). The **item is the product**; where an item carries
+`includedEntries > 0`, those entries are a **free inclusion** with it — never sold, never priced
+per entry (rule 11).
+
+| Fact | Value |
+| ---- | ----- |
+| Shipping | Free on orders of **$100 or more**, otherwise **$10** flat (`SHOP_CONFIG`, integer cents) |
+| GST | **Inside** the total, never added — `total / 11` is the GST component |
+| Member discount | The tier's shop % (Tradie 5 / Foreman 10 / Boss 20), applied before shipping is assessed |
+| Checkout | **Account required** — `Order.user` is mandatory, so there is no guest checkout |
+| Entry pool | **Major Draw only.** Merchandise never grants Mini Draw entries |
+| Promo multiplier | Merchandise **inherits the one-time pack multiplier**. Both move together, so merch can never become better value per entry than the packs during a promo |
+| Draw eligibility | Entries are granted to **every** buyer. SA/ACT exclusion is applied by the draw export at winner selection, not at point of sale |
+| Partial refund | Entries already credited **stay**; they are withdrawn only if the whole order is refunded (stated in `/terms` §3d, §5.2 and §17) |
+
+**Entries on merchandise are switched OFF at launch.** Every product ships at
+`includedEntries: 0` pending a **trade-promotion permit variation** for a fourth entry method.
+The code path is live; the promise is not made, and nothing renders on a product page at 0.
+Turning it on is an admin edit, not a deploy.
 
 Partner access for subscriptions is **lifecycle-gated** — active while the subscription is active, not a fixed window (`partnerDiscountDays: 0`). It re-enables the moment a paused or past-due subscription returns to good standing.
 

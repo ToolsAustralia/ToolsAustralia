@@ -277,3 +277,10 @@ moves from "on a photo" to "on white":
 
 **Lesson: a fidelity spec written against placeholder imagery is a spec about the placeholder.**
 Check any `cover`/scrim instruction against the real asset class before shipping it.
+
+## Shop discount line restored in the major-draw entry CTA (2026-08-17)
+
+`useMajorDrawEntryCta.ts` carried a commented-out `{ text: "10% Off Shop purchases" }` benefit
+line marked "Shop coming soon". The shop is live and the discount is applied at checkout, so the
+line is shown again. It duplicates the tier benefit prose in `src/data/membershipPackages.ts` —
+if a tier's shop percentage ever changes, both need editing.

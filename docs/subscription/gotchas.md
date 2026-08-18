@@ -358,3 +358,29 @@ Worth noting for future sweeps: `/terms` and `/competition-term-majordraw` are *
 legal-copy scan's `PAGES` list, so nothing automated would have caught this. Both pages also
 reference Gambling Help 1800 858 858 — that is deliberate responsible-play signposting and a
 lawyer's decision, not a rule-11 violation to "fix".
+
+## Merchandise added as a fourth entry method in Terms (2026-08-17)
+
+`/terms` and `/competition-term-majordraw` both enumerated exactly **three** ways to obtain
+entries, as closed lists, and §17 asked the customer to *acknowledge* that list. Adding a fourth
+entry route without updating them would have left customers agreeing to terms that contradict what
+they were sold.
+
+Changed, all in the same pass:
+
+- `/terms` §3 — "three distinct product categories" → **four**, plus a new `d. Merchandise` block.
+- `/terms` §5.1 — merchandise added to Entry Allocation.
+- `/terms` §5.2 — the multi-item partial-refund rule (entries already credited stay; withdrawn only
+  if the whole order is refunded). Shop orders are multi-line, so this is routine rather than rare.
+- `/terms` §17 — both the closed-list acknowledgement and a new bullet on entries being an
+  inclusion, never sold.
+- `/competition-term-majordraw` — merchandise added to the `membershipEntryMethods` array (the
+  permit-facing list of approved entry methods) and to Entry Package Conditions.
+
+**A human must still sign this off.** The promotion runs under NSW TP/05113 / NTP/17494, issued
+against its stated entry mechanics — a fourth paid entry route may require a permit or
+notification variation. The wording is written; whether it may be *used* is not this repo's call,
+which is why merchandise ships at `includedEntries: 0`.
+
+Note neither page is in the e2e legal-copy scan's `PAGES` list, so nothing automated checks this
+copy for rule-11 vocabulary. Sweep by hand when editing them.

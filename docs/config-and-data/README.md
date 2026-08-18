@@ -166,3 +166,29 @@ Entry 79 is the one to be careful with on future edits: customers ask it as an o
 pack is regenerated into `src/generated/chatKnowledgePack.ts` and its size ceiling lives in
 `src/lib/support-chat/__tests__/knowledge-pack.test.ts` — read the comment there before raising it
 (the pack is currently ~13,375 tokens and is re-sent **uncached** on every request).
+
+## Shop discount lines un-hidden in membership tiers (2026-08-17)
+
+`src/data/membershipPackages.ts` carried `// "5% Off Shop purchases", // Temporarily disabled -
+Shop coming soon` on all three subscription tiers (and one in `useMajorDrawEntryCta.ts`). The
+discount is real — `resolveShopDiscountPercent` applies it at checkout — so hiding the line
+understated what a member gets. Now shown: Tradie 5%, Foreman 10%, Boss 20%.
+
+Keep these in lockstep with `shopDiscountPercent` on the same object. The percentage is authored
+twice per tier: once as data (`shopDiscountPercent`, which drives the actual discount) and once as
+prose in `features[]` (which drives what the customer reads). Nothing enforces that they agree.
+
+## Cobber FAQ corpus — the shop is live, entries are not (2026-08-17)
+
+Entry **15** said the member shop was "coming soon". It is live at `/shop`, so that answer now
+describes the real thing: tier discount at checkout, free shipping at $100+, $10 flat below,
+account required.
+
+Entry **84** ("Do I get free entries when I buy merchandise?") is written **conditionally on
+purpose** — *"where a shop item includes free entries…"*. Merchandise entries are gated on a
+trade-promotion permit variation and ship switched off, so the answer has to read true both before
+and after they are enabled, and stays correct even if the permit is refused. **Do not rewrite it
+into a flat promise** until the permit is confirmed.
+
+The corpus size is pinned by `src/data/__tests__/faqs.test.ts` (83 → 84 here). Bump it
+deliberately and re-run `npm run build:chat-knowledge-pack` + `npm run test:chat-faqs`.

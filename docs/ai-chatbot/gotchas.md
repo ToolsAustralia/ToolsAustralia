@@ -506,3 +506,24 @@ The other direction still holds: a bottom-anchored **non-modal** bar (the mini-d
 "Enter draw" bar) must NOT climb above the launcher — it carries `data-floating-widget` and
 [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
 lifts Cobber clear of it instead. Modal → out-rank it; persistent chrome → dodge it.
+
+## The knowledge-pack builder had its own "coming soon" claims (2026-08-17)
+
+Fixing the FAQ corpus is not enough. `scripts/build-chat-knowledge-pack.ts` writes prose of its
+own straight into the generated pack the LLM is grounded on, and it held two stale shop claims
+that no FAQ edit would have touched:
+
+- the membership-tiers table rendered the shop discount as `` `${pct}% (coming soon)` ``
+- a bullet reading "the **member shop** is coming soon"
+
+Both are corrected. **When a feature's status changes, grep the builder as well as the corpus** —
+`grep -rn "coming soon" scripts/build-chat-knowledge-pack.ts`.
+
+### Editing prose inside the builder's template literals
+
+Those strings live inside JS template literals. A backtick in replacement text **terminates the
+literal** and breaks the build with errors pointing at unrelated lines — `` `/shop` `` did exactly
+that here. Write plain prose (`/shop`, not `` `/shop` ``) and avoid `${`.
+
+Verify with `npm run build:chat-knowledge-pack` (it runs in `prebuild`/`predev`, so a break stops
+the app from starting) and then `npm run test:chat-faqs`.
