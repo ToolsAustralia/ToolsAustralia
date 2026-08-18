@@ -71,53 +71,54 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                     <dt className="text-sm text-gray-600 dark:text-neutral-400">Model</dt>
                     <dd className="text-sm font-medium text-gray-900 dark:text-neutral-100">{product.id}</dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-600 dark:text-neutral-400">Weight</dt>
-                    <dd className="text-sm font-medium text-gray-900 dark:text-neutral-100">2.5 kg</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-600 dark:text-neutral-400">Dimensions</dt>
-                    <dd className="text-sm font-medium text-gray-900 dark:text-neutral-100">30 x 20 x 15 cm</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-600 dark:text-neutral-400">Power Source</dt>
-                    <dd className="text-sm font-medium text-gray-900 dark:text-neutral-100">Cordless/Battery</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-sm text-gray-600 dark:text-neutral-400">Warranty</dt>
-                    <dd className="text-sm font-medium text-gray-900 dark:text-neutral-100">3 Years</dd>
-                  </div>
+                  {/*
+                    Real specifications only.
+
+                    This list used to hard-code Weight "2.5 kg", Dimensions
+                    "30 x 20 x 15 cm", Power Source "Cordless/Battery" and Warranty
+                    "3 Years" for EVERY product — so a cotton t-shirt advertised a
+                    battery and a three-year warranty. The Product model has carried
+                    a real `specifications` map the whole time; the template simply
+                    never read it.
+
+                    A product with no specifications now shows none, which is honest.
+                    An empty row is better than an invented one.
+                  */}
+                  {Object.entries(product.specifications ?? {}).map(([label, value]) => (
+                    <div key={label} className="flex justify-between">
+                      <dt className="text-sm text-gray-600 dark:text-neutral-400">{label}</dt>
+                      <dd className="text-sm font-medium text-gray-900 dark:text-neutral-100">
+                        {String(value)}
+                      </dd>
+                    </div>
+                  ))}
                 </dl>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4">Key Features</h3>
-                <ul className="space-y-2">
-                  <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <Check className="w-4 h-4 text-green-500" />
-                    Professional grade quality
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <Check className="w-4 h-4 text-green-500" />
-                    Durable construction
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <Check className="w-4 h-4 text-green-500" />
-                    Easy to use design
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <Check className="w-4 h-4 text-green-500" />
-                    Long-lasting performance
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <Check className="w-4 h-4 text-green-500" />
-                    Manufacturer warranty included
-                  </li>
-                  <li className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400">
-                    <Check className="w-4 h-4 text-green-500" />
-                    Compatible with standard accessories
-                  </li>
-                </ul>
-              </div>
+              {/*
+                Key features come from the product's own `features[]`. The previous
+                six bullets were fixed strings on every product — including
+                "Manufacturer warranty included" and "Compatible with standard
+                accessories", neither of which is true of apparel, and one of which
+                asserts a warranty that does not exist.
+              */}
+              {(product.features ?? []).length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4">
+                    Key Features
+                  </h3>
+                  <ul className="space-y-2">
+                    {product.features.map((feature) => (
+                      <li
+                        key={feature}
+                        className="flex items-center gap-2 text-sm text-gray-600 dark:text-neutral-400"
+                      >
+                        <Check className="w-4 h-4 text-green-500" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

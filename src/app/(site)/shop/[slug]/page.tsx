@@ -47,7 +47,14 @@ async function getRelatedProducts(productId: string, brand: string, category: st
       $or: [{ brand }, { category }],
       isActive: true,
     })
-      .select("_id name price images brand category stock rating reviews isFeatured")
+      // trackInventory is REQUIRED here, not optional polish: ProductCard defaults a
+      // missing value to "tracked", so omitting it from this projection made every
+      // print-to-order related product render as "Sold Out" — while the same product's
+      // own page correctly said "Made to order". includedEntries rides along so a card
+      // can show the free-entry inclusion.
+      .select(
+        "_id name price images brand category stock trackInventory includedEntries rating reviews isFeatured"
+      )
       .limit(4)
       .lean();
 
@@ -134,7 +141,12 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     other: {
       "product:price:amount": product.price.toString(),
       "product:price:currency": "AUD",
-      "product:availability": product.stock && product.stock > 0 ? "in stock" : "out of stock",
+      // Print-to-order items sit at stock 0 forever, so a bare stock check published
+      // "out of stock" to Google and every social crawler for the entire catalogue.
+      "product:availability":
+        product.trackInventory === false || (product.stock && product.stock > 0)
+          ? "in stock"
+          : "out of stock",
       "product:condition": "new",
       "product:brand": product.brand,
       "product:category": product.category || "Tools",
@@ -190,7 +202,9 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
           price: product.price,
           priceCurrency: "AUD",
           availability:
-            product.stock && product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            product.trackInventory === false || (product.stock && product.stock > 0)
+              ? "https://schema.org/InStock"
+              : "https://schema.org/OutOfStock",
           url: productUrl,
         }}
         nonce={nonce}
@@ -293,13 +307,22 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
               <span className="text-sm text-gray-500 dark:text-neutral-400">({product.reviews} reviews)</span>
             </div>
 
-            {/* Price */}
+            {/*
+              Price. One number, because there is only one number.
+
+              This block used to render `product.price * 1.2` struck through beside a
+              "Save 20%" badge — a former price that never existed, invented in the
+              template for EVERY product. Advertising a saving against a price the
+              item was never sold at is a misleading former-price representation
+              under Australian Consumer Law, and it was on every product page.
+
+              If a genuine sale price is wanted later, it needs a real
+              `originalPrice` on the product (the field already exists on the query
+              type) plus evidence the item was actually sold at it — not arithmetic
+              on the current price.
+            */}
             <div className="flex items-center gap-3">
               <span className="text-3xl font-bold text-red-600 font-poppins">${product.price}</span>
-              <span className="text-sm text-gray-500 dark:text-neutral-500 line-through">${(product.price * 1.2).toFixed(2)}</span>
-              <span className="bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-1 rounded-full text-sm font-bold">
-                Save 20%
-              </span>
             </div>
 
             {/* Description */}

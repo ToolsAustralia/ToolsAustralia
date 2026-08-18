@@ -140,3 +140,58 @@ swap can only push the section further down, never back up into view. Measured a
 
 `/shop/[slug]` has no Suspense boundary and is unaffected. Same failure family as the promo
 footer/newsletter shifts — see [docs/promo/gotchas.md](../promo/gotchas.md).
+
+## Print-to-order merchandise was unbuyable from the shop listing (fixed 2026-08-17)
+
+`ProductCard` computed `isOutOfStock = productData.stock === 0` with **no `trackInventory`
+check**. Print-to-order items hold `stock: 0` permanently — the printer makes each one on demand
+— so every merchandise card rendered **"Out of Stock"** with a disabled **"Sold Out"** button.
+The customer could never reach the size picker, which lives on the product page.
+
+The product page was correct the whole time (`ProductInteractions` has always read
+`trackInventory && stock === 0`), so the two surfaces disagreed: the listing said Sold Out, the
+detail page said Made to order. Anyone testing from the product URL directly would never see it.
+
+The same root cause had **three** faces, and fixing only the card would have left two:
+
+1. `ProductCard.tsx` — the comparison itself. Now `trackInventory && stock === 0`, and the label
+   is three-state (`Out of Stock` / `Made to order` / `In Stock`) to match the product page.
+2. **The related-products projection** in `shop/[slug]/page.tsx` did not `.select()`
+   `trackInventory`. `ProductCard` defaults a missing value to *tracked*, so related products
+   still rendered Sold Out even after the card was fixed. A projection that drops a field a
+   consumer defaults to `true` fails **closed** and silently.
+3. **SEO metadata and JSON-LD** both derived availability from `stock > 0`, publishing
+   `out of stock` / `schema.org/OutOfStock` to Google and every social crawler for the whole
+   made-to-order catalogue.
+
+**Rule of thumb:** anything that reads `stock` to decide availability must check `trackInventory`
+first. Grep for `stock === 0` and `stock > 0` before adding a fourth surface.
+
+## Customer-facing claims that were not true (removed 2026-08-17)
+
+Found while reviewing the shop UI against the mini-draws pages. All four were template filler
+inherited from a storefront starter and applied to **every** product:
+
+| Claim | Where | Why it was wrong |
+|---|---|---|
+| `Save 20%` beside a struck-through price | `shop/[slug]/page.tsx` | The "was" price was `product.price * 1.2` — a former price the item was never sold at. A misleading former-price representation under Australian Consumer Law, on every product page |
+| `Free Shipping` badge | `ProductInteractions.tsx` | Unconditional, while `priceCart` only waives shipping at $100+. A $45.95 tee was shown "Free Shipping" and charged $10 at checkout |
+| `3 Year Warranty` badge | `ProductInteractions.tsx` | No such warranty is offered, on apparel or anything else |
+| `30-Day Returns` badge | `ProductInteractions.tsx` | States a returns window no policy backs |
+| Weight `2.5 kg`, Dimensions `30 x 20 x 15 cm`, Power Source `Cordless/Battery`, Warranty `3 Years` | `ProductTabs.tsx` | Hard-coded on every product, so a cotton t-shirt advertised a battery and a warranty |
+| Six fixed "Key Features" incl. `Manufacturer warranty included` | `ProductTabs.tsx` | Same — fixed strings, one of which asserts a warranty that does not exist |
+
+Specifications and features now render the product's own `specifications` map and `features[]`
+(both real fields the model always carried and the template ignored). **A product with none shows
+none** — an empty section is honest; an invented row is not.
+
+**If badges return here, drive each from something real** — the resolved shipping for *this*
+cart, a stated returns policy, a genuine `originalPrice` with evidence of sale at that price. A
+badge is a promise, and the product page is where a customer decides whether to trust it.
+
+## Shipping figures are imported, never typed
+
+`FREE_SHIPPING_THRESHOLD_LABEL` / `FLAT_SHIPPING_RATE_LABEL` (`src/config/shop.ts`) exist because
+the product page said "over $99" while the code charged below $100, and separately advertised
+Express $15 and Same Day $25 in three cities — neither of which exists in the pricing path at
+all. Copy that restates a money value drifts from it. Import the label.

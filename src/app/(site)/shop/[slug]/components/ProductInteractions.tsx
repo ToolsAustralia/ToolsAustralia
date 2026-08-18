@@ -311,27 +311,27 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
         </button>
       </div>
 
-      {/* Trust Badges */}
-      <div className="grid grid-cols-3 gap-4 pt-6 border-t border-gray-200 dark:border-neutral-800">
-        <div className="text-center">
-          <div className="w-8 h-8 mx-auto mb-2 bg-green-100 rounded-full flex items-center justify-center">
-            <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-          </div>
-          <div className="text-xs text-gray-600 dark:text-neutral-400">Free Shipping</div>
-        </div>
-        <div className="text-center">
-          <div className="w-8 h-8 mx-auto mb-2 bg-blue-100 rounded-full flex items-center justify-center">
-            <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-          </div>
-          <div className="text-xs text-gray-600 dark:text-neutral-400">3 Year Warranty</div>
-        </div>
-        <div className="text-center">
-          <div className="w-8 h-8 mx-auto mb-2 bg-purple-100 rounded-full flex items-center justify-center">
-            <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
-          </div>
-          <div className="text-xs text-gray-600 dark:text-neutral-400">30-Day Returns</div>
-        </div>
-      </div>
+      {/*
+        The three "trust badges" that used to sit here — Free Shipping, 3 Year
+        Warranty, 30-Day Returns — were removed on 2026-08-17 because all three
+        were untrue:
+
+          - Free Shipping was UNCONDITIONAL, while priceCart only waives it at
+            $100+. A $45.95 tee was shown "Free Shipping" and charged $10.
+          - 3 Year Warranty is not a warranty this business offers, on apparel or
+            anything else.
+          - 30-Day Returns states a returns window no policy backs.
+
+        They were hard-coded decoration inherited from a storefront template, not
+        facts about an order. Real shipping terms live on the Shipping & Returns
+        tab and are derived from SHOP_CONFIG, so they cannot drift from what the
+        customer is actually charged.
+
+        If genuine badges are wanted here, drive each from something real (the
+        resolved shipping for THIS cart, a stated returns policy) rather than a
+        fixed string — a badge is a promise, and this page is where a customer
+        decides to trust it.
+      */}
     </div>
   );
 }

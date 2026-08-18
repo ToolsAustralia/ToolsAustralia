@@ -29,6 +29,12 @@ export interface Product {
    * not be rendered at all.
    */
   includedEntries?: number;
+  /**
+   * `false` for print-to-order items, which hold `stock: 0` permanently because the
+   * printer makes each one on demand. Anything reading stock to decide availability
+   * MUST check this first, or the whole made-to-order catalogue reads as sold out.
+   */
+  trackInventory?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

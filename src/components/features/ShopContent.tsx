@@ -17,7 +17,9 @@ interface FilterState {
   category: string[];
   priceRange: [number, number];
   brands: string[];
-  styles: string[];
+  /** Apparel sizes and colours, from variants[]. Replaced the old "styles" (Tool Style) facet. */
+  sizes: string[];
+  colours: string[];
 }
 
 // Remove ApiResponse interface as it's now handled by React Query
@@ -56,7 +58,8 @@ export default function ShopContent({
     priceRange: [0, 500],
     // If a default brand is provided we pre-populate the filters array.
     brands: defaultBrand ? [defaultBrand] : [],
-    styles: [],
+    sizes: [],
+    colours: [],
   });
   const [sortBy, setSortBy] = useState("createdAt-desc");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -166,7 +169,8 @@ export default function ShopContent({
       category: [],
       priceRange: [0, 500],
       brands: defaultBrand ? [defaultBrand] : [],
-      styles: [],
+      sizes: [],
+      colours: [],
     });
     setSortBy("createdAt-desc");
     setCurrentPage(1);
@@ -181,7 +185,8 @@ export default function ShopContent({
   const activeFilterCount =
     filters.category.length +
     filters.brands.length +
-    filters.styles.length +
+    filters.sizes.length +
+    filters.colours.length +
     (filters.priceRange[0] > 0 || filters.priceRange[1] < 500 ? 1 : 0);
   const hasControlsApplied = activeFilterCount > 0 || debouncedSearch.trim().length > 0 || sortBy !== "createdAt-desc";
 

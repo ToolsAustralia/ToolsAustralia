@@ -209,3 +209,79 @@ The same block advertised **Express Shipping $15** and **Same Day Delivery $25**
 Neither exists anywhere in the pricing path: checkout can only ever produce $0 or the flat rate.
 Both were removed rather than reworded — they were template copy promising services the business
 does not sell.
+
+## Shop hero (2026-08-17)
+
+The hero's overlay div was commented `{/* Background Image with Dark Overlay */}` and carried
+**no background class at all** — `className="absolute inset-0 "`. Hero copy sat directly on a busy
+photograph, and on a phone the title and strapline collided into an unreadable block.
+
+It now uses `bg-black/50`, copied from
+[`MiniDrawsHero.tsx`](<../../src/app/(site)/mini-draws/components/MiniDrawsHero.tsx>) rather than
+invented, plus that hero's mobile rhythm (`pb-5 sm:pb-14`, gap and margin tightened at the small
+breakpoint). The shop and mini-draws heroes should stay visually interchangeable.
+
+## Alignment with mini-draws — what matches and what does not
+
+The shop listing already shares the mini-draws skeleton: left filter rail, "Browse …" header with
+subtitle, search field, grid/list toggle, sort dropdown. **This is deliberate — do not redesign
+the shop as its own thing.** The remaining differences are the work, not the layout:
+
+| | Mini-draws | Shop | Status |
+|---|---|---|---|
+| Hero overlay | `bg-black/50` | `bg-black/50` | aligned 2026-08-17 |
+| Mobile filters | Horizontal scrolling **brand chip row** | Single "Filters" drawer button | **open** |
+| Empty state | Icon + "Try a different brand or clear your filters" | Nothing rendered | **open** |
+| Facets | Brands, drawn from real data | Hard-coded power-tool categories (`Power Tools`, `Cutting Tools`) and a `Tool Style` group (`DIY`, `Heavy Duty`) | **open** — merchandise is unfilterable, and the brand list has no `Tools Australia` entry |
+
+## The free-entry badge
+
+`ProductInteractions` renders it above the stock line. See
+[the entry-count section](#) in this file and `docs/cart-shop-products/backend.md` for why the
+multiplier is included in the displayed number and why the page must stay dynamic.
+
+## Filter facets are derived, never hard-coded (2026-08-17)
+
+`ProductFilters` used to declare three literal arrays: eight tool categories
+(`Power Tools`, `Hand Tools`, `Cutting Tools`…), five tool brands (`DeWalt`, `Makita`…), and a
+`Tool Style` group (`Professional`, `DIY`, `Industrial`, `Compact`, `Heavy Duty`). None of them
+was connected to the database.
+
+**The shop sells apparel — tools are prizes, not stock.** So every one of those facets returned
+zero results forever, while the two things a merchandise shopper actually filters by (size and
+colour) were absent entirely.
+
+Facets now come from `useShopFacets()` → `/api/products/categories`, which already computed
+distinct categories, brands and a price range from active products and simply was not being used.
+Size and colour were added to it, aggregated from `variants[]` with `variants.isActive != false`
+so an inactive size is never offered as a filter that returns nothing.
+
+Today the rail renders **Apparel / Tools Australia / XS S M L XL / Black**. If the catalogue ever
+grows, the rail grows with it — there is nothing to keep in sync.
+
+**Sizes sort in garment order, not by frequency.** Aggregation returns them by count, which put
+"S, M, L, XS, XL" in front of customers — every value correct, and it still reads as broken.
+Unrecognised sizes keep their frequency position at the end of the list.
+
+### Why not a separate `/shop/merch` view, and why not an "Apparel" category
+
+Both were considered and rejected:
+
+- **A separate merch view** forks a route, filter set, card path, test suite and docs for a
+  catalogue that *is* the entire catalogue — `/shop` would show nothing and `/shop/merch`
+  everything. Two names for one concept (see the naming rule in the user-level CLAUDE.md).
+- **An "Apparel" category beside "Power Tools"** promises siblings that will never have stock. A
+  customer filtering to Hand Tools gets zero results permanently.
+
+Deriving the facets is also the least code of the three: it deleted three arrays and reused an
+endpoint that already existed.
+
+### `FilterState` shape change
+
+`styles: string[]` became `sizes: string[]` + `colours: string[]`, in both `ProductFilters` and
+`ShopContent` (each declares its own copy of the interface — they must move together; `tsc`
+catches it because the prop is passed between them).
+
+**Do not reuse `useProductCategories`** in `useProductQueries.ts` — it is typed
+`{ success, data: ProductCategory[] }`, which has never matched what
+`/api/products/categories` actually returns. `useShopFacets` is the correctly-typed accessor.

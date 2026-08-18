@@ -22,6 +22,14 @@ interface ProductItem {
   images: string[];
   brand: string;
   stock: number;
+  /**
+   * Print-to-order items sit at stock 0 permanently — the printer makes each one on
+   * demand. Without this the card reads stock 0 as "Sold Out" and disables its own
+   * Add button, which is what made every merchandise item unbuyable from the shop
+   * listing while the product page (which does check it) said "Made to order".
+   * Absent = true, so tracked stock keeps its existing behaviour exactly.
+   */
+  trackInventory?: boolean;
   reviews?: number;
   rating?: number;
 }
@@ -60,6 +68,8 @@ interface NormalizedProductData {
     gradientOverride?: string | null;
   } | null;
   stock: number | null;
+  /** False for print-to-order: stock 0 must not read as sold out. */
+  trackInventory: boolean;
   rating: number;
   isPrize: boolean;
   endDate: Date | null;
@@ -233,6 +243,9 @@ export default function ProductCard({
           gradientOverride,
         },
         stock: remainingEntries,
+        // A mini draw has real, finite capacity — remainingEntries 0 means closed,
+        // so unlike print-to-order merchandise it is genuinely stock-tracked.
+        trackInventory: true,
         rating: 4.5,
         isPrize: true,
         endDate: null,
@@ -254,6 +267,7 @@ export default function ProductCard({
         brand: product.brand,
         brandAccent: null,
         stock: product.stock,
+        trackInventory: product.trackInventory ?? true,
         rating: getValidRating(product.rating),
         isPrize: false,
         endDate: null,
@@ -378,7 +392,10 @@ export default function ProductCard({
     ));
   };
 
-  const isOutOfStock = productData.stock === 0;
+  // Only a stock-TRACKED item can be out of stock. A print-to-order garment is
+  // never out of stock — matches ProductInteractions on the product page, which
+  // has always had this check while the card did not.
+  const isOutOfStock = productData.trackInventory && productData.stock === 0;
   const miniDrawStatus = productData.isPrize ? (productData.status as MiniDrawType["status"] | null) : null;
   const entriesRemaining = productData.isPrize ? productData.entriesRemaining ?? 0 : null;
   const isPrizeCancelled = productData.isPrize && miniDrawStatus === "cancelled";
@@ -483,7 +500,7 @@ export default function ProductCard({
               <div className="flex items-center gap-2">
                 <div className={cn("w-2 h-2 rounded-full", isOutOfStock ? "bg-red-500" : "bg-green-500")} />
                 <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
-                  {isOutOfStock ? "Out of Stock" : "In Stock"}
+                  {isOutOfStock ? "Out of Stock" : !productData.trackInventory ? "Made to order" : "In Stock"}
                 </span>
               </div>
             )}
@@ -667,7 +684,7 @@ export default function ProductCard({
               <div className="flex items-center gap-2">
                 <div className={cn("w-2 h-2 rounded-full", isOutOfStock ? "bg-red-500" : "bg-green-500")} />
                 <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
-                  {isOutOfStock ? "Out of Stock" : "In Stock"}
+                  {isOutOfStock ? "Out of Stock" : !productData.trackInventory ? "Made to order" : "In Stock"}
                 </span>
               </div>
             )}

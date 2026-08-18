@@ -37,7 +37,7 @@ export default function ShopPage() {
   return (
     <div className="min-h-screen-svh bg-white dark:bg-neutral-950">
       {/* Page Header - Metallic Industrial Design */}
-      <div className="relative pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-8 bg-gradient-to-b from-black via-slate-900 to-black">
+      <div className="relative pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] pb-5 sm:pb-14 bg-gradient-to-b from-black via-slate-900 to-black overflow-hidden">
         {/* Background Image with Dark Overlay */}
         <div className="absolute inset-0 z-0">
           <Image
@@ -48,14 +48,14 @@ export default function ShopPage() {
             priority
             sizes="100vw"
           />
-          <div className="absolute inset-0 " />
+          <div className="absolute inset-0 bg-black/50" />
         </div>
 
         {/* Content */}
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-3 sm:gap-6">
             <div className="text-center lg:text-left">
-              <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-poppins mb-4">
+              <h1 className="text-[32px] sm:text-[40px] lg:text-[48px] font-bold font-poppins mb-0 lg:mb-4">
                 <span className="text-white">S</span>
                 <span className="bg-gradient-to-r from-red-600 to-red-675 bg-clip-text text-transparent">h</span>
                 <span className="text-white">op</span>
