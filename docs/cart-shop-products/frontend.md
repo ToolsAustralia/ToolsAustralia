@@ -285,3 +285,30 @@ catches it because the prop is passed between them).
 **Do not reuse `useProductCategories`** in `useProductQueries.ts` — it is typed
 `{ success, data: ProductCategory[] }`, which has never matched what
 `/api/products/categories` actually returns. `useShopFacets` is the correctly-typed accessor.
+
+## Sticky columns — and why the wrapper is not optional (2026-08-17)
+
+The product image and the checkout order summary both follow the scroll on desktop, matching the
+mini-draw detail page.
+
+Three things are load-bearing, and the first two are copied verbatim from
+[`mini-draws/[id]/page.tsx`](<../../src/app/(site)/mini-draws/[id]/page.tsx>):
+
+1. **`overflow-x-clip`, never `overflow-x-hidden`, on the page root.** `overflow-x: hidden`
+   computes `overflow-y: auto`, which makes that element the scroll container and stops `sticky`
+   engaging at all. `clip` suppresses horizontal overflow without creating a scroll box.
+2. **A wrapper around the sticky element.** `sticky` applied directly to a grid item collapses it
+   to content height and never engages. The pattern is an outer `lg:self-stretch` div containing
+   an inner `lg:sticky lg:top-24`.
+3. **The other column has to be taller than the sticky one.** A sticky element can only travel
+   inside its own grid row.
+
+Point 3 is the one that bites, because the first two can be right and it still looks broken.
+`ProductTabs` used to render *below* the grid, so the two columns were near-equal height (692px
+against a 579px image) and the image scrolled away after ~113px — sticky was correctly applied
+and did almost nothing. Moving the tabs **inside the right column** is what gives it travel, and
+is how mini-draws was already built.
+
+Verified by measurement, not by eye: at 300px and 600px of scroll the image holds its position
+completely (`e2e-artifacts/tmp/sticky3.mjs` pattern — compare the element's `y` against
+`y0 - scrollDistance`).

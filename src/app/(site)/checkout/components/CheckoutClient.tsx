@@ -239,8 +239,11 @@ export default function CheckoutClient() {
           )}
         </div>
 
-        {/* Right: order summary */}
-        <aside className="h-fit rounded-xl border border-gray-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900">
+        {/* Right: order summary. Sticky on desktop because the left column (address +
+            payment element) is far taller — without it the total scrolls out of sight
+            exactly when the customer is deciding whether to pay. `h-fit` stays: it keeps
+            the card at content height rather than stretching down the grid row. */}
+        <aside className="h-fit rounded-xl border border-gray-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900 lg:sticky lg:top-24">
           <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">Your order</h2>
 
           <ul className="mb-4 space-y-3">

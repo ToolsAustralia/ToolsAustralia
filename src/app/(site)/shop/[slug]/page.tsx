@@ -188,7 +188,11 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   const nonce = await getNonce();
 
   return (
-    <div className="min-h-screen-svh bg-white dark:bg-neutral-950">
+    // overflow-x-clip, NOT -hidden: `overflow-x: hidden` computes `overflow-y: auto`,
+    // which makes this element the scroll container for the sticky image column and stops
+    // it engaging. `clip` suppresses horizontal overflow without creating a scroll box.
+    // Same reasoning as the mini-draw detail page.
+    <div className="min-h-screen-svh bg-white dark:bg-neutral-950 w-full overflow-x-clip">
       {/* Track ViewContent event for Facebook Pixel */}
       <ProductViewTracking product={serializedProduct} />
       {/* JSON-LD structured data */}
@@ -220,8 +224,13 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
       {/* Product Detail */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
-          {/* Product Image - Single Main Image */}
-          <div className="space-y-4">
+          {/* Product Image. The outer wrapper is REQUIRED: `sticky` applied directly to a
+              grid item collapses it to content height and never engages, so the image would
+              scroll away from the options it belongs to. Mirrors the mini-draw gallery
+              column (mini-draws/[id]/page.tsx). Desktop only — on a phone the image sits
+              above the details and there is nothing to stick to. */}
+          <div className="lg:self-stretch">
+            <div className="space-y-4 lg:sticky lg:top-24">
             <div className="aspect-square bg-gray-100 dark:bg-neutral-900 rounded-2xl overflow-hidden">
               <Image
                 src={product.images?.[0] || "/images/placeholder-product.jpg"}
@@ -232,6 +241,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 priority
               />
+            </div>
             </div>
           </div>
 
@@ -333,11 +343,17 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
             {/* Interactive Components */}
             <ProductInteractions product={serializedProduct} />
+
+            {/* Tabs live INSIDE the right column, not below the grid.
+                This is what gives the sticky image something to stick against: the
+                sticky element can only travel within its own grid row, so while the
+                tabs sat outside it the two columns were near-equal height (692px vs a
+                579px image) and the image scrolled away after ~113px. Putting the tabs
+                here makes the right column tall, which is exactly how the mini-draw
+                detail page is built. */}
+            <ProductTabs product={serializedProduct} />
           </div>
         </div>
-
-        {/* Product Tabs */}
-        <ProductTabs product={serializedProduct} />
       </div>
 
       {/* Related Products Section */}

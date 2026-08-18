@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import ProductCard from "@/components/ui/ProductCard";
 import ProductFilters from "@/components/features/ProductFilters";
+import { useShopFacets } from "@/hooks/queries/useProductQueries";
 import MetallicButton from "@/components/ui/MetallicButton";
 import { Grid, List, Filter, X, Search, Clock, ArrowUpDown } from "lucide-react";
 import { Product as ProductType } from "@/types/product";
@@ -137,6 +138,21 @@ export default function ShopContent({
   };
 
   // Handle filter changes
+  const { data: shopFacets } = useShopFacets();
+  const categoryChips = useMemo<string[]>(
+    () => (shopFacets?.categories ?? []).map((c) => c.name),
+    [shopFacets]
+  );
+
+  // Lifted verbatim from MiniDrawsContent so the two rails are visually identical.
+  const chipClass = (on: boolean) =>
+    [
+      "h-8 shrink-0 whitespace-nowrap rounded-full px-[13px] text-[12.5px] font-semibold transition-all duration-150",
+      on
+        ? "border border-red-600 bg-red-600 text-white shadow-[0_6px_14px_-8px_rgba(238,0,0,.9)]"
+        : "border border-[#E5E7EB] bg-white text-[#374151] dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200",
+    ].join(" ");
+
   const handleFilterChange = (newFilters: Partial<FilterState>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
     setCurrentPage(1); // Reset to first page when filters change
@@ -283,6 +299,51 @@ export default function ShopContent({
                   )}
                 </button>
               </div>
+
+              {/*
+                Mobile facet rail — the same behaviour as the mini-draws page: a
+                horizontally scrolling chip row for the top-level facet, with "+ More"
+                opening the full drawer. The shop previously offered only the drawer
+                button, so narrowing the list on a phone always cost two taps and a
+                modal.
+
+                Categories are DERIVED (useShopFacets), so this rail lists exactly what
+                the catalogue holds and grows by itself.
+              */}
+              {categoryChips.length > 0 && (
+                <div className="-mx-4 flex gap-[7px] overflow-x-auto px-4 pb-1 scrollbar-hide">
+                  <button
+                    type="button"
+                    onClick={() => handleFilterChange({ category: [] })}
+                    className={chipClass(filters.category.length === 0)}
+                  >
+                    All products
+                  </button>
+                  {categoryChips.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() =>
+                        handleFilterChange({
+                          category: filters.category.includes(name)
+                            ? filters.category.filter((c) => c !== name)
+                            : [...filters.category, name],
+                        })
+                      }
+                      className={chipClass(filters.category.includes(name))}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setIsFiltersOpen(true)}
+                    className="h-8 shrink-0 whitespace-nowrap rounded-full border border-dashed border-[#D1D5DB] bg-white px-3 text-[12.5px] font-semibold text-[#6B7280] dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-400"
+                  >
+                    + More
+                  </button>
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 <div className="inline-flex shrink-0 items-center rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-1">
@@ -459,7 +520,34 @@ export default function ShopContent({
                 />
               ))}
             </div>
+          ) : hasControlsApplied ? (
+            /*
+              Filtered to zero — NOT an empty shop.
+              This branch used to render the same "Coming Soon / our shop is currently
+              being set up" panel as a genuinely empty catalogue, so narrowing to a size
+              with no match told the customer the shop did not exist yet. Mirrors the
+              mini-draws empty state, including the clear-filters escape hatch.
+            */
+            <div className="flex flex-col items-center gap-2.5 px-8 py-11 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#F3F4F6] text-[#9CA3AF] dark:bg-neutral-800">
+                <Search className="h-6 w-6" />
+              </span>
+              <h3 className="text-[15px] font-bold text-[#111827] dark:text-white">
+                {searchQuery ? `No products found for "${searchQuery}"` : "No products found"}
+              </h3>
+              <p className="text-[13px] leading-[1.5] text-[#6B7280] dark:text-neutral-400">
+                Try a different filter or clear your filters.
+              </p>
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="mt-1 h-[38px] rounded-full bg-[#111827] px-[18px] text-[12.5px] font-bold text-white dark:bg-white dark:text-neutral-900"
+              >
+                Clear all filters
+              </button>
+            </div>
           ) : (
+            /* Genuinely nothing in the catalogue — the only case that may say "coming soon". */
             <div className="text-center py-16">
               <div className="text-gray-400 mb-6">
                 <Clock className="w-20 h-20 mx-auto text-gray-300" />
