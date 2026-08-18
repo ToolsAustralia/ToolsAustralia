@@ -402,3 +402,82 @@ export function createReferralRewardEmailTemplate(
     contentHtml: content,
   });
 }
+
+/**
+ * Order confirmation for a merchandise purchase.
+ *
+ * Sent from the Stripe webhook once the order is actually paid — never from the
+ * checkout page, which a customer can leave before the payment settles.
+ *
+ * `freeEntries` is rendered ONLY when > 0. Merchandise ships with entries switched
+ * off pending a permit variation, and a "0 free entries" line would state a promise
+ * we are not making. Per CLAUDE.md rule 11 entries are a free INCLUSION with the
+ * garment — never sold, never priced per unit — so this says "includes", and there
+ * is no per-entry figure anywhere in it.
+ */
+export function createShopOrderConfirmationTemplate(params: {
+  firstName: string;
+  orderNumber: string;
+  items: { name: string; variant?: string; quantity: number; lineTotal: string }[];
+  subtotal: string;
+  discount?: string;
+  shipping: string;
+  total: string;
+  gst: string;
+  freeEntries?: number;
+  shippingAddress: string;
+  orderUrl: string;
+}): string {
+  const safeName = escapeHtml(params.firstName || 'mate');
+  const safeOrder = escapeHtml(params.orderNumber);
+
+  const itemLines = params.items
+    .map((i) => ({
+      label: escapeHtml(`${i.quantity} × ${i.name}${i.variant ? ` (${i.variant})` : ''}`),
+      value: escapeHtml(i.lineTotal),
+    }));
+
+  const moneyRows = [
+    { label: 'Subtotal', value: escapeHtml(params.subtotal) },
+    ...(params.discount ? [{ label: 'Member discount', value: escapeHtml(params.discount) }] : []),
+    { label: 'Delivery', value: escapeHtml(params.shipping) },
+    { label: 'Total paid', value: escapeHtml(params.total) },
+    // Australian tax invoices must show the GST component. It is INSIDE the total,
+    // never added to it.
+    { label: 'Includes GST', value: escapeHtml(params.gst) },
+  ];
+
+  const content =
+    chip('Order confirmed') +
+    spacer(14) +
+    heading(`Thanks, ${safeName}`) +
+    spacer(16) +
+    lede(
+      `We've got your order <strong>${safeOrder}</strong> and it's on its way to being made. Your items are printed to order, so give us a little time before they ship.`
+    ) +
+    spacer(24) +
+    bodyHeading('What you ordered') +
+    infoTable([...itemLines, ...moneyRows]) +
+    spacer(22) +
+    (params.freeEntries && params.freeEntries > 0
+      ? entriesCallout({
+          label: 'Included with your order',
+          value: `${params.freeEntries} free ${params.freeEntries === 1 ? 'entry' : 'entries'}`,
+          caption: "Into this month's major prize draw — already credited to your account.",
+        }) + spacer(22)
+      : '') +
+    bodyHeading('Delivering to') +
+    bodyText(escapeHtml(params.shippingAddress)) +
+    spacer(24) +
+    button({ href: params.orderUrl, label: 'View your order', variant: 'red', width: 260 }) +
+    spacer(18) +
+    note(
+      "We'll email you again when it ships. If anything looks wrong, reply to this email and we'll sort it."
+    );
+
+  return renderBrandEmail({
+    title: 'Order confirmed',
+    preheader: `Order ${safeOrder} confirmed — we're getting it made.`,
+    contentHtml: content,
+  });
+}

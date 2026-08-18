@@ -4,6 +4,7 @@ import User from "@/models/User";
 import Order, { type IOrder } from "@/models/Order";
 import { ShopOrderService } from "@/services/shop/ShopOrderService";
 import { processPaymentBenefits } from "@/utils/payment/payment-processing";
+import { sendShopOrderConfirmation } from "@/services/shop/sendOrderConfirmation";
 
 /**
  * Fulfil a paid shop order.
@@ -251,6 +252,21 @@ export async function finalizeShopOrder(
   // refunded order holding its entries, and the refund reversal cannot clean it
   // up (it fails closed when the BenefitsGranted row is not yet committed).
   const entriesGranted = await grantShopEntries(order, paymentIntent.id, entryMultiplier);
+
+  // Receipt AFTER the grant, so it can state the entries the customer actually
+  // received. Sending it earlier would read order.entriesGranted before it was set
+  // and silently omit the entries block from every confirmation — invisible today
+  // while merchandise ships at 0 entries, and wrong the day the permit lands.
+  //
+  // Safe to sequence here: grantShopEntries catches its own failures and never
+  // throws, so a failed grant still produces a receipt. Best-effort — an SMTP
+  // problem must never fail the webhook, which would retry the whole fulfilment.
+  await sendShopOrderConfirmation(order).catch((err) => {
+    console.error("[shop] order confirmation email failed", {
+      orderNumber: order.orderNumber,
+      err,
+    });
+  });
 
   return { status: "fulfilled", orderNumber: order.orderNumber, entriesGranted };
 }
