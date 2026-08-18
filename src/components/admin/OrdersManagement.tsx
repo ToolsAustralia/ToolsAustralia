@@ -59,6 +59,11 @@ export default function OrdersManagement() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
+  // Inline tracking entry, keyed by order id. Held locally so typing in one row
+  // never re-renders the table or disturbs another row mid-edit.
+  const [trackingDraft, setTrackingDraft] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+
   // Debounced so typing a surname does not fire a query per keystroke.
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -96,6 +101,35 @@ export default function OrdersManagement() {
   }, [status, category, debouncedSearch]);
 
   const categories = useMemo(() => data?.categories ?? [], [data]);
+
+  /**
+   * Save a tracking number. The service flips status to "shipped" on its own when a
+   * tracking number arrives without an explicit status, so the admin does not have to
+   * remember a second field for the customer to see the right thing.
+   */
+  const saveTracking = async (orderId: string) => {
+    const value = (trackingDraft[orderId] ?? "").trim();
+    if (!value) return;
+    setSavingId(orderId);
+    try {
+      const res = await fetch("/api/admin/shop/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId, trackingNumber: value }),
+      });
+      if (!res.ok) throw new Error("Failed to save tracking");
+      setTrackingDraft((d) => {
+        const next = { ...d };
+        delete next[orderId];
+        return next;
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save tracking");
+    } finally {
+      setSavingId(null);
+    }
+  };
   const selectClass =
     "h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100";
 
@@ -174,7 +208,7 @@ export default function OrdersManagement() {
               {data.total} order{data.total === 1 ? "" : "s"}
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
+              <table className="w-full min-w-[900px] text-left text-sm">
                 <thead className="text-xs uppercase text-gray-500 dark:text-neutral-400">
                   <tr>
                     <th className="pb-2 pr-3 font-semibold">Order</th>
@@ -184,6 +218,7 @@ export default function OrdersManagement() {
                     <th className="pb-2 pr-3 font-semibold">Total</th>
                     <th className="pb-2 pr-3 font-semibold">Entries</th>
                     <th className="pb-2 pr-3 font-semibold">Printer</th>
+                    <th className="pb-2 pr-3 font-semibold">Tracking</th>
                     <th className="pb-2 font-semibold">Status</th>
                   </tr>
                 </thead>
@@ -225,6 +260,33 @@ export default function OrdersManagement() {
                           <span className="text-amber-700 dark:text-amber-400">waiting</span>
                         ) : (
                           "—"
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        {o.trackingNumber ? (
+                          <span className="font-mono text-xs">{o.trackingNumber}</span>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <input
+                              value={trackingDraft[o.id] ?? ""}
+                              onChange={(e) =>
+                                setTrackingDraft((d) => ({ ...d, [o.id]: e.target.value }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") void saveTracking(o.id);
+                              }}
+                              placeholder="Add tracking"
+                              className="h-7 w-28 rounded border border-gray-300 px-2 text-xs dark:border-neutral-600 dark:bg-neutral-900"
+                            />
+                            <button
+                              onClick={() => void saveTracking(o.id)}
+                              disabled={savingId === o.id || !(trackingDraft[o.id] ?? "").trim()}
+                              className="rounded border border-gray-300 px-1.5 py-1 text-xs font-semibold disabled:opacity-40 dark:border-neutral-600"
+                              aria-label="Save tracking number"
+                            >
+                              {savingId === o.id ? "…" : "Save"}
+                            </button>
+                          </div>
                         )}
                       </td>
                       <td className="py-2.5">

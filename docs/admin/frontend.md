@@ -1569,3 +1569,33 @@ withholding a paid order silently is the worse failure.
 Tracking does not come back automatically. "Ship through the app" means labels are created on
 their side; nothing tells this database an order shipped, so status stays `processing` until
 someone updates it. That is the next gap to close if this workflow stays.
+
+## Tracking numbers close the CSV loop (2026-08-17)
+
+The `Orders` panel takes a tracking number inline per row. `PATCH /api/admin/shop/orders`
+persists it and **flips the status to `shipped` automatically** when a tracking number arrives
+without an explicit status — a human who has just pasted a tracking number should not have to
+remember a second field for the customer to see the right thing.
+
+This closes the gap the CSV fulfilment path leaves open. The print provider creates labels on
+their side and nothing tells this database the parcel moved, so without it an order sits at
+`processing` forever and the customer is never told it shipped. The number then renders on the
+customer's own order page.
+
+Audited (`requirePermissionWithAudit`, `shop.edit`) because it is what a customer sees, and "who
+marked this shipped" is a real support question.
+
+Draft values are held per order id in local state, so typing in one row never disturbs another
+mid-edit.
+
+## Orders in the dashboard nav
+
+`/my-account/orders` is in `DASHBOARD_NAV` with `desktopOnly: true`.
+
+The mobile bottom bar is a fixed five-item layout built around a raised centre item; a sixth
+entry does not fit and squeezing one in degrades every other tap target. So the sidebar shows it
+on desktop, and mobile reaches it from a Package button in `DashboardHero` beside Settings —
+exactly the pattern Settings itself already uses for a route that is not in the bar. The button is
+hidden for guests, who have no orders and would land on an empty page.
+
+`BottomNav` filters `desktopOnly` items out; `DeskNav` renders the full list.

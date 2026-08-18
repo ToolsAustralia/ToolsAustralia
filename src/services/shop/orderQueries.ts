@@ -153,3 +153,34 @@ export async function distinctOrderCategories(): Promise<string[]> {
   const values = (await Order.distinct("products.category")) as (string | null)[];
   return values.filter((v): v is string => Boolean(v && v.trim())).sort();
 }
+
+/**
+ * Set an order's tracking number and/or status.
+ *
+ * The CSV fulfilment path leaves this open: the print provider creates the label on
+ * their side and nothing tells this database the parcel moved, so an order would sit
+ * at `processing` forever and the customer would never be told it shipped.
+ *
+ * Setting a tracking number alone implies dispatch, so status follows automatically
+ * unless the caller names one — a human who has just pasted a tracking number should
+ * not have to remember a second field for the customer to see the right thing.
+ */
+export async function updateOrderFulfilment(
+  orderId: string,
+  patch: { status?: OrderStatus; trackingNumber?: string }
+): Promise<{ id: string; status: OrderStatus; trackingNumber?: string } | null> {
+  if (!mongoose.Types.ObjectId.isValid(orderId)) return null;
+
+  const update: Partial<Pick<IOrder, "status" | "trackingNumber">> = {};
+  if (patch.trackingNumber !== undefined) update.trackingNumber = patch.trackingNumber.trim();
+  if (patch.status) update.status = patch.status;
+
+  // Tracking implies shipped, unless an explicit status says otherwise.
+  if (!patch.status && patch.trackingNumber?.trim()) update.status = "shipped";
+
+  const doc = await Order.findByIdAndUpdate(orderId, { $set: update }, { new: true })
+    .select("status trackingNumber")
+    .lean<{ _id: mongoose.Types.ObjectId; status: OrderStatus; trackingNumber?: string } | null>();
+
+  return doc ? { id: String(doc._id), status: doc.status, trackingNumber: doc.trackingNumber } : null;
+}

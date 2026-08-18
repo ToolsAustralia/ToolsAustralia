@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import { requirePermission } from "@/lib/api-auth-permissions";
-import { distinctOrderCategories, listOrders } from "@/services/shop/orderQueries";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
+import {
+  distinctOrderCategories,
+  listOrders,
+  updateOrderFulfilment,
+} from "@/services/shop/orderQueries";
 
 /**
  * Admin order list.
@@ -52,5 +57,46 @@ export async function GET(request: NextRequest) {
     }
     console.error("[shop] admin order list failed:", error);
     return NextResponse.json({ error: "Failed to load orders" }, { status: 500 });
+  }
+}
+
+const patchSchema = z.object({
+  orderId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  status: z.enum(["processing", "shipped", "delivered", "cancelled", "completed"]).optional(),
+  trackingNumber: z.string().trim().max(64).optional(),
+});
+
+/**
+ * Set an order's tracking number and/or status.
+ *
+ * Closes the gap the CSV workflow leaves open: the print provider creates labels on
+ * their side and nothing tells this database an order shipped, so without this an
+ * order sits at "processing" forever and the customer is never told it is on its way.
+ *
+ * Audited — this is what a customer sees on their order page, and "who marked this
+ * shipped" is a real support question.
+ */
+export async function PATCH(request: NextRequest) {
+  const guard = await requirePermissionWithAudit("shop.edit", request, { resourceType: "order" });
+  if (guard instanceof NextResponse) return guard;
+
+  try {
+    await connectDB();
+    const { orderId, status, trackingNumber } = patchSchema.parse(await request.json());
+
+    if (status === undefined && trackingNumber === undefined) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    }
+
+    const updated = await updateOrderFulfilment(orderId, { status, trackingNumber });
+    if (!updated) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
+    return NextResponse.json({ order: updated });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });
+    }
+    console.error("[shop] failed to update order fulfilment:", error);
+    return NextResponse.json({ error: "Failed to update the order" }, { status: 500 });
   }
 }
