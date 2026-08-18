@@ -19,6 +19,14 @@ export interface IOrder extends Document {
      * This is the BASE count — the promo multiplier is applied at fulfilment.
      */
     includedEntries?: number;
+    /**
+     * Product category at purchase time — "Apparel", and whatever else the catalogue
+     * grows into. Snapshotted for the same reason name and price are, plus one more:
+     * it is what the order lists filter on, so a product being recategorised (or
+     * deleted) must not retroactively rewrite which bucket an old order sits in.
+     * Filtering through a join to Product would do exactly that.
+     */
+    category?: string;
     quantity: number;
     price: number;
   }[];
@@ -107,6 +115,7 @@ const OrderSchema = new Schema<IOrder>(
         // from price — there is no dollar-to-entry rate in this system, by law
         // (CLAUDE.md rule 11).
         includedEntries: { type: Number, default: 0, min: 0 },
+        category: { type: String, trim: true },
         quantity: {
           type: Number,
           required: true,
@@ -237,6 +246,9 @@ const OrderSchema = new Schema<IOrder>(
 OrderSchema.index({ user: 1 });
 OrderSchema.index({ status: 1 });
 OrderSchema.index({ createdAt: -1 });
+// Backs the admin order list's category filter ("merch vs tools"), which queries
+// products.category alongside a createdAt sort.
+OrderSchema.index({ "products.category": 1, createdAt: -1 });
 OrderSchema.index({ paymentIntentId: 1 }, { sparse: true });
 // UNIQUE + sparse: the duplicate-print guard. The print provider has no
 // idempotency keys, so if a submission times out and we retry, this index is

@@ -268,3 +268,61 @@ were set before any of them existed.
 `Order.subtotal`, `.gstAmount`, `.shippingCost`, `.totalAmount` are all persisted. An Australian
 tax invoice has to show the GST component, and a support conversation about "why was I charged
 $10" needs the breakdown rather than a single figure to re-derive.
+
+## Order listing — one service, two surfaces (2026-08-17)
+
+`src/services/shop/orderQueries.ts` backs **both** the customer's own history
+(`GET /api/orders`) and the admin list (`GET /api/admin/shop/orders`).
+
+They differ in exactly one way: the customer's call pins `userId` from the session, the admin's
+does not. **That asymmetry is the entire security boundary**, which is why it is stated in the
+service rather than implied. `userId` is read from the session and never from a query parameter,
+and an invalid id matches nothing rather than being dropped from the filter — dropping it would
+widen a customer's own history to every order in the system.
+
+Everything else — filtering, paging, sort, projection, row shape — lives once. Two
+implementations drift, and a projection that gains a field on one surface and not the other is how
+support ends up seeing something the customer cannot.
+
+The projection is an explicit `.select()` include-list. The customer route previously did an
+unprojected `.find().populate("products.product")`, which shipped every full Product document plus
+every address on every row — the unprojected-list footgun CLAUDE.md documents.
+
+### Category is snapshotted onto the order line
+
+`Order.products[].category` is frozen at checkout alongside name, price and `includedEntries`.
+Filtering through a join to `Product` would mean recategorising (or deleting) a product
+retroactively moves old orders between buckets. Indexed as
+`{ "products.category": 1, createdAt: -1 }`, matching how the admin list queries and sorts.
+
+### The merch-vs-tools filter is derived
+
+`distinctOrderCategories()` returns what orders actually contain — `["Apparel"]` today, and tools
+too if they are ever stocked and sold, with no code change. Same reasoning as the shop's facet
+rail: a hard-coded list offers a filter that matches nothing. The admin UI hides the control
+entirely while there is only one category, and it appears by itself the day a second is sold.
+
+### Customer-facing status wording
+
+`processing` is what a paid order sits at until dispatch, and "Processing" reads like a stuck
+payment. The customer page maps it to **"Being made"**, which is what is actually happening to a
+print-to-order garment.
+
+`entriesGranted` renders only above zero — merchandise entries ship switched off pending the
+permit, and "0 free entries" would state a promise we are not making.
+
+### Two dead ends fixed on the checkout success page
+
+- **"View Order Details" pointed at `/my-account`**, which has no orders on it. It promised order
+  details and delivered a dashboard. Now `/my-account/orders`.
+- **"Download Receipt" had no `onClick`** and never did anything. Removed — a button that silently
+  does nothing is worse than no button, because the customer clicks it, gets no file, and contacts
+  support. The receipt is emailed on payment; a downloadable invoice needs a real endpoint behind
+  it.
+
+### Open: no nav entry
+
+`/my-account/orders` is reachable from checkout success and the confirmation email, but is **not**
+in `DASHBOARD_NAV`. That nav is a deliberate five-item mobile bottom bar with a centre-emphasised
+item, and a sixth entry would break the layout — so which item it replaces, or whether orders live
+under an existing section, is a product decision rather than something to guess at.

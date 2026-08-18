@@ -28,6 +28,7 @@ import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManageme
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import ProductManagement from "@/components/admin/ProductManagement";
 import FulfilmentQueue from "@/components/admin/FulfilmentQueue";
+import OrdersManagement from "@/components/admin/OrdersManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
 import PastDueChargeHistory from "./PastDueChargeHistory";
 import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
@@ -171,7 +172,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "repeat-purchases" && "One-time buyers who came back — repeat rate, time-to-return, and the fetchable cohort"}
                   {selectedTab === "chatbot" && "Cobber AI chatbot — availability, daily spend, deflection rate, usage, and conversation transcripts"}
                   {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
-                  {selectedTab === "products" && "Shop catalog — products, variants and included free entries"}
+                  {selectedTab === "products" && "Shop catalog, fulfilment queue and order history"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}
@@ -231,6 +232,11 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
               {/* Fulfilment sits under the catalogue: the print provider's API is
                   unreachable on our account, so paid orders are handed over by CSV. */}
               <FulfilmentQueue />
+              {/* Then the full order history — the fulfilment queue only shows what is
+                  still waiting, and support needs to find an order after it has shipped. */}
+              <div className="mt-6">
+                <OrdersManagement />
+              </div>
             </>
           )}
           {selectedTab === "error-reports" && <ErrorReportsManagement />}

@@ -9,8 +9,7 @@ import {
   Truck,
   Mail,
   Phone,
-  Download,
-  ArrowRight,
+  ArrowRight,
   MapPin,
   CreditCard,
 } from "lucide-react";
@@ -268,8 +267,11 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          {/* Was /my-account, which has no orders on it — the button promised order
+              details and delivered a dashboard. /my-account/orders is the page that
+              actually answers it. */}
           <Link
-            href="/my-account"
+            href="/my-account/orders"
             className="inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-all duration-200"
           >
             View Order Details
@@ -283,10 +285,11 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
             Continue Shopping
           </Link>
 
-          <button className="inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 dark:text-neutral-200 rounded-lg font-medium hover:bg-gray-50 transition-all duration-200">
-            <Download className="w-4 h-4 mr-2" />
-            Download Receipt
-          </button>
+          {/* "Download Receipt" was removed: it had no onClick and never did anything.
+              A button that silently does nothing is worse than no button — a customer
+              clicks it, gets no file, and contacts support. The receipt is emailed on
+              payment (sendShopOrderConfirmation); if a downloadable invoice is wanted
+              later it needs a real endpoint behind it. */}
           </div>
 
           {/* Support Information */}

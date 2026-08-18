@@ -5,6 +5,7 @@ import Order from "@/models/Order";
 import { z } from "zod";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
 import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
+import { listOrders } from "@/services/shop/orderQueries";
 
 const createOrderSchema = z.object({
   products: z
@@ -25,16 +26,33 @@ const createOrderSchema = z.object({
   paymentIntentId: z.string().min(1),
 });
 
-export async function GET() {
+/**
+ * The signed-in customer's own order history.
+ *
+ * Shares listOrders with the admin list; the ONLY difference is that userId is
+ * pinned to the session here, which is the entire security boundary. It is read
+ * from the session and never from a query parameter.
+ *
+ * Previously this did an unprojected .find().populate("products.product"), which
+ * shipped every full Product document plus every address on every order — the
+ * exact unprojected-list footgun CLAUDE.md documents. The shared service projects
+ * an explicit include-list instead.
+ */
+export async function GET(request: NextRequest) {
   try {
     await connectDB();
     const auth = await requireAuthenticatedUserDoc();
     if ("errorResponse" in auth) return auth.errorResponse;
     const { user } = auth;
 
-    const orders = await Order.find({ user: user._id }).populate("products.product").sort({ createdAt: -1 }).lean();
+    const params = request.nextUrl.searchParams;
+    const result = await listOrders({
+      userId: String(user._id),
+      page: Number(params.get("page")) || 1,
+      limit: Math.min(50, Number(params.get("limit")) || 20),
+    });
 
-    return NextResponse.json({ orders });
+    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Error fetching orders:", error);
     return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });

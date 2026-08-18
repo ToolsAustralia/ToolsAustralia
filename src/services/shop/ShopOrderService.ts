@@ -62,6 +62,8 @@ interface ResolvedLine extends CartLine {
   name: string;
   /** Base free entries for one unit, read from the catalog and frozen onto the order. */
   includedEntries: number;
+  /** Category at purchase time — what the order lists filter on. */
+  category: string;
 }
 
 /**
@@ -162,6 +164,7 @@ async function resolveLines(items: readonly CheckoutLineInput[]): Promise<Resolv
       // count. Frozen here so an admin edit between checkout and webhook cannot
       // change what this buyer was promised.
       includedEntries: product.includedEntries ?? 0,
+      category: product.category ?? "",
       quantity: item.quantity,
     });
   }
@@ -204,6 +207,7 @@ export const ShopOrderService = {
         sku: l.sku,
         name: l.name,
         includedEntries: l.includedEntries,
+        category: l.category,
         quantity: l.quantity,
         price: centsToDollars(l.priceCents),
       })),
