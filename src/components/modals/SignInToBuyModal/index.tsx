@@ -28,6 +28,8 @@ import LoginModal from "../LoginModal";
 interface SignInToBuyModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Runs once the session is live, still on this page. */
+  onSignedIn?: () => void;
   /** What they were trying to do, e.g. "add this to your cart". */
   intent?: string;
 }
@@ -37,6 +39,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function SignInToBuyModal({
   isOpen,
   onClose,
+  onSignedIn,
   intent = "add this to your cart",
 }: SignInToBuyModalProps) {
   const pathname = usePathname();
@@ -118,7 +121,16 @@ export default function SignInToBuyModal({
         </ModalContent>
       </ModalContainer>
 
-      <LoginModal isOpen={showLogin} onClose={handleLoginClose} email={email} />
+      {/* redirectTo={null}: signing in here is a step INSIDE buying, not the
+          errand itself. The default push to /my-account would abandon the
+          product and the half-built cart at the worst possible moment. */}
+      <LoginModal
+        isOpen={showLogin}
+        onClose={handleLoginClose}
+        email={email}
+        redirectTo={null}
+        onSignedIn={onSignedIn}
+      />
     </>
   );
 }

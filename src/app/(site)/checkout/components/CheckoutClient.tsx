@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, ShoppingBag } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useSession } from "next-auth/react";
+import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
 import ShopCheckoutPaymentElement from "@/components/payment/ShopCheckoutPaymentElement";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
@@ -63,6 +65,19 @@ export default function CheckoutClient() {
   const router = useRouter();
   const { items, summary, isLoading: isCartLoading } = useCart();
 
+  // A guest could previously fill in their entire delivery address and only
+  // then be told "Unauthorized" in a red box — the 401 body from the checkout
+  // route, rendered raw. Ask up front instead, in the same sheet the product
+  // page uses, and never send them to /login and back.
+  const { status: sessionStatus } = useSession();
+  const [showSignIn, setShowSignIn] = useState(false);
+
+  useEffect(() => {
+    // `loading` is not `signed out`; acting on it would flash the sheet at
+    // every signed-in customer before the session resolves.
+    if (sessionStatus === "unauthenticated") setShowSignIn(true);
+    if (sessionStatus === "authenticated") setShowSignIn(false);
+  }, [sessionStatus]);
   const { trackInitiateCheckout } = usePixelTracking();
   // The shop-shaped Started Checkout, NOT trackKlaviyoStartedCheckout — that one
   // is the package schema and demands package_id / package_type.
@@ -352,6 +367,11 @@ export default function CheckoutClient() {
           </dl>
         </aside>
       </div>
+      <SignInToBuyModal
+        isOpen={showSignIn}
+        onClose={() => setShowSignIn(false)}
+        intent="finish your order"
+      />
     </div>
   );
 }

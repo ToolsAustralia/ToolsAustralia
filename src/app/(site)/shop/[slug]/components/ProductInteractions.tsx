@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ShoppingCart, Minus, Plus, Ticket } from "lucide-react";
 import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { ProductData } from "@/data";
@@ -40,6 +40,9 @@ interface ProductInteractionsProps {
 export default function ProductInteractions({ product }: ProductInteractionsProps) {
   const [quantity, setQuantity] = useState(1);
   const [showSignIn, setShowSignIn] = useState(false);
+  // Set when the sign-in sheet interrupted an add, so the session landing can
+  // finish what the customer already asked for instead of making them click twice.
+  const [addAfterSignIn, setAddAfterSignIn] = useState(false);
   const { showToast } = useToast();
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
@@ -124,6 +127,20 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
     ? Boolean(selectedVariant) && isVariantPurchasable(variantHost, selectedVariant!)
     : !trackInventory || (product.stock ?? 0) > 0;
 
+  // Finish the interrupted add once the session is actually live.
+  //
+  // Deliberately an effect and not a callback from the modal: handleAddToCart
+  // reads session from its closure, so calling it straight from onSignedIn
+  // would see the PRE-login value, hit the same guard and reopen the sheet.
+  // This runs on the render where useSession has published the new id.
+  useEffect(() => {
+    if (!addAfterSignIn || !session?.user?.id) return;
+    setAddAfterSignIn(false);
+    void handleAddToCart();
+    // handleAddToCart is redefined every render; depending on it would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addAfterSignIn, session?.user?.id]);
+
   const handleQuantityChange = (change: number) => {
     setQuantity(Math.max(1, Math.min(product.stock || 999, quantity + change)));
   };
@@ -138,6 +155,7 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       // Was a native alert(): a browser dialog over a dark themed page, with no
       // way to actually sign in from it, and the chosen colour and size lost on
       // dismiss. The sheet keeps the selection and hands straight to LoginModal.
+      setAddAfterSignIn(true);
       setShowSignIn(true);
       return;
     }
@@ -466,7 +484,13 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       */}
       <SignInToBuyModal
         isOpen={showSignIn}
-        onClose={() => setShowSignIn(false)}
+        onClose={() => {
+          setShowSignIn(false);
+          setAddAfterSignIn(false);
+        }}
+        onSignedIn={() => {
+          setShowSignIn(false);
+        }}
         intent="add this to your cart"
       />
     </div>

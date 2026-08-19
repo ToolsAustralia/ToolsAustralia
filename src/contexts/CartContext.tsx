@@ -175,6 +175,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // instead of letting both fire.
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSyncingRef = useRef(false);
+  // Operations this client actually PUT ON THE WIRE. Distinct from "was queued
+  // when the load started": a guest's adds sit in the queue unsent, because the
+  // drain is gated on userId. See loadCartFromServer.
+  const sentOperationIdsRef = useRef<Set<string>>(new Set());
 
   const fetchServerCartItems = useCallback(async (): Promise<CartItem[]> => {
     const response = await fetch("/api/cart");
@@ -191,17 +195,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      // Snapshot which operations the server response can possibly account for.
-      // Anything queued AFTER this point is newer than the response and must
-      // survive it — the load used to clear the queue wholesale, so an
-      // add-to-cart during the ~500ms initial fetch was silently discarded and
-      // the item never reached the server. Nothing errored; it just vanished.
-      const inFlightAtLoadStart = new Set(pendingOperationsRef.current.map((op) => op.id));
+      // Only operations we actually SENT can be reflected in the server's
+      // response, so only those may be dropped from the queue.
+      //
+      // This used to snapshot everything queued at load start, which is right
+      // for the mid-load race it was written for but wrong for the commoner
+      // one: a signed-out shopper adds an item, the drain never runs because
+      // it is gated on userId, they sign in, this load fires on the userId
+      // transition - and their never-sent add was treated as accounted for and
+      // thrown away. The item vanished at the exact moment the customer proved
+      // they wanted to buy it.
+      const accountedFor = sentOperationIdsRef.current;
 
       const items = await fetchServerCartItems();
 
       setCartState((prev) => {
-        const survivors = prev.pendingOperations.filter((op) => !inFlightAtLoadStart.has(op.id));
+        const survivors = prev.pendingOperations.filter((op) => !accountedFor.has(op.id));
+        // Those ids are spent - the response has absorbed them.
+        accountedFor.clear();
         // Operations queued mid-load are not reflected in `items`, so the cart
         // stays dirty and the drain is rescheduled for them.
         return {
@@ -242,6 +253,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       // Process operations in sequence to maintain order
       for (const operation of operations) {
+        // Recorded before the request, not after: an operation that reaches the
+        // server and then fails is still accounted for by the next load.
+        sentOperationIdsRef.current.add(operation.id);
         try {
           let response: Response;
 

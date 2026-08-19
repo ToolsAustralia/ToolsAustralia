@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Star, ShoppingCart, Ticket, Check, Loader2, AlertCircle, RefreshCw } from "lucide-react";
@@ -13,6 +13,7 @@ import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
 import { cn } from "@/utils/cn";
+import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
 
 // Types
 interface ProductItem {
@@ -109,6 +110,7 @@ export default function ProductCard({
   const { trackAddToCart } = usePixelTracking();
   const { trackAddToCart: trackKlaviyoAddToCart } = useKlaviyoTracking();
   const { userData, isAuthenticated } = useUserContext();
+  const [showSignIn, setShowSignIn] = useState(false);
 
   // Helper functions
   const getValidRating = (rating: unknown): number => {
@@ -313,6 +315,14 @@ export default function ProductCard({
     // AddToCart to Meta, TikTok and Klaviyo for a line that never persisted — and
     // then the product page emitted a second one for the same intent. Every
     // other render site leaves this undefined, so their behaviour is unchanged.
+    // Signed out, the optimistic add was queued and could never drain — both
+    // drain paths are gated on userId — so the card sat on "Adding…" forever
+    // and nothing was ever saved. Ask first.
+    if (!isAuthenticated) {
+      setShowSignIn(true);
+      return;
+    }
+
     if (onAddToCart) {
       onAddToCart(product);
       return;
@@ -371,7 +381,7 @@ export default function ProductCard({
       // Don't throw - tracking should not break cart functionality
     }
 
-  }, [productData, addToCart, onAddToCart, product, trackAddToCart, trackKlaviyoAddToCart]);
+  }, [productData, addToCart, onAddToCart, product, isAuthenticated, trackAddToCart, trackKlaviyoAddToCart]);
 
   // Retry the operation that actually failed, so it leaves failedOperations and the card
   // returns to its normal state. Re-running handleAddToCart would queue a second operation
@@ -630,6 +640,13 @@ export default function ProductCard({
             </div>
           </div>
         </div>
+      {/* Same sheet as the product page, so a guest add from a card asks for a
+          sign-in instead of queueing an operation that can never drain. */}
+      <SignInToBuyModal
+        isOpen={showSignIn}
+        onClose={() => setShowSignIn(false)}
+        intent="add this to your cart"
+      />
       </div>
     );
   }
@@ -794,6 +811,13 @@ export default function ProductCard({
           </div>
         </div>
       </div>
+      {/* Same sheet as the product page, so a guest add from a card asks for a
+          sign-in instead of queueing an operation that can never drain. */}
+      <SignInToBuyModal
+        isOpen={showSignIn}
+        onClose={() => setShowSignIn(false)}
+        intent="add this to your cart"
+      />
     </div>
   );
 }
