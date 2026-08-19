@@ -219,7 +219,7 @@ Expected: Mongoose `ValidationError: packageType: 'shop' is not a valid enum val
 
 Do **not** widen the ~36 same-shaped unions elsewhere in `src/` (Klaviyo helpers, partner-discount queue UI, admin types). They are separate vocabularies a shop payment never reaches. Widening them would advertise paths that do not exist.
 
-- [ ] **Step 5: Run and commit**
+- [ ] **Step 5: Run and commit**                              
 
 ```bash
 npm run test:shop-entries && npm run type-check && npm run lint

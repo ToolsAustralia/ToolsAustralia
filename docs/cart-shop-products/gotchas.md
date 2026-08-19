@@ -253,3 +253,24 @@ The CSV branch of the fulfilment route is the exception — it returns a file an
   rather than a 28-char uid, and as at 2026-08-19 the deployment rejects it on
   every header scheme tried (`x-uid`, `x-api-key`, bearer, and six others) with
   `403 Authentication failed`. Outstanding with the supplier.
+
+## Rotating the print-provider API key (2026-08-19) — do not
+
+Rotation was attempted on the strength of their docs and reverted the same day.
+
+- The rotated key is `rv_live_…` (56 chars). The deployment **rejects it on every
+  endpoint and every auth scheme** — `x-uid`, `x-api-key`, `Authorization: Bearer`,
+  and six others, across nine host and path-prefix combinations.
+- The tell that it is their fault, not ours: the API returns a **byte-identical
+  403** for the real rotated key and for the literal string
+  `"obviously-not-a-real-key"`. It does not recognise the new format at all.
+- Their docs say *"After you rotate, only the new key is accepted — the previous
+  key stops working immediately."* **Both halves are false.** The previous
+  28-character uid was pasted back into `.env.local` and every route returned 200
+  immediately.
+
+So the working credential is the account **uid**, and rotation issues a parallel
+key the deployed API ignores. Until the supplier confirms otherwise, treat the uid
+as the only credential and **do not rotate it** — there is no in-product way back
+if the revert ever stops working, and the uid is the join key for product ids and
+mockup URLs as well as for auth.
