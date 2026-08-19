@@ -57,6 +57,8 @@
     "smoke:chat-provider": "tsx scripts/smoke-chat-provider.ts",
     "test:chat-faqs": "tsx src/data/__tests__/faqs.test.ts",
     "test:discount-visit": "tsx src/utils/partner-discounts/__tests__/record-discount-visit.test.ts",
+    "test:brand-lane": "tsx src/utils/metrics/__tests__/brand-lane.test.ts",
+    "test:brand-performance": "tsx src/services/analytics/__tests__/brand-performance.test.ts",
     "test:norm-user-service-account": "tsx src/models/__tests__/User.serviceAccount.test.ts",
     "test:norm-call-log": "tsx src/models/__tests__/NormCallLog.test.ts",
     "test:norm-receipt": "tsx src/models/__tests__/NormTriggerReceipt.test.ts",

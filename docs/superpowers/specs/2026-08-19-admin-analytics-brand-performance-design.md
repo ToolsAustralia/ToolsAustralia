@@ -31,7 +31,7 @@ Underneath all three: **the admin analytics surface has grown two of everything.
 | 3 | **"Last month" = previous calendar month.** Literal 1st→last day of the prior calendar month in AEST, independent of the selected range. |
 | 4 | **Comparison appears in both places**, reading one service response: a card on the Overview *and* inline deltas on Brand Performance rows. Plus a full-screen drawer for the complete metric table. |
 | 5 | **Deltas are opt-in.** The default table shows clean figures; a `Compare` toggle reveals delta chips. Full period-vs-period detail lives in the drill-down. |
-| 6 | **Page Analytics and Brand Performance both stay.** A page and a dashboard section are not redundant surfaces. The requirement is that they must never show *conflicting* numbers — enforced by a shared aggregation path and a reconciliation test, not by deleting a surface. |
+| 6 | **Page Analytics and Brand Performance both stay.** A page and a dashboard section are not redundant surfaces. The requirement is that they must never show *conflicting* numbers — enforced by a shared lane mapping both surfaces import, not by deleting a surface (see §9). |
 | 7 | **UI over prose.** Minimise explanatory copy; carry meaning in layout, grouping and affordances. |
 | 8 | **No new permission.** Reuse `facebookAds.view`, consistent with every sibling analytics route. |
 
@@ -308,9 +308,11 @@ Page Analytics (`/admin/promo-analytics`) keeps its per-page funnel — visits �
 
 They already share three of the four rules — `getAggregatedByToolbox` uses `excludeRefundedBenefitsGrantedStages()`, the `$nor` renewal exclusion, and `PRIZE_LANE_SLUGS`. What differs is only *where the lane mapping is written*: it has a local `$switch` built from `PRIZE_LANE_SLUGS`, and Brand Performance would add a second one.
 
-**Action:** extract that `$switch` builder into `brand-lane.ts` as `brandLaneSwitchStage(field, lane)` and have `getAggregatedByToolbox` import it. One lane mapping in the codebase, used by both surfaces.
+**Action (done):** the `$switch` builder lives in `brand-lane.ts` as `brandLaneSwitchExpr(field, lane)`, and `getAggregatedByToolbox` imports it. One lane mapping in the codebase, used by both surfaces — not two copies kept in step by review.
 
-**Guard:** a tsx test (§12) asserting that for the same window, `getAggregatedByToolbox().byToolbox[i].{conversions, revenue}` equals `BrandPerformanceService`'s `Toolbox × Built prize` `{purchases, revenue}` for every lane. If a future change makes them diverge, the test fails rather than the dashboard quietly lying.
+**Guard (done, narrower than first drafted):** `test:brand-lane` asserts the Mongo `$switch` and the JS resolver produce an identical mapping for every registry entry, in both lanes. That is the structural guarantee: the two surfaces cannot bucket a purchase differently, because they execute the same mapping.
+
+A full DB-level reconciliation test — run both aggregations over one seeded window and diff the per-lane totals — is **not** included, and this is a deliberate narrowing of the original plan. Both sides are Mongo-coupled, and the repo has no unit-test database: the e2e suite owns the only seeded Mongo and wipes it each run, so a `tsx` script has nothing to run against. Sharing the mapping eliminates the failure mode that test was meant to catch. The residual risk is a divergence in the surrounding `$match` — today both use `excludeRefundedBenefitsGrantedStages()` and the same `billingReason` renewal rule. If the two ever need proving equal on real data, that belongs in an e2e-seeded spec, not here.
 
 ---
 
@@ -346,7 +348,7 @@ No test runner exists; tests are standalone `tsx` scripts with their own `packag
 |---|---|
 | `test:brand-lane` | `resolveBrandLane*` — toolset segment extraction; toolbox from explicit suffix; toolbox from page default on bare toolset URLs; `cash-prize` → null under toolbox; `unknown://meta-ad/…` → null; every `PRIZE_LANE_SLUGS` entry maps to a valid lane in both directions |
 | `test:brand-performance` | ROAS recomputed from totals not averaged; renewals excluded via `billingReason`; refunded rows excluded; `newMembership*Pct` = 0 (not `NaN`) on zero denominators; `platform=all` sums spend but not platform revenue; unattributed spend appears in the footer so Total reconciles |
-| `test:brand-performance-reconciliation` | §9 — `getAggregatedByToolbox` and `BrandPerformanceService` toolbox/built-prize agree per lane |
+| ~~`test:brand-performance-reconciliation`~~ | **Not built** — see §9. The lane mapping is now shared rather than duplicated, and `test:brand-lane` asserts the Mongo `$switch` matches the JS resolver. A DB-level diff needs a seeded Mongo this repo has no unit-test harness for. |
 | `test:previous-calendar-month` | AEST correctness across a DST transition and across a year boundary; January → previous December |
 
 Existing suites that must still pass: `npm run test:chat-faqs` (unaffected), plus `npm run lint`, `npm run type-check`, `npm run norm:smoke`.

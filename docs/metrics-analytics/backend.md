@@ -183,3 +183,31 @@ number. Unanimous multi-URL destinations classify normally, so the common case i
 ## Dashboard redesign
 
 (Migrated stub from `docs/dashboard-redesign-implementation.md` — _TODO: read root._)
+
+## Brand-lane resolution (`src/utils/metrics/brand-lane.ts`, 2026-08-19)
+
+The single mapping from a promotion identifier to the brand row it belongs in. Two axes, both derived from `PRIZE_LANE_SLUGS` / `TOOLBOX_LANE_ORDER`:
+
+- **toolset** — the power-tool brand (`ryobi | milwaukee | dewalt | makita | hikoki`)
+- **toolbox** — the storage brand (`sidchrome | kincrome | milwaukee | gearwrench`)
+
+**Why it is one module rather than a resolver per caller.** Brand analytics joins two sources that can only ever be keyed differently: spend comes from `LandingPageMetricsDaily` keyed on the **canonical URL** (query strings are stripped, so a visitor's `?toolbox=` selection is invisible), while outcomes come from `PaymentEvent` keyed on `data.promotionSlug` or `data.builtPrizeSlug`. Applying the *same* rules to both keys is what makes the two sides bucket identically instead of by coincidence. Fork it and a brand's ad spend and the revenue it produced land in different rows with nothing to flag it.
+
+Four entry points, all agreeing by construction:
+
+| Function | Input | Notes |
+|---|---|---|
+| `resolveBrandLaneFromBuiltPrize` | `ryobi-kincrome` | exact — a built prize names both halves |
+| `resolveBrandLaneFromPromoSlug` | `/promotions/<slug>`'s slug | bare toolset slugs resolve their toolbox via `getPageDefaultPrizeSlug` |
+| `resolveBrandLaneFromCanonicalUrl` | full canonical URL | extracts the slug, then defers to the above |
+| `brandLaneSwitchExpr` | a Mongo field path | `$switch` for in-database bucketing |
+
+**The page-default fallback is load-bearing.** A bare `/promotions/ryobi` has no toolbox in the identifier, so the toolbox lane resolves through `getPageDefaultPrizeSlug('ryobi')` → `ryobi-milwaukee` → `milwaukee`. That is the toolbox the ad's traffic actually saw on first paint, and it is exactly what the server records for a visitor who never touched the builder — so both sides agree by construction.
+
+⚠️ **Known, accepted skew:** `getDefaultPrizeForToolsetSlug` prefers the Milwaukee toolbox, so bare-toolset-URL spend concentrates on Milwaukee in the toolbox view. That is the literal truth of what was advertised, not an error. The `built-prize` basis is the lens that shows how demand redistributes away from the default.
+
+**Unrecognised inputs resolve to `null` and are DROPPED, never bucketed somewhere plausible** — notably `cash-prize` (no toolbox lane) and the `unknown://meta-ad/<id>` placeholder rows the sync writes when a platform can't resolve an ad's destination. Callers surface these as an "Unattributed" row so totals still reconcile.
+
+**Server-safety:** this module is imported by services and repositories, so it must never import the prize-builder's `TOOLBOXES` / `TOOLSETS` constants (they live under `src/components/**`). `PRIZE_LANE_SLUGS` in `src/config/promo-landing-slugs.ts` is the server-safe registry.
+
+`brandLaneSwitchExpr` is shared with `PromoAnalyticsRepository.getAggregatedByToolbox`, so the Page Analytics tab and the Overview's Brand Performance section cannot disagree about which lane a purchase belongs to. `npm run test:brand-lane` asserts the `$switch` and the JS resolver produce identical mappings for every registry entry in both lanes.

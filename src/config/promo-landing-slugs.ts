@@ -112,8 +112,57 @@ export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSl
  * `cash-prize` is deliberately absent — it has no toolbox lane, so it is excluded from
  * toolbox rollups rather than bucketed somewhere misleading.
  */
-const TOOLBOX_LANE_ORDER = ["sidchrome", "kincrome", "milwaukee", "gearwrench"] as const;
+export const TOOLBOX_LANE_ORDER = ["sidchrome", "kincrome", "milwaukee", "gearwrench"] as const;
 export type ToolboxLaneId = (typeof TOOLBOX_LANE_ORDER)[number];
+
+/**
+ * Display label + wordmark for every brand lane, both axes.
+ *
+ * Lives here beside the registries it describes rather than inside a single admin component,
+ * which is where the toolset half used to live — a fork that covered only 5 of the 9 lanes and
+ * had already gone stale once (HiKOKI was missing from the ROAS table for its whole first run).
+ *
+ * The `Record<…>` types are load-bearing: adding a brand to `TOOLSET_LANDING_SLUGS` or
+ * `TOOLBOX_LANE_ORDER` fails compilation here until its label and wordmark are supplied, so a
+ * new brand cannot silently appear as an unlabelled row.
+ *
+ * ⚠️ Milwaukee appears in BOTH maps with the same label and wordmark — it is genuinely both a
+ * power-toolset brand and a toolbox brand. Any UI showing these must make the active lane
+ * obvious, because the artwork alone cannot distinguish the two rows.
+ */
+export interface BrandLaneDisplay {
+  label: string;
+  /** Wordmark under /public/images/brands/name/. */
+  logoPath: string;
+}
+
+const wordmark = (slug: string) => `/images/brands/name/${slug}Text.svg`;
+
+export const TOOLSET_LANE_DISPLAY: Record<ToolsetLandingSlug, BrandLaneDisplay> = {
+  ryobi: { label: "Ryobi", logoPath: wordmark("ryobi") },
+  milwaukee: { label: "Milwaukee", logoPath: wordmark("milwaukee") },
+  dewalt: { label: "Dewalt", logoPath: wordmark("dewalt") },
+  makita: { label: "Makita", logoPath: wordmark("makita") },
+  hikoki: { label: "HiKOKI", logoPath: wordmark("hikoki") },
+};
+
+export const TOOLBOX_LANE_DISPLAY: Record<ToolboxLaneId, BrandLaneDisplay> = {
+  sidchrome: { label: "Sidchrome", logoPath: wordmark("sidchrome") },
+  kincrome: { label: "Kincrome", logoPath: wordmark("kincrome") },
+  milwaukee: { label: "Milwaukee", logoPath: wordmark("milwaukee") },
+  gearwrench: { label: "GearWrench", logoPath: wordmark("gearwrench") },
+};
+
+/** Label + wordmark for a lane id, or a titlecased fallback for an id the registries don't know. */
+export function getBrandLaneDisplay(laneId: string, lane: "toolset" | "toolbox"): BrandLaneDisplay {
+  const map = lane === "toolset" ? TOOLSET_LANE_DISPLAY : TOOLBOX_LANE_DISPLAY;
+  return (
+    (map as Record<string, BrandLaneDisplay | undefined>)[laneId] ?? {
+      label: laneId.charAt(0).toUpperCase() + laneId.slice(1),
+      logoPath: "",
+    }
+  );
+}
 
 export const PRIZE_LANE_SLUGS: ReadonlyArray<{
   slug: PrizeSlug;

@@ -1595,3 +1595,34 @@ The `backdrop-blur-sm` on the sticky bar *does* create a containing block for ab
 **Behaviour note:** the Overview's custom-range *trigger label* is now the hook's compact `"1 Jun – 30 Jun"` rather than its old `"Jun 1 - Jun 30, 2025"` — the same string the other four tabs already showed. The longer form is still used for the per-card KPI tag (`formatAbbreviatedDate`, kept local to `DashboardOverview`).
 
 **Klaviyo and A/B Testing are deliberately still absent** from `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR`: neither uses this filter (Klaviyo drives its own `hourRange`; A/B Testing has no date filter). Adding them would mount an empty header slot.
+
+## Prize performance → Brand performance (2026-08-19)
+
+Phase 2 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-analytics-brand-performance-design.md). `overview/sections/PrizePerformanceCard.tsx` is **deleted**; `overview/sections/BrandPerformanceCard.tsx` takes its slot in `DashboardOverview`.
+
+**What changed and why.** The old card covered only the **toolset** lane (it parsed the first path segment of `/promotions/<slug>` and deliberately discarded the `-<toolbox>` suffix), and its revenue was **platform-reported** — so the four toolbox brands had no ROAS surface at all, and no view could answer "how much of this brand's return is new membership?".
+
+**Three `Segmented` controls plus a Compare toggle**, no explanatory paragraphs:
+
+| Control | Values | What it changes |
+|---|---|---|
+| Lane | Toolset / Toolbox | which brand axis groups the rows |
+| Basis | Landing page / Built prize / Platform | where the OUTCOME figures come from |
+| Platform | All / Meta / TikTok | spend scope (and revenue scope under the platform basis) |
+| Compare | on/off | adds Δ chips vs the previous calendar month |
+
+Columns: **Brand · ROAS · Spend · Revenue · Purchases · New members · New memb %**. Purchases counts all five acquisition categories; New members counts `membership-purchase` only.
+
+⚠️ **Milwaukee is in BOTH lanes** — same wordmark, different population. The brand cell renders the wordmark alone (name on `alt`), so the active Lane pill is the only thing distinguishing a Milwaukee-the-toolset row from a Milwaukee-the-toolbox one. Do not weaken that control.
+
+**Spend is always URL-derived, for every basis** — ad platforms cannot see which combination a visitor built (`canonicalizeLandingUrl` strips the query). Under the two non-landing-page bases the Spend column header therefore reads **"Spend · URL"**, and the basis `Segmented` carries a `title` explaining the join. One tooltip, not a paragraph.
+
+**Under `basis=platform`**, New members / New memb % render **`—`**, never `0` — platform data has no membership split, and a zero would read as "we sold none". With `platform=all` the response sets `meta.blendedPlatformRevenue` and the card shows the double-counting caveat (the same purchase can be claimed by Meta and TikTok).
+
+**The Unattributed footer row** carries spend whose URL resolved to no lane (`unknown://meta-ad/…` placeholders, non-promotion pages, `cash-prize` under the toolbox lane) *and* revenue whose event has no `promotionSlug`/`builtPrizeSlug`. It is included in the Total. Without it the Total would silently disagree with both the ad account and the Overview revenue card.
+
+**`PrizePerformanceAdsModal` is unchanged** and still the row drill-down — it is URL-keyed per-ad detail, which stays correct regardless of basis.
+
+**Display registry moved.** `BRAND_DISPLAY_NAME` used to live inside the card and covered only 5 of the 9 lanes. It is now `TOOLSET_LANE_DISPLAY` / `TOOLBOX_LANE_DISPLAY` + `getBrandLaneDisplay()` in `src/config/promo-landing-slugs.ts`, typed as `Record<ToolsetLandingSlug|ToolboxLaneId, …>` so a new brand fails compilation until its label and wordmark exist.
+
+**`ProgressBar` gained `tone`.** The New memb % bar passes `tone="neutral"`; the default `"risk"` scale (green<50 / amber / red>80) is a *budget* scale and would paint a healthy 85% share red. Existing callers are unaffected.

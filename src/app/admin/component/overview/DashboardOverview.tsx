@@ -8,7 +8,7 @@ import MembershipCard from "./sections/MembershipCard";
 import RevenueBreakdownCard from "./sections/RevenueBreakdownCard";
 import AdvertisingPlatformCard from "./sections/AdvertisingPlatformCard";
 import MerByDrawCard from "./sections/MerByDrawCard";
-import PrizePerformanceCard from "./sections/PrizePerformanceCard";
+import BrandPerformanceCard from "./sections/BrandPerformanceCard";
 import TopDrawsCard from "./sections/TopDrawsCard";
 import UpcomingRenewalsCard from "./sections/UpcomingRenewalsCard";
 import ActivityCard from "./sections/ActivityCard";
@@ -175,8 +175,8 @@ export default function DashboardOverview() {
         </div>
       </div>
 
-      {/* Prize performance — ad spend & return by prize (redesign Phase 4, row 3b) */}
-      <PrizePerformanceCard
+      {/* Brand performance — spend & return by brand lane (toolset / toolbox) */}
+      <BrandPerformanceCard
         dateRange={dateRange}
         startDate={childStartDate}
         endDate={childEndDate}

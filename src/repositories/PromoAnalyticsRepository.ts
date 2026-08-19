@@ -9,9 +9,11 @@ import type { ConvertingPlatform } from "@/types/attribution";
 import { listPrizes, getPrizeLabel } from "@/config/prizes";
 import {
   TOOLSET_LANDING_SLUGS,
-  PRIZE_LANE_SLUGS,
   getPageDefaultPrizeSlug,
 } from "@/config/promo-landing-slugs";
+// Lane bucketing is shared with BrandPerformanceService so the Page Analytics tab and the
+// Overview's Brand Performance section cannot disagree about which lane a purchase is in.
+import { brandLaneSwitchExpr, BRAND_LANE_PRIZE_SLUGS } from "@/utils/metrics/brand-lane";
 import { getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 // Type-only. Shared with the functional core so the write path cannot silently lose a field
 // again — see the note on `createVisit`.
@@ -1095,18 +1097,17 @@ export class PromoAnalyticsRepository {
   ): Promise<{ byToolbox: ToolboxMetrics[] }> {
     await connectDB();
 
-    // `$switch` over the lane registry. Anything unrecognised — notably `cash-prize`, which has
-    // no toolbox lane — resolves to null and is dropped, never bucketed somewhere plausible.
-    const laneOf = (field: string) => ({
-      $switch: {
-        branches: PRIZE_LANE_SLUGS.map(({ slug, toolbox }) => ({
-          case: { $eq: [field, slug] },
-          then: toolbox,
-        })),
-        default: null,
-      },
-    });
-    const LANE_SLUGS = PRIZE_LANE_SLUGS.map((l) => l.slug);
+    // `$switch` over the lane registry, SHARED with `BrandPerformanceService` via
+    // `brandLaneSwitchExpr`. This tab and the Overview's Brand Performance section are allowed
+    // to answer different questions, but never to contradict each other on the same one — so
+    // the lane mapping lives in exactly ONE place (src/utils/metrics/brand-lane.ts) and both
+    // import it. Guarded by `test:brand-performance-reconciliation`, which fails if the two
+    // surfaces' per-lane conversions/revenue ever diverge.
+    //
+    // Anything unrecognised — notably `cash-prize`, which has no toolbox lane — resolves to
+    // null and is dropped, never bucketed somewhere plausible.
+    const laneOf = (field: string) => brandLaneSwitchExpr(field, "toolbox");
+    const LANE_SLUGS = BRAND_LANE_PRIZE_SLUGS;
 
     const [builderAgg, signupAgg, convAgg] = await Promise.all([
       PromoAnalyticsVisit.aggregate<{ _id: string; builders: number; interactedBuilders: number }>([
