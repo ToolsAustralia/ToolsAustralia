@@ -26,7 +26,7 @@ import type { SpendByUrlPlatform } from "@/hooks/queries/useSpendByUrlAnalytics"
 import { resolveAestDateWindow } from "@/utils/admin/resolveAestDateWindow";
 import { cn } from "@/utils/cn";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
-import PrizePerformanceAdsModal from "@/components/modals/PrizePerformanceAdsModal";
+import BrandPerformanceAdsModal from "@/components/modals/BrandPerformanceAdsModal";
 
 const AEST_TIMEZONE = "Australia/Sydney";
 
@@ -500,7 +500,7 @@ export default function BrandPerformanceCard({
         )}
       </Card>
 
-      <PrizePerformanceAdsModal
+      <BrandPerformanceAdsModal
         isOpen={!!selected}
         onClose={() => setSelected(null)}
         brandLabel={selected?.brand ?? ""}

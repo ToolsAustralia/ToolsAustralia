@@ -256,8 +256,8 @@ function ComparisonTable({ metrics, fmt, DeltaCell, unequal, currentDays, previo
         </thead>
         <tbody>
           {metrics.map((m) => {
-            const curPerDay = perDay(m.current, currentDays, m.format);
-            const prevPerDay = perDay(m.previous, previousDays, m.format);
+            const curPerDay = perDay(m.current, currentDays, m.format, m.stock);
+            const prevPerDay = perDay(m.previous, previousDays, m.format, m.stock);
             return (
               <tr
                 key={m.key}

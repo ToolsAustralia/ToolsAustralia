@@ -1653,3 +1653,20 @@ An arrow wants "vs the previous equivalent stretch"; this table wants a **stable
 **`RevenueBreakdownItem` is a live union** (bare number on older payloads, object on newer). Every read goes through the model's `itemRevenue` / `itemCount` helpers — reading `.purchaseCount` off the numeric form would yield `NaN`. Guarded by `npm run test:period-comparison`.
 
 **Deliberately absent: a "Contribution" / profit row.** `revenue.total` includes renewals while ad spend only buys acquisition, so `revenue − spend` here would flatter. The honest version of that metric is acquisition-scoped and already lives on the **All Platforms** tab (master spec §2). Adding an ambiguous second one would be a new source of truth, which is the thing this work exists to reduce.
+
+## Rendered verification + two fixes it caught (2026-08-19)
+
+The Brand Performance and Period Comparison work was verified **on screen** via the e2e harness (`npm run e2e:env`, isolated seeded DB at :3799, Playwright as `e2e.admin@e2e.local`) rather than by reasoning about the DOM. Two things only surfaced there:
+
+**1. Per-day normalisation was being applied to a stock metric.** "Active memberships" rendered as `1 vs 0.032 per day` — a point-in-time *level* divided by a day count, which is meaningless. `ComparisonMetric` now carries a `stock` flag and `perDay()` returns null for it, exactly as it already did for ratios. `activeSubscriptions` is the only stock in the set; `test:period-comparison` asserts that and that everything else stays a flow.
+
+**2. `PrizePerformanceAdsModal` was a naming fork.** The card became `BrandPerformanceCard` but the modal (and four code comments) still said `PrizePerformance*`, referencing a file that no longer exists. Renamed to `BrandPerformanceAdsModal`; comments in `spendByUrlAdBreakdown.ts`, `spend-by-url/route.ts`, `CampaignTreeTable.tsx` and `LandingPageMetricsDaily.ts` updated.
+
+**Confirmed working in the browser:**
+
+- **Sticky filter** — scrolled the admin container 2000px; the toolbar held at a constant 24px offset from the container top and stayed visible, with content scrolling *under* it. Ancestor chain verified: sticky bar → `space-y-5` parent (3240px) → `overflow-y-auto` container (827px), no `transform`/`filter`/`contain` in between.
+- **Period comparison** — both windows named ("Today vs 2026-07-01 → 2026-07-31"), per-day column appears on unequal lengths with the "1d vs 31d" note, `deltaPct === null` renders "new" rather than ∞, ROAS shows `—` for per-day.
+- **Drawer** — opens, groups Revenue / Customers / Advertising, carries Acquisition revenue + Contribution, "Biggest movers" sort present.
+- **Brand Performance** — all three `Segmented` controls plus Compare render; all 8 toggle combinations clicked with **zero console errors** and the card still mounted.
+
+⚠️ Not covered: the seeded e2e DB has no ad-spend rows, so Brand Performance was exercised only in its empty state. The populated table, the observed-mix split note and the Δ chips have been verified against production data through the API (see the Norm smoke) but not visually.

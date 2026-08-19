@@ -194,6 +194,21 @@ function testPerDayNormalisation() {
   assert.equal(perDay(62, 31, "count"), 2);
   assert.equal(perDay(4.5, 31, "ratio"), null, "a ratio is already a rate — never normalise it");
   assert.equal(perDay(100, 0, "currency"), null, "no divide-by-zero");
+  // A STOCK is a level, not an amount accrued over the window. "1 active membership" is not
+  // "0.032 active memberships per day" — that rendered on screen before this guard existed.
+  assert.equal(perDay(1, 31, "count", true), null, "stocks are never per-day normalised");
+}
+
+function testStockMetricsAreFlagged() {
+  const m = buildPeriodComparison(stats({}), stats({}));
+  const stocks = m.filter((x) => x.stock).map((x) => x.key);
+  assert.deepEqual(stocks, ["activeSubscriptions"], "active memberships is the only level metric");
+  // Everything else is a flow and MUST stay normalisable, or the per-day column loses its point.
+  for (const x of m) {
+    if (x.key !== "activeSubscriptions") {
+      assert.equal(x.stock, false, `${x.key} should be a flow`);
+    }
+  }
 }
 
 function run() {
@@ -209,6 +224,7 @@ function run() {
   testHeadlineIsASubsetOfAll();
   testInclusiveDayCount();
   testPerDayNormalisation();
+  testStockMetricsAreFlagged();
   console.log("periodComparisonModel tests passed");
 }
 

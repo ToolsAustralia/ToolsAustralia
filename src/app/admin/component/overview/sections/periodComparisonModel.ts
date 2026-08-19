@@ -16,6 +16,15 @@ export interface ComparisonMetric {
   key: string;
   label: string;
   format: MetricFormat;
+  /**
+   * A STOCK (a point-in-time level) rather than a FLOW (an amount accrued over the window).
+   *
+   * Flows divide by day count meaningfully — $3,100 over 31 days is $100/day. Stocks do not:
+   * "1 active membership" is not "0.032 active memberships per day", it is a count that
+   * happened to be 1 at the end of the window. Stocks are therefore excluded from the per-day
+   * column, exactly as ratios are.
+   */
+  stock: boolean;
   /** Shown in the card (the headline set) as well as the drawer. */
   headline: boolean;
   /** Section heading in the drawer. */
@@ -89,6 +98,8 @@ export function buildPeriodComparison(
     key: string;
     label: string;
     format: MetricFormat;
+    /** Omitted = a flow (per-day normalisation is meaningful). See ComparisonMetric.stock. */
+    stock?: true;
     headline: boolean;
     group: ComparisonMetric["group"];
     read: (s: AdminDashboardStats | undefined) => number;
@@ -180,6 +191,8 @@ export function buildPeriodComparison(
       key: "activeSubscriptions",
       label: "Active memberships",
       format: "count",
+      // A LEVEL, not an amount accrued over the window — never divide it by days.
+      stock: true,
       headline: false,
       group: "Customers",
       read: (s) => s?.users.activeSubscriptions ?? 0,
@@ -239,11 +252,12 @@ export function buildPeriodComparison(
     },
   ];
 
-  return spec.map(({ read, ...rest }) => {
+  return spec.map(({ read, stock, ...rest }) => {
     const cur = read(current);
     const prev = read(previous);
     return {
       ...rest,
+      stock: stock === true,
       current: cur,
       previous: prev,
       delta: cur - prev,
@@ -260,8 +274,14 @@ export function buildPeriodComparison(
  * the two windows differ in length. Ratios (ROAS) are already rates and are never normalised —
  * dividing them by days would be meaningless.
  */
-export function perDay(value: number, days: number, format: MetricFormat): number | null {
-  if (format === "ratio" || days <= 0) return null;
+export function perDay(
+  value: number,
+  days: number,
+  format: MetricFormat,
+  stock = false,
+): number | null {
+  // Ratios are already rates; stocks are levels. Neither divides by days meaningfully.
+  if (format === "ratio" || stock || days <= 0) return null;
   return value / days;
 }
 
