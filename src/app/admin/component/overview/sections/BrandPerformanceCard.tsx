@@ -382,6 +382,9 @@ export default function BrandPerformanceCard({
               columns={columns}
               rows={rows}
               renderCell={renderCell}
+              // Seven columns of numbers scroll horizontally on a phone. Without pinning, the
+              // brand wordmark — the only thing identifying a row — scrolls away with them.
+              stickyFirstColumn
               onRowClick={(r) => openDrilldown(r.row)}
               footer={
                 <>

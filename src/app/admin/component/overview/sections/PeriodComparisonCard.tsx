@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { CalendarRange, Maximize2, X, ArrowUpDown } from "lucide-react";
 import { Card, SectionTitle } from "@/components/admin/ui";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
@@ -166,7 +167,19 @@ export default function PeriodComparisonCard({
         )}
       </Card>
 
-      {isOpen && (
+      {/*
+        PORTALED to <body>, not rendered in place.
+
+        The card is a child of DashboardOverview's `space-y-5` stack, and `space-y-*` sets
+        `margin-top` on every child after the first — including position:fixed ones. Rendered
+        inline, the overlay and drawer inherited a 20px top margin and sat 20px below the
+        viewport, leaving a strip of the admin header uncovered (caught on a phone, but it was
+        wrong at every width). Portaling also guarantees the drawer can never be trapped by a
+        future transform/filter ancestor, the same reason the kit's Popover portals.
+
+        Safe during SSR: `isOpen` starts false, so this branch never runs on the server.
+      */}
+      {isOpen && createPortal(
         <>
           <div
             className="fixed inset-0 z-40 bg-black/50"
@@ -206,7 +219,8 @@ export default function PeriodComparisonCard({
               />
             </div>
           </aside>
-        </>
+        </>,
+        document.body,
       )}
     </>
   );
@@ -221,13 +235,29 @@ interface TableProps {
   previousDays: number;
 }
 
+/** Shared header-cell styling, so the two header rows can't drift apart. */
+const TH =
+  "py-2 px-2 text-2xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400";
+
 /**
- * Metric rows × Selected / Last month / Δ.
+ * Sticky first column. The table scrolls horizontally on a phone, and without this the metric
+ * name scrolls away with it — leaving a column of numbers with nothing naming the row. The
+ * background is opaque and matches `Card`, or the scrolling cells show through underneath.
+ */
+const STICKY_COL = "sticky left-0 z-[1] bg-white dark:bg-neutral-900";
+
+/**
+ * Metric rows × Selected / Last month / Δ / Per day.
  *
  * Hand-rolled rather than the kit `DataTable` because the rows are METRICS, not records: the
  * label column is a row header (`<th scope="row">`), the value formats differ per row, and
  * column sorting would be meaningless. Reusing DataTable here would mean fighting its
  * record-shaped API for no gain.
+ *
+ * ⚠️ Column ORDER is load-bearing on narrow screens. Δ sits immediately after the two values it
+ * compares, and the (optional, supporting) per-day column trails it — because on a phone the
+ * table scrolls and whatever is 5th is effectively hidden. Putting per-day 4th pushed Δ — the
+ * entire point of the table — off-screen by default.
  */
 function ComparisonTable({ metrics, fmt, DeltaCell, unequal, currentDays, previousDays }: TableProps) {
   return (
@@ -235,23 +265,11 @@ function ComparisonTable({ metrics, fmt, DeltaCell, unequal, currentDays, previo
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-200 dark:border-neutral-800">
-            <th className="py-2 px-2 text-left text-2xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Metric
-            </th>
-            <th className="py-2 px-2 text-right text-2xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Selected
-            </th>
-            <th className="py-2 px-2 text-right text-2xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Last month
-            </th>
-            {unequal && (
-              <th className="py-2 px-2 text-right text-2xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Per day
-              </th>
-            )}
-            <th className="py-2 px-2 text-right text-2xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Δ
-            </th>
+            <th className={`${TH} text-left ${STICKY_COL}`}>Metric</th>
+            <th className={`${TH} text-right`}>Selected</th>
+            <th className={`${TH} text-right`}>Last month</th>
+            <th className={`${TH} text-right`}>Δ</th>
+            {unequal && <th className={`${TH} text-right whitespace-nowrap`}>Per day</th>}
           </tr>
         </thead>
         <tbody>
@@ -265,7 +283,7 @@ function ComparisonTable({ metrics, fmt, DeltaCell, unequal, currentDays, previo
               >
                 <th
                   scope="row"
-                  className="py-2.5 px-2 text-left text-xs sm:text-sm font-medium text-neutral-700 dark:text-neutral-300"
+                  className={`py-2.5 px-2 text-left text-xs sm:text-sm font-medium text-neutral-700 dark:text-neutral-300 ${STICKY_COL}`}
                 >
                   {m.label}
                 </th>
@@ -275,8 +293,11 @@ function ComparisonTable({ metrics, fmt, DeltaCell, unequal, currentDays, previo
                 <td className="py-2.5 px-2 text-right num text-xs sm:text-sm text-neutral-500 dark:text-neutral-400">
                   {fmt(m.previous, m.format)}
                 </td>
+                <td className="py-2.5 px-2 text-right">
+                  <DeltaCell m={m} />
+                </td>
                 {unequal && (
-                  <td className="py-2.5 px-2 text-right num text-2xs text-neutral-500 dark:text-neutral-400 tabular-nums">
+                  <td className="py-2.5 px-2 text-right num text-2xs text-neutral-500 dark:text-neutral-400 tabular-nums whitespace-nowrap">
                     {curPerDay === null || prevPerDay === null ? (
                       "—"
                     ) : (
@@ -288,9 +309,6 @@ function ComparisonTable({ metrics, fmt, DeltaCell, unequal, currentDays, previo
                     )}
                   </td>
                 )}
-                <td className="py-2.5 px-2 text-right">
-                  <DeltaCell m={m} />
-                </td>
               </tr>
             );
           })}

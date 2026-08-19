@@ -1670,3 +1670,23 @@ The Brand Performance and Period Comparison work was verified **on screen** via 
 - **Brand Performance** — all three `Segmented` controls plus Compare render; all 8 toggle combinations clicked with **zero console errors** and the card still mounted.
 
 ⚠️ Not covered: the seeded e2e DB has no ad-spend rows, so Brand Performance was exercised only in its empty state. The populated table, the observed-mix split note and the Δ chips have been verified against production data through the API (see the Norm smoke) but not visually.
+
+## Mobile + dark verification, and the two bugs it found (2026-08-19)
+
+Both surfaces were rendered on a 390×844 viewport and in dark mode via the e2e harness, not reasoned about.
+
+**Dark mode needed no changes.** Measured rather than eyeballed — the active `Segmented` pill computes to `rgb(10,10,10)` on a `rgb(23,23,23)` card with white text; the Compare / Sync / All-metrics buttons all resolve to `neutral-900` surfaces with `neutral-300/400` text; the asymmetry note and Δ chips keep contrast. Every new class already carried a paired `dark:` variant.
+
+**Mobile found two real bugs:**
+
+**1. The Δ column was scrolled off-screen.** The comparison table scrolls horizontally on a phone, and Δ was 5th — behind the optional per-day column — so the single most important number was hidden by default. **Column order is now load-bearing:** `Metric · Selected · Last month · Δ · Per day`. Δ sits immediately after the two values it compares; per-day is supporting detail and trails it. This is better at every width, not just on mobile.
+
+**2. The drawer sat 20px below the viewport.** `PeriodComparisonCard` is a child of `DashboardOverview`'s `space-y-5` stack, and **`space-y-*` applies `margin-top` to every child after the first — including `position: fixed` ones.** The overlay and drawer inherited `margin: 20px 0 0`, so both rendered 20px down and left a strip of the admin header uncovered. Both are now portaled to `document.body`, which removes the margin and also guarantees they can never be trapped by a future transform/filter ancestor — the same reason the kit's `Popover` portals.
+
+⚠️ **General rule this exposes:** never render a `fixed` overlay as a direct child of a `space-y-*` / `gap` container. It looks correct in the JSX and silently offsets at runtime.
+
+**`DataTable` gained an opt-in `stickyFirstColumn`.** Default off, so no existing table changes (verified in-browser: Advertising and MER are untouched). Brand Performance turns it on — seven columns scroll on a phone, and without pinning the brand wordmark, which is the *only* thing identifying a row, scrolls away leaving anonymous numbers.
+
+**Confirmed on device:** no page-level horizontal scroll; the date filter portals into the always-visible header slot; wide tables scroll inside their own containers; the pinned metric column holds at `left:0` with an opaque matching background through a full horizontal scroll; the drawer fills the viewport at `top:0`.
+
+The `NEXTJS-PORTAL` element that paints over the drawer header under `npm run dev` is the Next.js dev-tools overlay — dev-only, not present in production builds.
