@@ -265,3 +265,51 @@ Nothing built so far is wasted, and the `PrintProvider` service boundary is unaf
 **Does change:** a REST adapter is a much smaller job than the GraphQL client the spec assumed —
 four plain JSON endpoints, no schema, no codegen. The moment a shopId lands, pulling products and
 their images becomes viable.
+
+### 2026-08-19, continued — the account is not provisioned, and that is provable
+
+The docs were re-read in full. They describe **only** GraphQL at
+`https://api.riverr.app/graphql` authenticated with `x-uid` — exactly what we send, and exactly
+what 404s. Documented operations: `getAllShops`, `getShop`, `createShop`, `updateShop`,
+`deleteShop`, `getProducts(shopId, limit)`, `getProduct`, `createProduct`, `updateProduct`,
+`deleteProduct`. Doc sections: Authentication, Getting Started, **Finding GTINs**, Shops, Orders,
+Products, Shipments, Tracking & Fulfillment, Placements, Artwork & Print Files, Errors.
+
+**The docs are stale against the deployment.** The live API is REST.
+
+A Shop in their model is a **connected sales channel**, not the print account —
+its fields are `id, name, platformId, platformName, platformShopId, url`. That is what the CSV
+upload screen's "Channel → Select Shop" dropdown reads.
+
+**`POST /shops` was attempted** (authorised by the owner) with
+`{ name: "Tools Australia", url: "https://toolsaustralia.com.au" }`, and with the payload nested
+under `input` to mirror the GraphQL signature. Both returned:
+
+```
+500  Value for argument "documentPath" is not a valid resource path.
+     Path must be a non-empty string.
+```
+
+**Nothing was created** — `GET /shops` still returns `{"shops":[]}` afterwards `[V]`.
+
+That message is a **Firestore SDK error**. Their handler builds a document path from an
+identifier that is empty for our key. `GET /catalogs` fails the same way with
+`Cannot read properties of undefined (reading 'replace')`, and supplying
+`x-enterprise-id` / `x-org-id` / `x-shop-id` / `x-account-id` changes nothing `[V]`.
+
+**Diagnosis: our API key authenticates but is not linked to an enterprise/organisation record.**
+Reads return empty because there is no enterprise to scope them to; writes 500 because the
+handler cannot build a document path without one. No parameter we can supply fixes this — it is
+provisioning on their side.
+
+**This is now a single question, not five.** Ask TeePrintCentre:
+
+> Our API key authenticates — a bogus key returns 403, ours gets through. But `GET /shops`,
+> `/products`, `/orders` and `/designs` all return empty, and `POST /shops` fails with a Firestore
+> error about an empty `documentPath`. It looks like the key is not associated with an enterprise
+> or organisation record. Can you link our account, and confirm our shopId? Also: the published
+> docs describe a GraphQL endpoint at `api.riverr.app/graphql` which 404s — the deployed API
+> appears to be REST. Which is current?
+
+Until that is answered, **product and image sync is not possible** and the CSV path stays the
+fulfilment route. Nothing built depends on the answer.
