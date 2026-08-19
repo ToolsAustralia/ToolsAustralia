@@ -12,6 +12,7 @@ import {
   Checkbox,
   Button,
   ImageUpload,
+  Select,
 } from "@/components/modals/ui";
 
 export interface ProductVariantFormItem {
@@ -20,6 +21,13 @@ export interface ProductVariantFormItem {
   colour?: string;
   gtin?: string;
   isActive: boolean;
+}
+
+export interface ProductArtworkFormItem {
+  url: string;
+  /** A print-provider placement id — see `ARTWORK_PLACEMENTS`. */
+  placement: string;
+  type: "printing" | "mockup";
 }
 
 export interface ProductFormItem {
@@ -32,6 +40,8 @@ export interface ProductFormItem {
   brand: string;
   variants: ProductVariantFormItem[];
   includedEntries: number;
+  /** Optional because the admin list does not default it the way it defaults `variants`. */
+  printArtwork?: ProductArtworkFormItem[];
   trackInventory: boolean;
   stock: number;
   isActive: boolean;
@@ -54,6 +64,51 @@ const emptyVariant = (): ProductVariantFormItem => ({
   isActive: true,
 });
 
+/**
+ * The placements the fulfilment export knows how to send.
+ *
+ * The values are the print provider's own ids; `PLACEMENTS` in
+ * `src/services/shop/fulfilmentExport.ts` maps each to a column pair in their CSV and
+ * skips any id it does not recognise. Artwork saved against an id that is not in this
+ * list therefore never reaches the printer, so the two lists must stay in step.
+ *
+ * Staff choose the label. Nobody should have to know that Left chest is "3".
+ */
+const ARTWORK_PLACEMENTS: { value: string; label: string }[] = [
+  { value: "1", label: "Front" },
+  { value: "2", label: "Back" },
+  { value: "3", label: "Left chest" },
+];
+
+const ARTWORK_TYPES: { value: ProductArtworkFormItem["type"]; label: string; description: string }[] =
+  [
+    {
+      value: "printing",
+      label: "Print-ready file",
+      description: "Goes on the order. This is the file the garment is printed from.",
+    },
+    {
+      value: "mockup",
+      label: "Mockup",
+      description: "A preview render. Never sent to the printer.",
+    },
+  ];
+
+const placementLabel = (value: string) =>
+  ARTWORK_PLACEMENTS.find((placement) => placement.value === value)?.label ?? value;
+
+/** Narrows the Select's string back to the two the model accepts. */
+const artworkTypeFrom = (value: string): ProductArtworkFormItem["type"] =>
+  value === "mockup" ? "mockup" : "printing";
+
+// Placement is deliberately blank: a print on the wrong side of a garment is a
+// reprint, so the side is chosen rather than inherited from a default.
+const emptyArtwork = (): ProductArtworkFormItem => ({
+  url: "",
+  placement: "",
+  type: "printing",
+});
+
 export default function AdminProductModal({
   isOpen,
   onClose,
@@ -70,6 +125,7 @@ export default function AdminProductModal({
   const [brand, setBrand] = useState("");
   const [images, setImages] = useState<(File | string)[]>([]);
   const [variants, setVariants] = useState<ProductVariantFormItem[]>([emptyVariant()]);
+  const [printArtwork, setPrintArtwork] = useState<ProductArtworkFormItem[]>([]);
   const [trackInventory, setTrackInventory] = useState(false);
   const [stock, setStock] = useState(0);
   const [isFeatured, setIsFeatured] = useState(false);
@@ -91,6 +147,7 @@ export default function AdminProductModal({
       setVariants(
         editingProduct.variants?.length ? editingProduct.variants : [emptyVariant()]
       );
+      setPrintArtwork(editingProduct.printArtwork ?? []);
       setTrackInventory(editingProduct.trackInventory ?? false);
       setStock(editingProduct.stock ?? 0);
       setIsFeatured(editingProduct.isFeatured ?? false);
@@ -104,6 +161,7 @@ export default function AdminProductModal({
       setBrand("");
       setImages([]);
       setVariants([emptyVariant()]);
+      setPrintArtwork([]);
       setTrackInventory(false);
       setStock(0);
       setIsFeatured(false);
@@ -149,6 +207,20 @@ export default function AdminProductModal({
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, ...patch } : v)));
   };
 
+  const updateArtwork = (index: number, patch: Partial<ProductArtworkFormItem>) => {
+    setPrintArtwork((prev) => prev.map((a, i) => (i === index ? { ...a, ...patch } : a)));
+  };
+
+  /**
+   * ImageUpload hands back a Cloudinary URL once the upload finishes and a `File`
+   * while it has not. Only the URL is kept — a `File` cannot survive the POST, and
+   * storing anything else here would put an unfetchable reference on the print order.
+   */
+  const setArtworkFile = (index: number, uploaded: (File | string)[]) => {
+    const url = uploaded.find((entry): entry is string => typeof entry === "string") ?? "";
+    updateArtwork(index, { url });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -182,6 +254,32 @@ export default function AdminProductModal({
       return;
     }
 
+    // A row with no file is an empty slot the admin left behind, not artwork.
+    const cleanedArtwork = printArtwork
+      .map((a) => ({ url: a.url.trim(), placement: a.placement, type: a.type }))
+      .filter((a) => a.url.length > 0);
+
+    if (cleanedArtwork.some((a) => !ARTWORK_PLACEMENTS.some((p) => p.value === a.placement))) {
+      setError("Give every artwork file a placement. Without one the printer never receives it.");
+      return;
+    }
+
+    // One file per placement is all the fulfilment export can carry: it writes a single
+    // column pair per position, so a second print-ready file on the same placement
+    // overwrites the first and is silently never printed.
+    const printingPlacements = cleanedArtwork
+      .filter((a) => a.type === "printing")
+      .map((a) => a.placement);
+    const duplicatePlacement = printingPlacements.find(
+      (placement, i) => printingPlacements.indexOf(placement) !== i
+    );
+    if (duplicatePlacement) {
+      setError(
+        `Two print-ready files are set to ${placementLabel(duplicatePlacement)}. Each placement takes one.`
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const payload = {
@@ -193,6 +291,7 @@ export default function AdminProductModal({
         brand: brand.trim(),
         variants: cleanedVariants,
         includedEntries,
+        printArtwork: cleanedArtwork,
         trackInventory,
         stock: trackInventory ? stock : 0,
         isFeatured,
@@ -310,6 +409,94 @@ export default function AdminProductModal({
               uploadToCloudinary
               label="Product images"
             />
+          </FormSection>
+
+          {/*
+            Separate from Images above, and it is not a duplicate of it: Images is what
+            the customer browses, this is what the printer prints. The fulfilment export
+            reads only this field, so a garment saved without a print-ready file here
+            leaves the printer's CSV columns blank.
+          */}
+          <FormSection title="Print artwork">
+            <div className="space-y-3">
+              {!printArtwork.some((a) => a.type === "printing" && a.url.trim()) && (
+                <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-200">
+                  No print-ready file yet. This product exports to the printer with empty artwork
+                  columns, and a blank line cannot be produced.
+                </p>
+              )}
+
+              {printArtwork.map((artwork, index) => (
+                <div
+                  key={index}
+                  className="rounded-lg border border-gray-200 p-3 dark:border-neutral-700"
+                >
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Select
+                      label="Placement"
+                      value={artwork.placement}
+                      options={ARTWORK_PLACEMENTS}
+                      placeholder="Choose a placement"
+                      onChange={(e) => updateArtwork(index, { placement: e.target.value })}
+                    />
+                    <Select
+                      label="File type"
+                      value={artwork.type}
+                      options={ARTWORK_TYPES}
+                      onChange={(e) =>
+                        updateArtwork(index, { type: artworkTypeFrom(e.target.value) })
+                      }
+                    />
+                  </div>
+                  <div className="mt-3">
+                    {/* preserveOriginal: the default upload limits to 1200px and applies
+                        q_auto/f_auto, which turns a print file into a web thumbnail and
+                        flattens the transparent background the printer needs. An incoming
+                        Cloudinary transformation runs BEFORE storage, so the original
+                        would not be recoverable. */}
+                    <ImageUpload
+                      images={artwork.url ? [artwork.url] : []}
+                      onImagesChange={(uploaded) => setArtworkFile(index, uploaded)}
+                      maxImages={1}
+                      uploadToCloudinary
+                      preserveOriginal
+                      maxFileSize={40}
+                      label="Artwork file"
+                    />
+                  </div>
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setPrintArtwork((prev) => prev.filter((_, i) => i !== index))}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 px-3 text-xs font-semibold text-red-700 hover:bg-red-100 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-300"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setPrintArtwork((prev) => [...prev, emptyArtwork()])}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-800 hover:bg-gray-50 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add artwork
+              </button>
+              <p className="text-xs text-gray-500 dark:text-neutral-400">
+                <strong>Placement</strong> is where the design sits on the garment. Front, Back and
+                Left chest are the positions the printer&apos;s order file carries; artwork left
+                without a placement never reaches them.
+                <br />
+                <strong>Print-ready file</strong> is what the garment is printed from — the design
+                on its own, at print resolution, on a transparent background.{" "}
+                <strong>Mockup</strong> is a preview of the finished garment and is never sent to
+                the printer, so a mockup saved as print-ready would print a photo of a shirt onto
+                the shirt.
+              </p>
+            </div>
           </FormSection>
 
           <FormSection title="Variants">

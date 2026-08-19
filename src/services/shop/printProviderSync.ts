@@ -22,7 +22,10 @@ import {
  * variants, colours, mockups. It does NOT know our retail price, included
  * entries, category or featured flag — those are commercial decisions set in
  * admin. A re-sync refreshes the former and leaves the latter untouched, so
- * re-running this after a price change cannot silently revert it.
+ * re-running this after a price change cannot silently revert it. The line runs
+ * through a variant as well as around it: which variants exist, and their sku,
+ * size and colour, are the provider's; the gtin and whether we still sell that
+ * size are typed in admin, so both are carried back on by sku.
  */
 
 export interface SyncedProductSummary {
@@ -137,12 +140,30 @@ export async function syncPrintProviderProduct(providerId: string): Promise<Sync
     if (url) colourways[job.ci].images.push(url);
   });
 
-  const variants = source.variants.map((v) => ({
-    sku: v.sku,
-    ...(v.size ? { size: v.size } : {}),
-    ...(v.colour ? { colour: v.colour } : {}),
-    isActive: true,
-  }));
+  // What an admin typed on a variant, keyed by the sku that identifies it across
+  // syncs. The provider payload carries no gtin and no notion of a variant being
+  // sellable, so neither can be refreshed from it — without carrying them over,
+  // the assign below would blank every hand-typed gtin, which empties the
+  // product-id column of the fulfilment CSV and leaves the printer unable to
+  // match the line.
+  const authored = new Map<string, { gtin?: string; isActive: boolean }>();
+  for (const v of existing?.variants ?? []) {
+    authored.set(v.sku, { gtin: v.gtin, isActive: v.isActive });
+  }
+
+  // Built from the provider's list, not merged into ours, so a variant the
+  // provider has dropped stays dropped rather than resurrecting from what we
+  // hold. A variant we have not seen before has no gtin yet and starts sellable.
+  const variants = source.variants.map((v) => {
+    const held = authored.get(v.sku);
+    return {
+      sku: v.sku,
+      ...(v.size ? { size: v.size } : {}),
+      ...(v.colour ? { colour: v.colour } : {}),
+      ...(held?.gtin ? { gtin: held.gtin } : {}),
+      isActive: held?.isActive ?? true,
+    };
+  });
 
   // The gallery's lead images: the first shot of each colour, so a customer sees
   // the range at a glance rather than four angles of the same black tee.

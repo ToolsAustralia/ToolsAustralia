@@ -117,3 +117,42 @@ pass the sku from the cart line being rendered.
 Checkout itself goes through [billing-stripe](../billing-stripe/api.md) routes:
 - `POST /api/stripe/create-payment-intent` → start payment
 - Webhook → `Order` row + `BenefitsGranted`
+
+## `POST /api/admin/shop/orders/refund`
+
+Refunds a merchandise order. `shop.delete`, audited.
+
+Its own route rather than another branch of the orders `PATCH`: a refund moves
+real money and cannot be undone, so it gets its own permission, its own audit row
+and its own request shape. Bundled into the tracking-number endpoint, one
+malformed body could refund an order. `shop.delete` rather than `shop.edit`
+because a staff member who may correct a tracking number is not automatically
+someone who may hand money back.
+
+```
+{ orderId: "<24 hex>", amountCents?: number, reason?: string }
+```
+
+Omit `amountCents` for a full refund.
+
+**Money moves before we write anything.** `refundShopOrder` reads the order,
+refuses the states that must not be refunded, calls Stripe, and only then writes
+status. A local status written before a failed refund is a lie that pulls the
+order out of the fulfilment queue while the customer is still out of pocket; the
+reverse ordering has no recovery. If the save fails after the refund succeeded,
+the money is still back and the `console.error` carries the order number and
+refund id.
+
+**A partial refund leaves the order live.** Only a full refund sets `cancelled`,
+which is what removes it from the print queue — a customer who got $10 back on a
+$90 hoodie still wants the hoodie.
+
+**Entries are not reversed here.** That belongs to the existing refund-reversal
+path, which runs from the Stripe refund webhook against the `BenefitsGranted`
+`PaymentEvent` and already covers every package type. Reversing here as well
+would double-subtract. Moot while merch ships at `includedEntries: 0`; it will
+not be once the permit lands.
+
+Refusals: `order_not_found` 404 · `not_refundable` 409 (a `pending` order is
+unpaid) · `already_refunded` 409 (the stock-loss path already refunded and
+cancelled it) · `no_payment` 409 · `stripe_failed` 502.

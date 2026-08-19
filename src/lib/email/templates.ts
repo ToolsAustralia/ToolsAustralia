@@ -404,10 +404,29 @@ export function createReferralRewardEmailTemplate(
 }
 
 /**
- * Order confirmation for a merchandise purchase.
+ * The supplier identity an Australian tax invoice has to name.
+ *
+ * A supplier must give a proof of transaction for any sale over $75, and on
+ * request below it. A document is only a *tax invoice* if it is identifiable as
+ * one and carries the seller's identity and ABN — without those, a business
+ * buyer cannot claim the GST it already shows. Kept next to the one template that
+ * needs it; the wider licence/notification identity lives in
+ * `src/constants/legal.ts`, which does not yet hold the entity or the ABN.
+ */
+const TAX_INVOICE_SUPPLIER = {
+  legalName: 'Tools Australia Pty Ltd',
+  abn: '54 690 397 061',
+} as const;
+
+/**
+ * Order confirmation for a merchandise purchase — and the customer's tax invoice.
  *
  * Sent from the Stripe webhook once the order is actually paid — never from the
  * checkout page, which a customer can leave before the payment settles.
+ *
+ * This is the ONLY document the customer gets, so it has to be all three things
+ * at once: confirmation, receipt and tax invoice. That is why the supplier block
+ * below is not decoration — drop it and the GST line becomes unclaimable.
  *
  * `freeEntries` is rendered ONLY when > 0. Merchandise ships with entries switched
  * off pending a permit variation, and a "0 free entries" line would state a promise
@@ -427,9 +446,19 @@ export function createShopOrderConfirmationTemplate(params: {
   freeEntries?: number;
   shippingAddress: string;
   orderUrl: string;
+  /** Date the invoice was issued. Defaults to now — see below. */
+  issuedAt?: Date | string;
 }): string {
   const safeName = escapeHtml(params.firstName || 'mate');
   const safeOrder = escapeHtml(params.orderNumber);
+
+  // A tax invoice must show the date it was issued. This email IS the invoice and
+  // is rendered at the moment it goes out, so "now" is the accurate default; a
+  // caller re-sending an old order should pass that order's own date instead.
+  const issuedDate = new Date(params.issuedAt ?? Date.now()).toLocaleDateString('en-AU', {
+    dateStyle: 'medium',
+    timeZone: 'Australia/Sydney',
+  });
 
   const itemLines = params.items
     .map((i) => ({
@@ -448,7 +477,7 @@ export function createShopOrderConfirmationTemplate(params: {
   ];
 
   const content =
-    chip('Order confirmed') +
+    chip('Order confirmed · Tax invoice') +
     spacer(14) +
     heading(`Thanks, ${safeName}`) +
     spacer(16) +
@@ -456,6 +485,14 @@ export function createShopOrderConfirmationTemplate(params: {
       `We've got your order <strong>${safeOrder}</strong> and it's on its way to being made. Your items are printed to order, so give us a little time before they ship.`
     ) +
     spacer(24) +
+    bodyHeading('Tax invoice') +
+    infoTable([
+      { label: 'Supplier', value: TAX_INVOICE_SUPPLIER.legalName },
+      { label: 'ABN', value: TAX_INVOICE_SUPPLIER.abn },
+      { label: 'Order number', value: safeOrder },
+      { label: 'Date issued', value: issuedDate },
+    ]) +
+    spacer(22) +
     bodyHeading('What you ordered') +
     infoTable([...itemLines, ...moneyRows]) +
     spacer(22) +
@@ -467,17 +504,24 @@ export function createShopOrderConfirmationTemplate(params: {
         }) + spacer(22)
       : '') +
     bodyHeading('Delivering to') +
-    bodyText(escapeHtml(params.shippingAddress)) +
+    // The caller joins the address with newlines, and plain escapeHtml drops them —
+    // which collapsed name, street, suburb and country onto one run-on line on the
+    // document a customer may have to hand to their bookkeeper.
+    bodyText(escapeHtmlPreserveNewlines(params.shippingAddress)) +
     spacer(24) +
     button({ href: params.orderUrl, label: 'View your order', variant: 'red', width: 260 }) +
     spacer(18) +
+    // Nothing sends a dispatch email — there is no shipped template and no code
+    // path that would trigger one. Tracking is added to the order by hand and
+    // shows on My Account, so that is what this points at. Promising a second
+    // email would guarantee a support ticket from every customer who waits for it.
     note(
-      "We'll email you again when it ships. If anything looks wrong, reply to this email and we'll sort it."
+      "Follow your order any time under My Account — tracking shows up there once it ships. If anything looks wrong, reply to this email and we'll sort it."
     );
 
   return renderBrandEmail({
-    title: 'Order confirmed',
-    preheader: `Order ${safeOrder} confirmed — we're getting it made.`,
+    title: `Tax invoice — order ${safeOrder}`,
+    preheader: `Order ${safeOrder} confirmed — we're getting it made. Your tax invoice is inside.`,
     contentHtml: content,
   });
 }

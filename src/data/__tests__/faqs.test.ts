@@ -156,7 +156,32 @@ function main() {
   // reads zero for everyone) and its editable profile copy (edits there never reach us).
   // Both were live to members with no grounded answer, so Cobber's nearest matches were the
   // TA rewards-points and TA profile entries — i.e. a confidently wrong answer.
-  assert.strictEqual(entries.length, 84, `Expected 84 FAQ entries, got ${entries.length}`);
+  // Bumped 84 → 89 (2026-08-19): ids 85-89 — the merchandise shop. The shop shipped
+  // with only "does it exist" (15) and "does an item include entries" (84), so the
+  // question a shop is asked most — where is my order — had no grounded answer and
+  // Cobber may not invent one. The batch covers the orders page and its statuses,
+  // print-to-order turnaround (no held stock, and deliberately no quoted ETA), the
+  // delivery fee and free threshold, faulty/wrong items, and the member discount.
+  assert.strictEqual(entries.length, 89, `Expected 89 FAQ entries, got ${entries.length}`);
+
+  // 8d. Merchandise-shop batch (ids 85-89). The order-tracking entry is the reason the
+  // batch exists, so it must route to the page that actually answers it — /my-account
+  // alone lands the customer on a dashboard with no orders on it.
+  const orderTracking = entries.find((e) => e.id === "85");
+  assert.ok(orderTracking !== undefined, "FAQ entry id=85 (where's my order) must exist");
+  assert.ok(
+    orderTracking!.answer.includes("/my-account/orders"),
+    "Order-tracking FAQ (id 85) must route to /my-account/orders, not the dashboard"
+  );
+  // Delivery is flat-rate-or-free and nothing else (priceCart), and the free threshold
+  // is measured AFTER the member discount — copy that omits that promises free delivery
+  // on a $100 cart the discount drops below the threshold.
+  const deliveryFee = entries.find((e) => e.id === "87");
+  assert.ok(deliveryFee !== undefined, "FAQ entry id=87 (delivery cost) must exist");
+  assert.ok(
+    deliveryFee!.answer.includes("$10") && deliveryFee!.answer.includes("$100"),
+    "Delivery FAQ (id 87) must state the $10 flat rate and the $100 free-delivery threshold"
+  );
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).

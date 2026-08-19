@@ -82,6 +82,10 @@ export default function ShopContent({
     search: debouncedSearch.trim() || undefined,
     category: filters.category.length > 0 ? filters.category : undefined,
     brand: filters.brands.length > 0 ? filters.brands : defaultBrand ? [defaultBrand] : undefined,
+    // Singular here because these are the API's param names, matching `variants[].size`
+    // and `variants[].colour` — the same split `brands` above already lives with.
+    size: filters.sizes.length > 0 ? filters.sizes : undefined,
+    colour: filters.colours.length > 0 ? filters.colours : undefined,
     minPrice: filters.priceRange[0] > 0 ? filters.priceRange[0] : undefined,
     maxPrice: filters.priceRange[1] < 500 ? filters.priceRange[1] : undefined,
     sortBy: sortField,

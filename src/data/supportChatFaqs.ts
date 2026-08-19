@@ -323,7 +323,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "36",
       question: "Do your prices include GST?",
       answer:
-        "All prices are shown in Australian dollars. Entries into our draws are GST-free, so your membership and pack tax invoices show a GST amount of $0.00. (When our member shop launches, physical products in the shop will include 10% GST.) For anything specific about a tax invoice, [contact us](/contact).",
+        "All prices are shown in Australian dollars, GST included — the 10% is already inside the price and is never added on top at checkout. Entries into our draws are GST-free, so your membership and pack tax invoices show a GST amount of $0.00. Shop orders do carry GST: the 10% is already inside the price on the product page, and your checkout summary and order confirmation email report it as the \"Includes GST\" share of what you paid (delivery sits inside that figure too). For anything specific about a tax invoice, [contact us](/contact).",
       category: "PAYMENTS",
     },
     {
@@ -678,6 +678,53 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       answer:
         "Yes. Every Major Draw winner is published on our [Draw Results](/draw-results) page, shown as their first name and last initial (like \"John D.\") along with their state and the prize they took — plus the verification link from randomdraws.com.au, the independent service that picks the winner. Winners are also contacted directly by our team, and the draw itself is streamed live on [Facebook](https://www.facebook.com/toolsaust). We don't share any more of a winner's details than that. I can't look results up from here, so head to [Draw Results](/draw-results) for the latest.",
       category: "ALL QUESTIONS",
+    },
+
+    // ── MERCHANDISE SHOP (2026-08-19) ────────────────────────────────────────
+    // The shop went live with only two grounded entries (15 = it exists + the
+    // money, 84 = entries on an item), so "where is my order" — the question a
+    // shop gets more than any other — had no answer at all, and Cobber is
+    // forbidden from inventing one. Every figure below is imported-in-spirit from
+    // the code that produces it: the status words are `STATUS_LABEL` in
+    // src/app/(site)/my-account/orders/page-client.tsx, the delivery rule is
+    // `priceCart` (src/utils/shop/pricing.ts) reading SHOP_CONFIG, and the
+    // returns wording matches the Shipping & Returns tab on the product page.
+    // No delivery ETA is quoted anywhere: print turnaround is supplier-dependent
+    // and unconfirmed, so a number here would be a guess told to a paying customer.
+    {
+      id: "85",
+      question: "Where's my order — how do I track it?",
+      answer:
+        "Every order you've placed is in [My Account → Orders](/my-account/orders) when you're signed in, newest first, with what you ordered and the size and colour you picked. Each one carries a status: **Awaiting payment**, **Being made**, **On its way**, **Delivered**, **Complete** or **Cancelled** — and once it's with the courier, the tracking number shows on that order. You'll also get a confirmation email as soon as your payment clears. I can't see your account from here, so I can't look an order up for you — if something looks wrong there, [contact us](/contact) with your order number.",
+      category: "REWARDS",
+    },
+    {
+      id: "86",
+      question: "How long will my shop order take, and why does it say \"Made to order\"?",
+      answer:
+        "Each garment is printed after you order it, in the colour and size you chose — nothing sits in a warehouse waiting, so \"Made to order\" is normal and never means sold out. That printing step is why it takes longer to reach you than something picked off a shelf, and we'd rather not quote a delivery date we can't stand behind. Your order reads **Being made** while it's in production and **On its way** once it's shipped, with the tracking number on it — both on [My Account → Orders](/my-account/orders).",
+      category: "REWARDS",
+    },
+    {
+      id: "87",
+      question: "How much is delivery, and do you ship outside Australia?",
+      answer:
+        "Delivery is a $10 flat rate, and it's free on orders of $100 or more. The threshold is measured on what you actually pay, so any member discount comes off first — checkout shows the exact delivery line before you pay, and it's free or $10, never anything else. We deliver within Australia only: the checkout address form takes the eight Australian states and territories, so we can't send an order overseas at this stage.",
+      category: "REWARDS",
+    },
+    {
+      id: "88",
+      question: "My order arrived faulty, damaged or wrong — what do I do?",
+      answer:
+        "[Contact us](/contact) with your order number and a photo, and we'll replace it or refund it — return postage is on us. If the print itself cracks or peels in ordinary wear and washing, tell us and we'll sort that out too. The one thing we can't do is a change-of-mind return: each garment is printed to order in your chosen colour and size, so there's no way to resell it — worth double-checking your size before you order. None of this limits your rights under Australian Consumer Law.",
+      category: "REWARDS",
+    },
+    {
+      id: "89",
+      question: "Does my membership discount apply in the shop, and does a one-time pack count?",
+      answer:
+        "Yes — while your membership is active your shop discount comes off automatically at checkout (Tradie 5%, Foreman 10%, Boss 20%), across the whole shop, with no code to enter. It's a membership benefit only: one-time packs and Mini Packs carry no shop discount, and a membership that's paused, past due or cancelled doesn't discount either — settling a past-due payment switches it straight back on. Because free delivery is worked out after the discount, a larger discount can drop an order back under the $100 threshold. Your tier is on [My Account → Membership](/my-account/membership).",
+      category: "REWARDS",
     },
   ];
 }

@@ -1586,3 +1586,21 @@ Three conventions, all load-bearing:
 `PortalTransit.tsx` is the one imprecise case: `memberName` is `.join(" · ")`-ed with the tier
 label and catalogue %, so the whole `<span>` is masked rather than the name alone. Isolating it
 would mean restructuring the join. If you touch that line, prefer splitting the nodes.
+
+## Print artwork in the admin product modal (2026-08-19)
+
+`AdminProductModal` can now author `Product.printArtwork`. Until this existed
+**no code path anywhere wrote that field**, so every fulfilment CSV line exported
+with blank artwork columns and no garment could actually be produced — the API's
+Zod schema had accepted `printArtwork` all along; only the form never sent it.
+
+Each row is an image (through the same Cloudinary upload the modal already used),
+a placement, and a type of `printing` or `mockup`. Two constraints come from the
+consumer rather than the form:
+
+- **`fulfilmentExport` filters to `type === "printing"`.** A mockup is for the
+  product page, never for the printer.
+- **Placements are the provider's own ids**, and the export's `PLACEMENTS` map
+  silently `continue`s past any id it does not recognise. `ARTWORK_PLACEMENTS`
+  therefore offers only ids the export can actually send, labelled in the
+  admin's language — "Left chest", not `"3"`.

@@ -85,12 +85,24 @@ const PLACEMENTS: Record<string, { key: "front" | "back" | "leftChest"; label: s
   "3": { key: "leftChest", label: "Left Chest" },
 };
 
+/**
+ * The statuses an order may be printed from, listed rather than left implicit.
+ *
+ * "processing" is what markPaid sets and is the only printable status today —
+ * "pending" is unpaid, "shipped"/"delivered"/"completed" are already out the door,
+ * and "cancelled" is refunded. Relying on that one equality to exclude the rest is
+ * what makes this dangerous to leave implicit: `cancelled` is written by
+ * finalizeShopOrder AFTER it has already refunded the buyer for stock lost after
+ * payment, so a cancelled order reaching the printer means paying the print provider
+ * and the postage for a garment nobody paid for, and posting it to a customer who has
+ * their money back. Once the CSV is uploaded none of that is recoverable.
+ */
+const PRINTABLE_STATUSES: IOrder["status"][] = ["processing"];
+
 /** Orders that are paid and not yet handed to the printer. */
 function pendingFilter() {
   return {
-    // "processing" is what markPaid sets. pending = unpaid, and anything further
-    // along has already been sent.
-    status: "processing",
+    status: { $in: PRINTABLE_STATUSES },
     submittedAt: { $exists: false },
     "products.0": { $exists: true },
   };

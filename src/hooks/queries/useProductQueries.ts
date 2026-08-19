@@ -42,6 +42,17 @@ export interface Product {
 export interface ProductFilters extends Record<string, unknown> {
   category?: string[];
   brand?: string[];
+  /**
+   * Apparel facets, matched against `variants[]` rather than a top-level field — a
+   * product qualifies when one active variant carries every selected facet.
+   *
+   * Singular to match the API param and the `variants[].size` / `variants[].colour`
+   * fields they filter on, the same way `brand` here feeds the shop's `brands`
+   * selection. Each value is appended separately, so the endpoint reads them with
+   * getAll().
+   */
+  size?: string[];
+  colour?: string[];
   priceRange?: [number, number];
   search?: string;
   sortBy?: string;

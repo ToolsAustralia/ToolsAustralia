@@ -4,29 +4,40 @@ import Image from "next/image";
 import ShopContent from "@/components/features/ShopContent";
 import MembershipSection from "@/components/sections/MembershipSection";
 import MetallicDivider from "@/components/ui/MetallicDivider";
+import { FREE_SHIPPING_THRESHOLD_LABEL } from "@/config/shop";
 
 // nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
 // (see docs/security-csp/architecture.md "Route classes").
 export const dynamic = "force-dynamic";
 
 // SEO Metadata for Shop Page
+//
+// This used to promise DeWalt, Makita and Milwaukee power tools. We sell none of
+// them — the catalogue is Tools Australia apparel, printed to order by the print
+// provider (see printProviderSync, which seeds every product as category
+// "Apparel", brand "Tools Australia"). Naming brands we do not stock draws in
+// searches we cannot answer and lands the shopper on a page of t-shirts.
+const SHOP_TITLE = "Merch Shop | Tools Australia";
+const SHOP_TAGLINE =
+  "Official Tools Australia gear, printed to order in your pick of colour and size.";
+
 export const metadata: Metadata = {
-  title: "Shop Tools & Equipment | Tools Australia",
-  description:
-    "Discover our premium collection of professional tools and equipment. Shop power tools, hand tools, safety equipment, and more from top brands like DeWalt, Makita, and Milwaukee.",
+  title: SHOP_TITLE,
+  // The shipping threshold comes from SHOP_CONFIG rather than being typed here —
+  // copy that restates a config value drifts from it, and this one is a promise.
+  description: `${SHOP_TAGLINE} Free delivery on orders of ${FREE_SHIPPING_THRESHOLD_LABEL} or more, and members get their tier's discount applied at checkout.`,
   keywords:
-    "tools, power tools, hand tools, safety equipment, DeWalt, Makita, Milwaukee, professional tools, Australia",
+    "Tools Australia merch, Tools Australia apparel, tradie apparel, tradie merch, print to order clothing, Australia",
   openGraph: {
-    title: "Shop Tools & Equipment | Tools Australia",
-    description:
-      "Discover our premium collection of professional tools and equipment. Shop power tools, hand tools, safety equipment, and more.",
+    title: SHOP_TITLE,
+    description: `${SHOP_TAGLINE} Free delivery on orders of ${FREE_SHIPPING_THRESHOLD_LABEL} or more.`,
     type: "website",
     url: "/shop",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Shop Tools & Equipment | Tools Australia",
-    description: "Discover our premium collection of professional tools and equipment.",
+    title: SHOP_TITLE,
+    description: SHOP_TAGLINE,
   },
   alternates: {
     canonical: `${process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au"}/shop`,
@@ -62,9 +73,7 @@ export default function ShopPage() {
               </h1>
             </div>
             <div className="text-center lg:text-right lg:max-w-md">
-              <p className="text-[16px] text-gray-200">
-                Discover our premium collection of tools and equipment for professionals and enthusiasts
-              </p>
+              <p className="text-[16px] text-gray-200">{SHOP_TAGLINE}</p>
             </div>
           </div>
         </div>

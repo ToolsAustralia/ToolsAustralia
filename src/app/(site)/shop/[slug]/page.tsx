@@ -33,7 +33,15 @@ interface ProductPageProps {
 const getProduct = createCachedQuery(async (slug: string): Promise<ProductType | null> => {
   try {
     await connectDB();
-    const product = await Product.findOne({ _id: slug, isActive: true }).lean();
+    // -printArtwork and -printProvider: this read is UNPROJECTED and the whole
+    // document is serialised into the RSC payload for the client components
+    // below, so anything on it is one view-source away for any visitor. The
+    // print-ready design files are our supplier-facing assets on permanent public
+    // Cloudinary URLs; publishing them hands anyone the artwork to print their own.
+    // Same reasoning as the printProvider comment in models/Product.ts.
+    const product = await Product.findOne({ _id: slug, isActive: true })
+      .select("-printArtwork -printProvider")
+      .lean();
     return product as unknown as ProductType | null;
   } catch (error) {
     console.error("Error fetching product:", error);

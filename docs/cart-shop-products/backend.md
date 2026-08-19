@@ -326,3 +326,40 @@ permit, and "0 free entries" would state a promise we are not making.
 in `DASHBOARD_NAV`. That nav is a deliberate five-item mobile bottom bar with a centre-emphasised
 item, and a sixth entry would break the layout — so which item it replaces, or whether orders live
 under an existing section, is a product decision rather than something to guess at.
+
+## Launch-blocker fixes (2026-08-19)
+
+### A re-sync no longer blanks hand-typed GTINs
+
+`printProviderSync` rebuilds `variants` from the provider payload and then
+`Object.assign`s them over the existing product. The provider carries no `gtin`
+and no notion of a variant being sellable, so both were wiped on every sync —
+which empties the `product_id` column of the fulfilment CSV and leaves the
+printer unable to match the line.
+
+The ownership line now runs **through** a variant as well as around it: sku, size
+and colour are the provider's; `gtin` and `isActive` are authored in admin and
+are carried back on by sku. A variant the provider has dropped does not
+resurrect; a new one simply has no gtin yet.
+
+### Cancelled orders can no longer be printed
+
+`fulfilmentExport.pendingFilter()` selected `status: "processing"` and relied on
+that one equality to exclude everything else. `cancelled` is written by
+`finalizeShopOrder` **after** it has already refunded a buyer for stock lost after
+payment, so a cancelled order reaching the printer means paying the provider and
+the postage for a garment nobody paid for, and posting it to someone who has
+their money back. Once the CSV is uploaded none of that is recoverable, so the
+printable statuses are now listed explicitly rather than left implicit.
+
+### `paymentIntentId` on the admin order surface only
+
+Staff had no way to find a paid-but-stuck order: the projection omitted Stripe's
+handle on the money. It is now returned on the admin path and left out of the
+customer projection entirely — not merely hidden — so a field added for support
+cannot reach a customer's own history through a later mapping mistake.
+
+**Still missing:** there is no shop refund route. Nothing writes `status` on a
+refund except the stock-loss path, so a refund issued in the Stripe dashboard
+leaves the order looking live. That is a money path and belongs in its own
+reviewed change, not a launch sweep.

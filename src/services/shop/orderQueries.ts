@@ -5,11 +5,14 @@ import Order, { type IOrder } from "@/models/Order";
  * Order listing — the ONE query used by both the customer's order history and the
  * admin order list.
  *
- * The two differ in exactly one way: the customer's list is scoped to their own
- * `userId`, the admin's is not. Everything else — filtering, sorting, paging, the
- * projection, the summary shape — is identical, so it lives here once rather than
- * being written twice and drifting. A projection that gains a field on one surface
- * and not the other is how support ends up seeing something the customer cannot.
+ * The two differ in exactly two ways: the customer's list is scoped to their own
+ * `userId`, and the admin's carries staff-only fields on top of the same rows.
+ * Everything else — filtering, sorting, paging, the summary shape — is identical, so
+ * it lives here once rather than being written twice and drifting.
+ *
+ * Every staff-only field hangs off the single `isAdminSurface` flag AND is left out
+ * of the projection entirely on the customer path, so a field added for support
+ * cannot reach a customer's own history through a later mapping mistake.
  *
  * SECURITY: `userId` is the only thing separating a customer's own history from
  * everyone's. Callers pass it from the session, never from a query parameter.
@@ -45,6 +48,12 @@ export interface OrderListItem {
   categories: string[];
   /** Present on admin rows; omitted on a customer's own list, where it is redundant. */
   customerName?: string;
+  /**
+   * Stripe's handle on the money for this order. Admin rows only — it is what lets
+   * staff reconcile an order against a refund or a dispute in Stripe, which is the
+   * only way to find a paid order that is stuck. A customer has no use for it.
+   */
+  paymentIntentId?: string;
   entriesGranted?: number;
   submittedAt?: string;
   trackingNumber?: string;
@@ -104,22 +113,31 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
   const limit = Math.min(MAX_LIMIT, Math.max(1, filters.limit ?? 20));
   const query = buildFilter(filters);
 
+  // An unscoped list is the admin one. That asymmetry is the whole security
+  // boundary here, so the staff-only fields below key off it rather than off
+  // anything a caller could set independently.
+  const isAdminSurface = !filters.userId;
+
   // Explicit include-list. An unprojected find() on this collection ships every
   // address and line on every row — the documented performance footgun in
   // CLAUDE.md, which once shipped MB-scale payloads.
+  //
+  // paymentIntentId is appended for staff only. It is not fetched at all on a
+  // customer's own history, so it cannot leak there even if someone later adds it
+  // to the unconditional half of the row mapping.
+  const projection =
+    "orderNumber status createdAt totalAmount products.name products.sku products.size products.colour products.quantity products.price products.category shippingAddress.firstName shippingAddress.lastName entriesGranted submittedAt trackingNumber" +
+    (isAdminSurface ? " paymentIntentId" : "");
+
   const [docs, total] = await Promise.all([
     Order.find(query)
-      .select(
-        "orderNumber status createdAt totalAmount products.name products.sku products.size products.colour products.quantity products.price products.category shippingAddress.firstName shippingAddress.lastName entriesGranted submittedAt trackingNumber"
-      )
+      .select(projection)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .lean<IOrder[]>(),
     Order.countDocuments(query),
   ]);
-
-  const includeCustomer = !filters.userId;
 
   const orders: OrderListItem[] = docs.map((o) => {
     const a = o.shippingAddress ?? {};
@@ -131,8 +149,11 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
       totalAmount: o.totalAmount ?? 0,
       itemCount: (o.products ?? []).reduce((n, p) => n + (p.quantity ?? 0), 0),
       categories: [...new Set((o.products ?? []).map((p) => p.category).filter(Boolean) as string[])],
-      ...(includeCustomer
-        ? { customerName: [a.firstName, a.lastName].filter(Boolean).join(" ") || undefined }
+      ...(isAdminSurface
+        ? {
+            customerName: [a.firstName, a.lastName].filter(Boolean).join(" ") || undefined,
+            paymentIntentId: o.paymentIntentId,
+          }
         : {}),
       entriesGranted: o.entriesGranted,
       submittedAt: o.submittedAt ? new Date(o.submittedAt).toISOString() : undefined,
