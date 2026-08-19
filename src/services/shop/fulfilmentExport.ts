@@ -303,7 +303,17 @@ const HEADERS: { key: keyof FulfilmentRow; label: string }[] = [
  * malformed row here means a garment shipped to the wrong place.
  */
 function csvCell(value: string | number): string {
-  return `"${String(value).replace(/"/g, '""')}"`;
+  const raw = String(value);
+  // Neutralise a leading =, +, - or @ before quoting.
+  //
+  // Excel and Sheets evaluate a cell starting with one of those as a FORMULA, and
+  // most of these fields are customer-supplied -- a name, an address, a delivery
+  // instruction. Someone typing `=HYPERLINK(...)` into their delivery notes would
+  // have that run on the machine of whoever at the print provider opens the file.
+  // Quoting alone does not stop it; a leading apostrophe does, and is invisible in
+  // the spreadsheet.
+  const safe = /^[=+\-@\t\r\n]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replace(/"/g, '""')}"`;
 }
 
 export function toCsv(rows: FulfilmentRow[]): string {

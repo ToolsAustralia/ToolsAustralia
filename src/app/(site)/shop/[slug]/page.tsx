@@ -70,9 +70,11 @@ async function getRelatedProducts(productId: string, brand: string, category: st
       // missing value to "tracked", so omitting it from this projection made every
       // print-to-order related product render as "Sold Out" — while the same product's
       // own page correctly said "Made to order". includedEntries rides along so a card
-      // can show the free-entry inclusion.
+      // can show the free-entry inclusion. reviewCount, NOT reviews: the array
+      // carries every review body and reviewer userId, and this is serialised into
+      // the page like everything else here. The card only needs the count.
       .select(
-        "_id name price images brand category stock trackInventory includedEntries rating reviews isFeatured"
+        "_id name price images brand category stock trackInventory includedEntries rating reviewCount displayRating displayReviewCount isFeatured"
       )
       .limit(4)
       .lean();

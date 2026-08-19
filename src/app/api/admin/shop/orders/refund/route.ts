@@ -31,6 +31,9 @@ const STATUS_CODE: Record<string, number> = {
   already_refunded: 409,
   no_payment: 409,
   stripe_failed: 502,
+  // The money moved but our record did not: a 502 so the caller treats it as the
+  // failure it is, and staff go and look at the order.
+  local_write_failed: 502,
 };
 
 export async function POST(request: NextRequest) {

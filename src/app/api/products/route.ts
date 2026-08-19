@@ -79,7 +79,7 @@ const equalsAnyOf = (values: string[]) => ({ $in: values.map((v) => new RegExp(`
  * are supplier-facing, and the product page projects them out too.
  */
 const LIST_FIELDS =
-  "_id name price images brand category stock trackInventory includedEntries rating reviewCount isFeatured createdAt updatedAt";
+  "_id name price images brand category stock trackInventory includedEntries rating reviewCount displayRating displayReviewCount isFeatured createdAt updatedAt";
 
 export async function GET(request: NextRequest) {
   try {

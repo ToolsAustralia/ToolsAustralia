@@ -7,6 +7,7 @@ import { processPaymentBenefits } from "@/utils/payment/payment-processing";
 import { sendShopOrderConfirmation } from "@/services/shop/sendOrderConfirmation";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 import { trackShopPlacedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
+import { normalizeEpochToUnixSeconds } from "@/lib/tracking/canonical-event";
 
 /**
  * Fulfil a paid shop order.
@@ -328,6 +329,16 @@ export async function finalizeShopOrder(
     content_ids: order.products.map((line) => line.sku ?? line.product.toString()),
     num_items: order.products.reduce((n, line) => n + line.quantity, 0),
     ...(requestContext ? { requestContext } : {}),
+    // There is no browser here -- this runs from the Stripe webhook -- so the event
+    // must say so. Left unset it defaulted to a website event carrying a fabricated
+    // source URL, which is both untrue and worse for matching.
+    actionSource: "system_generated" as const,
+    // Meta books the conversion at event_time. Without this the sale is dated by
+    // when the webhook happened to be processed, so a purchase paid at 23:59 lands
+    // on the next day whenever delivery is delayed.
+    eventTimeUnixSeconds: normalizeEpochToUnixSeconds(
+      paymentIntent.created ? paymentIntent.created * 1000 : undefined
+    ),
   }).catch((err) => {
     // Never throw: failing the webhook would retry the whole fulfilment.
     console.error("[shop] Purchase tracking failed", { orderNumber: order.orderNumber, err });

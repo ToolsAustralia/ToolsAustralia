@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { z } from "zod";
+import { PUBLIC_PRODUCT_EXCLUDE } from "@/utils/shop/public-product-fields";
 
 const searchSchema = z.object({
   q: z.string().min(1),
@@ -96,7 +97,7 @@ export async function GET(request: NextRequest) {
 
     // Execute search
     const [products, totalCount] = await Promise.all([
-      Product.find(searchQuery).sort(sortObj).skip(skip).limit(limit).lean(),
+      Product.find(searchQuery).select(PUBLIC_PRODUCT_EXCLUDE).sort(sortObj).skip(skip).limit(limit).lean(),
       Product.countDocuments(searchQuery),
     ]);
 

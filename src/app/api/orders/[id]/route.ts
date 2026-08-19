@@ -35,7 +35,16 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if ("errorResponse" in auth) return auth.errorResponse;
     const userId = auth.session.user.id;
 
-    const order = await Order.findOne({ _id: id, user: userId }).populate("products.product").lean();
+    // Projected, and the populate narrowed.
+    //
+    // This returned the raw Order plus a FULLY populated Product, so a buyer
+    // received `notes` -- which is where staff refund reasons are written -- and
+    // the print-ready artwork for everything they had ordered. `notes` is internal;
+    // the product join only needs enough to render a line.
+    const order = await Order.findOne({ _id: id, user: userId })
+      .select("-notes")
+      .populate("products.product", "name images brand category")
+      .lean();
 
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });

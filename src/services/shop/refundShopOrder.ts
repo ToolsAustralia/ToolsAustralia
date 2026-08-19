@@ -37,7 +37,13 @@ export type RefundShopOrderStatus =
   | "not_refundable"
   | "already_refunded"
   | "no_payment"
-  | "stripe_failed";
+  | "stripe_failed"
+  /**
+   * Stripe refunded, our own write did not land. The customer HAS their money
+   * and the order still reads as live, so the caller must surface this loudly
+   * rather than reporting a clean refund.
+   */
+  | "local_write_failed";
 
 export interface RefundShopOrderResult {
   status: RefundShopOrderStatus;
@@ -111,23 +117,68 @@ export async function refundShopOrder(params: {
   }
 
   // A partial refund leaves the order live — the customer still has the garment and
-  // it may still need dispatching. Only a full refund cancels it, which is what takes
-  // it out of the fulfilment queue.
-  const isFull = !params.amountCents || params.amountCents >= Math.round(order.totalAmount * 100);
-  const note = `Refunded ${(refund.amount / 100).toFixed(2)} AUD${params.reason ? ` — ${params.reason}` : ""}`;
-  order.notes = order.notes ? `${order.notes}\n${note}` : note;
+  // it may still need dispatching. Only a FULL refund cancels it, which is what
+  // takes it out of the fulfilment queue.
+  //
+  // Fullness is cumulative, read back from Stripe, not computed from this one
+  // request. Two partials of $60 and $40 against a $100 order each look partial in
+  // isolation, so the order would stay `processing` — the only status the
+  // fulfilment CSV selects — and be printed and posted to someone who has every
+  // dollar back. Nothing on the Order records refunded amounts, so Stripe is the
+  // only place that knows.
+  const totalCents = Math.round(order.totalAmount * 100);
+  let refundedToDateCents = refund.amount;
+  try {
+    const all = await stripe.refunds.list({ payment_intent: order.paymentIntentId, limit: 100 });
+    refundedToDateCents = all.data.reduce((sum, r) => sum + (r.amount ?? 0), 0);
+  } catch (err) {
+    // Fall back to this refund alone. That can under-report and leave the order
+    // live, which is the safe direction: a live order is visible and fixable, a
+    // wrongly-cancelled one silently is not.
+    console.error("[shop] could not read the refund history; treating this refund alone", {
+      orderNumber: order.orderNumber,
+      err,
+    });
+  }
+  const isFull = refundedToDateCents >= totalCents;
+  // `notes` is capped at 500 characters by the schema, and both the route and the
+  // admin textarea accept a 500-character reason — so an ordinary maximum-length
+  // reason produced a 521-character note, Mongoose refused the whole document, and
+  // the swallowed catch below still returned success. The order kept `processing`,
+  // stayed in the print queue, and was made and posted to a refunded customer.
+  // Truncate to fit rather than lose the write.
+  const NOTES_MAX = 500;
+  const prefix = `Refunded ${(refund.amount / 100).toFixed(2)} AUD`;
+  const note = params.reason ? `${prefix} — ${params.reason}` : prefix;
+  const combined = order.notes ? `${order.notes}\n${note}` : note;
+  // Keep the NEWEST note: a second refund on an order that already carries one
+  // would otherwise overflow long before the reason reaches its own limit.
+  order.notes =
+    combined.length <= NOTES_MAX ? combined : combined.slice(combined.length - NOTES_MAX);
   if (isFull) order.status = "cancelled";
 
   try {
     await order.save();
   } catch (err) {
-    // The money is already back with the customer. Losing this write means the order
-    // still reads as live, so it must be findable — hence console.error with the ids.
-    console.error("[shop] refund succeeded but the order could not be updated", {
+    // The money is already back with the customer and our record did not move, so
+    // the order still reads as live and printable. That is NOT a successful refund
+    // and must not be reported as one — the caller turns this into a 502 so staff
+    // know to check the order themselves.
+    console.error("[shop] REFUND SUCCEEDED BUT THE ORDER COULD NOT BE UPDATED", {
       orderNumber: order.orderNumber,
       refundId: refund.id,
+      amountRefunded: refund.amount,
       err,
     });
+    return {
+      status: "local_write_failed",
+      orderNumber: order.orderNumber,
+      amountRefunded: refund.amount,
+      wasFull: isFull,
+      error:
+        "The refund went through in Stripe but this order could not be updated. " +
+        "It may still be in the print queue — check it before anything ships.",
+    };
   }
 
   return {

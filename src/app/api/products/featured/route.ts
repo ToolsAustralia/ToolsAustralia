@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
+import { PUBLIC_PRODUCT_EXCLUDE } from "@/utils/shop/public-product-fields";
 
 // Next.js ISR configuration
 export const revalidate = 60; // Revalidate every 60 seconds (ISR)
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
     const featuredProducts = await Product.find({
       isActive: true,
       isFeatured: true,
-    })
+    }).select(PUBLIC_PRODUCT_EXCLUDE)
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean();

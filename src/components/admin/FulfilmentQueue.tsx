@@ -119,15 +119,20 @@ export default function FulfilmentQueue() {
 
   const selectedCount = orders.filter((o) => selected.has(o.orderId)).length;
 
-  // The download must carry the SAME selection as the mark button sitting beside
-  // it. Ticking three of ten and getting a ten-row CSV means printing seven
-  // garments nobody asked for. All-selected sends no ids, so the URL stays short
-  // and the server falls back to the whole queue.
+  // The download carries the SAME ids the mark button will stamp -- ALWAYS, even
+  // when everything is selected.
+  //
+  // Two reasons. Ticking three of ten and getting a ten-row CSV would print seven
+  // garments nobody asked for. And the server rebuilds the export at download
+  // time, so an all-selected download with no ids would include any order paid
+  // since this page loaded -- which the mark, working from the ids it knows,
+  // would then miss. That order gets printed, never stamped, and printed again on
+  // the next run.
+  const selectedIds = orders.filter((o) => selected.has(o.orderId)).map((o) => o.orderId);
   const csvHref =
-    selectedCount > 0 && selectedCount < orders.length
-      ? `/api/admin/shop/fulfilment?format=csv&${orders
-          .filter((o) => selected.has(o.orderId))
-          .map((o) => `orderId=${encodeURIComponent(o.orderId)}`)
+    selectedIds.length > 0
+      ? `/api/admin/shop/fulfilment?format=csv&${selectedIds
+          .map((id) => `orderId=${encodeURIComponent(id)}`)
           .join("&")}`
       : "/api/admin/shop/fulfilment?format=csv";
   const allSelected = orders.length > 0 && selectedCount === orders.length;

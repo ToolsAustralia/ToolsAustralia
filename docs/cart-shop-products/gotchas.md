@@ -330,3 +330,62 @@ reviews.
 If brand hubs return, they must be generated from brands the catalogue actually
 carries, and the copy must not assert stock or warranty for a print-to-order
 range.
+
+## What the branch review found (2026-08-19)
+
+Six reviewers over the diff, every finding then handed to a separate agent to
+refute. **15 confirmed, 21 refuted** — the refutation pass is what makes the list
+worth acting on.
+
+### Two blockers
+
+**A refund could report success while leaving the order in the print queue.**
+`Order.notes` is capped at 500 characters and both the route and the admin
+textarea accept a 500-character reason, so an ordinary maximum-length reason
+produced a 521-character note. Mongoose refused the whole document, the catch
+around `order.save()` only logged, and the function still returned
+`{status:"refunded"}` — so the route answered 200 and staff were told it landed.
+`status = "cancelled"` was never persisted, the order stayed `processing`, and
+`processing` is the only status the fulfilment CSV selects. The garment would
+have been printed and posted to a customer holding a full refund.
+
+Now: the note is truncated to fit, and a failed write returns
+`local_write_failed`, which the route turns into a 502 naming the risk.
+
+**Cards fired AddToCart for a line the server rejects.** On the homepage rows and
+the Related Products strip, `ProductCard` added with no `sku`, which the cart API
+400s for any variant-bearing product — while still reporting AddToCart to Meta,
+TikTok and Klaviyo, and then offering a Retry that re-sent the same rejected
+request. A card cannot collect a size, and the list query deliberately omits
+`variants`, so a card cannot even know one is required. Products now go to their
+own page; only a mini-draw ticket, which has no options, is added from a card.
+TypeScript then proved the product branch unreachable, so it is gone.
+
+### The rest
+
+- **Six public product endpoints returned whole documents** — print artwork,
+  provider ids and reviewer user ids, unauthenticated and edge-cached. One shared
+  `PUBLIC_PRODUCT_EXCLUDE` now applies to all of them.
+- **The customer order-detail route** returned the raw order plus a fully
+  populated product, handing a buyer internal refund notes and the print artwork.
+- **Partial refunds never summed.** $60 then $40 on a $100 order both looked
+  partial, so the order stayed live and printable. Fullness is now read back from
+  Stripe cumulatively.
+- **The fulfilment CSV was formula-injectable.** A delivery instruction beginning
+  `=` executes when the printer opens the file in Excel. Leading `= + - @` are now
+  neutralised.
+- **A tracking number forced `shipped` from any state**, including `pending` —
+  and `markPaid` matches on `pending`, so that order could never afterwards be
+  marked paid.
+- **The image reuse map keyed on array position**, but the stored array is
+  compacted when a mirror fails, so one failure permanently mis-ordered every
+  later image and the failed one could never retry. Keyed on the Cloudinary
+  public_id now.
+- **Card and product page disagreed on the rating** — the card averaged every
+  review, the page only the displayed ones. `displayRating` and
+  `displayReviewCount` are written in the same recompute as `rating`.
+- **The shop's server Purchase claimed to be a browser event** and was dated by
+  webhook-processing time rather than payment time.
+- **Mark-as-sent raced the CSV**: the export is rebuilt at download time, so an
+  order paid mid-session was printed but never stamped, and printed again next
+  run. The download now always carries the same ids the mark will stamp.

@@ -42,6 +42,20 @@ export interface SyncedProductSummary {
   uncreatedColours: string[];
 }
 
+/**
+ * The public_id back out of a Cloudinary URL: the last path segment, minus its
+ * extension. Used to match a stored image to the job that would produce it,
+ * without depending on array positions that do not survive a failed mirror.
+ */
+function publicIdFromCloudinaryUrl(url: string): string | null {
+  if (!url) return null;
+  const withoutQuery = url.split("?")[0];
+  const last = withoutQuery.split("/").pop();
+  if (!last) return null;
+  const dot = last.lastIndexOf(".");
+  return dot > 0 ? last.slice(0, dot) : last;
+}
+
 /** Cloudinary rejects most punctuation in a public_id. */
 const slug = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
@@ -89,11 +103,24 @@ export async function syncPrintProviderProduct(providerId: string): Promise<Sync
   // What we already hold, so a re-sync does not pay to move bytes that have not
   // changed. Keyed by the public_id we would upload to, which is derived from
   // colour and index and is therefore stable across syncs.
+  // Keyed by the Cloudinary public_id parsed back OUT of the stored URL, not by the
+  // position in the stored array.
+  //
+  // The stored array is compacted -- a mirror that fails is simply absent -- so
+  // positions do not survive a failure. If a colour's second image failed once,
+  // every later image shifted down one, and the next sync then reused the wrong
+  // picture for every remaining slot and duplicated one. The failed image could
+  // also never be retried, because its position now belonged to another image.
+  //
+  // The public_id is derived from colour and SOURCE index, so it is stable across
+  // syncs and independent of what happened to land last time. A missing key simply
+  // re-downloads, which is how a previously-failed image finally arrives.
   const alreadyMirrored = new Map<string, string>();
   for (const c of existing?.colourways ?? []) {
-    (c.images ?? []).forEach((url: string, index: number) => {
-      if (url) alreadyMirrored.set(`${slug(c.name)}-${index}`, url);
-    });
+    for (const url of c.images ?? []) {
+      const publicId = publicIdFromCloudinaryUrl(url);
+      if (publicId) alreadyMirrored.set(publicId, url);
+    }
   }
 
   // Every image of every colour as one flat work list. Mirroring is network-bound

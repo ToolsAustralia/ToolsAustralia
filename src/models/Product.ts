@@ -28,6 +28,21 @@ export interface IProduct extends Document {
    * forever. Derived from the same array as `rating`, the two cannot disagree.
    */
   reviewCount: number;
+  /**
+   * The average and count of the reviews a customer actually SEES — those at or
+   * above the four-star display floor.
+   *
+   * Separate from `rating`/`reviewCount`, which stay honest across every review
+   * for admin and reporting. A listing card cannot compute this: the list query
+   * deliberately does not carry review bodies, so without these two fields the
+   * card printed the all-reviews average while the product page printed the
+   * displayed one, and the same product showed 3.2 on the grid and 4.8 on its
+   * own page.
+   *
+   * Written in the same recompute as `rating`, never incremented.
+   */
+  displayRating: number;
+  displayReviewCount: number;
   features: string[];
   specifications: Record<string, string>;
   isActive: boolean;
@@ -164,6 +179,17 @@ const ProductSchema = new Schema<IProduct>({
     },
   }],
   reviewCount: {
+    type: Number,
+    default: 0,
+    min: [0, 'Review count cannot be negative'],
+  },
+  displayRating: {
+    type: Number,
+    default: 0,
+    min: [0, 'Rating cannot be negative'],
+    max: [5, 'Rating cannot be more than 5'],
+  },
+  displayReviewCount: {
     type: Number,
     default: 0,
     min: [0, 'Review count cannot be negative'],

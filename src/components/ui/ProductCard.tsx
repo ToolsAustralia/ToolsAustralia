@@ -3,6 +3,7 @@
 import React, { useCallback, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Star, ShoppingCart, Ticket, Check, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
@@ -177,6 +178,7 @@ export default function ProductCard({
   const { trackAddToCart: trackKlaviyoAddToCart } = useKlaviyoTracking();
   const { userData, isAuthenticated } = useUserContext();
   const [showSignIn, setShowSignIn] = useState(false);
+  const router = useRouter();
 
   // Helper functions
   const getValidRating = (rating: unknown): number => {
@@ -394,32 +396,39 @@ export default function ProductCard({
       return;
     }
 
-    // Optimistic cart update (UI updates immediately, API call happens in background)
+    // A PRODUCT goes to its own page; only a mini-draw ticket is added from here.
+    //
+    // A card cannot collect a size or a colour, and the cart API rejects a
+    // variant-bearing line with no sku (400). Every render site without an
+    // onAddToCart handler — the homepage rows and the Related Products strip —
+    // was therefore firing a request the server refused, while still reporting
+    // AddToCart to Meta, TikTok and Klaviyo for a line that never existed. The
+    // card then offered Retry, which re-sent the identical rejected request.
+    //
+    // The list query deliberately does not carry `variants`, so a card cannot
+    // know whether a choice is required; the product page is the one surface
+    // that can. This is the same conclusion ShopContent already reached for the
+    // shop grid, applied everywhere rather than in one caller.
+    if (!isMiniDrawProduct(product)) {
+      router.push(`/shop/${productData.id}`);
+      return;
+    }
+
+    // Only a mini-draw ticket reaches here — the branch above sends every product
+    // to its own page. A ticket has no size or colour to choose, so a card CAN
+    // add one, and the compiler now proves the product branch is unreachable.
     await addToCart({
-      productId: isMiniDrawProduct(product) ? undefined : productData.id,
-      miniDrawId: isMiniDrawProduct(product) ? productData.id : undefined,
+      miniDrawId: productData.id,
       quantity: 1,
       price: productData.price,
-      product: isMiniDrawProduct(product)
-        ? undefined
-        : {
-            _id: product._id,
-            name: product.name,
-            price: product.price,
-            images: product.images,
-            brand: product.brand,
-            stock: product.stock,
-          },
-      miniDraw: isMiniDrawProduct(product)
-        ? {
-            _id: product._id,
-            name: product.name,
-            ticketPrice: productData.price, // Use prize value as price for cart compatibility
-            totalTickets: product.minimumEntries || 0, // Use minimumEntries for cart compatibility
-            soldTickets: product.totalEntries || 0, // Use totalEntries for cart compatibility
-            prize: product.prize,
-          }
-        : undefined,
+      miniDraw: {
+        _id: product._id,
+        name: product.name,
+        ticketPrice: productData.price, // Prize value doubles as price for the cart
+        totalTickets: product.minimumEntries || 0,
+        soldTickets: product.totalEntries || 0,
+        prize: product.prize,
+      },
     });
 
     try {
@@ -447,7 +456,7 @@ export default function ProductCard({
       // Don't throw - tracking should not break cart functionality
     }
 
-  }, [productData, addToCart, onAddToCart, product, isAuthenticated, trackAddToCart, trackKlaviyoAddToCart]);
+  }, [productData, addToCart, onAddToCart, product, isAuthenticated, router, trackAddToCart, trackKlaviyoAddToCart]);
 
   // Retry the operation that actually failed, so it leaves failedOperations and the card
   // returns to its normal state. Re-running handleAddToCart would queue a second operation
@@ -581,18 +590,21 @@ export default function ProductCard({
                 product rather than a new one, and contradicted its own detail page. */}
             {!productData.isPrize &&
               shouldShowReviews({
-                // reviewCount counts EVERY review, including ones below the display
-                // threshold, so a card can show stars for a product whose visible
-                // list is empty. The list query does not carry the reviews
-                // themselves — deliberately, since that would ship every body and
-                // reviewer id to the browser — so the card cannot know better. It
-                // links to the product page, which is authoritative.
-                displayableCount: (product as { reviewCount?: number }).reviewCount ?? 0,
+                // displayReviewCount, NOT reviewCount: the latter counts reviews a
+                // customer never sees, so the card would show stars for a product
+                // whose visible list is empty.
+                displayableCount:
+                  (product as { displayReviewCount?: number }).displayReviewCount ?? 0,
               }) && (
               <div className="flex items-center gap-1">
-                <div className="flex items-center">{renderStars(productData.rating)}</div>
+                {/* The DISPLAYED average, matching the product page. productData.rating
+                    averages every review including the hidden ones, so the same
+                    product read 3.2 here and 4.8 on its own page. */}
+                <div className="flex items-center">
+                  {renderStars((product as { displayRating?: number }).displayRating ?? 0)}
+                </div>
                 <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400 ml-1">
-                  ({getValidRating(productData.rating).toFixed(1)})
+                  ({((product as { displayRating?: number }).displayRating ?? 0).toFixed(1)})
                 </span>
               </div>
             )}

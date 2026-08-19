@@ -247,8 +247,17 @@ export async function updateOrderFulfilment(
   if (patch.trackingNumber !== undefined) update.trackingNumber = patch.trackingNumber.trim();
   if (patch.status) update.status = patch.status;
 
-  // Tracking implies shipped, unless an explicit status says otherwise.
-  if (!patch.status && patch.trackingNumber?.trim()) update.status = "shipped";
+  // Tracking implies shipped -- but only from a state an order can legitimately
+  // ship FROM, which cannot be known until the pre-image comes back. So the
+  // implied transition is applied AFTER the read, below.
+  //
+  // The admin list renders the tracking input on every row, including `pending`
+  // (unpaid) and `cancelled` (refunded) ones. Forcing either to `shipped` is
+  // unrecoverable: markPaid matches on `pending`, so a pending order pushed to
+  // shipped can never afterwards be marked paid by the webhook, and the customer
+  // has paid for something the system will never fulfil.
+  const CAN_SHIP_FROM: readonly OrderStatus[] = ["processing", "shipped"];
+  const wantsImpliedShip = !patch.status && Boolean(patch.trackingNumber?.trim());
 
   // Returns the document as it was BEFORE the write, which is the only thing that
   // can tell a real dispatch from a re-save. `findOneAndUpdate` is atomic, so two
@@ -259,6 +268,14 @@ export async function updateOrderFulfilment(
     .lean<{ _id: mongoose.Types.ObjectId; status: OrderStatus; trackingNumber?: string } | null>();
 
   if (!previous) return null;
+
+  // Now the pre-image is known, apply the implied transition if it is legal. A
+  // second write rather than a cleverer single one: the pre-image is what tells a
+  // real dispatch from a re-save, and it is also what the email guard below reads.
+  if (wantsImpliedShip && CAN_SHIP_FROM.includes(previous.status)) {
+    update.status = "shipped";
+    await Order.updateOne({ _id: orderId }, { $set: { status: "shipped" } });
+  }
 
   const status = update.status ?? previous.status;
   const trackingNumber = update.trackingNumber ?? previous.trackingNumber;

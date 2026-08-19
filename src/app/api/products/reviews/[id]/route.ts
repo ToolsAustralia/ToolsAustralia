@@ -8,6 +8,7 @@ import Order, { type IOrder } from "@/models/Order";
 import { authOptions } from "@/lib/auth";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
 import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
+import { displayableReviews, displayAverage } from "@/utils/shop/reviews";
 
 // GET now varies per viewer (`reviewEligibility` is derived from the session), so
 // this response must never be served from a shared cache.
@@ -214,7 +215,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const rating = averageRating(reviews);
     // reviewCount rides the SAME recompute rather than being incremented, so it
     // cannot drift out of step with the average the way the old counter did.
-    await Product.updateOne({ _id: id }, { $set: { rating, reviewCount: reviews.length } });
+    // Both pairs from the same array in the same write, so the figures a customer
+    // sees and the figures staff see can never drift apart.
+    const shown = displayableReviews(reviews);
+    await Product.updateOne(
+      { _id: id },
+      {
+        $set: {
+          rating,
+          reviewCount: reviews.length,
+          displayRating: displayAverage(shown),
+          displayReviewCount: shown.length,
+        },
+      }
+    );
 
     return NextResponse.json({
       message: "Review added successfully",
