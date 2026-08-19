@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import Hero from "@/components/sections/Hero";
 import PrizeShowcase from "@/components/sections/promo/PrizeShowcase";
 import MembershipSection from "@/components/sections/MembershipSection";
