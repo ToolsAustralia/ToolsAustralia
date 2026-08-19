@@ -313,3 +313,91 @@ provisioning on their side.
 
 Until that is answered, **product and image sync is not possible** and the CSV path stays the
 fulfilment route. Nothing built depends on the answer.
+
+### 2026-08-19, third pass — the `/docs/reference` schema, and a correction
+
+The `/docs/reference` section is a **generated GraphQL schema reference**, and reading it
+overturns part of what was written above. It is rendered client-side, so the page itself lists
+only one operation per category; **`/sitemap.xml` carries the full index** `[V]`.
+
+**30 operations, not the ten previously recorded** `[V]`:
+
+| | |
+|---|---|
+| Shops | `getAllShops` `getShop` `createShop` `updateShop` `deleteShop` |
+| Products | `getProducts` `getProduct` `createProduct` `updateProduct` `deleteProduct` |
+| **Blanks** | **`getBlankProducts`** `getDecorationMethods` `getPlacements` |
+| Orders | `getOrders` `getOrder` `createOrder` `createOrderFromGtin` `updateOrder` |
+| Shipping | `getShipments` `getShipment` `getShippingPrices` `getShippingSpeeds` `getAvailableShippingSpeeds` `saveShippingPrice` `saveShippingSpeed` `updateShippingPrice` `deleteShippingPrice` `deleteShippingSpeed` `addShippingUpgradeToOrder` |
+
+Types include `blank-product`, `blank-variant`, `blank-variant-image`, `shipping-price`,
+`shipping-price-country`, `placement`, `decoration-method`, `variant-mapping` `[V]`.
+
+**Correction: "product and image sync is not possible" was wrong.** It was written after
+`GET /catalogs` 500'd, and `/catalogs` was the only catalogue route tried. The operation list
+named the right one.
+
+```
+GET /blank-products    200    15 blank products, 178 KB
+```
+
+#### What the blank catalogue actually contains `[V]`
+
+| id | supplier | product | variants | images |
+|---|---|---|---|---|
+| `ASAU5001` | Ascolour Australia | **Staple Tee \| 5001** | **563** | 157 |
+| `ASAU5101` | Ascolour Australia | Supply Hood \| 5101 | 115 | 38 |
+| `ASAU5146` | Ascolour Australia | Heavy Hood \| 5146 | 63 | 22 |
+| `ASAU4001` | Ascolour Australia | Wo's Maple Tee \| 4001 | 332 | 108 |
+| `ASAU3005` / `ASAU3006` | Ascolour Australia | Kids / Youth Staple Tee | 60 / 100 | 51 / 51 |
+| `ASAU5025` | Ascolour Australia | Barnard Tank \| 5025 | 0 | 30 |
+| `SS5000` `SS64000` `SS65000` `SSSF500` | S&S Activewear (US) | Gildan / Softstyle tees + hood | 403–518 | — |
+| 2 × Ramo, 2 × Aussie Pacific | | Ringer Tee, Raglan Tee, AP Torquay Hoodie ×2 | | |
+
+**Staple Tee 5001 — 75 colours × 9 sizes (XS–5XL)** `[V]`. Variant ids encode both:
+`5001-FOREST-I-L` → `{style}-{COLOUR}-{sizeIndex}-{size}`. Colours run `ARC_B, ARMY, ATLAN,
+BLACK, BONE, … WHITE, YELLO`.
+
+Images are `{ type, url }` on BigCommerce CDN URLs. `type` is `primary`, `front` or `back` for
+exactly one image each; the other 154 are `type: null` **per-colour thumbnails with the colour in
+the filename** — `5001_STAPLE_TEE_FOREST_GREEN_THUMB__66860…jpg` `[V]`. So a colour swatch UI is
+buildable today: parse the colour from the variant id, match the thumbnail by filename.
+
+**Use the LIST endpoint, not the detail one.** `GET /blank-products/{id}` returns 200 but *omits*
+`blankSettings` — the object holding placements, pricing pointers and `blankVariantIds`. The list
+response is strictly richer `[V]`.
+
+`blankSettings.placements` gives **decoration prices**: `{"1":{printingPrice:10},
+{"2":{printingPrice:10}, "3":{printingPrice:5}}` — front $10, back $10, left chest $5, matching
+our existing PLACEMENTS map `[V]`. `upcharge: 10`, `vatPercent: 0`.
+
+**Blank garment cost is still not exposed.** It sits behind `pricingTableId` and
+`decorationMethodPricings` — opaque ids `[V]`. `GET /shipping-prices` returns
+`401 {"requiresAdmin":true}` `[V]`, so the freight rate card is a role we do not hold. Both stay
+supplier questions; the pricing model already uses the quoted $9–$15 freight and is unaffected.
+
+#### The GraphQL 404, now proven rather than asserted
+
+Auth runs **before** routing, which makes the two responses diagnostic `[V]`:
+
+| request | status | body |
+|---|---|---|
+| `POST /graphql` **without** `x-uid` | 403 | `{"message":"Authentication failed.","status":403}` |
+| `POST /graphql` **with** our `x-uid` | 404 | `<pre>Cannot POST /graphql</pre>` (Express default) |
+
+Our key authenticates. The GraphQL route is simply **not deployed** — the docs describe a surface
+this deployment does not serve. `x-powered-by: Express`, `server: Google Frontend`.
+
+The docs also state: *"Until you rotate, the key is your user ID."* So `x-uid` is literally a
+Riverr user id, which is consistent with everything above.
+
+#### Revised standing: one blocker, not five
+
+Tenant-scoped reads (`/products`, `/shops`, `/orders`, `/designs`) return empty and `POST /shops`
+500s on a Firestore `documentPath` — still consistent with the account not being linked to an
+enterprise. But **public data reads fine**, so the key is not broken and the integration is not
+dead. The revised ask is unchanged in substance and smaller in scope: link the account, confirm
+the shopId, publish the blank cost + freight tables, and say whether GraphQL or REST is current.
+
+**Nothing built depends on this.** CSV remains the fulfilment route. What changed is that
+sourcing product imagery and the colour matrix no longer waits on the supplier.
