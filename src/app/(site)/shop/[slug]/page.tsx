@@ -18,6 +18,11 @@ import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import { getNonce } from "@/utils/security/getNonce";
 import { FREE_SHIPPING_THRESHOLD_LABEL } from "@/config/shop";
 import { shouldShowReviews } from "@/utils/shop/reviews";
+// Client component, deliberately: this page is server-rendered and cannot read
+// who is signed in, and the member price has to be the signed-in member's own.
+// It ships in the ProductCard module, which this route already loads for the
+// related-products row below.
+import { MemberPriceLine } from "@/components/ui/ProductCard";
 
 // nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
 // (see docs/security-csp/architecture.md "Route classes").
@@ -38,9 +43,13 @@ const getProduct = createCachedQuery(async (slug: string): Promise<ProductType |
     // below, so anything on it is one view-source away for any visitor. The
     // print-ready design files are our supplier-facing assets on permanent public
     // Cloudinary URLs; publishing them hands anyone the artwork to print their own.
+    // reviews.userId is the same class of leak. The reviews API strips it through
+    // toPublicReview, but this page bypasses that route entirely, so every
+    // reviewer's user id would ship in the page source of the product they
+    // reviewed — tying an identifiable account to a purchase.
     // Same reasoning as the printProvider comment in models/Product.ts.
     const product = await Product.findOne({ _id: slug, isActive: true })
-      .select("-printArtwork -printProvider")
+      .select("-printArtwork -printProvider -reviews.userId")
       .lean();
     return product as unknown as ProductType | null;
   } catch (error) {
@@ -348,6 +357,13 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             <div className="flex items-center gap-3">
               <span className="text-3xl font-bold text-red-600 font-poppins">${product.price}</span>
             </div>
+
+            {/* The member price sits beside the shelf price, never struck through
+                it: a strikethrough reads as a former price, which is the exact
+                misrepresentation the block above was removed for. A member is
+                quoted their own tier; everyone else sees the best tier's price,
+                which is what the membership is worth to them. */}
+            <MemberPriceLine price={product.price} variant="detail" />
 
             {/* Description */}
             <div>

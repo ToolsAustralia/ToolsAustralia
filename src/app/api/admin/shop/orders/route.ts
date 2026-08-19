@@ -94,18 +94,26 @@ const patchSchema = z.object({
  * shipped" is a real support question.
  */
 export async function PATCH(request: NextRequest) {
+  // Read before the guard so the audit row can name the order. `log()` carries only a
+  // status code and the rest of the context is fixed when the guard is built, so an id
+  // read afterwards never reaches the row — leaving "somebody edited an order", which
+  // answers nothing. Same early parse as admin/mini-draw/update. Validation still
+  // happens after the guard, so an unauthorised caller learns nothing about the shape.
+  const body: unknown = await request.json().catch(() => null);
+  const auditOrderId = (body as { orderId?: unknown } | null)?.orderId;
+
   const guard = await requirePermissionWithAudit("shop.edit", request, {
     resourceType: "order",
+    ...(typeof auditOrderId === "string" ? { resourceId: auditOrderId } : {}),
   });
   if (guard instanceof NextResponse) return guard;
 
   try {
     await connectDB();
-    const { orderId, status, trackingNumber } = patchSchema.parse(
-      await request.json(),
-    );
+    const { orderId, status, trackingNumber } = patchSchema.parse(body);
 
     if (status === undefined && trackingNumber === undefined) {
+      await guard.log(400);
       return NextResponse.json(
         { success: false, error: "Nothing to update" },
         { status: 400 },
@@ -117,21 +125,27 @@ export async function PATCH(request: NextRequest) {
       trackingNumber,
     });
     if (!updated) {
+      await guard.log(404);
       return NextResponse.json(
         { success: false, error: "Order not found" },
         { status: 404 },
       );
     }
 
+    // Every outcome is logged, not just the successful one: a rejected attempt to
+    // ship an order that does not exist is exactly the pattern the log is read for.
+    await guard.log(200);
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      await guard.log(400);
       return NextResponse.json(
         { success: false, error: "Validation error", details: error.issues },
         { status: 400 },
       );
     }
     console.error("[shop] failed to update order fulfilment:", error);
+    await guard.log(500);
     return NextResponse.json(
       { success: false, error: "Failed to update the order" },
       { status: 500 },

@@ -511,17 +511,95 @@ export function createShopOrderConfirmationTemplate(params: {
     spacer(24) +
     button({ href: params.orderUrl, label: 'View your order', variant: 'red', width: 260 }) +
     spacer(18) +
-    // Nothing sends a dispatch email — there is no shipped template and no code
-    // path that would trigger one. Tracking is added to the order by hand and
-    // shows on My Account, so that is what this points at. Promising a second
-    // email would guarantee a support ticket from every customer who waits for it.
+    // This promise is kept by `sendShopOrderShipped`, which fires the one time an
+    // order crosses into "shipped". It was cut once, while nothing sent that email —
+    // so if the dispatch notice is ever removed, cut this sentence with it. A
+    // customer waiting on an email that never arrives is a support ticket.
+    //
+    // It promises the email, NOT a tracking number: an order can be marked shipped
+    // with no tracking, and the dispatch notice omits the number when there is none.
     note(
-      "Follow your order any time under My Account — tracking shows up there once it ships. If anything looks wrong, reply to this email and we'll sort it."
+      "We'll email you when it ships. You can follow your order any time under My Account too — if anything looks wrong, reply to this email and we'll sort it."
     );
 
   return renderBrandEmail({
     title: `Tax invoice — order ${safeOrder}`,
     preheader: `Order ${safeOrder} confirmed — we're getting it made. Your tax invoice is inside.`,
+    contentHtml: content,
+  });
+}
+
+/**
+ * Dispatch notice for a merchandise order.
+ *
+ * The confirmation email used to promise "we'll email you when it ships" and that
+ * line had to be cut, because nothing sent one. This is that email, so the promise
+ * can be made again truthfully.
+ *
+ * Deliberately NOT a second invoice. No totals, no GST, no entries — the
+ * confirmation is the tax invoice and the only place any of that belongs. A dollar
+ * figure on a dispatch notice reads as a second charge.
+ *
+ * `trackingNumber` is OPTIONAL and its row is omitted entirely when absent: the
+ * admin can mark an order shipped without one, and an empty "Tracking: —" row
+ * invites the exact reply it was meant to prevent. Nothing here links to a carrier
+ * either — an order stores a bare number with no carrier beside it, so a tracking
+ * URL would be a guess. My Account shows the same bare number this does.
+ */
+export function createShopOrderShippedTemplate(params: {
+  firstName: string;
+  orderNumber: string;
+  items: { name: string; variant?: string; quantity: number }[];
+  trackingNumber?: string;
+  shippingAddress: string;
+  orderUrl: string;
+}): string {
+  const safeName = escapeHtml(params.firstName || 'mate');
+  const safeOrder = escapeHtml(params.orderNumber);
+  const tracking = params.trackingNumber?.trim();
+
+  const itemLines = params.items.map((i) => ({
+    label: escapeHtml(i.name),
+    value: escapeHtml([i.variant, `× ${i.quantity}`].filter(Boolean).join(' · ')),
+  }));
+
+  const content =
+    // "On its way" is the word My Account already puts on a shipped order. Two
+    // names for one state is how a customer ends up asking whether "dispatched"
+    // and "on its way" are different things.
+    chip('On its way') +
+    spacer(14) +
+    heading(`Packed and shipped, ${safeName}`) +
+    spacer(16) +
+    lede(
+      `Order <strong>${safeOrder}</strong> has been dispatched and is on its way to you.`
+    ) +
+    spacer(24) +
+    bodyHeading("What's on its way") +
+    infoTable([
+      ...itemLines,
+      { label: 'Order number', value: safeOrder },
+      ...(tracking ? [{ label: 'Tracking number', value: escapeHtml(tracking) }] : []),
+    ]) +
+    spacer(22) +
+    bodyHeading('Delivering to') +
+    // The caller joins the address with newlines, and plain escapeHtml drops them —
+    // which would collapse name, street, suburb and country onto one run-on line.
+    bodyText(escapeHtmlPreserveNewlines(params.shippingAddress)) +
+    spacer(24) +
+    button({ href: params.orderUrl, label: 'View your orders', variant: 'red', width: 260 }) +
+    spacer(18) +
+    note(
+      tracking
+        ? "A tracking number can take a day or so to start updating after the parcel is collected. It's on your order under My Account too. If anything looks wrong, reply to this email and we'll sort it."
+        : "Your order stays under My Account any time. If anything looks wrong, reply to this email and we'll sort it."
+    );
+
+  return renderBrandEmail({
+    title: `Your order ${safeOrder} is on its way`,
+    preheader: tracking
+      ? `Order ${safeOrder} has shipped — your tracking number is inside.`
+      : `Order ${safeOrder} has shipped and is on its way to you.`,
     contentHtml: content,
   });
 }

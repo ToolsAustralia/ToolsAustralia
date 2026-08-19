@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
       data: {
         orderNumber: result.orderNumber,
         amountRefunded: result.amountRefunded,
+        wasFull: result.wasFull,
       },
     });
   } catch (error) {

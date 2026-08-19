@@ -15,6 +15,19 @@ export interface IProduct extends Document {
     comment: string;
     createdAt: Date;
   }[];
+  /**
+   * How many reviews this product has.
+   *
+   * Denormalised so a listing card can apply the same display gate as the
+   * product page without the list query shipping every review body — and every
+   * reviewer's user id — to the browser.
+   *
+   * ALWAYS written as `reviews.length` from the array a write returns, never
+   * incremented. An earlier `reviewCount` was read by six paths and never
+   * existed on the schema, so Mongoose dropped every write to it and it read 0
+   * forever. Derived from the same array as `rating`, the two cannot disagree.
+   */
+  reviewCount: number;
   features: string[];
   specifications: Record<string, string>;
   isActive: boolean;
@@ -150,6 +163,11 @@ const ProductSchema = new Schema<IProduct>({
       default: Date.now,
     },
   }],
+  reviewCount: {
+    type: Number,
+    default: 0,
+    min: [0, 'Review count cannot be negative'],
+  },
   features: [{
     type: String,
     trim: true,

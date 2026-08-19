@@ -1,26 +1,51 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Star, Check, Truck, Shield, RotateCcw, Award, Clock } from "lucide-react";
 import { ProductData } from "@/data";
 import { getContactEmail } from "@/lib/email/sender-identities";
 import { FREE_SHIPPING_THRESHOLD_LABEL, FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
 import { shouldShowReviews } from "@/utils/shop/reviews";
+import { useProductReviews } from "@/hooks/queries/useProductQueries";
+import ProductReviewForm from "./ProductReviewForm";
 
 interface ProductTabsProps {
   product: ProductData;
 }
 
 export default function ProductTabs({ product }: ProductTabsProps) {
-  const [activeTab, setActiveTab] = useState<"specifications" | "reviews" | "shipping">("specifications");
+  const [activeTab, setActiveTab] = useState<"specifications" | "reviews" | "shipping">("specifications");
 
-  // Reviews appear only with at least one real review AND a 4-star average.
-  // Below either bar there is no tab at all, rather than an empty shell.
+  // The route segment IS the product's `_id` — page.tsx resolves this page with
+  // `Product.findOne({ _id: slug })`. Taken from the URL rather than the prop
+  // because `ProductData` describes the static fixtures, whose identifier is `id`,
+  // while the document this page actually renders carries `_id`.
+  const { slug: productId } = useParams<{ slug: string }>();
+
+  // The review LIST appears only with at least one real review AND a 4-star
+  // average. Below either bar there is no list, rather than an empty shell.
   const reviewList = Array.isArray(product.reviews) ? product.reviews : [];
   const showReviews = shouldShowReviews({
     rating: product.rating,
     reviewCount: reviewList.length,
   });
+
+  // Entitlement is decided server-side from the viewer's paid orders and is only
+  // ever used here to choose what to draw. The tab has to survive the gate above
+  // for a verified buyer, or there is nowhere to leave the first review and the
+  // list can never become non-empty.
+  //
+  // Only fetched once a session exists: nobody signed out can be a buyer, and this
+  // is a public product page, so firing it for every anonymous view would be a
+  // request per pageview that can only ever answer "not_eligible".
+  const { status: sessionStatus } = useSession();
+  const { data: reviewsData } = useProductReviews(
+    sessionStatus === "authenticated" ? productId : undefined
+  );
+  const reviewEligibility = reviewsData?.reviewEligibility ?? "not_eligible";
+  const showReviewsTab = showReviews || reviewEligibility !== "not_eligible";
   const contactEmail = getContactEmail();
 
   return (
@@ -38,10 +63,11 @@ export default function ProductTabs({ product }: ProductTabsProps) {
             >
               Specifications
             </button>
-            {/* No reviews tab at all below the gate — an empty shell reading
-                "Reviews (0)" beside grey stars is worse than nothing on a
-                brand-new print-to-order garment. */}
-            {showReviews && (
+            {/* No reviews tab for a passing visitor below the gate — an empty shell
+                reading "Reviews (0)" beside grey stars is worse than nothing on a
+                brand-new print-to-order garment. A buyer entitled to write one is
+                the exception: they get the tab so the form is reachable. */}
+            {showReviewsTab && (
             <button
               onClick={() => setActiveTab("reviews")}
               className={`flex-1 py-4 px-4 border-b-2 font-medium transition-colors text-center ${
@@ -50,7 +76,10 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                   : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
-              Reviews ({reviewList.length})
+              {/* The count rides along only when the list is actually shown —
+                  otherwise the label would advertise reviews this tab is not
+                  displaying. */}
+              Reviews{showReviews ? ` (${reviewList.length})` : ""}
               </button>
             )}
             <button
@@ -137,10 +166,12 @@ export default function ProductTabs({ product }: ProductTabsProps) {
           )}
 
           {/* Reviews Tab */}
-          {activeTab === "reviews" && showReviews && (
+          {activeTab === "reviews" && showReviewsTab && (
             <div className="space-y-8">
               <div className="flex flex-col lg:flex-row gap-8">
-                {/* Rating Summary */}
+                {/* Rating Summary — an average is only worth printing next to the
+                    reviews it was computed from. */}
+                {showReviews && (
                 <div className="lg:w-1/3">
                   <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4">Customer Reviews</h3>
@@ -163,23 +194,37 @@ export default function ProductTabs({ product }: ProductTabsProps) {
 
                   </div>
                 </div>
+                )}
 
-                {/* The real reviews. Rendered only when the gate above passes, so
-                    this list is never empty. Three invented testimonials used to sit
-                    here — named reviewers, invented bodies, and a "Verified Purchase"
-                    badge on each, against a product with zero reviews in the database.
+                {/* The real reviews, plus the only way one can ever get here. The
+                    list renders only when the gate above passes, so it is never
+                    empty. Three invented testimonials used to sit here — named
+                    reviewers, invented bodies, and a "Verified Purchase" badge on
+                    each, against a product with zero reviews in the database.
                     Fabricated testimonials and false verified-purchase badges are
-                    prohibited conduct under the Australian Consumer Law. */}
-                <div className="lg:w-2/3 space-y-4">
-                  {reviewList.map((review, i) => (
+                    prohibited conduct under the Australian Consumer Law. Nothing
+                    below claims either: the form writes what a buyer actually typed,
+                    and no badge is drawn on top of it. */}
+                <div className={`space-y-4 ${showReviews ? "lg:w-2/3" : "w-full"}`}>
+                  <ProductReviewForm productId={productId} eligibility={reviewEligibility} />
+                  {showReviews && reviewList.map((review, i) => (
                     <div
                       key={i}
                       className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-950"
                     >
                       <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="font-semibold text-gray-900 dark:text-neutral-100">
-                          {review.reviewer || "Customer"}
-                        </span>
+                        {/* Only when a name genuinely exists. The reviews sub-schema
+                            in models/Product.ts is { userId, rating, comment,
+                            createdAt } — there is no name on it and nothing writes
+                            one, so this used to print "Customer" over every real
+                            review. An attributed-looking placeholder on an
+                            unattributed review is the same defect as the invented
+                            testimonials it replaced. */}
+                        {review.reviewer && (
+                          <span className="font-semibold text-gray-900 dark:text-neutral-100">
+                            {review.reviewer}
+                          </span>
+                        )}
                         <span className="flex items-center gap-0.5">
                           {[...Array(5)].map((_, star) => (
                             <Star

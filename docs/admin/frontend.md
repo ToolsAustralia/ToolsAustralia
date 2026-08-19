@@ -1599,3 +1599,30 @@ exactly the pattern Settings itself already uses for a route that is not in the 
 hidden for guests, who have no orders and would land on an empty page.
 
 `BottomNav` filters `desktopOnly` items out; `DeskNav` renders the full list.
+
+## Shop orders: detail, refund, and the Stripe id (2026-08-19)
+
+`OrdersManagement` used to declare its own local `OrderRow` type. That duplicate
+is why adding `paymentIntentId` to the service projection changed nothing — the
+field was serialised on every admin page and thrown away. It now imports
+`OrderListItem` from `orderQueries`, so a field added to the service reaches the
+UI without a second edit.
+
+`OrderDetailModal` carries the detail view and the refund flow. Refund is gated
+`shop.delete` on both sides — the same permission
+`POST /api/admin/shop/orders/refund` enforces, so a staff member who cannot
+refund never sees a button that will 403.
+
+**Full-vs-partial comes from the server.** The modal used to infer it from what
+it asked for, but a "partial" refund typed at exactly the order total IS a full
+refund in `refundShopOrder`, and cancels the order out of the fulfilment queue.
+The response now carries `wasFull` and the modal reports that, so staff are never
+told an order is still live when it has just been cancelled.
+
+**Known gap:** the delivery address is still not visible. `listOrders` projects
+only `shippingAddress.firstName` and `.lastName`, so once an order is stamped
+submitted — which removes it from the fulfilment CSV — nothing in admin can
+answer "where was this sent?". Closing it means adding the rest of
+`shippingAddress` to the `isAdminSurface` branch of the projection; the modal's
+Delivery section is already built and says plainly what is missing rather than
+rendering a blank that reads as a data fault.

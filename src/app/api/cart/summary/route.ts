@@ -4,6 +4,7 @@ import Product from "@/models/Product";
 import MiniDraw from "@/models/MiniDraw";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
 import { priceCart, dollarsToCents, toDollarSummary } from "@/utils/shop/pricing";
+import { resolveShopDiscountPercent } from "@/utils/shop/member-discount";
 
 export async function GET() {
   try {
@@ -42,15 +43,23 @@ export async function GET() {
     // priceCart only needs the money, and this preserves the total exactly.
     // An empty cart must pass NO lines — a synthetic `quantity: 1` line would
     // miss priceCart's empty-cart guard and charge flat shipping on nothing.
+    // The SAME resolver the checkout route uses. This used to hardcode a zero
+    // discount, so a member saw full price in the cart and a discounted total only
+    // at the final step — and now that the shop shows a member price on the product
+    // page too, the cart was the one surface disagreeing with both. A shop that
+    // quotes one number and charges another is the bug to avoid above all others.
+    const shopDiscountPercent = resolveShopDiscountPercent(user);
+
     const totals = priceCart(
-      totalItems === 0 ? [] : [{ priceCents: dollarsToCents(subtotal), quantity: 1 }]
+      totalItems === 0 ? [] : [{ priceCents: dollarsToCents(subtotal), quantity: 1 }],
+      { shopDiscountPercent }
     );
 
     const summary = {
       ...toDollarSummary(totals),
       // The synthetic single line above collapses quantities, so report the real count.
       totalItems,
-      membershipDiscount: 0,
+      membershipDiscount: totals.discountCents / 100,
       partnerDiscount: 0,
     };
 

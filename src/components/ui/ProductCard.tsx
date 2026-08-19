@@ -14,6 +14,8 @@ import { useUserContext } from "@/contexts/UserContext";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
 import { cn } from "@/utils/cn";
 import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
+import { resolveMemberShopPrice } from "@/utils/shop/member-discount";
+import { shouldShowReviews } from "@/utils/shop/reviews";
 
 // Types
 interface ProductItem {
@@ -90,6 +92,67 @@ type ProductCardProps = {
   width?: string;
   viewMode?: "grid" | "list";
 };
+
+/**
+ * The member price, stated next to the shelf price.
+ *
+ * Shared by this card and the product detail page. It lives in this module
+ * rather than a file of its own because the detail page already mounts
+ * ProductCard for its related-products row, so both surfaces carry this chunk
+ * either way — and that page is a server component, which cannot read who is
+ * signed in.
+ *
+ * The figure comes from resolveMemberShopPrice, which resolves the percentage
+ * and the money through the same functions the checkout route runs. Working a
+ * percentage out here instead is how a shop ends up showing one price and
+ * charging another.
+ */
+export function MemberPriceLine({
+  price,
+  variant = "card",
+}: {
+  price: number;
+  variant?: "card" | "detail";
+}) {
+  const { userData } = useUserContext();
+  const memberPrice = resolveMemberShopPrice(price, userData);
+
+  // Nothing to say when no tier discounts this item — never a 0% claim.
+  if (!memberPrice) return null;
+
+  if (variant === "card") {
+    return (
+      <p className="mt-1 text-[11px] sm:text-[12px] font-semibold text-emerald-700 dark:text-emerald-400">
+        {memberPrice.isMember
+          ? `Your price ${memberPrice.priceLabel}`
+          : `Members from ${memberPrice.priceLabel}`}
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3">
+      <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
+        {memberPrice.isMember
+          ? `You pay ${memberPrice.priceLabel}`
+          : `Members pay from ${memberPrice.priceLabel}`}
+      </p>
+      <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400/90">
+        {memberPrice.isMember
+          ? `Your ${memberPrice.tierName} membership takes ${memberPrice.percent}% off shop orders, applied at checkout.`
+          : `${memberPrice.tierName} membership takes ${memberPrice.percent}% off every shop order.`}
+      </p>
+      {!memberPrice.isMember && (
+        <Link
+          href="/membership"
+          className="mt-2 inline-block text-xs font-semibold text-emerald-800 dark:text-emerald-300 underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-200"
+        >
+          See membership options
+        </Link>
+      )}
+    </div>
+  );
+}
 
 export default function ProductCard({
   product,
@@ -509,8 +572,15 @@ export default function ProductCard({
               </p>
             )}
 
-            {/* Rating - Only show for products, not mini draws */}
-            {!productData.isPrize && (
+            {/* Rating. Same gate as the product page and the JSON-LD -- at least one
+                review AND a 4-star average. Ungated, a brand-new print-to-order
+                garment showed five grey stars and (0.0), which reads as a bad
+                product rather than a new one, and contradicted its own detail page. */}
+            {!productData.isPrize &&
+              shouldShowReviews({
+                rating: productData.rating,
+                reviewCount: (product as { reviewCount?: number }).reviewCount ?? 0,
+              }) && (
               <div className="flex items-center gap-1">
                 <div className="flex items-center">{renderStars(productData.rating)}</div>
                 <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400 ml-1">
@@ -556,8 +626,13 @@ export default function ProductCard({
           <div className="mt-4 space-y-3">
             {/* Price */}
             {!productData.isPrize && (
-              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
-                <span>${productData.price.toFixed(2)}</span>
+              <div>
+                <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
+                  <span>${productData.price.toFixed(2)}</span>
+                </div>
+                {/* Mini draws are excluded above: their figure is a prize VALUE,
+                    not a price anyone pays, so no discount applies to it. */}
+                <MemberPriceLine price={productData.price} />
               </div>
             )}
 
@@ -743,8 +818,11 @@ export default function ProductCard({
           <div className="flex items-center justify-between mt-4">
             {/* Price */}
             {!productData.isPrize && (
-              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
-                <span>${productData.price.toFixed(2)}</span>
+              <div>
+                <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
+                  <span>${productData.price.toFixed(2)}</span>
+                </div>
+                <MemberPriceLine price={productData.price} />
               </div>
             )}
 

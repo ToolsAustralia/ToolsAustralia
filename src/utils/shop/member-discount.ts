@@ -1,4 +1,5 @@
-import { getPackageById } from "@/data/membershipPackages";
+import { getPackageById, membershipPackages } from "@/data/membershipPackages";
+import { centsToDollars, dollarsToCents, priceCart } from "@/utils/shop/pricing";
 
 /**
  * The member shop discount: Tradie 5%, Foreman 10%, Boss 20%.
@@ -37,4 +38,96 @@ export function resolveShopDiscountPercent(
   // inflate the total, and >100 would invert it.
   if (!Number.isFinite(percent) || percent <= 0) return 0;
   return Math.min(percent, 100);
+}
+
+/**
+ * The member price for one unit of a shop product, ready to render.
+ *
+ * `null` means say nothing — a free or unpriced item, or a catalog with no
+ * discounting tier left in it. A "0% off" line is worse than silence.
+ */
+export interface MemberShopPrice {
+  /** The tier percentage behind the figure. Always above 0. */
+  percent: number;
+  /** What that member pays for one unit, formatted — `"$47.96"`. */
+  priceLabel: string;
+  /** Whose discount this is: the shopper's own tier, or the best one on offer. */
+  tierName: string;
+  /** True when the figure is the signed-in shopper's OWN price, not an example. */
+  isMember: boolean;
+}
+
+/**
+ * The largest shop discount a membership currently carries.
+ *
+ * Read back out through `resolveShopDiscountPercent` rather than off the catalog
+ * rows directly, so the percentage the shop advertises and the percentage the
+ * till applies can never come from two different reads — the clamping included.
+ *
+ * Skips an inactive package: quoting a price off a tier nobody can subscribe to
+ * advertises a saving the shopper has no way to obtain.
+ */
+function findBestShopDiscountTier(): { percent: number; tierName: string } | null {
+  let best: { percent: number; tierName: string } | null = null;
+
+  for (const pkg of membershipPackages) {
+    if (!pkg.isActive) continue;
+    const percent = resolveShopDiscountPercent({
+      subscription: { isActive: true, packageId: pkg._id },
+    });
+    if (percent > 0 && (best === null || percent > best.percent)) {
+      best = { percent, tierName: pkg.name };
+    }
+  }
+
+  return best;
+}
+
+/**
+ * What a member pays for this product — the shopper's own price when they hold a
+ * tier, the best tier's price when they do not.
+ *
+ * Pure, so a listing card or a product page can state the figure with no
+ * endpoint and no round trip. Both halves come from the functions checkout
+ * itself runs: `resolveShopDiscountPercent` for the percentage, `priceCart` for
+ * the money. A second copy of either is exactly how a shop ends up showing one
+ * price and charging another.
+ *
+ * The figure is this line's own contribution. Checkout rounds the discount once
+ * across the whole cart, so a mixed basket can land a cent either side of the
+ * sum of these.
+ */
+export function resolveMemberShopPrice(
+  priceDollars: number,
+  user: ShopDiscountUserInput | null | undefined
+): MemberShopPrice | null {
+  // A giveaway row or a mispriced one has no member price worth stating.
+  if (!Number.isFinite(priceDollars) || priceDollars <= 0) return null;
+
+  let tier: { percent: number; tierName: string; isMember: boolean } | null = null;
+
+  const ownPercent = user ? resolveShopDiscountPercent(user) : 0;
+  if (ownPercent > 0) {
+    const ownPackage = getPackageById(user?.subscription?.packageId ?? "");
+    if (ownPackage) tier = { percent: ownPercent, tierName: ownPackage.name, isMember: true };
+  }
+
+  if (!tier) {
+    const best = findBestShopDiscountTier();
+    if (best) tier = { ...best, isMember: false };
+  }
+
+  if (!tier) return null;
+
+  const { subtotalCents, discountCents } = priceCart(
+    [{ priceCents: dollarsToCents(priceDollars), quantity: 1 }],
+    { shopDiscountPercent: tier.percent }
+  );
+
+  return {
+    percent: tier.percent,
+    priceLabel: `$${centsToDollars(subtotalCents - discountCents).toFixed(2)}`,
+    tierName: tier.tierName,
+    isMember: tier.isMember,
+  };
 }

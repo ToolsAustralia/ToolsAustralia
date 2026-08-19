@@ -1,5 +1,6 @@
 import mongoose, { type FilterQuery } from "mongoose";
 import Order, { type IOrder } from "@/models/Order";
+import { sendShopOrderShipped } from "@/services/shop/sendOrderShipped";
 
 /**
  * Order listing — the ONE query used by both the customer's order history and the
@@ -194,6 +195,9 @@ export async function distinctOrderCategories(): Promise<string[]> {
  * Setting a tracking number alone implies dispatch, so status follows automatically
  * unless the caller names one — a human who has just pasted a tracking number should
  * not have to remember a second field for the customer to see the right thing.
+ *
+ * Crossing INTO "shipped" is what tells the customer, so this is also where the
+ * dispatch notice is sent from — see the transition guard below.
  */
 export async function updateOrderFulfilment(
   orderId: string,
@@ -208,9 +212,37 @@ export async function updateOrderFulfilment(
   // Tracking implies shipped, unless an explicit status says otherwise.
   if (!patch.status && patch.trackingNumber?.trim()) update.status = "shipped";
 
-  const doc = await Order.findByIdAndUpdate(orderId, { $set: update }, { new: true })
+  // Returns the document as it was BEFORE the write, which is the only thing that
+  // can tell a real dispatch from a re-save. `findOneAndUpdate` is atomic, so two
+  // staff hitting "shipped" at once produce exactly one pre-image that was not
+  // already shipped — and therefore exactly one email.
+  const previous = await Order.findByIdAndUpdate(orderId, { $set: update }, { new: false })
     .select("status trackingNumber")
     .lean<{ _id: mongoose.Types.ObjectId; status: OrderStatus; trackingNumber?: string } | null>();
 
-  return doc ? { id: String(doc._id), status: doc.status, trackingNumber: doc.trackingNumber } : null;
+  if (!previous) return null;
+
+  const status = update.status ?? previous.status;
+  const trackingNumber = update.trackingNumber ?? previous.trackingNumber;
+
+  // Only on the TRANSITION. An order already at "shipped" is being re-saved or
+  // having a mistyped tracking number corrected, and a customer must not be told
+  // twice that the same parcel just left — the second email reads as a second
+  // parcel. Awaited, not fired and forgotten: a serverless function that returns
+  // can be frozen mid-send. It never throws, so the write's result still stands.
+  // And only from a state a parcel can legitimately leave. Testing the VALUE
+  // alone would email on illegal transitions: an order sits at "pending" before
+  // payment, and a full refund sets "cancelled" -- so a mis-set status on either
+  // would tell someone who has not paid, or who has just been refunded, that
+  // their parcel is on its way.
+  const DISPATCHABLE_FROM: readonly OrderStatus[] = ["processing"];
+  if (
+    status === "shipped" &&
+    previous.status !== "shipped" &&
+    DISPATCHABLE_FROM.includes(previous.status)
+  ) {
+    await sendShopOrderShipped(orderId);
+  }
+
+  return { id: String(previous._id), status, trackingNumber };
 }

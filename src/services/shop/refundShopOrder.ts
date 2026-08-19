@@ -44,6 +44,15 @@ export interface RefundShopOrderResult {
   orderNumber?: string;
   /** Cents actually refunded, as Stripe reports it. */
   amountRefunded?: number;
+  /**
+   * Whether this refund cancelled the order.
+   *
+   * Returned rather than left for the caller to infer from what it asked for: a
+   * "partial" refund entered at exactly the order total IS a full refund here and
+   * cancels the order, so a caller reasoning from its own request would tell staff
+   * the order is still live when it has just left the fulfilment queue.
+   */
+  wasFull?: boolean;
   error?: string;
 }
 
@@ -125,5 +134,6 @@ export async function refundShopOrder(params: {
     status: "refunded",
     orderNumber: order.orderNumber,
     amountRefunded: refund.amount,
+    wasFull: isFull,
   };
 }

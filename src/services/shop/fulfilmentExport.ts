@@ -59,10 +59,27 @@ export interface FulfilmentRow {
   leftChestPlacement: string;
 }
 
+/** An order in the queue, as the admin picks it: by number, not by id. */
+export interface FulfilmentOrderSummary {
+  orderId: string;
+  orderNumber: string;
+}
+
+/** An order already handed to the printer, and therefore un-markable. */
+export interface SubmittedOrderSummary extends FulfilmentOrderSummary {
+  /** ISO — when it was marked, so the admin can spot the click they just made. */
+  submittedAt: string;
+  customerName: string;
+}
+
 export interface FulfilmentExport {
   rows: FulfilmentRow[];
-  /** Orders represented in `rows` — what "mark as submitted" would act on. */
-  orderIds: string[];
+  /**
+   * One entry per order represented in `rows` — what a mark acts on. The number
+   * travels with the id because marking is per order: the admin picks orders off
+   * this screen against the printer's, and their screen shows numbers, not ids.
+   */
+  orders: FulfilmentOrderSummary[];
   /**
    * Lines whose variant has no GTIN. These are STILL exported, because withholding
    * a paid order silently is worse than exporting a row the admin must complete —
@@ -121,8 +138,23 @@ export async function countPendingFulfilment(): Promise<number> {
  * admin forgets, which is visible and fixable; the cost of the alternative is a paid
  * order that silently never reaches the printer.
  */
-export async function buildFulfilmentExport(): Promise<FulfilmentExport> {
-  const orders = (await Order.find(pendingFilter())
+/**
+ * @param orderIds restrict the export to these orders. Omitted means every
+ *   pending order, which is what the queue view shows.
+ *
+ * The queue lets an admin tick individual orders before marking them sent, so
+ * the download has to honour the same selection — ticking three of ten and
+ * getting a ten-row CSV means either printing seven garments nobody asked for,
+ * or noticing and re-doing it by hand.
+ */
+export async function buildFulfilmentExport(orderIds?: string[]): Promise<FulfilmentExport> {
+  const selected = orderIds?.filter((id) => mongoose.Types.ObjectId.isValid(id));
+  const filter =
+    selected && selected.length > 0
+      ? { ...pendingFilter(), _id: { $in: selected.map((id) => new mongoose.Types.ObjectId(id)) } }
+      : pendingFilter();
+
+  const orders = (await Order.find(filter)
     .sort({ createdAt: 1 })
     .lean()) as unknown as IOrder[];
 
@@ -212,7 +244,7 @@ export async function buildFulfilmentExport(): Promise<FulfilmentExport> {
 
   return {
     rows,
-    orderIds: orders.map((o) => String(o._id)),
+    orders: orders.map((o) => ({ orderId: String(o._id), orderNumber: o.orderNumber })),
     missingProductId,
     missingArtwork,
   };
@@ -288,6 +320,10 @@ export function toCsv(rows: FulfilmentRow[]): string {
  * excludes anything already stamped, so a second upload of the same file cannot be
  * produced from this screen. Idempotent — re-marking an already-marked order is a
  * no-op rather than an error, because the admin may click twice.
+ *
+ * Takes ids rather than acting on the whole queue: a mark the admin cannot narrow
+ * is a mark they cannot get right when only part of the file uploaded. Anything it
+ * stamps by mistake is recoverable through `unmarkSubmitted`.
  */
 export async function markSubmitted(orderIds: string[]): Promise<number> {
   const valid = orderIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
@@ -298,4 +334,75 @@ export async function markSubmitted(orderIds: string[]): Promise<number> {
     { $set: { submittedAt: new Date(), printProviderStatus: "submitted_via_csv" } }
   );
   return res.modifiedCount;
+}
+
+/**
+ * Put orders back in the print queue by clearing the stamp.
+ *
+ * Without this the stamp is a one-way door: a mis-click drops paid orders out of
+ * `pendingFilter` for good, so the garments are never printed, the customer is never
+ * told, and nothing anywhere surfaces it. Being able to undo the click is the only
+ * thing standing between one wrong button press and a customer who paid and receives
+ * nothing.
+ *
+ * `printProviderStatus` goes with it. `markSubmitted` is the only writer of that
+ * field, so unsetting it cannot erase a status recorded elsewhere — and leaving
+ * "submitted_via_csv" on an order that is back in the queue would state, on the order
+ * record and in admin, that the printer has work it does not have.
+ *
+ * Restricted to printable statuses for the same reason the export is: an order that
+ * has since shipped is out the door, and clearing its stamp would either be a lie
+ * about where it is or, once it were ever moved back to processing, a second print of
+ * a garment already posted. Those orders are skipped, so the returned count is what
+ * actually went back.
+ */
+export async function unmarkSubmitted(orderIds: string[]): Promise<number> {
+  const valid = orderIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+  if (valid.length === 0) return 0;
+
+  const res = await Order.updateMany(
+    {
+      _id: { $in: valid },
+      status: { $in: PRINTABLE_STATUSES },
+      submittedAt: { $exists: true },
+    },
+    { $unset: { submittedAt: "", printProviderStatus: "" } }
+  );
+  return res.modifiedCount;
+}
+
+/**
+ * The most recently marked orders — the undo list.
+ *
+ * An order drops out of the queue the moment it is marked, so without this the admin
+ * has nothing to point an undo at: the mis-click makes its own evidence disappear.
+ *
+ * Lists only what `unmarkSubmitted` will actually restore (same status rule), so the
+ * screen never offers an undo that silently does nothing.
+ */
+export async function listRecentlySubmitted(limit = 20): Promise<SubmittedOrderSummary[]> {
+  const docs = (await Order.find({
+    status: { $in: PRINTABLE_STATUSES },
+    submittedAt: { $exists: true },
+  })
+    // Explicit include-list: an unprojected find here ships every address and line
+    // on every row, the footgun documented in CLAUDE.md.
+    .select("orderNumber submittedAt shippingAddress.firstName shippingAddress.lastName")
+    .sort({ submittedAt: -1 })
+    .limit(limit)
+    .lean()) as unknown as IOrder[];
+
+  const submitted: SubmittedOrderSummary[] = [];
+  for (const o of docs) {
+    // The query guarantees the stamp; the type does not know that.
+    if (!o.submittedAt) continue;
+    const a = o.shippingAddress ?? {};
+    submitted.push({
+      orderId: String(o._id),
+      orderNumber: o.orderNumber,
+      submittedAt: new Date(o.submittedAt).toISOString(),
+      customerName: [a.firstName, a.lastName].filter(Boolean).join(" "),
+    });
+  }
+  return submitted;
 }

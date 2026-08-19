@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Package, Search, ShoppingBag } from "lucide-react";
+import { Check, Copy, Loader2, Package, Search, ShoppingBag } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
+import type { OrderListItem, OrderStatus } from "@/services/shop/orderQueries";
+import OrderDetailModal, { orderStatusClass } from "./OrderDetailModal";
 
 /**
  * Shop order list for admin.
@@ -12,42 +15,32 @@ import { Loader2, Package, Search, ShoppingBag } from "lucide-react";
  *
  * Reads the same service the customer's own history does; the difference is that
  * this one is not scoped to a user.
+ *
+ * The row type is IMPORTED from that service rather than restated here. A local copy
+ * is how `paymentIntentId` came to be fetched, serialised and then silently dropped:
+ * the service grew the field, this file's private interface did not, and TypeScript
+ * had no way to notice. Sharing the type means the next staff-only field the service
+ * adds is visible here the moment it exists.
  */
 
-interface OrderRow {
-  id: string;
-  orderNumber: string;
-  status: string;
-  createdAt: string;
-  totalAmount: number;
-  itemCount: number;
-  categories: string[];
-  customerName?: string;
-  entriesGranted?: number;
-  submittedAt?: string;
-  trackingNumber?: string;
-  items: { name: string; sku?: string; variant?: string; quantity: number; price: number }[];
-}
-
 interface OrdersResponse {
-  orders: OrderRow[];
+  orders: OrderListItem[];
   total: number;
   page: number;
   totalPages: number;
   categories: string[];
 }
 
-const STATUSES = ["pending", "processing", "shipped", "delivered", "cancelled", "completed"] as const;
-
-const statusClass = (status: string) =>
-  ({
-    pending: "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-300",
-    processing: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300",
-    shipped: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-    delivered: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300",
-    completed: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300",
-    cancelled: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300",
-  })[status] ?? "bg-gray-100 text-gray-700";
+// Typed against the service's own union so a typo here fails the build rather than
+// quietly sending a filter the API will reject.
+const STATUSES: OrderStatus[] = [
+  "pending",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "completed",
+];
 
 export default function OrdersManagement() {
   const [data, setData] = useState<OrdersResponse | null>(null);
@@ -63,6 +56,16 @@ export default function OrdersManagement() {
   // never re-renders the table or disturbs another row mid-edit.
   const [trackingDraft, setTrackingDraft] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  // The open order, plus whether it was opened by the Refund button — one modal, two
+  // entry points, so refunding always goes through the order it is refunding.
+  const [detail, setDetail] = useState<{ order: OrderListItem; startInRefund: boolean } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Same permission the refund route enforces (`shop.delete`). Without this check the
+  // button would be offered to staff whose request the server would then 403.
+  const { has } = usePermissions();
+  const canRefund = has("shop.delete");
 
   // Debounced so typing a surname does not fire a query per keystroke.
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -132,6 +135,18 @@ export default function OrdersManagement() {
       setSavingId(null);
     }
   };
+
+  /**
+   * The PaymentIntent id is the only handle staff have on this order's money in
+   * Stripe, and reconciling a paid order means pasting it into Stripe's search — so
+   * it is copyable from the row, not merely readable.
+   */
+  const copyPaymentIntent = (id: string) => {
+    void navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   const selectClass =
     "h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100";
 
@@ -210,7 +225,7 @@ export default function OrdersManagement() {
               {data.total} order{data.total === 1 ? "" : "s"}
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-sm">
+              <table className="w-full min-w-[1140px] text-left text-sm">
                 <thead className="text-xs uppercase text-gray-500 dark:text-neutral-400">
                   <tr>
                     <th className="pb-2 pr-3 font-semibold">Order</th>
@@ -221,7 +236,11 @@ export default function OrdersManagement() {
                     <th className="pb-2 pr-3 font-semibold">Entries</th>
                     <th className="pb-2 pr-3 font-semibold">Printer</th>
                     <th className="pb-2 pr-3 font-semibold">Tracking</th>
-                    <th className="pb-2 font-semibold">Status</th>
+                    <th className="pb-2 pr-3 font-semibold">Stripe payment</th>
+                    <th className="pb-2 pr-3 font-semibold">Status</th>
+                    <th className="pb-2 font-semibold">
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
@@ -294,10 +313,51 @@ export default function OrdersManagement() {
                           </div>
                         )}
                       </td>
-                      <td className="py-2.5">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusClass(o.status)}`}>
+                      <td className="py-2.5 pr-3">
+                        {o.paymentIntentId ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (o.paymentIntentId) copyPaymentIntent(o.paymentIntentId);
+                            }}
+                            title={o.paymentIntentId}
+                            className="inline-flex max-w-[150px] items-center gap-1 rounded border border-gray-300 px-1.5 py-1 font-mono text-xs text-gray-700 hover:bg-gray-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                          >
+                            {copiedId === o.paymentIntentId ? (
+                              <Check className="h-3 w-3 shrink-0" />
+                            ) : (
+                              <Copy className="h-3 w-3 shrink-0" />
+                            )}
+                            <span className="truncate">{o.paymentIntentId}</span>
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-3">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${orderStatusClass(o.status)}`}>
                           {o.status}
                         </span>
+                      </td>
+                      <td className="py-2.5">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setDetail({ order: o, startInRefund: false })}
+                            className="rounded border border-gray-300 px-2 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                          >
+                            View
+                          </button>
+                          {canRefund && (
+                            <button
+                              type="button"
+                              onClick={() => setDetail({ order: o, startInRefund: true })}
+                              className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/40"
+                            >
+                              Refund
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -329,6 +389,18 @@ export default function OrdersManagement() {
           </>
         )}
       </div>
+
+      {detail && (
+        <OrderDetailModal
+          order={detail.order}
+          isOpen
+          startInRefund={detail.startInRefund}
+          onClose={() => setDetail(null)}
+          // A refund moves the order's status, so the list behind the modal is stale
+          // the moment one lands.
+          onRefunded={() => void load()}
+        />
+      )}
     </div>
   );
 }

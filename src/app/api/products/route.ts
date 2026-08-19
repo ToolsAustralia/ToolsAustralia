@@ -60,14 +60,26 @@ const equalsAnyOf = (values: string[]) => ({ $in: values.map((v) => new RegExp(`
 /**
  * Explicit include-list, mirroring the related-products projection on the product
  * page (src/app/(site)/shop/[slug]/page.tsx). An unprojected find() ships every
- * field a garment carries — hundreds of `variants`, the `colourways` image arrays,
+ * field a garment carries — hundreds of `variants`, the whole `reviews` array,
  * `printArtwork`, the full description — for twelve cards that render none of it.
  *
- * `trackInventory` is required, not padding: ProductCard reads a missing value as
- * tracked stock, so leaving it out renders every print-to-order item "Sold Out".
+ * Two of these are load-bearing, not padding, because dropping them fails silently:
+ *  - `trackInventory` — ProductCard reads a missing value as tracked stock, so
+ *    leaving it out renders every print-to-order item "Sold Out".
+ *  - `reviewCount` — the listing card gates its star row on the same rule as the
+ *    product page, and needs a count to do it without this query shipping every
+ *    review body and reviewer id to the browser. `colourways` is deliberately
+ *    ABSENT: only the product detail page renders them, and on a 51-colour tee
+ *    it is the single heaviest field on the document.
+ *    per colour, unlike `variants[]`, which runs to hundreds of rows on one tee.
+ *
+ * `reviews` is the one field the related-products list carries that this one does
+ * not: every row is a full review subdocument, and no card on the listing renders
+ * one. `printArtwork` and `printProvider` stay off for a different reason — they
+ * are supplier-facing, and the product page projects them out too.
  */
 const LIST_FIELDS =
-  "_id name price images brand category stock trackInventory includedEntries rating isFeatured createdAt updatedAt";
+  "_id name price images brand category stock trackInventory includedEntries rating reviewCount isFeatured createdAt updatedAt";
 
 export async function GET(request: NextRequest) {
   try {

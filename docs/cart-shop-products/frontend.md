@@ -337,3 +337,21 @@ sheet links to `/login` with a `callbackUrl` back to the product until then.
 
 The failure path on add-to-cart uses the repo toast for the same reason; there are
 no `alert()` calls left in the shop flow.
+
+## Reviews are gated on a real count (2026-08-19)
+
+`Product.reviewCount` now exists on the schema. Four surfaces gate their star
+display on the same rule — at least one review AND a 4-star average — and the
+listing card could not apply it without a count, because projecting the whole
+`reviews` array into a list query would ship every review body and every
+reviewer's user id to the browser.
+
+It is written as `reviews.length` from the array the write returns, alongside the
+recomputed `rating`, **never incremented**. An earlier `reviewCount` was read by
+six paths and had never existed on the schema, so Mongoose silently dropped every
+write and it read 0 forever. Derived from the same array as the average, the two
+cannot disagree.
+
+`colourways` is deliberately absent from the list projection: only the product
+detail page renders them, and on a 51-colour tee it is the heaviest field on the
+document.

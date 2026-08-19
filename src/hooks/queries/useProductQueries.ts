@@ -303,16 +303,53 @@ export const useProductAnalytics = (productId?: string) => {
   });
 };
 
+/** A review as the public endpoint serves it. The reviewer's user id never leaves the server. */
+export interface ProductReview {
+  rating: number;
+  comment?: string;
+  createdAt?: string;
+}
+
+/**
+ * Whether the viewer may post a review of this product, decided server-side from
+ * their paid orders. `already_reviewed` is kept distinct from `not_eligible`
+ * because a buyer who has already written one has to be told it was kept.
+ */
+export type ProductReviewEligibility = "eligible" | "already_reviewed" | "not_eligible";
+
+export interface ProductReviewsResponse {
+  reviews: ProductReview[];
+  averageRating: number;
+  totalReviews: number;
+  reviewEligibility: ProductReviewEligibility;
+}
+
+export interface AddProductReviewResponse {
+  review: ProductReview;
+  averageRating: number;
+  totalReviews: number;
+}
+
+export interface ProductReviewInput {
+  rating: number;
+  comment?: string;
+}
+
+/**
+ * NOTE: this was typed `{ success, data }` and returned `response.data`, which the
+ * endpoint has never sent — every call resolved to undefined. The shape below is
+ * what /api/products/reviews/[id] actually returns.
+ */
 export const useProductReviews = (productId?: string) => {
   return useQuery({
     queryKey: queryKeys.products.reviews(productId!),
-    queryFn: async () => {
-      const response = await apiGet<{ success: boolean; data: unknown[] }>(`/api/products/reviews/${productId}`);
-      return response.data;
-    },
+    queryFn: async () => apiGet<ProductReviewsResponse>(`/api/products/reviews/${productId}`),
     enabled: !!productId,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes
+    // Deliberately short: `reviewEligibility` is per-viewer, so a long window
+    // would keep showing a form to someone who has just used it, or hide one from
+    // a customer whose order was marked paid a moment ago.
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 };
 
@@ -321,22 +358,19 @@ export const useAddProductReview = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ productId, review }: { productId: string; review: unknown }) => {
-      const response = await apiPost<{ success: boolean; data: unknown }>(`/api/products/reviews/${productId}`, review);
-      return response.data;
-    },
+    mutationFn: async ({ productId, review }: { productId: string; review: ProductReviewInput }) =>
+      apiPost<AddProductReviewResponse>(`/api/products/reviews/${productId}`, review),
     onSuccess: (data, variables) => {
-      // Invalidate product reviews
+      // Refetches the list AND the viewer's eligibility, which has just changed to
+      // "already_reviewed".
       queryClient.invalidateQueries({ queryKey: queryKeys.products.reviews(variables.productId) });
 
-      // Update product rating in cache
+      // Only `rating` is patched into the cached product. The old code also wrote
+      // `reviewCount` from the response — a field neither the endpoint nor the
+      // Product schema has ever carried, so it wrote undefined over the cache.
       queryClient.setQueryData(queryKeys.products.detail(variables.productId), (old: unknown) => {
-        if (old && typeof old === "object" && data && typeof data === "object") {
-          return {
-            ...old,
-            rating: (data as { rating: number }).rating,
-            reviewCount: (data as { reviewCount: number }).reviewCount,
-          };
+        if (old && typeof old === "object") {
+          return { ...old, rating: data.averageRating };
         }
         return old;
       });
