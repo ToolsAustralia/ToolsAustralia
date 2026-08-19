@@ -21,6 +21,8 @@ import {
   type ColourwayLike,
 } from "@/utils/shop/variants";
 import { useProductColourStore } from "@/stores/useProductColourStore";
+import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
+import { useToast } from "@/components/ui/Toast";
 
 interface DatabaseProduct {
   _id: string;
@@ -37,6 +39,8 @@ interface ProductInteractionsProps {
 
 export default function ProductInteractions({ product }: ProductInteractionsProps) {
   const [quantity, setQuantity] = useState(1);
+  const [showSignIn, setShowSignIn] = useState(false);
+  const { showToast } = useToast();
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const { addToCart, isAddingToCart: isProductAdding } = useCart();
@@ -131,7 +135,10 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
     if (isSessionLoading) return;
 
     if (!session?.user?.id) {
-      alert("Please log in to add items to cart");
+      // Was a native alert(): a browser dialog over a dark themed page, with no
+      // way to actually sign in from it, and the chosen colour and size lost on
+      // dismiss. The sheet keeps the selection and hands straight to LoginModal.
+      setShowSignIn(true);
       return;
     }
 
@@ -181,7 +188,13 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
       console.log(`Added ${quantity} of ${product.name} to cart`);
     } catch (error) {
       console.error("Error adding to cart:", error);
-      alert("Failed to add item to cart. Please try again.");
+      // The repo toast, not a browser alert: same reason as the sign-in sheet.
+      showToast({
+        type: "error",
+        title: "Could not add to cart",
+        message: "Something went wrong. Please try again.",
+        duration: 4000,
+      });
     } finally {
       setIsAddingToCart(false);
     }
@@ -451,6 +464,11 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
         fixed string — a badge is a promise, and this page is where a customer
         decides to trust it.
       */}
+      <SignInToBuyModal
+        isOpen={showSignIn}
+        onClose={() => setShowSignIn(false)}
+        intent="add this to your cart"
+      />
     </div>
   );
 }

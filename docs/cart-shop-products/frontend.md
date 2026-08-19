@@ -312,3 +312,28 @@ is how mini-draws was already built.
 Verified by measurement, not by eye: at 300px and 600px of scroll the image holds its position
 completely (`e2e-artifacts/tmp/sticky3.mjs` pattern — compare the element's `y` against
 `y0 - scrollDistance`).
+
+## Signing in at the point of purchase
+
+`SignInToBuyModal` (`src/components/modals/SignInToBuyModal/`) replaces the native
+`alert("Please log in to add items to cart")` that used to fire from the product
+page. A browser dialog was wrong three ways: it rendered as an OS chrome box over
+a dark themed page, it offered no way to actually sign in, and dismissing it lost
+the colour and size the customer had just chosen.
+
+**Email-first, by necessity.** `LoginModal` takes an `email` prop and is a
+complete in-place portal from there — password, Google, or a one-time code posted
+to that address. So the sheet collects the address and hands over. Nothing
+navigates, and the variant selection survives.
+
+**Creating an account still leaves the page, deliberately.**
+`/api/auth/register` mints no session, and all three existing session bridges
+refuse a brand-new non-member (`auto-login` wants a paid PaymentIntent,
+`verify-email` wants `hasMembership`, `send-login-code` wants `isEmailVerified`
+which defaults false). Signing someone up in place therefore needs a new auth
+endpoint — an auth-surface change that gets its own review and its own
+`docs/auth/` + `CUSTOMER.md` updates rather than riding in on a shop ticket. The
+sheet links to `/login` with a `callbackUrl` back to the product until then.
+
+The failure path on add-to-cart uses the repo toast for the same reason; there are
+no `alert()` calls left in the shop flow.
