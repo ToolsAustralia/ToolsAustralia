@@ -1919,13 +1919,24 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       updateCartItem({
                         productId: cartItem.type === "product" ? cartItem.productId : undefined,
                         miniDrawId: cartItem.type === "ticket" ? cartItem.miniDrawId : undefined,
+                        // Without this the server matched on productId alone and edited
+                        // whichever variant sat first — a customer changing Navy XL
+                        // silently changed their Black L.
+                        sku: cartItem.type === "product" ? cartItem.sku : undefined,
                         quantity: newQuantity,
                       });
                     };
 
                     const handleRemove = () => {
                       const itemId = cartItem.productId || cartItem.miniDrawId || "";
-                      removeFromCart(itemId, cartItem.type);
+                      // DELETE /api/cart matches a line on (productId, sku) and treats a
+                      // missing sku as "the line that has none", so omitting it made
+                      // Remove a silent no-op for every apparel line.
+                      removeFromCart(
+                        itemId,
+                        cartItem.type,
+                        cartItem.type === "product" ? cartItem.sku : undefined
+                      );
                     };
 
                     return (

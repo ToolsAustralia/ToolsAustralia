@@ -1,6 +1,6 @@
 import type { IOrder } from "@/models/Order";
 import User from "@/models/User";
-import { sendCustomEmail } from "@/lib/email";
+import { emailService } from "@/lib/email/";
 import { createShopOrderConfirmationTemplate } from "@/lib/email/templates";
 
 /**
@@ -81,7 +81,13 @@ export async function sendShopOrderConfirmation(order: IOrder): Promise<void> {
     orderUrl: `${baseUrl}/checkout/success?orderId=${String(order._id)}`,
   });
 
-  const result = await sendCustomEmail({
+  // emailService, NOT the sendCustomEmail in @/lib/email. That one is the
+  // deprecated SMTP path whose transporter is hard-coded `return null`, so every
+  // call returned {success:false,"Email service not configured"} into a
+  // console.error nobody reads -- meaning no customer ever received a receipt
+  // for a paid order. The deprecation notice on it says exactly this; it was
+  // imported by name without reading it.
+  const result = await emailService.sendCustomEmail({
     to,
     subject: `Order confirmed — ${order.orderNumber}`,
     html,
