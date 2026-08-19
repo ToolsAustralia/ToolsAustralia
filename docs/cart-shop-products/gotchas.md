@@ -305,3 +305,28 @@ The same pass removed untrue delivery and warranty claims from the same file:
 30-day returns, free return shipping, a first-party 3-year warranty (on a cotton
 tee, contradicted by our own `/terms`), nationwide repair centres, and a
 `1800-TOOLS-AU` number that appears nowhere else in the repo and is not dialable.
+
+## The brand hubs were deleted (2026-08-19)
+
+`/shop/brand/[brand]` served 13 hubs — Milwaukee, DeWALT, Makita, Kincrome,
+Sidchrome, Chicago Pneumatic, GearWrench, Ingersoll Rand, Knipex, Koken,
+Mitutoyo, Stahlwille, Warren & Brown — each with per-brand metadata and body copy
+making explicit stock and warranty claims: *"Genuine Australian stock with full
+manufacturer warranty support"*, *"Extensive inventory of 18V LXT and 40V XGT
+tools"*.
+
+Every one rendered an **empty grid**. They filter on a brand slug against a
+catalogue whose only products are seeded `brand: "Tools Australia"` by
+`printProviderSync`, so each page was an in-stock promise over nothing. They were
+also linked from the homepage as a "keyword-rich internal linking block", which
+is what made them findable.
+
+Removed rather than hedged: the route, the homepage link block, and their sitemap
+entries. The brand scroller in `ProductCategories` now points at `/shop` instead
+of a dead hub. Nothing about the shop needs them, and a page that makes a stock
+claim for goods we do not hold is the same class of problem as the fabricated
+reviews.
+
+If brand hubs return, they must be generated from brands the catalogue actually
+carries, and the copy must not assert stock or warranty for a print-to-order
+range.

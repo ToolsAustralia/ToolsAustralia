@@ -277,7 +277,7 @@ export default function ProductCategories({
             {[...partnerBrands, ...partnerBrands, ...partnerBrands].map((brand, index) => (
               <div key={`${brand.id}-${index}`} className="flex-shrink-0">
                 <Link
-                  href={`/shop/brand/${brand.id}`}
+                  href="/shop"
                   className="block relative overflow-hidden rounded-[16px] sm:rounded-[20px] shadow-[0_8px_32px_rgba(0,0,0,0.4)] w-[280px] sm:w-[320px] bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm border border-slate-500/30"
                 >
                   {/* Metallic shine overlay */}
@@ -335,7 +335,7 @@ export default function ProductCategories({
           {partnerBrands.map((brand) => (
             <div key={brand.id} className="relative">
               <Link
-                href={`/shop/brand/${brand.id}`}
+                href="/shop"
                 className="block relative overflow-hidden rounded-[20px] shadow-[0_8px_32px_rgba(0,0,0,0.4)] bg-gradient-to-br from-slate-700/80 via-slate-600/80 to-slate-700/80 backdrop-blur-sm border border-slate-500/30"
               >
                 {/* Metallic shine overlay */}
