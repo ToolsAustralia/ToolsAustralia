@@ -48,7 +48,14 @@ export interface OrderListItem {
   entriesGranted?: number;
   submittedAt?: string;
   trackingNumber?: string;
-  items: { name: string; sku?: string; quantity: number; price: number }[];
+  items: {
+    name: string;
+    sku?: string;
+    /** "Black · L" — what the customer chose, built from the order-line snapshot. */
+    variant?: string;
+    quantity: number;
+    price: number;
+  }[];
 }
 
 export interface OrderListResult {
@@ -103,7 +110,7 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
   const [docs, total] = await Promise.all([
     Order.find(query)
       .select(
-        "orderNumber status createdAt totalAmount products.name products.sku products.quantity products.price products.category shippingAddress.firstName shippingAddress.lastName entriesGranted submittedAt trackingNumber"
+        "orderNumber status createdAt totalAmount products.name products.sku products.size products.colour products.quantity products.price products.category shippingAddress.firstName shippingAddress.lastName entriesGranted submittedAt trackingNumber"
       )
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
@@ -133,6 +140,8 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
       items: (o.products ?? []).map((p) => ({
         name: p.name ?? "Item",
         sku: p.sku,
+        // Colour before size reads the way a person says it: "Black · L".
+        variant: [p.colour, p.size].filter(Boolean).join(" · ") || undefined,
         quantity: p.quantity,
         price: p.price,
       })),

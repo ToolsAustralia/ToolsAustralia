@@ -168,8 +168,11 @@ export async function buildFulfilmentExport(): Promise<FulfilmentExport> {
         productId,
         sku: line.sku ?? "",
         productName,
-        size: variant?.size ?? "",
-        colour: variant?.colour ?? "",
+        // Snapshot first: it is what the customer bought. The catalogue lookup is
+        // only a fallback for orders placed before these fields existed, and it
+        // returns nothing if the variant has since been removed.
+        size: line.size ?? variant?.size ?? "",
+        colour: line.colour ?? variant?.colour ?? "",
         quantity: line.quantity,
         firstName: a.firstName ?? "",
         lastName: a.lastName ?? "",

@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
 
   try {
     await connectDB();
-    const { rows, orderIds, missingProductId } = await buildFulfilmentExport();
+    const { rows, orderIds, missingProductId, missingArtwork } =
+      await buildFulfilmentExport();
 
     if (request.nextUrl.searchParams.get("format") === "csv") {
       const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -43,24 +44,39 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // { success, data } matches /api/admin/products. The CSV branch above returns a
+    // file and is deliberately not wrapped.
     return NextResponse.json(
       {
-        orderCount: orderIds.length,
-        lineCount: rows.length,
-        orderIds,
-        missingProductId,
-        rows,
+        success: true,
+        data: {
+          orderCount: orderIds.length,
+          lineCount: rows.length,
+          orderIds,
+          missingProductId,
+          // Must ship with missingProductId: FulfilmentQueue reads .length on BOTH,
+          // and an omitted key crashed the whole admin Products tab with
+          // "Cannot read properties of undefined" — caught by the full-story e2e.
+          missingArtwork,
+          rows,
+        },
       },
-      { headers: { "Cache-Control": "no-store" } }
+      { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     console.error("[shop] fulfilment export failed:", error);
-    return NextResponse.json({ error: "Failed to build the fulfilment export" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Failed to build the fulfilment export" },
+      { status: 500 },
+    );
   }
 }
 
 const markSchema = z.object({
-  orderIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/)).min(1).max(500),
+  orderIds: z
+    .array(z.string().regex(/^[0-9a-fA-F]{24}$/))
+    .min(1)
+    .max(500),
 });
 
 export async function POST(request: NextRequest) {
@@ -75,12 +91,18 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const { orderIds } = markSchema.parse(await request.json());
     const marked = await markSubmitted(orderIds);
-    return NextResponse.json({ marked });
+    return NextResponse.json({ success: true, data: { marked } });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Validation error", details: error.issues },
+        { status: 400 },
+      );
     }
     console.error("[shop] failed to mark orders submitted:", error);
-    return NextResponse.json({ error: "Failed to mark orders as submitted" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Failed to mark orders as submitted" },
+      { status: 500 },
+    );
   }
 }

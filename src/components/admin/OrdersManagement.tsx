@@ -26,7 +26,7 @@ interface OrderRow {
   entriesGranted?: number;
   submittedAt?: string;
   trackingNumber?: string;
-  items: { name: string; sku?: string; quantity: number; price: number }[];
+  items: { name: string; sku?: string; variant?: string; quantity: number; price: number }[];
 }
 
 interface OrdersResponse {
@@ -81,8 +81,9 @@ export default function OrdersManagement() {
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
 
       const res = await fetch(`/api/admin/shop/orders?${params}`);
-      if (!res.ok) throw new Error("Failed to load orders");
-      setData(await res.json());
+      const body = await res.json();
+      if (!res.ok || !body?.success) throw new Error(body?.error || "Failed to load orders");
+      setData(body.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load orders");
     } finally {
@@ -117,7 +118,8 @@ export default function OrdersManagement() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, trackingNumber: value }),
       });
-      if (!res.ok) throw new Error("Failed to save tracking");
+      const body = await res.json();
+      if (!res.ok || !body?.success) throw new Error(body?.error || "Failed to save tracking");
       setTrackingDraft((d) => {
         const next = { ...d };
         delete next[orderId];
@@ -236,6 +238,9 @@ export default function OrdersManagement() {
                         {o.items.slice(0, 2).map((i, idx) => (
                           <div key={idx} className="text-xs">
                             {i.quantity} × {i.name}
+                            {i.variant && (
+                              <span className="text-gray-500 dark:text-neutral-400"> · {i.variant}</span>
+                            )}
                           </div>
                         ))}
                         {o.items.length > 2 && (

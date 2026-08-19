@@ -27,6 +27,15 @@ export interface IOrder extends Document {
      * Filtering through a join to Product would do exactly that.
      */
     category?: string;
+    /**
+     * Variant labels at purchase time. The sku identifies the variant but is an
+     * internal string — "TEE-BLK-L" is not what the customer chose. Snapshotted so
+     * a receipt, an order history row and the printer CSV can all say "Black · L"
+     * without a join, and so a variant later removed from the catalogue does not
+     * make an old order unreadable.
+     */
+    size?: string;
+    colour?: string;
     quantity: number;
     price: number;
   }[];
@@ -116,6 +125,8 @@ const OrderSchema = new Schema<IOrder>(
         // (CLAUDE.md rule 11).
         includedEntries: { type: Number, default: 0, min: 0 },
         category: { type: String, trim: true },
+        size: { type: String, trim: true },
+        colour: { type: String, trim: true },
         quantity: {
           type: Number,
           required: true,

@@ -60,9 +60,10 @@ export async function sendShopOrderConfirmation(order: IOrder): Promise<void> {
     orderNumber: order.orderNumber,
     items: order.products.map((line) => ({
       name: line.name ?? "Item",
-      // Size and colour are not on the order line; the sku is what identifies the
-      // variant there, and it is what support will ask for anyway.
-      variant: line.sku,
+      // Snapshotted on the line at checkout, so this needs no lookup and stays
+      // correct even if the variant is later removed from the catalogue. Falls back
+      // to the sku for orders placed before those fields existed.
+      variant: [line.colour, line.size].filter(Boolean).join(" · ") || line.sku,
       quantity: line.quantity,
       lineTotal: money((line.price ?? 0) * line.quantity),
     })),

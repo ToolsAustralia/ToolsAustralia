@@ -24,7 +24,14 @@ import {
 
 const querySchema = z.object({
   status: z
-    .enum(["pending", "processing", "shipped", "delivered", "cancelled", "completed"])
+    .enum([
+      "pending",
+      "processing",
+      "shipped",
+      "delivered",
+      "cancelled",
+      "completed",
+    ])
     .optional(),
   category: z.string().trim().min(1).max(64).optional(),
   search: z.string().trim().max(120).optional(),
@@ -46,23 +53,33 @@ export async function GET(request: NextRequest) {
       distinctOrderCategories(),
     ]);
 
+    // { success, data } matches /api/admin/products, the nearest sibling. The repo
+    // convention is to match siblings before inventing a shape.
     return NextResponse.json(
-      { ...result, categories },
+      { success: true, data: { ...result, categories } },
       // Customer names and order values — never cached at the edge.
-      { headers: { "Cache-Control": "no-store" } }
+      { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid filters", details: error.issues }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Invalid filters", details: error.issues },
+        { status: 400 },
+      );
     }
     console.error("[shop] admin order list failed:", error);
-    return NextResponse.json({ error: "Failed to load orders" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Failed to load orders" },
+      { status: 500 },
+    );
   }
 }
 
 const patchSchema = z.object({
   orderId: z.string().regex(/^[0-9a-fA-F]{24}$/),
-  status: z.enum(["processing", "shipped", "delivered", "cancelled", "completed"]).optional(),
+  status: z
+    .enum(["processing", "shipped", "delivered", "cancelled", "completed"])
+    .optional(),
   trackingNumber: z.string().trim().max(64).optional(),
 });
 
@@ -77,26 +94,47 @@ const patchSchema = z.object({
  * shipped" is a real support question.
  */
 export async function PATCH(request: NextRequest) {
-  const guard = await requirePermissionWithAudit("shop.edit", request, { resourceType: "order" });
+  const guard = await requirePermissionWithAudit("shop.edit", request, {
+    resourceType: "order",
+  });
   if (guard instanceof NextResponse) return guard;
 
   try {
     await connectDB();
-    const { orderId, status, trackingNumber } = patchSchema.parse(await request.json());
+    const { orderId, status, trackingNumber } = patchSchema.parse(
+      await request.json(),
+    );
 
     if (status === undefined && trackingNumber === undefined) {
-      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Nothing to update" },
+        { status: 400 },
+      );
     }
 
-    const updated = await updateOrderFulfilment(orderId, { status, trackingNumber });
-    if (!updated) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    const updated = await updateOrderFulfilment(orderId, {
+      status,
+      trackingNumber,
+    });
+    if (!updated) {
+      return NextResponse.json(
+        { success: false, error: "Order not found" },
+        { status: 404 },
+      );
+    }
 
-    return NextResponse.json({ order: updated });
+    return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Validation error", details: error.issues },
+        { status: 400 },
+      );
     }
     console.error("[shop] failed to update order fulfilment:", error);
-    return NextResponse.json({ error: "Failed to update the order" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Failed to update the order" },
+      { status: 500 },
+    );
   }
 }

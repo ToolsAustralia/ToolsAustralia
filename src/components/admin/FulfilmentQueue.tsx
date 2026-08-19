@@ -32,6 +32,10 @@ interface FulfilmentRow {
   productId: string;
 }
 
+// Arrays are read with ?? [] at the use site. A missing key in the response used to
+// throw "Cannot read properties of undefined" from .length and white-screen the whole
+// admin Products tab, since this renders inside it — a warning banner is not worth
+// taking the catalogue down for.
 interface QueueState {
   orderCount: number;
   lineCount: number;
@@ -54,8 +58,11 @@ export default function FulfilmentQueue() {
     setIsLoading(true);
     try {
       const res = await fetch("/api/admin/shop/fulfilment");
-      if (!res.ok) throw new Error("Failed to load the fulfilment queue");
-      setQueue(await res.json());
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        throw new Error(body?.error || "Failed to load the fulfilment queue");
+      }
+      setQueue(body.data);
     } catch (error) {
       setFeedback({
         type: "error",
@@ -90,11 +97,14 @@ export default function FulfilmentQueue() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderIds: queue.orderIds }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to mark orders as submitted");
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        throw new Error(body?.error || "Failed to mark orders as submitted");
+      }
+      const marked = body.data?.marked ?? 0;
       setFeedback({
         type: "success",
-        message: `${data.marked} order${data.marked === 1 ? "" : "s"} marked as sent to the printer.`,
+        message: `${marked} order${marked === 1 ? "" : "s"} marked as sent to the printer.`,
       });
       await load();
     } catch (error) {
@@ -171,14 +181,14 @@ export default function FulfilmentQueue() {
                 [
                   {
                     key: "gtin",
-                    items: queue.missingProductId,
+                    items: queue.missingProductId ?? [],
                     title: (n: number) => `${n} line${n === 1 ? " has" : "s have"} no GTIN`,
                     detail:
                       "These export with an empty product_id. Add the GTIN to the variant in Products, or fill the column in before uploading — the printer cannot match a blank.",
                   },
                   {
                     key: "artwork",
-                    items: queue.missingArtwork,
+                    items: queue.missingArtwork ?? [],
                     title: (n: number) =>
                       `${n} line${n === 1 ? " has" : "s have"} no print artwork`,
                     detail:

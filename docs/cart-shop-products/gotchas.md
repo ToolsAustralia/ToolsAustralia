@@ -195,3 +195,34 @@ badge is a promise, and the product page is where a customer decides whether to 
 the product page said "over $99" while the code charged below $100, and separately advertised
 Express $15 and Same Day $25 in three cities — neither of which exists in the pricing path at
 all. Copy that restates a money value drifts from it. Import the label.
+
+## The cart clear was not scoped to the order (fixed 2026-08-19)
+
+`finalizeShopOrder` ended with `$pull: { cart: { type: "product" } }` — **every** product
+line, not the order's own. Webhooks are asynchronous, so a customer who adds a new item while
+the previous order's webhook is still in flight had that new item silently removed.
+
+Now matched on `(productId, sku)` pairs taken from the order, with a line that has no sku
+matched on the absence of one so a variant-less product does not pull every sku of the same
+product. Mini-draw tickets were always excluded and still are.
+
+Found by two e2e specs running back to back, where the first purchase's late webhook emptied the
+second test's cart. Narrow in production, but a fast customer can hit it.
+
+## `full-story.spec.ts` must run on its own
+
+It shares the seeded member — and that member's cart — with `entries.spec.ts`, which also drives
+a full purchase. Run back to back, its add-to-cart is intermittently rejected with a 400 while
+the previous purchase settles. Alone it passes every time.
+
+Deliberately **not** retried around. A retry would hide it, and the honest fix is to give the spec
+its own user, which is worth doing if it ever needs to run inside the full suite. Run it with:
+
+```bash
+npx tsx e2e/run.ts --proof --grep "the complete story" --project chromium-desktop
+```
+
+## Response shapes on `/api/admin/shop/**`
+
+Both routes return `{ success, data }` / `{ success, error }`, matching `/api/admin/products`.
+The CSV branch of the fulfilment route is the exception — it returns a file and is not wrapped.

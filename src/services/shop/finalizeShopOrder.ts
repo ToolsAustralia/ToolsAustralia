@@ -226,12 +226,26 @@ export async function finalizeShopOrder(
     return { status: "refunded_stock_lost", orderNumber: order.orderNumber };
   }
 
-  // Clear only the PRODUCT lines. A customer may hold mini-draw tickets in the
-  // same cart, and those are a separate purchase path that this payment did not
-  // cover — wiping them would silently discard something they still intend to buy.
+  // Clear only THIS ORDER'S lines — matched on (productId, sku), not "every product
+  // line".
+  //
+  // Two reasons. Mini-draw tickets share the cart and are a separate purchase path
+  // this payment did not cover. And webhooks are asynchronous: a customer who adds a
+  // new item while the previous order's webhook is still in flight would have that
+  // new item silently wiped by a blanket $pull. Surfaced by two e2e specs running
+  // back to back, where the first purchase's late webhook emptied the second test's
+  // cart — a narrow race, but a real one a fast customer can hit.
+  const purchasedLines = order.products.map((line) => ({
+    type: "product" as const,
+    productId: line.product,
+    // A line with no sku is a product without variants; matching on absence keeps
+    // that case exact rather than pulling every sku of the same product.
+    ...(line.sku ? { sku: line.sku } : {}),
+  }));
+
   await User.updateOne(
     { _id: order.user },
-    { $pull: { cart: { type: "product" } } }
+    { $pull: { cart: { $or: purchasedLines } } }
   ).catch((err) => {
     // Non-fatal: the order is paid and will be fulfilled. A stale cart line is
     // an annoyance, not a lost sale, and must not fail the webhook.

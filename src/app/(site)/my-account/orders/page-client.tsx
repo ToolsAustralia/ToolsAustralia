@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Loader2, Package, Ticket, Truck } from "lucide-react";
+import { useOrders, type OrderListRow } from "@/hooks/queries/useOrderQueries";
 
 /**
  * The customer's own order history.
@@ -12,22 +13,14 @@ import { Loader2, Package, Ticket, Truck } from "lucide-react";
  * Before this, a customer could buy but never see the order again — the API and
  * query hooks existed, and nothing rendered them.
  *
- * Reads `/api/orders`, which shares its query with the admin list but pins
- * `userId` to the session, so this can only ever return the signed-in customer's
- * own orders.
+ * Reads `/api/orders` through `useOrders`, which shares its query with the admin
+ * list but pins `userId` to the session, so this can only ever return the signed-in
+ * customer's own orders.
+ *
+ * Uses the shared query hook rather than its own fetch: caching, retry and
+ * invalidation then behave the same here as everywhere else, and there is one place
+ * that knows the endpoint's shape.
  */
-
-interface OrderRow {
-  id: string;
-  orderNumber: string;
-  status: string;
-  createdAt: string;
-  totalAmount: number;
-  itemCount: number;
-  entriesGranted?: number;
-  trackingNumber?: string;
-  items: { name: string; sku?: string; quantity: number; price: number }[];
-}
 
 /**
  * Customer-facing wording. `processing` is what a paid order sits at until it is
@@ -54,11 +47,13 @@ const statusClass = (status: string) =>
   })[status] ?? "bg-gray-100 text-gray-700";
 
 export default function OrdersPage() {
-  const { status: sessionStatus } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
 
-  const [orders, setOrders] = useState<OrderRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // The session id is what the route scopes on, so it is also what keys the query.
+  const { data, isLoading, isError } = useOrders(session?.user?.id, { limit: 50 });
+  const orders: OrderListRow[] | null = data?.orders ?? null;
+  const error = isError ? "We couldn't load your orders just now." : null;
 
   useEffect(() => {
     // `unauthenticated` only — `loading` returns null data and would bounce a
@@ -66,25 +61,7 @@ export default function OrdersPage() {
     if (sessionStatus === "unauthenticated") router.replace("/login?callbackUrl=/my-account/orders");
   }, [sessionStatus, router]);
 
-  useEffect(() => {
-    if (sessionStatus !== "authenticated") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/orders?limit=50");
-        if (!res.ok) throw new Error("We couldn't load your orders just now.");
-        const data = await res.json();
-        if (!cancelled) setOrders(data.orders ?? []);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "We couldn't load your orders.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionStatus]);
-
-  if (sessionStatus === "loading" || (sessionStatus === "authenticated" && !orders && !error)) {
+  if (sessionStatus === "loading" || (sessionStatus === "authenticated" && isLoading)) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-red-600" />
@@ -148,8 +125,9 @@ export default function OrdersPage() {
                 <li key={i} className="flex justify-between gap-3 text-sm text-gray-800 dark:text-neutral-100">
                   <span>
                     {item.quantity} × {item.name}
-                    {item.sku && (
-                      <span className="text-gray-500 dark:text-neutral-400"> · {item.sku}</span>
+                    {/* The variant the customer chose ("Black · L"), not the internal sku. */}
+                    {item.variant && (
+                      <span className="text-gray-500 dark:text-neutral-400"> · {item.variant}</span>
                     )}
                   </span>
                   <span className="shrink-0">${(item.price * item.quantity).toFixed(2)}</span>

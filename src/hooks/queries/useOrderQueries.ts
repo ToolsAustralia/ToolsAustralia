@@ -91,7 +91,38 @@ export interface OrderFilters extends Record<string, unknown> {
   limit?: number;
 }
 
+/**
+ * A row from the ORDER LIST — not a full order document.
+ *
+ * `/api/orders` returns a lean projection built by `listOrders`, deliberately: an
+ * unprojected list once shipped every Product document and every address on every
+ * row. Use `useOrder(id)` when the whole document is genuinely needed.
+ */
+export interface OrderListRow {
+  id: string;
+  orderNumber: string;
+  status: Order["status"];
+  createdAt: string;
+  totalAmount: number;
+  itemCount: number;
+  categories: string[];
+  /** Admin surfaces only — omitted from a customer's own list. */
+  customerName?: string;
+  entriesGranted?: number;
+  submittedAt?: string;
+  trackingNumber?: string;
+  items: { name: string; sku?: string; variant?: string; quantity: number; price: number }[];
+}
+
 export interface OrderResponse {
+  orders: OrderListRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+/** @deprecated Legacy paginated envelope. Nothing returns this shape any more. */
+export interface LegacyOrderResponse {
   orders: Order[];
   pagination: {
     currentPage: number;
@@ -176,7 +207,9 @@ export const useInfiniteOrders = (userId?: string, filters: OrderFilters = {}) =
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
-      return lastPage.pagination.hasNextPage ? lastPage.pagination.currentPage + 1 : undefined;
+      // The route returns { page, totalPages }, not a pagination envelope — the old
+      // shape was never what /api/orders sent.
+      return lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined;
     },
     enabled: !!userId,
     staleTime: 2 * 60 * 1000,

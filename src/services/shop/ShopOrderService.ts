@@ -64,6 +64,9 @@ interface ResolvedLine extends CartLine {
   includedEntries: number;
   /** Category at purchase time — what the order lists filter on. */
   category: string;
+  /** Variant labels at purchase time — what the customer actually chose. */
+  size?: string;
+  colour?: string;
 }
 
 /**
@@ -115,6 +118,9 @@ async function resolveLines(items: readonly CheckoutLineInput[]): Promise<Resolv
     }
 
     const variants = product.variants ?? [];
+    // Hoisted out of the validation block so the resolved line can snapshot the
+    // variant's labels; a product with no variants leaves it undefined.
+    let chosenVariant: { size?: string; colour?: string } | undefined;
     if (variants.length > 0) {
       if (!item.sku) {
         errors.push({
@@ -141,6 +147,7 @@ async function resolveLines(items: readonly CheckoutLineInput[]): Promise<Resolv
         });
         continue;
       }
+      chosenVariant = variant;
     }
 
     // Print-to-order items carry stock 0 permanently, so stock only gates a
@@ -165,6 +172,8 @@ async function resolveLines(items: readonly CheckoutLineInput[]): Promise<Resolv
       // change what this buyer was promised.
       includedEntries: product.includedEntries ?? 0,
       category: product.category ?? "",
+      size: chosenVariant?.size,
+      colour: chosenVariant?.colour,
       quantity: item.quantity,
     });
   }
@@ -208,6 +217,8 @@ export const ShopOrderService = {
         name: l.name,
         includedEntries: l.includedEntries,
         category: l.category,
+        size: l.size,
+        colour: l.colour,
         quantity: l.quantity,
         price: centsToDollars(l.priceCents),
       })),
