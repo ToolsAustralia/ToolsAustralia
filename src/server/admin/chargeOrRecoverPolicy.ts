@@ -226,3 +226,42 @@ export function shouldCooldownForExcessiveRetry(params: {
   );
   return { cooldown: true, retryAfter, daysRemaining };
 }
+
+/** How a failed `invoices.retrieve` should be treated by the bulk charge job. */
+export type InvoiceRetrieveFailure =
+  /** The invoice is genuinely gone. Retrying cannot help; record a skip. */
+  | "permanent"
+  /** Stripe was unreachable (429 / 5xx / network). Worth another attempt. */
+  | "transient"
+  /** Real error (auth, bad request). Retrying will not help, but it is NOT
+   *  evidence the invoice is deleted — record a failure, never a skip. */
+  | "fatal";
+
+/**
+ * Classify a Stripe error from `invoices.retrieve`.
+ *
+ * Exists because a bare catch previously recorded EVERY failure as a permanent
+ * "deleted/void" skip — so a transient rate limit silently retired a member for
+ * the day and read in the admin UI as though their invoice no longer existed.
+ * Rate limits are exactly what a long, paced run is most likely to hit.
+ *
+ * Pure so the three branches can be tested without Stripe or a DB.
+ */
+export function classifyInvoiceRetrieveError(err: unknown): InvoiceRetrieveFailure {
+  const e = err as { code?: string; statusCode?: number; type?: string } | null | undefined;
+  if (!e) return "fatal";
+
+  if (e.code === "resource_missing" || e.statusCode === 404) return "permanent";
+
+  if (
+    e.statusCode === 429 ||
+    e.code === "rate_limit" ||
+    (typeof e.statusCode === "number" && e.statusCode >= 500) ||
+    e.type === "StripeConnectionError" ||
+    e.type === "StripeAPIError"
+  ) {
+    return "transient";
+  }
+
+  return "fatal";
+}

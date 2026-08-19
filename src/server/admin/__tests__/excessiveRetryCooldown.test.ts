@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   EXCESSIVE_RETRY_COOLDOWN_DAYS,
+  classifyInvoiceRetrieveError as classify,
   shouldCooldownForExcessiveRetry,
 } from "../chargeOrRecoverPolicy";
 
@@ -149,3 +150,36 @@ assert.ok(
 );
 
 console.log("✅ excessiveRetryCooldown: all assertions passed");
+
+// ── classifyInvoiceRetrieveError ─────────────────────────────────────────────
+// A transient failure must NEVER be recorded as "invoice deleted/void": that
+// silently retires a member for the day and misleads the operator.
+{
+  // Genuinely gone.
+  assert.equal(classify({ code: "resource_missing" }), "permanent", "resource_missing → permanent");
+  assert.equal(classify({ statusCode: 404 }), "permanent", "404 → permanent");
+
+  // Reachability problems — a paced run meets these most.
+  assert.equal(classify({ statusCode: 429 }), "transient", "429 → transient");
+  assert.equal(classify({ code: "rate_limit" }), "transient", "rate_limit → transient");
+  for (const statusCode of [500, 502, 503, 504]) {
+    assert.equal(classify({ statusCode }), "transient", `${statusCode} → transient`);
+  }
+  assert.equal(
+    classify({ type: "StripeConnectionError" }),
+    "transient",
+    "connection error → transient"
+  );
+
+  // Real errors: not retryable, but NOT evidence the invoice is gone.
+  assert.equal(classify({ statusCode: 401 }), "fatal", "401 → fatal, not permanent");
+  assert.equal(classify({ statusCode: 400, code: "parameter_invalid_empty" }), "fatal", "400 → fatal");
+  assert.equal(classify(null), "fatal", "null → fatal");
+  assert.equal(classify(undefined), "fatal", "undefined → fatal");
+  assert.equal(classify(new Error("boom")), "fatal", "plain Error → fatal");
+
+  // The regression this guards: a rate limit must not read as a deleted invoice.
+  assert.notEqual(classify({ statusCode: 429 }), "permanent", "429 must never be permanent");
+
+  console.log("✅ classifyInvoiceRetrieveError: all assertions passed");
+}

@@ -49,7 +49,10 @@ import ChargeJobWorklist from "@/models/ChargeJobWorklist";
 import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import { previewChargePastDueInvoices } from "@/services/admin/previewChargePastDueInvoices";
 import { findLatestBlockByFingerprint } from "@/services/allowlist/blockedTransactionRepo";
-import { shouldCooldownForExcessiveRetry } from "./chargeOrRecoverPolicy";
+import {
+  classifyInvoiceRetrieveError,
+  shouldCooldownForExcessiveRetry,
+} from "./chargeOrRecoverPolicy";
 import {
   reconcileAllowlistFromBlocked,
   type ReconcileSummary,
@@ -86,9 +89,32 @@ const LOCK_WINDOW_MS = 30 * 60 * 1000; // 30 min — renewed each chunk.
 export const DEFAULT_CHUNK_SIZE = 30;
 export const MAX_CHUNK_SIZE = 60;
 
-/** Sub-batch within a chunk — mirrors the legacy 15-parallel / 500ms throttle. */
+/**
+ * Default pacing — the legacy 15-parallel / 500ms throttle.
+ *
+ * This is what the ADMIN-triggered (browser-driven) run keeps: it is
+ * human-supervised, rare, and the operator is watching a progress bar, so a
+ * multi-minute run is the right trade there.
+ *
+ * The CRON run overrides it with sequential + a delay, because it is the daily
+ * volume that generates Stripe's excessive-retry blocks. See
+ * docs/admin/backend.md#automated-charge-run.
+ */
 const SUB_BATCH_SIZE = 15;
 const SUB_BATCH_DELAY_MS = 500;
+
+/** How fast a chunk pushes charges at Stripe. */
+export type ChargePacing = {
+  /** Charges issued in parallel. 1 = strictly sequential (no burst). */
+  concurrency: number;
+  /** Delay after each group before the next one. */
+  delayMs: number;
+};
+
+export const DEFAULT_PACING: ChargePacing = {
+  concurrency: SUB_BATCH_SIZE,
+  delayMs: SUB_BATCH_DELAY_MS,
+};
 
 export class ChargeJobLockedError extends Error {
   constructor() {
@@ -158,7 +184,7 @@ async function recomputeTotalsFromLogs(
  * its real totals from logs and mark it `aborted`. Mirrors fix-stuck-charge-jobs.ts
  * but runs inline at the next kickoff so the history self-heals.
  */
-async function sweepOrphanRuns(): Promise<void> {
+export async function sweepOrphanRuns(): Promise<void> {
   const cutoff = new Date(Date.now() - ORPHAN_RUN_THRESHOLD_MS);
   const orphans = await ChargeJobRun.find({ status: "running", startedAt: { $lt: cutoff } })
     .select({ _id: 1, totals: 1 })
@@ -201,8 +227,24 @@ async function renewLock(adminId: string): Promise<void> {
  * charging), and creates the ChargeJobRun. Throws ChargeJobLockedError (→409) if
  * another job holds the lock.
  */
-export async function startChargePastDueJob(params: { adminId: string }): Promise<StartChargeJobResult> {
+export class ChargeJobWorklistTooLargeError extends Error {
+  constructor(public readonly total: number, public readonly ceiling: number) {
+    super(`Worklist ${total} exceeds ceiling ${ceiling}`);
+    this.name = "ChargeJobWorklistTooLargeError";
+  }
+}
+
+export async function startChargePastDueJob(params: {
+  adminId: string;
+  /** Refuse (and release the lock) if the snapshot exceeds this. Checked BEFORE
+   *  any ChargeJobRun/Worklist is created, so an anomaly leaves no state behind. */
+  maxWorklist?: number;
+  /** Defaults to "admin". The cron passes "cron" so it can later resume its OWN
+   *  run and never adopt (or abort) one an admin started by hand. */
+  trigger?: "admin" | "cron";
+}): Promise<StartChargeJobResult> {
   const { adminId } = params;
+  const trigger = params.trigger ?? "admin";
   const now = new Date();
 
   // Atomic mutex acquire — unlocked-or-expired predicate + upsert; race loser E11000.
@@ -238,9 +280,15 @@ export async function startChargePastDueJob(params: { adminId: string }): Promis
       amount: u.amount,
     }));
 
+    if (params.maxWorklist !== undefined && worklistItems.length > params.maxWorklist) {
+      await releaseLock();
+      throw new ChargeJobWorklistTooLargeError(worklistItems.length, params.maxWorklist);
+    }
+
     const run = await ChargeJobRun.create({
       adminId: new mongoose.Types.ObjectId(adminId),
       kind: "charge",
+      trigger,
       startedAt: new Date(),
       status: "running",
       totals: { eligibleCount: worklistItems.length },
@@ -472,42 +520,92 @@ function resolveChargedCardFingerprint(
   return null;
 }
 
+/**
+ * Retrieve a worklist invoice, distinguishing "this invoice is gone" from
+ * "Stripe was unreachable".
+ *
+ * A bare catch here used to record BOTH as a permanent "deleted/void" skip, so a
+ * transient 429 or 5xx silently retired a member for the day and read in the
+ * admin UI as though their invoice no longer existed. Rate limits are exactly
+ * what a long paced run is most likely to meet.
+ *
+ * Retries 429/5xx/network with backoff; `resource_missing` (404) returns
+ * permanent immediately, since retrying that can never help.
+ */
+async function retrieveWorklistInvoice(
+  invoiceId: string,
+  maxAttempts = 3
+): Promise<
+  | { ok: true; invoice: Stripe.Invoice }
+  | { ok: false; permanent: true }
+  | { ok: false; permanent: false; message: string }
+> {
+  let lastMessage = "unknown error";
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      // `payments` lets decideBulkChargeAction tell a truly unpayable invoice
+      // (every PaymentIntent canceled) from an exhausted-but-payable one. The two
+      // payment-method paths give the charged card's fingerprint for the
+      // excessive-retry cooldown WITHOUT an extra paymentMethods.retrieve.
+      const invoice = (await stripe.invoices.retrieve(invoiceId, {
+        expand: [
+          "customer",
+          "payments",
+          "default_payment_method",
+          "customer.invoice_settings.default_payment_method",
+        ],
+      })) as Stripe.Invoice;
+      return { ok: true, invoice };
+    } catch (err) {
+      const e = err as Stripe.errors.StripeError;
+      lastMessage = e?.message ?? String(err);
+
+      const kind = classifyInvoiceRetrieveError(err);
+      if (kind === "permanent") return { ok: false, permanent: true };
+      // "fatal" will not fix itself either, but it is NOT evidence the invoice
+      // is deleted — surface it rather than mislabel it as gone.
+      if (kind === "fatal" || attempt === maxAttempts) {
+        return { ok: false, permanent: false, message: lastMessage };
+      }
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+    }
+  }
+  return { ok: false, permanent: false, message: lastMessage };
+}
+
 /** Charge a single worklist item: retrieve fresh invoice, resolve PM, delegate to the primitive. */
 async function chargeWorklistItem(
   item: { invoiceId: string; customerId: string; userId: mongoose.Types.ObjectId; amount: number },
   adminId: string,
   runId: mongoose.Types.ObjectId
 ): Promise<void> {
-  let invoice: Stripe.Invoice;
-  try {
-    // `payments` is expanded so decideBulkChargeAction can tell a truly unpayable
-    // invoice (every PaymentIntent canceled) from an exhausted-but-payable one.
-    invoice = (await stripe.invoices.retrieve(item.invoiceId, {
-      // The two payment-method paths are expanded so the charged card's
-      // fingerprint is available for the Stripe excessive-retry cooldown check
-      // below WITHOUT an extra paymentMethods.retrieve per worklist item.
-      expand: [
-        "customer",
-        "payments",
-        "default_payment_method",
-        "customer.invoice_settings.default_payment_method",
-      ],
-    })) as Stripe.Invoice;
-  } catch {
-    // Invoice no longer retrievable (deleted/void). Log a skip so it counts as done.
+  const retrieved = await retrieveWorklistInvoice(item.invoiceId);
+  if (!retrieved.ok) {
+    // Either way a row is written, so the item leaves `remaining` and the run can
+    // finish — but the two cases must not read the same to an operator.
     await InvoiceChargeLog.create({
       invoiceId: item.invoiceId,
       customerId: item.customerId,
       userId: item.userId,
       adminId: new mongoose.Types.ObjectId(adminId),
-      status: "skipped",
+      status: retrieved.permanent ? "skipped" : "failed",
       amount: item.amount,
       attemptedAt: new Date(),
-      errorMessage: "Skipped: invoice not retrievable (deleted/void)",
+      errorMessage: retrieved.permanent
+        ? "Skipped: invoice not retrievable (deleted/void)"
+        : `Stripe could not be reached for this invoice after retries: ${retrieved.message}`,
+      ...(retrieved.permanent ? {} : { errorCode: RECOVERY_DECLINE_CODES.invoiceUnavailable }),
       chargeRunId: runId,
     });
+    if (!retrieved.permanent) {
+      console.error(
+        `[chargePastDue] invoice ${item.invoiceId} unreachable after retries: ${retrieved.message}`
+      );
+    }
     return;
   }
+  const invoice = retrieved.invoice;
 
   // Pay-vs-recover branch (the bulk counterpart of the per-user chargeOrRecover).
   // A stranded invoice — retries exhausted AND no payable invoice_payment left —
@@ -637,9 +735,20 @@ export async function processChargePastDueChunk(params: {
   runId: string;
   adminId: string;
   chunkSize?: number;
+  /** Omitted = DEFAULT_PACING (the admin/browser path keeps today's speed). */
+  pacing?: ChargePacing;
+  /**
+   * Absolute epoch-ms after which the loop stops and returns done:false.
+   * Budgeting on the sleep constant alone is wrong — each item also costs
+   * Stripe round-trips — so the caller cannot predict a chunk's cost. Every
+   * item writes its own log row, so stopping early is always safe and the next
+   * invocation resumes exactly where this one left off.
+   */
+  deadlineAt?: number;
 }): Promise<ChargeChunkResult> {
   const { runId, adminId } = params;
   const chunkSize = Math.min(Math.max(params.chunkSize ?? DEFAULT_CHUNK_SIZE, 1), MAX_CHUNK_SIZE);
+  const pacing = params.pacing ?? DEFAULT_PACING;
   const runObjId = new mongoose.Types.ObjectId(runId);
 
   const run = await ChargeJobRun.findById(runObjId).select({ status: 1, totals: 1 }).lean();
@@ -681,18 +790,35 @@ export async function processChargePastDueChunk(params: {
   await renewLock(adminId);
 
   const batch = remaining.slice(0, chunkSize);
-  for (let i = 0; i < batch.length; i += SUB_BATCH_SIZE) {
-    const sub = batch.slice(i, i + SUB_BATCH_SIZE);
+  const step = Math.max(1, pacing.concurrency);
+  const deadlineAt = params.deadlineAt;
+  let stoppedEarly = false;
+  for (let i = 0; i < batch.length; i += step) {
+    if (deadlineAt !== undefined && Date.now() >= deadlineAt) {
+      stoppedEarly = true;
+      break;
+    }
+    const sub = batch.slice(i, i + step);
     await Promise.allSettled(sub.map((it) => chargeWorklistItem(it, adminId, runObjId)));
-    if (i + SUB_BATCH_SIZE < batch.length) {
-      await new Promise((r) => setTimeout(r, SUB_BATCH_DELAY_MS));
+    if (i + step < batch.length && pacing.delayMs > 0) {
+      await new Promise((r) => setTimeout(r, pacing.delayMs));
     }
   }
 
   // Recompute live totals from logs and check whether the worklist is now drained.
+  //
+  // `done` MUST come from the same de-duplicated set that drives `remaining`.
+  // Deriving it from `attempted + skipped` compares a ROW count against an ITEM
+  // count, so a single worklist item that acquires two run-tagged rows (two
+  // overlapping invocations racing the same item) finalizes the run one item
+  // early — dropping a member for the day AND releasing the lock.
   const totals = await recomputeTotalsFromLogs(runObjId, eligibleCount);
-  const processed = totals.attempted + totals.skipped.total;
-  const done = processed >= items.length;
+  const worklistIds = new Set(items.map((it) => it.invoiceId));
+  const loggedAfter = (
+    (await InvoiceChargeLog.distinct("invoiceId", { chargeRunId: runObjId })) as string[]
+  ).filter((id) => worklistIds.has(id));
+  const processed = loggedAfter.length;
+  const done = !stoppedEarly && processed >= items.length;
 
   if (done) {
     await ChargeJobRun.updateOne(
