@@ -63,6 +63,19 @@ function totalPurchases(stats: AdminDashboardStats | undefined): number {
 }
 
 /**
+ * Acquisition revenue — the five acquisition buckets, RENEWALS EXCLUDED.
+ *
+ * Deliberately not `revenue.total`, which includes `membershipRenewal`. Ad spend only buys
+ * acquisition, so `revenue.total − adSpend` would credit the ad budget with renewal income it
+ * did not produce and flatter the number. This matches the Advertising Analytics Suite master
+ * spec §2 ("acquisition-only for ALL ROAS/contribution numbers").
+ */
+function acquisitionRevenue(stats: AdminDashboardStats | undefined): number {
+  if (!stats) return 0;
+  return ACQUISITION_KEYS.reduce((t, k) => t + itemRevenue(stats.revenue.breakdown[k]), 0);
+}
+
+/**
  * Build the comparison rows from two stats payloads.
  *
  * A missing payload (still loading, or the comparison window errored) contributes zeros rather
@@ -196,6 +209,33 @@ export function buildPeriodComparison(
       headline: true,
       group: "Advertising",
       read: (s) => s?.adTotals?.roas ?? 0,
+    },
+    {
+      key: "acquisitionRevenue",
+      label: "Acquisition revenue",
+      format: "currency",
+      headline: false,
+      group: "Advertising",
+      read: acquisitionRevenue,
+    },
+    {
+      /**
+       * Contribution after ad spend — acquisition revenue minus ad spend.
+       *
+       * Labelled as the subtraction it is, NEVER as "Profit": COGS, fees and returns are not
+       * subtracted (master spec §2). Uses ACQUISITION revenue, not `revenue.total` — ad spend
+       * only buys acquisition, so including renewals would credit the budget with income it
+       * did not produce.
+       *
+       * Legitimately negative in a month where spend outran acquisition; the UI must render
+       * the sign rather than treating a negative as an error.
+       */
+      key: "contribution",
+      label: "Contribution (acq. revenue − ad spend)",
+      format: "currency",
+      headline: false,
+      group: "Advertising",
+      read: (s) => acquisitionRevenue(s) - (s?.adTotals?.spend ?? 0),
     },
   ];
 

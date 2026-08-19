@@ -254,7 +254,10 @@ export default function BrandPerformanceCard({
     if (key === "purchases") {
       return (
         <>
-          <span className="num text-xs sm:text-sm">{formatNumber(d.purchases)}</span>
+          {/* Rounded: under the toolbox lane a bare-toolset page's conversions are split across
+              lanes by the observed visitor mix, which yields fractions. The split is exact in
+              aggregate — the Total is computed from unrounded values. */}
+          <span className="num text-xs sm:text-sm">{formatNumber(Math.round(d.purchases))}</span>
           {delta(d.purchases, prior?.purchases)}
         </>
       );
@@ -401,7 +404,7 @@ export default function BrandPerformanceCard({
                         {fmtCompact(unattributed.revenue)}
                       </td>
                       <td className="py-2 px-2 text-right num text-xs">
-                        {formatNumber(unattributed.purchases)}
+                        {formatNumber(Math.round(unattributed.purchases))}
                       </td>
                       <td className="py-2 px-2 text-right num text-xs">
                         {unattributed.newMemberships == null
@@ -428,7 +431,7 @@ export default function BrandPerformanceCard({
                         {fmtCompact(totals.revenue)}
                       </td>
                       <td className="py-2.5 px-2 text-right num text-xs sm:text-sm">
-                        {formatNumber(totals.purchases)}
+                        {formatNumber(Math.round(totals.purchases))}
                       </td>
                       <td className="py-2.5 px-2 text-right num text-xs sm:text-sm">
                         {totals.newMemberships == null ? "—" : formatNumber(totals.newMemberships)}
@@ -444,6 +447,42 @@ export default function BrandPerformanceCard({
               }
             />
 
+            {lane === "toolbox" && data?.meta.toolboxSpendModel === "observed-mix" && (
+              <p className="text-2xs text-neutral-500 dark:text-neutral-400 mt-3">
+                Toolset landing pages don&apos;t name a toolbox, so their spend is split across
+                these rows by the toolbox mix their visitors actually built
+                {data.meta.toolboxMixVisitors != null && (
+                  <>
+                    {" "}
+                    —{" "}
+                    <span
+                      className={cn(
+                        "font-medium",
+                        // Builder beacons are far sparser than impressions, so a handful of
+                        // visitors can end up dividing thousands of dollars. Below ~30 the
+                        // split is indicative, not a measurement, and must look like it.
+                        data.meta.toolboxMixVisitors < 30 && "text-amber-600 dark:text-amber-500",
+                      )}
+                    >
+                      from {formatNumber(data.meta.toolboxMixVisitors)} visitor build
+                      {data.meta.toolboxMixVisitors === 1 ? "" : "s"}
+                    </span>
+                    {data.meta.toolboxMixVisitors < 30 && ", a thin sample — treat the split as indicative"}
+                  </>
+                )}
+                .
+              </p>
+            )}
+            {lane === "toolbox" &&
+              (data?.meta.toolboxSpendModel === "page-default" ||
+                data?.meta.toolboxSpendModel === "mixed") && (
+                <p className="text-2xs text-amber-600 dark:text-amber-500 mt-3">
+                  {data.meta.toolboxSpendModel === "mixed" ? "Some " : ""}Toolset landing-page
+                  spend has no visitor data in this window, so it falls back to each page&apos;s
+                  default toolbox — which concentrates it on one brand. Pick a more recent range
+                  for a split that reflects what visitors actually built.
+                </p>
+              )}
             {data?.meta.blendedPlatformRevenue && (
               <p className="text-2xs text-neutral-500 dark:text-neutral-400 mt-3">
                 Spend is the true combined total. Revenue is each platform&apos;s <em>own</em>{" "}

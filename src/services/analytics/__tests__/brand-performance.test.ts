@@ -222,9 +222,9 @@ function testServerBasisAcrossPlatformsIsNotBlended() {
   assert.equal(rowFor(result, "ryobi").revenue, 100, "server revenue, not the platforms' claims");
 }
 
-function testToolboxLaneUsesPageDefaultForBareToolsetSpend() {
-  // /promotions/ryobi has no toolbox in the URL; its spend must land on the page default's
-  // toolbox — the same lane the server records for a visitor who never touched the builder.
+function testToolboxLaneFallsBackToPageDefaultWithoutMix() {
+  // No visit data for the window (older than the PromoAnalyticsVisit TTL, say). Spend must
+  // still land somewhere and the response must SAY it used the fallback model.
   const result = build({
     lane: "toolbox",
     basis: "built-prize",
@@ -232,15 +232,87 @@ function testToolboxLaneUsesPageDefaultForBareToolsetSpend() {
     events: [ev("ryobi-kincrome", "one-time", 100)],
   });
 
-  // Spend lands on the default toolbox, revenue on the one actually built — that divergence
-  // is the whole point of the built-prize basis.
+  assert.equal(result.meta.toolboxSpendModel, "page-default");
+  assert.equal(result.meta.toolboxMixVisitors, null, "no sample when nothing was modelled from visits");
+
   const kincrome = rowFor(result, "kincrome");
-  assert.equal(kincrome.revenue, 100);
+  assert.equal(kincrome.revenue, 100, "revenue follows the combination actually built");
   assert.equal(kincrome.spend, 0);
 
   const milwaukee = rowFor(result, "milwaukee");
-  assert.equal(milwaukee.spend, 100, "bare-toolset spend attributes to the page default toolbox");
+  assert.equal(milwaukee.spend, 100, "fallback pins bare-toolset spend to the page default");
   assert.equal(result.totals.spend, 100, "totals still reconcile");
+}
+
+function testToolboxSpendIsSplitByObservedMix() {
+  // THE SKEW CORRECTION. Without it, all $100 of /promotions/ryobi spend lands on Milwaukee
+  // (the page default) and the Milwaukee row measures the default rather than the market.
+  const result = build({
+    lane: "toolbox",
+    basis: "built-prize",
+    spend: [spend("meta", [[`${ORIGIN}/promotions/ryobi`, 10_000]])],
+    events: [],
+    toolboxMix: [
+      { slug: "ryobi", toolbox: "kincrome", visitors: 60 },
+      { slug: "ryobi", toolbox: "milwaukee", visitors: 30 },
+      { slug: "ryobi", toolbox: "sidchrome", visitors: 10 },
+    ],
+  });
+
+  assert.equal(result.meta.toolboxSpendModel, "observed-mix");
+  assert.equal(result.meta.toolboxMixVisitors, 100, "the sample behind the split must be reported");
+  assert.equal(rowFor(result, "kincrome").spend, 60);
+  assert.equal(rowFor(result, "milwaukee").spend, 30);
+  assert.equal(rowFor(result, "sidchrome").spend, 10);
+  assert.equal(result.totals.spend, 100, "the split conserves spend exactly");
+}
+
+function testPlatformBasisSplitsRevenueWithSpend() {
+  // Platform revenue and conversions are URL-keyed too, so they take the SAME split — dividing
+  // a modelled spend by an unmodelled revenue would produce a nonsense ROAS.
+  const result = build({
+    lane: "toolbox",
+    basis: "platform",
+    spend: [spend("meta", [[`${ORIGIN}/promotions/ryobi`, 10_000, 40_000, 10]])],
+    toolboxMix: [
+      { slug: "ryobi", toolbox: "kincrome", visitors: 75 },
+      { slug: "ryobi", toolbox: "milwaukee", visitors: 25 },
+    ],
+  });
+
+  const kincrome = rowFor(result, "kincrome");
+  assert.equal(kincrome.spend, 75);
+  assert.equal(kincrome.revenue, 300);
+  assert.equal(kincrome.purchases, 7.5, "conversions split with the rest; the UI rounds on render");
+  assert.equal(kincrome.roas, 4, "ROAS survives the split — 300/75 == 400/100");
+  assert.equal(rowFor(result, "milwaukee").roas, 4, "…and is identical on the other share");
+  assert.equal(result.totals.revenue, 400);
+}
+
+function testToolsetLaneIsNeverModelled() {
+  const result = build({
+    lane: "toolset",
+    spend: [spend("meta", [[`${ORIGIN}/promotions/ryobi`, 10_000]])],
+    toolboxMix: [{ slug: "ryobi", toolbox: "kincrome", visitors: 99 }],
+  });
+  assert.equal(result.meta.toolboxSpendModel, null, "every promotion URL names its toolset");
+  assert.equal(rowFor(result, "ryobi").spend, 100);
+}
+
+function testMixedModelIsReported() {
+  // One page has visit data, another does not. The reader must be told the table blends both.
+  const result = build({
+    lane: "toolbox",
+    spend: [
+      spend("meta", [
+        [`${ORIGIN}/promotions/ryobi`, 10_000],
+        [`${ORIGIN}/promotions/makita`, 10_000],
+      ]),
+    ],
+    toolboxMix: [{ slug: "ryobi", toolbox: "kincrome", visitors: 5 }],
+  });
+  assert.equal(result.meta.toolboxSpendModel, "mixed");
+  assert.equal(result.totals.spend, 200, "both pages' spend is still counted in full");
 }
 
 function testCashPrizeIsDroppedIntoUnattributed() {
@@ -286,7 +358,11 @@ function run() {
   testPlatformBasisUsesPlatformRevenueAndHasNoMembershipSplit();
   testPlatformAllSumsSpendButFlagsBlendedRevenue();
   testServerBasisAcrossPlatformsIsNotBlended();
-  testToolboxLaneUsesPageDefaultForBareToolsetSpend();
+  testToolboxLaneFallsBackToPageDefaultWithoutMix();
+  testToolboxSpendIsSplitByObservedMix();
+  testPlatformBasisSplitsRevenueWithSpend();
+  testToolsetLaneIsNeverModelled();
+  testMixedModelIsReported();
   testCashPrizeIsDroppedIntoUnattributed();
   testTotalUserCountIsDistinctAcrossLanes();
   testZeroBrandRowShape();

@@ -221,3 +221,28 @@ In `src/utils/admin/resolveAestDateWindow.ts`, beside the preset resolver. Retur
 **Anchored on the AEST calendar, never UTC.** Sydney is UTC+10/+11, so a late-UTC-evening instant is already the *next* AEST day — and on the last UTC day of a month, the AEST calendar has already rolled over. `2026-01-31T23:00Z` is 1 February in Sydney, so the previous calendar month is **January**, not December. Reading the UTC month there gives the wrong answer. Covered by `npm run test:previous-calendar-month`, which also pins the year boundary (January → previous December), leap/non-leap February, and both DST transitions.
 
 The month arithmetic runs on calendar *numbers* pulled out of `formatInTimeZone(..., "yyyy-MM")`, so a 23h/25h DST day cannot shift either bound.
+
+## Toolbox spend de-skew — observed visitor mix (2026-08-19)
+
+**The problem.** A bare `/promotions/<toolset>` page names no toolbox, so under the toolbox lane its ad spend can only be assigned by modelling. The first model — assign 100% to the page's first-paint default — was wrong in a way that looked plausible: `getDefaultPrizeForToolsetSlug` prefers the Milwaukee toolbox, so *every* toolset page's spend piled onto Milwaukee. The Milwaukee row measured the default, not the market.
+
+**The correction.** `allocateBrandLanes` (`src/utils/metrics/brand-lane.ts`) splits that spend across toolbox lanes in proportion to the toolbox mix the page's visitors **actually built**, from `PromoAnalyticsRepository.getToolboxMixByToolsetPage`. Spend follows the traffic it bought.
+
+Measured on production data (1 Jul – 19 Aug 2026): `/promotions/makita` drew 5 builder visitors splitting milwaukee 60% / gearwrench 20% / kincrome 20%, so its $1,373.51 now divides $824.11 / $274.70 / $274.70 instead of all $1,373.51 landing on Milwaukee.
+
+**Two models, and the response says which ran** (`meta.toolboxSpendModel`):
+
+| Value | Meaning |
+|---|---|
+| `observed-mix` | split by the page's real visitor mix — the accurate model |
+| `page-default` | fallback: no visit data in the window (short range, or older than the `PromoAnalyticsVisit` TTL). **Skews** toward the page default |
+| `mixed` | both, on different pages |
+| `null` | toolset lane — the URL names the brand, nothing is modelled |
+
+Weights always sum to 1, so **no spend is created or lost**: total spend is identical whichever lane you group by. Verified against production — both groupings returned exactly `16762.5000`.
+
+⚠️ **The sample can be thin, and that is surfaced, not buried.** Builder beacons are far sparser than ad impressions — the production window above split thousands of dollars on 2–6 visitors per page. `meta.toolboxMixVisitors` reports the sample size; the admin card renders it in amber below 30 with "treat the split as indicative". A modelled split must never be presented as a measurement.
+
+**Fractional counts are expected.** Splitting a page's conversions by weight yields fractions per row. The split conserves totals exactly; the UI rounds per row on render only.
+
+**Under `basis=platform`, revenue and conversions take the SAME split** as spend — they are URL-keyed too, and dividing a modelled spend by an unmodelled revenue would produce a nonsense ROAS.

@@ -310,9 +310,12 @@ They already share three of the four rules — `getAggregatedByToolbox` uses `ex
 
 **Action (done):** the `$switch` builder lives in `brand-lane.ts` as `brandLaneSwitchExpr(field, lane)`, and `getAggregatedByToolbox` imports it. One lane mapping in the codebase, used by both surfaces — not two copies kept in step by review.
 
-**Guard (done, narrower than first drafted):** `test:brand-lane` asserts the Mongo `$switch` and the JS resolver produce an identical mapping for every registry entry, in both lanes. That is the structural guarantee: the two surfaces cannot bucket a purchase differently, because they execute the same mapping.
+**Guard (done):** two tests, together closing the loop.
 
-A full DB-level reconciliation test — run both aggregations over one seeded window and diff the per-lane totals — is **not** included, and this is a deliberate narrowing of the original plan. Both sides are Mongo-coupled, and the repo has no unit-test database: the e2e suite owns the only seeded Mongo and wipes it each run, so a `tsx` script has nothing to run against. Sharing the mapping eliminates the failure mode that test was meant to catch. The residual risk is a divergence in the surrounding `$match` — today both use `excludeRefundedBenefitsGrantedStages()` and the same `billingReason` renewal rule. If the two ever need proving equal on real data, that belongs in an e2e-seeded spec, not here.
+- `test:brand-lane` asserts the Mongo `$switch` and the JS resolver produce an identical mapping for every registry entry, in both lanes.
+- `test:brand-performance-reconciliation` feeds BOTH code paths the same canned event set and asserts the per-lane conversions/revenue match exactly, and — crucially — **captures the pipeline** `getAggregatedByToolbox` passes to Mongo and checks its `$switch` branches against the shared resolver. Without that capture the test would be circular (both sides deriving lanes from the same helper). Verified to actually fail: sabotaging the repository with a drifted local `$switch` makes it exit 1.
+
+_(An earlier draft of this spec claimed the repo had no unit-test database and cut this test on that basis. That was wrong and unverified — `test:promo-analytics-aggregation` had long established the pattern of stubbing `model.aggregate` with canned rows, inside the very file being modified.)_
 
 ---
 
@@ -348,7 +351,7 @@ No test runner exists; tests are standalone `tsx` scripts with their own `packag
 |---|---|
 | `test:brand-lane` | `resolveBrandLane*` — toolset segment extraction; toolbox from explicit suffix; toolbox from page default on bare toolset URLs; `cash-prize` → null under toolbox; `unknown://meta-ad/…` → null; every `PRIZE_LANE_SLUGS` entry maps to a valid lane in both directions |
 | `test:brand-performance` | ROAS recomputed from totals not averaged; renewals excluded via `billingReason`; refunded rows excluded; `newMembership*Pct` = 0 (not `NaN`) on zero denominators; `platform=all` sums spend but not platform revenue; unattributed spend appears in the footer so Total reconciles |
-| ~~`test:brand-performance-reconciliation`~~ | **Not built** — see §9. The lane mapping is now shared rather than duplicated, and `test:brand-lane` asserts the Mongo `$switch` matches the JS resolver. A DB-level diff needs a seeded Mongo this repo has no unit-test harness for. |
+| `test:brand-performance-reconciliation` | §9 — both surfaces agree per lane on identical canned input, AND `getAggregatedByToolbox` still buckets via the shared `$switch` (pipeline captured and compared to the resolver) |
 | `test:previous-calendar-month` | AEST correctness across a DST transition and across a year boundary; January → previous December |
 
 Existing suites that must still pass: `npm run test:chat-faqs` (unaffected), plus `npm run lint`, `npm run type-check`, `npm run norm:smoke`.
@@ -382,3 +385,28 @@ Each phase is independently shippable and independently reviewable.
 - **No partial-refund handling.** `RefundPartial` is still not subtracted, consistent with every other revenue surface (master spec §3.1.4). Carried forward deliberately, not silently "fixed" differently here.
 - **No new permission, no new admin tab.**
 - **Not rewriting the ~15 other `PaymentEvent` aggregations.** This spec adds none and shares where it touches; the wider consolidation is a separate project.
+
+---
+
+## 15. Addendum (2026-08-19, post-review)
+
+Three items from DJ's review of the shipped phases.
+
+### 15.1 Toolbox spend skew — corrected, not accepted
+
+§7.1 originally documented the page-default fallback as a "known, accepted skew". It is no longer accepted. `allocateBrandLanes` now splits a bare toolset page's spend across toolbox lanes **in proportion to the toolbox mix its visitors actually built** (`PromoAnalyticsRepository.getToolboxMixByToolsetPage`), falling back to the page default only when the window has no visit data. `meta.toolboxSpendModel` reports which model ran.
+
+Measured on production (1 Jul – 19 Aug 2026): `/promotions/makita` splits milwaukee 60% / gearwrench 20% / kincrome 20%, so its $1,373.51 now divides $824.11 / $274.70 / $274.70 rather than landing entirely on Milwaukee. Total spend is identical whichever lane you group by (verified: `16762.5000` both ways), so the split creates and loses nothing.
+
+⚠️ New caveat, surfaced in the UI rather than buried: builder beacons are far sparser than ad impressions, so the split can rest on a very small sample — the production window above divided thousands of dollars on 2–6 visitors per page. `meta.toolboxMixVisitors` reports the sample and the card renders it in amber below 30.
+
+### 15.2 The two items cut from the original plan — both restored
+
+Both were cut for reasons that did not hold:
+
+- **Reconciliation test.** The spec claimed the repo had no unit-test database. That was asserted without checking and was false — `test:promo-analytics-aggregation` already stubbed `model.aggregate` with canned rows, in the very file being modified. Now built (see §9), and verified to actually fail when the mapping drifts.
+- **Contribution row.** The objection was that `revenue.total` includes renewals — a reason not to build it *that way*, not a reason to skip it. Now built as `acquisitionRevenue − adSpend`, summing the five acquisition buckets so renewals are excluded per master spec §2, and labelled as the subtraction it is rather than "Profit".
+
+### 15.3 Norm mirror — wired
+
+`analytics.brand-performance` → `/v1/analytics/brand-performance`, wrapping the same service (§10's open question resolved: yes, in this branch). Registry entry, Zod schema, route, regenerated manifest and `norm-context.md` all updated in lockstep. Smoke-tested live against production data on all three bases, both lanes and with `compare` — all 200 OK, which is the only way to catch a schema↔output mismatch (`tsc` cannot see it).

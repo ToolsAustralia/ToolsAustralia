@@ -49,11 +49,16 @@ import {
 } from "@/services/admin/platformRevenueBreakdown";
 import { aestDayBounds } from "@/services/admin/dashboard-stats/DashboardStatsSnapshotWriter";
 import {
-  resolveBrandLaneFromCanonicalUrl,
   resolveBrandLaneFromPromoSlug,
   resolveBrandLaneFromBuiltPrize,
+  allocateBrandLanes,
+  indexToolboxMix,
   type BrandLane,
+  type BrandLaneAllocation,
+  type ToolboxMixRow,
+  type ToolboxSpendModel,
 } from "@/utils/metrics/brand-lane";
+import promoAnalyticsRepository from "@/repositories/PromoAnalyticsRepository";
 import { getBrandLaneDisplay } from "@/config/promo-landing-slugs";
 import type { AdDestinationPlatform } from "@/models/AdDestination";
 
@@ -109,6 +114,26 @@ export interface BrandPerformanceResult {
     currency: "AUD";
     /** True when spend and revenue come from more than one platform under the platform basis. */
     blendedPlatformRevenue: boolean;
+    /**
+     * How bare-toolset-page spend was assigned to toolbox lanes. null for the toolset lane,
+     * where the URL names the brand exactly and no modelling happens.
+     *
+     * "observed-mix"  split by the visitor mix the page actually drew (the accurate model)
+     * "page-default"  everything to the page first-paint default (fallback: no visit data in
+     *                 the window, e.g. older than the PromoAnalyticsVisit TTL) — SKEWS toward
+     *                 whichever toolbox is the default
+     * "mixed"         both, on different pages
+     */
+    toolboxSpendModel: ToolboxSpendModel | "mixed" | null;
+    /**
+     * How many visitor builds the observed-mix split was computed from, across every toolset
+     * page in the window. null when nothing was modelled.
+     *
+     * Surfaced because the split can be STATISTICALLY THIN: builder beacons are far sparser
+     * than ad impressions, so a handful of visitors can end up dividing thousands of dollars
+     * of spend. The reader has to be able to see the sample behind the number.
+     */
+    toolboxMixVisitors: number | null;
     comparison?: { startDate: string; endDate: string };
   };
   rows: BrandPerformanceRow[];
@@ -246,6 +271,27 @@ export class BrandPerformanceService {
       ]).exec();
     }
 
+    /**
+     * Toolbox lane only: the observed visitor mix per toolset landing page, so a bare
+     * `/promotions/<toolset>` page's spend can be split by the traffic it actually bought
+     * instead of piling onto the page's first-paint default. Not fetched for the toolset lane,
+     * where the URL already names the brand exactly.
+     */
+    let toolboxMix: ToolboxMixRow[] = [];
+    if (lane === "toolbox") {
+      const { dayStartUTC } = aestDayBounds(startDate);
+      const { dayEndUTC } = aestDayBounds(endDate);
+      try {
+        toolboxMix = await promoAnalyticsRepository.getToolboxMixByToolsetPage(
+          dayStartUTC,
+          dayEndUTC,
+        );
+      } catch {
+        // Best-effort. Losing the mix degrades to the page-default model, which the response
+        // reports — it must never blank the table.
+      }
+    }
+
     return buildBrandPerformanceWindow({
       lane,
       basis,
@@ -254,6 +300,7 @@ export class BrandPerformanceService {
       endDate,
       spend,
       events,
+      toolboxMix,
     });
   }
 
@@ -296,8 +343,10 @@ export function buildBrandPerformanceWindow(input: {
   endDate: string;
   spend: BrandSpendSource[];
   events: BrandOutcomeEvent[];
+  /** Observed visitor mix per toolset page. Toolbox lane only; empty = page-default model. */
+  toolboxMix?: ToolboxMixRow[];
 }): BrandPerformanceResult {
-  const { lane, basis, platform, startDate, endDate, spend, events } = input;
+  const { lane, basis, platform, startDate, endDate, spend, events, toolboxMix } = input;
 
   const buckets = new Map<string, Bucket>();
   const bucket = (id: string) => {
@@ -310,21 +359,40 @@ export function buildBrandPerformanceWindow(input: {
   };
 
   // ── Spend (always URL-keyed, for every basis) ─────────────────────────────────────────
+  //
+  // A bare `/promotions/<toolset>` URL names no toolbox, so under the toolbox lane its spend
+  // is SPLIT across lanes by the visitor mix that page actually drew, rather than piling onto
+  // the page's first-paint default (which concentrated every page's spend on Milwaukee and
+  // measured the default rather than the market). `allocateBrandLanes` returns weights summing
+  // to 1, so nothing is created or lost and the Total still reconciles with the ad account.
+  const mixBySlug = indexToolboxMix(toolboxMix ?? []);
+  const modelsUsed = new Set<ToolboxSpendModel>();
+  const mixVisitors = (toolboxMix ?? []).reduce((t, r) => t + r.visitors, 0);
+
   let contributingPlatforms = 0;
   for (const source of spend) {
     if (source.rows.length > 0) contributingPlatforms += 1;
     for (const r of source.rows) {
-      const laneId = resolveBrandLaneFromCanonicalUrl(r.canonicalUrl, lane) ?? UNATTRIBUTED;
-      const b = bucket(laneId);
-      b.spend += r.spendCents / CENTS;
-      b.platforms.add(source.platform);
-      b.urls[source.platform].add(r.canonicalUrl);
+      const { allocations, model } = allocateBrandLanes(r.canonicalUrl, lane, mixBySlug);
+      if (model) modelsUsed.add(model);
 
-      // Under the platform basis the SAME rows supply revenue and conversions — no
-      // PaymentEvent query runs at all, so this basis is strictly cheaper than the others.
-      if (basis === "platform") {
-        b.revenue += r.revenueCents / CENTS;
-        b.purchases += r.conversions;
+      const shares: BrandLaneAllocation[] =
+        allocations.length > 0 ? allocations : [{ laneId: UNATTRIBUTED, weight: 1 }];
+
+      for (const { laneId, weight } of shares) {
+        const b = bucket(laneId);
+        b.spend += (r.spendCents / CENTS) * weight;
+        b.platforms.add(source.platform);
+        b.urls[source.platform].add(r.canonicalUrl);
+
+        // Under the platform basis the SAME rows supply revenue and conversions — no
+        // PaymentEvent query runs at all, so this basis is strictly cheaper than the others.
+        // They are URL-keyed too, so they take the same split; otherwise a modelled spend
+        // would be divided by an unmodelled revenue and the ROAS would be nonsense.
+        if (basis === "platform") {
+          b.revenue += (r.revenueCents / CENTS) * weight;
+          b.purchases += r.conversions * weight;
+        }
       }
     }
   }
@@ -474,6 +542,16 @@ export function buildBrandPerformanceWindow(input: {
       // Only the platform basis can double-count: two platforms each claiming the same
       // purchase. Server bases read our own ledger once, so combining platforms is safe.
       blendedPlatformRevenue: basis === "platform" && contributingPlatforms > 1,
+      // Which model assigned bare-toolset-page spend to toolbox lanes. Reported rather than
+      // hidden: "page-default" is a fallback that skews toward whichever toolbox is the page
+      // default, and the reader must be able to tell a measurement from a model.
+      toolboxSpendModel:
+        lane !== "toolbox" || modelsUsed.size === 0
+          ? null
+          : modelsUsed.size > 1
+            ? "mixed"
+            : [...modelsUsed][0],
+      toolboxMixVisitors: lane === "toolbox" && modelsUsed.has("observed-mix") ? mixVisitors : null,
     },
     rows,
     unattributed,

@@ -153,3 +153,86 @@ export function brandLaneSwitchExpr(field: string, lane: BrandLane) {
 
 /** Every built-prize slug the registry knows — the `$in` guard for lane aggregations. */
 export const BRAND_LANE_PRIZE_SLUGS: string[] = PRIZE_LANE_SLUGS.map((l) => l.slug);
+
+/** A share of one URL's spend assigned to a lane. Weights for a URL always sum to 1. */
+export interface BrandLaneAllocation {
+  laneId: string;
+  weight: number;
+}
+
+/** Observed visitor mix on a toolset landing page, from `getToolboxMixByToolsetPage`. */
+export interface ToolboxMixRow {
+  slug: string;
+  toolbox: string;
+  visitors: number;
+}
+
+/** Which model produced a toolbox allocation — surfaced so the reader knows what they're seeing. */
+export type ToolboxSpendModel = "observed-mix" | "page-default";
+
+/**
+ * How ONE canonical URL's spend divides across lanes.
+ *
+ * Every case except one returns a single lane at weight 1. The exception is the reason this
+ * function exists: **a bare `/promotions/<toolset>` page under the toolbox lane names no
+ * toolbox at all**, so its spend can only be assigned by modelling.
+ *
+ * Two models, in preference order:
+ *
+ *  1. `observed-mix` — split by how the visitors that page actually drew distributed across
+ *     toolboxes in the same window (`PromoAnalyticsVisit`). Spend follows the traffic it bought.
+ *  2. `page-default` — everything to the combination the page renders on first paint. Used only
+ *     when there is no visit data for that page in the window (short windows, or windows older
+ *     than the `PromoAnalyticsVisit` TTL).
+ *
+ * Model 2 was the original behaviour and it SKEWS: `getDefaultPrizeForToolsetSlug` prefers the
+ * Milwaukee toolbox, so every toolset page's spend piled onto Milwaukee, producing a row that
+ * measured the default rather than the market. Model 1 is the correction. The caller reports
+ * which model was used — a modelled split must never be presented as a measurement.
+ *
+ * Weights always sum to 1, so no spend is created or lost and totals still reconcile.
+ */
+export function allocateBrandLanes(
+  canonicalUrl: string,
+  lane: BrandLane,
+  mixBySlug?: Map<string, ToolboxMixRow[]>,
+): { allocations: BrandLaneAllocation[]; model: ToolboxSpendModel | null } {
+  const match = canonicalUrl.match(/\/promotions\/([^/?#]+)/);
+  if (!match) return { allocations: [], model: null };
+
+  const slug = match[1].toLowerCase().trim();
+
+  // Everything except "toolbox lane on a bare toolset page" is an exact, single-lane answer.
+  if (lane === "toolset" || !isToolsetLandingSlug(slug)) {
+    const laneId = resolveBrandLaneFromPromoSlug(slug, lane);
+    return { allocations: laneId ? [{ laneId, weight: 1 }] : [], model: null };
+  }
+
+  const mix = mixBySlug?.get(slug)?.filter((r) => r.visitors > 0) ?? [];
+  const totalVisitors = mix.reduce((t, r) => t + r.visitors, 0);
+
+  if (totalVisitors > 0) {
+    return {
+      allocations: mix.map((r) => ({ laneId: r.toolbox, weight: r.visitors / totalVisitors })),
+      model: "observed-mix",
+    };
+  }
+
+  const fallback = resolveBrandLaneFromBuiltPrize(getPageDefaultPrizeSlug(slug), "toolbox");
+  return {
+    allocations: fallback ? [{ laneId: fallback, weight: 1 }] : [],
+    model: "page-default",
+  };
+}
+
+/** Group mix rows by page slug for `allocateBrandLanes`. */
+export function indexToolboxMix(rows: ToolboxMixRow[]): Map<string, ToolboxMixRow[]> {
+  const bySlug = new Map<string, ToolboxMixRow[]>();
+  for (const r of rows) {
+    const key = r.slug.toLowerCase();
+    const list = bySlug.get(key);
+    if (list) list.push(r);
+    else bySlug.set(key, [r]);
+  }
+  return bySlug;
+}

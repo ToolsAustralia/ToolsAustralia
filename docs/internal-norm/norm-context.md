@@ -2817,6 +2817,40 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
 
 ---
 
+### `GET /v1/analytics/brand-performance`
+
+**Returns**: Ad spend and return per **brand lane**, with a new-membership split. Pure aggregates — rows are brands, not people. The only identity-adjacent field is a per-category `userCount` (a DISTINCT count, no ids).
+
+| Param | Required | Default | Notes |
+|---|---|---|---|
+| `startDate` / `endDate` | yes | — | `YYYY-MM-DD`, AEST calendar days |
+| `lane` | no | `toolset` | `toolset` \| `toolbox` |
+| `basis` | no | `landing-page` | `landing-page` \| `built-prize` \| `platform` |
+| `platform` | no | `all` | `meta` \| `tiktok` \| `all` — spend scope |
+| `compare` | no | — | `previous-calendar-month` |
+
+⚠️ **Milwaukee is a member of BOTH lanes.** A row labelled "Milwaukee" is a power-toolset brand under `lane=toolset` and a storage brand under `lane=toolbox` — two different populations. Always read `meta.lane` before naming a row.
+
+**`basis` is the only thing that changes where outcomes come from.** Spend is *always* keyed on the landing URL an ad bought, because `canonicalizeLandingUrl` strips query strings, so the ad platform can never see which combination a visitor built.
+
+| basis | outcome source | membership split |
+|---|---|---|
+| `landing-page` | our `PaymentEvent` ledger, keyed on `data.promotionSlug` | yes |
+| `built-prize` | our `PaymentEvent` ledger, keyed on `data.builtPrizeSlug` | yes |
+| `platform` | what Meta/TikTok themselves report | **no** — those fields are `null` |
+
+**Toolbox spend is modelled, and the response says how.** A bare `/promotions/<toolset>` page names no toolbox, so under `lane=toolbox` its spend is split across lanes in proportion to the toolbox mix its visitors actually built (`PromoAnalyticsVisit`). `meta.toolboxSpendModel` reports `observed-mix` (the accurate model), `page-default` (fallback when the window has no visit data — e.g. older than the visit TTL — which **skews** toward whichever toolbox is the page default), or `mixed`. Per-row counts can therefore be **fractional**; the split conserves totals exactly.
+
+**Invariants** (Advertising Analytics Suite master spec §3.1): acquisition-only — renewals excluded via `data.billingReason === "subscription_cycle"`, never the `isRenewal` flag; refunds netted whole-row; ROAS recomputed from summed spend ÷ summed revenue, never averaged. `unattributed` (spend/outcomes that resolved to no lane) is **included in `totals`**, which is what keeps them reconcilable against the ad account.
+
+`meta.blendedPlatformRevenue: true` warns that under `basis=platform` with `platform=all`, the same purchase may be claimed by both platforms — that revenue and ROAS read high.
+
+**Data source**: `BrandPerformanceService` (`src/services/analytics/BrandPerformanceService.ts`), the same service the admin Overview card uses. Spend from `LandingPageMetricsDaily` via `SpendByUrlAggregationService`; outcomes from `PaymentEvent`; toolbox mix from `PromoAnalyticsRepository.getToolboxMixByToolsetPage`. Lane bucketing is shared with the Page Analytics toolbox rollup via `src/utils/metrics/brand-lane.ts`, guarded by `npm run test:brand-performance-reconciliation`.
+
+**Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Read-only. Rate limit 10/min. An unconfigured ad platform contributes no spend rather than erroring.
+
+---
+
 ### `GET /v1/analytics/packages-focus`
 
 **Returns**: Membership vs one-time landing-URL split of ONE platform's ad spend/ROAS — a materialized bucket summary (any date range) plus a live campaign→adset→ad breakdown per bucket, bounded by that platform's insights retention window. Pure ad metrics — no PII.

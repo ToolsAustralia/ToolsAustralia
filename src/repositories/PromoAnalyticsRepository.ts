@@ -1191,6 +1191,60 @@ export class PromoAnalyticsRepository {
   }
 
   /**
+   * Observed toolbox mix per TOOLSET landing page — how the visitors an ad bought actually
+   * distributed across toolbox lanes.
+   *
+   * Exists to de-skew toolbox ad-spend attribution. A bare `/promotions/ryobi` names no toolbox,
+   * so spend on it can only be assigned by modelling. The naive model — assign 100% to the
+   * page's first-paint default — concentrates every toolset page's spend on whichever toolbox
+   * is the default (today Milwaukee, via `getDefaultPrizeForToolsetSlug`), producing a Milwaukee
+   * row that is an artefact of the default rather than a measurement. This returns the real
+   * distribution so the spend can be split by the traffic it actually bought.
+   *
+   * Visitors are deduped per (page, toolbox) with the same `VISITOR_ID_EXPR` every other
+   * aggregation here uses, so this cannot disagree with the builder counts on the Page
+   * Analytics tab.
+   *
+   * ⚠️ `PromoAnalyticsVisit` carries a TTL (PROMO_VISIT_RETENTION_DAYS), so windows older than
+   * the retention period return NOTHING for those pages. That is not an error — the caller must
+   * fall back to the page default and say which model it used. Never silently drop the spend.
+   */
+  async getToolboxMixByToolsetPage(
+    startDate: Date,
+    endDate: Date
+  ): Promise<Array<{ slug: string; toolbox: string; visitors: number }>> {
+    await connectDB();
+
+    const rows = await PromoAnalyticsVisit.aggregate<{
+      _id: { slug: string; toolbox: string };
+      visitors: number;
+    }>([
+      {
+        $match: {
+          timestamp: { $gte: startDate, $lte: endDate },
+          pageType: "toolset",
+          slug: { $in: [...TOOLSET_LANDING_SLUGS] },
+          builtPrizeSlug: { $in: BRAND_LANE_PRIZE_SLUGS },
+        },
+      },
+      { $addFields: { _toolbox: brandLaneSwitchExpr("$builtPrizeSlug", "toolbox") } },
+      // Dedupe first: one visitor who fired several beacons on the same page for the same
+      // toolbox must weigh once, or a chatty session would skew the very mix this corrects.
+      { $group: { _id: { slug: "$slug", toolbox: "$_toolbox", v: VISITOR_ID_EXPR } } },
+      {
+        $group: {
+          _id: { slug: "$_id.slug", toolbox: "$_id.toolbox" },
+          visitors: { $sum: 1 },
+        },
+      },
+    ]).exec();
+
+    return rows
+      .filter((r) => r._id?.slug && r._id?.toolbox)
+      .map((r) => ({ slug: r._id.slug, toolbox: r._id.toolbox, visitors: r.visitors }));
+  }
+
+  /**
    * Per-page prize-build breakdown: which combination each visitor ended on, how many changed
    * it, and how each combination converted.
    *

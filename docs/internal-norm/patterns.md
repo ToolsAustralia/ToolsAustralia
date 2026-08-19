@@ -112,3 +112,16 @@ Several admin routes still have business logic inline in `route.ts`. Before wiri
 5. Now write the Norm route from step 4 of P1, importing the same service. By construction, the numbers match.
 
 This is how `FacebookAdsInsightsService` ([src/services/facebook-ads/](../../src/services/facebook-ads/)) and `DashboardStatsService` ([src/services/admin/DashboardStatsService.ts](../../src/services/admin/DashboardStatsService.ts)) came to exist — they were inlined in the admin routes until Phase 2/3 of this domain.
+
+## Brand performance mirror (2026-08-19)
+
+`analytics.brand-performance` → `/v1/analytics/brand-performance` wraps `BrandPerformanceService` — the same service the admin Overview card uses, per the mirror-the-service rule. No aggregation is re-implemented, so the two surfaces cannot drift.
+
+**Projection.** Brand rows carry no identity: they are brands, not people. The only identity-adjacent field is a per-category `userCount`, a DISTINCT count with no ids attached, so the projection is the full service payload minus two things:
+
+- `canonicalUrlsByPlatform` — ad-platform plumbing for the admin drill-down, useless to Norm and needless surface area.
+- per-row `comparison` — would double the payload for a consumer that can simply request the other window. `meta.comparison` still names the window used.
+
+**Verified live** (`npm run norm:smoke`, all four variants 200 OK against production data): a schema↔output mismatch is a runtime 500 invisible to `tsc`, so this endpoint was smoke-tested on every `basis` (`landing-page` / `built-prize` / `platform`), both lanes, and with `compare=previous-calendar-month`.
+
+⚠️ Two things a Norm consumer must read before interpreting a row: `meta.lane` (Milwaukee is a member of BOTH lanes and means a different population in each) and `meta.toolboxSpendModel` + `meta.toolboxMixVisitors` (toolbox spend on bare toolset pages is modelled, sometimes from a very small visitor sample).

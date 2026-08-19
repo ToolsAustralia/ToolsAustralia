@@ -130,6 +130,45 @@ function testMissingAdTotalsIsZeroNotCrash() {
   assert.equal(metric(m, "adRoas").current, 0);
 }
 
+function testAcquisitionRevenueExcludesRenewals() {
+  // The whole reason this metric exists rather than reusing revenue.total: ad spend only buys
+  // acquisition, so a contribution built on total revenue would credit the budget with renewal
+  // income it did not produce.
+  const s = stats({
+    total: 1000, // includes renewals
+    membershipPurchase: { revenue: 200, purchaseCount: 2 },
+    oneTimePurchase: { revenue: 100, purchaseCount: 1 },
+    additionalOneTimePurchase: { revenue: 50, purchaseCount: 1 },
+    miniDraw: { revenue: 30, purchaseCount: 1 },
+    upsell: { revenue: 20, purchaseCount: 1 },
+    adSpend: 150,
+  });
+  const m = buildPeriodComparison(s, stats({}));
+
+  assert.equal(metric(m, "revenueTotal").current, 1000, "total still reports everything");
+  assert.equal(
+    metric(m, "acquisitionRevenue").current,
+    400,
+    "200+100+50+30+20 — the five acquisition buckets, renewals excluded",
+  );
+  assert.equal(metric(m, "contribution").current, 250, "400 acquisition − 150 spend");
+}
+
+function testContributionCanBeNegative() {
+  // Spend outran acquisition. A real reading, not an error — the sign must survive.
+  const m = buildPeriodComparison(
+    stats({ membershipPurchase: { revenue: 100, purchaseCount: 1 }, adSpend: 400 }),
+    stats({ membershipPurchase: { revenue: 100, purchaseCount: 1 }, adSpend: 200 }),
+  );
+  const c = metric(m, "contribution");
+  assert.equal(c.current, -300);
+  assert.equal(c.previous, -100);
+  assert.equal(c.delta, -200, "getting worse");
+  // Percentage uses |previous| as the denominator, so a negative baseline still yields a
+  // signed, meaningful figure rather than an inverted one.
+  assert.equal(c.deltaPct, -200);
+}
+
 function testHeadlineIsASubsetOfAll() {
   const m = buildPeriodComparison(stats({}), stats({}));
   const headline = m.filter((x) => x.headline);
@@ -165,6 +204,8 @@ function run() {
   testLegacyNumericBreakdownDoesNotThrow();
   testMissingPayloadDegradesToZero();
   testMissingAdTotalsIsZeroNotCrash();
+  testAcquisitionRevenueExcludesRenewals();
+  testContributionCanBeNegative();
   testHeadlineIsASubsetOfAll();
   testInclusiveDayCount();
   testPerDayNormalisation();
