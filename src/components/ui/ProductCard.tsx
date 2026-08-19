@@ -284,6 +284,11 @@ export default function ProductCard({
   };
 
   const productData = getProductData();
+  // Garment mockups are shot whole on a white ground, so cropping them to fill
+  // lops off sleeves and hems. Tools are photographed to fill the frame and still
+  // look best cropped, and trackInventory is what already separates the two:
+  // print-to-order apparel carries false.
+  const imageFit = productData.trackInventory ? "object-cover" : "object-contain";
   const brandAccent = productData.brandAccent;
 
   // The cart's own item list is the single source of truth for "added": addToCart writes it
@@ -300,6 +305,19 @@ export default function ProductCard({
 
   // Optimistic add to cart handler
   const handleAddToCart = useCallback(async () => {
+    // A supplied onAddToCart REPLACES the add rather than following it.
+    //
+    // ShopContent passes one to route the shopper to the product page, because
+    // apparel needs a size and colour this card cannot collect. Adding here wrote
+    // a sku-less line the cart API rejects with a 400, while still emitting
+    // AddToCart to Meta, TikTok and Klaviyo for a line that never persisted — and
+    // then the product page emitted a second one for the same intent. Every
+    // other render site leaves this undefined, so their behaviour is unchanged.
+    if (onAddToCart) {
+      onAddToCart(product);
+      return;
+    }
+
     // Optimistic cart update (UI updates immediately, API call happens in background)
     await addToCart({
       productId: isMiniDrawProduct(product) ? undefined : productData.id,
@@ -353,10 +371,6 @@ export default function ProductCard({
       // Don't throw - tracking should not break cart functionality
     }
 
-    // Call legacy callback if provided
-    if (onAddToCart) {
-      onAddToCart(product);
-    }
   }, [productData, addToCart, onAddToCart, product, trackAddToCart, trackKlaviyoAddToCart]);
 
   // Retry the operation that actually failed, so it leaves failedOperations and the card
@@ -418,7 +432,7 @@ export default function ProductCard({
                 src={productData.images[0] || "/images/placeholder.jpg"}
                 alt={productData.name}
                 fill
-                className="object-cover transition-transform duration-300 group-hover:scale-105"
+                className={`${imageFit} transition-transform duration-300 group-hover:scale-105`}
                 sizes="(max-width: 640px) 200px, (max-width: 1024px) 220px, 240px"
               />
             </div>

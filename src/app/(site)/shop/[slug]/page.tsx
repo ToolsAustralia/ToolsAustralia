@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Image from "next/image";
+
 import { Star, Award } from "lucide-react";
 import ProductCategories from "@/components/features/ProductCategories";
 import MembershipSection from "@/components/sections/MembershipSection";
@@ -17,6 +17,7 @@ import { ProductJsonLd, BreadcrumbJsonLd } from "@/components/seo/StructuredData
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import { getNonce } from "@/utils/security/getNonce";
 import { FREE_SHIPPING_THRESHOLD_LABEL } from "@/config/shop";
+import { shouldShowReviews } from "@/utils/shop/reviews";
 
 // nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
 // (see docs/security-csp/architecture.md "Route classes").
@@ -299,7 +300,13 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-neutral-100 mb-3 font-poppins">{product.name}</h1>
             </div>
 
-            {/* Rating & Reviews */}
+            {/* Rating row, shown only above the gate. A brand-new print-to-order
+                garment has no reviews, and five grey stars beside "(0 reviews)"
+                reads as a bad product rather than a new one. */}
+            {shouldShowReviews({
+              rating: product.rating,
+              reviewCount: Array.isArray(product.reviews) ? product.reviews.length : 0,
+            }) && (
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1">
                 {[...Array(5)].map((_, i) => (
@@ -312,8 +319,9 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                 ))}
                 <span className="ml-2 text-sm font-medium text-gray-700 dark:text-neutral-200">{product.rating}</span>
               </div>
-              <span className="text-sm text-gray-500 dark:text-neutral-400">({product.reviews} reviews)</span>
-            </div>
+              <span className="text-sm text-gray-500 dark:text-neutral-400">({Array.isArray(product.reviews) ? product.reviews.length : 0} reviews)</span>
+              </div>
+            )}
 
             {/*
               Price. One number, because there is only one number.

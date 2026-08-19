@@ -3,7 +3,6 @@ import connectDB from "@/lib/mongodb";
 import Order from "@/models/Order";
 import { z } from "zod";
 import { requireAuthenticatedUser } from "@/lib/api-auth";
-import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
 
 // A Mongo ObjectId, not any non-empty string. `Order.findOne({_id: "ORD-2024-001"})`
 // throws a CastError, which surfaced as a 500 — the checkout success page's
@@ -12,12 +11,21 @@ const paramsSchema = z.object({
   id: z.string().regex(/^[0-9a-fA-F]{24}$/, "Not a valid order id"),
 });
 
-const updateOrderSchema = z.object({
-  status: z.enum(["pending", "processing", "shipped", "delivered", "cancelled"]).optional(),
-  trackingNumber: z.string().optional(),
-  notes: z.string().optional(),
-});
-
+/**
+ * A customer reading one of their own orders. READ ONLY, deliberately.
+ *
+ * There was a PUT here that accepted `status`, `trackingNumber` and `notes`
+ * from the request body, authorised by nothing more than "you own this order".
+ * A signed-in customer could therefore PUT their own unpaid order from
+ * `pending` to `processing` — which is exactly what the fulfilment queue
+ * selects on (services/shop/fulfilmentExport.ts pendingFilter) — and have a
+ * garment printed and posted without paying for it. It would also have
+ * desynced the Stripe webhook, whose markPaid matches on status `pending`.
+ *
+ * Nothing in the app called it: the order hooks point at /cancel and /status,
+ * neither of which exists. Order status belongs to the webhook and to staff,
+ * never to the buyer, so the handler is gone rather than patched.
+ */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectDB();
@@ -43,43 +51,5 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
     console.error("Error fetching order:", error);
     return NextResponse.json({ error: "Failed to fetch order" }, { status: 500 });
-  }
-}
-
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const csrf = requireSameOrigin(request);
-    if (csrf) return csrf;
-    await connectDB();
-
-    const { id } = paramsSchema.parse(await params);
-    const auth = await requireAuthenticatedUser();
-    if ("errorResponse" in auth) return auth.errorResponse;
-    const userId = auth.session.user.id;
-    const body = await request.json();
-    const validatedData = updateOrderSchema.parse(body);
-
-    const order = await Order.findOne({ _id: id, user: userId });
-    if (!order) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    }
-
-    // Update order
-    if (validatedData.status) order.status = validatedData.status;
-    if (validatedData.trackingNumber) order.trackingNumber = validatedData.trackingNumber;
-    if (validatedData.notes) order.notes = validatedData.notes;
-
-    await order.save();
-
-    return NextResponse.json({
-      message: "Order updated successfully",
-      order,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Validation error", details: error.issues }, { status: 400 });
-    }
-    console.error("Error updating order:", error);
-    return NextResponse.json({ error: "Failed to update order" }, { status: 500 });
   }
 }

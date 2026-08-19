@@ -5,13 +5,22 @@ import { Star, Check, Truck, Shield, RotateCcw, Award, Clock } from "lucide-reac
 import { ProductData } from "@/data";
 import { getContactEmail } from "@/lib/email/sender-identities";
 import { FREE_SHIPPING_THRESHOLD_LABEL, FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
+import { shouldShowReviews } from "@/utils/shop/reviews";
 
 interface ProductTabsProps {
   product: ProductData;
 }
 
 export default function ProductTabs({ product }: ProductTabsProps) {
-  const [activeTab, setActiveTab] = useState<"specifications" | "reviews" | "shipping">("specifications");
+  const [activeTab, setActiveTab] = useState<"specifications" | "reviews" | "shipping">("specifications");
+
+  // Reviews appear only with at least one real review AND a 4-star average.
+  // Below either bar there is no tab at all, rather than an empty shell.
+  const reviewList = Array.isArray(product.reviews) ? product.reviews : [];
+  const showReviews = shouldShowReviews({
+    rating: product.rating,
+    reviewCount: reviewList.length,
+  });
   const contactEmail = getContactEmail();
 
   return (
@@ -29,6 +38,10 @@ export default function ProductTabs({ product }: ProductTabsProps) {
             >
               Specifications
             </button>
+            {/* No reviews tab at all below the gate — an empty shell reading
+                "Reviews (0)" beside grey stars is worse than nothing on a
+                brand-new print-to-order garment. */}
+            {showReviews && (
             <button
               onClick={() => setActiveTab("reviews")}
               className={`flex-1 py-4 px-4 border-b-2 font-medium transition-colors text-center ${
@@ -37,8 +50,9 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                   : "border-transparent text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-200"
               }`}
             >
-              Reviews ({product.reviews?.length || 0})
-            </button>
+              Reviews ({reviewList.length})
+              </button>
+            )}
             <button
               onClick={() => setActiveTab("shipping")}
               className={`flex-1 py-4 px-4 border-b-2 font-medium transition-colors text-center ${
@@ -123,7 +137,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
           )}
 
           {/* Reviews Tab */}
-          {activeTab === "reviews" && (
+          {activeTab === "reviews" && showReviews && (
             <div className="space-y-8">
               <div className="flex flex-col lg:flex-row gap-8">
                 {/* Rating Summary */}
@@ -143,116 +157,56 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                             />
                           ))}
                         </div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Based on {product.reviews?.length || 0} reviews</div>
+                        <div className="text-sm text-gray-600 dark:text-neutral-400">Based on {reviewList.length} {reviewList.length === 1 ? "review" : "reviews"}</div>
                       </div>
                     </div>
 
-                    {/* Rating Breakdown */}
-                    <div className="space-y-2">
-                      {[5, 4, 3, 2, 1].map((rating) => (
-                        <div key={rating} className="flex items-center gap-2">
-                          <span className="text-sm text-gray-600 dark:text-neutral-400 w-2">{rating}</span>
-                          <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                          <div className="flex-1 bg-gray-200 dark:bg-neutral-800 rounded-full h-2">
-                            <div
-                              className="bg-red-600 h-2 rounded-full"
-                              style={{
-                                width: `${
-                                  rating === 5 ? 60 : rating === 4 ? 25 : rating === 3 ? 10 : rating === 2 ? 3 : 2
-                                }%`,
-                              }}
-                            ></div>
-                          </div>
-                          <span className="text-sm text-gray-600 dark:text-neutral-400 w-8">
-                            {rating === 5
-                              ? "60%"
-                              : rating === 4
-                              ? "25%"
-                              : rating === 3
-                              ? "10%"
-                              : rating === 2
-                              ? "3%"
-                              : "2%"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 </div>
 
-                {/* Individual Reviews */}
-                <div className="lg:w-2/3 space-y-6">
-                  {/* Sample Review 1 */}
-                  <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-gray-900 dark:text-neutral-100">John D.</span>
-                          <span className="text-sm text-gray-500 dark:text-neutral-400">Verified Purchase</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
+                {/* The real reviews. Rendered only when the gate above passes, so
+                    this list is never empty. Three invented testimonials used to sit
+                    here — named reviewers, invented bodies, and a "Verified Purchase"
+                    badge on each, against a product with zero reviews in the database.
+                    Fabricated testimonials and false verified-purchase badges are
+                    prohibited conduct under the Australian Consumer Law. */}
+                <div className="lg:w-2/3 space-y-4">
+                  {reviewList.map((review, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-950"
+                    >
+                      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="font-semibold text-gray-900 dark:text-neutral-100">
+                          {review.reviewer || "Customer"}
+                        </span>
+                        <span className="flex items-center gap-0.5">
+                          {[...Array(5)].map((_, star) => (
+                            <Star
+                              key={star}
+                              className={`h-4 w-4 ${
+                                star < review.rating
+                                  ? "fill-current text-yellow-400"
+                                  : "text-gray-300 dark:text-neutral-700"
+                              }`}
+                            />
                           ))}
-                        </div>
+                        </span>
+                        {(review.createdAt ?? review.date) && (
+                          <span className="ml-auto text-sm text-gray-500 dark:text-neutral-400">
+                            {new Date(review.createdAt ?? review.date!).toLocaleDateString("en-AU", {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            })}
+                          </span>
+                        )}
                       </div>
-                      <span className="text-sm text-gray-500 dark:text-neutral-400">2 weeks ago</span>
+                      {review.comment && (
+                        <p className="text-gray-700 dark:text-neutral-300">{review.comment}</p>
+                      )}
                     </div>
-                    <h4 className="font-medium text-gray-900 dark:text-neutral-100 mb-2">Excellent quality tool!</h4>
-                    <p className="text-gray-600 dark:text-neutral-400 text-sm leading-relaxed">
-                      This tool exceeded my expectations. The build quality is outstanding and it performs exactly as
-                      advertised. I&apos;ve been using it for professional work and it handles everything I throw at it.
-                      Highly recommended!
-                    </p>
-                  </div>
-
-                  {/* Sample Review 2 */}
-                  <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-gray-900 dark:text-neutral-100">Sarah M.</span>
-                          <span className="text-sm text-gray-500 dark:text-neutral-400">Verified Purchase</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {[...Array(4)].map((_, i) => (
-                            <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
-                          ))}
-                          <Star className="w-4 h-4 text-gray-300 dark:text-neutral-700" />
-                        </div>
-                      </div>
-                      <span className="text-sm text-gray-500 dark:text-neutral-400">1 month ago</span>
-                    </div>
-                    <h4 className="font-medium text-gray-900 dark:text-neutral-100 mb-2">Great value for money</h4>
-                    <p className="text-gray-600 dark:text-neutral-400 text-sm leading-relaxed">
-                      Good quality tool at a reasonable price. Does exactly what it&apos;s supposed to do. The only
-                      minor complaint is that it&apos;s slightly heavier than I expected, but that&apos;s probably due
-                      to the solid construction.
-                    </p>
-                  </div>
-
-                  {/* Sample Review 3 */}
-                  <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-gray-900 dark:text-neutral-100">Mike R.</span>
-                          <span className="text-sm text-gray-500 dark:text-neutral-400">Verified Purchase</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
-                          ))}
-                        </div>
-                      </div>
-                      <span className="text-sm text-gray-500 dark:text-neutral-400">3 weeks ago</span>
-                    </div>
-                    <h4 className="font-medium text-gray-900 dark:text-neutral-100 mb-2">Professional grade quality</h4>
-                    <p className="text-gray-600 dark:text-neutral-400 text-sm leading-relaxed">
-                      As a professional tradesman, I&apos;m very particular about my tools. This one definitely meets
-                      professional standards. Fast delivery and excellent customer service from Tools Australia.
-                    </p>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -308,22 +262,22 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 text-green-500 mt-0.5" />
                       <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">30-Day Return Policy</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Return unused items in original packaging</div>
+                        <div className="font-medium text-gray-900 dark:text-neutral-100">Change of mind</div>
+                        <div className="text-sm text-gray-600 dark:text-neutral-400">Printed to order in your chosen colour and size, so we cannot resell a returned garment. Change-of-mind returns are not offered.</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 text-green-500 mt-0.5" />
                       <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Free Return Shipping</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">We cover return shipping costs</div>
+                        <div className="font-medium text-gray-900 dark:text-neutral-100">Faulty or wrong item</div>
+                        <div className="text-sm text-gray-600 dark:text-neutral-400">If a garment arrives faulty, damaged or not what you ordered, contact us and we will replace it or refund it. Return postage is on us.</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 text-green-500 mt-0.5" />
                       <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Easy Returns Process</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Print return label from your account</div>
+                        <div className="font-medium text-gray-900 dark:text-neutral-100">Your rights</div>
+                        <div className="text-sm text-gray-600 dark:text-neutral-400">Nothing here limits the guarantees you have under Australian Consumer Law.</div>
                       </div>
                     </div>
                   </div>
@@ -340,22 +294,22 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                     <div className="flex items-start gap-3">
                       <Award className="w-5 h-5 text-gold-500 mt-0.5" />
                       <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Manufacturer Warranty</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">3-year warranty on all {product.brand} products</div>
+                        <div className="font-medium text-gray-900 dark:text-neutral-100">Print quality</div>
+                        <div className="text-sm text-gray-600 dark:text-neutral-400">The print is made to last normal wear and washing. If it cracks or peels in ordinary use, tell us and we will sort it out.</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 text-green-500 mt-0.5" />
                       <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Expert Support</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Technical support from our tool specialists</div>
+                        <div className="font-medium text-gray-900 dark:text-neutral-100">Talk to a person</div>
+                        <div className="text-sm text-gray-600 dark:text-neutral-400">Email us and a human replies — no ticket queue.</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Check className="w-5 h-5 text-green-500 mt-0.5" />
                       <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Repair Services</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Authorized repair centers nationwide</div>
+                        <div className="font-medium text-gray-900 dark:text-neutral-100">Care</div>
+                        <div className="text-sm text-gray-600 dark:text-neutral-400">Wash inside out, cold, and hang to dry. That is all a printed garment needs.</div>
                       </div>
                     </div>
                   </div>
@@ -370,7 +324,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                   <div className="space-y-2">
                     <div className="text-sm">
                       <span className="font-medium text-gray-900 dark:text-neutral-100">Phone:</span>
-                      <span className="text-gray-600 dark:text-neutral-400 ml-2">1800-TOOLS-AU</span>
+                      <span className="text-gray-600 dark:text-neutral-400 ml-2">{contactEmail}</span>
                     </div>
                     <div className="text-sm">
                       <span className="font-medium text-gray-900 dark:text-neutral-100">Email:</span>
@@ -378,7 +332,7 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                     </div>
                     <div className="text-sm">
                       <span className="font-medium text-gray-900 dark:text-neutral-100">Hours:</span>
-                      <span className="text-gray-600 dark:text-neutral-400 ml-2">Mon-Fri 8AM-6PM AEST</span>
+                      <span className="text-gray-600 dark:text-neutral-400 ml-2">We reply within one business day</span>
                     </div>
                   </div>
                 </div>

@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { Loader2, ShoppingBag } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import ShopCheckoutPaymentElement from "@/components/payment/ShopCheckoutPaymentElement";
+import { usePixelTracking } from "@/hooks/usePixelTracking";
+import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 
 /**
  * Shop checkout: review the cart, enter a delivery address, pay.
@@ -61,6 +63,10 @@ export default function CheckoutClient() {
   const router = useRouter();
   const { items, summary, isLoading: isCartLoading } = useCart();
 
+  const { trackInitiateCheckout } = usePixelTracking();
+  // The shop-shaped Started Checkout, NOT trackKlaviyoStartedCheckout — that one
+  // is the package schema and demands package_id / package_type.
+  const { trackInitiateCheckout: trackKlaviyoStartedCheckout } = useKlaviyoTracking();
   const [address, setAddress] = useState<AddressForm>(EMPTY_ADDRESS);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [serverTotals, setServerTotals] = useState<ServerTotals | null>(null);
@@ -112,6 +118,66 @@ export default function CheckoutClient() {
       setServerTotals(data.data.totals);
       setOrderNumber(data.data.orderNumber);
       setOrderId(data.data.orderId);
+
+      // InitiateCheckout fires HERE, not on form submit, because this is the only
+      // point where server-priced totals, orderNumber and orderId all exist at
+      // once. Firing on submit would also count carts the server then rejects
+      // with a 409 for an unavailable variant.
+      try {
+        const lines = items.filter((i) => i.type === "product");
+        const contentIds = lines
+          .map((i) => i.sku ?? i.productId)
+          .filter((id): id is string => Boolean(id));
+        const unitCount = lines.reduce((n, i) => n + i.quantity, 0);
+
+        // order_id must be snake_case: buildMetaCustomData strips the camelCase
+        // orderId out, and fireFunnelEvent only reads metaCustomData.order_id.
+        trackInitiateCheckout(
+          {
+            value: data.data.totals.total,
+            currency: "AUD",
+            content_type: "product",
+            content_ids: contentIds,
+            num_items: unitCount,
+            order_id: data.data.orderNumber,
+          },
+          undefined,
+          {
+            // Just-typed billing identity, which lifts CAPI match quality. Click
+            // ids and externalId are server-derived and must not be sent here.
+            firstName: address.firstName,
+            lastName: address.lastName,
+            phone: address.phone || undefined,
+            city: address.city,
+            state: address.state,
+            zipCode: address.postalCode,
+            country: "AU",
+          }
+        );
+
+        // image_url and url per line are what make an abandoned-checkout email
+        // renderable; every shop Klaviyo payload before this lacked both.
+        trackKlaviyoStartedCheckout({
+          value: data.data.totals.total,
+          currency: "AUD",
+          num_items: unitCount,
+          order_id: data.data.orderNumber,
+          order_type: "shop",
+          checkout_url: `${window.location.origin}/checkout`,
+          items: lines.map((i) => ({
+            product_id: i.productId,
+            sku: i.sku,
+            product_name: i.product?.name,
+            value: i.price,
+            quantity: i.quantity,
+            image_url: i.product?.images?.[0],
+            url: `${window.location.origin}/shop/${i.productId}`,
+          })),
+        });
+      } catch (trackingError) {
+        // Tracking must never cost a customer their checkout.
+        console.error("[shop] InitiateCheckout tracking failed", trackingError);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start checkout");
     } finally {
@@ -232,6 +298,7 @@ export default function CheckoutClient() {
               )}
               <ShopCheckoutPaymentElement
                 clientSecret={clientSecret}
+                orderId={orderId ?? ""}
                 totalLabel={money(totals.total)}
                 onPaid={() => router.push(`/checkout/success?orderId=${orderId}`)}
               />

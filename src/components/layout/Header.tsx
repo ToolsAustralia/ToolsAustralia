@@ -1231,11 +1231,34 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </div>
             )}
 
-            {/* Theme (replaces cart until shop is live) */}
+            {/* Theme, then cart — the shop is live again. */}
             <div className="relative z-10 flex items-center justify-center">
               <ThemeToggleButton
                 className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-110 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11 [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5"
               />
+            </div>
+
+            {/* Cart. Mirrors the theme button's shape so the right cluster reads as one
+                row. The badge is the only thing that moves, so a count change is the
+                only thing that draws the eye. */}
+            <div className="relative z-10 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={() => setIsCartOpen(true)}
+                aria-label={
+                  cartItemCount > 0
+                    ? `Open cart, ${cartItemCount} ${cartItemCount === 1 ? "item" : "items"}`
+                    : "Open cart"
+                }
+                className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-110 hover:shadow-lg active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11"
+              >
+                <ShoppingCart className="h-4 w-4 text-gray-700 dark:text-neutral-200 sm:h-5 sm:w-5" />
+                {cartItemCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white shadow-md">
+                    {cartItemCount > 99 ? "99+" : cartItemCount}
+                  </span>
+                )}
+              </button>
             </div>
             {/* Login Button for Mobile - Show when not authenticated (user or affiliate) */}
             {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
@@ -1955,25 +1978,30 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   })}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full px-4 py-8 text-center">
-                  <div className="text-gray-400 mb-6">
-                    <Clock className="w-20 h-20 mx-auto text-gray-300" />
+                /* Empty cart. This used to render a "Coming Soon" panel pointing at
+                   the mini-draws, which was correct while the shop was dark and
+                   became a bug the moment it went live: every customer with an empty
+                   cart was told the shop did not exist yet. */
+                <div className="flex h-full flex-col items-center justify-center px-4 py-8 text-center">
+                  <div className="mb-6 text-gray-400">
+                    <ShoppingCart className="mx-auto h-20 w-20 text-gray-300 dark:text-neutral-600" />
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 font-poppins">
-                    Coming Soon
+                  <h3 className="mb-3 font-poppins text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">
+                    Your cart is empty
                   </h3>
-                  <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-300 mb-6 max-w-sm mx-auto font-['Inter']">
-                    Our shop is currently being set up. In the meantime, check out our exciting mini-draws where you can
-                    win amazing tools!
+                  <p className="mx-auto mb-6 max-w-sm font-['Inter'] text-sm text-gray-600 dark:text-neutral-300 sm:text-base">
+                    Nothing in here yet. Have a look at the gear — every order is printed
+                    to order right here in Australia.
                   </p>
                   <MetallicButton
-                    href="/mini-draws"
+                    href="/shop"
                     variant="primary"
                     size="md"
                     borderRadius="lg"
                     className="w-full max-w-xs"
+                    onClick={handleCloseCart}
                   >
-                    Visit Mini Draws
+                    Browse the shop
                   </MetallicButton>
                 </div>
               )}

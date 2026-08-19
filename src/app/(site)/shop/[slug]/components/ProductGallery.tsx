@@ -37,9 +37,18 @@ export default function ProductGallery({
     ? colourways.find((c) => c.name === selectedColour)
     : undefined;
 
-  // A colour with mockups drives the gallery; otherwise the product's own images.
+  // A colour with mockups drives the gallery.
+  //
+  // With nothing selected yet, fall back to the FIRST colourway rather than the
+  // product's own images: those hold one lead shot per colour, so a 51-colour tee
+  // rendered 51 thumbnails and shoved the rest of the page down. The swatch row
+  // is already the colour chooser — the strip only needs this colour's views.
   const gallery =
-    colourway?.images && colourway.images.length > 0 ? colourway.images : images;
+    colourway?.images && colourway.images.length > 0
+      ? colourway.images
+      : colourways[0]?.images && colourways[0].images.length > 0
+        ? colourways[0].images
+        : images;
 
   const src = gallery[activeIndex] ?? gallery[0] ?? "/images/placeholder-product.jpg";
   const alt = colourway ? `${name} — ${colourway.name}` : name;
@@ -55,7 +64,7 @@ export default function ProductGallery({
           alt={alt}
           width={600}
           height={600}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
           sizes="(max-width: 1024px) 100vw, 50vw"
           priority
         />
@@ -81,7 +90,7 @@ export default function ProductGallery({
                 alt=""
                 width={64}
                 height={64}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain"
               />
             </button>
           ))}

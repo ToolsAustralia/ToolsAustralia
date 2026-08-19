@@ -274,3 +274,34 @@ key the deployed API ignores. Until the supplier confirms otherwise, treat the u
 as the only credential and **do not rotate it** — there is no in-product way back
 if the revert ever stops working, and the uid is the join key for product ids and
 mockup URLs as well as for auth.
+
+## A customer could mark their own order paid (fixed 2026-08-19)
+
+`PUT /api/orders/[id]` accepted `status`, `trackingNumber` and `notes` from the
+request body, authorised by nothing more than owning the order. A signed-in
+customer could therefore move their own unpaid order from `pending` to
+`processing` — exactly what `fulfilmentExport.ts` `pendingFilter()` selects on —
+and have a garment printed and posted **without paying**. It would also have
+desynced the Stripe webhook, whose `markPaid` matches on `status: "pending"`.
+
+Nothing called it: the order hooks point at `/cancel` and `/status`, **neither of
+which exists**. The handler is deleted rather than patched. Order status belongs
+to the webhook and to staff, never to the buyer.
+
+## Fabricated reviews shipped on every product page (removed 2026-08-19)
+
+`ProductTabs.tsx` rendered three invented testimonials as literal JSX — named
+reviewers, invented bodies, a "Verified Purchase" badge on each — beside a real
+review count of zero, plus a rating histogram whose bars were hard-coded
+60/25/10/3/2%. Fabricated testimonials and false verified-purchase badges are
+prohibited conduct under the Australian Consumer Law.
+
+Reviews now render from `Product.reviews` and only above the gate in
+`src/utils/shop/reviews.ts`: **at least one review AND a 4-star average**. Below
+either bar there is no tab and no star row, because five grey stars beside
+"(0 reviews)" reads as a bad product rather than a new one.
+
+The same pass removed untrue delivery and warranty claims from the same file:
+30-day returns, free return shipping, a first-party 3-year warranty (on a cotton
+tee, contradicted by our own `/terms`), nationwide repair centres, and a
+`1800-TOOLS-AU` number that appears nowhere else in the repo and is not dialable.

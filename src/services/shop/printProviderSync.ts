@@ -33,6 +33,8 @@ export interface SyncedProductSummary {
   colourways: number;
   imagesMirrored: number;
   imagesFailed: number;
+  /** Already held from a previous sync, so not re-uploaded. */
+  imagesReused: number;
   /** Colours the blank offers that no variant exists for yet. */
   uncreatedColours: string[];
 }
@@ -79,21 +81,61 @@ export async function syncPrintProviderProduct(providerId: string): Promise<Sync
   const folder = `shop/print-provider/${slug(source.name)}`;
   let imagesMirrored = 0;
   let imagesFailed = 0;
+  let imagesReused = 0;
 
-  const colourways: { name: string; hex?: string; images: string[] }[] = [];
-  for (const colour of source.colourways) {
-    const images: string[] = [];
-    for (const [index, url] of colour.imageUrls.entries()) {
-      const mirrored = await mirrorImage(url, folder, `${slug(colour.name)}-${index}`);
-      if (mirrored) {
-        images.push(mirrored);
-        imagesMirrored++;
-      } else {
-        imagesFailed++;
-      }
-    }
-    colourways.push({ name: colour.name, ...(colour.hex ? { hex: colour.hex } : {}), images });
+  // What we already hold, so a re-sync does not pay to move bytes that have not
+  // changed. Keyed by the public_id we would upload to, which is derived from
+  // colour and index and is therefore stable across syncs.
+  const alreadyMirrored = new Map<string, string>();
+  for (const c of existing?.colourways ?? []) {
+    (c.images ?? []).forEach((url: string, index: number) => {
+      if (url) alreadyMirrored.set(`${slug(c.name)}-${index}`, url);
+    });
   }
+
+  // Every image of every colour as one flat work list. Mirroring is network-bound
+  // at both ends, so it runs concurrently — sequentially this took just under
+  // seven minutes for 177 images, which would blow the route's 300s ceiling on a
+  // first sync. The cap is deliberately modest: Cloudinary rate-limits, and the
+  // provider's storage is not ours to hammer.
+  const jobs = source.colourways.flatMap((colour, ci) =>
+    colour.imageUrls.map((url, index) => ({ ci, index, url, publicId: `${slug(colour.name)}-${index}` }))
+  );
+
+  const CONCURRENCY = 6;
+  const done: (string | null)[] = new Array(jobs.length).fill(null);
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async () => {
+      for (;;) {
+        const i = cursor++;
+        if (i >= jobs.length) return;
+        const job = jobs[i];
+        const reuse = alreadyMirrored.get(job.publicId);
+        if (reuse) {
+          done[i] = reuse;
+          imagesReused++;
+          continue;
+        }
+        const mirrored = await mirrorImage(job.url, folder, job.publicId);
+        done[i] = mirrored;
+        if (mirrored) imagesMirrored++;
+        else imagesFailed++;
+      }
+    })
+  );
+
+  const colourways: { name: string; hex?: string; images: string[] }[] = source.colourways.map(
+    (colour) => ({
+      name: colour.name,
+      ...(colour.hex ? { hex: colour.hex } : {}),
+      images: [],
+    })
+  );
+  jobs.forEach((job, i) => {
+    const url = done[i];
+    if (url) colourways[job.ci].images.push(url);
+  });
 
   const variants = source.variants.map((v) => ({
     sku: v.sku,
@@ -123,7 +165,7 @@ export async function syncPrintProviderProduct(providerId: string): Promise<Sync
   if (existing) {
     Object.assign(existing, providerOwned);
     await existing.save();
-    return summarise(existing._id.toString(), source, false, imagesMirrored, imagesFailed, colourways.length);
+    return summarise(existing._id.toString(), source, false, imagesMirrored, imagesFailed, imagesReused, colourways.length);
   }
 
   // First sync only: seed the commercial fields with safe defaults an admin then
@@ -143,7 +185,7 @@ export async function syncPrintProviderProduct(providerId: string): Promise<Sync
     tags: [],
   });
 
-  return summarise(created._id.toString(), source, true, imagesMirrored, imagesFailed, colourways.length);
+  return summarise(created._id.toString(), source, true, imagesMirrored, imagesFailed, imagesReused, colourways.length);
 }
 
 function summarise(
@@ -152,6 +194,7 @@ function summarise(
   created: boolean,
   imagesMirrored: number,
   imagesFailed: number,
+  imagesReused: number,
   colourways: number
 ): SyncedProductSummary {
   return {
@@ -162,6 +205,7 @@ function summarise(
     colourways,
     imagesMirrored,
     imagesFailed,
+    imagesReused,
     uncreatedColours: source.uncreatedColours.map((c) => c.name),
   };
 }

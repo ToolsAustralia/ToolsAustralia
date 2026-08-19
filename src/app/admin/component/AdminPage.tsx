@@ -28,6 +28,7 @@ import ABTestingManagement from "@/components/admin/ab-testing/ABTestingManageme
 import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import ProductManagement from "@/components/admin/ProductManagement";
 import FulfilmentQueue from "@/components/admin/FulfilmentQueue";
+import PrintProviderSync from "@/components/admin/PrintProviderSync";
 import OrdersManagement from "@/components/admin/OrdersManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
 import PastDueChargeHistory from "./PastDueChargeHistory";
@@ -228,9 +229,12 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           {/* ERROR REPORTS TAB */}
           {selectedTab === "products" && (
             <>
+              {/* Above the catalogue, because this is where a merch product comes
+                  from: designed in the printer’s portal, then pulled in here. */}
+              <PrintProviderSync />
               <ProductManagement />
-              {/* Fulfilment sits under the catalogue: the print provider's API is
-                  unreachable on our account, so paid orders are handed over by CSV. */}
+              {/* Fulfilment sits under the catalogue. Orders are still handed over by CSV —
+                  their API reads products fine but we do not book orders through it. */}
               <FulfilmentQueue />
               {/* Then the full order history — the fulfilment queue only shows what is
                   still waiting, and support needs to find an order after it has shipped. */}

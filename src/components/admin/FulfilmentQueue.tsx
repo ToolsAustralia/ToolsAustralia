@@ -7,8 +7,8 @@ import { usePermissions } from "@/hooks/usePermissions";
 /**
  * Paid orders waiting to be sent to the print provider.
  *
- * The provider's GraphQL API is enterprise-gated and unreachable on our account, so
- * fulfilment goes through their bulk CSV upload. This panel is that workflow:
+ * Orders are handed to the provider by bulk CSV upload rather than through their
+ * API. This panel is that workflow:
  * download the file, upload it on their site, then mark the orders as submitted.
  *
  * Download and mark are SEPARATE buttons on purpose. Marking on download would hide
