@@ -367,11 +367,13 @@ export default function CheckoutClient() {
           </dl>
         </aside>
       </div>
-      <SignInToBuyModal
-        isOpen={showSignIn}
-        onClose={() => setShowSignIn(false)}
-        intent="finish your order"
-      />
+      {showSignIn && (
+        <SignInToBuyModal
+          isOpen={showSignIn}
+          onClose={() => setShowSignIn(false)}
+          intent="finish your order"
+        />
+      )}
     </div>
   );
 }

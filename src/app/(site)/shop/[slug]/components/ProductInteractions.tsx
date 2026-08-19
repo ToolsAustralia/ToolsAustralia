@@ -482,17 +482,19 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
         fixed string — a badge is a promise, and this page is where a customer
         decides to trust it.
       */}
-      <SignInToBuyModal
-        isOpen={showSignIn}
-        onClose={() => {
-          setShowSignIn(false);
-          setAddAfterSignIn(false);
-        }}
-        onSignedIn={() => {
-          setShowSignIn(false);
-        }}
-        intent="add this to your cart"
-      />
+      {showSignIn && (
+        <SignInToBuyModal
+          isOpen={showSignIn}
+          onClose={() => {
+            setShowSignIn(false);
+            setAddAfterSignIn(false);
+          }}
+          onSignedIn={() => {
+            setShowSignIn(false);
+          }}
+          intent="add this to your cart"
+        />
+      )}
     </div>
   );
 }

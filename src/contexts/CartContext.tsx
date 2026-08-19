@@ -211,8 +211,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       setCartState((prev) => {
         const survivors = prev.pendingOperations.filter((op) => !accountedFor.has(op.id));
-        // Those ids are spent - the response has absorbed them.
-        accountedFor.clear();
         // Operations queued mid-load are not reflected in `items`, so the cart
         // stays dirty and the drain is rescheduled for them.
         return {
@@ -225,6 +223,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           failedOperations: [], // Clear failed operations on successful load
         };
       });
+
+      // Outside the updater: it must stay pure, and React may run it twice.
+      accountedFor.clear();
     } catch (error) {
       console.error("Failed to load cart:", error);
       setError(error instanceof Error ? error.message : "Failed to load cart");
@@ -253,9 +254,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       // Process operations in sequence to maintain order
       for (const operation of operations) {
-        // Recorded before the request, not after: an operation that reaches the
-        // server and then fails is still accounted for by the next load.
-        sentOperationIdsRef.current.add(operation.id);
         try {
           let response: Response;
 
@@ -307,6 +305,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
           }
 
           successfulOperations.push(operation.id);
+          // Accounted for only once the server has acknowledged it. Marking
+          // before the request would let a failed send be dropped by the next
+          // load, losing the item entirely.
+          sentOperationIdsRef.current.add(operation.id);
         } catch (error) {
           failedOperations.push({
             id: operation.id,

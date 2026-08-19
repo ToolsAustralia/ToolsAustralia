@@ -516,3 +516,36 @@ payments, external SSO.
 
 **Production is unaffected.** `getBaseUrl()` throws when `NEXT_PUBLIC_APP_URL` is unset in
 production, and it is set there to the real domain. This was purely a local-harness gap.
+
+## The shop `@purchase` specs cannot share a suite (2026-08-19)
+
+`checkout.spec`, `entries.spec` and `full-story.spec` each pass **alone** and all
+fail when run together. They share the seeded member, and therefore that member's
+cart, and each drives a real purchase — so a still-settling webhook from the
+previous spec rejects the next spec's add-to-cart with a 400 and the assertion
+reads `variant never reached the server cart`.
+
+This is stated in `full-story.spec.ts`'s own header and was still treated as a
+signal once, costing three ~11-minute cycles chasing a regression that did not
+exist. **Read a spec's header before interpreting its failure in a suite run.**
+
+The real fix is to give each shop spec its own seeded member rather than sharing
+one. Until then, run them one at a time:
+
+```bash
+npx tsx e2e/run.ts --grep "the complete story" --project chromium-desktop
+```
+
+### Two things that made both investigations cost more than they should have
+
+1. **`playwright.config.ts` still sets no `actionTimeout`.** Both the showcase
+   hang and this one surfaced as bare 300-second timeouts naming no line. The
+   existing entry above ("an auto-opening modal intercepts clicks") already says
+   bounding the click converts a silent 20-minute hang into a pointed error in
+   two minutes. It is still worth doing globally.
+2. **`purchase-via-showcase.spec.ts` fails independently of the merchandise
+   branch** — reproduced with `LoginModal`, `CartContext`, `Header` and
+   `ProductCard` all reverted to their pre-change state. Its click target is
+   `page.getByRole("button", { name: /^purchase$/i })`, unscoped, so it can
+   resolve to a Purchase button behind the membership modal rather than inside
+   it. Not diagnosed further here; it is not a shop regression.

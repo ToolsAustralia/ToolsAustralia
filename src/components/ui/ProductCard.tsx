@@ -640,13 +640,17 @@ export default function ProductCard({
             </div>
           </div>
         </div>
-      {/* Same sheet as the product page, so a guest add from a card asks for a
-          sign-in instead of queueing an operation that can never drain. */}
-      <SignInToBuyModal
-        isOpen={showSignIn}
-        onClose={() => setShowSignIn(false)}
-        intent="add this to your cart"
-      />
+      {/* Mounted ONLY while open. A closed modal still mounts its whole subtree,
+          and this renders once per card - a grid of twelve products would mount
+          twelve LoginModals, each with its own hooks and its own dialog node,
+          which is the repo perf rule about never rendering a modal closed. */}
+      {showSignIn && (
+        <SignInToBuyModal
+          isOpen
+          onClose={() => setShowSignIn(false)}
+          intent="add this to your cart"
+        />
+      )}
       </div>
     );
   }
@@ -811,13 +815,17 @@ export default function ProductCard({
           </div>
         </div>
       </div>
-      {/* Same sheet as the product page, so a guest add from a card asks for a
-          sign-in instead of queueing an operation that can never drain. */}
-      <SignInToBuyModal
-        isOpen={showSignIn}
-        onClose={() => setShowSignIn(false)}
-        intent="add this to your cart"
-      />
+      {/* Mounted ONLY while open. A closed modal still mounts its whole subtree,
+          and this renders once per card - a grid of twelve products would mount
+          twelve LoginModals, each with its own hooks and its own dialog node,
+          which is the repo perf rule about never rendering a modal closed. */}
+      {showSignIn && (
+        <SignInToBuyModal
+          isOpen
+          onClose={() => setShowSignIn(false)}
+          intent="add this to your cart"
+        />
+      )}
     </div>
   );
 }
