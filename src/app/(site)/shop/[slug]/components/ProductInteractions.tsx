@@ -13,8 +13,14 @@ import {
   activeVariants,
   variantLabel,
   isVariantPurchasable,
+  purchasableColours,
+  sizesForColour,
+  findVariantByOptions,
+  SIZE_ORDER,
   type ProductVariantLike,
+  type ColourwayLike,
 } from "@/utils/shop/variants";
+import { useProductColourStore } from "@/stores/useProductColourStore";
 
 interface DatabaseProduct {
   _id: string;
@@ -55,24 +61,60 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
     trackInventory?: boolean;
     variants?: ProductVariantLike[];
     isActive?: boolean;
+    colourways?: ColourwayLike[];
   };
   const trackInventory = fields.trackInventory ?? true;
   const rawVariants = fields.variants;
+  const rawColourways = fields.colourways;
   const options = useMemo<ProductVariantLike[]>(
     () => activeVariants({ variants: rawVariants ?? [] }),
     [rawVariants]
   );
   const hasVariants = options.length > 0;
 
-  const [selectedSku, setSelectedSku] = useState<string | null>(null);
-  const selectedVariant = options.find((v) => v.sku === selectedSku) ?? null;
+  const variantHost = useMemo(
+    () => ({
+      isActive: fields.isActive ?? true,
+      trackInventory,
+      stock: product.stock ?? 0,
+      variants: options,
+    }),
+    [fields.isActive, trackInventory, product.stock, options]
+  );
 
-  const variantHost = {
-    isActive: fields.isActive ?? true,
-    trackInventory,
-    stock: product.stock ?? 0,
-    variants: options,
+  // Colour-then-size, but only when the product actually ships colourways.
+  const colours = useMemo(
+    () => purchasableColours(variantHost, rawColourways ?? []),
+    [variantHost, rawColourways]
+  );
+  const hasColourways = colours.length > 0;
+
+  const [selectedColour, setSelectedColour] = useState<string | null>(null);
+  const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const selectColourInStore = useProductColourStore((s) => s.select);
+
+  const sizeOptions = useMemo(
+    () => (selectedColour ? sizesForColour(variantHost, selectedColour, SIZE_ORDER) : []),
+    [variantHost, selectedColour]
+  );
+
+  const handleColourChange = (colour: string) => {
+    setSelectedColour(colour);
+    // Clear the size: the next colour may not be made in it, and carrying a stale
+    // size forward would resolve to a sku the printer cannot fulfil.
+    setSelectedSize(null);
+    // Drives the gallery, which lives in the other grid column.
+    selectColourInStore(productIdValue, colour);
   };
+
+  // Flat picker for products without colourways (the existing tool catalogue).
+  const [flatSku, setFlatSku] = useState<string | null>(null);
+  const setSelectedSku = setFlatSku;
+
+  const selectedVariant = hasColourways
+    ? findVariantByOptions(options, selectedColour, selectedSize)
+    : options.find((v) => v.sku === flatSku) ?? null;
+  const selectedSku = selectedVariant?.sku ?? null;
 
   const canAddSelected = hasVariants
     ? Boolean(selectedVariant) && isVariantPurchasable(variantHost, selectedVariant!)
@@ -217,9 +259,86 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
         </span>
       </div>
 
-      {/* Variant picker — apparel is size x colour, so this is what the customer
-          actually chooses and what the printer is told to make. */}
-      {hasVariants && (
+      {/* Colour, then size.
+          A printed tee runs to 383 variants, so one chip per variant is unusable.
+          Picking a colour narrows the sizes to what that colour is actually made
+          in — 51 colours x 9 sizes is 459 pairs but only 383 exist, and offering
+          a size the printer cannot make is a cancelled order.
+          Products with no colourways (the tool catalogue) fall back to the flat
+          list, which is exactly what they had before. */}
+      {hasVariants && hasColourways && (
+        <div className="space-y-5">
+          <div className="space-y-2">
+            <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">
+              Colour:{" "}
+              <span className="font-normal text-gray-500 dark:text-neutral-400">
+                {selectedColour ?? "choose one"}
+              </span>
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {colours.map((colourway) => {
+                const isSelected = colourway.name === selectedColour;
+                return (
+                  <button
+                    key={colourway.name}
+                    type="button"
+                    onClick={() => handleColourChange(colourway.name)}
+                    aria-pressed={isSelected}
+                    aria-label={colourway.name}
+                    title={colourway.name}
+                    style={{ backgroundColor: colourway.hex ?? "#9ca3af" }}
+                    className={`h-9 w-9 rounded-full border border-black/20 transition-transform hover:scale-110 motion-reduce:transform-none dark:border-white/20 ${
+                      isSelected
+                        ? "ring-2 ring-red-600 ring-offset-2 ring-offset-white dark:ring-offset-neutral-950"
+                        : ""
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          {selectedColour && (
+            <div className="space-y-2">
+              <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">
+                Size:
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {sizeOptions.map(({ size, available }) => {
+                  const isSelected = size === selectedSize;
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => setSelectedSize(size)}
+                      disabled={!available}
+                      aria-pressed={isSelected}
+                      className={`min-w-[3rem] rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                        isSelected
+                          ? "border-red-600 bg-red-600 text-white"
+                          : available
+                          ? "border-gray-300 bg-white text-gray-800 hover:border-red-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                          : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 line-through dark:border-neutral-800 dark:bg-neutral-800 dark:text-neutral-500"
+                      }`}
+                    >
+                      {size}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!selectedSku && (
+            <p className="text-xs text-gray-500 dark:text-neutral-400">
+              {selectedColour ? "Pick a size to continue." : "Pick a colour to continue."}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Legacy flat picker — products with variants but no colourways. */}
+      {hasVariants && !hasColourways && (
         <div className="space-y-2">
           <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">
             Choose an option:

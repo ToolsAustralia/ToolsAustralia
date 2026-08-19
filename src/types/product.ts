@@ -35,6 +35,19 @@ export interface Product {
    * MUST check this first, or the whole made-to-order catalogue reads as sold out.
    */
   trackInventory?: boolean;
+  /**
+   * One entry per colour the customer can pick, normalised out of `variants` so a
+   * 383-variant garment carries 51 swatches rather than repeating an image URL on
+   * every row. `name` joins to `variants[].colour`.
+   *
+   * `images` are always our own Cloudinary copies — the print provider's mockup
+   * URLs contain the account uid and must never reach a browser.
+   */
+  colourways?: {
+    name: string;
+    hex?: string;
+    images?: string[];
+  }[];
   createdAt: Date;
   updatedAt: Date;
 }

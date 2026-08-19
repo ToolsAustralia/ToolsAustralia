@@ -605,6 +605,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/Order.ts",
         "src/types/product.ts",
         "src/services/shop/**",
+        "src/lib/print-provider/**",
+        "src/stores/useProductColourStore.ts",
         "src/utils/shop/**",
         "src/config/shop.ts",
         "src/app/api/shop/**",

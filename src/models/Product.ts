@@ -45,6 +45,41 @@ export interface IProduct extends Document {
   trackInventory: boolean;
   /** Reserved: which origin ships this. Merch ships from the printer, not our VIC store. */
   originLocation?: string;
+  /**
+   * One entry per colour the customer can pick, normalised out of `variants`.
+   *
+   * Apparel is colour x size, and a tee runs to 383 variants — rendering one chip
+   * per variant is unusable. The UI picks a colourway first, then a size, so this
+   * holds the 51 colours rather than repeating a swatch and an image URL on all
+   * 383 rows.
+   *
+   * `images` are OUR Cloudinary copies, never the provider's URLs: those embed our
+   * uid in the path, and the uid is the API key until it is rotated.
+   */
+  colourways: {
+    /** Matches `variants[].colour` exactly — that is the join. */
+    name: string;
+    /** Swatch colour from the blank catalogue, e.g. "#2c78ac". */
+    hex?: string;
+    /** Mirrored mockups for this colour, front-most first. */
+    images: string[];
+  }[];
+  /**
+   * Provenance for a product synced from the print provider.
+   *
+   * Deliberately does NOT hold the provider's product id. That id is
+   * `"00" + uid + platformProductId`, and the uid IS the API key — storing it
+   * would put a live credential in Mongo and, because the product detail page
+   * reads the document unprojected, into the page HTML. Only the suffix is kept;
+   * `printProviderProductId()` rebuilds the full id server-side when needed.
+   */
+  printProvider?: {
+    /** Blank catalogue id, e.g. "ASAU5001". Not secret. */
+    blankProductId?: string;
+    /** The provider id with the uid prefix stripped. Not secret on its own. */
+    platformProductId?: string;
+    syncedAt?: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -161,6 +196,16 @@ const ProductSchema = new Schema<IProduct>({
     type: String,
     trim: true,
   },
+  colourways: [{
+    name: { type: String, required: true, trim: true },
+    hex: { type: String, trim: true },
+    images: [{ type: String, trim: true }],
+  }],
+  printProvider: {
+    blankProductId: { type: String, trim: true },
+    platformProductId: { type: String, trim: true },
+    syncedAt: { type: Date },
+  },
 }, {
   timestamps: true,
 });
@@ -173,5 +218,7 @@ ProductSchema.index({ price: 1 });
 ProductSchema.index({ rating: -1 });
 ProductSchema.index({ isActive: 1, isFeatured: 1 });
 ProductSchema.index({ tags: 1 });
+// Sparse: only synced products carry one, and re-syncing looks the product up by it.
+ProductSchema.index({ 'printProvider.platformProductId': 1 }, { sparse: true });
 
 export default mongoose.models.Product || mongoose.model<IProduct>('Product', ProductSchema);

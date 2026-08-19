@@ -6,6 +6,7 @@ import ProductCategories from "@/components/features/ProductCategories";
 import MembershipSection from "@/components/sections/MembershipSection";
 import ProductSection from "@/components/features/ProductSection";
 import ProductInteractions from "./components/ProductInteractions";
+import ProductGallery from "./components/ProductGallery";
 import ProductTabs from "./components/ProductTabs";
 import ShareButton from "./components/ShareButton";
 import ProductViewTracking from "./components/ProductViewTracking";
@@ -231,17 +232,14 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
               above the details and there is nothing to stick to. */}
           <div className="lg:self-stretch">
             <div className="space-y-4 lg:sticky lg:top-24">
-            <div className="aspect-square bg-gray-100 dark:bg-neutral-900 rounded-2xl overflow-hidden">
-              <Image
-                src={product.images?.[0] || "/images/placeholder-product.jpg"}
-                alt={product.name}
-                width={600}
-                height={600}
-                className="w-full h-full object-cover"
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                priority
+              {/* Client-side because apparel galleries follow the selected colour;
+                  a tool with no colourways renders exactly as it did before. */}
+              <ProductGallery
+                productId={String(product._id)}
+                name={product.name}
+                images={product.images ?? []}
+                colourways={product.colourways ?? []}
               />
-            </div>
             </div>
           </div>
 

@@ -226,3 +226,30 @@ npx tsx e2e/run.ts --proof --grep "the complete story" --project chromium-deskto
 
 Both routes return `{ success, data }` / `{ success, error }`, matching `/api/admin/products`.
 The CSV branch of the fulfilment route is the exception — it returns a file and is not wrapped.
+
+## The print provider's API will mislead you
+
+- **The published docs describe GraphQL. The deployment is REST.** `POST /graphql`
+  returns Express's default `Cannot POST /graphql`. Auth runs BEFORE routing, so
+  no key gives a JSON 403 and a valid key gives the HTML 404 — that pair is how
+  you tell "bad key" from "route absent".
+- **Collection endpoints return empty, get-by-id works.** `/products`, `/shops`,
+  `/orders`, `/designs` all answer `[]`. Do not read that as an empty account.
+- **Query parameters are ignored on collection routes.** `GET /blank-products`
+  and `GET /blank-products?limit=1` return byte-identical 182,464-byte payloads.
+- **`GET /blank-products/{id}` returns MORE than the list, not less.** The wrapper
+  carries `blankProduct`, `blankProductSettings`, `blankVariants` and `mockups` as
+  SIBLINGS. Looking for settings *inside* `blankProduct` finds nothing and reads
+  as "the detail endpoint is thinner" — it is not.
+- **`colorsWithImages` on a BLANK is the undecorated garment.** It has no logo on
+  it. The customer-facing mockups are `colorImages` on the PRODUCT wrapper, keyed
+  by colour and placement (`"3"` left chest, `"2"` back, `"front_back_stagger"`
+  both). Using the blank's imagery ships plain stock photos.
+- **Colour names come from `variants[].properties`, never from the sku.** Sku
+  colour codes are a three-letter prefix plus a supplier id (`CHA847`, `CHA4055`,
+  `CHA8197` for Charcoal, Charity Pink and Charlotte) and the numeric part appears
+  nowhere in the catalogue payload, so prefix-matching is ambiguous by design.
+- **Rotating the API key breaks access.** A rotated key is `rv_live_…` (56 chars)
+  rather than a 28-char uid, and as at 2026-08-19 the deployment rejects it on
+  every header scheme tried (`x-uid`, `x-api-key`, bearer, and six others) with
+  `403 Authentication failed`. Outstanding with the supplier.
