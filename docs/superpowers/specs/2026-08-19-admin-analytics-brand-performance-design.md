@@ -1,7 +1,7 @@
 # Admin Analytics — Brand Performance, Period Comparison & Filter Unification — Design Spec
 
 **Date:** 2026-08-19
-**Status:** Draft — pending DJ review
+**Status:** Implemented — phases 1-3 shipped on `feature/prize-performance` (2026-08-19). See §13 for what each commit covered and §12 for the one test deliberately not built.
 **Branch:** `feature/prize-performance`
 **Extends:** [Advertising Analytics Suite — Master Spec](./2026-06-03-advertising-analytics-suite-master-spec.md) (§3.1 invariants are binding here)
 
@@ -355,7 +355,17 @@ Existing suites that must still pass: `npm run test:chat-faqs` (unaffected), plu
 
 ---
 
-## 13. Sequencing
+## 13. Sequencing — as shipped
+
+| Phase | Commit | Ships |
+|---|---|---|
+| 1 | `5ac48152` | One sticky, URL-synced date filter for every analytics tab. `OverviewToolbar` deleted, `DashboardOverview`'s bespoke date state deleted, one preset→AEST resolver. |
+| 2 | `24190eff` | Brand Performance replaces Prize Performance — both lanes, three bases, server-side new-membership figures. `getAggregatedByToolbox` shares the lane mapping. |
+| 3 | this commit | Period comparison vs previous calendar month: Overview card + full-metric drawer, plus per-brand deltas via the `Compare` toggle shipped in phase 2. |
+
+Tests added: `test:brand-lane`, `test:brand-performance`, `test:previous-calendar-month`, `test:period-comparison`.
+
+### Original sequencing rationale
 
 Each phase is independently shippable and independently reviewable.
 

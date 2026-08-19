@@ -230,3 +230,13 @@ Two loop guards make the sync safe, and both are load-bearing:
 Only presets that **carry** dates (`custom`, `current-draw`, `last-draw`) write `startDate`/`endDate` to the URL; the rest delete them, because for those the preset alone is the complete description and a stale pair would outrank it on the next mount.
 
 **Consumers forwarding dates to query hooks should mirror that same rule.** `DashboardOverview` passes `startDate`/`endDate` to its cards only for those three presets. The hook always resolves a concrete window, but `useAdminDashboardStats` treats the pair as part of its cache key while only forwarding it to the route for custom/draw ranges — so passing a resolved "today" pair would re-key every cached query once per day for no behavioural gain.
+
+## P11. Brand performance + period comparison query keys (2026-08-19)
+
+**`useBrandPerformance`** (`src/hooks/queries/useBrandPerformance.ts`) — inline query key per the dominant admin convention, keyed on `[lane, basis, platform, compare, startDate, endDate]`. **All four control values are in the key** because each produces genuinely different numbers; sharing a cache entry across them would render one toggle's data under another toggle's heading.
+
+⚠️ **Types only from `@/services/analytics/BrandPerformanceService`.** The service imports Mongoose models, so a *value* import would ship the data layer to the browser. `import type` is erased at compile time, which is what makes this safe. The `no-models-in-client` lint rule only catches direct `@/models/**` imports, so this boundary is maintained by hand — same rule as `useReceipts` (P9).
+
+**`useAdminDashboardStats` gained freshness overrides.** Its defaults (2-minute `staleTime`, 5-minute `refetchInterval`) are right for the live dashboard, whose window includes today. `PeriodComparisonCard` queries a **closed** calendar month, so it passes `{ staleTime: 60 * 60 * 1000, refetchInterval: false }` — polling a fairly heavy route every 5 minutes for a finished period that can only change if a late refund lands is pure waste. Defaults are unchanged for every existing caller.
+
+That card's comparison key is also **stable across date-range changes** (last month doesn't move), so flipping presets costs nothing after the first fetch, and the drawer reuses the card's already-loaded data rather than issuing a second request.

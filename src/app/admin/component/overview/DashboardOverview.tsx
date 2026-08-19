@@ -9,6 +9,7 @@ import RevenueBreakdownCard from "./sections/RevenueBreakdownCard";
 import AdvertisingPlatformCard from "./sections/AdvertisingPlatformCard";
 import MerByDrawCard from "./sections/MerByDrawCard";
 import BrandPerformanceCard from "./sections/BrandPerformanceCard";
+import PeriodComparisonCard from "./sections/PeriodComparisonCard";
 import TopDrawsCard from "./sections/TopDrawsCard";
 import UpcomingRenewalsCard from "./sections/UpcomingRenewalsCard";
 import ActivityCard from "./sections/ActivityCard";
@@ -174,6 +175,16 @@ export default function DashboardOverview() {
           />
         </div>
       </div>
+
+      {/* Selected period vs the previous calendar month. Sits directly above Brand
+          performance so the two "how did we do" reads are together. */}
+      <PeriodComparisonCard
+        stats={dashboardStats}
+        statsLoading={statsLoading}
+        startDate={df.startDate}
+        endDate={df.endDate}
+        rangeLabel={kpiRangeLabel}
+      />
 
       {/* Brand performance — spend & return by brand lane (toolset / toolbox) */}
       <BrandPerformanceCard

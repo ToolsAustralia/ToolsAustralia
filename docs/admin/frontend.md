@@ -1626,3 +1626,30 @@ Columns: **Brand · ROAS · Spend · Revenue · Purchases · New members · New 
 **Display registry moved.** `BRAND_DISPLAY_NAME` used to live inside the card and covered only 5 of the 9 lanes. It is now `TOOLSET_LANE_DISPLAY` / `TOOLBOX_LANE_DISPLAY` + `getBrandLaneDisplay()` in `src/config/promo-landing-slugs.ts`, typed as `Record<ToolsetLandingSlug|ToolboxLaneId, …>` so a new brand fails compilation until its label and wordmark exist.
 
 **`ProgressBar` gained `tone`.** The New memb % bar passes `tone="neutral"`; the default `"risk"` scale (green<50 / amber / red>80) is a *budget* scale and would paint a healthy 85% share red. Existing callers are unaffected.
+
+## Period comparison — selected window vs previous calendar month (2026-08-19)
+
+Phase 3 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-analytics-brand-performance-design.md). `overview/sections/PeriodComparisonCard.tsx` + `periodComparisonModel.ts`, mounted on `DashboardOverview` directly above Brand performance.
+
+**Two comparison mechanisms now exist, deliberately, with different meanings:**
+
+| | Window | Used by |
+|---|---|---|
+| `trendCalculationService.getComparisonPeriod` | equal-length window immediately preceding the selection | KPI trend arrows |
+| `resolvePreviousCalendarMonthAest` | literal 1st→last day of the prior calendar month, AEST | this card |
+
+An arrow wants "vs the previous equivalent stretch"; this table wants a **stable month-on-month benchmark that does not move when the reader changes the range**. Neither replaces the other, and the card names both windows in its subheading so nobody has to guess which is which.
+
+**No new aggregation.** The comparison window is a second call to the *same* `useAdminDashboardStats` the dashboard already uses (`dateRange="custom"` + the resolved month bounds). The card introduces **no second definition of revenue** — it re-presents numbers the dashboard already computes. The selected window's payload is passed in as a prop from `DashboardOverview` rather than re-fetched.
+
+⚠️ **Length asymmetry is real and is surfaced, not hidden.** "Today" against a whole calendar month is not like-for-like. When the two windows differ in length a **Per day** column appears (current vs previous rate) alongside the raw figures, and a one-line note names both day counts. Ratio metrics (ROAS) are never normalised — they are already rates.
+
+**`deltaPct` is `null` when the prior value was 0**, and renders as "new" rather than ∞ or a flat 100%. A change from nothing has no meaningful percentage; showing one would read as a real measurement.
+
+**Card vs drawer.** The card shows the `headline` subset (total revenue, new memberships, purchases, new accounts, ad spend, ROAS). The corner **All metrics** button opens a right-hand drawer (same overlay/sticky-header pattern as `PastDueChargeHistoryDrawer`) with every metric grouped Revenue / Customers / Advertising, plus a **Biggest movers** toggle that flattens and sorts by |Δ%|. Metrics with no comparable percentage sort last rather than to either extreme. The drawer reuses the card's already-loaded data — no second fetch.
+
+**Why the table is hand-rolled rather than the kit `DataTable`.** The rows are *metrics*, not records: the label column is a `<th scope="row">`, each row formats its value differently (currency / count / ratio), and column sorting would be meaningless. Reusing `DataTable` would mean fighting its record-shaped API for no gain.
+
+**`RevenueBreakdownItem` is a live union** (bare number on older payloads, object on newer). Every read goes through the model's `itemRevenue` / `itemCount` helpers — reading `.purchaseCount` off the numeric form would yield `NaN`. Guarded by `npm run test:period-comparison`.
+
+**Deliberately absent: a "Contribution" / profit row.** `revenue.total` includes renewals while ad spend only buys acquisition, so `revenue − spend` here would flatter. The honest version of that metric is acquisition-scoped and already lives on the **All Platforms** tab (master spec §2). Adding an ambiguous second one would be a new source of truth, which is the thing this work exists to reduce.

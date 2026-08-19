@@ -211,3 +211,13 @@ Four entry points, all agreeing by construction:
 **Server-safety:** this module is imported by services and repositories, so it must never import the prize-builder's `TOOLBOXES` / `TOOLSETS` constants (they live under `src/components/**`). `PRIZE_LANE_SLUGS` in `src/config/promo-landing-slugs.ts` is the server-safe registry.
 
 `brandLaneSwitchExpr` is shared with `PromoAnalyticsRepository.getAggregatedByToolbox`, so the Page Analytics tab and the Overview's Brand Performance section cannot disagree about which lane a purchase belongs to. `npm run test:brand-lane` asserts the `$switch` and the JS resolver produce identical mappings for every registry entry in both lanes.
+
+## `resolvePreviousCalendarMonthAest` (2026-08-19)
+
+In `src/utils/admin/resolveAestDateWindow.ts`, beside the preset resolver. Returns the literal 1st→last day of the previous calendar month in AEST as `yyyy-MM-dd` bounds — the fixed benchmark the admin period-comparison table measures against.
+
+**Not a replacement for `trendCalculationService.getComparisonPeriod`.** That returns the equal-length window immediately *preceding* the selection and drives the KPI trend arrows. Both are kept as separate, clearly-named functions rather than one function with a mode flag, because they answer different questions: "vs the previous equivalent stretch" versus "vs last month, a benchmark that doesn't move when you change the range".
+
+**Anchored on the AEST calendar, never UTC.** Sydney is UTC+10/+11, so a late-UTC-evening instant is already the *next* AEST day — and on the last UTC day of a month, the AEST calendar has already rolled over. `2026-01-31T23:00Z` is 1 February in Sydney, so the previous calendar month is **January**, not December. Reading the UTC month there gives the wrong answer. Covered by `npm run test:previous-calendar-month`, which also pins the year boundary (January → previous December), leap/non-leap February, and both DST transitions.
+
+The month arithmetic runs on calendar *numbers* pulled out of `formatInTimeZone(..., "yyyy-MM")`, so a 23h/25h DST day cannot shift either bound.
