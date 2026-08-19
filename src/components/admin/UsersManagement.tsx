@@ -198,6 +198,8 @@ export default function UsersManagement() {
     role: undefined,
     states: undefined,
     inActiveMajorDraw: undefined,
+    miniDrawPackage: undefined,
+    inActiveMiniDraw: undefined,
     streak: undefined,
     segment: undefined,
     sortBy: "createdAt",
@@ -306,6 +308,8 @@ export default function UsersManagement() {
       role: undefined,
       states: undefined,
       inActiveMajorDraw: undefined,
+      miniDrawPackage: undefined,
+      inActiveMiniDraw: undefined,
       streak: undefined,
       segment: undefined,
       sortBy: "createdAt",
@@ -323,6 +327,8 @@ export default function UsersManagement() {
       filters.role ||
       (filters.states?.length ?? 0) > 0 ||
       filters.inActiveMajorDraw ||
+      filters.miniDrawPackage ||
+      filters.inActiveMiniDraw ||
       filters.streak ||
       filters.segment
     );
@@ -665,6 +671,41 @@ export default function UsersManagement() {
                 onChange={(value) => updateFilter("inActiveMajorDraw", value)}
                 placeholder="Major draw"
                 active={!!filters.inActiveMajorDraw}
+              />
+            </div>
+
+            {/*
+              Mini draws — TWO dropdowns, not one, because they answer different questions and
+              compose. "Bought a Mini Pack" is a lifetime purchase fact; "In an active mini draw"
+              is where they stand right now. Crossing them is the useful part: bought a pack but
+              NOT currently in a draw is a re-engagement segment, and neither dropdown alone can
+              express it.
+            */}
+            <div className="min-w-[100px] sm:min-w-[150px] lg:min-w-[170px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Mini pack", icon: Package },
+                  { value: "yes", label: "Bought a Mini Pack", icon: CheckCircle },
+                  { value: "no", label: "Never bought one", icon: Ban },
+                ]}
+                value={filters.miniDrawPackage || ""}
+                onChange={(value) => updateFilter("miniDrawPackage", value)}
+                placeholder="Mini pack"
+                active={!!filters.miniDrawPackage}
+              />
+            </div>
+
+            <div className="min-w-[100px] sm:min-w-[150px] lg:min-w-[170px]">
+              <Dropdown
+                options={[
+                  { value: "", label: "Mini draw", icon: Gift },
+                  { value: "yes", label: "In an active mini draw", icon: CheckCircle },
+                  { value: "no", label: "Not in an active one", icon: Ban },
+                ]}
+                value={filters.inActiveMiniDraw || ""}
+                onChange={(value) => updateFilter("inActiveMiniDraw", value)}
+                placeholder="Mini draw"
+                active={!!filters.inActiveMiniDraw}
               />
             </div>
 

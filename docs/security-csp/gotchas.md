@@ -120,3 +120,13 @@ already have. It is explicitly **not** a precedent for wildcarding generic cloud
 **No other file needed changing.** `next.config.ts` and `src/middleware.ts` both call
 `buildContentSecurityPolicy()`; there is no second policy literal in the repo. `npm run
 test:csp-inline-hashes` was run after the change and passed.
+
+## Staff were blocked from the public draw pages (2026-08-20)
+
+**Symptom:** a team member (`userType: "staff"`) opening `/mini-draws` — or clicking through from admin — was redirected to `/admin`. Invisible to the owner, because the rule only ever applied to `"staff"`, never `"admin"`.
+
+**Cause:** `/mini-draws` and `/major-draw` were on the middleware's staff block-list. Those are **public** pages: a logged-out stranger can read them, so the only people who could not were the ones who manage draws. The admin UI links to `/mini-draws/<id>` from three places — `MiniDrawCard`'s "Open the public mini-draw page", `ActivityLogManagement`, and the Overview `ActivityCard` — and every one bounced. `/draw-results` and `/winners`, the same category, were never blocked, so the list also disagreed with itself.
+
+**Fix:** both came off the list, and the rule moved out of `middleware.ts` into `src/utils/security/staffRouteAccess.ts` as a pure predicate so it can be unit-tested (`npm run test:staff-route-access`). Access control shouldn't be verified by reading an inline array.
+
+**The rule the list encodes:** block a route when visiting it would **create or expose customer state** — an account surface, a purchase flow, or a post-purchase confirmation. *Not* "is it outside `/admin`". `/mini-draw-success` therefore stays blocked while `/mini-draws` does not: viewing a draw is read-only, buying into one is not.

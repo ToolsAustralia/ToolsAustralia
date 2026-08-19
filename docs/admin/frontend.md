@@ -1690,3 +1690,25 @@ Both surfaces were rendered on a 390×844 viewport and in dark mode via the e2e 
 **Confirmed on device:** no page-level horizontal scroll; the date filter portals into the always-visible header slot; wide tables scroll inside their own containers; the pinned metric column holds at `left:0` with an opaque matching background through a full horizontal scroll; the drawer fills the viewport at `top:0`.
 
 The `NEXTJS-PORTAL` element that paints over the drawer header under `npm run dev` is the Next.js dev-tools overlay — dev-only, not present in production builds.
+
+## Users: mini-draw filters (2026-08-20)
+
+Two new dropdowns on the Users tab, and both flow into the export.
+
+| Filter | Param | Means |
+|---|---|---|
+| Mini pack | `miniDrawPackage=yes\|no` | Ever bought a Mini Pack — a lifetime purchase fact |
+| Mini draw | `inActiveMiniDraw=yes\|no` | Holds entries in a draw that is active **right now** |
+
+**Two dropdowns rather than one**, because they answer different questions and compose. "Bought a Mini Pack but is NOT currently in a draw" is a re-engagement segment, and neither filter alone can express it.
+
+⚠️ **`inActiveMiniDraw` resolves from the MiniDraw collection (`status: "active"`), NOT from `miniDrawParticipation[].isActive`** — even though that flag is indexed and would be cheaper. The flag is only cleared when a **winner is selected**; an admin changing a draw's status via `/api/admin/mini-draw/update` does not cascade to participants, so it goes stale and would report people as being in a draw that was cancelled or completed without a winner. `MiniDraw.isActive` is itself marked "backward compatibility — should use status instead". This mirrors how `inActiveMajorDraw` resolves its cohort from the draw rather than a cache.
+
+**Query shape matters and is tested** (`npm run test:user-mini-draw-filters`): both use `$elemMatch` so the draw-id and entry-count predicates land on the **same** array element, and the "no" variants use `$not: { $elemMatch }` so users with no `miniDrawParticipation` array at all still match. With `inActiveMiniDraw=yes` and no active draws, the filter matches **nobody** rather than silently falling back to everybody — the same deliberate choice `inActiveMajorDraw` makes.
+
+**Export changes:**
+- Both filters apply (shared `buildUserFilter`) and appear in the export modal's filter summary and the generated filename.
+- **"Mini Draw Count" → "Active Mini Draws"**, and it now counts against the currently-active draw ids so it **agrees with the list filter**. It previously used the stale `isActive` flag, which meant filtering "in an active mini draw" and exporting produced a count column that disagreed with the rows it described.
+- New **"Mini Pack Entries"** column — lifetime entries from Mini Pack purchases. A purchase fact, so unlike the count it does not drop to zero when a draw completes.
+
+The active-draw ids are resolved **once per export**, not per user, and only when the column is selected.
