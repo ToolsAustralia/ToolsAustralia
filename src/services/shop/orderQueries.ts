@@ -55,6 +55,28 @@ export interface OrderListItem {
    * only way to find a paid order that is stuck. A customer has no use for it.
    */
   paymentIntentId?: string;
+  /**
+   * Where the order is going. Admin rows only.
+   *
+   * Staff had only the customer's name, and the sole surface carrying a full
+   * address was the fulfilment CSV — whose filter excludes anything already
+   * stamped submitted. So the moment an order was handed to the printer, nobody
+   * could answer "where was this sent?", which is most of what a delivery
+   * enquiry is. Omitted entirely from a customer's own history, where they
+   * supplied it and it is redundant.
+   */
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    deliveryInstructions?: string;
+  };
   entriesGranted?: number;
   submittedAt?: string;
   trackingNumber?: string;
@@ -128,7 +150,9 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
   // to the unconditional half of the row mapping.
   const projection =
     "orderNumber status createdAt totalAmount products.name products.sku products.size products.colour products.quantity products.price products.category shippingAddress.firstName shippingAddress.lastName entriesGranted submittedAt trackingNumber" +
-    (isAdminSurface ? " paymentIntentId" : "");
+    (isAdminSurface
+      ? " paymentIntentId shippingAddress.email shippingAddress.phone shippingAddress.addressLine1 shippingAddress.addressLine2 shippingAddress.address shippingAddress.city shippingAddress.state shippingAddress.postalCode shippingAddress.deliveryInstructions"
+      : "");
 
   const [docs, total] = await Promise.all([
     Order.find(query)
@@ -154,6 +178,20 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
         ? {
             customerName: [a.firstName, a.lastName].filter(Boolean).join(" ") || undefined,
             paymentIntentId: o.paymentIntentId,
+            shippingAddress: {
+              firstName: a.firstName,
+              lastName: a.lastName,
+              email: a.email,
+              phone: a.phone,
+              // `address` is the deprecated single-line field. Older orders have
+              // only that, so fall back to it rather than showing a blank line.
+              addressLine1: a.addressLine1 ?? a.address,
+              addressLine2: a.addressLine2,
+              city: a.city,
+              state: a.state,
+              postalCode: a.postalCode,
+              deliveryInstructions: a.deliveryInstructions,
+            },
           }
         : {}),
       entriesGranted: o.entriesGranted,

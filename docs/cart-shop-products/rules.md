@@ -87,3 +87,30 @@ implementation worth reading before extending this domain:
 Two things it does that we deliberately do **not** copy: it writes the Order from Stripe metadata
 (a 500-char-per-value cap that limits cart size), and it changes the *subscription* return URL to
 `/my-account` — an unrelated behaviour change.
+
+## R? — Only four-star-and-above reviews are displayed
+
+A business decision, recorded so nobody re-derives it or quietly moves the
+threshold. Reviews below four stars are **stored exactly as written** and simply
+not rendered. `MIN_DISPLAY_RATING` in `src/utils/shop/reviews.ts` is the single
+definition; four surfaces depend on it (reviews tab, star row, JSON-LD, card).
+
+Two consequences the code handles, and must keep handling:
+
+**The average shown describes the reviews shown.** `displayAverage(displayableReviews(...))`,
+never `Product.rating`. `Product.rating` averages every review including hidden
+ones, so printing it above a list of 5-star reviews would contradict the list
+directly beneath it. Never mix a displayed list with the stored average.
+
+**A product with only low reviews shows no section**, exactly like one nobody has
+reviewed.
+
+`Product.rating` and `Product.reviewCount` stay honest across ALL reviews — they
+are what admin and any reporting should read. Nothing in the display path
+rewrites them.
+
+**Known limit:** the listing card gates on `reviewCount`, which counts every
+review, so a card can show stars for a product whose visible list is empty. The
+list query deliberately does not carry review bodies — that would ship every
+comment and reviewer id to the browser — so the card cannot know better. The
+product page is authoritative.

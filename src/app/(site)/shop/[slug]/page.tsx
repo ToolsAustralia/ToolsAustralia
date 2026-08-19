@@ -17,7 +17,7 @@ import { ProductJsonLd, BreadcrumbJsonLd } from "@/components/seo/StructuredData
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import { getNonce } from "@/utils/security/getNonce";
 import { FREE_SHIPPING_THRESHOLD_LABEL } from "@/config/shop";
-import { shouldShowReviews } from "@/utils/shop/reviews";
+import { shouldShowReviews, displayableReviews, displayAverage } from "@/utils/shop/reviews";
 // Client component, deliberately: this page is server-rendered and cannot read
 // who is signed in, and the member price has to be the signed-in member's own.
 // It ships in the ProductCard module, which this route already loads for the
@@ -206,6 +206,11 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   // Get CSP nonce from request headers (set by middleware in production)
   const nonce = await getNonce();
 
+  // Only four-star-and-above reviews are shown, and the star row must describe
+  // those rather than Product.rating, which averages the hidden ones too.
+  const shownReviews = displayableReviews(product.reviews);
+  const shownAverage = displayAverage(shownReviews);
+
   return (
     // overflow-x-clip, NOT -hidden: `overflow-x: hidden` computes `overflow-y: auto`,
     // which makes this element the scroll container for the sticky image column and stops
@@ -320,23 +325,20 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             {/* Rating row, shown only above the gate. A brand-new print-to-order
                 garment has no reviews, and five grey stars beside "(0 reviews)"
                 reads as a bad product rather than a new one. */}
-            {shouldShowReviews({
-              rating: product.rating,
-              reviewCount: Array.isArray(product.reviews) ? product.reviews.length : 0,
-            }) && (
+            {shouldShowReviews({ displayableCount: shownReviews.length }) && (
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1">
                 {[...Array(5)].map((_, i) => (
                   <Star
                     key={i}
                     className={`w-5 h-5 ${
-                      i < Math.floor(product.rating) ? "text-yellow-400 fill-current" : "text-gray-300 dark:text-neutral-700"
+                      i < Math.floor(shownAverage) ? "text-yellow-400 fill-current" : "text-gray-300 dark:text-neutral-700"
                     }`}
                   />
                 ))}
-                <span className="ml-2 text-sm font-medium text-gray-700 dark:text-neutral-200">{product.rating}</span>
+                <span className="ml-2 text-sm font-medium text-gray-700 dark:text-neutral-200">{shownAverage}</span>
               </div>
-              <span className="text-sm text-gray-500 dark:text-neutral-400">({Array.isArray(product.reviews) ? product.reviews.length : 0} reviews)</span>
+              <span className="text-sm text-gray-500 dark:text-neutral-400">({shownReviews.length} {shownReviews.length === 1 ? "review" : "reviews"})</span>
               </div>
             )}
 

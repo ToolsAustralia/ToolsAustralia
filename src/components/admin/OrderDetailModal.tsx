@@ -113,6 +113,7 @@ export default function OrderDetailModal({
   // Same permission the route enforces (`shop.delete`). Gated here so a staff member
   // who cannot refund is never shown a control that would 403 on them.
   const canRefund = has("shop.delete");
+  const address = order.shippingAddress;
 
   const [copied, setCopied] = useState(false);
   const [showRefund, setShowRefund] = useState(startInRefund && canRefund);
@@ -339,30 +340,39 @@ export default function OrderDetailModal({
           </div>
         </section>
 
-        {/*
-          The delivery address is NOT available to this modal, and saying so is better
-          than showing a blank field that reads as a data fault.
-
-          `listOrders` projects `shippingAddress.firstName` and `.lastName` only, and
-          the sole admin surface that emits a full address is the fulfilment CSV —
-          which is filtered to orders that have not been handed to the printer. So the
-          moment an order is stamped `submittedAt`, nothing left in the admin panel can
-          answer "where was this sent?".
-
-          Closing this needs the admin branch of the projection in
-          `src/services/shop/orderQueries.ts` to carry the rest of `shippingAddress`
-          (and `OrderListItem` to declare it) — a server change, deliberately out of
-          this component's reach.
-        */}
+        {/* The address survives after the order leaves the fulfilment CSV, which is
+            exactly when a delivery enquiry arrives. Admin projection only — a
+            customer supplied it and does not need it read back. */}
         <section className="rounded-lg border border-gray-200 p-3 dark:border-neutral-800">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
             Delivery address
           </h4>
-          <p className="mt-2 text-sm text-gray-600 dark:text-neutral-400">
-            Not available on this screen. The admin order list carries the customer&apos;s name
-            but not their address — the full address only appears on the fulfilment CSV,
-            which covers orders that have not been sent to the printer yet.
-          </p>
+          {address ? (
+            <address className="mt-2 whitespace-pre-line text-sm not-italic text-gray-800 dark:text-neutral-100">
+              {[
+                [address.firstName, address.lastName].filter(Boolean).join(" "),
+                address.addressLine1,
+                address.addressLine2,
+                [address.city, address.state, address.postalCode].filter(Boolean).join("  "),
+              ]
+                .filter(Boolean)
+                .join("\n")}
+            </address>
+          ) : (
+            <p className="mt-2 text-sm text-gray-500 dark:text-neutral-500">
+              No address recorded on this order.
+            </p>
+          )}
+          {(address?.email || address?.phone) && (
+            <p className="mt-2 text-xs text-gray-600 dark:text-neutral-400">
+              {[address?.email, address?.phone].filter(Boolean).join(" · ")}
+            </p>
+          )}
+          {address?.deliveryInstructions && (
+            <p className="mt-2 rounded-md bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <span className="font-semibold">Instructions:</span> {address.deliveryInstructions}
+            </p>
+          )}
         </section>
 
         {canRefund && (

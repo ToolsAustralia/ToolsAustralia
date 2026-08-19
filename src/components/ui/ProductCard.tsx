@@ -33,7 +33,10 @@ interface ProductItem {
    * Absent = true, so tracked stock keeps its existing behaviour exactly.
    */
   trackInventory?: boolean;
-  reviews?: number;
+  /** Reviews as stored — an array, matching the model. The count is reviewCount. */
+  reviews?: { rating: number }[];
+  /** ALL reviews, including ones below the display threshold. */
+  reviewCount?: number;
   rating?: number;
 }
 
@@ -578,8 +581,13 @@ export default function ProductCard({
                 product rather than a new one, and contradicted its own detail page. */}
             {!productData.isPrize &&
               shouldShowReviews({
-                rating: productData.rating,
-                reviewCount: (product as { reviewCount?: number }).reviewCount ?? 0,
+                // reviewCount counts EVERY review, including ones below the display
+                // threshold, so a card can show stars for a product whose visible
+                // list is empty. The list query does not carry the reviews
+                // themselves — deliberately, since that would ship every body and
+                // reviewer id to the browser — so the card cannot know better. It
+                // links to the product page, which is authoritative.
+                displayableCount: (product as { reviewCount?: number }).reviewCount ?? 0,
               }) && (
               <div className="flex items-center gap-1">
                 <div className="flex items-center">{renderStars(productData.rating)}</div>

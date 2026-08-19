@@ -96,7 +96,11 @@ export default function ShopContent({
   const transformedProducts: ProductType[] =
     productsData?.products?.map((product: ReactQueryProduct) => ({
       ...product,
-      reviews: product.reviewCount || 0,
+      // `reviews` is the array, `reviewCount` the count -- this used to map the
+      // count INTO reviews, which is the confusion the mistyped field caused.
+      // Both ride through the spread above; the list query carries reviewCount and
+      // deliberately not the review bodies.
+      reviewCount: product.reviewCount ?? 0,
       slug: product.name.toLowerCase().replace(/\s+/g, "-"),
       specifications: product.specifications as Record<string, string>,
       createdAt: new Date(product.createdAt),

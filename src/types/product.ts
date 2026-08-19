@@ -9,7 +9,21 @@ export interface Product {
   brand: string;
   stock: number;
   rating: number;
-  reviews: number; // Number of reviews
+  /**
+   * The reviews themselves, as stored on the model — NOT a count. The field was
+   * typed `number` here while models/Product.ts has always held an array, so any
+   * caller trusting this type was reading a lie. Use `reviewCount` for the count.
+   *
+   * `userId` is deliberately absent: the product page projects it out, because it
+   * would otherwise ship in the page source and tie an account to a purchase.
+   */
+  reviews?: {
+    rating: number;
+    comment?: string;
+    createdAt?: string | Date;
+  }[];
+  /** Count of ALL reviews, including those below the display threshold. */
+  reviewCount?: number;
   features: string[];
   specifications: Record<string, string>;
   isActive: boolean;

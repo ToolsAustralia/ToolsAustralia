@@ -7,7 +7,7 @@ import { Star, Check, Truck, Shield, RotateCcw, Award, Clock } from "lucide-reac
 import { ProductData } from "@/data";
 import { getContactEmail } from "@/lib/email/sender-identities";
 import { FREE_SHIPPING_THRESHOLD_LABEL, FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
-import { shouldShowReviews } from "@/utils/shop/reviews";
+import { shouldShowReviews, displayableReviews, displayAverage } from "@/utils/shop/reviews";
 import { useProductReviews } from "@/hooks/queries/useProductQueries";
 import ProductReviewForm from "./ProductReviewForm";
 
@@ -24,13 +24,15 @@ export default function ProductTabs({ product }: ProductTabsProps) {
   // while the document this page actually renders carries `_id`.
   const { slug: productId } = useParams<{ slug: string }>();
 
-  // The review LIST appears only with at least one real review AND a 4-star
-  // average. Below either bar there is no list, rather than an empty shell.
-  const reviewList = Array.isArray(product.reviews) ? product.reviews : [];
-  const showReviews = shouldShowReviews({
-    rating: product.rating,
-    reviewCount: reviewList.length,
-  });
+  // Only four-star-and-above reviews are shown — the business rule, kept in
+  // one place in utils/shop/reviews.ts. A lower review is stored exactly as
+  // written and simply not rendered.
+  const reviewList = displayableReviews(product.reviews);
+  const showReviews = shouldShowReviews({ displayableCount: reviewList.length });
+  // The headline average describes the reviews BELOW it, not Product.rating.
+  // Product.rating averages every review including the hidden ones, so printing
+  // it over a list of 5-star reviews would contradict the list itself.
+  const shownAverage = displayAverage(reviewList);
 
   // Entitlement is decided server-side from the viewer's paid orders and is only
   // ever used here to choose what to draw. The tab has to survive the gate above
@@ -176,14 +178,14 @@ export default function ProductTabs({ product }: ProductTabsProps) {
                   <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4">Customer Reviews</h3>
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="text-4xl font-bold text-red-600">{product.rating}</div>
+                      <div className="text-4xl font-bold text-red-600">{shownAverage}</div>
                       <div>
                         <div className="flex items-center gap-1 mb-1">
                           {[...Array(5)].map((_, i) => (
                             <Star
                               key={i}
                               className={`w-5 h-5 ${
-                                i < Math.floor(product.rating || 0) ? "text-yellow-400 fill-current" : "text-gray-300 dark:text-neutral-700"
+                                i < Math.floor(shownAverage) ? "text-yellow-400 fill-current" : "text-gray-300 dark:text-neutral-700"
                               }`}
                             />
                           ))}
