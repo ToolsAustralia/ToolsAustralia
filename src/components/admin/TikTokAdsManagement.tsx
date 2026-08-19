@@ -45,15 +45,18 @@ export default function TikTokAdsManagement() {
 
   return (
     <div className="space-y-6">
-      {/* empty:hidden — the dropdown portals to the mobile header slot, leaving this
-          wrapper childless on mobile; the variant collapses it so there's no phantom gap. */}
-      <div className="flex flex-wrap items-center justify-between gap-2 empty:hidden">
-        <div className="flex flex-wrap items-center gap-2">
-          {tab("ads", "Ads")}
-          {tab("spend-by-url", "Spend by URL")}
-        </div>
-        <AdminDateRangeToolbar filter={df} />
-      </div>
+      {/* The view switch rides INSIDE the sticky bar via `leading` rather than sharing a
+          wrapper with it — a wrapper sized to this row would be the only box the sticky
+          toolbar could travel within, pinning it to nothing. */}
+      <AdminDateRangeToolbar
+        filter={df}
+        leading={
+          <>
+            {tab("ads", "Ads")}
+            {tab("spend-by-url", "Spend by URL")}
+          </>
+        }
+      />
 
       {viewMode === "ads" ? (
         <>
