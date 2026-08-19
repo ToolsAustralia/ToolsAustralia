@@ -8,6 +8,8 @@ import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent
 import { ShopOrderService, CheckoutValidationError } from "@/services/shop/ShopOrderService";
 import { resolveShopDiscountPercent } from "@/utils/shop/member-discount";
 import { resolveStripeCustomerId } from "@/services/shop/resolveStripeCustomer";
+import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
+import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 
 /**
  * Start a shop purchase.
@@ -75,6 +77,12 @@ export async function POST(request: NextRequest) {
     // buyer sees as a 500 at checkout with no way forward.
     const stripeCustomerId = await resolveStripeCustomerId(user);
 
+    // Purchase fires from the Stripe webhook, which has no cookies, so the click
+    // ids have to ride through Stripe metadata. Every other payment type already
+    // did this; shop was the one that did not, which is why merch conversions
+    // reached Meta and TikTok unattributed.
+    const requestContext = { ...extractRequestContext(request), ...extractTikTokContext(request) };
+
     const config = createPaymentIntentConfig({
       amount: totalCents,
       currency: "aud",
@@ -94,6 +102,12 @@ export async function POST(request: NextRequest) {
         // resolveStripeCustomerId persists the id best-effort with a swallowed
         // catch, so that mismatch is reachable, not theoretical.
         userEmail: user.email,
+        ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
+        ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
+        ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
+        ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
+        ...(requestContext.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
+        ...(requestContext.ttp ? { capi_ttp: requestContext.ttp } : {}),
       },
     });
 

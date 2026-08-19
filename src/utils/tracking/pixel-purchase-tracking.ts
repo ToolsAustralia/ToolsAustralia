@@ -33,7 +33,7 @@ export interface PixelPurchaseParams {
   value: number;
   currency: string;
   orderId: string;
-  packageType: "membership" | "one-time" | "mini-draw" | "upsell";
+  packageType: "membership" | "one-time" | "mini-draw" | "upsell" | "shop";
   packageId?: string;
   packageName?: string;
   userId?: string;

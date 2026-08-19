@@ -5,6 +5,8 @@ import Order, { type IOrder } from "@/models/Order";
 import { ShopOrderService } from "@/services/shop/ShopOrderService";
 import { processPaymentBenefits } from "@/utils/payment/payment-processing";
 import { sendShopOrderConfirmation } from "@/services/shop/sendOrderConfirmation";
+import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
+import { trackShopPlacedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
 
 /**
  * Fulfil a paid shop order.
@@ -38,6 +40,12 @@ export interface FinalizeShopOrderResult {
 }
 
 export interface FinalizeShopOrderOptions {
+  /**
+   * Click ids and IP/UA recovered from the PaymentIntent's metadata by the
+   * webhook. The webhook has no cookies, so without this hand-off the server
+   * Purchase reaches Meta and TikTok with no click id and cannot be attributed.
+   */
+  requestContext?: Record<string, string | undefined>;
   /**
    * Promo multiplier to apply to the order's base entry count.
    *
@@ -140,7 +148,7 @@ async function grantShopEntries(
 
 export async function finalizeShopOrder(
   paymentIntent: Stripe.PaymentIntent,
-  { entryMultiplier }: FinalizeShopOrderOptions
+  { entryMultiplier, requestContext }: FinalizeShopOrderOptions
 ): Promise<FinalizeShopOrderResult> {
   const orderId = paymentIntent.metadata?.orderId;
   if (!orderId) {
@@ -281,6 +289,69 @@ export async function finalizeShopOrder(
       err,
     });
   });
+
+  // The canonical Purchase, server-side (docs/tracking/rules.md R1).
+  //
+  // HERE, and not hung off processPaymentBenefits: that returns early while
+  // includedEntries is 0, which is every merch order today, so hanging Purchase
+  // off it would mean no merch sale is ever reported.
+  //
+  // On the fulfilled path only. The stock-loss branch above refunds in full and
+  // returns before this, and a redelivered webhook stops at markPaid, so this
+  // runs exactly once per order that was actually shipped.
+  //
+  // Keyed on orderNumber to match the browser fire from CheckoutSuccessClient, so
+  // Meta merges the pair rather than counting the sale twice. Every other server
+  // emitter keys on paymentIntentId, which is precisely why the shop was excluded
+  // from the shared path.
+  const buyer = await User.findById(order.user)
+    .select("email firstName lastName mobile state")
+    .lean<{ email?: string; firstName?: string; lastName?: string; mobile?: string; state?: string } | null>()
+    .catch(() => null);
+
+  await trackPixelPurchase({
+    value: order.totalAmount,
+    currency: "AUD",
+    orderId: order.orderNumber,
+    packageType: "shop",
+    packageId: order.orderNumber,
+    packageName: `Merchandise order ${order.orderNumber}`,
+    userId: order.user.toString(),
+    userEmail: buyer?.email,
+    userPhone: buyer?.mobile,
+    userFirstName: buyer?.firstName,
+    userLastName: buyer?.lastName,
+    userState: buyer?.state,
+    userCountry: "AU",
+    paymentIntentId: paymentIntent.id,
+    content_type: "product",
+    content_ids: order.products.map((line) => line.sku ?? line.product.toString()),
+    num_items: order.products.reduce((n, line) => n + line.quantity, 0),
+    ...(requestContext ? { requestContext } : {}),
+  }).catch((err) => {
+    // Never throw: failing the webhook would retry the whole fulfilment.
+    console.error("[shop] Purchase tracking failed", { orderNumber: order.orderNumber, err });
+  });
+
+  try {
+    trackShopPlacedOrder({
+      email: buyer?.email,
+      userId: order.user.toString(),
+      orderNumber: order.orderNumber,
+      totalAmount: order.totalAmount,
+      items: order.products.map((line) => ({
+        productId: line.product.toString(),
+        sku: line.sku,
+        name: line.name ?? "Merchandise",
+        quantity: line.quantity,
+        price: line.price,
+        size: line.size,
+        colour: line.colour,
+      })),
+    });
+  } catch (err) {
+    console.error("[shop] Klaviyo Placed Order failed", { orderNumber: order.orderNumber, err });
+  }
 
   return { status: "fulfilled", orderNumber: order.orderNumber, entriesGranted };
 }

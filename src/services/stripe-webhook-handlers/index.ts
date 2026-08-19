@@ -864,7 +864,11 @@ async function handlePaymentSuccess(
       // be the third of an identical wrapper.
       webhookLog("info", `Processing shop payment: ${paymentIntent.id}`);
       const entryMultiplier = await getActivePromoMultiplier("one-time");
-      const result = await finalizeShopOrder(paymentIntent, { entryMultiplier });
+      // Click ids recovered from metadata, so the server Purchase is attributable.
+      const result = await finalizeShopOrder(paymentIntent, {
+        entryMultiplier,
+        requestContext: extractRequestContextFromMetadata(paymentIntent.metadata),
+      });
       webhookLog(
         "info",
         `Shop payment ${result.status}: ${result.orderNumber ?? "unknown order"} · ${
