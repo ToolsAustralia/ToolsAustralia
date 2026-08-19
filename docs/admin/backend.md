@@ -530,3 +530,57 @@ must stay in lockstep. Regression-guarded by `npm run test:excessive-retry-coold
 ⚠️ **Still open:** the cooldown limits *per-invoice* velocity only. Stripe also flagged **batch**
 velocity ("spread them over a longer time window rather than submitting them all at once") — the
 run still fires its whole worklist in one burst. Cohorting / pacing is not implemented.
+
+## Automated charge run (cron)
+
+`GET /api/cron/charge-past-due` runs the same job as the admin button, on a schedule, with
+**different pacing**. Opt-in: it no-ops unless `CHARGE_CRON_ENABLED=true`, so merging it changes
+nothing.
+
+**Why the pacing differs.** The admin run is human-supervised and rare, so it keeps its fast
+15-parallel pacing (`DEFAULT_PACING`). The cron carries the *daily* volume, and daily volume at that
+burst rate is what generates Stripe's excessive-retry blocks — Stripe support: *"too many payment
+attempts were made in a short time window… spread them over a longer time window rather than
+submitting them all at once."* The cron therefore runs `concurrency: 1` with
+`CHARGE_CRON_DELAY_MS` (default 2000) between charges: ~20/min instead of ~196/min, ~45 min for a
+~880 worklist. **Concurrency is the burst**; the delay only tunes what remains.
+
+**Scheduling — Vercel crons are UTC only.** Sydney is UTC+10 (AEST) / UTC+11 (AEDT), so a
+fixed UTC hour drifts an hour across DST. The schedule is therefore `*/5 * * * *` and the handler
+resolves the **real Sydney local hour** with `date-fns-tz`. One entry, no DST maintenance, and
+`CHARGE_CRON_START_HOUR` is freely configurable 0-23 (a narrower UTC window would silently make most
+values unreachable for half the year). A non-integer or out-of-range value refuses loudly rather
+than no-opping every day.
+
+**Start window, not a start hour.** A run may begin at `startHour` through `startHour + 2`, so a day
+whose previous run overran still gets one. The anti-double-start guard is the one-run-per-local-day
+count, whose day boundary uses `fromZonedTime` — a bare `new Date("YYYY-MM-DDT00:00:00")` parses in
+the SERVER timezone (UTC on Vercel) and would put the boundary hours in the future, disabling the
+guard entirely.
+
+**Orphan sweep runs FIRST, every tick.** `sweepOrphanRuns` otherwise only runs inside
+`startChargePastDueJob`, which is unreachable while any run is `running` — so an admin run left
+`running` by a closed browser tab would disable the cron indefinitely while every tick returned
+HTTP 200. Standing down for a live admin run also `console.error`s, because a silent skip means the
+day collected nothing.
+
+**Tick model.** Vercel caps the function at 300s, so a run is never one long process. The invocation
+deadline is passed **into** the chunk and enforced per item — a chunk cost is dominated by Stripe
+round-trips, not by our sleep, so the caller cannot predict it up front. Every item writes its log
+row before the next begins, so stopping mid-chunk is safe and fully resumable.
+
+### Conflict rules
+
+| Situation | Behaviour |
+|---|---|
+| **Admin run in progress** | Cron **skips entirely** (`admin_run_in_progress`). It never resumes or aborts a run a human started — the admin owns it. |
+| **Cron's own run in progress** | Resumes it, **regardless of hour**, until drained. The start-hour gate applies only to *starting*. |
+| **Admin starts one while cron runs** | Existing global `ChargeJobLock` → 409, unchanged. Admin can abort the cron run and take over. Per-user charging is **never** blocked (that route deliberately does not take the bulk lock). |
+| **Member self-serves mid-run** | Already handled: `shouldSkipForNotPastDue` re-reads live status immediately before every `invoices.pay`, so they are skipped as `no_longer_past_due`. Pacing makes this *better* — more members self-resolve before the run reaches them. |
+| **Two ticks overlap** | Second gets `ChargeJobLockedError` → reported as `skipped: "locked"`, retried next tick. Not an error. |
+| **Double start (extra UTC tick / DST)** | Start-hour gate, plus a one-run-per-local-day count on `trigger: "cron"`. |
+| **Worklist anomaly** | Above `CHARGE_CRON_MAX_WORKLIST` (3000) the run is aborted immediately and logged, rather than charging an unexpected population unattended. |
+
+`ChargeJobRun.trigger` (`"admin"` | `"cron"`, default `"admin"`) is what lets the cron tell its own
+run from a human's. Legacy rows have no value and read as `"admin"` — which is the safe default,
+since the cron will not touch them.

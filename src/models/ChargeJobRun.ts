@@ -29,6 +29,10 @@ export interface ChargeJobRunTotals {
 export interface IChargeJobRun extends Document {
   adminId: mongoose.Types.ObjectId;
   kind: "charge" | "recover";
+  /** What started the run. Lets the cron resume its OWN run without ever
+   *  touching a run an admin kicked off by hand. Legacy rows have no value
+   *  and are treated as "admin". */
+  trigger?: "admin" | "cron";
   startedAt: Date;
   finishedAt: Date | null;
   status: ChargeJobRunStatus;
@@ -67,6 +71,7 @@ const ChargeJobRunSchema = new Schema<IChargeJobRun>(
   {
     adminId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     kind: { type: String, enum: ["charge", "recover"], required: true, default: "charge", index: true },
+    trigger: { type: String, enum: ["admin", "cron"], default: "admin", index: true },
     startedAt: { type: Date, required: true, default: Date.now },
     finishedAt: { type: Date, default: null },
     status: {

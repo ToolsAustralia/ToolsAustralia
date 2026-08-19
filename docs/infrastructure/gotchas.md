@@ -120,3 +120,15 @@ clip each. This joins them back. Unlike the sibling `e2e:*` scripts it does **no
 rather than orchestrator flags and never touches the DB or a browser. Its only binary
 dependency is the already-installed `ffmpeg-static` (no system ffmpeg, no ffprobe — durations
 are parsed from `ffmpeg -i` stderr). Full mechanics: `docs/e2e/proof-mode.md` rule 4.
+
+## Vercel crons are UTC — Sydney DST needs handling in the HANDLER
+
+Vercel cron `schedule` has no timezone option; it is always UTC. Sydney runs UTC+10 (AEST) and
+UTC+11 (AEDT), so any fixed UTC hour drifts by an hour twice a year. Several existing jobs work
+around this with **duplicate entries** (e.g. `0 14` + `0 15`), which relies on the job being
+idempotent — fine for a snapshot, **dangerous for anything that moves money**.
+
+`/api/cron/charge-past-due` takes the safer approach: fire often across a window
+(`*/5 * * * *`) and let the handler resolve the true local hour via
+`formatInTimeZone(now, "Australia/Sydney", "H")`. One entry, no DST maintenance, and the handler
+owns the decision. Prefer this for any new time-sensitive cron.

@@ -79,47 +79,132 @@
     {
       "path": "/api/cron/sync-tiktok-ads",
       "schedule": "59 12,13 * * *"
+    },
+    {
+      "path": "/api/cron/charge-past-due",
+      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
-    "src/app/api/stripe/webhook/route.ts": { "maxDuration": 60 },
-    "src/app/api/cron/process-stripe-webhook-queue/route.ts": { "maxDuration": 300 },
-    "src/app/api/admin/stripe-webhook-queue/route.ts": { "maxDuration": 60 },
-    "src/app/api/upload/cloudinary/route.ts": { "maxDuration": 30 },
-    "src/app/api/upload/route.ts": { "maxDuration": 30 },
-    "src/app/api/admin/users/export/route.ts": { "maxDuration": 60 },
-    "src/app/api/admin/major-draw/export/route.ts": { "maxDuration": 60 },
-    "src/app/api/admin/major-draw/participants/route.ts": { "maxDuration": 60 },
-    "src/app/api/admin/sync-klaviyo-profiles/route.ts": { "maxDuration": 300 },
-    "src/app/api/admin/invoices/charge-past-due/route.ts": { "maxDuration": 300 },
-    "src/app/api/admin/invoices/recover-past-due/route.ts": { "maxDuration": 300 },
-    "src/app/api/admin/dashboard/recent-activities/route.ts": { "maxDuration": 60 },
-    "src/app/api/admin/dashboard/stats/route.ts": { "maxDuration": 60 },
-    "src/app/api/admin/metrics/users/route.ts": { "maxDuration": 60 },
-    "src/app/api/internal/norm/v1/metrics/users/route.ts": { "maxDuration": 60 },
-    "src/app/api/admin/activity-log/route.ts": { "maxDuration": 60 },
-    "src/app/api/cron/major-draw-transition/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/process-partner-discount-queues/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/ab-testing-aggregate-metrics/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/milestone-rewards-issuance/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/monthly-redeemables-issuance/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/sync-meta-spend-by-url/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/sync-meta-ads/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/sync-tiktok-ads/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/reconcile-blocked-transactions/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/reconcile-affiliate-commissions/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/reconcile-major-draw-entries/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/dashboard-stats-daily-snapshot/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/cancellation-retention-resume/route.ts": { "maxDuration": 300 },
-    "src/app/api/cron/cancellation-retention-maturity/route.ts": { "maxDuration": 300 },
-    "src/app/api/admin/klaviyo/**/route.ts": { "maxDuration": 300 },
-    "src/app/api/stripe/**/route.ts": { "maxDuration": 60 },
-    "src/app/api/payment-intent/**/route.ts": { "maxDuration": 60 },
-    "src/app/api/subscription/**/route.ts": { "maxDuration": 60 },
-    "src/app/api/invoice/**/route.ts": { "maxDuration": 60 },
-    "src/app/api/orders/**/route.ts": { "maxDuration": 60 },
-    "src/app/api/admin/facebook-ads/health/insights/route.ts": { "maxDuration": 30 },
-    "src/app/api/chat/route.ts": { "maxDuration": 60 },
-    "src/app/api/**/route.ts": { "maxDuration": 10 }
+    "src/app/api/stripe/webhook/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/process-stripe-webhook-queue/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/stripe-webhook-queue/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/upload/cloudinary/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/upload/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/admin/users/export/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/major-draw/export/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/major-draw/participants/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/sync-klaviyo-profiles/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/invoices/charge-past-due/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/invoices/recover-past-due/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/dashboard/recent-activities/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/dashboard/stats/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/metrics/users/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/norm/v1/metrics/users/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/activity-log/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/major-draw-transition/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/process-partner-discount-queues/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/ab-testing-aggregate-metrics/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/milestone-rewards-issuance/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/monthly-redeemables-issuance/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/sync-meta-spend-by-url/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/sync-meta-ads/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/sync-tiktok-ads/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/reconcile-blocked-transactions/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/reconcile-affiliate-commissions/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/reconcile-major-draw-entries/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/dashboard-stats-daily-snapshot/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/cancellation-retention-resume/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/cancellation-retention-maturity/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/klaviyo/**/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/stripe/**/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/payment-intent/**/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/subscription/**/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/invoice/**/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/orders/**/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/facebook-ads/health/insights/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/chat/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/**/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/cron/charge-past-due/route.ts": {
+      "maxDuration": 300
+    }
   }
 }
