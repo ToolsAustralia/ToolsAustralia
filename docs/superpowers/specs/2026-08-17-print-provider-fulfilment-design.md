@@ -200,3 +200,68 @@ retry.
 
 **If the answer is no on the endpoint:** phase 1 ships and is the permanent workflow. Phases 2–3
 are not built. No customer-facing difference, and specs 1 and 2 are entirely unaffected.
+
+---
+
+## Addendum — 2026-08-19: the API is reachable, and it is REST, not GraphQL
+
+Re-probed with the approved `RIVERR_API_KEY` (28-char Firebase UID). **The earlier conclusion
+that the API is unreachable was half wrong**, and the half that was wrong is the important one.
+
+### GraphQL is still not mounted — anywhere
+
+`POST /graphql`, `/api/graphql`, `/v1/graphql`, `/gql`, `/query` all return
+`404 Cannot POST …` on **both** `api.riverr.app` and `dev.riverr.app` `[V]`. The published docs
+describe an endpoint that does not exist. **Stop treating the docs as the contract.**
+
+The gateway still distinguishes the key correctly, which is how we know auth works:
+
+| Request | Response |
+| --- | --- |
+| no `x-uid` header | `403 Authentication failed` |
+| bogus `x-uid` | `403 Authentication failed` |
+| **our real `x-uid`** | **404 — past the gateway, no handler** |
+
+### There IS a live REST API
+
+Found by sweeping resource names rather than trusting the docs `[V]`:
+
+| Endpoint | Status | Body |
+| --- | --- | --- |
+| `GET /products` | **200** | `{"products":[]}` |
+| `GET /shops` | **200** | `{"shops":[]}` |
+| `GET /orders` | **200** | `{"orders":[]}` |
+| `GET /designs` | **200** | `{"designs":[]}` |
+| `GET /catalogs` | 500 | `Cannot read properties of undefined (reading 'replace')` |
+| everything else tried | 404 | — |
+
+`/catalogs` throwing a **TypeError rather than a 404** means the route exists and is missing a
+required parameter we have not guessed. It is the blank-garment catalogue — the likely source of
+GTINs — so it is worth asking them for its parameters specifically.
+
+### The blocker is now precise: our account has no shop
+
+Every collection returns **empty**, including `/shops`. The portal shows three products; the API
+says we own zero shops and zero products. So the products live under a Firestore structure the
+API does not associate with our UID.
+
+That turns the vague "we need a shopId" question into a sharp one: **`RIVERR_SHOP_ID` is
+unset, `/shops` cannot supply it, and until the account is linked to a shop the API returns
+empty regardless of what the portal displays.**
+
+Ask TeePrintCentre, in this order:
+
+1. Our **shopId** — and why `GET /shops` returns empty for a key that authenticates.
+2. The required parameters for **`GET /catalogs`** (it 500s rather than 404s).
+3. Whether products created in the portal are ever visible to the API, or whether the API is
+   write-only for orders. If the latter, product/image sync is not possible and the CSV
+   fulfilment path stays permanent.
+
+### What this does and does not change
+
+**Does not change:** the CSV fulfilment path still works and is still how orders are handed over.
+Nothing built so far is wasted, and the `PrintProvider` service boundary is unaffected.
+
+**Does change:** a REST adapter is a much smaller job than the GraphQL client the spec assumed —
+four plain JSON endpoints, no schema, no codegen. The moment a shopId lands, pulling products and
+their images becomes viable.
