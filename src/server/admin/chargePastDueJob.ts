@@ -49,7 +49,10 @@ import ChargeJobWorklist from "@/models/ChargeJobWorklist";
 import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import { previewChargePastDueInvoices } from "@/services/admin/previewChargePastDueInvoices";
 import { findLatestBlockByFingerprint } from "@/services/allowlist/blockedTransactionRepo";
-import { shouldCooldownForExcessiveRetry } from "./chargeOrRecoverPolicy";
+import {
+  classifyInvoiceRetrieveError,
+  shouldCooldownForExcessiveRetry,
+} from "./chargeOrRecoverPolicy";
 import {
   reconcileAllowlistFromBlocked,
   type ReconcileSummary,
@@ -517,42 +520,92 @@ function resolveChargedCardFingerprint(
   return null;
 }
 
+/**
+ * Retrieve a worklist invoice, distinguishing "this invoice is gone" from
+ * "Stripe was unreachable".
+ *
+ * A bare catch here used to record BOTH as a permanent "deleted/void" skip, so a
+ * transient 429 or 5xx silently retired a member for the day and read in the
+ * admin UI as though their invoice no longer existed. Rate limits are exactly
+ * what a long paced run is most likely to meet.
+ *
+ * Retries 429/5xx/network with backoff; `resource_missing` (404) returns
+ * permanent immediately, since retrying that can never help.
+ */
+async function retrieveWorklistInvoice(
+  invoiceId: string,
+  maxAttempts = 3
+): Promise<
+  | { ok: true; invoice: Stripe.Invoice }
+  | { ok: false; permanent: true }
+  | { ok: false; permanent: false; message: string }
+> {
+  let lastMessage = "unknown error";
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      // `payments` lets decideBulkChargeAction tell a truly unpayable invoice
+      // (every PaymentIntent canceled) from an exhausted-but-payable one. The two
+      // payment-method paths give the charged card's fingerprint for the
+      // excessive-retry cooldown WITHOUT an extra paymentMethods.retrieve.
+      const invoice = (await stripe.invoices.retrieve(invoiceId, {
+        expand: [
+          "customer",
+          "payments",
+          "default_payment_method",
+          "customer.invoice_settings.default_payment_method",
+        ],
+      })) as Stripe.Invoice;
+      return { ok: true, invoice };
+    } catch (err) {
+      const e = err as Stripe.errors.StripeError;
+      lastMessage = e?.message ?? String(err);
+
+      const kind = classifyInvoiceRetrieveError(err);
+      if (kind === "permanent") return { ok: false, permanent: true };
+      // "fatal" will not fix itself either, but it is NOT evidence the invoice
+      // is deleted — surface it rather than mislabel it as gone.
+      if (kind === "fatal" || attempt === maxAttempts) {
+        return { ok: false, permanent: false, message: lastMessage };
+      }
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+    }
+  }
+  return { ok: false, permanent: false, message: lastMessage };
+}
+
 /** Charge a single worklist item: retrieve fresh invoice, resolve PM, delegate to the primitive. */
 async function chargeWorklistItem(
   item: { invoiceId: string; customerId: string; userId: mongoose.Types.ObjectId; amount: number },
   adminId: string,
   runId: mongoose.Types.ObjectId
 ): Promise<void> {
-  let invoice: Stripe.Invoice;
-  try {
-    // `payments` is expanded so decideBulkChargeAction can tell a truly unpayable
-    // invoice (every PaymentIntent canceled) from an exhausted-but-payable one.
-    invoice = (await stripe.invoices.retrieve(item.invoiceId, {
-      // The two payment-method paths are expanded so the charged card's
-      // fingerprint is available for the Stripe excessive-retry cooldown check
-      // below WITHOUT an extra paymentMethods.retrieve per worklist item.
-      expand: [
-        "customer",
-        "payments",
-        "default_payment_method",
-        "customer.invoice_settings.default_payment_method",
-      ],
-    })) as Stripe.Invoice;
-  } catch {
-    // Invoice no longer retrievable (deleted/void). Log a skip so it counts as done.
+  const retrieved = await retrieveWorklistInvoice(item.invoiceId);
+  if (!retrieved.ok) {
+    // Either way a row is written, so the item leaves `remaining` and the run can
+    // finish — but the two cases must not read the same to an operator.
     await InvoiceChargeLog.create({
       invoiceId: item.invoiceId,
       customerId: item.customerId,
       userId: item.userId,
       adminId: new mongoose.Types.ObjectId(adminId),
-      status: "skipped",
+      status: retrieved.permanent ? "skipped" : "failed",
       amount: item.amount,
       attemptedAt: new Date(),
-      errorMessage: "Skipped: invoice not retrievable (deleted/void)",
+      errorMessage: retrieved.permanent
+        ? "Skipped: invoice not retrievable (deleted/void)"
+        : `Stripe could not be reached for this invoice after retries: ${retrieved.message}`,
+      ...(retrieved.permanent ? {} : { errorCode: RECOVERY_DECLINE_CODES.invoiceUnavailable }),
       chargeRunId: runId,
     });
+    if (!retrieved.permanent) {
+      console.error(
+        `[chargePastDue] invoice ${item.invoiceId} unreachable after retries: ${retrieved.message}`
+      );
+    }
     return;
   }
+  const invoice = retrieved.invoice;
 
   // Pay-vs-recover branch (the bulk counterpart of the per-user chargeOrRecover).
   // A stranded invoice — retries exhausted AND no payable invoice_payment left —

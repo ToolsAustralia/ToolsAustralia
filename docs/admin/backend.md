@@ -584,3 +584,25 @@ row before the next begins, so stopping mid-chunk is safe and fully resumable.
 `ChargeJobRun.trigger` (`"admin"` | `"cron"`, default `"admin"`) is what lets the cron tell its own
 run from a human's. Legacy rows have no value and read as `"admin"` — which is the safe default,
 since the cron will not touch them.
+
+### Transient Stripe failures are no longer recorded as deleted invoices
+
+`chargeWorklistItem` used a bare `catch {}` around `invoices.retrieve` and logged every failure as
+`skipped: "invoice not retrievable (deleted/void)"`. A transient **429 or 5xx** therefore retired a
+member for the run and read in the admin UI as though their invoice no longer existed — and rate
+limits are exactly what a long, paced run is most likely to meet.
+
+`retrieveWorklistInvoice` now retries transient failures (3 attempts, exponential backoff) and
+branches on the pure `classifyInvoiceRetrieveError`
+([chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts)):
+
+| Classification | Trigger | Recorded as |
+|---|---|---|
+| `permanent` | `resource_missing` / 404 | `skipped` — "not retrievable (deleted/void)" |
+| `transient` | 429, `rate_limit`, 5xx, connection error | retried; if still failing → `failed` + `invoice_unavailable` |
+| `fatal` | auth / bad request / non-Stripe throw | `failed` + `invoice_unavailable` — **never** a skip, since it is not evidence the invoice is gone |
+
+Both outcomes still write a row, so the item leaves `remaining` and the run can finish — the point
+is that an operator can now tell "this invoice is gone" from "Stripe was unreachable". The new
+synthetic code is labelled **"Stripe unavailable (retry next run)"** in the decline views.
+Regression-guarded by `npm run test:excessive-retry-cooldown`.
