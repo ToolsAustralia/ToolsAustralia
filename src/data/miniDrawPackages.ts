@@ -384,6 +384,29 @@ export const getMiniDrawPackageById = (id: string): MiniDrawPackage | undefined 
 };
 
 /**
+ * Is this id from the mini-draw catalogue?
+ *
+ * The question the PURCHASE ROUTES need answered, and the reason it exists: a mini-draw package can
+ * only be bought against a specific draw. `POST /api/mini-draw/purchase` supplies `miniDrawId` in
+ * the PaymentIntent metadata; the membership / one-time Stripe routes have no draw in scope and
+ * cannot. If one of those routes sells a mini id anyway it stamps `type: "mini-draw"` with no
+ * `miniDrawId`, and `handleMiniDrawWebhook` cannot grant against it — money in, nothing out.
+ *
+ * Deliberately matches on the CATALOGUE, not on a `-mini`/`mini-pack-` string shape: the ids are
+ * two unrelated families (`mini-pack-1..8` and `additional-*-pack-mini`), a prefix test would miss
+ * one and a suffix test the other, and both would silently stop covering a 14th pack. Verified
+ * against `membershipPackages`: zero id collisions, so this can never reject a legitimate
+ * membership or one-time purchase.
+ *
+ * Does NOT match the mini upsell ids (`mini-pack-N-upgrade`, `mini-upsell-additional-*`) — those
+ * are owned by `/api/upsell/purchase`, which resolves `miniDrawId` from purchase history.
+ */
+export const isMiniDrawPackageId = (id?: string | null): boolean => {
+  if (!id) return false;
+  return miniDrawPackages.some((pkg) => pkg._id === id);
+};
+
+/**
  * Helper function to get upsell for a mini draw package
  */
 export const getMiniDrawUpsell = (packageId: string): MiniDrawUpsell | undefined => {

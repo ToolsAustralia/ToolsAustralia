@@ -66,3 +66,23 @@ Two lessons:
 and is keyed per COMBINATION, not per toolbox. It is currently empty and every one of the 20
 combos has its own composite — keep the mechanism for the next toolbox/toolset addition, but
 do not park a placeholder in `gallery[0]` instead of using it.
+
+---
+
+## `miniDrawPackages` ids are two unrelated families — match the catalogue, never a string shape (2026-08-20)
+
+`src/data/miniDrawPackages.ts` holds **13** purchasable ids in two families that share no prefix or suffix:
+
+- `mini-pack-1` … `mini-pack-8` (tiers 4–8 are `isActive: false`, kept so historical receipts resolve)
+- `additional-{tradie,foreman,boss,power,vip}-pack-mini` (added 2026-05-14)
+
+Anything deciding "is this a mini-draw package?" must test **membership of the array** — `isMiniDrawPackageId()`. A `startsWith("mini-pack-")` rule misses all five `additional-*` ids; an `endsWith("-mini")` rule misses all eight `mini-pack-N` ids. Both silently stop covering a 14th pack.
+
+This matters because the answer gates money: the Stripe one-time routes reject these ids (they cannot supply `miniDrawId`), so a **false negative re-opens a charge-with-no-grant hole** and a **false positive 400s a real purchase**. See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md).
+
+Two near-misses the predicate deliberately gets right:
+
+- `additional-vip-pack` (membership, **sellable** on the one-time routes) vs `additional-vip-pack-mini` (mini, **rejected**) — one suffix apart. Verified: **zero id collisions** between `miniDrawPackages` and `membershipPackages`.
+- The mini **upsell** ids (`mini-pack-N-upgrade`, `mini-upsell-additional-*`) are **not** matched — they belong to `/api/upsell/purchase`, which resolves `miniDrawId` from purchase history.
+
+`normalizeMembershipPlanId` strips only `-member`, so `-mini` survives it and raw/canonical forms agree. The existing-user route checks both anyway, and `npm run test:mini-draw-package-id` fails loudly if that ever changes.

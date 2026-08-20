@@ -132,3 +132,17 @@ idempotent — fine for a snapshot, **dangerous for anything that moves money**.
 (`*/5 * * * *`) and let the handler resolve the true local hour via
 `formatInTimeZone(now, "Australia/Sydney", "H")`. One entry, no DST maintenance, and the handler
 owns the decision. Prefer this for any new time-sensitive cron.
+
+---
+
+## `find:stranded-mini-draw-payments` — why it scans Stripe first, and why it has no denominator (2026-08-20)
+
+`scripts/find-stranded-mini-draw-payments.ts` (read-only) answers: was a mini-draw payment ever captured that could never be granted? See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md) for the defect.
+
+**It starts from Stripe, not Mongo, and that is the point.** The failure mode *is* "the webhook recorded nothing" — no `PaymentEvent{BenefitsGranted}`, no `users.miniDrawPackages` row. Mongo cannot see a purchase it never wrote. So the scan reads Stripe (which definitely holds the charge) and cross-checks **into** Mongo to prove the absence. A Mongo-first audit for this class of bug finds nothing and reports "clean" — a false all-clear.
+
+**It deliberately breaks the up-front-total convention.** CLAUDE.md requires ops scripts to print a denominator. Stripe's list API has no count endpoint, and the only way to learn the total is to page the whole window — doing the job twice. It reports `processed · rate/sec · elapsed` on the same adaptive cadence instead, and prints the date window up front so the run stays bounded. If you add a Stripe-paging script, reuse this justification rather than inventing a fake total.
+
+**Exit codes:** `0` clean · `1` stranded payments found · `2` the script itself failed. CSV to **stdout**, progress and summary to **stderr**, so `> findings.csv` yields a clean file.
+
+It never refunds. `miniDrawId` is unrecoverable for a stranded row (the metadata never held it), so the intended draw cannot be inferred — remediation is a human decision, and the script says so in its exit message.

@@ -19,7 +19,8 @@
 |---|---|
 | `/api/cron/major-draw-transition` | Daily transition cron (1:30 UTC) |
 | `/api/stripe/webhook` | Triggers transitions before payment processing |
-| `/api/stripe/create-one-time-purchase` | Mini-draw package purchase flow ([billing-stripe](../billing-stripe/)) |
+| `/api/mini-draw/purchase` | **The** mini-draw pack purchase flow — the only route that stamps `miniDrawId` |
+| `/api/stripe/create-one-time-purchase` | Membership / one-time packs ([billing-stripe](../billing-stripe/)). **Rejects mini-draw ids with 400 `MINI_DRAW_PACKAGE_WRONG_ENDPOINT`** — it has no draw in scope, so it cannot grant one |
 
 ## Authorization
 

@@ -55,6 +55,7 @@
     "test:chat-promo": "tsx src/services/support-chat/__tests__/currentPromo.test.ts",
     "test:chat-routing-shape": "tsx src/services/support-chat/__tests__/routing-goldenset-shape.test.ts",
     "smoke:chat-provider": "tsx scripts/smoke-chat-provider.ts",
+    "test:mini-draw-package-id": "tsx src/data/__tests__/mini-draw-package-id.test.ts",
     "test:chat-faqs": "tsx src/data/__tests__/faqs.test.ts",
     "test:discount-visit": "tsx src/utils/partner-discounts/__tests__/record-discount-visit.test.ts",
     "test:brand-lane": "tsx src/utils/metrics/__tests__/brand-lane.test.ts",
@@ -191,6 +192,8 @@
     "test:force-charge-mint-map": "tsx src/server/admin/__tests__/forceChargeMintMap.test.ts",
     "test:rebill-classification": "tsx src/utils/billing/__tests__/rebill-classification.test.ts",
     "stripe:probe-reanchor:dry": "tsx scripts/stripe-probe-reanchor.ts --dry-run",
+
+    "find:stranded-mini-draw-payments": "tsx scripts/find-stranded-mini-draw-payments.ts",
     "find:direct-attribution": "tsx scripts/find-direct-attribution.ts",
     "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",
     "find:klaviyo-legacy-fields": "tsx scripts/find-klaviyo-legacy-fields.ts",
