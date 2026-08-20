@@ -134,16 +134,14 @@ The wired endpoints cover several data domains. Choose the smallest endpoint tha
 - **Inbox queues**: `/v1/submissions/unviewed-count` returns counts of unread contact submissions and partner applications — used for the admin sidebar badge.
 - **Cancellation funnel**: `/v1/cancellation-flow-analytics` returns the cancellation-flow event aggregation (reason mix, funnel counts, save rate, per-offer acceptance, 90-day retention split, free-text "other" reasons). Window is 90 days by default; optional `startDate`/`endDate` (AEST) narrow it.
 - **Upsell configuration**: `/v1/upsell-multipliers` returns the current membership / one-time / additional multiplier triple and the last-updated timestamp. Configuration state, not a metric.
-- **Merchandise is NOT governed solely by the one-time multiplier (2026-08-20).** Merchandise
-  inherits the one-time pack multiplier, so changing that rate through
-  `/v1/promo/alternating-multiplier` or the scheduled/toggle promos changes what a garment grants
-  too — but an admin can set a **ceiling** (per product, per category, or shop-wide) that holds
-  merch *below* the inherited rate. The applied value is `min(inherited, ceiling)`. So a promo
-  raised to 10× does **not** guarantee merch grants 10×, and Norm must not state that it does.
-  The ceilings are **not exposed on this gateway** — there is no `shop.*` registry entry — so
-  Norm cannot read or set them; say so rather than guessing. Ceilings can only ever lower the
-  merch rate, never raise it above the packs. Merch entries remain switched OFF pending a
-  trade-promotion permit variation, so today the ceiling multiplies zero.
+- **Merchandise entries are NOT governed by the one-time multiplier at all (2026-08-20).**
+  Merchandise carries its own multiplier, set in admin per product / per category / shop-wide,
+  defaulting to 1×. Changing the one-time pack rate through `/v1/promo/alternating-multiplier`
+  or the scheduled/toggle promos has **no effect whatsoever** on what a garment grants. Do not
+  tell anyone a pack promo boosts merch entries. The merch rates are **not exposed on this
+  gateway** — there is no `shop.*` registry entry — so Norm can neither read nor set them; say
+  so rather than guessing. Merch entries remain switched OFF pending a trade-promotion permit
+  variation, so today the multiplier multiplies zero.
 - **Klaviyo post-draw reset**: `/v1/klaviyo/draw-reset-preview` describes which users a reset *would* sync (counts + sample) without performing one; `/v1/klaviyo/draw-reset-progress` reports the in-flight progress of a manual reset on the answering process (or null when none is running). They describe the same operation at preview vs runtime.
 - **Past-due charge history**: `/v1/charge-past-due/decline-summary` returns a top-N decline-reason bucket aggregation of failed `InvoiceChargeLog` rows in a window. `/v1/charge-past-due/runs` lists `ChargeJobRun` batches (admin-triggered bulk past-due sweeps) with per-run totals. `/v1/charge-past-due/runs/{runId}` returns the per-invoice rows for one batch run. `/v1/charge-past-due/manual-retries` lists single-user retry attempts that were *not* part of a batch run (i.e. `chargeRunId == null`). These four describe the same `InvoiceChargeLog`/`ChargeJobRun` collections at different granularities: summary across all attempts, batch index, batch detail, and one-off attempts respectively.
 - **Promo analytics** (the admin **Page Analytics** tab): `/v1/promo-analytics` is the aggregate — per-page metrics (visits, build exposure/engagement, signups, conversions, revenue, conversion rates) and a parallel per-**channel** breakdown for the same window. `/v1/promo-analytics/channel-detail` drills into one channel key: which pages it drove traffic to, which campaigns inside it, and the raw `utm_source` values that folded into it. `/v1/promo-analytics/page-detail` drills into one (`pageType`, `slug`) page: per-`(channel, utmMedium, utmCampaign)` rows plus a prize-build breakdown of what visitors assembled there. Channel-detail and page-detail are orthogonal slices of the same `PromoAnalyticsVisit` + `User.signupAttribution` + `PaymentEvent.BenefitsGranted` joined dataset that summary aggregates. **All three were rebuilt on 2026-07-31** — the date filter was inert, channels bucketed by raw `utm_source` (so `Klaviyo` and `TIKTOK` reported zero signups), drill-down visit totals double-counted, `builds` measured exposure while labelled engagement, and ranges were not clamped to the 90-day visit-retention floor. Do not reuse figures pulled from these endpoints before that date.

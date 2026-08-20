@@ -1744,3 +1744,17 @@ Deactivate / Delete buttons, and a card-wide drag listener swallows their clicks
 every render, which would remount every card mid-drag.
 
 Nothing is written until **Save order**; Cancel refetches, so the server stays the source of truth.
+
+## Entry Multipliers — rates, not ceilings (2026-08-20)
+
+Supersedes the ceiling description above. **Merchandise no longer inherits the one-time pack
+multiplier**, so the panel sets the merch rate outright rather than capping an inherited one.
+
+Same three tiers, same one-button save, same normalised category keys. What changed is the
+meaning: a value here IS the multiplier, and the default is 1× rather than "whatever the promo
+is doing".
+
+**The panel no longer protects the pricing ladder.** Under the ceiling design it was impossible
+to set merch above the pack rate. Now it is a number an admin types, so a rate that makes a
+garment better value per entry than a pack is reachable. Worth a warning in this panel; there
+is not one yet.

@@ -99,6 +99,16 @@ export interface OrderListResult {
 
 const MAX_LIMIT = 100;
 
+/**
+ * How long a `pending` order stays visible to the customer who created it.
+ *
+ * A real payment resolves in seconds; anything still pending after this was
+ * abandoned at the card step. Long enough to cover a slow or retried Stripe
+ * webhook, short enough that a stale attempt does not sit in someone's order
+ * history looking like a second purchase.
+ */
+const PENDING_GRACE_MS = 60 * 60 * 1000; // 1 hour
+
 function buildFilter(f: OrderListFilters): FilterQuery<IOrder> {
   const query: FilterQuery<IOrder> = {};
 
@@ -109,6 +119,32 @@ function buildFilter(f: OrderListFilters): FilterQuery<IOrder> {
       return { _id: { $exists: false } } as FilterQuery<IOrder>;
     }
     query.user = new mongoose.Types.ObjectId(f.userId);
+
+    // Hide ABANDONED checkout attempts from the customer's own list.
+    //
+    // Every submit of the checkout address form creates a fresh pending order and
+    // PaymentIntent. A customer who edits their address and resubmits, or who
+    // backs out at the card step, leaves a pending order behind — permanently, on
+    // a page headed "Everything you've bought from the shop", labelled "Awaiting
+    // payment" with no way to resume it. One real purchase reads as two orders.
+    //
+    // Recent pending orders are still shown: a customer who has just paid should
+    // see their order while the Stripe webhook is in flight, and if that webhook
+    // never lands they need to see SOMETHING to contact support about rather than
+    // a page saying they bought nothing.
+    //
+    // ADMIN IS UNAFFECTED — this branch only runs when a userId scopes the query,
+    // and staff must keep seeing every pending order to reconcile stuck payments.
+    const abandonedBefore = new Date(Date.now() - PENDING_GRACE_MS);
+    query.$and = [
+      ...(query.$and ?? []),
+      {
+        $or: [
+          { status: { $ne: "pending" } },
+          { createdAt: { $gte: abandonedBefore } },
+        ],
+      },
+    ];
   }
 
   if (f.status) query.status = f.status;

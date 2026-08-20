@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ShoppingCart, Minus, Plus, Ticket } from "lucide-react";
-import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
 import { ProductData } from "@/data";
 import { useCart } from "@/contexts/CartContext";
 import { useSession } from "next-auth/react";
@@ -26,10 +25,7 @@ import { useToast } from "@/components/ui/Toast";
 // The PURE module, never the service: the service imports a Mongoose model,
 // and mongoose is a serverExternalPackage — reaching it from a client bundle
 // makes `mongoose.models` undefined and the model file throws on load.
-import {
-  applyShopEntryCap,
-  NO_CAPS,
-} from "@/utils/shop/entry-multiplier";
+import { DEFAULT_ENTRY_MULTIPLIER } from "@/utils/shop/entry-multiplier";
 
 interface DatabaseProduct {
   _id: string;
@@ -49,12 +45,12 @@ interface ProductInteractionsProps {
    * Resolved there rather than here because two of the three tiers are admin
    * config; the client only needs the answer, not the table.
    */
-  entryMultiplierCap?: number | null;
+  entryMultiplier?: number | null;
 }
 
 export default function ProductInteractions({
   product,
-  entryMultiplierCap = null,
+  entryMultiplier: resolvedMultiplier = null,
 }: ProductInteractionsProps) {
   const [quantity, setQuantity] = useState(1);
   const [showSignIn, setShowSignIn] = useState(false);
@@ -249,17 +245,11 @@ export default function ProductInteractions({
   // stops at active-promo -> alternating and would print a number the grant does
   // not honour. (The hook's `context` parameter is dead; the body ignores it.)
   //
-  // null means no promo and must read as 1x, never 0.
-  const inheritedMultiplier = useResolvedMultiplier("one-time-packages") ?? 1;
-  // The SAME function the grant calls, so the page cannot promise a number the
-  // webhook will not honour. The tiers are already collapsed into one ceiling
-  // by the server, so NO_CAPS here means "no further tiers to consult", not
-  // "uncapped".
-  const entryMultiplier = applyShopEntryCap(
-    inheritedMultiplier,
-    { entryMultiplierCap },
-    NO_CAPS
-  );
+  // Merchandise carries its OWN multiplier, set in admin — it does NOT inherit
+  // the one-time pack promo (owner decision 2026-08-20). The server already
+  // collapsed product -> category -> shop-wide into this one number, so there is
+  // nothing left to resolve here and no promo hook to consult.
+  const entryMultiplier = resolvedMultiplier ?? DEFAULT_ENTRY_MULTIPLIER;
   // `product` is a union of the static ProductData fixtures and the DB shape;
   // only the latter carries includedEntries, so read it defensively rather than
   // widening a type that legitimately does not have the field.
@@ -271,12 +261,11 @@ export default function ProductInteractions({
     <div className="space-y-6">
       {/* Free entries included with this item.
 
-          The count shown is base x quantity x the CURRENT one-time promo
-          multiplier, resolved from the same server chain the grant uses
-          (useResolvedMultiplier -> /api/promo/alternating-multiplier/current ->
-          getResolvedMultiplierWithSource), so the page and the webhook cannot
-          disagree. This route is force-dynamic, so the number is never frozen
-          into cached HTML across the start or end of a promo.
+          The count shown is base x quantity x the item's OWN multiplier, which
+          the server resolved through product -> category -> shop-wide and passed
+          down as one number. The grant resolves the same chain from the same
+          config, so the page and the webhook cannot disagree. This route is
+          force-dynamic, so the number is never frozen into cached HTML.
 
           Rendered only when there is something to promise: at includedEntries 0
           — the state the feature ships in until the permit lands — nothing
@@ -293,7 +282,7 @@ export default function ProductInteractions({
             </div>
             <div className="text-sm text-gray-600 dark:text-neutral-400">
               Into this month&apos;s major prize draw
-              {entryMultiplier > 1 ? ` — ${entryMultiplier}× promo applied` : ""}
+              {entryMultiplier > 1 ? ` — ${entryMultiplier}× entries on this item` : ""}
             </div>
           </div>
         </div>

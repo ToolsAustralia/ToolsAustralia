@@ -42,7 +42,7 @@ interface ProductRow {
 
 interface ConfigResponse {
   cap: number | null;
-  categoryCaps: Record<string, number>;
+  categoryMultipliers: Record<string, number>;
   categories: CategoryOption[];
   products: ProductRow[];
   updatedAt: string | null;
@@ -51,8 +51,8 @@ interface ConfigResponse {
 /** Blank = no ceiling at this tier. Kept as strings so a field can be cleared. */
 interface Draft {
   cap: string;
-  categoryCaps: Record<string, string>;
-  productCaps: Record<string, string>;
+  categoryMultipliers: Record<string, string>;
+  productMultipliers: Record<string, string>;
 }
 
 /**
@@ -70,13 +70,13 @@ const CAP_OPTIONS: SelectMenuOption[] = [
 function toDraft(config: ConfigResponse): Draft {
   return {
     cap: config.cap == null ? "" : String(config.cap),
-    categoryCaps: Object.fromEntries(
+    categoryMultipliers: Object.fromEntries(
       config.categories.map((c) => [
         c.key,
-        config.categoryCaps[c.key] == null ? "" : String(config.categoryCaps[c.key]),
+        config.categoryMultipliers[c.key] == null ? "" : String(config.categoryMultipliers[c.key]),
       ])
     ),
-    productCaps: Object.fromEntries(
+    productMultipliers: Object.fromEntries(
       config.products.map((p) => [p.id, p.cap == null ? "" : String(p.cap)])
     ),
   };
@@ -90,7 +90,7 @@ export default function ShopEntryMultiplierPanel() {
   const canEdit = has("shop.edit");
 
   const [config, setConfig] = useState<ConfigResponse | null>(null);
-  const [draft, setDraft] = useState<Draft>({ cap: "", categoryCaps: {}, productCaps: {} });
+  const [draft, setDraft] = useState<Draft>({ cap: "", categoryMultipliers: {}, productMultipliers: {} });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(
@@ -130,11 +130,11 @@ export default function ShopEntryMultiplierPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cap: toValue(draft.cap),
-          categoryCaps: Object.fromEntries(
-            Object.entries(draft.categoryCaps).map(([k, v]) => [k, toValue(v)])
+          categoryMultipliers: Object.fromEntries(
+            Object.entries(draft.categoryMultipliers).map(([k, v]) => [k, toValue(v)])
           ),
-          productCaps: Object.fromEntries(
-            Object.entries(draft.productCaps).map(([k, v]) => [k, toValue(v)])
+          productMultipliers: Object.fromEntries(
+            Object.entries(draft.productMultipliers).map(([k, v]) => [k, toValue(v)])
           ),
         }),
       });
@@ -235,10 +235,10 @@ export default function ShopEntryMultiplierPanel() {
               ) : (
                 <ul className="mt-1 divide-y divide-gray-200 dark:divide-neutral-700">
                   {config.categories.map((c) =>
-                    row(c.key, c.label, null, draft.categoryCaps[c.key] ?? "", (next) =>
+                    row(c.key, c.label, null, draft.categoryMultipliers[c.key] ?? "", (next) =>
                       setDraft((d) => ({
                         ...d,
-                        categoryCaps: { ...d.categoryCaps, [c.key]: next },
+                        categoryMultipliers: { ...d.categoryMultipliers, [c.key]: next },
                       }))
                     )
                   )}
@@ -259,10 +259,10 @@ export default function ShopEntryMultiplierPanel() {
               ) : (
                 <ul className="mt-1 divide-y divide-gray-200 dark:divide-neutral-700">
                   {config.products.map((p) =>
-                    row(p.id, p.name, p.category || "Uncategorised", draft.productCaps[p.id] ?? "", (next) =>
+                    row(p.id, p.name, p.category || "Uncategorised", draft.productMultipliers[p.id] ?? "", (next) =>
                       setDraft((d) => ({
                         ...d,
-                        productCaps: { ...d.productCaps, [p.id]: next },
+                        productMultipliers: { ...d.productMultipliers, [p.id]: next },
                       }))
                     )
                   )}

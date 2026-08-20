@@ -203,12 +203,13 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 **Merchandise is a fourth way a customer can hold entries (2026-08-17).** Buying an eligible shop
 item credits free entries into the **Major Draw only** — never a Mini Draw — under the source key
 `entriesBySource.shop`. What the customer receives is
-`includedEntries × quantity × the effective multiplier`. Merchandise deliberately inherits the
-one-time pack multiplier so the two move together — and since 2026-08-20 an admin can set a
-**ceiling** that holds merch *lower* than the packs during a promo (per product, per category, or
-shop-wide). A ceiling can only ever lower the merch rate, never raise it, so the number a product
-page shows and the number the customer receives are resolved through the same helper and cannot
-disagree. With no ceiling set — the default — behaviour is exactly as it was.
+`includedEntries × quantity × the item's own multiplier`.
+
+**That multiplier belongs to the shop, not to the packs (2026-08-20).** An admin sets it per
+product, per category, or shop-wide, and it defaults to 1× — the entries the product advertises,
+unmultiplied. A one-time pack promo does **not** change what a garment grants. The number the
+product page shows and the number the customer actually receives resolve from the same config,
+so they cannot disagree.
 
 Three customer-visible consequences worth knowing:
 

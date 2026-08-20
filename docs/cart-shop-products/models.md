@@ -101,3 +101,28 @@ statements and only the first stays correct if `PROMO_MULTIPLIERS` ever grows.
 The dividing rule: **product data is snapshotted onto the order line, config resolves live at
 webhook time.** That is why the product ceiling is frozen at checkout while the category and
 shop-wide ceilings are read fresh alongside the promo.
+
+## Entry multiplier — the model as it stands (2026-08-20)
+
+Supersedes the ceiling description above. Merchandise carries its **own** multiplier; it does not
+inherit the one-time pack rate.
+
+`ShopEntryMultiplierConfig` (singleton, `_id: "shop-entry-multiplier-config"`):
+
+| Field | Meaning |
+| --- | --- |
+| `multiplier: number \| null` | Shop-wide rate. `null` = fall through to 1× |
+| `categoryMultipliers: Map<string, number>` | Per-category rates, keyed by `normaliseCategoryKey`. Absent = fall through |
+
+| Field | Where | Why it lives there |
+| --- | --- | --- |
+| `entryMultiplier?: number \| null` | `Product` | The per-product rate, beside `includedEntries` |
+| `entryMultiplier?: number \| null` | `Order.products[]` | Snapshotted at checkout — the webhook never loads products |
+| `entryMultiplierApplied?: number` | `Order.products[]` | What the grant actually multiplied this line by. **Per line**: two categories can carry different rates, so an order has no single multiplier |
+
+`null` is deliberately distinct from `1`: null means nothing was configured at that tier, `1`
+means somebody decided 1. They look identical to a customer and completely different to whoever
+is debugging why a rate did nothing.
+
+A **Map**, not an array of `{category, multiplier}`: a map cannot hold two rows for the same
+category, so "which one wins" is unaskable rather than answered.

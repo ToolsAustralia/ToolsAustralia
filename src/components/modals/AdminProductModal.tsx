@@ -40,7 +40,7 @@ export interface ProductFormItem {
   brand: string;
   variants: ProductVariantFormItem[];
   includedEntries: number;
-  entryMultiplierCap?: number | null;
+  entryMultiplier?: number | null;
   /** Optional because the admin list does not default it the way it defaults `variants`. */
   printArtwork?: ProductArtworkFormItem[];
   trackInventory: boolean;
@@ -125,7 +125,7 @@ export default function AdminProductModal({
   // Empty string, not 0, is the no-ceiling state. 0 is not a valid ceiling —
   // it would revoke the entries the product advertises — so the field has to
   // distinguish blank from a number, which a numeric state cannot do.
-  const [entryMultiplierCap, setEntryMultiplierCap] = useState<string>("");
+  const [entryMultiplier, setEntryMultiplierCap] = useState<string>("");
   const [category, setCategory] = useState("");
   const [brand, setBrand] = useState("");
   const [images, setImages] = useState<(File | string)[]>([]);
@@ -147,8 +147,8 @@ export default function AdminProductModal({
       setPrice(editingProduct.price);
       setIncludedEntries(editingProduct.includedEntries ?? 0);
       setEntryMultiplierCap(
-        typeof editingProduct.entryMultiplierCap === "number"
-          ? String(editingProduct.entryMultiplierCap)
+        typeof editingProduct.entryMultiplier === "number"
+          ? String(editingProduct.entryMultiplier)
           : ""
       );
       setCategory(editingProduct.category);
@@ -304,7 +304,7 @@ export default function AdminProductModal({
         // null, never undefined: the admin clearing this field must REMOVE the
         // ceiling, and an undefined would be dropped from the JSON body and read
         // as "leave it alone".
-        entryMultiplierCap: entryMultiplierCap.trim() === "" ? null : Number(entryMultiplierCap),
+        entryMultiplier: entryMultiplier.trim() === "" ? null : Number(entryMultiplier),
         printArtwork: cleanedArtwork,
         trackInventory,
         stock: trackInventory ? stock : 0,
@@ -434,7 +434,7 @@ export default function AdminProductModal({
             <Input
               label="Entry multiplier ceiling (optional)"
               type="number"
-              value={entryMultiplierCap}
+              value={entryMultiplier}
               onChange={(e) => setEntryMultiplierCap(e.target.value)}
               min={1}
               max={10}

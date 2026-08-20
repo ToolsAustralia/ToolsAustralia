@@ -8,8 +8,8 @@ import { sendShopOrderConfirmation } from "@/services/shop/sendOrderConfirmation
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 import { trackShopPlacedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
 import { normalizeEpochToUnixSeconds } from "@/lib/tracking/canonical-event";
-import { loadShopEntryCaps } from "@/services/shop/resolveShopEntryMultiplier";
-import { applyShopEntryCap } from "@/utils/shop/entry-multiplier";
+import { loadShopEntryMultipliers } from "@/services/shop/resolveShopEntryMultiplier";
+import { entriesForLine, resolveEntryMultiplierFor } from "@/utils/shop/entry-multiplier";
 
 /**
  * Fulfil a paid shop order.
@@ -49,22 +49,6 @@ export interface FinalizeShopOrderOptions {
    * Purchase reaches Meta and TikTok with no click id and cannot be attributed.
    */
   requestContext?: Record<string, string | undefined>;
-  /**
-   * Promo multiplier to apply to the order's base entry count.
-   *
-   * Required rather than optional, and resolved by the CALLER, on purpose.
-   * Merchandise inherits the one-time pack multiplier, and the webhook already
-   * owns a helper that resolves it with the right fallbacks — passing it in
-   * avoids a third copy of that wrapper (there are already two: the webhook
-   * handler and the upsell purchase route). Making it required means a future
-   * caller cannot silently forget it and grant at 1×.
-   *
-   * This is the INHERITED, uncapped rate. The admin-set ceilings (product,
-   * category, shop-wide) are applied inside this service, per line — a caller
-   * cannot pre-apply them, because a single order can hold products with
-   * different ceilings.
-   */
-  entryMultiplier: number;
 }
 
 /**
@@ -84,30 +68,30 @@ export interface FinalizeShopOrderOptions {
  */
 async function grantShopEntries(
   order: IOrder,
-  paymentIntentId: string,
-  inheritedMultiplier: number
+  paymentIntentId: string
 ): Promise<number | undefined> {
   // One read for the whole order rather than one per line.
   //
   // On failure this returns NO caps, i.e. inherit unchanged — never a cap of 1.
   // A database blip must not silently withhold entries the product page promised;
   // it can only ever grant what the promo already permits.
-  const caps = await loadShopEntryCaps();
+  const multipliers = await loadShopEntryMultipliers();
 
-  // Per line, NOT sum-then-multiply. A cart can hold a garment capped at 1×
-  // beside an uncapped one, and a single scalar cannot honour both — it would
-  // silently apply one line's rate to the other, with no error anywhere.
+  // Per line, NOT sum-then-multiply. Two products can carry different
+  // multipliers, and a single scalar cannot honour both — it would silently
+  // apply one line's rate to the other, with no error anywhere.
   //
-  // The ceiling itself comes off the LINE, not the product: it was frozen at
-  // checkout with the rest of the snapshot, so an admin editing the catalogue
-  // mid-flight cannot change what this buyer was shown.
+  // The product's own rate comes off the LINE, not the product record: it was
+  // frozen at checkout with the rest of the snapshot, so an admin editing the
+  // catalogue mid-flight cannot change what this buyer was shown. The category
+  // and shop-wide rates are config and resolve live, here.
   let entries = 0;
   for (const line of order.products) {
-    const applied = applyShopEntryCap(inheritedMultiplier, line, caps);
+    const applied = resolveEntryMultiplierFor(line, multipliers);
     // Recorded per line so support can answer "why did this item give three"
     // for a mixed order. Saved by the order.save() on either path below.
     line.entryMultiplierApplied = applied;
-    entries += (line.includedEntries ?? 0) * line.quantity * applied;
+    entries += entriesForLine(line.includedEntries ?? 0, line.quantity, applied);
   }
 
   // Zero is the normal state while the feature ships dark. Returning before
@@ -173,7 +157,7 @@ async function grantShopEntries(
 
 export async function finalizeShopOrder(
   paymentIntent: Stripe.PaymentIntent,
-  { entryMultiplier, requestContext }: FinalizeShopOrderOptions
+  { requestContext }: FinalizeShopOrderOptions
 ): Promise<FinalizeShopOrderResult> {
   const orderId = paymentIntent.metadata?.orderId;
   if (!orderId) {
@@ -216,7 +200,7 @@ export async function finalizeShopOrder(
 
     const entriesGranted =
       existing.entriesGranted === undefined
-        ? await grantShopEntries(existing, paymentIntent.id, entryMultiplier)
+        ? await grantShopEntries(existing, paymentIntent.id)
         : existing.entriesGranted;
 
     return { status: "already_processed", orderNumber: existing.orderNumber, entriesGranted };
@@ -298,7 +282,7 @@ export async function finalizeShopOrder(
   // customer in full and returns — granting before that check would leave a fully
   // refunded order holding its entries, and the refund reversal cannot clean it
   // up (it fails closed when the BenefitsGranted row is not yet committed).
-  const entriesGranted = await grantShopEntries(order, paymentIntent.id, entryMultiplier);
+  const entriesGranted = await grantShopEntries(order, paymentIntent.id);
 
   // Receipt AFTER the grant, so it can state the entries the customer actually
   // received. Sending it earlier would read order.entriesGranted before it was set

@@ -223,3 +223,18 @@ field have no value at all — MongoDB sorts a missing field before any number �
 `npm run backfill:product-display-order` assigns 1..N in today's customer-facing order
 (`createdAt` desc), leaving the storefront visually identical while turning the order into data.
 Dry-run by default; `:apply` writes.
+
+### `/api/admin/shop/entry-multiplier` — rates, not ceilings (2026-08-20)
+
+Supersedes the ceiling payload described above. The field names changed with the model:
+
+| Field | Writes to |
+| --- | --- |
+| `multiplier` | `ShopEntryMultiplierConfig.multiplier` (shop-wide) |
+| `categoryMultipliers` | `ShopEntryMultiplierConfig.categoryMultipliers` |
+| `productMultipliers` | `Product.entryMultiplier`, via one `bulkWrite` |
+
+`GET /api/products` now returns a resolved `entryMultiplier` per row. The tier chain is collapsed
+**server-side** — the category and shop-wide rates are admin config the browser has no business
+holding — so a listing card and the product page print the same number by construction rather
+than by two independent resolutions agreeing.

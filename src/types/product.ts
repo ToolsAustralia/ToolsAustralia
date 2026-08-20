@@ -56,7 +56,7 @@ export interface Product {
    * A ceiling, never a rate: the grant applies `min(inherited, cap)`, so it can
    * only hold merchandise below the pack multiplier, never lift it above.
    */
-  entryMultiplierCap?: number | null;
+  entryMultiplier?: number | null;
   /**
    * `false` for print-to-order items, which hold `stock: 0` permanently because the
    * printer makes each one on demand. Anything reading stock to decide availability

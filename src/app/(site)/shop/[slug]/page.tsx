@@ -23,8 +23,8 @@ import { shouldShowReviews, displayableReviews, displayAverage } from "@/utils/s
 // It ships in the ProductCard module, which this route already loads for the
 // related-products row below.
 import { MemberPriceLine } from "@/components/ui/ProductCard";
-import { loadShopEntryCaps } from "@/services/shop/resolveShopEntryMultiplier";
-import { resolveCapFor } from "@/utils/shop/entry-multiplier";
+import { loadShopEntryMultipliers } from "@/services/shop/resolveShopEntryMultiplier";
+import { resolveEntryMultiplierFor } from "@/utils/shop/entry-multiplier";
 
 // nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
 // (see docs/security-csp/architecture.md "Route classes").
@@ -207,9 +207,9 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   // browser has no business reading in full. The live promo rate is still read
   // on the client, and the same `min` is applied there — so the number this
   // page prints and the number the webhook grants come from one helper.
-  const entryMultiplierCap = resolveCapFor(
-    { category: product.category, entryMultiplierCap: product.entryMultiplierCap },
-    await loadShopEntryCaps()
+  const entryMultiplier = resolveEntryMultiplierFor(
+    { category: product.category, entryMultiplier: product.entryMultiplier },
+    await loadShopEntryMultipliers()
   );
   const serializedRelatedProducts = JSON.parse(JSON.stringify(relatedProducts));
 
@@ -395,7 +395,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             </div>
 
             {/* Interactive Components */}
-            <ProductInteractions product={serializedProduct} entryMultiplierCap={entryMultiplierCap} />
+            <ProductInteractions product={serializedProduct} entryMultiplier={entryMultiplier} />
 
             {/* Tabs live INSIDE the right column, not below the grid.
                 This is what gives the sticky image something to stick against: the

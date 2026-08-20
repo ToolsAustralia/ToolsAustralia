@@ -26,7 +26,7 @@ export interface IOrder extends Document {
      * Category and shop-wide caps are config rather than product data and so
      * resolve live at webhook time, alongside the promo itself.
      */
-    entryMultiplierCap?: number | null;
+    entryMultiplier?: number | null;
     /**
      * What the grant actually multiplied this line by. Per line, not per order:
      * a cart holding a capped tee beside an uncapped hoodie has no single
@@ -143,7 +143,7 @@ const OrderSchema = new Schema<IOrder>(
         // this the per-product tier would apply on the page and silently not
         // apply to the grant. The category and shop-wide caps are config, not
         // product data, and resolve live at webhook time alongside the promo.
-        entryMultiplierCap: { type: Number, default: null, min: 1, max: 10 },
+        entryMultiplier: { type: Number, default: null, min: 1, max: 10 },
         // What the grant actually multiplied by, per line. Not order-level:
         // a cart holding a capped tee and an uncapped hoodie has no single
         // multiplier, and support needs to answer "why did this item give 3".

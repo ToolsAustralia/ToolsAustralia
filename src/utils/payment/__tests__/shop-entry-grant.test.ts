@@ -10,12 +10,12 @@ import Order from "@/models/Order";
 import ShopEntryMultiplierConfig, {
   SHOP_ENTRY_MULTIPLIER_CONFIG_ID,
 } from "@/models/ShopEntryMultiplierConfig";
-import { loadShopEntryCaps } from "@/services/shop/resolveShopEntryMultiplier";
+import { loadShopEntryMultipliers } from "@/services/shop/resolveShopEntryMultiplier";
 import {
-  applyShopEntryCap,
+  entriesForLine,
   normaliseCategoryKey,
-  resolveCapFor,
-  type ShopEntryCaps,
+  resolveEntryMultiplierFor,
+  type ShopEntryMultipliers,
 } from "@/utils/shop/entry-multiplier";
 
 /**
@@ -193,7 +193,7 @@ async function run() {
       orderNumber: `SHOP-TEST-${Date.now().toString(36).toUpperCase()}`,
       user: userId,
       products: [
-        { product: new mongoose.Types.ObjectId(), name: "Staple Tee", sku: "TEE-M", includedEntries: 5, quantity: 2, price: 45.95, category: "Apparel", entryMultiplierCap: 2 },
+        { product: new mongoose.Types.ObjectId(), name: "Staple Tee", sku: "TEE-M", includedEntries: 5, quantity: 2, price: 45.95, category: "Apparel", entryMultiplier: 2 },
         { product: new mongoose.Types.ObjectId(), name: "Torquay Jacket", sku: "JKT-L", includedEntries: 8, quantity: 1, price: 79.95, category: "Apparel" },
       ],
       subtotal: 171.85,
@@ -209,7 +209,7 @@ async function run() {
         includedEntries?: number;
         quantity: number;
         category?: string;
-        entryMultiplierCap?: number | null;
+        entryMultiplier?: number | null;
       }[];
       entriesGranted?: number;
     } | null>();
@@ -248,156 +248,177 @@ async function run() {
       assert.equal(base * 10, 0, "shipping dark must stay dark during a promo");
     });
 
-    check("merch never overtakes the packs — across every PAIR of multipliers", () => {
-      // The previous version divided both sides by the same `m`, so all four
-      // iterations were algebraically identical and it asserted nothing about
-      // multipliers at all. It could not have failed.
+    check("merch value per entry is now an ADMIN decision, not a guarantee", () => {
+      // This used to assert that merchandise could never beat a pack on value per
+      // entry, and it held BY CONSTRUCTION because merch inherited the pack rate
+      // and could only be capped below it.
       //
-      // The real property needs TWO rates: what the packs run at, and what merch
-      // runs at after the cap. Merch must stay worse value per entry for every
-      // reachable pair — and the cap is what makes that true, since it can only
-      // ever lower the merch rate.
+      // That invariant is gone: merchandise carries its own multiplier now (owner
+      // decision 2026-08-20). The test is kept, inverted, to record that the
+      // protection is no longer structural — so nobody reads its absence as an
+      // oversight and nobody assumes the old guarantee still applies.
       const apprentice = { price: 25, entries: 3 };
       const tee = { price: 45.95, entries: 5 };
-      const jacket = { price: 79.95, entries: 8 };
       const per = (x: { price: number; entries: number }, m: number) => x.price / (x.entries * m);
 
-      for (let packM = 1; packM <= 10; packM++) {
-        for (let capValue = 1; capValue <= 10; capValue++) {
-          const merchM = applyShopEntryCap(packM, {}, {
-            shopCap: capValue,
-            categoryCaps: new Map(),
-          });
-          assert.ok(merchM <= packM, `cap ${capValue} RAISED merch to ${merchM} against pack ${packM}`);
-          assert.ok(
-            per(apprentice, packM) < per(tee, merchM) && per(tee, merchM) < per(jacket, merchM),
-            `ladder inverted: pack ${packM}x, merch ${merchM}x`
-          );
-        }
-      }
+      // At 1x the pack is still the better rate — that is the pricing baseline.
+      assert.ok(per(apprentice, 1) < per(tee, 1), "baseline ladder should hold at 1x");
+
+      // But a high enough merch multiplier DOES overtake it, and nothing in the
+      // code stops an admin setting one. The admin panel warns; it does not enforce.
+      const overtakes = [2, 3, 5, 10].some((m) => per(tee, m) < per(apprentice, 1));
+      assert.ok(
+        overtakes,
+        "expected some merch multiplier to beat the pack rate — if this fails the model changed back"
+      );
     });
 
-    // ------------------------------------------------------------- 5. cap tiers
+    // ---------------------------------------------------- 5. multiplier tiers
 
-    const caps = (shopCap: number | null, cats: Record<string, number> = {}): ShopEntryCaps => ({
-      shopCap,
-      categoryCaps: new Map(Object.entries(cats)),
+    const rates = (
+      shopMultiplier: number | null,
+      cats: Record<string, number> = {}
+    ): ShopEntryMultipliers => ({
+      shopMultiplier,
+      categoryMultipliers: new Map(Object.entries(cats)),
     });
 
     check("the product cap wins over category and shop", () => {
-      assert.equal(resolveCapFor({ category: "Apparel", entryMultiplierCap: 2 }, caps(9, { apparel: 6 })), 2);
+      assert.equal(resolveEntryMultiplierFor({ category: "Apparel", entryMultiplier: 2 }, rates(9, { apparel: 6 })), 2);
     });
 
     check("the category cap wins over shop when the product has none", () => {
-      const c = caps(9, { apparel: 6 });
-      assert.equal(resolveCapFor({ category: "Apparel" }, c), 6);
-      assert.equal(resolveCapFor({ category: "Apparel", entryMultiplierCap: null }, c), 6);
+      const c = rates(9, { apparel: 6 });
+      assert.equal(resolveEntryMultiplierFor({ category: "Apparel" }, c), 6);
+      assert.equal(resolveEntryMultiplierFor({ category: "Apparel", entryMultiplier: null }, c), 6);
     });
 
     check("a category with no cap falls through to shop-wide, not to 1", () => {
-      assert.equal(resolveCapFor({ category: "power-tools" }, caps(9, { apparel: 6 })), 9);
+      assert.equal(resolveEntryMultiplierFor({ category: "power-tools" }, rates(9, { apparel: 6 })), 9);
     });
 
-    check("every tier absent inherits unchanged", () => {
-      assert.equal(resolveCapFor({ category: "Apparel" }, caps(null)), null);
-      assert.equal(applyShopEntryCap(10, { category: "Apparel" }, caps(null)), 10);
+    check("every tier absent resolves to 1x — the advertised entries, unmultiplied", () => {
+      assert.equal(resolveEntryMultiplierFor({ category: "Apparel" }, rates(null)), 1);
+      assert.equal(resolveEntryMultiplierFor({}, rates(null)), 1);
     });
 
     check("category keys match whatever casing or padding was typed", () => {
       // Product.category is free text behind a free-text admin input, and the
       // vocabulary is already forked. Keyed on the raw string, an admin retyping
       // the category would silently orphan the cap.
-      const c = caps(null, { [normaliseCategoryKey("Apparel")]: 3 });
+      const c = rates(null, { [normaliseCategoryKey("Apparel")]: 3 });
       for (const written of ["Apparel", "apparel", "APPAREL", "  Apparel  ", "aPPaRel"]) {
-        assert.equal(resolveCapFor({ category: written }, c), 3, `missed on ${JSON.stringify(written)}`);
+        assert.equal(resolveEntryMultiplierFor({ category: written }, c), 3, `missed on ${JSON.stringify(written)}`);
       }
     });
 
-    check("no tier, at any value, can raise merch above the promo", () => {
-      // The invariant itself, over every reachable combination. This assertion
-      // would have to fail before merch could become a cheaper route into a draw
-      // than the packs.
-      for (let inherited = 1; inherited <= 10; inherited++) {
-        for (let v = 1; v <= 10; v++) {
-          const subjects = [
-            { entryMultiplierCap: v },
-            { category: "Apparel" },
-            { category: "Apparel", entryMultiplierCap: v },
-            {},
-          ];
-          const configs = [caps(v), caps(null, { apparel: v }), caps(v, { apparel: v }), caps(null)];
-          for (const c of configs) {
-            for (const subject of subjects) {
-              const got = applyShopEntryCap(inherited, subject, c);
-              assert.ok(got <= inherited, `raised ${inherited} -> ${got}`);
-              assert.ok(got >= 1, `dropped below 1: ${got}`);
-            }
+    check("the resolver always returns a usable rate — never 0, null or NaN", () => {
+      // What replaced the old ceiling invariant. The rate is now whatever an admin
+      // set, so there is no upper bound to assert; what still must hold is that
+      // every reachable combination yields a positive number the grant can
+      // multiply by. A 0 or NaN here silently revokes the entries a product
+      // advertises, and nothing downstream would notice.
+      for (let v = 1; v <= 10; v++) {
+        const subjects = [
+          { entryMultiplier: v },
+          { category: "Apparel" },
+          { category: "Apparel", entryMultiplier: v },
+          { category: "unknown-category" },
+          { entryMultiplier: null },
+          {},
+        ];
+        const configs = [
+          rates(v),
+          rates(null, { apparel: v }),
+          rates(v, { apparel: v }),
+          rates(null),
+        ];
+        for (const c of configs) {
+          for (const subject of subjects) {
+            const got = resolveEntryMultiplierFor(subject, c);
+            assert.ok(Number.isFinite(got), `not finite: ${got}`);
+            assert.ok(got >= 1, `below 1: ${got}`);
           }
         }
       }
     });
 
+    check("the product rate beats the category rate beats the shop rate", () => {
+      // Explicit ordering, because with no ceiling left to clamp against, the tier
+      // chain IS the whole behaviour.
+      assert.equal(resolveEntryMultiplierFor({ category: "Apparel", entryMultiplier: 2 }, rates(9, { apparel: 6 })), 2);
+      assert.equal(resolveEntryMultiplierFor({ category: "Apparel" }, rates(9, { apparel: 6 })), 6);
+      assert.equal(resolveEntryMultiplierFor({ category: "tools" }, rates(9, { apparel: 6 })), 9);
+    });
+
     check("a mixed cart multiplies each line by its own rate", () => {
       // The defect a single order-level scalar hides: sum-then-multiply applies
-      // one line's rate to every line.
-      const c = caps(null, { apparel: 1 });
+      // one line's rate to every line. Two categories, two different rates.
+      const c = rates(null, { apparel: 2, "power-tools": 5 });
       const lines = [
-        { includedEntries: 5, quantity: 2, category: "Apparel" },     // capped at 1x
-        { includedEntries: 8, quantity: 1, category: "power-tools" }, // uncapped
+        { includedEntries: 5, quantity: 2, category: "Apparel" },     // 2x
+        { includedEntries: 8, quantity: 1, category: "power-tools" }, // 5x
       ];
-      const inherited = 5;
       const total = lines.reduce(
-        (sum, l) => sum + l.includedEntries * l.quantity * applyShopEntryCap(inherited, l, c),
+        (sum, l) => sum + entriesForLine(l.includedEntries, l.quantity, resolveEntryMultiplierFor(l, c)),
         0
       );
-      assert.equal(total, 5 * 2 * 1 + 8 * 1 * 5, "expected 10 + 40");
-      assert.notEqual(total, baseEntriesFor(lines) * inherited, "sum-then-multiply must not agree");
+      assert.equal(total, 5 * 2 * 2 + 8 * 1 * 5, "expected 20 + 40");
+
+      // Whatever single scalar you pick, sum-then-multiply cannot reproduce it.
+      for (const scalar of [1, 2, 5, 10]) {
+        assert.notEqual(
+          total,
+          baseEntriesFor(lines) * scalar,
+          `sum-then-multiply at ${scalar}x must not agree`
+        );
+      }
     });
 
     // ------------------------------------------- 6. the cap survives the write
 
-    check("Order line entryMultiplierCap survives the write", () => {
+    check("Order line entryMultiplier survives the write", () => {
       // Same strict-mode failure as includedEntries, and worse in effect: the
       // ceiling would apply on the product page and silently never reach the
       // grant, because the webhook reads it from the line and nowhere else.
-      assert.equal(rereadOrder!.products[0].entryMultiplierCap, 2, "tee ceiling was dropped");
+      assert.equal(rereadOrder!.products[0].entryMultiplier, 2, "tee ceiling was dropped");
       assert.equal(
-        rereadOrder!.products[1].entryMultiplierCap ?? null,
+        rereadOrder!.products[1].entryMultiplier ?? null,
         null,
         "uncapped line should read as null, not as a number"
       );
     });
 
     const configDoc = await ShopEntryMultiplierConfig.getOrCreate();
-    configDoc.cap = 3;
-    configDoc.categoryCaps = new Map([
+    configDoc.multiplier = 3;
+    configDoc.categoryMultipliers = new Map([
       [normaliseCategoryKey("Apparel"), 2],
       [normaliseCategoryKey("power-tools"), 5],
     ]);
     await configDoc.save();
     const rereadConfig = await ShopEntryMultiplierConfig.findById(configDoc._id).lean<{
-      cap: number | null;
-      categoryCaps: Record<string, number>;
+      multiplier: number | null;
+      categoryMultipliers: Record<string, number>;
     } | null>();
 
-    check("the shop cap and the category map both survive the write", () => {
-      assert.equal(rereadConfig!.cap, 3, "shop-wide cap was dropped");
-      assert.equal(rereadConfig!.categoryCaps.apparel, 2, "apparel cap was dropped");
-      assert.equal(rereadConfig!.categoryCaps["power-tools"], 5, "power-tools cap was dropped");
+    check("the shop multiplier and the category map both survive the write", () => {
+      assert.equal(rereadConfig!.multiplier, 3, "shop-wide multiplier was dropped");
+      assert.equal(rereadConfig!.categoryMultipliers.apparel, 2, "apparel multiplier was dropped");
+      assert.equal(rereadConfig!.categoryMultipliers["power-tools"], 5, "power-tools multiplier was dropped");
     });
 
     // Awaited out here because `check` is synchronous — an async callback
     // would have its rejection swallowed and the test would pass regardless.
-    const loadedCaps = await loadShopEntryCaps();
+    const loadedCaps = await loadShopEntryMultipliers();
 
-    check("loadShopEntryCaps reads back what was saved, as a real Map", () => {
+    check("loadShopEntryMultipliers reads back what was saved, as a real Map", () => {
       // Mongoose hands back its own Map subclass here and a plain object from a
       // lean() read; the loader normalises both, and this is the assertion that
       // proves it rather than assuming it.
       const caps = loadedCaps;
-      assert.equal(caps.shopCap, 3);
-      assert.equal(caps.categoryCaps.get("apparel"), 2);
-      assert.equal(resolveCapFor({ category: "Apparel" }, caps), 2, "category tier did not bind");
+      assert.equal(caps.shopMultiplier, 3);
+      assert.equal(caps.categoryMultipliers.get("apparel"), 2);
+      assert.equal(resolveEntryMultiplierFor({ category: "Apparel" }, caps), 2, "category tier did not bind");
     });
 
     // The admin write routes strip unknown keys at the Zod boundary BEFORE
@@ -410,11 +431,11 @@ async function run() {
       "src/app/api/admin/products/[id]/route.ts",
     ].map((f) => ({ f, src: readFileSync(f, "utf8") }));
 
-    check("both admin product routes declare entryMultiplierCap in their Zod schema", () => {
+    check("both admin product routes declare entryMultiplier in their Zod schema", () => {
       for (const { f, src } of routeSources) {
         assert.ok(
-          src.includes("entryMultiplierCap"),
-          `${f} would strip entryMultiplierCap before Mongoose ever sees it`
+          src.includes("entryMultiplier"),
+          `${f} would strip entryMultiplier before Mongoose ever sees it`
         );
       }
     });

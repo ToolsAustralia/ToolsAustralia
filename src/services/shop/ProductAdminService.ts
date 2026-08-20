@@ -24,7 +24,7 @@ export interface ProductInput {
   variants: ProductVariantInput[];
   includedEntries?: number;
   /** Ceiling on the promo multiplier for this product. null = fall through. */
-  entryMultiplierCap?: number | null;
+  entryMultiplier?: number | null;
   printArtwork?: ProductArtworkInput[];
   trackInventory?: boolean;
   stock?: number;

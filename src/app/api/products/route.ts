@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { z } from "zod";
+import { loadShopEntryMultipliers } from "@/services/shop/resolveShopEntryMultiplier";
+import { resolveEntryMultiplierFor } from "@/utils/shop/entry-multiplier";
 // import { Product as ProductType, ProductSearchResult } from "@/types/product"; // TODO: Use for type validation
 
 // Next.js ISR configuration
@@ -79,7 +81,8 @@ const equalsAnyOf = (values: string[]) => ({ $in: values.map((v) => new RegExp(`
  * are supplier-facing, and the product page projects them out too.
  */
 const LIST_FIELDS =
-  "_id name price images brand category stock trackInventory includedEntries rating reviewCount displayRating displayReviewCount isFeatured createdAt updatedAt";
+  "_id name price images brand category stock trackInventory includedEntries entryMultiplier displayOrder " +
+  "rating reviewCount displayRating displayReviewCount isFeatured createdAt updatedAt";
 
 export async function GET(request: NextRequest) {
   try {
@@ -186,13 +189,30 @@ export async function GET(request: NextRequest) {
     // Execute query with timeout and optimization
     const queryTimeout = 10000; // 10 seconds timeout
 
-    const [products, totalCount] = (await Promise.race([
+    const [rawProducts, totalCount, entryCaps] = (await Promise.race([
       Promise.all([
         Product.find(filter).select(LIST_FIELDS).sort(sort).skip(skip).limit(limit).lean().maxTimeMS(queryTimeout),
         Product.countDocuments(filter).maxTimeMS(queryTimeout),
+        // One config read for the whole page, not one per product.
+        loadShopEntryMultipliers(),
       ]),
       new Promise((_, reject) => setTimeout(() => reject(new Error("Query timeout")), queryTimeout)),
-    ])) as [unknown[], number];
+    ])) as [Record<string, unknown>[], number, Awaited<ReturnType<typeof loadShopEntryMultipliers>>];
+
+    // Collapse the tier chain server-side and hand each row ONE number. The
+    // category and shop-wide settings are admin config the browser has no
+    // business holding, and resolving here is what stops a listing card and the
+    // product page printing different entry counts for the same product.
+    const products = rawProducts.map((p) => ({
+      ...p,
+      entryMultiplier: resolveEntryMultiplierFor(
+        {
+          category: p.category as string | undefined,
+          entryMultiplier: p.entryMultiplier as number | null | undefined,
+        },
+        entryCaps
+      ),
+    }));
 
     // Calculate pagination info
     const totalPages = Math.ceil(totalCount / limit);

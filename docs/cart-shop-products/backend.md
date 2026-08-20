@@ -98,61 +98,55 @@ become a third copy of that wrapper (the webhook handler and the upsell purchase
 hold two). Both sides move together, so merch can never become better value per entry than the
 packs during a promo.
 
-### The multiplier CEILING — three tiers, downward only (2026-08-20)
+### Merchandise carries its OWN entry multiplier (2026-08-20)
 
-Inheriting is the default, not the whole story: an admin can hold merchandise **below** the
-inherited rate, never above it. The ceiling resolves most-specific-first, and the clamp is
-applied once, at the end:
+**Merchandise does NOT inherit the one-time pack multiplier.** It did until 2026-08-20, and a
+clamp design briefly sat on top of that; both are gone. A pack promo now has no effect on
+garment entries whatsoever — if merch should run at 5×, an admin sets 5×.
+
+Three tiers, most specific first:
 
 ```
-cap = line.entryMultiplierCap                     // 1. this product
-   ?? config.categoryCaps[norm(line.category)]    // 2. its category
-   ?? config.cap                                  // 3. the whole shop
-   ?? null                                        // 4. inherit unchanged
-
-applied = cap == null ? inherited : Math.min(inherited, cap)
+multiplier = line.entryMultiplier                        // 1. this product
+          ?? config.categoryMultipliers[norm(category)]  // 2. its category
+          ?? config.multiplier                           // 3. the whole shop
+          ?? 1                                           // 4. unmultiplied
 ```
 
-`Math.min` sits **outside** the tier chain deliberately. Because it runs once, after resolution,
-no tier — however specific — can return a value above `inherited`. The "merchandise cannot
-overtake the packs" invariant therefore holds *by construction* rather than by a runtime check
-at each of four tiers, three of which somebody would eventually forget. It is also why three
-tiers of control are safe: they are three ways to set a **ceiling**, not three ways to set a
-rate.
+`1` is the floor and the default, so a shop with nothing configured grants exactly the entries a
+product advertises. There is no "off" below that: zero would revoke the entries the product
+itself promises, and that decision belongs on `includedEntries`.
 
-One helper — `services/shop/resolveShopEntryMultiplier` — is called by both the product page and
-the grant. Two call sites resolving independently is how a page promises 40 and the webhook
-writes 8.
+**What this gave up.** The previous design applied `min(packRate, ceiling)`, which made it
+*structurally impossible* for merchandise to be better value per entry than a pack. That
+guarantee no longer exists — the merch rate is whatever an admin types. The ladder test in
+`shop-entry-grant.test.ts` was inverted rather than deleted, so it now records the absence of
+the protection instead of asserting a property that is no longer true. Treat an undercutting
+rate as a pricing decision someone has to make deliberately, not something the code prevents.
 
-**Entries are summed PER LINE, not sum-then-multiply.** `Σ(includedEntries × qty) × multiplier`
-is only correct while every product shares one rate; per-product ceilings make a mixed cart
-reachable, and a single scalar would silently apply one line's rate to the other. The grant
-loops, resolves per line, and records `entryMultiplierApplied` on each line — per line rather
-than per order, because a cart holding a capped tee beside an uncapped hoodie has no single
-multiplier to record.
+**Entries are summed PER LINE.** `Σ(includedEntries × qty) × oneMultiplier` is only correct
+while every product shares a rate, and two categories with different multipliers make a mixed
+cart reachable. The grant loops, resolves per line via `entriesForLine`, and records
+`entryMultiplierApplied` on each line — per line rather than per order, because a cart holding
+a 2× garment beside a 5× tool has no single multiplier to record.
 
-**The product tier is snapshotted onto the order line** (`Order.products[].entryMultiplierCap`,
-copied from the catalog in `ShopOrderService.createPendingOrder`). The webhook never loads
-products, so without the snapshot the per-product ceiling would apply on the page and silently
-never reach the grant. The rule that decides where each tier lives: **product data is
-snapshotted, config resolves live** — so the category and shop-wide ceilings are read at webhook
-time alongside the promo itself.
+**The product tier is snapshotted onto the order line.** The webhook never loads products, so
+without it the rate would apply on the page and never reach the grant. The rule that decides
+where each tier lives: **product data is snapshotted, config resolves live** — so the category
+and shop-wide rates are read at webhook time.
 
-**Category keys are normalised** (`trim().toLowerCase()`) on write *and* on read.
-`Product.category` is free text with no enum, behind a free-text admin input, and the vocabulary
-is already forked — the print sync writes `"Apparel"` while the seeded tools carry
-`"power-tools"` and `"measuring"`. Keyed on the raw string, a ceiling stops matching the moment
-somebody retypes the category, with no error anywhere. Normalising only one side would be worse
-than neither: the mismatch would then depend on which value happened to be saved first.
+**Category keys are normalised** (`trim().toLowerCase()`) on write *and* read. `Product.category`
+is free text with no enum and the vocabulary is already forked — `"Apparel"` from the sync
+beside `"power-tools"` from the seeds. Keyed on the raw string, a rate stops matching the moment
+somebody retypes the category, with no error anywhere.
 
-**On a failed config read the loader returns NO ceilings — never a ceiling of 1.** A database
-blip must not silently withhold entries the product page promised; falling back to "inherit" can
-only ever grant what the promo already permits.
+**On a failed config read the loader falls back to 1×**, never to a rate nobody set. That can
+only ever grant exactly what the product advertises.
 
-Admin surface: `PUT /api/admin/shop/entry-multiplier` (`shop.edit`) for the shop-wide and
-per-category ceilings, and `entryMultiplierCap` on the product itself through the existing
-product routes. Both product routes had to declare it in their Zod schema — those strip unknown
-keys before Mongoose sees them, so a model field alone would never save.
+**The Stripe webhook no longer resolves a promo rate for shop payments.** It used to call
+`getActivePromoMultiplier("one-time")` and pass it in; that plumbing was removed rather than
+left dangling, because a dead parameter named "promo multiplier" is how the inheritance quietly
+comes back.
 
 ### Ordering inside `finalizeShopOrder` — all three constraints are load-bearing
 

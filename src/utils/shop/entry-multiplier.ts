@@ -1,36 +1,46 @@
 /**
- * The merchandise entry-multiplier CEILING — pure logic, no data layer.
+ * The merchandise entry multiplier — pure logic, no data layer.
  *
- * Deliberately separate from `services/shop/resolveShopEntryMultiplier`, which
- * reads the config from Mongo. The product page needs `applyShopEntryCap` on the
- * CLIENT (it applies the ceiling to a live promo rate read in the browser), and a
- * client component that reaches a module importing `@/models/**` crashes: mongoose
- * is a `serverExternalPackage`, so `mongoose.models` is `undefined` in that bundle
- * and the model file throws on load.
+ * Merchandise carries its OWN multiplier, set in admin. It does not inherit the
+ * one-time pack rate (owner decision, 2026-08-20, reversing the 2026-08-17
+ * "merch inherits" design). A pack promo therefore has no effect on garment
+ * entries: if merch should run at 5x, an admin sets 5x here.
  *
- * So the rule for this file: **nothing here may import a model, `@/lib/mongodb`,
- * or mongoose.** Everything here must be safe to run in a browser.
+ * Three tiers, most specific first:
+ *
+ *     product  ->  category  ->  whole shop  ->  1x (no multiplication)
+ *
+ * `1` is the floor and the default, so a shop with nothing configured grants
+ * exactly the entries a product advertises. There is no "off" below that: zero
+ * would revoke the entries the product itself promises, which is a decision that
+ * belongs on `includedEntries`, not here.
+ *
+ * NOTE FOR WHOEVER READS THIS NEXT: because the merch rate is now independent,
+ * nothing structurally prevents merchandise being better value per entry than a
+ * one-time pack. That protection used to come from `min(packRate, ceiling)`. It
+ * is now a matter of what an admin types, and the admin panel warns rather than
+ * enforces — see ShopEntryMultiplierPanel.
+ *
+ * This file must import NOTHING from `@/models/**`, `@/lib/mongodb`, or
+ * mongoose: the product page applies it in the browser, and a client bundle that
+ * reaches a Mongoose model throws on load.
  */
 
-/**
- * The lowest and highest ceiling an admin may set.
- *
- * 1 is the floor rather than 0 because a ceiling of zero would revoke the free
- * entries a product advertises — a pricing decision belonging on the product
- * (`includedEntries`), not a promo control. 10 is the top of PROMO_MULTIPLIERS,
- * so a ceiling above it could never bind.
- */
-export const SHOP_ENTRY_CAP_MIN = 1;
-export const SHOP_ENTRY_CAP_MAX = 10;
+/** The lowest and highest multiplier an admin may set. */
+export const SHOP_ENTRY_MULTIPLIER_MIN = 1;
+export const SHOP_ENTRY_MULTIPLIER_MAX = 10;
+
+/** Applied when no tier specifies anything: the advertised entries, unmultiplied. */
+export const DEFAULT_ENTRY_MULTIPLIER = 1;
 
 /**
- * Normalises a product category into a ceiling key.
+ * Normalises a product category into a config key.
  *
  * `Product.category` is free text with no enum, behind a free-text admin input,
- * and the vocabulary is ALREADY forked — the print-provider sync writes "Apparel"
- * while the seeded tools carry "power-tools" and "measuring". Keyed on the raw
- * string, a ceiling stops matching the moment somebody retypes the category with
- * different casing or a trailing space, with no error anywhere.
+ * and the vocabulary is ALREADY forked -- the print-provider sync writes
+ * "Apparel" while the seeded tools carry "power-tools" and "measuring". Keyed on
+ * the raw string, a setting stops matching the moment somebody retypes the
+ * category with different casing or a trailing space, with no error anywhere.
  *
  * Must be applied on write AND on read. Applying it to only one side is worse
  * than applying it to neither, because the mismatch then depends on which value
@@ -43,58 +53,57 @@ export function normaliseCategoryKey(category: string): string {
 /**
  * The product-shaped facts the tier chain needs. Deliberately structural rather
  * than `IProduct`: the grant reads it from a frozen ORDER LINE, the page reads it
- * from a product document, and forcing either to satisfy a Mongoose document type
- * would mean a fetch neither caller needs — and would drag the model into the
- * client bundle, which is the bug this split exists to prevent.
+ * from a product document, and the listing card reads it from a JSON row.
  */
 export interface ShopEntryMultiplierSubject {
   category?: string | null;
-  entryMultiplierCap?: number | null;
+  entryMultiplier?: number | null;
 }
 
-/** The ceilings in force, read once so a multi-line order does not re-query per line. */
-export interface ShopEntryCaps {
-  shopCap: number | null;
-  categoryCaps: Map<string, number>;
+/** The admin-set rates, read once so a multi-line order does not re-query per line. */
+export interface ShopEntryMultipliers {
+  shopMultiplier: number | null;
+  categoryMultipliers: Map<string, number>;
 }
 
-/** No ceilings at all — i.e. inherit the promo unchanged. */
-export const NO_CAPS: ShopEntryCaps = { shopCap: null, categoryCaps: new Map() };
+/** Nothing configured — every product resolves to DEFAULT_ENTRY_MULTIPLIER. */
+export const NO_MULTIPLIERS: ShopEntryMultipliers = {
+  shopMultiplier: null,
+  categoryMultipliers: new Map(),
+};
 
 /**
- * The ceiling in force for one product, most specific tier first.
+ * The multiplier in force for one product, most specific tier first.
  *
  * Absence falls through; only an explicit number stops the chain. `null` would be
- * ambiguous with "inherit", so a tier that has nothing to say says nothing.
+ * ambiguous with "use the tier above", so a tier with nothing to say says nothing.
  */
-export function resolveCapFor(
+export function resolveEntryMultiplierFor(
   subject: ShopEntryMultiplierSubject,
-  caps: ShopEntryCaps
-): number | null {
-  if (typeof subject.entryMultiplierCap === "number") return subject.entryMultiplierCap;
+  config: ShopEntryMultipliers
+): number {
+  if (typeof subject.entryMultiplier === "number") return subject.entryMultiplier;
 
   if (subject.category) {
-    const categoryCap = caps.categoryCaps.get(normaliseCategoryKey(subject.category));
-    if (typeof categoryCap === "number") return categoryCap;
+    const forCategory = config.categoryMultipliers.get(normaliseCategoryKey(subject.category));
+    if (typeof forCategory === "number") return forCategory;
   }
 
-  return caps.shopCap;
+  return config.shopMultiplier ?? DEFAULT_ENTRY_MULTIPLIER;
 }
 
 /**
- * The multiplier to apply to one product.
+ * What one line of an order actually grants.
  *
- * `Math.min` sits OUTSIDE the tier chain on purpose. Because it is applied once,
- * after resolution, no tier -- however specific -- can return a value above
- * `inherited`. The 2026-08-17 invariant ("merchandise cannot overtake the packs")
- * therefore holds by construction rather than by a runtime check at each of four
- * tiers, three of which somebody would eventually forget.
+ * Kept here rather than inline in the grant so the product page and the webhook
+ * compute it with the same function — the display and the grant are independent
+ * reads separated by the whole of checkout, and two call sites doing their own
+ * arithmetic is how a page promises 40 and the webhook writes 8.
  */
-export function applyShopEntryCap(
-  inherited: number,
-  subject: ShopEntryMultiplierSubject,
-  caps: ShopEntryCaps
+export function entriesForLine(
+  includedEntries: number,
+  quantity: number,
+  multiplier: number
 ): number {
-  const cap = resolveCapFor(subject, caps);
-  return cap == null ? inherited : Math.min(inherited, cap);
+  return includedEntries * quantity * multiplier;
 }

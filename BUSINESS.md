@@ -48,7 +48,7 @@ per entry (rule 11).
 | Member discount | The tier's shop % (Tradie 5 / Foreman 10 / Boss 20), applied before shipping is assessed |
 | Checkout | **Account required** — `Order.user` is mandatory, so there is no guest checkout |
 | Entry pool | **Major Draw only.** Merchandise never grants Mini Draw entries |
-| Promo multiplier | Merchandise **inherits the one-time pack multiplier**, and an admin can set a **ceiling** to hold it lower — per product, per category, or shop-wide (most specific wins). A ceiling can only ever lower the merch rate, never raise it, so merch can never become better value per entry than the packs during a promo |
+| Entry multiplier | Merchandise carries its **own** multiplier, set in admin — per product, per category, or shop-wide (most specific wins), defaulting to 1×. It does **not** inherit the one-time pack multiplier, so a pack promo does not change what a garment grants. Nothing structurally prevents a merch rate that beats the packs on value per entry; that is now a pricing decision, not a code guarantee |
 | Draw eligibility | Entries are granted to **every** buyer. SA/ACT exclusion is applied by the draw export at winner selection, not at point of sale |
 | Partial refund | Entries already credited **stay**; they are withdrawn only if the whole order is refunded (stated in `/terms` §3d, §5.2 and §17) |
 
@@ -82,14 +82,17 @@ revisit once invoices arrive, not a pass-through. Two consequences worth naming:
 The code path is live; the promise is not made, and nothing renders on a product page at 0.
 Turning it on is an admin edit, not a deploy.
 
-**The merch multiplier has an admin ceiling (2026-08-20).** Merchandise still inherits the
-one-time pack multiplier by default, so a 10× pack weekend multiplies garment entries too. Three
-tiers of ceiling can hold it lower — on a single product (product modal), on a category, or
-shop-wide (Admin → Products → *Merchandise entry multiplier*). The applied rate is
-`min(promo, ceiling)`, so a ceiling is **structurally incapable** of lifting merch above the
-packs; that is what makes three tiers of control safe rather than three ways to cannibalise the
-packs. Every tier defaults to *no ceiling*, i.e. today's behaviour exactly, and clearing them all
-is the kill switch — no deploy needed. Inert until entries are switched on.
+**Merchandise has its OWN entry multiplier (2026-08-20).** It does **not** inherit the one-time
+pack multiplier — a 10× pack weekend leaves garment entries untouched. An admin sets the merch
+rate directly at whichever level fits: one product (product modal), a category, or shop-wide
+(Admin → Shop → *Entry Multipliers*). Most specific wins; with nothing set the rate is 1×, i.e.
+exactly the entries the product advertises.
+
+This reverses the earlier design, in which merch inherited the pack rate and an admin could only
+cap it lower. That version made it *structurally impossible* for merchandise to be better value
+per entry than a pack. **That protection is gone.** Nothing in the code now stops a merch rate
+that undercuts the packs — it is a pricing decision someone makes deliberately. Inert until
+entries are switched on.
 
 Partner access for subscriptions is **lifecycle-gated** — active while the subscription is active, not a fixed window (`partnerDiscountDays: 0`). It re-enables the moment a paused or past-due subscription returns to good standing.
 

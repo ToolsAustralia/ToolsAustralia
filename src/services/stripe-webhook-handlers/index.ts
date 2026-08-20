@@ -863,17 +863,21 @@ async function handlePaymentSuccess(
       // file and is what the one-time path uses; a copy in the shop service would
       // be the third of an identical wrapper.
       webhookLog("info", `Processing shop payment: ${paymentIntent.id}`);
-      const entryMultiplier = await getActivePromoMultiplier("one-time");
+      // NO promo multiplier is resolved for merchandise. It carries its own,
+      // set in admin and resolved inside finalizeShopOrder from the same config
+      // the product page reads (owner decision 2026-08-20 — merch no longer
+      // inherits the one-time pack rate). Passing one here would be dead weight
+      // that reads like the inheritance is still wired up.
       // Click ids recovered from metadata, so the server Purchase is attributable.
       const result = await finalizeShopOrder(paymentIntent, {
-        entryMultiplier,
+
         requestContext: extractRequestContextFromMetadata(paymentIntent.metadata),
       });
       webhookLog(
         "info",
         `Shop payment ${result.status}: ${result.orderNumber ?? "unknown order"} · ${
           result.entriesGranted ?? "no"
-        } entries (${entryMultiplier}x)`
+        } entries`
       );
       return result.status === "fulfilled" || result.status === "already_processed";
     } else if (paymentType === "upsell") {

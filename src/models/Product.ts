@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import { SHOP_ENTRY_CAP_MAX, SHOP_ENTRY_CAP_MIN } from "@/utils/shop/entry-multiplier";
+import { SHOP_ENTRY_MULTIPLIER_MAX, SHOP_ENTRY_MULTIPLIER_MIN } from "@/utils/shop/entry-multiplier";
 
 export interface IProduct extends Document {
   name: string;
@@ -74,7 +74,7 @@ export interface IProduct extends Document {
    * above. That is what keeps a garment from becoming a cheaper route into a
    * draw than the packs during a promo.
    */
-  entryMultiplierCap?: number | null;
+  entryMultiplier?: number | null;
   /**
    * Manual catalogue position, ascending. Same field name and same default as
    * `MiniDraw.displayOrder`, deliberately — the two admin panels do the same job.
@@ -254,11 +254,11 @@ const ProductSchema = new Schema<IProduct>({
     type: Number,
     default: () => Date.now(),
   },
-  entryMultiplierCap: {
+  entryMultiplier: {
     type: Number,
     default: null,
-    min: [SHOP_ENTRY_CAP_MIN, 'Entry multiplier cap cannot be below 1'],
-    max: [SHOP_ENTRY_CAP_MAX, 'Entry multiplier cap cannot exceed 10'],
+    min: [SHOP_ENTRY_MULTIPLIER_MIN, 'Entry multiplier cap cannot be below 1'],
+    max: [SHOP_ENTRY_MULTIPLIER_MAX, 'Entry multiplier cap cannot exceed 10'],
   },
   printArtwork: [{
     url: { type: String, required: true, trim: true },

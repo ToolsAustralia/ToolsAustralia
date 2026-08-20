@@ -8,8 +8,8 @@ import Product from "@/models/Product";
 import ShopEntryMultiplierConfig from "@/models/ShopEntryMultiplierConfig";
 import {
   normaliseCategoryKey,
-  SHOP_ENTRY_CAP_MAX,
-  SHOP_ENTRY_CAP_MIN,
+  SHOP_ENTRY_MULTIPLIER_MAX,
+  SHOP_ENTRY_MULTIPLIER_MIN,
 } from "@/utils/shop/entry-multiplier";
 
 /**
@@ -18,30 +18,30 @@ import {
  * Nullable rather than merely optional: the UI has to be able to CLEAR a cap,
  * and an optional field cannot distinguish "leave it alone" from "remove it".
  */
-const capSchema = z
+const multiplierSchema = z
   .number()
   .int()
-  .min(SHOP_ENTRY_CAP_MIN)
-  .max(SHOP_ENTRY_CAP_MAX)
+  .min(SHOP_ENTRY_MULTIPLIER_MIN)
+  .max(SHOP_ENTRY_MULTIPLIER_MAX)
   .nullable();
 
 const updateSchema = z.object({
-  cap: capSchema,
+  multiplier: multiplierSchema,
   /**
    * Keys are normalised server-side before saving, so a client sending "Apparel"
    * and one sending "apparel" cannot create two rows that shadow each other.
    */
-  categoryCaps: z.record(z.string().trim().min(1), capSchema).optional(),
+  categoryMultipliers: z.record(z.string().trim().min(1), multiplierSchema).optional(),
   /**
    * Per-product ceilings, keyed by product id. Handled here rather than through
    * the product routes so all three tiers save together on one button — a
    * partial save across tiers is how a page ends up showing a ceiling that was
    * never written.
    */
-  productCaps: z
+  productMultipliers: z
     .record(
       z.string().regex(/^[0-9a-fA-F]{24}$/, "not a product id"),
-      capSchema
+      multiplierSchema
     )
     .optional(),
 });
@@ -67,9 +67,9 @@ export async function GET() {
     // ceiling, and nothing else. An unprojected read here would ship variants,
     // reviews and print artwork for the whole catalogue on every page load.
     const products = await Product.find({})
-      .select("_id name category entryMultiplierCap")
+      .select("_id name category entryMultiplier")
       .sort({ name: 1 })
-      .lean<{ _id: unknown; name: string; category?: string; entryMultiplierCap?: number | null }[]>();
+      .lean<{ _id: unknown; name: string; category?: string; entryMultiplier?: number | null }[]>();
 
     const rawCategories = products.map((p) => p.category ?? "");
     // Collapsed by normalised key so "Apparel" and "apparel " offer once, not
@@ -81,7 +81,7 @@ export async function GET() {
       if (!byKey.has(key)) byKey.set(key, raw.trim());
     }
 
-    const stored = config.categoryCaps ?? new Map<string, number>();
+    const stored = config.categoryMultipliers ?? new Map<string, number>();
     const entries =
       stored instanceof Map
         ? [...stored.entries()]
@@ -90,8 +90,8 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        cap: config.cap ?? null,
-        categoryCaps: Object.fromEntries(entries),
+        multiplier: config.multiplier ?? null,
+        categoryMultipliers: Object.fromEntries(entries),
         categories: [...byKey.entries()]
           .map(([key, label]) => ({ key, label }))
           .sort((a, b) => a.label.localeCompare(b.label)),
@@ -99,7 +99,7 @@ export async function GET() {
           id: String(prod._id),
           name: prod.name,
           category: prod.category ?? "",
-          cap: prod.entryMultiplierCap ?? null,
+          multiplier: prod.entryMultiplier ?? null,
         })),
         updatedAt: config.updatedAt,
       },
@@ -139,17 +139,17 @@ export async function PUT(request: NextRequest) {
     await connectDB();
     const config = await ShopEntryMultiplierConfig.getOrCreate();
 
-    config.cap = parsed.data.cap;
+    config.multiplier = parsed.data.multiplier;
 
     // Normalised on write as well as on read. Applying it to only one side is
     // worse than neither, because the mismatch then depends on which value
     // happened to be saved first.
     const next = new Map<string, number>();
-    for (const [rawKey, value] of Object.entries(parsed.data.categoryCaps ?? {})) {
+    for (const [rawKey, value] of Object.entries(parsed.data.categoryMultipliers ?? {})) {
       if (value == null) continue; // null clears the row
       next.set(normaliseCategoryKey(rawKey), value);
     }
-    config.categoryCaps = next;
+    config.categoryMultipliers = next;
 
     config.updatedBy = new mongoose.Types.ObjectId(session.user.id);
     await config.save();
@@ -157,15 +157,15 @@ export async function PUT(request: NextRequest) {
     // One bulkWrite rather than a request per product: the panel saves every
     // tier at once, and N round-trips would leave the page showing ceilings that
     // only partly landed if one failed.
-    const productEntries = Object.entries(parsed.data.productCaps ?? {});
+    const productEntries = Object.entries(parsed.data.productMultipliers ?? {});
     if (productEntries.length > 0) {
       await Product.bulkWrite(
-        productEntries.map(([id, cap]) => ({
+        productEntries.map(([id, multiplier]) => ({
           updateOne: {
             filter: { _id: new mongoose.Types.ObjectId(id) },
             // null is meaningful — it CLEARS the ceiling so the product falls
             // through to its category, then to the shop-wide value.
-            update: { $set: { entryMultiplierCap: cap } },
+            update: { $set: { entryMultiplier: multiplier } },
           },
         }))
       );
@@ -175,8 +175,8 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        cap: config.cap ?? null,
-        categoryCaps: Object.fromEntries(next),
+        multiplier: config.multiplier ?? null,
+        categoryMultipliers: Object.fromEntries(next),
         productsUpdated: productEntries.length,
       },
     });
