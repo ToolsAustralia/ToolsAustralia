@@ -1,3 +1,4 @@
+import { formatInTimeZone } from "date-fns-tz";
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 
 /**
@@ -17,14 +18,13 @@ export interface ComparisonMetric {
   label: string;
   format: MetricFormat;
   /**
-   * A STOCK (a point-in-time level) rather than a FLOW (an amount accrued over the window).
+   * A RISE in this metric is bad news (cancellations), so the Δ must be coloured the other way.
    *
-   * Flows divide by day count meaningfully — $3,100 over 31 days is $100/day. Stocks do not:
-   * "1 active membership" is not "0.032 active memberships per day", it is a count that
-   * happened to be 1 at the end of the window. Stocks are therefore excluded from the per-day
-   * column, exactly as ratios are.
+   * Named `invert` to match `TrendPill`, which already encodes exactly this and is what the
+   * Cancellations KPI tile on this same page uses. Without it the drawer painted a rising
+   * cancellation count green while the tile six inches above painted it red.
    */
-  stock: boolean;
+  invert: boolean;
   /** Shown in the card (the headline set) as well as the drawer. */
   headline: boolean;
   /** Section heading in the drawer. */
@@ -49,7 +49,7 @@ export interface ComparisonMetric {
    * rendered as −96.1%. So when the lengths differ, the percentage is computed from the rates.
    */
   normalised: boolean;
-  /** current ÷ days. null for stocks and ratios, which do not divide by days. */
+  /** current ÷ days. null for ratios, which are already rates. */
   currentPerDay: number | null;
   previousPerDay: number | null;
 }
@@ -151,8 +151,8 @@ export function buildPeriodComparison(
     key: string;
     label: string;
     format: MetricFormat;
-    /** Omitted = a flow (per-day normalisation is meaningful). See ComparisonMetric.stock. */
-    stock?: true;
+    /** Omitted = a rise is good. See ComparisonMetric.invert. */
+    invert?: true;
     headline: boolean;
     group: ComparisonMetric["group"];
     read: (s: AdminDashboardStats | undefined) => number;
@@ -240,20 +240,24 @@ export function buildPeriodComparison(
       group: "Customers",
       read: (s) => s?.users.newInRange ?? 0,
     },
-    {
-      key: "activeSubscriptions",
-      label: "Active memberships",
-      format: "count",
-      // A LEVEL, not an amount accrued over the window — never divide it by days.
-      stock: true,
-      headline: false,
-      group: "Customers",
-      read: (s) => s?.users.activeSubscriptions ?? 0,
-    },
+    /**
+     * ⚠️ "Active memberships" is deliberately NOT a row here, and must not be added back.
+     *
+     * `users.activeSubscriptions` is `User.countDocuments(getActiveSubscriptionFilter())` —
+     * a live standing count with NO date bound (DashboardStatsService). Both windows therefore
+     * read the same number, so the row renders "1,234 vs 1,234 · 0%" and invites the reader to
+     * conclude memberships were flat across the two periods. That is a claim the data cannot
+     * support: it is one number shown twice.
+     *
+     * The movement it seems to promise is already here, honestly and date-scoped: New
+     * memberships (in) and Cancellations (out).
+     */
     {
       key: "cancelledMemberships",
       label: "Cancellations",
       format: "count",
+      // More cancellations is worse — matches the `invert` on the Cancellations KPI tile.
+      invert: true,
       headline: false,
       group: "Customers",
       read: (s) => s?.users.cancelledMemberships ?? 0,
@@ -307,17 +311,16 @@ export function buildPeriodComparison(
 
   const { currentDays, previousDays } = windows;
 
-  return spec.map(({ read, stock, ...rest }) => {
+  return spec.map(({ read, invert, ...rest }) => {
     const cur = read(current);
     const prev = read(previous);
-    const isStock = stock === true;
-    // Ratios are already rates and stocks are levels; neither divides by days.
-    const comparable = !isStock && rest.format !== "ratio";
+    // A ratio is already a rate; dividing it by days would be meaningless.
+    const comparable = rest.format !== "ratio";
     const d = rateDelta(cur, prev, { currentDays, previousDays, comparable });
 
     return {
       ...rest,
-      stock: isStock,
+      invert: invert === true,
       current: cur,
       previous: prev,
       delta: cur - prev,
@@ -337,25 +340,46 @@ export function buildPeriodComparison(
  * the two windows differ in length. Ratios (ROAS) are already rates and are never normalised —
  * dividing them by days would be meaningless.
  */
-export function perDay(
-  value: number,
-  days: number,
-  format: MetricFormat,
-  stock = false,
-): number | null {
-  // Ratios are already rates; stocks are levels. Neither divides by days meaningfully.
-  if (format === "ratio" || stock || days <= 0) return null;
+export function perDay(value: number, days: number, format: MetricFormat): number | null {
+  // Ratios are already rates; dividing one by days is meaningless.
+  if (format === "ratio" || days <= 0) return null;
   return value / days;
 }
 
-/** Inclusive day count between two `yyyy-MM-dd` bounds. */
-export function inclusiveDayCount(startDate: string, endDate: string): number {
+/**
+ * Inclusive day count between two `yyyy-MM-dd` bounds, counting only days that have HAPPENED.
+ *
+ * `clampEndTo` (normally `aestToday()`) truncates a window whose end date is in the future.
+ * Without it the count is NOMINAL, and every window that is still running gets divided by days
+ * it has not lived yet — which quietly re-introduces the calendar skew the normalisation exists
+ * to remove:
+ *
+ *   "Current draw" runs 28 Jul → 27 Aug. On 20 Aug that is 31 nominal days but 24 elapsed ones,
+ *   so a per-day rate divided by 31 reads ~23% low — and the previous draw it is compared
+ *   against is fully elapsed and counted correctly. The comparison invents a 23% decline.
+ *
+ * The previous calendar month is always fully elapsed, so clamping is a no-op on that side; this
+ * only ever corrects the current window.
+ */
+export function inclusiveDayCount(startDate: string, endDate: string, clampEndTo?: string): number {
   if (!startDate || !endDate) return 0;
+  // `yyyy-MM-dd` is lexicographically ordered, so a string compare is a date compare.
+  const effectiveEnd = clampEndTo && clampEndTo < endDate ? clampEndTo : endDate;
   const [ys, ms, ds] = startDate.split("-").map(Number);
-  const [ye, me, de] = endDate.split("-").map(Number);
+  const [ye, me, de] = effectiveEnd.split("-").map(Number);
   if (!ys || !ye) return 0;
   // UTC arithmetic on calendar numbers only — no zone conversion, so DST cannot shift the count.
   const start = Date.UTC(ys, ms - 1, ds);
   const end = Date.UTC(ye, me - 1, de);
-  return Math.floor((end - start) / 86_400_000) + 1;
+  // A window that has not started yet is 0 elapsed days, never negative.
+  return Math.max(0, Math.floor((end - start) / 86_400_000) + 1);
+}
+
+/**
+ * Today as `yyyy-MM-dd` in Australia/Sydney — the calendar every admin date filter resolves
+ * against (`resolveAestDateWindow`). Split out from `inclusiveDayCount` so that stays pure and
+ * unit-testable; this one-liner is the only impure part.
+ */
+export function aestToday(): string {
+  return formatInTimeZone(new Date(), "Australia/Sydney", "yyyy-MM-dd");
 }

@@ -1658,7 +1658,7 @@ An arrow wants "vs the previous equivalent stretch"; this table wants a **stable
 
 The Brand Performance and Period Comparison work was verified **on screen** via the e2e harness (`npm run e2e:env`, isolated seeded DB at :3799, Playwright as `e2e.admin@e2e.local`) rather than by reasoning about the DOM. Two things only surfaced there:
 
-**1. Per-day normalisation was being applied to a stock metric.** "Active memberships" rendered as `1 vs 0.032 per day` — a point-in-time *level* divided by a day count, which is meaningless. `ComparisonMetric` now carries a `stock` flag and `perDay()` returns null for it, exactly as it already did for ratios. `activeSubscriptions` is the only stock in the set; `test:period-comparison` asserts that and that everything else stays a flow.
+**1. Per-day normalisation was being applied to a stock metric.** "Active memberships" rendered as `1 vs 0.032 per day` — a point-in-time *level* divided by a day count, which is meaningless. It was first fixed with a `stock` flag on `ComparisonMetric`; the row was then **removed entirely** in the pre-merge audit (below), which made the flag unnecessary.
 
 **2. `PrizePerformanceAdsModal` was a naming fork.** The card became `BrandPerformanceCard` but the modal (and four code comments) still said `PrizePerformance*`, referencing a file that no longer exists. Renamed to `BrandPerformanceAdsModal`; comments in `spendByUrlAdBreakdown.ts`, `spend-by-url/route.ts`, `CampaignTreeTable.tsx` and `LandingPageMetricsDaily.ts` updated.
 
@@ -1740,7 +1740,7 @@ DJ read the live dashboard and found three things wrong. All were confidently wr
 
 **1. Δ measured the calendar, not the business.** "Today" against a whole calendar month compared **raw totals**, so every flow read ≈ −97% simply because one day is ≈ 3% of thirty-one. It also **inverted** the answer: 197 new accounts today against July's 161.7/day is **+22%**, rendered as **−96.1%**.
 
-Δ is now computed from **per-day rates** whenever the windows differ in length, via `rateDelta` in `periodComparisonModel.ts` — shared by the Period Comparison card *and* Brand Performance's Compare chips, so one dashboard has one definition of Δ. Ratios (ROAS) and stocks (active memberships) still compare raw: they are already like-for-like and dividing them by days would invent a swing. The header reads **"Δ / day"** when normalised. Pinned by `testDeltaNormalisesAcrossUnequalWindows` with the exact production figures.
+Δ is now computed from **per-day rates** whenever the windows differ in length, via `rateDelta` in `periodComparisonModel.ts` — shared by the Period Comparison card *and* Brand Performance's Compare chips, so one dashboard has one definition of Δ. Ratios (ROAS) still compare raw: they are already rates, and dividing one by days would invent a swing. The header reads **"Δ / day"** when normalised. Pinned by `testDeltaNormalisesAcrossUnequalWindows` with the exact production figures.
 
 **2. The platform chips didn't scope revenue.** Selecting Meta or TikTok narrowed *spend* while leaving revenue at every channel's, so the same $770 appeared under both, and per-platform ROAS was all-channel revenue ÷ one platform's spend — **8.95×** on a table whose true blended figure was **0.97×**.
 
@@ -1749,3 +1749,32 @@ The server bases now add `convertingPlatform` to the `PaymentEvent` match when a
 **3. Toolbox spend and revenue were keyed differently** — see the entry in `docs/metrics-analytics/backend.md`.
 
 **Also:** Brand Performance's three `Segmented` groups plus Compare wrapped onto four rows on a phone and pushed the table below the fold. They now collapse behind a summary button that names the active state (`Toolset · Landing page · All · Compare`), expanded on tap and always open from `sm` up.
+
+## Pre-merge audit: three ways the comparison still lied (2026-08-20)
+
+Found by auditing the branch against its own claims before merge. All three are in
+`periodComparisonModel.ts` and its two consumers, and all three are pinned by `test:period-comparison`.
+
+**1. Day counts were nominal, not elapsed.** `inclusiveDayCount` counted the whole window even when
+part of it hadn't happened. The "Current draw" preset ends on the **draw date**, which is in the
+future while the draw is running: on 20 Aug, a 28 Jul → 27 Aug window is 31 nominal days but 24
+elapsed. Dividing current-window totals by 31 while the fully-elapsed previous draw divided by its
+true length manufactured a ~23% decline out of the calendar — a smaller version of the exact bug the
+normalisation was added to kill. `inclusiveDayCount(start, end, clampEndTo?)` now truncates at
+`clampEndTo`; both cards pass `aestToday()`. The previous calendar month is always closed, so the
+clamp is a no-op on that side and the two windows stay like-for-like. Also affects "This month" and
+any custom range with a future end date.
+
+**2. Δ had no polarity, on a page that already had one.** The drawer coloured on direction alone
+(`up ? emerald : red`), so a **rising cancellation count rendered green** — directly below the
+Cancellations KPI tile, which passes `invert` to `TrendPill` and renders the same movement **red**.
+`ComparisonMetric` now carries `invert` (same name as `TrendPill`, one concept one name) and the Δ
+cell colours on `good = invert ? !up : up` while the arrow keeps following the number.
+
+**3. "Active memberships" compared a number against itself.** `users.activeSubscriptions` is
+`User.countDocuments(getActiveSubscriptionFilter())` — a live standing count with **no date bound**
+(`DashboardStatsService`). Both windows therefore read the identical number, so the row rendered
+"1,234 vs 1,234 · 0%" and invited the reader to conclude memberships were flat across the two
+periods. That is one number shown twice, dressed as a finding about history. The row was removed;
+the movement it seemed to promise is already present, honestly and date-scoped, as **New
+memberships** (in) and **Cancellations** (out). `testEveryRowIsDateScoped` keeps it out.

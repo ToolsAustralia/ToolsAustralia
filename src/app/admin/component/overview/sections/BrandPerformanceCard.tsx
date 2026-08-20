@@ -24,7 +24,7 @@ import type {
 import type { BrandLane } from "@/utils/metrics/brand-lane";
 import type { SpendByUrlPlatform } from "@/hooks/queries/useSpendByUrlAnalytics";
 import { resolveAestDateWindow } from "@/utils/admin/resolveAestDateWindow";
-import { inclusiveDayCount, rateDelta } from "./periodComparisonModel";
+import { aestToday, inclusiveDayCount, rateDelta } from "./periodComparisonModel";
 import { cn } from "@/utils/cn";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 import BrandPerformanceAdsModal from "@/components/modals/BrandPerformanceAdsModal";
@@ -143,10 +143,17 @@ export default function BrandPerformanceCard({
   const showCompare = compare !== "off";
 
   // Window lengths, so a Δ across unequal windows compares rates rather than the calendar.
-  const currentDays = inclusiveDayCount(data?.meta.startDate ?? "", data?.meta.endDate ?? "");
+  // Clamped to today so a still-running window is divided by elapsed days, not nominal ones.
+  const today = aestToday();
+  const currentDays = inclusiveDayCount(
+    data?.meta.startDate ?? "",
+    data?.meta.endDate ?? "",
+    today,
+  );
   const previousDays = inclusiveDayCount(
     data?.meta.comparison?.startDate ?? "",
     data?.meta.comparison?.endDate ?? "",
+    today,
   );
   const unequalWindows = currentDays > 0 && previousDays > 0 && currentDays !== previousDays;
 
