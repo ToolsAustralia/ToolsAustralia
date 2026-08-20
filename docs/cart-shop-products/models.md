@@ -73,3 +73,31 @@ exist in code.
 | `paymentIntentId` | String, sparse index | Bare id; no charge id, no payment-method snapshot, no `paymentStatus` |
 | `trackingNumber` | String, optional | |
 | `notes` | String ≤500 | |
+
+## `ShopEntryMultiplierConfig` (2026-08-20)
+
+Singleton (`_id: "shop-entry-multiplier-config"`) holding the two admin-set ceilings that are
+*not* product data:
+
+| Field | Meaning |
+| --- | --- |
+| `cap: number \| null` | Shop-wide ceiling. `null` = inherit the one-time promo unchanged |
+| `categoryCaps: Map<string, number>` | Per-category ceilings, keyed by `normaliseCategoryKey` (`trim().toLowerCase()`). Absent = fall through |
+| `updatedBy` | Who last changed it |
+
+A **Map**, not an array of `{category, cap}`: a map cannot hold two rows for the same key, so
+"which one wins" is unaskable rather than answered. `null` is the no-ceiling value rather than
+defaulting to 10, because "inherit" and "capped at the highest possible value" are different
+statements and only the first stays correct if `PROMO_MULTIPLIERS` ever grows.
+
+### New fields on `Product` and `Order`
+
+| Field | Where | Why it lives there |
+| --- | --- | --- |
+| `entryMultiplierCap?: number \| null` | `Product` | The per-product tier. Authored beside `includedEntries`, which is already product-level and admin-editable |
+| `entryMultiplierCap?: number \| null` | `Order.products[]` | Snapshotted at checkout. The webhook never loads products, so without this the tier would apply on the page and never reach the grant |
+| `entryMultiplierApplied?: number` | `Order.products[]` | What the grant actually multiplied this line by. **Per line**, because a cart holding a capped tee beside an uncapped hoodie has no single multiplier |
+
+The dividing rule: **product data is snapshotted onto the order line, config resolves live at
+webhook time.** That is why the product ceiling is frozen at checkout while the category and
+shop-wide ceilings are read fresh alongside the promo.

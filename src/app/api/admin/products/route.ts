@@ -28,6 +28,7 @@ const productSchema = z.object({
   brand: z.string().trim().min(1),
   variants: z.array(variantSchema).min(1),
   includedEntries: z.number().int().min(0).optional(),
+  entryMultiplierCap: z.number().int().min(1).max(10).nullable().optional(),
   printArtwork: z.array(artworkSchema).optional(),
   trackInventory: z.boolean().optional(),
   stock: z.number().int().min(0).optional(),

@@ -35,14 +35,28 @@ export interface Product {
    * the item, never sold and never priced per unit (CLAUDE.md rule 11).
    *
    * This is the BASE count. What a customer actually receives is
-   * `includedEntries × quantity × the current one-time promo multiplier`, so any
-   * surface rendering it must apply the multiplier too or it understates the
-   * offer during a promo.
+   * `includedEntries × quantity × the effective multiplier`, so any surface
+   * rendering it must apply the multiplier too or it understates the offer
+   * during a promo.
+   *
+   * The effective multiplier is the current one-time promo rate, lowered by any
+   * admin ceiling in force — resolve it through
+   * `services/shop/resolveShopEntryMultiplier`, never from the promo alone, or
+   * the surface will promise more than the grant pays out.
    *
    * `0` (the default) means the product includes no entries and the promise must
    * not be rendered at all.
    */
   includedEntries?: number;
+  /**
+   * Ceiling on the promo multiplier for THIS product. null/absent falls through
+   * to the category ceiling, then the shop-wide one, then to inheriting the
+   * one-time promo unchanged.
+   *
+   * A ceiling, never a rate: the grant applies `min(inherited, cap)`, so it can
+   * only hold merchandise below the pack multiplier, never lift it above.
+   */
+  entryMultiplierCap?: number | null;
   /**
    * `false` for print-to-order items, which hold `stock: 0` permanently because the
    * printer makes each one on demand. Anything reading stock to decide availability

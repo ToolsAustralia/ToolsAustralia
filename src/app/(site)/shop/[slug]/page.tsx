@@ -23,6 +23,8 @@ import { shouldShowReviews, displayableReviews, displayAverage } from "@/utils/s
 // It ships in the ProductCard module, which this route already loads for the
 // related-products row below.
 import { MemberPriceLine } from "@/components/ui/ProductCard";
+import { loadShopEntryCaps } from "@/services/shop/resolveShopEntryMultiplier";
+import { resolveCapFor } from "@/utils/shop/entry-multiplier";
 
 // nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
 // (see docs/security-csp/architecture.md "Route classes").
@@ -199,6 +201,16 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
 
   // Serialize Mongoose documents to plain objects for client components
   const serializedProduct = JSON.parse(JSON.stringify(product));
+
+  // The multiplier CEILING in force for this product, resolved server-side
+  // because two of its three tiers (category, shop-wide) are admin config the
+  // browser has no business reading in full. The live promo rate is still read
+  // on the client, and the same `min` is applied there — so the number this
+  // page prints and the number the webhook grants come from one helper.
+  const entryMultiplierCap = resolveCapFor(
+    { category: product.category, entryMultiplierCap: product.entryMultiplierCap },
+    await loadShopEntryCaps()
+  );
   const serializedRelatedProducts = JSON.parse(JSON.stringify(relatedProducts));
 
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
@@ -259,11 +271,18 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             <div className="space-y-4 lg:sticky lg:top-24">
               {/* Client-side because apparel galleries follow the selected colour;
                   a tool with no colourways renders exactly as it did before. */}
+              {/* serializedProduct, NOT product: `colourways` is an array of Mongoose
+                  SUBDOCUMENTS, so each one carries an `_id` that is a BSON ObjectId
+                  wrapping a Buffer. React Server Components can only hand plain
+                  objects to a client component, and an ObjectId has a toJSON method
+                  — which throws "Only plain objects can be passed to Client
+                  Components". `images` is a plain string[] and was never the problem,
+                  but it reads from the same source here so the two cannot drift. */}
               <ProductGallery
                 productId={String(product._id)}
                 name={product.name}
-                images={product.images ?? []}
-                colourways={product.colourways ?? []}
+                images={serializedProduct.images ?? []}
+                colourways={serializedProduct.colourways ?? []}
               />
             </div>
           </div>
@@ -376,7 +395,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             </div>
 
             {/* Interactive Components */}
-            <ProductInteractions product={serializedProduct} />
+            <ProductInteractions product={serializedProduct} entryMultiplierCap={entryMultiplierCap} />
 
             {/* Tabs live INSIDE the right column, not below the grid.
                 This is what gives the sticky image something to stick against: the

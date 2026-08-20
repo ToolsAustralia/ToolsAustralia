@@ -40,6 +40,7 @@ export interface ProductFormItem {
   brand: string;
   variants: ProductVariantFormItem[];
   includedEntries: number;
+  entryMultiplierCap?: number | null;
   /** Optional because the admin list does not default it the way it defaults `variants`. */
   printArtwork?: ProductArtworkFormItem[];
   trackInventory: boolean;
@@ -121,6 +122,10 @@ export default function AdminProductModal({
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState(0);
   const [includedEntries, setIncludedEntries] = useState(0);
+  // Empty string, not 0, is the no-ceiling state. 0 is not a valid ceiling —
+  // it would revoke the entries the product advertises — so the field has to
+  // distinguish blank from a number, which a numeric state cannot do.
+  const [entryMultiplierCap, setEntryMultiplierCap] = useState<string>("");
   const [category, setCategory] = useState("");
   const [brand, setBrand] = useState("");
   const [images, setImages] = useState<(File | string)[]>([]);
@@ -141,6 +146,11 @@ export default function AdminProductModal({
       setDescription(editingProduct.description);
       setPrice(editingProduct.price);
       setIncludedEntries(editingProduct.includedEntries ?? 0);
+      setEntryMultiplierCap(
+        typeof editingProduct.entryMultiplierCap === "number"
+          ? String(editingProduct.entryMultiplierCap)
+          : ""
+      );
       setCategory(editingProduct.category);
       setBrand(editingProduct.brand);
       setImages(editingProduct.images ?? []);
@@ -291,6 +301,10 @@ export default function AdminProductModal({
         brand: brand.trim(),
         variants: cleanedVariants,
         includedEntries,
+        // null, never undefined: the admin clearing this field must REMOVE the
+        // ceiling, and an undefined would be dropped from the JSON body and read
+        // as "leave it alone".
+        entryMultiplierCap: entryMultiplierCap.trim() === "" ? null : Number(entryMultiplierCap),
         printArtwork: cleanedArtwork,
         trackInventory,
         stock: trackInventory ? stock : 0,
@@ -324,7 +338,20 @@ export default function AdminProductModal({
   };
 
   return (
-    <ModalContainer isOpen={isOpen} onClose={onClose} size="lg">
+    /*
+      4xl on desktop, near-fullscreen below lg.
+
+      This form was pinned at `lg` (512px) while its own field grids are written
+      as `sm:grid-cols-2` and `sm:grid-cols-4`. Those are VIEWPORT queries, not
+      container queries, so on any desktop they fired inside a 512px shell — the
+      four variant columns got ~120px each. Widening to 4xl (896px, the size the
+      Experiment and Affiliate detail modals already use) is what those grids
+      were written for.
+
+      `mobileFullBleed` gives the phone the full viewport instead of a centred
+      card, which is what a form this long needs when the keyboard is up.
+    */
+    <ModalContainer isOpen={isOpen} onClose={onClose} size="4xl" mobileFullBleed>
       <ModalHeader
         title={isEdit ? "Edit Product" : "Create Product"}
         onClose={onClose}
@@ -386,6 +413,14 @@ export default function AdminProductModal({
                 step={0.01}
                 required
               />
+              {/*
+                The placeholder spells out the zero state on purpose. The shared
+                Input renders a numeric 0 as an EMPTY box (`value === 0 ? ""`),
+                which is right for price-like fields but means every product
+                currently reads as "not configured" — merchandise all sits at 0
+                while entries are off pending the permit. A generic "Enter amount"
+                there is indistinguishable from a field that was never wired up.
+              */}
               <Input
                 label="Free entries included"
                 type="number"
@@ -393,11 +428,27 @@ export default function AdminProductModal({
                 onChange={(e) => setIncludedEntries(Number(e.target.value))}
                 min={0}
                 step={1}
+                placeholder="0 — no free entries with this item"
               />
             </div>
+            <Input
+              label="Entry multiplier ceiling (optional)"
+              type="number"
+              value={entryMultiplierCap}
+              onChange={(e) => setEntryMultiplierCap(e.target.value)}
+              min={1}
+              max={10}
+              step={1}
+              placeholder="No ceiling — follows the category or shop setting"
+            />
             <p className="text-xs text-gray-500 dark:text-neutral-400">
               Entries are a free inclusion with the item and are authored per product, never
               calculated from the price. Leave at 0 until entries are live.
+            </p>
+            <p className="text-xs text-gray-500 dark:text-neutral-400">
+              The ceiling caps this product during a promo — it can only ever hold it
+              <strong> below</strong> the pack multiplier, never lift it above. Leave blank to
+              follow the category setting, then the shop-wide one, then the promo itself.
             </p>
           </FormSection>
 

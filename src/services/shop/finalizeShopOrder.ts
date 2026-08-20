@@ -8,6 +8,8 @@ import { sendShopOrderConfirmation } from "@/services/shop/sendOrderConfirmation
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 import { trackShopPlacedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
 import { normalizeEpochToUnixSeconds } from "@/lib/tracking/canonical-event";
+import { loadShopEntryCaps } from "@/services/shop/resolveShopEntryMultiplier";
+import { applyShopEntryCap } from "@/utils/shop/entry-multiplier";
 
 /**
  * Fulfil a paid shop order.
@@ -56,6 +58,11 @@ export interface FinalizeShopOrderOptions {
    * avoids a third copy of that wrapper (there are already two: the webhook
    * handler and the upsell purchase route). Making it required means a future
    * caller cannot silently forget it and grant at 1×.
+   *
+   * This is the INHERITED, uncapped rate. The admin-set ceilings (product,
+   * category, shop-wide) are applied inside this service, per line — a caller
+   * cannot pre-apply them, because a single order can hold products with
+   * different ceilings.
    */
   entryMultiplier: number;
 }
@@ -78,13 +85,30 @@ export interface FinalizeShopOrderOptions {
 async function grantShopEntries(
   order: IOrder,
   paymentIntentId: string,
-  entryMultiplier: number
+  inheritedMultiplier: number
 ): Promise<number | undefined> {
-  const baseEntries = order.products.reduce(
-    (sum, line) => sum + (line.includedEntries ?? 0) * line.quantity,
-    0
-  );
-  const entries = baseEntries * entryMultiplier;
+  // One read for the whole order rather than one per line.
+  //
+  // On failure this returns NO caps, i.e. inherit unchanged — never a cap of 1.
+  // A database blip must not silently withhold entries the product page promised;
+  // it can only ever grant what the promo already permits.
+  const caps = await loadShopEntryCaps();
+
+  // Per line, NOT sum-then-multiply. A cart can hold a garment capped at 1×
+  // beside an uncapped one, and a single scalar cannot honour both — it would
+  // silently apply one line's rate to the other, with no error anywhere.
+  //
+  // The ceiling itself comes off the LINE, not the product: it was frozen at
+  // checkout with the rest of the snapshot, so an admin editing the catalogue
+  // mid-flight cannot change what this buyer was shown.
+  let entries = 0;
+  for (const line of order.products) {
+    const applied = applyShopEntryCap(inheritedMultiplier, line, caps);
+    // Recorded per line so support can answer "why did this item give three"
+    // for a mixed order. Saved by the order.save() on either path below.
+    line.entryMultiplierApplied = applied;
+    entries += (line.includedEntries ?? 0) * line.quantity * applied;
+  }
 
   // Zero is the normal state while the feature ships dark. Returning before
   // processPaymentBenefits matters: no PaymentEvent is written, so nothing about

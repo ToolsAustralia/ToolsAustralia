@@ -62,6 +62,12 @@ interface ResolvedLine extends CartLine {
   name: string;
   /** Base free entries for one unit, read from the catalog and frozen onto the order. */
   includedEntries: number;
+  /**
+   * This product's own multiplier ceiling, frozen with the rest of its snapshot.
+   * The fulfilment webhook never loads products, so without carrying it here the
+   * per-product tier would show on the page and never reach the grant.
+   */
+  entryMultiplierCap?: number | null;
   /** Category at purchase time — what the order lists filter on. */
   category: string;
   /** Variant labels at purchase time — what the customer actually chose. */
@@ -171,6 +177,7 @@ async function resolveLines(items: readonly CheckoutLineInput[]): Promise<Resolv
       // count. Frozen here so an admin edit between checkout and webhook cannot
       // change what this buyer was promised.
       includedEntries: product.includedEntries ?? 0,
+      entryMultiplierCap: product.entryMultiplierCap ?? null,
       category: product.category ?? "",
       size: chosenVariant?.size,
       colour: chosenVariant?.colour,
@@ -216,6 +223,7 @@ export const ShopOrderService = {
         sku: l.sku,
         name: l.name,
         includedEntries: l.includedEntries,
+        entryMultiplierCap: l.entryMultiplierCap,
         category: l.category,
         size: l.size,
         colour: l.colour,

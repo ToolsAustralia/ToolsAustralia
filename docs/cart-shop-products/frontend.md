@@ -160,8 +160,15 @@ the grid would either guess a variant or create an unbuyable line.
 ## The free-entry badge on a product page (2026-08-17)
 
 `ProductInteractions` renders "Includes N free entries" above the stock line, where
-**N = includedEntries × quantity × the current one-time promo multiplier** — it updates live as
-the customer changes quantity.
+**N = includedEntries × quantity × the effective multiplier** — it updates live as the customer
+changes quantity.
+
+The *effective* multiplier is the current one-time promo rate lowered by any admin ceiling in
+force (2026-08-20). The split is deliberate: the **server** resolves the ceiling — two of its
+three tiers, category and shop-wide, are admin config the browser has no business reading in
+full — and passes it down as a single `entryMultiplierCap` prop; the **client** keeps reading
+the live promo rate and applies `applyShopEntryCap`, the same function the grant calls. So the
+page and the webhook cannot disagree even though they read at different moments.
 
 **Why the multiplier is in the displayed number.** The grant multiplies too, so a page printing
 the bare `includedEntries` would understate the offer during a promo (page says 8, buyer receives

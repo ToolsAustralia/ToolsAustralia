@@ -3,9 +3,20 @@ import path from "node:path";
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
 import mongoose from "mongoose";
 import MajorDraw from "@/models/MajorDraw";
 import Order from "@/models/Order";
+import ShopEntryMultiplierConfig, {
+  SHOP_ENTRY_MULTIPLIER_CONFIG_ID,
+} from "@/models/ShopEntryMultiplierConfig";
+import { loadShopEntryCaps } from "@/services/shop/resolveShopEntryMultiplier";
+import {
+  applyShopEntryCap,
+  normaliseCategoryKey,
+  resolveCapFor,
+  type ShopEntryCaps,
+} from "@/utils/shop/entry-multiplier";
 
 /**
  * Shop entry grant — the silent-failure guards.
@@ -27,6 +38,13 @@ import Order from "@/models/Order";
  *      entries, and neither support nor the reconcile cron could tell them apart.
  *   4. The base-count arithmetic, including the multiplier and the ladder property
  *      that makes merch inheriting the one-time multiplier fair.
+ *   5. The multiplier CAP chain (product -> category -> shop -> inherit). Every
+ *      tier is another place a value can be accepted, stored, and then quietly
+ *      not applied, so each is asserted separately -- and the category key is
+ *      asserted case-insensitively, because Product.category is free text whose
+ *      vocabulary is already forked (Apparel beside power-tools).
+ *   6. A MIXED cart. Summing every line then multiplying once is only correct
+ *      while all products share one rate; per-product caps make that reachable.
  *
  * WHAT THIS DOES NOT COVER, and why it matters that you know:
  *   - The end-to-end grant through processPaymentBenefits (needs a user, an active
@@ -175,8 +193,8 @@ async function run() {
       orderNumber: `SHOP-TEST-${Date.now().toString(36).toUpperCase()}`,
       user: userId,
       products: [
-        { product: new mongoose.Types.ObjectId(), name: "Staple Tee", sku: "TEE-M", includedEntries: 5, quantity: 2, price: 45.95 },
-        { product: new mongoose.Types.ObjectId(), name: "Torquay Jacket", sku: "JKT-L", includedEntries: 8, quantity: 1, price: 79.95 },
+        { product: new mongoose.Types.ObjectId(), name: "Staple Tee", sku: "TEE-M", includedEntries: 5, quantity: 2, price: 45.95, category: "Apparel", entryMultiplierCap: 2 },
+        { product: new mongoose.Types.ObjectId(), name: "Torquay Jacket", sku: "JKT-L", includedEntries: 8, quantity: 1, price: 79.95, category: "Apparel" },
       ],
       subtotal: 171.85,
       gstAmount: 15.62,
@@ -187,7 +205,12 @@ async function run() {
     orderIds.push(order._id as mongoose.Types.ObjectId);
 
     const rereadOrder = await Order.findById(order._id).lean<{
-      products: { includedEntries?: number; quantity: number }[];
+      products: {
+        includedEntries?: number;
+        quantity: number;
+        category?: string;
+        entryMultiplierCap?: number | null;
+      }[];
       entriesGranted?: number;
     } | null>();
 
@@ -225,24 +248,183 @@ async function run() {
       assert.equal(base * 10, 0, "shipping dark must stay dark during a promo");
     });
 
-    check("merch stays worse value per entry than the thinnest pack at every multiplier", () => {
-      // The property that makes inheriting the one-time multiplier fair: both
-      // sides scale together, so the ratio never moves and merch can never
-      // overtake the packs during a promo.
+    check("merch never overtakes the packs — across every PAIR of multipliers", () => {
+      // The previous version divided both sides by the same `m`, so all four
+      // iterations were algebraically identical and it asserted nothing about
+      // multipliers at all. It could not have failed.
+      //
+      // The real property needs TWO rates: what the packs run at, and what merch
+      // runs at after the cap. Merch must stay worse value per entry for every
+      // reachable pair — and the cap is what makes that true, since it can only
+      // ever lower the merch rate.
       const apprentice = { price: 25, entries: 3 };
       const tee = { price: 45.95, entries: 5 };
       const jacket = { price: 79.95, entries: 8 };
-      for (const m of [1, 2, 5, 10]) {
-        const per = (p: { price: number; entries: number }) => p.price / (p.entries * m);
+      const per = (x: { price: number; entries: number }, m: number) => x.price / (x.entries * m);
+
+      for (let packM = 1; packM <= 10; packM++) {
+        for (let capValue = 1; capValue <= 10; capValue++) {
+          const merchM = applyShopEntryCap(packM, {}, {
+            shopCap: capValue,
+            categoryCaps: new Map(),
+          });
+          assert.ok(merchM <= packM, `cap ${capValue} RAISED merch to ${merchM} against pack ${packM}`);
+          assert.ok(
+            per(apprentice, packM) < per(tee, merchM) && per(tee, merchM) < per(jacket, merchM),
+            `ladder inverted: pack ${packM}x, merch ${merchM}x`
+          );
+        }
+      }
+    });
+
+    // ------------------------------------------------------------- 5. cap tiers
+
+    const caps = (shopCap: number | null, cats: Record<string, number> = {}): ShopEntryCaps => ({
+      shopCap,
+      categoryCaps: new Map(Object.entries(cats)),
+    });
+
+    check("the product cap wins over category and shop", () => {
+      assert.equal(resolveCapFor({ category: "Apparel", entryMultiplierCap: 2 }, caps(9, { apparel: 6 })), 2);
+    });
+
+    check("the category cap wins over shop when the product has none", () => {
+      const c = caps(9, { apparel: 6 });
+      assert.equal(resolveCapFor({ category: "Apparel" }, c), 6);
+      assert.equal(resolveCapFor({ category: "Apparel", entryMultiplierCap: null }, c), 6);
+    });
+
+    check("a category with no cap falls through to shop-wide, not to 1", () => {
+      assert.equal(resolveCapFor({ category: "power-tools" }, caps(9, { apparel: 6 })), 9);
+    });
+
+    check("every tier absent inherits unchanged", () => {
+      assert.equal(resolveCapFor({ category: "Apparel" }, caps(null)), null);
+      assert.equal(applyShopEntryCap(10, { category: "Apparel" }, caps(null)), 10);
+    });
+
+    check("category keys match whatever casing or padding was typed", () => {
+      // Product.category is free text behind a free-text admin input, and the
+      // vocabulary is already forked. Keyed on the raw string, an admin retyping
+      // the category would silently orphan the cap.
+      const c = caps(null, { [normaliseCategoryKey("Apparel")]: 3 });
+      for (const written of ["Apparel", "apparel", "APPAREL", "  Apparel  ", "aPPaRel"]) {
+        assert.equal(resolveCapFor({ category: written }, c), 3, `missed on ${JSON.stringify(written)}`);
+      }
+    });
+
+    check("no tier, at any value, can raise merch above the promo", () => {
+      // The invariant itself, over every reachable combination. This assertion
+      // would have to fail before merch could become a cheaper route into a draw
+      // than the packs.
+      for (let inherited = 1; inherited <= 10; inherited++) {
+        for (let v = 1; v <= 10; v++) {
+          const subjects = [
+            { entryMultiplierCap: v },
+            { category: "Apparel" },
+            { category: "Apparel", entryMultiplierCap: v },
+            {},
+          ];
+          const configs = [caps(v), caps(null, { apparel: v }), caps(v, { apparel: v }), caps(null)];
+          for (const c of configs) {
+            for (const subject of subjects) {
+              const got = applyShopEntryCap(inherited, subject, c);
+              assert.ok(got <= inherited, `raised ${inherited} -> ${got}`);
+              assert.ok(got >= 1, `dropped below 1: ${got}`);
+            }
+          }
+        }
+      }
+    });
+
+    check("a mixed cart multiplies each line by its own rate", () => {
+      // The defect a single order-level scalar hides: sum-then-multiply applies
+      // one line's rate to every line.
+      const c = caps(null, { apparel: 1 });
+      const lines = [
+        { includedEntries: 5, quantity: 2, category: "Apparel" },     // capped at 1x
+        { includedEntries: 8, quantity: 1, category: "power-tools" }, // uncapped
+      ];
+      const inherited = 5;
+      const total = lines.reduce(
+        (sum, l) => sum + l.includedEntries * l.quantity * applyShopEntryCap(inherited, l, c),
+        0
+      );
+      assert.equal(total, 5 * 2 * 1 + 8 * 1 * 5, "expected 10 + 40");
+      assert.notEqual(total, baseEntriesFor(lines) * inherited, "sum-then-multiply must not agree");
+    });
+
+    // ------------------------------------------- 6. the cap survives the write
+
+    check("Order line entryMultiplierCap survives the write", () => {
+      // Same strict-mode failure as includedEntries, and worse in effect: the
+      // ceiling would apply on the product page and silently never reach the
+      // grant, because the webhook reads it from the line and nowhere else.
+      assert.equal(rereadOrder!.products[0].entryMultiplierCap, 2, "tee ceiling was dropped");
+      assert.equal(
+        rereadOrder!.products[1].entryMultiplierCap ?? null,
+        null,
+        "uncapped line should read as null, not as a number"
+      );
+    });
+
+    const configDoc = await ShopEntryMultiplierConfig.getOrCreate();
+    configDoc.cap = 3;
+    configDoc.categoryCaps = new Map([
+      [normaliseCategoryKey("Apparel"), 2],
+      [normaliseCategoryKey("power-tools"), 5],
+    ]);
+    await configDoc.save();
+    const rereadConfig = await ShopEntryMultiplierConfig.findById(configDoc._id).lean<{
+      cap: number | null;
+      categoryCaps: Record<string, number>;
+    } | null>();
+
+    check("the shop cap and the category map both survive the write", () => {
+      assert.equal(rereadConfig!.cap, 3, "shop-wide cap was dropped");
+      assert.equal(rereadConfig!.categoryCaps.apparel, 2, "apparel cap was dropped");
+      assert.equal(rereadConfig!.categoryCaps["power-tools"], 5, "power-tools cap was dropped");
+    });
+
+    // Awaited out here because `check` is synchronous — an async callback
+    // would have its rejection swallowed and the test would pass regardless.
+    const loadedCaps = await loadShopEntryCaps();
+
+    check("loadShopEntryCaps reads back what was saved, as a real Map", () => {
+      // Mongoose hands back its own Map subclass here and a plain object from a
+      // lean() read; the loader normalises both, and this is the assertion that
+      // proves it rather than assuming it.
+      const caps = loadedCaps;
+      assert.equal(caps.shopCap, 3);
+      assert.equal(caps.categoryCaps.get("apparel"), 2);
+      assert.equal(resolveCapFor({ category: "Apparel" }, caps), 2, "category tier did not bind");
+    });
+
+    // The admin write routes strip unknown keys at the Zod boundary BEFORE
+    // Mongoose sees them, so a model-only round-trip passes while the field
+    // never actually saves through the UI. Checked at source rather than over
+    // HTTP because this suite has no server; the failure it guards against is
+    // someone adding a model field and forgetting one of the two routes.
+    const routeSources = [
+      "src/app/api/admin/products/route.ts",
+      "src/app/api/admin/products/[id]/route.ts",
+    ].map((f) => ({ f, src: readFileSync(f, "utf8") }));
+
+    check("both admin product routes declare entryMultiplierCap in their Zod schema", () => {
+      for (const { f, src } of routeSources) {
         assert.ok(
-          per(apprentice) < per(tee) && per(tee) < per(jacket),
-          `ladder inverted at ${m}x: pack ${per(apprentice)}, tee ${per(tee)}, jacket ${per(jacket)}`
+          src.includes("entryMultiplierCap"),
+          `${f} would strip entryMultiplierCap before Mongoose ever sees it`
         );
       }
     });
   } finally {
     if (drawIds.length) await MajorDraw.deleteMany({ _id: { $in: drawIds } });
     if (orderIds.length) await Order.deleteMany({ _id: { $in: orderIds } });
+    // The config is a SINGLETON — leaving a cap of 3 behind would silently
+    // change what every later run of this suite, and anything else sharing the
+    // e2e database, resolves to.
+    await ShopEntryMultiplierConfig.deleteOne({ _id: SHOP_ENTRY_MULTIPLIER_CONFIG_ID });
     await mongoose.disconnect();
   }
 

@@ -20,6 +20,20 @@ export interface IOrder extends Document {
      */
     includedEntries?: number;
     /**
+     * The product's own multiplier CEILING, frozen at checkout with the rest of
+     * its snapshot. The webhook never loads products, so without this the
+     * per-product tier would show on the page and quietly not reach the grant.
+     * Category and shop-wide caps are config rather than product data and so
+     * resolve live at webhook time, alongside the promo itself.
+     */
+    entryMultiplierCap?: number | null;
+    /**
+     * What the grant actually multiplied this line by. Per line, not per order:
+     * a cart holding a capped tee beside an uncapped hoodie has no single
+     * multiplier to record.
+     */
+    entryMultiplierApplied?: number;
+    /**
      * Product category at purchase time — "Apparel", and whatever else the catalogue
      * grows into. Snapshotted for the same reason name and price are, plus one more:
      * it is what the order lists filter on, so a product being recategorised (or
@@ -124,6 +138,16 @@ const OrderSchema = new Schema<IOrder>(
         // from price — there is no dollar-to-entry rate in this system, by law
         // (CLAUDE.md rule 11).
         includedEntries: { type: Number, default: 0, min: 0 },
+        // The product's own multiplier ceiling, frozen at checkout with the
+        // rest of its snapshot. The webhook never loads products, so without
+        // this the per-product tier would apply on the page and silently not
+        // apply to the grant. The category and shop-wide caps are config, not
+        // product data, and resolve live at webhook time alongside the promo.
+        entryMultiplierCap: { type: Number, default: null, min: 1, max: 10 },
+        // What the grant actually multiplied by, per line. Not order-level:
+        // a cart holding a capped tee and an uncapped hoodie has no single
+        // multiplier, and support needs to answer "why did this item give 3".
+        entryMultiplierApplied: { type: Number, min: 0 },
         category: { type: String, trim: true },
         size: { type: String, trim: true },
         colour: { type: String, trim: true },

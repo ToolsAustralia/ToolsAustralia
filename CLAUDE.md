@@ -344,7 +344,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-08-17",
+  "lastModified": "2026-08-20",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -425,7 +425,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useSavedPaymentMethods.ts",
         "eslint/rules/no-eager-stripe.js"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-08-20"
     },
     "draws": {
       "docs": "docs/draws/",
@@ -603,6 +603,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/orders/**",
         "src/models/Product.ts",
         "src/models/Order.ts",
+        "src/models/ShopEntryMultiplierConfig.ts",
         "src/types/product.ts",
         "src/services/shop/**",
         "src/lib/print-provider/**",
@@ -615,7 +616,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/CartContext.tsx",
         "src/hooks/usePurchaseInvalidation.ts"
       ],
-      "lastVerified": "2026-08-17"
+      "lastVerified": "2026-08-20"
     },
     "error-reporting": {
       "docs": "docs/error-reporting/",
@@ -820,7 +821,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-08-12"
+      "lastVerified": "2026-08-20"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -896,7 +897,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-08-11"
+      "lastVerified": "2026-08-20"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",

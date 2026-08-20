@@ -1,4 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { SHOP_ENTRY_CAP_MAX, SHOP_ENTRY_CAP_MIN } from "@/utils/shop/entry-multiplier";
 
 export interface IProduct extends Document {
   name: string;
@@ -63,6 +64,28 @@ export interface IProduct extends Document {
    * this yet; see docs/superpowers/specs/2026-08-17-shop-entries-design.md.
    */
   includedEntries: number;
+  /**
+   * Ceiling on the promo multiplier for THIS product. null/absent falls
+   * through to the category cap, then the shop-wide cap, then to inheriting
+   * the one-time promo unchanged.
+   *
+   * A ceiling, never a rate: the grant applies `min(inherited, cap)`, so this
+   * can only ever hold merchandise BELOW the pack multiplier, never lift it
+   * above. That is what keeps a garment from becoming a cheaper route into a
+   * draw than the packs during a promo.
+   */
+  entryMultiplierCap?: number | null;
+  /**
+   * Manual catalogue position, ascending. Same field name and same default as
+   * `MiniDraw.displayOrder`, deliberately — the two admin panels do the same job.
+   *
+   * `Date.now()` as the default is what makes an un-dragged product sort LAST:
+   * a reorder assigns 1..N, so anything never touched keeps an epoch-sized number
+   * and falls below the curated ones. Existing rows are backfilled by
+   * `scripts/backfill-product-display-order.ts` so the storefront order does not
+   * change on the deploy that adds this field.
+   */
+  displayOrder: number;
   printArtwork: {
     url: string;
     /** Print-provider placement id — "1" Front, "2" Back, "3" Left Chest. */
@@ -227,6 +250,16 @@ const ProductSchema = new Schema<IProduct>({
     default: 0,
     min: [0, 'Included entries cannot be negative'],
   },
+  displayOrder: {
+    type: Number,
+    default: () => Date.now(),
+  },
+  entryMultiplierCap: {
+    type: Number,
+    default: null,
+    min: [SHOP_ENTRY_CAP_MIN, 'Entry multiplier cap cannot be below 1'],
+    max: [SHOP_ENTRY_CAP_MAX, 'Entry multiplier cap cannot exceed 10'],
+  },
   printArtwork: [{
     url: { type: String, required: true, trim: true },
     placement: { type: String, required: true, trim: true },
@@ -257,6 +290,9 @@ const ProductSchema = new Schema<IProduct>({
 // Indexes for better query performance
 ProductSchema.index({ name: 'text', description: 'text', brand: 'text' });
 ProductSchema.index({ category: 1 });
+// Both the storefront list and the admin list sort on displayOrder now, so it
+// needs an index or every catalogue page becomes an in-memory sort.
+ProductSchema.index({ displayOrder: 1 });
 ProductSchema.index({ brand: 1 });
 ProductSchema.index({ price: 1 });
 ProductSchema.index({ rating: -1 });

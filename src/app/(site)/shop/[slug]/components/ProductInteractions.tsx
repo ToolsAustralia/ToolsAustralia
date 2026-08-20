@@ -23,6 +23,13 @@ import {
 import { useProductColourStore } from "@/stores/useProductColourStore";
 import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
 import { useToast } from "@/components/ui/Toast";
+// The PURE module, never the service: the service imports a Mongoose model,
+// and mongoose is a serverExternalPackage — reaching it from a client bundle
+// makes `mongoose.models` undefined and the model file throws on load.
+import {
+  applyShopEntryCap,
+  NO_CAPS,
+} from "@/utils/shop/entry-multiplier";
 
 interface DatabaseProduct {
   _id: string;
@@ -35,9 +42,20 @@ interface DatabaseProduct {
 
 interface ProductInteractionsProps {
   product: ProductData | DatabaseProduct;
+  /**
+   * The multiplier ceiling in force for this product, already resolved through
+   * product -> category -> shop-wide on the server. null = no ceiling.
+   *
+   * Resolved there rather than here because two of the three tiers are admin
+   * config; the client only needs the answer, not the table.
+   */
+  entryMultiplierCap?: number | null;
 }
 
-export default function ProductInteractions({ product }: ProductInteractionsProps) {
+export default function ProductInteractions({
+  product,
+  entryMultiplierCap = null,
+}: ProductInteractionsProps) {
   const [quantity, setQuantity] = useState(1);
   const [showSignIn, setShowSignIn] = useState(false);
   // Set when the sign-in sheet interrupted an add, so the session landing can
@@ -232,7 +250,16 @@ export default function ProductInteractions({ product }: ProductInteractionsProp
   // not honour. (The hook's `context` parameter is dead; the body ignores it.)
   //
   // null means no promo and must read as 1x, never 0.
-  const entryMultiplier = useResolvedMultiplier("one-time-packages") ?? 1;
+  const inheritedMultiplier = useResolvedMultiplier("one-time-packages") ?? 1;
+  // The SAME function the grant calls, so the page cannot promise a number the
+  // webhook will not honour. The tiers are already collapsed into one ceiling
+  // by the server, so NO_CAPS here means "no further tiers to consult", not
+  // "uncapped".
+  const entryMultiplier = applyShopEntryCap(
+    inheritedMultiplier,
+    { entryMultiplierCap },
+    NO_CAPS
+  );
   // `product` is a union of the static ProductData fixtures and the DB shape;
   // only the latter carries includedEntries, so read it defensively rather than
   // widening a type that legitimately does not have the field.

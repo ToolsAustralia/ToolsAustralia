@@ -23,6 +23,8 @@ export interface ProductInput {
   brand: string;
   variants: ProductVariantInput[];
   includedEntries?: number;
+  /** Ceiling on the promo multiplier for this product. null = fall through. */
+  entryMultiplierCap?: number | null;
   printArtwork?: ProductArtworkInput[];
   trackInventory?: boolean;
   stock?: number;
@@ -46,7 +48,10 @@ export const ProductAdminService = {
    * list once did elsewhere in this repo.
    */
   async list(limit = 200): Promise<IProduct[]> {
-    return Product.find({}).sort({ createdAt: -1 }).limit(limit);
+    // displayOrder first so the admin list mirrors the storefront exactly — an
+    // admin dragging a card must see the order a customer will see. createdAt
+    // breaks ties for rows that share a position.
+    return Product.find({}).sort({ displayOrder: 1, createdAt: -1 }).limit(limit);
   },
 
   async create(input: ProductInput): Promise<IProduct> {
