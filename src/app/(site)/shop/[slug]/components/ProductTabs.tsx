@@ -3,13 +3,67 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Star, Check, Truck, Shield, RotateCcw, Award, Clock } from "lucide-react";
+import { Star, Check, Truck, Shield, RotateCcw, Award, Clock, Info, Mail } from "lucide-react";
 import { ProductData } from "@/data";
 import { getContactEmail } from "@/lib/email/sender-identities";
 import { FREE_SHIPPING_THRESHOLD_LABEL, FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
 import { shouldShowReviews, displayableReviews, displayAverage } from "@/utils/shop/reviews";
 import { useProductReviews } from "@/hooks/queries/useProductQueries";
 import ProductReviewForm from "./ProductReviewForm";
+
+/**
+ * A titled panel on the Shipping & Returns tab.
+ *
+ * Declared at module scope, NOT inside ProductTabs: a component defined during
+ * render is a new type on every render, so React unmounts and remounts the whole
+ * subtree each time — which would throw away focus and any transition state in
+ * these cards for no reason.
+ */
+function InfoCard({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border bg-white p-6 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
+      {/* items-center, not items-start: the heading is one line at every width
+          this card is rendered at, so aligning to the text box centres the icon
+          against it. */}
+      <h3 className="mb-4 flex items-center gap-2.5 text-lg font-semibold text-gray-900 dark:text-neutral-100">
+        {icon}
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+/** One labelled point inside an InfoCard. */
+function InfoItem({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      {icon}
+      <div className="min-w-0">
+        <div className="font-medium text-gray-900 dark:text-neutral-100">{title}</div>
+        <div className="mt-0.5 text-sm leading-relaxed text-gray-600 dark:text-neutral-400">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface ProductTabsProps {
   product: ProductData;
@@ -261,129 +315,128 @@ export default function ProductTabs({ product }: ProductTabsProps) {
 
           {/* Shipping Tab */}
           {activeTab === "shipping" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="space-y-6">
-                <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
-                    <Truck className="w-5 h-5 text-red-600" />
-                    Shipping Information
-                  </h3>
-                  <div className="space-y-4">
-                    {/*
-                      These two lines are the ONLY shipping outcomes checkout can
-                      produce: priceCart charges flatShippingRateCents below the
-                      threshold and nothing at or above it. The figures are imported
-                      rather than typed — this block previously promised free
-                      shipping "over $99" while the code charged below $100 (so a
-                      $99.50 order was billed $10 at checkout), plus Express at $15
-                      and Same Day at $25 in three cities, neither of which exists
-                      anywhere in the pricing path.
-                    */}
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 text-green-500 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Free Standard Shipping</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">
-                          On orders of {FREE_SHIPPING_THRESHOLD_LABEL} or more
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Clock className="w-5 h-5 text-blue-500 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Standard Shipping</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">
-                          {FLAT_SHIPPING_RATE_LABEL} flat rate on orders under {FREE_SHIPPING_THRESHOLD_LABEL}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            /*
+              ONE column of full-width cards — deliberately NOT two columns of cards.
 
-                <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
-                    <RotateCcw className="w-5 h-5 text-red-600" />
-                    Returns & Exchanges
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 text-green-500 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Change of mind</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Printed to order in your chosen colour and size, so we cannot resell a returned garment. Change-of-mind returns are not offered.</div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 text-green-500 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Faulty or wrong item</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">If a garment arrives faulty, damaged or not what you ordered, contact us and we will replace it or refund it. Return postage is on us.</div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 text-green-500 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Your rights</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Nothing here limits the guarantees you have under Australian Consumer Law.</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              These tabs render INSIDE the product page's right-hand column (see the
+              comment above <ProductTabs/> in page.tsx: they live there so the sticky
+              product image has something to travel against). That column is roughly
+              half the page, so the previous `lg:grid-cols-2` handed each card about
+              330px. Every heading wrapped onto two lines, and because the two columns
+              grew independently, a tall Returns column sat beside a short Help one
+              with a large dead gap.
 
-              <div className="space-y-6">
-                <div className="bg-white dark:bg-neutral-950 rounded-xl p-6 shadow-sm border dark:border-neutral-800">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-4 flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-red-600" />
-                    Warranty & Support
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                      <Award className="w-5 h-5 text-gold-500 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Print quality</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">The print is made to last normal wear and washing. If it cracks or peels in ordinary use, tell us and we will sort it out.</div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 text-green-500 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Talk to a person</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Email us and a human replies — no ticket queue.</div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Check className="w-5 h-5 text-green-500 mt-0.5" />
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-neutral-100">Care</div>
-                        <div className="text-sm text-gray-600 dark:text-neutral-400">Wash inside out, cold, and hang to dry. That is all a printed garment needs.</div>
-                      </div>
-                    </div>
-                  </div>
+              Full width gives the headings room; the horizontal space is spent on the
+              ITEMS inside each card instead, which is where it actually reads better.
+            */
+            <div className="space-y-6">
+              <InfoCard icon={<Truck className="h-5 w-5 shrink-0 text-red-600" />} title="Shipping">
+                {/*
+                  These two lines are the ONLY shipping outcomes checkout can produce:
+                  priceCart charges flatShippingRateCents below the threshold and
+                  nothing at or above it. The figures are imported rather than typed —
+                  this block previously promised free shipping "over $99" while the
+                  code charged below $100 (so a $99.50 order was billed $10 at
+                  checkout), plus Express at $15 and Same Day at $25 in three cities,
+                  none of which exists anywhere in the pricing path.
+                */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <InfoItem
+                    icon={<Check className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />}
+                    title="Free standard shipping"
+                  >
+                    On orders of {FREE_SHIPPING_THRESHOLD_LABEL} or more.
+                  </InfoItem>
+                  <InfoItem
+                    icon={<Clock className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />}
+                    title="Standard shipping"
+                  >
+                    {FLAT_SHIPPING_RATE_LABEL} flat rate under {FREE_SHIPPING_THRESHOLD_LABEL}.
+                  </InfoItem>
                 </div>
+              </InfoCard>
 
-                <div className="bg-gradient-to-r from-red-600/10 to-red-100 rounded-xl p-6 border border-red-600/20">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-3">Need Help?</h3>
-                  <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
-                    Our customer service team is here to help with any questions about shipping, returns, or product
-                    support.
-                  </p>
-                  <div className="space-y-2">
-                    <div className="text-sm">
-                      <span className="font-medium text-gray-900 dark:text-neutral-100">Phone:</span>
-                      <span className="text-gray-600 dark:text-neutral-400 ml-2">{contactEmail}</span>
-                    </div>
-                    <div className="text-sm">
-                      <span className="font-medium text-gray-900 dark:text-neutral-100">Email:</span>
-                      <span className="text-gray-600 dark:text-neutral-400 ml-2">{contactEmail}</span>
-                    </div>
-                    <div className="text-sm">
-                      <span className="font-medium text-gray-900 dark:text-neutral-100">Hours:</span>
-                      <span className="text-gray-600 dark:text-neutral-400 ml-2">We reply within one business day</span>
-                    </div>
-                  </div>
+              <InfoCard
+                icon={<RotateCcw className="h-5 w-5 shrink-0 text-red-600" />}
+                title="Returns & exchanges"
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Info, not a green tick: a tick next to "not offered" reads as
+                      approval of the thing the sentence is refusing. */}
+                  <InfoItem
+                    icon={<Info className="mt-0.5 h-5 w-5 shrink-0 text-gray-400 dark:text-neutral-500" />}
+                    title="Change of mind"
+                  >
+                    Each garment is printed to order in your colour and size, so we cannot
+                    resell a return. Change-of-mind returns are not offered.
+                  </InfoItem>
+                  <InfoItem
+                    icon={<Check className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />}
+                    title="Faulty or wrong item"
+                  >
+                    Faulty, damaged, or not what you ordered? Contact us and we will replace
+                    or refund it. Return postage is on us.
+                  </InfoItem>
+                  <InfoItem
+                    icon={<Check className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />}
+                    title="Your rights"
+                  >
+                    Nothing here limits the guarantees you have under Australian Consumer Law.
+                  </InfoItem>
                 </div>
-              </div>
+              </InfoCard>
+
+              <InfoCard
+                icon={<Shield className="h-5 w-5 shrink-0 text-red-600" />}
+                title="Quality & care"
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* text-premium-gold, not text-gold-500 — the latter is not a colour
+                      this Tailwind config defines, so the icon rendered unstyled. */}
+                  <InfoItem
+                    icon={<Award className="mt-0.5 h-5 w-5 shrink-0 text-premium-gold" />}
+                    title="Print quality"
+                  >
+                    The print is made to last normal wear and washing. If it cracks or peels
+                    in ordinary use, tell us and we will sort it out.
+                  </InfoItem>
+                  <InfoItem
+                    icon={<Check className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />}
+                    title="Care"
+                  >
+                    Wash inside out, cold, and hang to dry. That is all a printed garment
+                    needs.
+                  </InfoItem>
+                </div>
+              </InfoCard>
+
+              {/*
+                The gradient previously ended at `to-red-100` in BOTH themes — a
+                near-white pink — while the body text stayed `dark:text-neutral-400`.
+                In dark mode that put light grey on light pink and the card was
+                effectively unreadable. Each theme now gets its own ramp.
+              */}
+              <section className="rounded-xl border border-red-600/20 bg-gradient-to-br from-red-50 to-white p-6 dark:border-red-500/20 dark:from-red-950/40 dark:to-neutral-950">
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-neutral-100">
+                  Still need a hand?
+                </h3>
+                <p className="mb-4 text-sm text-gray-600 dark:text-neutral-400">
+                  Email us and a human replies — usually within one business day.
+                </p>
+                {/*
+                  The "Phone:" row was removed rather than filled in. It rendered
+                  {contactEmail} beside a Phone label, because there is no phone number
+                  anywhere in the codebase to put there — and inventing one would
+                  promise a channel nobody answers.
+                */}
+                <a
+                  href={`mailto:${contactEmail}`}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-red-700 underline-offset-4 hover:underline dark:text-red-400"
+                >
+                  <Mail className="h-4 w-4 shrink-0" />
+                  {contactEmail}
+                </a>
+              </section>
             </div>
           )}
         </div>
