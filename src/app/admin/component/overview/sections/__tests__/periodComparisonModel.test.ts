@@ -3,6 +3,7 @@ import {
   buildPeriodComparison,
   inclusiveDayCount,
   perDay,
+  rateDelta,
 } from "../periodComparisonModel";
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 
@@ -189,6 +190,83 @@ function testInclusiveDayCount() {
   assert.equal(inclusiveDayCount("", "2026-08-31"), 0, "unresolved bounds yield 0, not NaN");
 }
 
+function testDeltaNormalisesAcrossUnequalWindows() {
+  // THE BUG THIS PINS (caught on production, 2026-08-20): comparing "Today" against a whole
+  // calendar month by raw total measures the calendar, not the business — every flow read
+  // ~ -97% because one day is ~3% of thirty-one. Worse, it INVERTED the answer: 197 new
+  // accounts today against July's 161.677/day is +22%, rendered as -96.1%.
+  const m = buildPeriodComparison(
+    stats({ newInRange: 197 }),
+    stats({ newInRange: 5012 }),
+    { currentDays: 1, previousDays: 31 },
+  );
+  const accounts = metric(m, "newUsers");
+
+  assert.equal(accounts.normalised, true, "unequal windows must normalise");
+  assert.equal(accounts.currentPerDay, 197);
+  assert.ok(Math.abs(accounts.previousPerDay! - 161.677) < 0.01);
+  assert.ok(accounts.deltaPct! > 0, "197/day vs 161.7/day is an INCREASE, not a 96% collapse");
+  assert.ok(Math.abs(accounts.deltaPct! - 21.85) < 0.5, `expected ~+21.9%, got ${accounts.deltaPct}`);
+
+  // Raw totals are still reported unchanged — only the percentage is normalised.
+  assert.equal(accounts.current, 197);
+  assert.equal(accounts.previous, 5012);
+}
+
+function testEqualWindowsCompareRaw() {
+  const m = buildPeriodComparison(
+    stats({ newInRange: 120 }),
+    stats({ newInRange: 100 }),
+    { currentDays: 31, previousDays: 31 },
+  );
+  const a = metric(m, "newUsers");
+  assert.equal(a.normalised, false, "same length needs no normalisation");
+  assert.equal(a.deltaPct, 20);
+}
+
+function testRatiosAndStocksNeverNormalise() {
+  const m = buildPeriodComparison(
+    stats({ adRoas: 0.7, newInRange: 1 }),
+    stats({ adRoas: 0.69, newInRange: 1 }),
+    { currentDays: 1, previousDays: 31 },
+  );
+  // A ratio is already a rate; dividing 0.7 by 1 day and 0.69 by 31 days would invent a 30x swing.
+  const roas = metric(m, "adRoas");
+  assert.equal(roas.normalised, false);
+  assert.equal(roas.currentPerDay, null);
+  assert.ok(Math.abs(roas.deltaPct! - 1.449) < 0.01, "compares the ratios directly");
+
+  const active = metric(m, "activeSubscriptions");
+  assert.equal(active.normalised, false, "a stock is a level, not a rate");
+  assert.equal(active.currentPerDay, null);
+}
+
+function testRateDeltaDirectly() {
+  assert.deepEqual(rateDelta(10, 5, { currentDays: 1, previousDays: 1, comparable: true }), {
+    pct: 100,
+    normalised: false,
+  });
+  // 10/1 vs 310/31 = 10 vs 10 -> no change, even though the raw totals differ 31x.
+  assert.deepEqual(rateDelta(10, 310, { currentDays: 1, previousDays: 31, comparable: true }), {
+    pct: 0,
+    normalised: true,
+  });
+  assert.deepEqual(rateDelta(10, 310, { currentDays: 1, previousDays: 31, comparable: false }), {
+    pct: (10 - 310) / 310 * 100,
+    normalised: false,
+  });
+  assert.equal(rateDelta(10, null, { currentDays: 1, previousDays: 31, comparable: true }), null);
+  assert.deepEqual(rateDelta(10, 0, { currentDays: 1, previousDays: 31, comparable: true }), {
+    pct: null,
+    normalised: true,
+  });
+  // Unknown window lengths must fall back to a raw comparison, never divide by zero.
+  assert.deepEqual(rateDelta(10, 5, { currentDays: 0, previousDays: 0, comparable: true }), {
+    pct: 100,
+    normalised: false,
+  });
+}
+
 function testPerDayNormalisation() {
   assert.equal(perDay(3100, 31, "currency"), 100);
   assert.equal(perDay(62, 31, "count"), 2);
@@ -225,6 +303,10 @@ function run() {
   testInclusiveDayCount();
   testPerDayNormalisation();
   testStockMetricsAreFlagged();
+  testDeltaNormalisesAcrossUnequalWindows();
+  testEqualWindowsCompareRaw();
+  testRatiosAndStocksNeverNormalise();
+  testRateDeltaDirectly();
   console.log("periodComparisonModel tests passed");
 }
 

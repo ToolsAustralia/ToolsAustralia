@@ -1733,3 +1733,19 @@ The first cut of `miniDrawPackage` keyed off `miniDrawParticipation[].entriesByS
 **Export follows the same source.** "Mini Pack Entries" now sums `miniDrawPackages[].entriesGranted` (lifetime, refund-net) rather than the resettable bucket, and a new **"Mini Packs Bought"** column counts the rows. The `entriesBySource` bucket is still used by "Active Mini Draws", which is correct — that column is about *current* participation, which is exactly what the bucket tracks.
 
 ⚠️ Note the bucket is not a per-tier signal either way: it stores no package identity. `miniDrawPackages[].packageId` does, so splitting the filter into "Mini Pack 1–3" vs "additional-* tiers" is now possible if it's ever wanted.
+
+### Three corrections from reading production data (2026-08-20)
+
+DJ read the live dashboard and found three things wrong. All were confidently wrong — plausible numbers pointing the wrong way — which is the worst failure mode for an analytics surface.
+
+**1. Δ measured the calendar, not the business.** "Today" against a whole calendar month compared **raw totals**, so every flow read ≈ −97% simply because one day is ≈ 3% of thirty-one. It also **inverted** the answer: 197 new accounts today against July's 161.7/day is **+22%**, rendered as **−96.1%**.
+
+Δ is now computed from **per-day rates** whenever the windows differ in length, via `rateDelta` in `periodComparisonModel.ts` — shared by the Period Comparison card *and* Brand Performance's Compare chips, so one dashboard has one definition of Δ. Ratios (ROAS) and stocks (active memberships) still compare raw: they are already like-for-like and dividing them by days would invent a swing. The header reads **"Δ / day"** when normalised. Pinned by `testDeltaNormalisesAcrossUnequalWindows` with the exact production figures.
+
+**2. The platform chips didn't scope revenue.** Selecting Meta or TikTok narrowed *spend* while leaving revenue at every channel's, so the same $770 appeared under both, and per-platform ROAS was all-channel revenue ÷ one platform's spend — **8.95×** on a table whose true blended figure was **0.97×**.
+
+The server bases now add `convertingPlatform` to the `PaymentEvent` match when a single platform is selected — the canonical platform basis per master spec §3.1.1, never `data.utmSource`. `platform=all` stays unfiltered by design (whole-picture), so **Meta + TikTok do not sum to All**; the gap is revenue no ad bought, and the card now says so.
+
+**3. Toolbox spend and revenue were keyed differently** — see the entry in `docs/metrics-analytics/backend.md`.
+
+**Also:** Brand Performance's three `Segmented` groups plus Compare wrapped onto four rows on a phone and pushed the table below the fold. They now collapse behind a summary button that names the active state (`Toolset · Landing page · All · Compare`), expanded on tap and always open from `sm` up.

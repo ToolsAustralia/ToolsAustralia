@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import { Tags, RotateCw } from "lucide-react";
+import { Tags, RotateCw, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { subDays } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +24,7 @@ import type {
 import type { BrandLane } from "@/utils/metrics/brand-lane";
 import type { SpendByUrlPlatform } from "@/hooks/queries/useSpendByUrlAnalytics";
 import { resolveAestDateWindow } from "@/utils/admin/resolveAestDateWindow";
+import { inclusiveDayCount, rateDelta } from "./periodComparisonModel";
 import { cn } from "@/utils/cn";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 import BrandPerformanceAdsModal from "@/components/modals/BrandPerformanceAdsModal";
@@ -103,6 +104,8 @@ export default function BrandPerformanceCard({
   const [basis, setBasis] = useState<BrandPerformanceBasis>("landing-page");
   const [platform, setPlatform] = useState<BrandPerformancePlatformScope>("all");
   const [compare, setCompare] = useState<CompareMode>("off");
+  // Mobile-only: the control row is collapsed by default so the table starts above the fold.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const query = useBrandPerformance(startDate, endDate, {
     lane,
@@ -139,6 +142,14 @@ export default function BrandPerformanceCard({
   const serverBasis = basis !== "platform";
   const showCompare = compare !== "off";
 
+  // Window lengths, so a Δ across unequal windows compares rates rather than the calendar.
+  const currentDays = inclusiveDayCount(data?.meta.startDate ?? "", data?.meta.endDate ?? "");
+  const previousDays = inclusiveDayCount(
+    data?.meta.comparison?.startDate ?? "",
+    data?.meta.comparison?.endDate ?? "",
+  );
+  const unequalWindows = currentDays > 0 && previousDays > 0 && currentDays !== previousDays;
+
   const rows = useMemo<Row[]>(
     () => (data?.rows ?? []).map((r) => ({ id: r.laneId, row: r })),
     [data?.rows],
@@ -164,8 +175,17 @@ export default function BrandPerformanceCard({
     platform: SpendByUrlPlatform;
   } | null>(null);
 
-  /** Δ chip beneath a figure. Only rendered when Compare is on and a prior value exists. */
-  const delta = (current: number, prior: number | null | undefined) => {
+  /**
+   * Δ chip beneath a figure. Only rendered when Compare is on and a prior value exists.
+   *
+   * NORMALISED to a per-day rate when the two windows differ in length, via the same
+   * `rateDelta` the Period Comparison card uses — one definition of Δ on one dashboard.
+   * Comparing "Today" to a whole month by raw total measures the calendar, not the brand:
+   * every row reads ≈ −97% because one day is ≈ 3% of thirty-one.
+   *
+   * `comparable: false` for ROAS — it is already a rate, so dividing it by days is meaningless.
+   */
+  const delta = (current: number, prior: number | null | undefined, isRatio = false) => {
     if (!showCompare || prior == null) return null;
     // No prior activity: a percentage change from zero is undefined, so say "new" rather than
     // rendering an infinite or 100% jump that reads as a real measurement.
@@ -174,7 +194,9 @@ export default function BrandPerformanceCard({
         <span className="block text-3xs font-medium text-emerald-600 dark:text-emerald-400">new</span>
       );
     }
-    const pct = ((current - prior) / Math.abs(prior)) * 100;
+    const d = rateDelta(current, prior, { currentDays, previousDays, comparable: !isRatio });
+    const pct = d?.pct;
+    if (pct == null) return null;
     if (Math.abs(pct) < 0.05) {
       return <span className="block text-3xs text-neutral-400 dark:text-neutral-500">—</span>;
     }
@@ -228,7 +250,7 @@ export default function BrandPerformanceCard({
           <span className={cn("num text-xs sm:text-sm font-semibold", roasClass(d.roas))}>
             {d.roas.toFixed(2)}x
           </span>
-          {delta(d.roas, prior?.roas)}
+          {delta(d.roas, prior?.roas, true)}
         </>
       );
     }
@@ -335,7 +357,42 @@ export default function BrandPerformanceCard({
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        {/*
+          MOBILE: three Segmented groups plus Compare wrap onto four rows on a phone and push the
+          table below the fold. Collapsed behind a summary button that names the ACTIVE state, so
+          the current view is still readable without expanding. Always open from `sm` up, where
+          the row fits.
+        */}
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((o) => !o)}
+          aria-expanded={filtersOpen}
+          className="sm:hidden mb-3 inline-flex w-full items-center justify-between gap-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300"
+        >
+          <span className="inline-flex items-center gap-1.5 min-w-0">
+            <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" strokeWidth={2} />
+            <span className="truncate">
+              {LANE_OPTIONS.find((o) => o.value === lane)?.label}
+              {" · "}
+              {BASIS_OPTIONS.find((o) => o.value === basis)?.label}
+              {" · "}
+              {PLATFORM_OPTIONS.find((o) => o.value === platform)?.label}
+              {showCompare ? " · Compare" : ""}
+            </span>
+          </span>
+          <ChevronDown
+            className={cn("w-4 h-4 shrink-0 transition-transform", filtersOpen && "rotate-180")}
+            strokeWidth={2}
+          />
+        </button>
+
+        <div
+          className={cn(
+            "flex-wrap items-center gap-2 mb-4",
+            filtersOpen ? "flex" : "hidden",
+            "sm:flex",
+          )}
+        >
           <Segmented options={LANE_OPTIONS} value={lane} onChange={setLane} size="sm" />
           {/* The basis hint is a tooltip, not a paragraph — the control carries the meaning. */}
           <span title={BASIS_HINT[basis]}>
@@ -361,6 +418,20 @@ export default function BrandPerformanceCard({
         {showCompare && data?.meta.comparison && (
           <p className="text-2xs text-neutral-500 dark:text-neutral-400 -mt-2 mb-3 tabular-nums">
             vs {data.meta.comparison.startDate} → {data.meta.comparison.endDate}
+            {unequalWindows && (
+              <span className="not-tabular-nums">
+                {" "}
+                · Δ compares the per-day rate ({currentDays}d vs {previousDays}d)
+              </span>
+            )}
+          </p>
+        )}
+
+        {serverBasis && platform !== "all" && (
+          <p className="text-2xs text-neutral-500 dark:text-neutral-400 -mt-2 mb-3">
+            Spend and revenue are both scoped to {platform === "meta" ? "Meta" : "TikTok"} —
+            revenue by its converting platform. Meta and TikTok will not sum to All: the gap is
+            revenue no ad bought (direct, organic, email).
           </p>
         )}
 

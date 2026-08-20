@@ -256,6 +256,25 @@ export class BrandPerformanceService {
             eventType: "BenefitsGranted",
             // Exclusive right edge (master spec §3.1.5) — `aestDayBounds` returns next-midnight.
             timestamp: { $gte: dayStartUTC, $lt: dayEndUTC },
+            /**
+             * Selecting ONE platform must scope the revenue too, not just the spend.
+             *
+             * Until 2026-08-20 it didn't: picking TikTok narrowed spend to TikTok while leaving
+             * revenue at every channel's, so the same $770 appeared under Meta AND TikTok and
+             * the per-platform ROAS was all-channel revenue ÷ one platform's spend — 8.95x on a
+             * table whose true blended figure was 0.97x. Confidently wrong in the direction that
+             * makes a channel look good.
+             *
+             * `convertingPlatform` is the canonical platform basis (master spec §3.1.1) — never
+             * `data.utmSource`, which is a different classifier and will not reconcile with the
+             * daily snapshot.
+             *
+             * `platform=all` stays unfiltered on purpose: it is the whole-picture view, so its
+             * revenue includes direct/organic/email that no ad bought. Meta + TikTok therefore
+             * do NOT sum to All, and the gap is exactly that non-ad revenue — surfaced in the UI
+             * rather than left for the reader to trip over.
+             */
+            ...(platform !== "all" ? { convertingPlatform: platform } : {}),
           },
         },
         ...excludeRefundedBenefitsGrantedStages(),

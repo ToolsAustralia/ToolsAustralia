@@ -31,13 +31,60 @@ export interface ComparisonMetric {
   group: "Revenue" | "Customers" | "Advertising";
   current: number;
   previous: number;
-  /** current − previous. */
+  /** current − previous, as raw totals. */
   delta: number;
   /**
-   * Percentage change, or null when the previous value is 0 — a change from nothing has no
-   * meaningful percentage, and rendering ∞ or a flat 100% would read as a real measurement.
+   * Percentage change, or null when there is nothing to compare against — a change from zero has
+   * no meaningful percentage, and rendering ∞ or a flat 100% would read as a real measurement.
+   *
+   * ⚠️ NORMALISED to a per-day rate whenever the two windows differ in length (see `normalised`).
    */
   deltaPct: number | null;
+  /**
+   * True when `deltaPct` compares per-day RATES rather than raw totals.
+   *
+   * Comparing "Today" against a whole calendar month by raw total measures the calendar, not the
+   * business: every flow reads ≈ −97% because one day is ≈ 3% of thirty-one. It also INVERTS the
+   * answer — 197 new accounts today against July's 161.7/day is +22%, which the raw comparison
+   * rendered as −96.1%. So when the lengths differ, the percentage is computed from the rates.
+   */
+  normalised: boolean;
+  /** current ÷ days. null for stocks and ratios, which do not divide by days. */
+  currentPerDay: number | null;
+  previousPerDay: number | null;
+}
+
+/** Percentage change between two values, or null when the baseline is 0. */
+function pctChange(current: number, previous: number): number | null {
+  if (previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+/**
+ * Percentage change between two windows, normalised to a per-day rate when they differ in length.
+ *
+ * Shared by the Period Comparison card and Brand Performance's Compare toggle so the two cannot
+ * disagree about what a Δ means — both sit on the same dashboard.
+ *
+ * `comparable: false` marks a value that must NOT be divided by days (a ratio like ROAS, or a
+ * stock like active memberships); those always compare raw, which is already like-for-like.
+ */
+export function rateDelta(
+  current: number,
+  previous: number | null | undefined,
+  opts: { currentDays: number; previousDays: number; comparable: boolean },
+): { pct: number | null; normalised: boolean } | null {
+  if (previous == null) return null;
+
+  const { currentDays, previousDays, comparable } = opts;
+  const canNormalise =
+    comparable && currentDays > 0 && previousDays > 0 && currentDays !== previousDays;
+
+  if (!canNormalise) return { pct: pctChange(current, previous), normalised: false };
+  return {
+    pct: pctChange(current / currentDays, previous / previousDays),
+    normalised: true,
+  };
 }
 
 /**
@@ -93,6 +140,12 @@ function acquisitionRevenue(stats: AdminDashboardStats | undefined): number {
 export function buildPeriodComparison(
   current: AdminDashboardStats | undefined,
   previous: AdminDashboardStats | undefined,
+  /**
+   * Inclusive day counts of the two windows. Supplied so the MODEL owns the normalisation —
+   * a caller that computed its own percentage from the raw totals would reproduce the exact bug
+   * this exists to prevent. Omitted (or zero) means "lengths unknown", and everything compares raw.
+   */
+  windows: { currentDays: number; previousDays: number } = { currentDays: 0, previousDays: 0 },
 ): ComparisonMetric[] {
   const spec: Array<{
     key: string;
@@ -252,16 +305,26 @@ export function buildPeriodComparison(
     },
   ];
 
+  const { currentDays, previousDays } = windows;
+
   return spec.map(({ read, stock, ...rest }) => {
     const cur = read(current);
     const prev = read(previous);
+    const isStock = stock === true;
+    // Ratios are already rates and stocks are levels; neither divides by days.
+    const comparable = !isStock && rest.format !== "ratio";
+    const d = rateDelta(cur, prev, { currentDays, previousDays, comparable });
+
     return {
       ...rest,
-      stock: stock === true,
+      stock: isStock,
       current: cur,
       previous: prev,
       delta: cur - prev,
-      deltaPct: prev === 0 ? null : ((cur - prev) / Math.abs(prev)) * 100,
+      deltaPct: d?.pct ?? null,
+      normalised: d?.normalised ?? false,
+      currentPerDay: comparable && currentDays > 0 ? cur / currentDays : null,
+      previousPerDay: comparable && previousDays > 0 ? prev / previousDays : null,
     };
   });
 }
