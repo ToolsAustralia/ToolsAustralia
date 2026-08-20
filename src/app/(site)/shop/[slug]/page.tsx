@@ -377,15 +377,16 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
               type) plus evidence the item was actually sold at it — not arithmetic
               on the current price.
             */}
-            <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold text-red-600 font-poppins">${product.price}</span>
-            </div>
+            {/*
+              MemberPriceLine owns the whole price on this page now. It used to
+              render a 3xl red full price ABOVE a small green member box, which put
+              the visual weight on the number a member does not pay.
 
-            {/* The member price sits beside the shelf price, never struck through
-                it: a strikethrough reads as a former price, which is the exact
-                misrepresentation the block above was removed for. A member is
-                quoted their own tier; everyone else sees the best tier's price,
-                which is what the membership is worth to them. */}
+              It still never strikes through a price the viewer would actually be
+              charged — see the comment in MemberPriceLine. A member sees their own
+              price as the headline with the shelf price struck; everyone else sees
+              the real price as the headline and the membership as an offer.
+            */}
             <MemberPriceLine price={product.price} variant="detail" />
 
             {/* Description */}

@@ -126,60 +126,106 @@ export function MemberPriceLine({
   if (!memberPrice) return null;
 
   if (variant === "card") {
-    // The discounted figure is the HEADLINE, not a footnote under the full price.
-    // It was a 12px green line below a 20px black one, which put the visual weight
-    // on the number a member does not pay.
-    //
-    // Coloured from the tier's own palette rather than a generic green, so the
-    // saving is legibly attached to a membership level. Non-members see the same
-    // treatment for the BEST tier — it is an offer, and it should look like one.
     const scheme = getElectricPackageColorScheme(memberPrice.packageId);
+
+    // A STRIKETHROUGH IS A CLAIM, and it is only true for a member.
+    //
+    // For someone holding the tier, the full price genuinely is not what they
+    // pay, so striking it is accurate and the discounted figure is the headline.
+    //
+    // For everyone else the full price IS what they pay. Striking it through
+    // presents a reduction they do not have — a misleading price representation
+    // under Australian Consumer Law, and the exact misrepresentation the older
+    // detail block was rewritten to remove. Non-members get the real price as the
+    // headline and the member price as a clearly-labelled offer beside it.
+    if (memberPrice.isMember) {
+      return (
+        <div className="mt-1 space-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-[17px] sm:text-[19px] lg:text-[21px] font-extrabold leading-none text-gray-900 dark:text-white">
+              {memberPrice.priceLabel}
+            </span>
+            <span className="text-[12px] sm:text-[13px] font-medium leading-none text-gray-400 line-through dark:text-neutral-500">
+              {memberPrice.fullPriceLabel}
+            </span>
+          </div>
+          <p className="text-[11px] font-medium text-gray-500 dark:text-neutral-400">
+            {memberPrice.tierName} price — saves {memberPrice.savingLabel}
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="mt-1 space-y-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="text-[17px] sm:text-[19px] lg:text-[21px] font-extrabold leading-none text-gray-900 dark:text-white">
-            {memberPrice.priceLabel}
-          </span>
-          <span className="text-[12px] sm:text-[13px] font-medium leading-none text-gray-400 line-through dark:text-neutral-500">
-            {memberPrice.fullPriceLabel}
-          </span>
-          <span
-            className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-wide text-black"
-            style={{ backgroundImage: scheme.bgGradient }}
-          >
-            <Tag className="h-3 w-3" aria-hidden="true" />
-            {memberPrice.percent}% off
-          </span>
+        <div className="text-[17px] sm:text-[19px] lg:text-[21px] font-extrabold leading-none text-gray-900 dark:text-white">
+          {memberPrice.fullPriceLabel}
         </div>
-        <p className="text-[11px] font-medium text-gray-500 dark:text-neutral-400">
-          {memberPrice.isMember
-            ? `${memberPrice.tierName} price — saves ${memberPrice.savingLabel}`
-            : `${memberPrice.tierName} members save ${memberPrice.savingLabel}`}
+        <p className="text-[11px] font-semibold" style={{ color: scheme.accentHex }}>
+          {memberPrice.tierName} members pay {memberPrice.priceLabel} — save{" "}
+          {memberPrice.savingLabel}
         </p>
       </div>
     );
   }
 
+  const scheme = getElectricPackageColorScheme(memberPrice.packageId);
+
+  // A member: their price is the headline, the shelf price is struck.
+  if (memberPrice.isMember) {
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="font-poppins text-4xl font-bold text-red-600">
+            {memberPrice.priceLabel}
+          </span>
+          <span className="text-lg font-medium text-gray-400 line-through dark:text-neutral-500">
+            {memberPrice.fullPriceLabel}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black uppercase leading-none tracking-wide text-black"
+            style={{ backgroundImage: scheme.bgGradient }}
+          >
+            {memberPrice.percent}% off
+          </span>
+        </div>
+        <p className="text-sm font-medium text-gray-600 dark:text-neutral-400">
+          Your {memberPrice.tierName} membership saves you {memberPrice.savingLabel} on this
+          item, applied at checkout.
+        </p>
+      </div>
+    );
+  }
+
+  // Everyone else: the price they actually pay is the headline, and the
+  // membership is presented as an offer rather than as a discount they hold.
   return (
-    <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3">
-      <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
-        {memberPrice.isMember
-          ? `You pay ${memberPrice.priceLabel}`
-          : `Members pay from ${memberPrice.priceLabel}`}
-      </p>
-      <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400/90">
-        {memberPrice.isMember
-          ? `Your ${memberPrice.tierName} membership takes ${memberPrice.percent}% off shop orders, applied at checkout.`
-          : `${memberPrice.tierName} membership takes ${memberPrice.percent}% off every shop order.`}
-      </p>
-      {!memberPrice.isMember && (
+    <div className="space-y-3">
+      <span className="font-poppins text-4xl font-bold text-red-600">
+        {memberPrice.fullPriceLabel}
+      </span>
+      <div
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border px-4 py-3"
+        style={{ borderColor: scheme.accentHex }}
+      >
+        <span
+          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black uppercase leading-none tracking-wide text-black"
+          style={{ backgroundImage: scheme.bgGradient }}
+        >
+          {memberPrice.percent}% off
+        </span>
+        <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
+          {memberPrice.tierName} members pay {memberPrice.priceLabel} — save{" "}
+          {memberPrice.savingLabel}
+        </p>
         <Link
           href="/membership"
-          className="mt-2 inline-block text-xs font-semibold text-emerald-800 dark:text-emerald-300 underline underline-offset-2 hover:text-emerald-900 dark:hover:text-emerald-200"
+          className="text-xs font-semibold underline underline-offset-2"
+          style={{ color: scheme.accentHex }}
         >
           See membership options
         </Link>
-      )}
+      </div>
     </div>
   );
 }
@@ -403,7 +449,19 @@ export default function ProductCard({
   // Whether MemberPriceLine will render anything. Computed here so the plain
   // price and the discounted block are mutually exclusive rather than both
   // trying to be the headline figure.
-  const memberPriceApplies = Boolean(resolveMemberShopPrice(productData.price, userData));
+  const memberPrice = resolveMemberShopPrice(productData.price, userData);
+  const memberPriceApplies = Boolean(memberPrice);
+
+  // The percentage moves onto the image; the price block below keeps the figures.
+  // Shown for members and non-members alike because it describes the OFFER, not a
+  // reduction the viewer already holds — the price block is what distinguishes
+  // those two cases, and it does so without striking a price anyone would pay.
+  const discountBadge = memberPrice
+    ? {
+        percent: memberPrice.percent,
+        gradient: getElectricPackageColorScheme(memberPrice.packageId).bgGradient,
+      }
+    : null;
   // Garment mockups are shot whole on a white ground, so cropping them to fill
   // lops off sleeves and hems. Tools are photographed to fill the frame and still
   // look best cropped, and trackInventory is what already separates the two:
@@ -573,6 +631,47 @@ export default function ProductCard({
             </div>
           </Link>
 
+          {/*
+            Entry marks and the member discount sit ON the image, top-left, not in
+            the text block below.
+
+            They are the reasons to look twice at this card, and in a grid the eye
+            reaches the image before the copy. Putting them under the title also
+            pushed the price down far enough that a 3-up row could not align its
+            buttons without every card growing to match the tallest.
+
+            pointer-events-none so the overlay never intercepts the click that
+            opens the product — the whole image is a link.
+          */}
+          {(entryCount > 0 || discountBadge) && (
+            <div className="pointer-events-none absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] flex-wrap gap-1.5">
+              {discountBadge && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-wide text-black shadow-sm"
+                  style={{ backgroundImage: discountBadge.gradient }}
+                >
+                  <Tag className="h-3 w-3" aria-hidden="true" />
+                  {discountBadge.percent}% off
+                </span>
+              )}
+              {entryCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-[3px] text-[10px] font-bold uppercase leading-none tracking-wide text-white shadow-sm">
+                  <Ticket className="h-3 w-3" aria-hidden="true" />
+                  {entryCount} free {entryCount === 1 ? "entry" : "entries"}
+                </span>
+              )}
+              {entryCount > 0 && entryMultiplier > 1 && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-wide text-black shadow-sm"
+                  style={{ backgroundImage: multiplierScheme.bgGradient }}
+                >
+                  <Zap className="h-3 w-3" aria-hidden="true" />
+                  {entryMultiplier}× entries
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Brand Overlay */}
           {productData.isPrize && brandAccent && (
             <div className="absolute bottom-12 right-2 z-10">
@@ -697,32 +796,6 @@ export default function ProductCard({
             {/* Price */}
             {!productData.isPrize && (
               <div>
-                {/*
-                  The free-entry and multiplier marks sit ABOVE the price, because
-                  they are the reason to choose this item rather than a detail of
-                  what it costs.
-
-                  Rule 11: entries are a free INCLUSION with the product. Never
-                  price them per unit and never imply they were bought.
-                */}
-                {entryCount > 0 && (
-                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-[3px] text-[10px] font-bold uppercase leading-none tracking-wide text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
-                      <Ticket className="h-3 w-3" aria-hidden="true" />
-                      {entryCount} free {entryCount === 1 ? "entry" : "entries"}
-                    </span>
-                    {entryMultiplier > 1 && (
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-wide text-black"
-                        style={{ backgroundImage: multiplierScheme.bgGradient }}
-                      >
-                        <Zap className="h-3 w-3" aria-hidden="true" />
-                        {entryMultiplier}× entries
-                      </span>
-                    )}
-                  </div>
-                )}
-
                 {/* Mini draws are excluded above: their figure is a prize VALUE,
                     not a price anyone pays, so no discount applies to it.
 

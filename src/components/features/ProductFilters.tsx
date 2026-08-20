@@ -46,16 +46,12 @@ export default function ProductFilters({ selectedFilters, onFilterChange, isMobi
   });
   const [categorySearch, setCategorySearch] = useState("");
   const [brandSearch, setBrandSearch] = useState("");
-  const [sizeSearch, setSizeSearch] = useState("");
-  const [colourSearch, setColourSearch] = useState("");
 
   // Derived from the catalogue. While loading these are empty, so each section shows
   // its own empty state rather than a stale hard-coded list.
   const { data: facets } = useShopFacets();
   const categories = useMemo(() => (facets?.categories ?? []).map((c) => c.name), [facets]);
   const brands = useMemo(() => (facets?.brands ?? []).map((b) => b.name), [facets]);
-  const sizes = useMemo(() => (facets?.sizes ?? []).map((v) => v.name), [facets]);
-  const colours = useMemo(() => (facets?.colours ?? []).map((v) => v.name), [facets]);
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({
@@ -78,19 +74,7 @@ export default function ProductFilters({ selectedFilters, onFilterChange, isMobi
     onFilterChange?.({ brands: newBrands });
   };
 
-  const handleSizeToggle = (size: string) => {
-    const next = selectedFilters.sizes.includes(size)
-      ? selectedFilters.sizes.filter((v) => v !== size)
-      : [...selectedFilters.sizes, size];
-    onFilterChange?.({ sizes: next });
-  };
 
-  const handleColourToggle = (colour: string) => {
-    const next = selectedFilters.colours.includes(colour)
-      ? selectedFilters.colours.filter((v) => v !== colour)
-      : [...selectedFilters.colours, colour];
-    onFilterChange?.({ colours: next });
-  };
 
   const handlePriceRangeChange = (min: number, max: number) => {
     const boundedMin = Math.max(MIN_PRICE, Math.min(min, MAX_PRICE));
@@ -125,14 +109,6 @@ export default function ProductFilters({ selectedFilters, onFilterChange, isMobi
   const filteredBrands = useMemo(
     () => brands.filter((item) => item.toLowerCase().includes(brandSearch.toLowerCase().trim())),
     [brands, brandSearch]
-  );
-  const filteredSizes = useMemo(
-    () => sizes.filter((item) => item.toLowerCase().includes(sizeSearch.toLowerCase().trim())),
-    [sizes, sizeSearch]
-  );
-  const filteredColours = useMemo(
-    () => colours.filter((item) => item.toLowerCase().includes(colourSearch.toLowerCase().trim())),
-    [colours, colourSearch]
   );
 
   const filterButtonClass = (isSelected: boolean) =>
@@ -364,87 +340,22 @@ export default function ProductFilters({ selectedFilters, onFilterChange, isMobi
         </div>
 
         {/*
-          Size and Colour replace the old "Tool Style" group (Professional / DIY /
-          Industrial / Compact / Heavy Duty) — a hard-coded list describing a tool
-          catalogue this shop does not sell. Both read from variants[], so every
-          option shown is one a real product actually has.
-        */}
-        {[
-          {
-            key: "size" as const,
-            label: "Size",
-            values: filteredSizes,
-            selected: selectedFilters.sizes,
-            onToggle: handleSizeToggle,
-            search: sizeSearch,
-            setSearch: setSizeSearch,
-            placeholder: "Search sizes...",
-            empty: "No sizes match your search.",
-          },
-          {
-            key: "colour" as const,
-            label: "Colour",
-            values: filteredColours,
-            selected: selectedFilters.colours,
-            onToggle: handleColourToggle,
-            search: colourSearch,
-            setSearch: setColourSearch,
-            placeholder: "Search colours...",
-            empty: "No colours match your search.",
-          },
-        ].map((facet) => (
-          <div key={facet.key}>
-            <button
-              type="button"
-              onClick={() => toggleSection(facet.key)}
-              className="flex w-full items-center justify-between rounded-lg px-1 -mx-1 py-1 text-left transition-colors hover:bg-red-50/70 dark:hover:bg-neutral-800"
-            >
-              <span className="text-sm font-semibold text-gray-900 dark:text-white">{facet.label}</span>
-              {expandedSections[facet.key] ? (
-                <ChevronUp className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-              )}
-            </button>
-            {expandedSections[facet.key] && (
-              <div className="mt-3 space-y-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-neutral-500" />
-                  <input
-                    type="text"
-                    value={facet.search}
-                    onChange={(e) => facet.setSearch(e.target.value)}
-                    placeholder={facet.placeholder}
-                    className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/80 py-2.5 pl-9 pr-3 text-sm text-gray-800 dark:text-neutral-100 outline-none transition-all focus:border-red-600/40 focus:bg-white dark:focus:bg-neutral-800 focus:ring-2 focus:ring-red-600/10"
-                  />
-                </div>
-                {facet.values.length > 0 ? (
-                  facet.values.map((value) => {
-                    const isSelected = facet.selected.includes(value);
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => facet.onToggle(value)}
-                        className={filterButtonClass(isSelected)}
-                      >
-                        <span className="font-medium">{value}</span>
-                        <span className={selectionMarkClass(isSelected)}>
-                          <Check className="h-3.5 w-3.5" />
-                        </span>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="rounded-xl border border-dashed border-gray-300 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-800/50 px-3 py-4 text-center text-sm text-gray-500 dark:text-neutral-400">
-                    {facet.empty}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          SIZE AND COLOUR ARE DELIBERATELY NOT FILTERABLE HERE (2026-08-20).
 
+          They were, and they read as a reasonable apparel facet — but they
+          describe a VARIANT, not a product, and this rail filters products. A
+          shopper picking "Black" was shown every garment that happens to be sold
+          in black, then still had to choose black again on the product page,
+          because the colour is chosen there from the variant picker.
+
+          Worse on this catalogue specifically: one tee carries 383 variants across
+          51 colours, so the colour list was longer than the product list it
+          filtered and matched almost everything in it.
+
+          The API still accepts ?size= and ?colour= — the $elemMatch filter is
+          correct and a future surface (a colour swatch rail on the product page,
+          say) may want it. Only the rail here is removed.
+        */}
         {hasActiveFilters && (
           <div className="mt-4 rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/60 p-3">
             <p className="text-sm text-gray-600 dark:text-neutral-400">{activeFiltersCount} filter(s) applied</p>

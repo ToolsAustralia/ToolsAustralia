@@ -18,14 +18,38 @@ const artworkSchema = z.object({
   type: z.enum(["printing", "mockup"]),
 });
 
+/**
+ * A product image: either an absolute URL (Cloudinary, the print provider) or a
+ * ROOT-RELATIVE path served by this app (`/images/...`).
+ *
+ * `z.string().url()` alone rejected the second kind, which is what the seeded
+ * tool catalogue uses — so every tool product failed validation the moment an
+ * admin pressed Save, on a form where they had changed nothing about the images.
+ *
+ * Root-relative only. A bare `images/x.png` or a protocol-relative `//host/x.png`
+ * is not accepted: the first breaks depending on the page it is rendered from,
+ * and the second is an off-site fetch wearing a relative path's clothes.
+ */
+const productImage = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((v) => v.startsWith("/") && !v.startsWith("//"), {
+    message: "must be an absolute URL or a root-relative path like /images/x.png",
+  })
+  .or(z.string().trim().url());
 const updateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().min(1).max(2000).optional(),
   price: z.number().min(0).optional(),
-  images: z.array(z.string().url()).min(1).optional(),
+  images: z.array(productImage).min(1).optional(),
   category: z.string().trim().min(1).optional(),
   brand: z.string().trim().min(1).optional(),
-  variants: z.array(variantSchema).min(1).optional(),
+  // NOT .min(1): a product with no variants is legitimate and purchasable —
+  // checkout explicitly handles it (`if (variants.length > 0)` in
+  // ShopOrderService.resolveLines). Requiring one here blocked editing every
+  // tool in the catalogue, none of which has variants.
+  variants: z.array(variantSchema).optional(),
   includedEntries: z.number().int().min(0).optional(),
   entryMultiplier: z.number().int().min(1).max(10).nullable().optional(),
   printArtwork: z.array(artworkSchema).optional(),

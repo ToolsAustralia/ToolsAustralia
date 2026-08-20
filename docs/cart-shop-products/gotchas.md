@@ -403,3 +403,51 @@ TypeScript then proved the product branch unreachable, so it is gone.
 - **Mark-as-sent raced the CSV**: the export is rebuilt at download time, so an
   order paid mid-session was printed but never stamped, and printed again next
   run. The download now always carries the same ids the mark will stamp.
+
+## A strikethrough is a CLAIM, and it is only true for a member (2026-08-20)
+
+The card and the product page show a struck-through original price **only when the viewer
+actually holds the tier**.
+
+For a member, the full price genuinely is not what they pay, so striking it is accurate and their
+own price is the headline. For everyone else the full price **is** what they pay — striking it
+presents a reduction they do not have, which is a misleading price representation under Australian
+Consumer Law. Non-members get the real price as the headline and the membership as a clearly
+labelled offer beside it.
+
+This was the reasoning behind an older comment on the product page ("the member price sits beside
+the shelf price, never struck through it"). That comment was correct and I removed it while
+rebuilding the price block, shipping a strikethrough for both cases. It is restored as a behaviour
+rather than a note, because `memberPrice.isMember` is the branch that enforces it.
+
+Read `MemberPriceLine` before changing either price block: the two branches are not styling
+variants, they are two different claims.
+
+## Six of eight products could not be edited at all (2026-08-20)
+
+Two rules in the admin product schemas rejected data the app itself created:
+
+| Rule | Reality |
+| --- | --- |
+| `images: z.array(z.string().url())` | The seeded tool catalogue uses root-relative paths (`/images/SampleProducts/dewalt1.jpg`), which `.url()` rejects |
+| `variants: z.array(...).min(1)` | Tools have **zero** variants, and checkout explicitly supports that — `if (variants.length > 0)` in `ShopOrderService.resolveLines` |
+
+Between them, every tool product failed validation the moment an admin pressed Save, on a form
+where they had changed nothing about either field. `images` now accepts an absolute URL **or** a
+root-relative path (not protocol-relative — `//host/x.png` is an off-site fetch wearing a relative
+path's clothes), and the variant floor is gone.
+
+The lesson generalises: a validator stricter than the data the system already stores is not
+protection, it is an outage with a 400 status.
+
+## Size and Colour are not product filters (2026-08-20)
+
+They were on the shop rail and read as a reasonable apparel facet, but they describe a **variant**,
+not a product, and the rail filters products. Picking "Black" showed every garment sold in black,
+and the shopper still chose black again on the product page.
+
+Worse on this catalogue: one tee carries 383 variants across 51 colours, so the colour list was
+longer than the product list it filtered and matched nearly everything in it.
+
+`?size=` and `?colour=` still work on `/api/products` — the `$elemMatch` filter is correct and a
+future colour-swatch surface may want it. Only the rail was removed.
