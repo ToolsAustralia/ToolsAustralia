@@ -218,10 +218,20 @@ export const EXPORT_FIELDS: ExportFieldDefinition[] = [
     isComputed: true,
   },
   {
-    // Lifetime entries received from buying a Mini Pack — a purchase fact, so it does not fall
-    // to zero when a draw completes. Pairs with the "Bought a Mini Pack" list filter.
+    // Lifetime entries granted by mini-draw package purchases, from the purchase ledger
+    // (User.miniDrawPackages) — so it survives winner selection and is net of refunds. Covers
+    // every tier: Mini Pack 1-3, the retired 4-8, and the additional-*-pack-mini records that
+    // display as Tradie / Foreman / Boss / Power / VIP Pack.
     key: "miniPackEntries",
     displayName: "Mini Pack Entries",
+    type: "number",
+    group: "entries",
+  },
+  {
+    // How many mini-draw packages they bought and kept. Pairs with the "Bought a Mini Pack"
+    // list filter, which is presence of at least one of these rows.
+    key: "miniPacksBought",
+    displayName: "Mini Packs Bought",
     type: "number",
     group: "entries",
   },

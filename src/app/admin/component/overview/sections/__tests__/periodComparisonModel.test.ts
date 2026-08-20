@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import {
   buildPeriodComparison,
+  aestToday,
   inclusiveDayCount,
   perDay,
+  rateDelta,
 } from "../periodComparisonModel";
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 
@@ -178,6 +180,28 @@ function testHeadlineIsASubsetOfAll() {
   }
 }
 
+function testDayCountClampsToElapsedDays() {
+  // A window whose end date is in the FUTURE must be divided by the days it has lived. The
+  // "Current draw" preset runs to the draw date, so on 20 Aug a 28 Jul → 27 Aug window is 31
+  // nominal days but 24 elapsed. Dividing by 31 while the fully-elapsed previous draw divides
+  // by its true length invents a ~23% decline out of the calendar.
+  assert.equal(inclusiveDayCount("2026-07-28", "2026-08-27", "2026-08-20"), 24, "elapsed, not 31");
+  // A closed window is untouched — so the previous-month side of every comparison is unaffected.
+  assert.equal(inclusiveDayCount("2026-07-01", "2026-07-31", "2026-08-20"), 31);
+  // The clamp never EXTENDS a window that ended before today.
+  assert.equal(inclusiveDayCount("2026-08-01", "2026-08-10", "2026-08-20"), 10);
+  // Today itself counts as a (partial) day, so "Today" stays 1 rather than collapsing to 0.
+  assert.equal(inclusiveDayCount("2026-08-20", "2026-08-20", "2026-08-20"), 1);
+  // A window entirely in the future has lived 0 days — never a negative divisor.
+  assert.equal(inclusiveDayCount("2026-09-01", "2026-09-30", "2026-08-20"), 0);
+  // Omitting the clamp keeps the old nominal behaviour, so callers opt in explicitly.
+  assert.equal(inclusiveDayCount("2026-07-28", "2026-08-27"), 31);
+}
+
+function testAestTodayIsAnIsoDay() {
+  assert.match(aestToday(), /^\d{4}-\d{2}-\d{2}$/, "yyyy-MM-dd, the format the filters use");
+}
+
 function testInclusiveDayCount() {
   assert.equal(inclusiveDayCount("2026-08-01", "2026-08-31"), 31);
   assert.equal(inclusiveDayCount("2026-08-19", "2026-08-19"), 1, "a single day counts as 1");
@@ -189,24 +213,110 @@ function testInclusiveDayCount() {
   assert.equal(inclusiveDayCount("", "2026-08-31"), 0, "unresolved bounds yield 0, not NaN");
 }
 
+function testDeltaNormalisesAcrossUnequalWindows() {
+  // THE BUG THIS PINS (caught on production, 2026-08-20): comparing "Today" against a whole
+  // calendar month by raw total measures the calendar, not the business — every flow read
+  // ~ -97% because one day is ~3% of thirty-one. Worse, it INVERTED the answer: 197 new
+  // accounts today against July's 161.677/day is +22%, rendered as -96.1%.
+  const m = buildPeriodComparison(
+    stats({ newInRange: 197 }),
+    stats({ newInRange: 5012 }),
+    { currentDays: 1, previousDays: 31 },
+  );
+  const accounts = metric(m, "newUsers");
+
+  assert.equal(accounts.normalised, true, "unequal windows must normalise");
+  assert.equal(accounts.currentPerDay, 197);
+  assert.ok(Math.abs(accounts.previousPerDay! - 161.677) < 0.01);
+  assert.ok(accounts.deltaPct! > 0, "197/day vs 161.7/day is an INCREASE, not a 96% collapse");
+  assert.ok(Math.abs(accounts.deltaPct! - 21.85) < 0.5, `expected ~+21.9%, got ${accounts.deltaPct}`);
+
+  // Raw totals are still reported unchanged — only the percentage is normalised.
+  assert.equal(accounts.current, 197);
+  assert.equal(accounts.previous, 5012);
+}
+
+function testEqualWindowsCompareRaw() {
+  const m = buildPeriodComparison(
+    stats({ newInRange: 120 }),
+    stats({ newInRange: 100 }),
+    { currentDays: 31, previousDays: 31 },
+  );
+  const a = metric(m, "newUsers");
+  assert.equal(a.normalised, false, "same length needs no normalisation");
+  assert.equal(a.deltaPct, 20);
+}
+
+function testRatiosNeverNormalise() {
+  const m = buildPeriodComparison(
+    stats({ adRoas: 0.7, newInRange: 1 }),
+    stats({ adRoas: 0.69, newInRange: 1 }),
+    { currentDays: 1, previousDays: 31 },
+  );
+  // A ratio is already a rate; dividing 0.7 by 1 day and 0.69 by 31 days would invent a 30x swing.
+  const roas = metric(m, "adRoas");
+  assert.equal(roas.normalised, false);
+  assert.equal(roas.currentPerDay, null);
+  assert.ok(Math.abs(roas.deltaPct! - 1.449) < 0.01, "compares the ratios directly");
+
+}
+
+function testRateDeltaDirectly() {
+  assert.deepEqual(rateDelta(10, 5, { currentDays: 1, previousDays: 1, comparable: true }), {
+    pct: 100,
+    normalised: false,
+  });
+  // 10/1 vs 310/31 = 10 vs 10 -> no change, even though the raw totals differ 31x.
+  assert.deepEqual(rateDelta(10, 310, { currentDays: 1, previousDays: 31, comparable: true }), {
+    pct: 0,
+    normalised: true,
+  });
+  assert.deepEqual(rateDelta(10, 310, { currentDays: 1, previousDays: 31, comparable: false }), {
+    pct: (10 - 310) / 310 * 100,
+    normalised: false,
+  });
+  assert.equal(rateDelta(10, null, { currentDays: 1, previousDays: 31, comparable: true }), null);
+  assert.deepEqual(rateDelta(10, 0, { currentDays: 1, previousDays: 31, comparable: true }), {
+    pct: null,
+    normalised: true,
+  });
+  // Unknown window lengths must fall back to a raw comparison, never divide by zero.
+  assert.deepEqual(rateDelta(10, 5, { currentDays: 0, previousDays: 0, comparable: true }), {
+    pct: 100,
+    normalised: false,
+  });
+}
+
 function testPerDayNormalisation() {
   assert.equal(perDay(3100, 31, "currency"), 100);
   assert.equal(perDay(62, 31, "count"), 2);
   assert.equal(perDay(4.5, 31, "ratio"), null, "a ratio is already a rate — never normalise it");
   assert.equal(perDay(100, 0, "currency"), null, "no divide-by-zero");
-  // A STOCK is a level, not an amount accrued over the window. "1 active membership" is not
-  // "0.032 active memberships per day" — that rendered on screen before this guard existed.
-  assert.equal(perDay(1, 31, "count", true), null, "stocks are never per-day normalised");
 }
 
-function testStockMetricsAreFlagged() {
+function testEveryRowIsDateScoped() {
+  // Every row must be a FLOW measured inside the selected window. `activeSubscriptions` is not:
+  // DashboardStatsService counts it with `getActiveSubscriptionFilter()` and NO date bound, so
+  // both windows read the same live number and the row rendered "1,234 vs 1,234 · 0%" — one
+  // number shown twice, dressed as a finding about history. It was removed; keep it removed.
   const m = buildPeriodComparison(stats({}), stats({}));
-  const stocks = m.filter((x) => x.stock).map((x) => x.key);
-  assert.deepEqual(stocks, ["activeSubscriptions"], "active memberships is the only level metric");
-  // Everything else is a flow and MUST stay normalisable, or the per-day column loses its point.
+  assert.equal(
+    m.find((x) => x.key === "activeSubscriptions"),
+    undefined,
+    "active memberships has no date bound and cannot be compared across windows",
+  );
+}
+
+function testRisingCancellationsReadAsBadNews() {
+  // Direction is not sentiment. The Cancellations KPI tile on this same page passes `invert` to
+  // TrendPill; the drawer had no such notion, so a cancellation spike rendered GREEN inches below
+  // the same number rendered RED.
+  const m = buildPeriodComparison(stats({}), stats({}));
+  const inverted = m.filter((x) => x.invert).map((x) => x.key);
+  assert.deepEqual(inverted, ["cancelledMemberships"], "only cancellations invert today");
   for (const x of m) {
-    if (x.key !== "activeSubscriptions") {
-      assert.equal(x.stock, false, `${x.key} should be a flow`);
+    if (x.key !== "cancelledMemberships") {
+      assert.equal(x.invert, false, `${x.key}: a rise should read as good`);
     }
   }
 }
@@ -223,8 +333,15 @@ function run() {
   testContributionCanBeNegative();
   testHeadlineIsASubsetOfAll();
   testInclusiveDayCount();
+  testDayCountClampsToElapsedDays();
+  testAestTodayIsAnIsoDay();
   testPerDayNormalisation();
-  testStockMetricsAreFlagged();
+  testEveryRowIsDateScoped();
+  testRisingCancellationsReadAsBadNews();
+  testDeltaNormalisesAcrossUnequalWindows();
+  testEqualWindowsCompareRaw();
+  testRatiosNeverNormalise();
+  testRateDeltaDirectly();
   console.log("periodComparisonModel tests passed");
 }
 

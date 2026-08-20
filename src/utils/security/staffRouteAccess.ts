@@ -21,8 +21,17 @@
  *
  * `/mini-draw-success` stays blocked: viewing a draw is read-only, buying into one is not.
  *
- * ⚠️ `userType: "admin"` is NOT subject to this — only `"staff"`. That is why the bug was
- * invisible to an owner account and only ever hit team members.
+ * ⚠️ **This list is not a purchase guard, and must not be used as one.** `/mini-draws/<id>`
+ * renders a working buy widget, and `POST /api/mini-draw/purchase` only ever checked that the
+ * caller was authenticated. Blocking the page used to prevent a staff purchase as a SIDE EFFECT;
+ * taking it off this list removed that accident, so the real guard now lives at the endpoint —
+ * `isEmployeeAccount` in `src/utils/giveaway-eligibility.ts`, per Terms §5.5 (employees are
+ * ineligible to win). Any future route that comes off this list needs the same question asked:
+ * what did the block incidentally prevent?
+ *
+ * ⚠️ `userType: "admin"` is NOT subject to this list — only `"staff"`. That is why the original
+ * bug was invisible to an owner account and only ever hit team members. The PURCHASE guard
+ * covers both, because the terms exclusion covers both.
  */
 export const STAFF_BLOCKED_PREFIXES = [
   "/my-account",

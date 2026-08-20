@@ -23,7 +23,7 @@ Impact: corrects the my-account **payload data** — `recentOrders`, `insights.t
 
 **`insights.totalSpent` is NOT lifetime spend.** It sums `totalAmount` over the **10 most recent orders regardless of status** (`.sort({ createdAt: -1 }).limit(10)`, no status filter → includes cancelled/pending, capped at 10). It was a rough dashboard stat, not an accounting figure. If a surface ever needs true LTV, compute it server-side from settled payments — don't render `insights.totalSpent` as accurate lifetime spend.
 
-Not fixed here (separate, out-of-scope drift): [mini-draws/entries/route.ts](../../src/app/api/mini-draws/entries/route.ts) still reads `miniDraw.tickets` / `ticketPrice` / `totalTickets` / `soldTickets` / `startDate` / `endDate` — an **entirely obsolete ticket-based MiniDraw schema** none of which exist on the current model. Its `now < startDate || now > endDate` entry-eligibility gate is dead (both `undefined` → the comparisons are always false, so only `!isActive` blocks). Permissive-not-harmful, but it needs its own draws-domain task — see [draws/gotchas.md](../draws/gotchas.md) if triaged.
+~~Not fixed here (separate, out-of-scope drift): `mini-draws/entries/route.ts` still reads `miniDraw.tickets` / `ticketPrice` / `totalTickets` / `soldTickets` / `startDate` / `endDate` — an **entirely obsolete ticket-based MiniDraw schema** none of which exist on the current model.~~ **Resolved 2026-08-20: the route was deleted.** It had zero callers and threw a TypeError before saving anything. See [draws/gotchas.md](../draws/gotchas.md) for the full write-up and the related dead-hook cluster that remains.
 
 ## Account settings reads `hasPassword` from the users/[id] payload, not my-account (fixed 2026-07-20)
 

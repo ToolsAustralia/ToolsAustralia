@@ -10,6 +10,7 @@ import { resolvePreviousCalendarMonthAest } from "@/utils/admin/resolveAestDateW
 import { cn } from "@/utils/cn";
 import {
   buildPeriodComparison,
+  aestToday,
   inclusiveDayCount,
   perDay,
   type ComparisonMetric,
@@ -69,14 +70,18 @@ export default function PeriodComparisonCard({
     { staleTime: 60 * 60 * 1000, refetchInterval: false },
   );
 
-  const metrics = useMemo(
-    () => buildPeriodComparison(stats, previousStats),
-    [stats, previousStats],
-  );
-
-  const currentDays = inclusiveDayCount(startDate, endDate);
-  const previousDays = inclusiveDayCount(previousMonth.startDate, previousMonth.endDate);
+  // Clamped to today: a still-running window (this month, the current draw) must be divided by
+  // the days it has LIVED, not the days it will eventually have. The previous calendar month is
+  // always closed, so the clamp is a no-op there and the two sides stay like-for-like.
+  const today = aestToday();
+  const currentDays = inclusiveDayCount(startDate, endDate, today);
+  const previousDays = inclusiveDayCount(previousMonth.startDate, previousMonth.endDate, today);
   const unequal = currentDays > 0 && previousDays > 0 && currentDays !== previousDays;
+
+  const metrics = useMemo(
+    () => buildPeriodComparison(stats, previousStats, { currentDays, previousDays }),
+    [stats, previousStats, currentDays, previousDays],
+  );
 
   const loading = statsLoading || previousLoading;
 
@@ -102,11 +107,16 @@ export default function PeriodComparisonCard({
       return <span className="text-xs text-neutral-400 dark:text-neutral-500">—</span>;
     }
     const up = m.deltaPct > 0;
+    // Direction ≠ sentiment. More cancellations is a rise AND bad news, so the colour follows
+    // `m.invert` while the arrow keeps following the number — same rule as `TrendPill`, which is
+    // what the Cancellations KPI tile on this page uses. Colouring on `up` alone made the drawer
+    // paint a cancellation spike green directly below a tile painting it red.
+    const good = m.invert ? !up : up;
     return (
       <span
         className={cn(
           "num text-xs sm:text-sm font-semibold tabular-nums",
-          up ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
+          good ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
         )}
       >
         {up ? "▲" : "▼"} {Math.abs(m.deltaPct).toFixed(1)}%
@@ -159,8 +169,8 @@ export default function PeriodComparisonCard({
             />
             {unequal && (
               <p className="text-2xs text-neutral-500 dark:text-neutral-400 mt-3">
-                Windows differ in length ({currentDays}d vs {previousDays}d) — the per-day column
-                is the like-for-like read.
+                Windows differ in length ({currentDays}d vs {previousDays}d), so Δ compares the
+                per-day rate — comparing the raw totals would just measure the calendar.
               </p>
             )}
           </>
@@ -268,14 +278,14 @@ function ComparisonTable({ metrics, fmt, DeltaCell, unequal, currentDays, previo
             <th className={`${TH} text-left ${STICKY_COL}`}>Metric</th>
             <th className={`${TH} text-right`}>Selected</th>
             <th className={`${TH} text-right`}>Last month</th>
-            <th className={`${TH} text-right`}>Δ</th>
+            <th className={`${TH} text-right whitespace-nowrap`}>{unequal ? "Δ / day" : "Δ"}</th>
             {unequal && <th className={`${TH} text-right whitespace-nowrap`}>Per day</th>}
           </tr>
         </thead>
         <tbody>
           {metrics.map((m) => {
-            const curPerDay = perDay(m.current, currentDays, m.format, m.stock);
-            const prevPerDay = perDay(m.previous, previousDays, m.format, m.stock);
+            const curPerDay = perDay(m.current, currentDays, m.format);
+            const prevPerDay = perDay(m.previous, previousDays, m.format);
             return (
               <tr
                 key={m.key}

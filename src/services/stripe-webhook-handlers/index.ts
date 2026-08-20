@@ -854,7 +854,12 @@ async function handlePaymentSuccess(
       await handleUpsellWebhook(user, paymentIntent, eventCreatedUnixSeconds);
     } else if (paymentType === "mini-draw") {
       webhookLog("info", `Processing mini-draw payment: ${paymentIntent.id}`);
-      await handleMiniDrawWebhook(user, paymentIntent, eventCreatedUnixSeconds);
+      // Honour the return value. It used to be ignored, so a mini-draw grant that bailed still
+      // left `shouldMarkAsProcessed = paymentProcessed !== false` TRUE (dispatchStripeEvent) and
+      // the event was ACKed as processed — meaning a Stripe retry or an admin replay would be
+      // SKIPPED. The one-time branch immediately below already returns false; this now matches.
+      const granted = await handleMiniDrawWebhook(user, paymentIntent, eventCreatedUnixSeconds);
+      if (!granted) return false;
     } else if (paymentType === "one-time") {
       webhookLog("info", `🔄 Processing one-time payment: ${paymentIntent.id}`);
 
@@ -1334,13 +1339,70 @@ async function handleOneTimeWebhook(
 }
 
 /**
+ * A mini-draw payment was CAPTURED but cannot be granted against any draw.
+ *
+ * `webhookLog("error", …)` maps to `console.error`, which production DOES keep
+ * (`next.config.ts` `removeConsole: { exclude: ["error"] }`), so that line does survive into the
+ * Vercel runtime logs. It is still not enough on its own: nobody watches runtime logs for a money
+ * event. This additionally writes an `ErrorReport` so it surfaces on the admin Error Reports page.
+ *
+ * Fire-and-forget by design — a logging failure must never mask the caller's `return false`,
+ * which is what keeps the Stripe event un-ACKed and therefore replayable once the PaymentIntent
+ * metadata is repaired.
+ *
+ * ⚠️ Do NOT copy the `addToMajorDraw` call shape in `payment-processing.ts` — see the options
+ * argument below for why that one silently writes nothing.
+ *
+ * Deliberately does NOT auto-refund. There is no `refunds.create` anywhere in `src/`, and firing
+ * one on "metadata looks wrong" would refund a legitimate purchase whose metadata was merely
+ * truncated, while bypassing the refund-reversal ledger (`docs/REFUND_REVERSAL.md`). Grant-vs-refund
+ * is a human call.
+ */
+async function reportStrandedMiniDrawPayment(
+  paymentIntent: Stripe.PaymentIntent,
+  user: { _id: { toString: () => string } },
+  reason: string
+): Promise<void> {
+  try {
+    const { ErrorLoggingService } = await import("@/services/error-reporting/ErrorLoggingService");
+    await ErrorLoggingService.logError(
+      new Error(`Captured mini-draw payment could not be granted: ${reason}`),
+      {
+        endpoint: "handleMiniDrawWebhook",
+        userId: user._id.toString(),
+        userEmail: paymentIntent.metadata.userEmail,
+        paymentIntentId: paymentIntent.id,
+        packageId: paymentIntent.metadata.packageId,
+        amount: paymentIntent.amount,
+      },
+      /**
+       * ⚠️ This third argument is LOAD-BEARING — without it the call writes NOTHING.
+       *
+       * `logError` → `logPaymentError` branches on `if (options?.isServerSide && options.request)`
+       * (`ErrorLoggingService.ts:108`). With `options` undefined it takes the CLIENT path,
+       * `autoLogError`, which `fetch`es a RELATIVE url `/api/error-reports`. In Node that throws
+       * "Failed to parse URL", and the rejection is swallowed by that util's own
+       * `.catch(console.warn)` — which `removeConsole` strips in production. A silent no-op.
+       *
+       * `request` is the structural type `{ headers: Headers; url?: string }`, so a webhook can
+       * satisfy it without a NextRequest. `autoLogErrorServer` degrades cleanly from empty
+       * headers (IP falls back to "unknown") and skips `apiEndpoint` when `url` is absent.
+       */
+      { isServerSide: true, request: { headers: new Headers() } }
+    );
+  } catch (logError) {
+    webhookLog("error", `Failed to record stranded mini-draw payment: ${String(logError)}`);
+  }
+}
+
+/**
  * Handle mini draw payments in webhook (backup processing)
  */
 async function handleMiniDrawWebhook(
   user: { _id: { toString: () => string } },
   paymentIntent: Stripe.PaymentIntent,
   eventCreatedUnixSeconds?: number
-) {
+): Promise<boolean> {
   const packageId = paymentIntent.metadata.packageId;
   const miniDrawId = paymentIntent.metadata.miniDrawId; // Extract MiniDraw ID from metadata
   const packageName = paymentIntent.metadata.packageName || `Mini Draw Package ${packageId}`;
@@ -1349,12 +1411,14 @@ async function handleMiniDrawWebhook(
 
   if (entriesCount <= 0) {
     webhookLog("error", `No entries found for mini draw ${packageId}`);
-    return;
+    await reportStrandedMiniDrawPayment(paymentIntent, user, "entriesCount missing or zero");
+    return false;
   }
 
   if (!miniDrawId) {
     webhookLog("error", `No miniDrawId found in payment intent metadata for package ${packageId}`);
-    return;
+    await reportStrandedMiniDrawPayment(paymentIntent, user, "miniDrawId missing from metadata");
+    return false;
   }
 
   // Get active promo multiplier for mini-draw packages
@@ -1447,6 +1511,15 @@ async function handleMiniDrawWebhook(
   if (!result.success) {
     webhookLog("error", `Failed to process mini draw ${packageId}: ${result.error}`);
   }
+
+  // The success path MUST return true — without it the function returns `undefined`, the caller's
+  // `if (!granted)` treats every successful grant as a failure, the event is never ACKed and
+  // Stripe retries it forever.
+  //
+  // Returning `result.success` (not a bare `true`) also un-ACKs a genuine PROCESSING failure,
+  // where a retry legitimately helps — unlike the metadata defects above, which no retry can fix
+  // but which stay replayable once the PaymentIntent is repaired.
+  return result.success;
 }
 
 /**

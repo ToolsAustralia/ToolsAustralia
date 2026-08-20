@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { isStaffBlockedPath, STAFF_BLOCKED_PREFIXES } from "../staffRouteAccess";
+import { isEmployeeAccount } from "@/utils/giveaway-eligibility";
 
 /**
  * Access control, so it gets a test rather than a read-through: this list decides what a team
@@ -71,8 +72,23 @@ function testListShapeIsSane() {
   );
 }
 
+function testEmployeesCannotEnterDraws() {
+  // Terms 5.5 — employees are ineligible to WIN, so they must not be able to BUY entries.
+  //
+  // Unblocking /mini-draws (above) removed the accident that used to prevent this: the page
+  // renders a working buy widget and POST /api/mini-draw/purchase only checked authentication.
+  // The real guard is isEmployeeAccount at that endpoint; this pins the predicate it uses.
+  assert.equal(isEmployeeAccount("staff"), true, "team members are employees");
+  assert.equal(isEmployeeAccount("admin"), true, "so is the owner account — the terms cover both");
+  assert.equal(isEmployeeAccount("customer"), false, "real customers must still be able to buy");
+  assert.equal(isEmployeeAccount(undefined), false, "an unknown userType is not an employee");
+  assert.equal(isEmployeeAccount(null), false);
+  assert.equal(isEmployeeAccount(""), false);
+}
+
 function run() {
   testPublicDrawPagesAreReachable();
+  testEmployeesCannotEnterDraws();
   testCustomerStateRoutesStayBlocked();
   testBuyingIntoADrawIsStillBlocked();
   testUnrelatedRoutesAreUntouched();

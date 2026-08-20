@@ -164,7 +164,7 @@ export async function buildUserFilter(
     states?: string[];
     /** "yes" = has entries in active major draw; "no" = not in that set */
     inActiveMajorDraw?: string;
-    /** "yes" = has ever bought a Mini Pack; "no" = never has. A lifetime purchase fact. */
+    /** "yes" = has ever bought a mini-draw package (any tier); "no" = never has. */
     miniDrawPackage?: string;
     /** "yes" = holds entries in a mini draw that is active RIGHT NOW; "no" = does not. */
     inActiveMiniDraw?: string;
@@ -519,28 +519,38 @@ export async function buildUserFilter(
   }
 
   /**
-   * Bought a Mini Pack, ever.
+   * Bought a package for a mini draw, ever — ANY of them: `mini-pack-1..3`, the retired
+   * `mini-pack-4..8`, or the member-facing `additional-*-pack-mini` records that replaced 4–8
+   * and display as "Tradie Pack" / "Foreman Pack" / "Boss Pack" / "Power Pack" / "VIP Pack".
+   * Nothing here branches on package id, so a rename or a new tier needs no change.
    *
-   * Read off `miniDrawParticipation[].entriesBySource["mini-draw-package"]` — a PURCHASE FACT,
-   * so it needs no draw lookup and never goes stale. `$elemMatch` keeps both predicates on the
-   * same array element; without it Mongo would happily match a user whose package entries came
-   * from one draw and whose other condition matched a different one.
+   * ⚠️ Reads `User.miniDrawPackages` — the PURCHASE LEDGER — NOT
+   * `miniDrawParticipation[].entriesBySource["mini-draw-package"]`, which this filter used until
+   * an audit on 2026-08-20 showed that bucket is wrong in both directions:
    *
-   * "no" means never bought one — including users with no `miniDrawParticipation` array at all,
-   * which is why it is `$not: $elemMatch` rather than a negated value comparison.
+   *   FALSE NEGATIVES — selecting a winner RESETS it. `mini-draw/[id]/select-winner` sets
+   *     `entriesBySource.mini-draw-package: 0` for every participant of the drawn cycle, so a
+   *     genuine buyer answers "never bought" the moment their draw is drawn. It also stays 0
+   *     when `addToMiniDraw` returns early on the capacity guard — the money is captured but no
+   *     entries are granted, which the higher-entry additional packs (25–500) hit far more often
+   *     than Mini Pack 1–3 (1/5/10).
+   *   FALSE POSITIVES — the bucket is written hard-coded by EVERY path into `addToMiniDraw`,
+   *     including mini-draw upsells and admin "Add Entry" edits (`syncMiniDrawParticipation`
+   *     force-writes it), so staff-granted entries read as a purchase.
+   *
+   * `miniDrawPackages` has none of that: it is `$push`ed only under `packageType === "mini-draw"`
+   * (before the capacity guard can bail), untouched by winner selection, and `$pull`ed by
+   * `stripePaymentIntentId` on refund — so it means "bought and kept". `packageId` is
+   * `required: true` on the schema, so its presence is exactly "has at least one purchase row".
+   *
+   * `"miniDrawPackages.packageId"` rather than `"miniDrawPackages.0"` so the multikey index can
+   * be used. Absence covers users with no array at all.
    */
   if (miniDrawPackage === "yes" || miniDrawPackage === "no") {
-    const boughtAPack = {
-      miniDrawParticipation: {
-        $elemMatch: { "entriesBySource.mini-draw-package": { $gt: 0 } },
-      },
-    };
     if (!filter.$and) filter.$and = [];
-    (filter.$and as Array<Record<string, unknown>>).push(
-      miniDrawPackage === "yes"
-        ? boughtAPack
-        : { miniDrawParticipation: { $not: { $elemMatch: { "entriesBySource.mini-draw-package": { $gt: 0 } } } } }
-    );
+    (filter.$and as Array<Record<string, unknown>>).push({
+      "miniDrawPackages.packageId": { $exists: miniDrawPackage === "yes" },
+    });
   }
 
   /**

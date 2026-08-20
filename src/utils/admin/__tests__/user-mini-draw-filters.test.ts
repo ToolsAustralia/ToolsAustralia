@@ -54,22 +54,38 @@ async function main() {
   const MiniDraw = (await import("@/models/MiniDraw")).default as unknown as FindStub;
   const { buildUserFilter } = await import("../userFilterBuilder");
 
-  // ── Mini Pack purchase (no draw lookup needed) ──────────────────────────────────────────
+  // ── Mini Pack purchase — the PURCHASE LEDGER, not the participation bucket ──────────────
   const bought = await buildUserFilter({ miniDrawPackage: "yes" });
-  check("bought a Mini Pack uses $elemMatch on the package source", () => {
-    const clause = andClauses(bought).find((c) => "miniDrawParticipation" in c);
-    assert.ok(clause, "expected a miniDrawParticipation clause");
-    assert.deepEqual(clause, {
-      miniDrawParticipation: { $elemMatch: { "entriesBySource.mini-draw-package": { $gt: 0 } } },
-    });
+  check("bought a Mini Pack reads User.miniDrawPackages, not entriesBySource", () => {
+    const clause = andClauses(bought).find((c) => "miniDrawPackages.packageId" in c);
+    assert.ok(
+      clause,
+      "must key off the purchase ledger — entriesBySource is reset to 0 when a winner is " +
+        "selected, so it reports genuine buyers as never having bought",
+    );
+    assert.deepEqual(clause, { "miniDrawPackages.packageId": { $exists: true } });
+
+    assert.equal(
+      andClauses(bought).some((c) => "miniDrawParticipation" in c),
+      false,
+      "must NOT touch miniDrawParticipation — upsells and admin entry edits write that bucket too",
+    );
   });
 
   const neverBought = await buildUserFilter({ miniDrawPackage: "no" });
-  check("never bought uses $not/$elemMatch so users with NO array still match", () => {
-    const clause = andClauses(neverBought).find((c) => "miniDrawParticipation" in c);
-    assert.ok(clause, "expected a miniDrawParticipation clause");
-    const inner = (clause!.miniDrawParticipation as Record<string, unknown>).$not;
-    assert.ok(inner, "must negate with $not — a $lte:0 comparison would skip users with no array");
+  check("never bought is absence of the field, so users with no array match", () => {
+    const clause = andClauses(neverBought).find((c) => "miniDrawPackages.packageId" in c);
+    assert.ok(clause, "expected a miniDrawPackages clause");
+    assert.deepEqual(clause, { "miniDrawPackages.packageId": { $exists: false } });
+  });
+
+  check("the filter is package-id agnostic (Mini Pack 1-3, retired 4-8, additional-*-pack-mini)", () => {
+    // The predicate names no package id at all, so renaming a tier or adding one cannot
+    // silently drop buyers out of the segment. This asserts that property directly.
+    const serialised = JSON.stringify(andClauses(bought));
+    for (const id of ["mini-pack-1", "mini-pack-7", "additional-vip-pack-mini", "additional-tradie-pack-mini"]) {
+      assert.equal(serialised.includes(id), false, `must not hard-code ${id}`);
+    }
   });
 
   // ── Active participation (resolved from the MiniDraw collection) ────────────────────────
@@ -134,8 +150,15 @@ async function main() {
         inActiveMiniDraw: "no",
       });
       check("the two filters COMPOSE (bought a pack, not currently in a draw)", () => {
-        const clauses = andClauses(reengagement).filter((c) => "miniDrawParticipation" in c);
-        assert.equal(clauses.length, 2, "both constraints must survive, not overwrite each other");
+        const all = andClauses(reengagement);
+        assert.ok(
+          all.some((c) => "miniDrawPackages.packageId" in c),
+          "the purchase constraint must survive",
+        );
+        assert.ok(
+          all.some((c) => "miniDrawParticipation" in c),
+          "the active-participation constraint must survive",
+        );
       });
     } finally {
       restore();

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
-import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
+import { isMiniDrawPackageId } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 // Referral processing moved to webhook - no longer needed here
 import { trackAffiliateSignup } from "@/lib/affiliate";
@@ -119,34 +119,30 @@ export async function POST(request: NextRequest) {
 
     console.log(`🛒 Creating one-time purchase for: ${validatedData.userEmail}`);
 
-    // Get the package (check both regular membership packages and mini draw packages)
-    membershipPackage = getPackageById(validatedData.packageId);
-    let isMiniDrawPackage = false;
-
-    // If not found in regular packages, check mini draw packages
-    if (!membershipPackage) {
-      const miniDrawPackage = getMiniDrawPackageById(validatedData.packageId);
-      if (miniDrawPackage && miniDrawPackage.isActive) {
-        // Convert mini draw package to membership package format for compatibility
-        membershipPackage = {
-          _id: miniDrawPackage._id,
-          name: miniDrawPackage.name,
-          price: miniDrawPackage.price,
-          totalEntries: miniDrawPackage.entries,
-          isActive: miniDrawPackage.isActive,
-          type: "one-time" as const,
-          description: miniDrawPackage.description,
-          features: [
-            `${miniDrawPackage.entries} Free Entries`,
-            `${miniDrawPackage.partnerDiscountDays} Days Partner Discounts`,
-          ],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        isMiniDrawPackage = true;
-        console.log("🎲 Mini draw package detected for new user:", miniDrawPackage.name);
-      }
+    /**
+     * A mini-draw package cannot be sold here — reject BEFORE any money moves.
+     *
+     * This route has no draw in scope, so it cannot put `miniDrawId` in the PaymentIntent
+     * metadata. It used to accept these ids anyway: it synthesised a fake one-time package from
+     * the mini catalogue and stamped `type: "mini-draw"` with no `miniDrawId`, Stripe captured
+     * the money, and `handleMiniDrawWebhook` then bailed at its `if (!miniDrawId)` guard —
+     * charged, nothing granted. No live UI ever sent one (every mini surface posts to
+     * `/api/mini-draw/purchase`), but the branch was one `activePlan.id` away from being live:
+     * `MembershipModal` still carries seven `startsWith("mini-pack-")` branches pointed here.
+     *
+     * 400, not 404: the id is real, the endpoint is wrong.
+     */
+    if (isMiniDrawPackageId(validatedData.packageId)) {
+      return NextResponse.json(
+        {
+          error: "Mini draw packages must be purchased through the mini draw flow",
+          code: "MINI_DRAW_PACKAGE_WRONG_ENDPOINT",
+        },
+        { status: 400 }
+      );
     }
+
+    membershipPackage = getPackageById(validatedData.packageId);
 
     if (!membershipPackage) {
       return NextResponse.json({ error: "Package not found" }, { status: 404 });
@@ -156,10 +152,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Package must be a one-time type" }, { status: 400 });
     }
 
-    if (!isMiniDrawPackage) {
-      const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
-      if (gateResponse) return gateResponse;
-    }
+    // Unconditional now that mini packages are rejected above — they were the only family that
+    // skipped the major-draw freeze gate, and they can no longer reach this route.
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     // Check if user already exists (from registration)
     console.log("👤 Checking if user already exists...");
@@ -490,7 +486,7 @@ export async function POST(request: NextRequest) {
 
       // ✅ FIX: Update PaymentIntent with customer and metadata
       // This ensures webhook can find the user by customer ID
-      const packageTypeValue = isMiniDrawPackage ? "mini-draw" : "one-time";
+      const packageTypeValue = "one-time";
       console.log(`🔄 Updating PaymentIntent ${existingPaymentIntent.id} with metadata for webhook processing...`);
       console.log(`📋 Original metadata:`, existingPaymentIntent.metadata);
 
@@ -620,13 +616,13 @@ export async function POST(request: NextRequest) {
         customer: customer.id,
         paymentMethod: finalPaymentMethodId, // Use the final payment method ID
         confirm: true, // Auto-confirm
-        paymentType: isMiniDrawPackage ? "mini-draw" : "one-time",
+        paymentType: "one-time",
         description: membershipPackage.name,
         setupFutureUsage: "off_session", // ✅ Save payment method for future use (required for production/staging)
         metadata: {
           items: JSON.stringify([
             {
-              type: isMiniDrawPackage ? "mini-draw" : "membership",
+              type: "membership",
               id: validatedData.packageId,
               name: membershipPackage.name,
               price: membershipPackage.price,
@@ -637,8 +633,8 @@ export async function POST(request: NextRequest) {
           // ✅ FIX: Add userId for registered users so webhook can find them
           // This fixes the issue where userId remains "guest" even for registered users
           ...(registeredUser && { userId: registeredUser._id.toString() }),
-          type: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
-          packageType: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ Also set 'packageType' for consistency
+          type: "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
+          packageType: "one-time", // ✅ Also set 'packageType' for consistency
           entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
           price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
           // ✅ ADD: Include user data for account creation in webhook (for new users)

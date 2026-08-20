@@ -123,6 +123,8 @@ This is why the platform owns *eligibility, freeze, and entry counts* but does n
 
 Tiers 4–8 of the original 8-tier flat ladder (`mini-pack-4` … `mini-pack-8`, $25 → $500) were deactivated 2026-05-14 (`isActive: false`) but the rows remain so historical orders and receipts still resolve; tiers 1–3 ($1/$5/$10) are the same original rows and remain active as the guest packs above. Upsells on mini-draw purchases use a fixed **1× multiplier** (no admin knob — see §6c).
 
+**A Mini Pack can only be bought against a named draw (enforced 2026-08-20).** Every Mini Pack purchase goes through [`POST /api/mini-draw/purchase`](src/app/api/mini-draw/purchase/route.ts), which stamps `miniDrawId` on the PaymentIntent — the webhook grants entries *against that draw*, so a purchase with no draw named cannot be honoured. The membership / one-time Stripe routes have no draw in scope and now **reject** mini-draw catalogue ids with a 400 (`isMiniDrawPackageId`, guard: `npm run test:mini-draw-package-id`). Previously they accepted them, captured the money, and the webhook silently granted nothing. No live checkout ever sent one — this closes a latent path, not an active leak. Practical effect: **there is no guest / membership-modal checkout for Mini Packs**, by design.
+
 ### 3c. Prize fulfillment & customization — what the winner actually receives
 
 The current monthly Major Draw prize is **fully customizable by the winner**. After being announced on Facebook Live (§3a), the winner picks **one** of:
