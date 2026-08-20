@@ -51,6 +51,8 @@ export type UserLeanDocument = {
     entriesBySource?: { "mini-draw-package"?: number; [k: string]: unknown };
     [key: string]: unknown;
   }>;
+  /** Purchase ledger — one row per mini-draw package bought, $pull-ed on refund. */
+  miniDrawPackages?: Array<{ entriesGranted?: number; packageId?: string; [k: string]: unknown }>;
   rewardsPoints?: number;
   accumulatedEntries?: number;
   [key: string]: unknown; // Allow other properties from MongoDB
@@ -305,12 +307,16 @@ export function transformUserData(
           computedFields.activeMiniDrawIds.has(String(p.miniDrawId))
       ).length;
     } else if (fieldKey === "miniPackEntries") {
-      // Lifetime entries that came from buying a Mini Pack. A purchase fact: no draw lookup,
-      // never stale, and unaffected by draws completing.
-      value = (user.miniDrawParticipation || []).reduce(
-        (sum, p) => sum + (p.entriesBySource?.["mini-draw-package"] ?? 0),
-        0
-      );
+      // Entries granted by mini-draw package PURCHASES, lifetime.
+      //
+      // Read off the purchase ledger, not entriesBySource — that bucket is reset to 0 for every
+      // participant when a winner is selected, and is also written by upsells and admin entry
+      // edits. `miniDrawPackages` survives winner selection and is $pull-ed on refund, so this
+      // is genuinely lifetime and genuinely a purchase.
+      value = (user.miniDrawPackages || []).reduce((sum, p) => sum + (p.entriesGranted ?? 0), 0);
+    } else if (fieldKey === "miniPacksBought") {
+      // How many mini-draw packages they have bought and kept (refunds are $pull-ed).
+      value = (user.miniDrawPackages || []).length;
     } else if (fieldKey === "id") {
       // Use userId as id
       value = userId;

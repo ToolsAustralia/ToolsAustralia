@@ -450,7 +450,7 @@ export interface UserFilters {
   states?: string[];
   /** Active major draw with entries: yes | no */
   inActiveMajorDraw?: "yes" | "no" | "";
-  /** Ever bought a Mini Pack (lifetime purchase fact): yes | no */
+  /** Ever bought a package for a mini draw — any tier. Reads User.miniDrawPackages. yes | no */
   miniDrawPackage?: "yes" | "no" | "";
   /** Holds entries in a mini draw that is active RIGHT NOW: yes | no */
   inActiveMiniDraw?: "yes" | "no" | "";

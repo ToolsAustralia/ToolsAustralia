@@ -1712,3 +1712,24 @@ Two new dropdowns on the Users tab, and both flow into the export.
 - New **"Mini Pack Entries"** column — lifetime entries from Mini Pack purchases. A purchase fact, so unlike the count it does not drop to zero when a draw completes.
 
 The active-draw ids are resolved **once per export**, not per user, and only when the column is selected.
+
+### Correction: the Mini Pack filter reads the purchase ledger (2026-08-20)
+
+The first cut of `miniDrawPackage` keyed off `miniDrawParticipation[].entriesBySource["mini-draw-package"]`. An audit prompted by DJ's question ("packs 4–8 are now normal package names — are those still mini packs?") showed that bucket is wrong in **both** directions, so the filter now reads **`User.miniDrawPackages`** — the purchase ledger — instead.
+
+**Answer to the question that started it: yes, all tiers count.** Nothing in the grant path branches on package id. A mini-draw checkout stamps `packageType: "mini-draw"` and `grantBenefits` routes on that string alone, so `mini-pack-1`, the deactivated `mini-pack-7`, and `additional-vip-pack-mini` are indistinguishable to it. `test:user-mini-draw-filters` asserts the predicate hard-codes no package id, so a future rename cannot silently drop buyers.
+
+**Why the old bucket was wrong:**
+
+| Direction | Cause |
+|---|---|
+| **False negative** | `mini-draw/[id]/select-winner` sets `entriesBySource.mini-draw-package: 0` for every participant of the drawn cycle — a genuine buyer reads as "never bought" the moment their draw is drawn |
+| **False negative** | `addToMiniDraw` returns early on the capacity guard, so the money is captured but nothing is written. The additional packs carry 25–500 entries vs 1/5/10, so they hit the ceiling far more often |
+| **False positive** | Mini-draw **upsells** write the same hard-coded key (`payment-processing.ts:1167-1171`) |
+| **False positive** | Admin "Add Entry" edits force-write it via `syncMiniDrawParticipation`, so a staff grant reads as a purchase |
+
+**`User.miniDrawPackages` has none of that:** `$push`ed only under `packageType === "mini-draw"` and *before* the capacity guard can bail, untouched by winner selection, and `$pull`ed by `stripePaymentIntentId` on refund — so it means "bought **and kept**". `packageId` is `required: true`, so `{ "miniDrawPackages.packageId": { $exists: true } }` is exactly "has at least one purchase row", and it is a pure User predicate with no foreign lookup.
+
+**Export follows the same source.** "Mini Pack Entries" now sums `miniDrawPackages[].entriesGranted` (lifetime, refund-net) rather than the resettable bucket, and a new **"Mini Packs Bought"** column counts the rows. The `entriesBySource` bucket is still used by "Active Mini Draws", which is correct — that column is about *current* participation, which is exactly what the bucket tracks.
+
+⚠️ Note the bucket is not a per-tier signal either way: it stores no package identity. `miniDrawPackages[].packageId` does, so splitting the filter into "Mini Pack 1–3" vs "additional-* tiers" is now possible if it's ever wanted.

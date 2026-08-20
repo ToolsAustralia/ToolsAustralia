@@ -4437,7 +4437,7 @@ Also **exposed `attributedRevenue`** (per-platform incl. TikTok + the All-Platfo
 
 | Param | Values | Means |
 |---|---|---|
-| `miniDrawPackage` | `yes` \| `no` | Ever bought a Mini Pack — a lifetime purchase fact |
+| `miniDrawPackage` | `yes` \| `no` | Ever bought a package for a mini draw — **any tier**: Mini Pack 1–3, the retired 4–8, or the `additional-*-pack-mini` records shown as Tradie / Foreman / Boss / Power / VIP Pack. Reads the `User.miniDrawPackages` purchase ledger, so it survives winner selection and is net of refunds |
 | `inActiveMiniDraw` | `yes` \| `no` | Holds entries in a mini draw that is active **right now** |
 
 They compose with each other and with every existing filter, so `miniDrawPackage=yes&inActiveMiniDraw=no` is the "bought a pack but is not currently in a draw" re-engagement cohort.

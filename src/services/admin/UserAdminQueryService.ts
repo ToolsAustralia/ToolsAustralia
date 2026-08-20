@@ -45,7 +45,7 @@ export interface ListUsersArgs {
   dateTo?: string;
   states?: string[];
   inActiveMajorDraw?: string;
-  /** "yes" = has ever bought a Mini Pack; "no" = never has. */
+  /** "yes" = has ever bought a mini-draw package (any tier); "no" = never has. */
   miniDrawPackage?: string;
   /** "yes" = holds entries in a mini draw active right now; "no" = does not. */
   inActiveMiniDraw?: string;
