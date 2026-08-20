@@ -89,8 +89,13 @@ async function main(): Promise<void> {
   let csvStream: fs.WriteStream | null = null;
   if (!NO_CSV) {
     try {
+      // Existence is checked BEFORE opening the stream. createWriteStream is LAZY — it
+      // does not touch the filesystem until the first write — so statSync on a brand-new
+      // path throws ENOENT, the catch below fires, and the audit log silently disabled
+      // itself on every run. Found by running it, not by reading it.
+      const isNew = !fs.existsSync(CSV_PATH) || fs.statSync(CSV_PATH).size === 0;
       csvStream = fs.createWriteStream(CSV_PATH, { flags: "a" });
-      if (fs.statSync(CSV_PATH).size === 0) {
+      if (isNew) {
         csvStream.write(
           "timestamp,order_number,order_id,created_at,total_amount,payment_intent_id,intent_status,action,error\n"
         );
