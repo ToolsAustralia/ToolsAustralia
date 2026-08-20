@@ -1604,3 +1604,36 @@ consumer rather than the form:
   silently `continue`s past any id it does not recognise. `ARTWORK_PLACEMENTS`
   therefore offers only ids the export can actually send, labelled in the
   admin's language — "Left chest", not `"3"`.
+
+## Admin product modal sizing (2026-08-20)
+
+`AdminProductModal` runs at `size="4xl"` with `mobileFullBleed`, not the default `lg`.
+
+It sat at `lg` (512px) while its own field grids are written as `sm:grid-cols-2` and
+`sm:grid-cols-4`. Those are **viewport** media queries, not container queries — so on any desktop
+they fired *inside* the 512px shell and the four variant columns got roughly 120px each. The grids
+were always written for a wide modal; the shell was the thing that was wrong.
+
+`4xl` is not a new size: `ExperimentDetailModal` and `AffiliateDetailModal` already use it for
+large admin surfaces.
+
+`mobileFullBleed` (a `ModalContainer` opt-in) renders near-fullscreen below `lg` and reverts to the
+centred dialog above it — worth having on any long form, where a centred card wastes the screen
+once the keyboard is up. `OrderDetailModal` takes the same flag but stays `2xl`: it is a
+read-mostly detail view, so extra width would only stretch its label/value rows.
+
+### The zero state on "Free entries included" (2026-08-20)
+
+The shared `Input` renders a numeric **0 as an empty box**
+(`value={type === "number" && value === 0 ? "" : value}` — [Input.tsx:96](../../src/components/modals/ui/Input.tsx)).
+That is right for price-like fields, where an empty box and a zero mean the same thing to an
+author. It is wrong for an entry count: merchandise currently sits at `includedEntries: 0` across
+the board while entries are off pending the permit, so **every product read as "not configured"**
+and the field looked like it had never been wired up.
+
+Fixed at the call site with an explicit placeholder (`"0 — no free entries with this item"`)
+rather than by changing `Input`, which would have altered every numeric field in every modal to
+fix one field's copy.
+
+Worth remembering as a class of bug: a component that collapses "zero" and "empty" is fine until a
+field comes along where the difference is the whole point.

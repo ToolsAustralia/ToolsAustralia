@@ -156,3 +156,70 @@ not be once the permit lands.
 Refusals: `order_not_found` 404 · `not_refundable` 409 (a `pending` order is
 unpaid) · `already_refunded` 409 (the stock-loss path already refunded and
 cancelled it) · `no_payment` 409 · `stripe_failed` 502.
+
+## `/api/admin/shop/entry-multiplier` (2026-08-20)
+
+The shop-wide and per-category multiplier ceilings. `GET` needs `shop.view`, `PUT` needs
+`shop.edit` and writes a `StaffActivity` row.
+
+`GET` returns the stored ceilings **plus the categories currently in the catalogue**
+(`Product.distinct("category")`, collapsed by normalised key). The panel offers that list rather
+than accepting free text: `Product.category` has no enum and the vocabulary is already forked
+(`"Apparel"` beside `"power-tools"`), so a hand-typed key would silently match nothing.
+
+`PUT` **replaces** the ceilings wholesale rather than merging. A partial update could not express
+"remove this category's ceiling", and a panel that can add but not remove is worse than no panel.
+A `null` value clears a row. Keys are normalised server-side, so a client sending `"Apparel"` and
+one sending `"apparel"` cannot create two rows that shadow each other.
+
+The **per-product** ceiling rides on the existing `/api/admin/products/**` routes as
+`entryMultiplierCap`. Both `POST` and `PUT` had to declare it in their Zod schema: those schemas
+strip unknown keys before Mongoose ever sees them, so adding the model field alone would have
+produced a form that saves nothing, with no error.
+
+### `PUT /api/admin/shop/entry-multiplier` — all three tiers (2026-08-20)
+
+The endpoint accepts, and writes, every tier in one request:
+
+| Field | Writes to | Meaning |
+| --- | --- | --- |
+| `cap` | `ShopEntryMultiplierConfig.cap` | Shop-wide ceiling. `null` clears it |
+| `categoryCaps` | `ShopEntryMultiplierConfig.categoryCaps` | Keyed by normalised category. `null` clears a row |
+| `productCaps` | `Product.entryMultiplierCap`, via one `bulkWrite` | Keyed by product id (24-hex, validated). `null` clears a product's ceiling |
+
+`productCaps` writes `Product` from this route rather than through
+`/api/admin/products/[id]` because the panel saves every tier on one button. Routing product
+ceilings through the product routes would mean one request per changed row, and a partial
+failure would leave the page asserting ceilings that were never stored.
+
+`GET` returns the stored ceilings plus **both** lists the panel offers from — the categories in
+use, and every product with its current ceiling. The product read is explicitly projected
+(`_id name category entryMultiplierCap`): an unprojected `Product.find({})` here would ship
+variants, reviews and print artwork for the whole catalogue on every page load.
+
+**A note on scale.** That product list is unpaginated. It is correct for a print-on-demand
+catalogue of a handful of garments, and would need paging or search well before the catalogue
+reached a few hundred rows.
+
+### `POST /api/admin/products/order` — manual catalogue order (2026-08-20)
+
+`{ orderedIds: string[] }`, gated on `shop.edit`, audited. Mirrors
+`POST /api/admin/mini-draw/order` exactly — same payload, same 1..N assignment, same
+`displayOrder` field name, because the two admin panels do the same job.
+
+Every id in the list is rewritten, not just the moved one. That is deliberate: it is what pulls
+the whole curated set below position ~N and above any product still carrying the epoch-sized
+`displayOrder` default.
+
+**The storefront honours it, and that is the point.** `GET /api/products` now defaults to
+`sortBy=displayOrder` (ascending, always — `sortOrder` only makes sense for value-like fields).
+When a customer picks an explicit sort, that wins and `displayOrder` becomes the tiebreak. Without
+this the reorder UI would be a no-op that *looks* like it works: cards move in admin, customers see
+no change.
+
+**`displayOrder` defaults to `Date.now()`**, matching `MiniDraw`. A never-dragged product therefore
+carries an epoch-sized number and sorts LAST, below anything positioned 1..N. Rows that predate the
+field have no value at all — MongoDB sorts a missing field before any number — so
+`npm run backfill:product-display-order` assigns 1..N in today's customer-facing order
+(`createdAt` desc), leaving the storefront visually identical while turning the order into data.
+Dry-run by default; `:apply` writes.

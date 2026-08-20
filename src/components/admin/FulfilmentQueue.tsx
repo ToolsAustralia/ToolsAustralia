@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Download, Loader2, Truck, Undo2 } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatDateInAEST } from "@/utils/common/timezone";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
 
 /**
  * Paid orders waiting to be sent to the print provider.
@@ -73,6 +74,10 @@ export default function FulfilmentQueue() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isMarking, setIsMarking] = useState(false);
+  // Both of these actions used to ask through `window.confirm`, which blocks the
+  // thread and returns a boolean inline. A real modal cannot, so each pending
+  // action is held in state and resumed from the modal's onConfirm.
+  const [pendingAction, setPendingAction] = useState<null | { kind: "mark" } | { kind: "undo"; order: SubmittedOrder }>(null);
   const [undoingOrderId, setUndoingOrderId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -150,18 +155,11 @@ export default function FulfilmentQueue() {
     setSelected(allSelected ? new Set() : new Set(orders.map((o) => o.orderId)));
   };
 
+  /** Runs only after the confirmation modal resolves — it no longer asks. */
   const handleMarkSubmitted = async () => {
     const orderIds = orders.filter((o) => selected.has(o.orderId)).map((o) => o.orderId);
     if (orderIds.length === 0) return;
-    // A reprint costs a real garment and real freight, so this one asks.
-    if (
-      !window.confirm(
-        `Mark ${orderIds.length} order${orderIds.length === 1 ? "" : "s"} as sent to the printer?\n\n` +
-          `Do this only AFTER the CSV has uploaded successfully. They drop out of this queue — if the upload did not go through, put them back with Undo under "Recently sent".`
-      )
-    ) {
-      return;
-    }
+    setPendingAction(null);
 
     setIsMarking(true);
     setFeedback(null);
@@ -191,17 +189,9 @@ export default function FulfilmentQueue() {
     }
   };
 
+  /** Runs only after the confirmation modal resolves — it no longer asks. */
   const handleUndo = async (order: SubmittedOrder) => {
-    // The mirror of the mark: putting back an order the printer really does have is
-    // how the same garment gets printed twice, so this one asks too.
-    if (
-      !window.confirm(
-        `Put ${order.orderNumber} back in the print queue?\n\n` +
-          `Do this only if that order was NOT uploaded to the printer. If it was, it will be printed and posted a second time.`
-      )
-    ) {
-      return;
-    }
+    setPendingAction(null);
 
     setUndoingOrderId(order.orderId);
     setFeedback(null);
@@ -435,7 +425,7 @@ export default function FulfilmentQueue() {
               </a>
               {canEdit && (
                 <button
-                  onClick={() => void handleMarkSubmitted()}
+                  onClick={() => setPendingAction({ kind: "mark" })}
                   disabled={isMarking || selectedCount === 0}
                   className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-100 dark:hover:bg-neutral-800"
                 >
@@ -479,7 +469,7 @@ export default function FulfilmentQueue() {
                     </span>
                   </span>
                   <button
-                    onClick={() => void handleUndo(order)}
+                    onClick={() => setPendingAction({ kind: "undo", order })}
                     disabled={undoingOrderId !== null}
                     className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 px-3 text-xs font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-100 dark:hover:bg-neutral-800"
                   >
@@ -496,6 +486,35 @@ export default function FulfilmentQueue() {
           </div>
         )}
       </div>
+
+      {/*
+        Both of these cost a real garment and real freight if they go the wrong
+        way, so they keep asking — just through the app's modal rather than the
+        browser's, which is chrome-styled, theme-blind and thread-blocking.
+
+        `type="warning"` rather than "delete": neither action destroys anything.
+        Marking as sent moves orders out of the queue (reversible with Undo), and
+        Undo puts one back. The risk is a DUPLICATE print, not a loss — and the
+        message says which it is.
+      */}
+      <ConfirmationModal
+        isOpen={pendingAction !== null}
+        onClose={() => setPendingAction(null)}
+        onConfirm={() => {
+          if (pendingAction?.kind === "mark") void handleMarkSubmitted();
+          else if (pendingAction?.kind === "undo") void handleUndo(pendingAction.order);
+        }}
+        type="warning"
+        title={pendingAction?.kind === "undo" ? "Put this order back?" : "Mark as sent to the printer?"}
+        message={
+          pendingAction?.kind === "undo"
+            ? `Put ${pendingAction.order.orderNumber} back in the print queue? Do this only if that order was NOT uploaded to the printer — if it was, it will be printed and posted a second time.`
+            : `Mark ${selected.size} order${selected.size === 1 ? "" : "s"} as sent to the printer? Do this only after the CSV has uploaded successfully. They drop out of this queue — if the upload did not go through, put them back with Undo under "Recently sent".`
+        }
+        confirmText={pendingAction?.kind === "undo" ? "Put it back" : "Yes, mark as sent"}
+        cancelText="Cancel"
+        isLoading={isMarking || undoingOrderId !== null}
+      />
     </div>
   );
 }

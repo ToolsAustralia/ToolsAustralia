@@ -29,6 +29,7 @@ import ErrorReportsManagement from "@/components/admin/ErrorReportsManagement";
 import ProductManagement from "@/components/admin/ProductManagement";
 import FulfilmentQueue from "@/components/admin/FulfilmentQueue";
 import PrintProviderSync from "@/components/admin/PrintProviderSync";
+import ShopEntryMultiplierPanel from "@/components/admin/ShopEntryMultiplierPanel";
 import OrdersManagement from "@/components/admin/OrdersManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
 import PastDueChargeHistory from "./PastDueChargeHistory";
@@ -173,7 +174,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "repeat-purchases" && "One-time buyers who came back — repeat rate, time-to-return, and the fetchable cohort"}
                   {selectedTab === "chatbot" && "Cobber AI chatbot — availability, daily spend, deflection rate, usage, and conversation transcripts"}
                   {selectedTab === "ab-testing" && "Manage A/B testing experiments and analyze variant performance"}
-                  {selectedTab === "products" && "Shop catalog, fulfilment queue and order history"}
+                  {selectedTab === "products" && "Pull garments from the printer, then price and publish them"}
+                  {selectedTab === "shop-orders" && "Hand paid orders to the printer, and search the full order history"}
+                  {selectedTab === "shop-multipliers" && "Cap how far a promo multiplies merchandise entries"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}
@@ -227,22 +230,34 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
           {selectedTab === "ab-testing" && <ABTestingManagement />}
 
           {/* ERROR REPORTS TAB */}
+          {/* PRODUCTS — stocking the shelf. */}
           {selectedTab === "products" && (
             <>
               {/* Above the catalogue, because this is where a merch product comes
                   from: designed in the printer’s portal, then pulled in here. */}
               <PrintProviderSync />
               <ProductManagement />
-              {/* Fulfilment sits under the catalogue. Orders are still handed over by CSV —
-                  their API reads products fine but we do not book orders through it. */}
+            </>
+          )}
+
+          {/* ORDERS — getting it made and shipped. The fulfilment queue lists only
+              what is still waiting, so the full history sits beneath it: support
+              needs to find an order after it has already shipped. */}
+          {selectedTab === "shop-orders" && (
+            <>
+              {/* Orders still reach the printer as a CSV. Their API can now book
+                  them (GraphQL createOrder), but no adapter is written yet. */}
               <FulfilmentQueue />
-              {/* Then the full order history — the fulfilment queue only shows what is
-                  still waiting, and support needs to find an order after it has shipped. */}
               <div className="mt-6">
                 <OrdersManagement />
               </div>
             </>
           )}
+
+          {/* ENTRY MULTIPLIERS — tuning what a purchase grants. Its own page because
+              it is a promo-shaped decision rather than a catalogue edit, and it
+              applies across the whole shop rather than to any one product. */}
+          {selectedTab === "shop-multipliers" && <ShopEntryMultiplierPanel />}
           {selectedTab === "error-reports" && <ErrorReportsManagement />}
 
           {/* BLOCKED TRANSACTIONS TAB */}

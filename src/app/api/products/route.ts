@@ -29,7 +29,7 @@ const querySchema = z.object({
   colour: multiValueParam,
   minPrice: z.string().optional(),
   maxPrice: z.string().optional(),
-  sortBy: z.enum(["name", "price", "rating", "createdAt"]).optional().default("createdAt"),
+  sortBy: z.enum(["name", "price", "rating", "createdAt", "displayOrder"]).optional().default("displayOrder"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
   featured: z.string().optional(),
   search: z.string().optional(),
@@ -162,8 +162,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Build sort object
+    // The admin's manual catalogue order is the DEFAULT the storefront shows.
+    // Without this the reorder UI would be a no-op that looks like it works —
+    // cards move in admin, customers see no change.
+    //
+    // displayOrder is always ascending (position 1 is first) regardless of
+    // sortOrder, which only makes sense for value-like fields. When a customer
+    // picks an explicit sort (price, name, rating) it wins, and displayOrder
+    // becomes the tiebreak so equal values stay in the curated order.
     const sort: Record<string, 1 | -1> = {};
-    sort[validatedQuery.sortBy] = validatedQuery.sortOrder === "asc" ? 1 : -1;
+    if (validatedQuery.sortBy === "displayOrder") {
+      sort.displayOrder = 1;
+    } else {
+      sort[validatedQuery.sortBy] = validatedQuery.sortOrder === "asc" ? 1 : -1;
+      sort.displayOrder = 1;
+    }
 
     // Calculate pagination
     const page = parseInt(validatedQuery.page);

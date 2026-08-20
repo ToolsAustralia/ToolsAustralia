@@ -228,6 +228,11 @@ export default function OrderDetailModal({
       isOpen={isOpen}
       onClose={handleClose}
       size="2xl"
+      // Stays 2xl on desktop: this is a read-mostly detail view with a delivery
+      // address and a line-item list, not a dense form — 4xl would just stretch
+      // the label/value rows. `mobileFullBleed` matches AdminProductModal so the
+      // two shop modals behave the same way on a phone.
+      mobileFullBleed
       closeOnBackdrop={!isRefunding}
     >
       <ModalHeader

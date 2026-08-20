@@ -4,7 +4,7 @@ import React from "react";
 import Image from "next/image";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Trophy, FileText, Trash2, Loader2, MessageSquare } from "lucide-react";
+import { Trophy, FileText, Trash2, Loader2, MessageSquare, ExternalLink } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { getBrandMeta, defaultBrandLogo } from "@/utils/brand-utils";
 import BrandLogoCard from "@/components/ui/BrandLogoCard";
@@ -185,6 +185,25 @@ export default function MiniDrawCard({
                   <span className="truncate">Winner</span>
                 </button>
               )}
+              {/*
+                Opens the live mini-draw page in a new tab — the same "View" affordance
+                the product cards carry, so the two admin surfaces behave alike.
+
+                stopPropagation matters here specifically: the whole card is a click
+                target that opens the edit modal, so without it the link fires AND the
+                modal opens behind the new tab.
+              */}
+              <a
+                href={`/mini-draws/${draw._id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className={cardAction}
+                title="Open the live mini draw page in a new tab"
+              >
+                <ExternalLink className="h-[13px] w-[13px] shrink-0 text-[var(--text2)]" />
+                <span className="truncate">View</span>
+              </a>
               <button
                 type="button"
                 onClick={(e) => {
