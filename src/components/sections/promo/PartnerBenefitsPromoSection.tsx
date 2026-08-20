@@ -3,8 +3,7 @@
 import React, { useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Check, Layers, Zap, ShieldCheck, Percent } from "lucide-react";
-import MetallicButton from "@/components/ui/MetallicButton";
+import { Check } from "lucide-react";
 import AccessRing from "@/components/ui/AccessRing";
 import { useUserContext } from "@/contexts/UserContext";
 import { usePromoTheme, usePromoThemeStore } from "@/stores/usePromoThemeStore";
@@ -15,43 +14,6 @@ import { getPackageIcon } from "@/utils/images/package-icons";
 import { TIER_HEX, tierKeyFromName, glossGrad, inkOn } from "@/utils/membership/tier-visuals";
 import { getPartnerCatalogAccessPercentForPlanId } from "@/utils/partner-discounts/partner-catalog-visibility";
 import { PARTNER_CATALOG_TOTAL } from "@/generated/partnerCatalogPreview";
-import { apprentice, tradie, foreman, boss, power } from "@/utils/images/package-icons";
-
-const BENEFITS = [
-  {
-    icon: Layers,
-    title: "Entries Accumulate Monthly",
-    text: "Your entries carry over and stack each billing cycle — the longer you stay subscribed, the more entries you hold.",
-  },
-  {
-    // Copy rule: user-facing text says "one-time packs", never the backend-only "Additional
-    // Packs" term (isAdditional flag). See docs/subscription/package-terminology.md.
-    icon: Zap,
-    title: "Boosted One-Time Packs",
-    text: "As a member, your one-time packs come with up to 2× more entries — at the same price as the standard version.",
-  },
-  {
-    icon: Percent,
-    title: "Partner Discounts & Shop Savings",
-    text: "Get 5–20% off in our shop and tiered access to partner brand discounts (50%–100% of offers by plan) for as long as your membership stays active.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Set & Forget",
-    text: "Your subscription auto-renews each giveaway — no need to re-purchase. Upgrade, downgrade, or cancel anytime.",
-  },
-];
-
-const TIERS = [
-  { src: tradie, name: "Tradie", entries: "15", price: "$20" },
-  { src: foreman, name: "Foreman", entries: "40", price: "$40" },
-  { src: boss, name: "Boss", entries: "100", price: "$80" },
-];
-
-const EXTRA_ICONS = [
-  { src: apprentice, name: "Apprentice" },
-  { src: power, name: "Power" },
-];
 
 interface PartnerBenefitsPromoSectionProps {
   /** Scroll target ID for VIEW PACKAGES CTA — "packages" (promo) or "membership" (FAQ/membership page) */
@@ -178,8 +140,26 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
 
           {/* Content */}
           <div className="relative z-10">
-            {/* ============================ MOBILE ============================ */}
-            <div className="p-4 sm:p-6 lg:hidden">
+            {/*
+              ONE layout at every width — the design that used to be mobile-only.
+
+              There were two full implementations of this section: a stacked card below
+              `lg`, and a 12-column split above it. They carried different copy ("A
+              Membership's Free Entries Accumulate Every Month" against "Your Entries
+              Accumulate. Every Month They Grow."), different benefit sets and different
+              calls to action — so the section a customer read on a phone was a different
+              pitch from the one on a laptop, and every wording change had to be made
+              twice or silently diverge.
+
+              The stacked version is the better pitch: it opens on the accumulation
+              chart, which is the single idea that makes a subscription make sense, and
+              its four stat tiles say what the desktop bullet list said in a quarter of
+              the words.
+
+              Capped and centred rather than stretched — the tiles are a reading column,
+              not a dashboard.
+            */}
+            <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
               {/* Eyebrow */}
               <div className="mb-2.5 flex items-center gap-2">
                 <div className="h-0.5 w-6 rounded-full" style={{ background: theme.gradient }} />
@@ -415,195 +395,6 @@ export default function PartnerBenefitsPromoSection({ scrollToId = "packages" }:
               )}
             </div>
 
-            {/* ============================ DESKTOP ============================ */}
-            <div className="hidden items-stretch lg:grid lg:grid-cols-12 lg:gap-6">
-
-              {/* LEFT: Copy + Benefits (7/12 on desktop) */}
-              <div className="lg:col-span-7 p-4 sm:p-6 lg:p-10">
-                {/* Eyebrow */}
-                <div className="flex items-center gap-2 mb-2 sm:mb-3">
-                  <div className="h-0.5 w-6 rounded-full" style={{ background: theme.gradient }} />
-                  <span
-                    className="text-2xs sm:text-xs font-bold uppercase tracking-[0.2em] bg-clip-text text-transparent"
-                    style={{
-                      backgroundImage: theme.gradient,
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                    }}
-                  >
-                    Become a member
-                  </span>
-                </div>
-
-                {/* Headline */}
-                <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold font-sans leading-[1.15] mb-1.5 sm:mb-2">
-                  <span className="text-white">Your Entries Accumulate.</span>
-                  <br />
-                  <span
-                    className="bg-clip-text text-transparent"
-                    style={{
-                      backgroundImage: theme.gradient,
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                    }}
-                  >
-                    Every Month They Grow.
-                  </span>
-                </h2>
-
-                {/* Sub-headline */}
-                <p className="text-xs sm:text-sm lg:text-[15px] text-gray-300 font-sans leading-relaxed mb-4 sm:mb-6 max-w-lg">
-                  Pick a tier — Tradie, Foreman, or Boss — and your entries
-                  stack on top of last month&apos;s total every billing cycle.
-                  Add promo multipliers on top and your count climbs fast.
-                </p>
-
-                {/* Benefits grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-5 sm:mb-6">
-                  {BENEFITS.map((b, i) => (
-                    <div key={i} className="flex items-start gap-2.5">
-                      <div
-                        className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center mt-0.5"
-                        style={{ background: `${theme.primary}20` }}
-                      >
-                        <b.icon className="w-3.5 h-3.5" style={{ color: theme.primaryLight }} />
-                      </div>
-                      <div>
-                        <p className="text-xs sm:text-[13px] font-bold text-white font-sans leading-tight mb-0.5">
-                          {b.title}
-                        </p>
-                        <p className="text-2xs sm:text-xs text-gray-400 font-sans leading-snug">
-                          {b.text}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* CTA row */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-4">
-                  <MetallicButton onClick={handleViewPackages} variant="primary" size="sm" borderRadius="lg">
-                    VIEW PACKAGES
-                  </MetallicButton>
-                  <span className="text-2xs text-gray-400 font-sans flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
-                    Cancel anytime — no lock-in
-                  </span>
-                </div>
-
-              </div>
-
-              {/* RIGHT: Tier showcase (5/12 on desktop) */}
-              <div className="hidden lg:flex lg:col-span-5 items-center justify-center py-8 pr-6">
-                <div className="w-full max-w-[280px] space-y-3">
-                  {/* Tier cards */}
-                  {TIERS.map((tier, i) => {
-                    const isCenter = i === 1;
-                    const isBoss = i === 2;
-                    return (
-                      <div
-                        key={tier.name}
-                        className={`relative flex items-center gap-4 rounded-xl p-3 backdrop-blur-[var(--ta-blur)] transition-transform duration-[var(--ta-transition-dur)] hover:scale-[1.03] cursor-pointer ${
-                          isBoss ? "bg-white/[0.08]" : "bg-white/[0.04] ring-1 ring-white/[0.06]"
-                        }`}
-                        style={isBoss ? { boxShadow: `inset 0 0 0 1px ${theme.primary}40` } : undefined}
-                        onClick={handleViewPackages}
-                      >
-                        {/* Icon */}
-                        <div
-                          className={`relative flex-shrink-0 animate-member-benefit-float ${
-                            isBoss ? "w-14 h-14" : isCenter ? "w-12 h-12" : "w-10 h-10"
-                          }`}
-                          style={{
-                            animationDuration: `${4 + i * 0.6}s`,
-                            animationDelay: `${i * 0.2}s`,
-                          }}
-                        >
-                          <Image
-                            src={tier.src}
-                            alt={`${tier.name} pack`}
-                            fill
-                            sizes="56px"
-                            className="object-contain drop-shadow-[0_4px_12px_rgba(238,0,0,0.3)]"
-                          />
-                        </div>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-white font-sans uppercase tracking-wide">
-                            {tier.name}
-                          </p>
-                          <p className="text-2xs text-gray-400 font-sans">
-                            {tier.price}/giveaway &middot; includes {tier.entries} free entries/mo
-                          </p>
-                        </div>
-
-                        {/* Arrow */}
-                        <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-
-                        {/* Boss highlight border */}
-                        {isBoss && (
-                          <div
-                            className="absolute inset-0 rounded-xl pointer-events-none"
-                            style={{ border: `1px solid ${theme.primary}30` }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {/* One-time packs teaser */}
-                  <div className="flex items-center justify-center gap-3 pt-2 mt-1 border-t border-white/[0.06]">
-                    {EXTRA_ICONS.map((pkg) => (
-                      <div key={pkg.name} className="flex items-center gap-1.5 opacity-60">
-                        <div className="relative w-7 h-7">
-                          <Image
-                            src={pkg.src}
-                            alt={`${pkg.name} pack`}
-                            fill
-                            sizes="28px"
-                            className="object-contain"
-                          />
-                        </div>
-                        <span className="text-2xs text-gray-500 font-sans font-medium uppercase">
-                          {pkg.name}
-                        </span>
-                      </div>
-                    ))}
-                    <span className="text-2xs text-gray-600 dark:text-neutral-400 font-sans">
-                      + one-time packs
-                    </span>
-                  </div>
-
-                  {/* Accumulation visual */}
-                  <div className="rounded-lg bg-white/[0.04] p-3 mt-1">
-                    <p className="text-2xs text-gray-500 font-sans uppercase tracking-wider mb-2 text-center font-semibold">
-                      How entries accumulate
-                    </p>
-                    <div className="flex items-end justify-center gap-1.5">
-                      {[1, 2, 3, 4, 5].map((month) => {
-                        const height = 12 + month * 8;
-                        return (
-                          <div key={month} className="flex flex-col items-center gap-1">
-                            <div
-                              className="w-6 rounded-sm transition-all"
-                              style={{
-                                height,
-                                background: `linear-gradient(to top, ${theme.primaryDark}, ${theme.primaryLight})`,
-                                opacity: 0.3 + month * 0.14,
-                              }}
-                            />
-                            <span className="text-3xs text-gray-600 dark:text-neutral-400 font-sans">M{month}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Border — only around the inset card. Full-bleed on a phone, a ring on all four
