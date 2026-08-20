@@ -26,7 +26,16 @@ interface FilterState {
 // Remove ApiResponse interface as it's now handled by React Query
 
 // Sort options - Updated to match API
+/**
+ * The FIRST entry is the default, and it must stay the admin's curated order.
+ *
+ * This list is why reordering in admin appeared to do nothing: the page always
+ * sends an explicit `sortBy`, so making `displayOrder` the API's default had no
+ * effect at all — the client never omitted the parameter for the default to apply.
+ * A server-side default cannot fix a client that always overrides it.
+ */
 const sortOptions = [
+  { value: "displayOrder-asc", label: "Featured" },
   { value: "createdAt-desc", label: "Newest Arrivals" },
   { value: "createdAt-asc", label: "Oldest" },
   { value: "price-asc", label: "Price: Low to High" },
@@ -34,6 +43,14 @@ const sortOptions = [
   { value: "rating-desc", label: "Top Rated" },
   { value: "name-asc", label: "Name (A-Z)" },
 ];
+
+/**
+ * Single source for the default. It was written out as a string literal in three
+ * places — the initial state, the reset handler and the has-controls-applied
+ * check — so changing the default meant changing three unrelated lines and the
+ * "Clear" affordance silently disagreeing with reality if you missed one.
+ */
+const DEFAULT_SORT = sortOptions[0].value;
 
 interface ShopContentProps {
   initialProducts: ProductType[];
@@ -62,7 +79,7 @@ export default function ShopContent({
     sizes: [],
     colours: [],
   });
-  const [sortBy, setSortBy] = useState("createdAt-desc");
+  const [sortBy, setSortBy] = useState(DEFAULT_SORT);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
@@ -196,7 +213,7 @@ export default function ShopContent({
       sizes: [],
       colours: [],
     });
-    setSortBy("createdAt-desc");
+    setSortBy(DEFAULT_SORT);
     setCurrentPage(1);
   };
 
@@ -212,7 +229,8 @@ export default function ShopContent({
     filters.sizes.length +
     filters.colours.length +
     (filters.priceRange[0] > 0 || filters.priceRange[1] < 500 ? 1 : 0);
-  const hasControlsApplied = activeFilterCount > 0 || debouncedSearch.trim().length > 0 || sortBy !== "createdAt-desc";
+  const hasControlsApplied =
+    activeFilterCount > 0 || debouncedSearch.trim().length > 0 || sortBy !== DEFAULT_SORT;
 
   return (
     <SectionContainer className="py-8">

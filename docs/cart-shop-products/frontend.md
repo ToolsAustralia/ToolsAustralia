@@ -362,3 +362,36 @@ cannot disagree.
 `colourways` is deliberately absent from the list projection: only the product
 detail page renders them, and on a 51-colour tee it is the heaviest field on the
 document.
+
+## The storefront sort default — why a server default was not enough (2026-08-20)
+
+Reordering the catalogue in admin appeared to do nothing on `/shop`, even though the
+positions saved correctly.
+
+`ShopContent` holds its sort in state and forwards **every** filter to `/api/products` as a
+query parameter. It initialised to `"createdAt-desc"`, so the request always carried an explicit
+`sortBy` — and making `displayOrder` the API's Zod default therefore had no effect whatsoever.
+**A server-side default cannot fix a client that never omits the parameter.**
+
+The fix is a `Featured` option (`displayOrder-asc`) at the head of `sortOptions`, and
+`DEFAULT_SORT = sortOptions[0].value` used for the initial state, the reset handler and the
+has-controls-applied check. Those three were separate string literals before, so changing the
+default meant changing three unrelated lines — and missing one left the "Clear" affordance
+disagreeing with what was actually applied.
+
+**The order is not visible instantly, and the admin copy says so.** Three layers of caching sit
+in front of it:
+
+| Layer | Setting |
+| --- | --- |
+| Next route segment | `export const revalidate = 60` |
+| CDN | `Cache-Control: public, s-maxage=60, stale-while-revalidate=300` |
+| TanStack Query | `staleTime: 5 * 60 * 1000` |
+
+A new visitor sees the change within about a minute; someone with the page already open can hold
+the old order for up to five. The save confirmation deliberately says "within a few minutes"
+rather than "now" — promising immediacy here is what makes a working feature read as broken.
+
+Verified end-to-end: reversing the order through `POST /api/admin/products/order` flipped the
+storefront from `Alpha, Bravo, Charlie, Delta` to `Delta, Charlie, Bravo, Alpha`, with a control
+query on `createdAt` returning a genuinely different order to prove the fixture discriminated.

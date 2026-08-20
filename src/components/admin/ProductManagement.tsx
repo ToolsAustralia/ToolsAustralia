@@ -257,7 +257,16 @@ export default function ProductManagement() {
       });
       const data = await res.json();
       if (!res.ok || !data?.success) throw new Error(data?.error || "Failed to save order");
-      setFeedback({ type: "success", message: "Catalogue order saved. The shop now lists products in this order." });
+      // Deliberately does NOT say "now". /api/products is cached at the edge
+      // (s-maxage=60, stale-while-revalidate=300) and the storefront's own query
+      // holds results for 5 minutes, so a reload straight after saving can still
+      // show the old order. Promising "now" here is what makes a working feature
+      // look broken.
+      setFeedback({
+        type: "success",
+        message:
+          "Catalogue order saved. The shop picks it up within a few minutes — product listings are cached.",
+      });
       setIsOrderDirty(false);
       setIsReorderMode(false);
       await loadProducts();
