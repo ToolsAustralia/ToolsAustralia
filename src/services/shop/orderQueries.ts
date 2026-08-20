@@ -80,6 +80,16 @@ export interface OrderListItem {
   entriesGranted?: number;
   submittedAt?: string;
   trackingNumber?: string;
+  /**
+   * Postage charged on this order, so a row's total reconciles with the lines
+   * shown beside it.
+   *
+   * Without it a $158.90 basket posted for $9.95 renders as a $168.85 total over
+   * a list of items that visibly sum to something else — which reads as an
+   * overcharge, and arrives as a support enquiry. One scalar, not the whole money
+   * breakdown: the rest is derivable and this is the only part the list needs.
+   */
+  shippingCost?: number;
   items: {
     name: string;
     sku?: string;
@@ -107,7 +117,23 @@ const MAX_LIMIT = 100;
  * webhook, short enough that a stale attempt does not sit in someone's order
  * history looking like a second purchase.
  */
-const PENDING_GRACE_MS = 60 * 60 * 1000; // 1 hour
+export const PENDING_GRACE_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * The statuses that mean money actually changed hands.
+ *
+ * One name for one concept: this list was re-typed inline in at least three places
+ * (review eligibility, refund eligibility, milestone spend) and every surface that
+ * counts or sums orders needs it, because `pending` includes abandoned checkouts and
+ * `cancelled` includes refunds. Anything reporting a COUNT or a TOTAL to a human
+ * must filter on this, or it is reporting attempts as purchases.
+ */
+export const PAID_ORDER_STATUSES: readonly IOrder["status"][] = [
+  "processing",
+  "shipped",
+  "delivered",
+  "completed",
+];
 
 function buildFilter(f: OrderListFilters): FilterQuery<IOrder> {
   const query: FilterQuery<IOrder> = {};
@@ -185,7 +211,7 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
   // customer's own history, so it cannot leak there even if someone later adds it
   // to the unconditional half of the row mapping.
   const projection =
-    "orderNumber status createdAt totalAmount products.name products.sku products.size products.colour products.quantity products.price products.category shippingAddress.firstName shippingAddress.lastName entriesGranted submittedAt trackingNumber" +
+    "orderNumber status createdAt totalAmount shippingCost products.name products.sku products.size products.colour products.quantity products.price products.category shippingAddress.firstName shippingAddress.lastName entriesGranted submittedAt trackingNumber" +
     (isAdminSurface
       ? " paymentIntentId shippingAddress.email shippingAddress.phone shippingAddress.addressLine1 shippingAddress.addressLine2 shippingAddress.address shippingAddress.city shippingAddress.state shippingAddress.postalCode shippingAddress.deliveryInstructions"
       : "");
@@ -231,6 +257,7 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
           }
         : {}),
       entriesGranted: o.entriesGranted,
+      shippingCost: o.shippingCost,
       submittedAt: o.submittedAt ? new Date(o.submittedAt).toISOString() : undefined,
       trackingNumber: o.trackingNumber,
       items: (o.products ?? []).map((p) => ({

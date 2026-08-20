@@ -140,6 +140,11 @@ export class PaymentEventRepository {
           timestamp: { $gte: startUTC, $lt: endUTC },
           // Acquisition basis: exclude membership renewals (matches aggregateRevenueForDay).
           $nor: [{ packageType: "membership", "data.billingReason": "subscription_cycle" }],
+          // …and exclude merchandise, for the same reason revenueAggregator keeps it out
+          // of byPlatform: this feeds the per-platform/ROAS view, where a merch total
+          // (shipping included) is not comparable to a package price. Merch IS counted in
+          // headline revenue via its own bucket.
+          packageType: { $ne: "shop" },
         },
       },
       ...excludeRefundedBenefitsGrantedStages(),

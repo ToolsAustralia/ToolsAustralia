@@ -94,16 +94,25 @@ async function grantShopEntries(
     entries += entriesForLine(line.includedEntries ?? 0, line.quantity, applied);
   }
 
-  // Zero is the normal state while the feature ships dark. Returning before
-  // processPaymentBenefits matters: no PaymentEvent is written, so nothing about
-  // the webhook's behaviour changes at all until an admin sets a real count.
-  if (entries <= 0) {
-    order.entriesGranted = 0;
-    await order.save().catch((err) => {
-      console.error("[shop] failed to record entriesGranted: 0", { orderNumber: order.orderNumber, err });
-    });
-    return 0;
-  }
+  /*
+    NO EARLY RETURN ON ZERO (changed 2026-08-21).
+
+    This used to `return 0` before processPaymentBenefits whenever the order was
+    worth no entries, on the reasoning that a zero grant should change nothing.
+    But processPaymentBenefits is also what writes the `BenefitsGranted`
+    PaymentEvent, and PaymentEvent is the SINGLE authoritative source of revenue in
+    this codebase — the daily snapshot aggregates it, and Order is never summed for
+    money anywhere.
+
+    Product.includedEntries defaults to 0, so that early return fired on EVERY merch
+    order ever placed. The consequence was not a missing entry grant, which was
+    intended; it was that shop revenue did not exist. Merchandise is income and has
+    to be counted as income.
+
+    The zero-entry case is now handled where it belongs — addToMajorDraw returns
+    immediately on entries <= 0, so no draw is touched and no `no active major draw`
+    error is logged for an order that never wanted a draw.
+  */
 
   try {
     const result = await processPaymentBenefits(

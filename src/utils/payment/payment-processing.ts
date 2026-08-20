@@ -2218,6 +2218,17 @@ async function addToMajorDraw(
   majorDrawRoutingMode: "renewal" | "new_purchase" = "new_purchase",
   benefitsEventId?: string
 ): Promise<void> {
+  /*
+    A grant worth no entries has no business in a draw.
+
+    Merchandise is the case that made this reachable: a shop order still writes a
+    BenefitsGranted PaymentEvent (it is revenue) but usually carries 0 entries,
+    because Product.includedEntries defaults to 0. Without this guard the function
+    goes on to look for an active major draw and logs a hard error when there isn't
+    one — an error about an allocation nobody asked for.
+  */
+  if (packageData.entries <= 0) return;
+
   try {
     // ✅ DEBUG: Log function call with all parameters
     // console.log(`🎯 addToMajorDraw called with:`, {
@@ -2470,6 +2481,17 @@ async function addToMiniDraw(
   sourceTypeOverride?: string, // Optional override for source type (e.g., "bonus-entry-promo")
   benefitsEventId?: string
 ): Promise<void> {
+  /*
+    A grant worth no entries has no business in a draw.
+
+    Merchandise is the case that made this reachable: a shop order still writes a
+    BenefitsGranted PaymentEvent (it is revenue) but usually carries 0 entries,
+    because Product.includedEntries defaults to 0. Without this guard the function
+    goes on to look for an active major draw and logs a hard error when there isn't
+    one — an error about an allocation nobody asked for.
+  */
+  if (packageData.entries <= 0) return;
+
   try {
     // ✅ DEBUG: Log function call with all parameters
     // console.log(`🎲 addToMiniDraw called with:`, {

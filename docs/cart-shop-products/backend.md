@@ -346,6 +346,12 @@ The projection is an explicit `.select()` include-list. The customer route previ
 unprojected `.find().populate("products.product")`, which shipped every full Product document plus
 every address on every row — the unprojected-list footgun CLAUDE.md documents.
 
+`shippingCost` is on the include-list (2026-08-21) for a presentation reason with a support cost
+behind it: a row shows a total above a list of line items, and a $158.90 basket posted for $9.95
+renders a $168.85 total over items that visibly sum to something else — which reads as an
+overcharge. One scalar, not the whole money breakdown; the rest is derivable and the list does not
+need it. `useOrder(id)` remains the way to get a full order document.
+
 ### Category is snapshotted onto the order line
 
 `Order.products[].category` is frozen at checkout alongside name, price and `includedEntries`.
@@ -421,3 +427,89 @@ cannot reach a customer's own history through a later mapping mistake.
 refund except the stock-loss path, so a refund issued in the Stripe dashboard
 leaves the order looking live. That is a money path and belongs in its own
 reviewed change, not a launch sweep.
+
+## Checkout is idempotent for a repeat submit (2026-08-21)
+
+`POST /api/shop/checkout` used to call `createPendingOrder()` unconditionally and then
+create a PaymentIntent keyed `shop_order_${order._id}` — an idempotency key derived from
+an order minted three lines earlier **in the same request**, so it was unique per request
+by construction and could only ever suppress the Stripe SDK's own retry of one in-flight
+call. The comment claiming it deduplicated "a double-submitted checkout form" was false
+for exactly the case it named.
+
+The customer supplies the second POST for free. `CheckoutClient` holds `clientSecret` in
+React state only, so a **refresh at the card step** drops it, re-enables the address
+fields (`disabled={!!clientSecret}`) and re-renders "Continue to payment" — the only
+action the UI then offers is the one that duplicates the order. Reproduced in production:
+`SHOP-20260820-N8LARP` 01:14 and `SHOP-20260820-XE442E` 01:16, one purchase, and a matching
+pair in Stripe where the abandoned intent sits **Incomplete** beside the succeeded one.
+
+**This was never only an analytics problem.** `markPaid` gates on `{ _id, status:
+"pending" }` — *per order* — so two orders carrying two intents that both confirmed would
+each fulfil: stock decremented twice, entries granted twice.
+
+### The fix
+
+`ShopOrderService.resolvePendingOrder()` reuses the caller's open pending order when it is
+for the same cart, and `startShopCheckout()` reuses that order's PaymentIntent:
+
+| Decision | Rule |
+| --- | --- |
+| Which order is a candidate | most recent `status: "pending"` for this user, created within `PENDING_GRACE_MS` |
+| Same cart? | `(product, sku, quantity)` compared as a **multiset**, plus `totalAmount` equality |
+| Address | **not** part of the match — updated on the reused order |
+| Different cart | old order retired to `cancelled` with a `notes` reason, new one created |
+| Reuse the PaymentIntent? | status ∈ {`requires_payment_method`, `requires_confirmation`, `requires_action`} **and** `amount === totalCents` **and** `currency === "aud"` |
+
+`(product, sku)` is already this codebase's definition of a cart line's identity (declared
+on the cart subdocument in `models/User.ts`, relied on by the cart-clear `$pull` in
+`finalizeShopOrder`), so the comparison invents no vocabulary and needs no cart-hash field.
+
+The address is deliberately excluded from the match because **shipping is flat and
+address-independent** — editing an address cannot change the total, so the existing
+PaymentIntent stays valid, and a customer who refreshed to fix a typo should update their
+order rather than open a second one.
+
+Amount **and** currency are checked before reusing an intent, not just status: an intent
+holds the amount it was created with, and a member tier change or a catalogue price edit
+between attempts changes what is owed. `processing`, `succeeded` and `canceled` are
+absent from the reusable set — those belong to the webhook, and handing back a succeeded
+intent's secret would show a paid order as unpaid.
+
+A side benefit: a reused order returns the **same** `orderNumber`, so the duplicate
+`InitiateCheckout` / Klaviyo `StartedCheckout` that each POST fired now dedupes instead of
+understating checkout→purchase conversion in Meta, TikTok and Klaviyo.
+
+Test: `npm run test:shop-checkout-reuse` (DB-backed, e2e database only). Mutation-tested —
+disabling the reuse branch fails 2 of its 5 cases.
+
+## A failed payment left the order pending forever (2026-08-21)
+
+The `payment_intent.payment_failed` handler assigned `order.status = "failed"`. `"failed"`
+is **not** in the enum on `models/Order.ts`, so Mongoose enum validation rejected the save,
+the throw was swallowed by the handler's outer catch, and **every declined card left its
+order stuck at `pending`** — a second, independent source of the orphan rows that polluted
+admin counts, and the reason the one cleanup path that existed never ran.
+
+It now writes `cancelled` with `notes: "Payment failed"`, through a `findOneAndUpdate`
+gated on `status: "pending"` so a late failure webhook cannot clobber an order the success
+webhook already moved to `processing`. `cancelled` is reused rather than adding a seventh
+status: it already covers the stock-loss auto-refund and the full-refund path, and `notes`
+is what a human reads to tell the three apart.
+
+## Merchandise is revenue (2026-08-21)
+
+`finalizeShopOrder` returned **before** `processPaymentBenefits` whenever the order was
+worth no entries. `processPaymentBenefits` is also what writes the `BenefitsGranted`
+PaymentEvent, and **PaymentEvent is the single authoritative source of revenue in this
+codebase** — the daily snapshot aggregates it and `Order` is never summed for money
+anywhere. Since `Product.includedEntries` defaults to `0`, that early return fired on
+every merch order ever placed, so shop revenue did not exist.
+
+The early return is gone. The zero-entry case is handled where it belongs: `addToMajorDraw`
+returns immediately on `entries <= 0`, so no draw is touched and no "no active major draw"
+error is logged for an order that never wanted one.
+
+Downstream, merchandise is **headline revenue but not ads revenue** — see
+[admin/backend.md](../admin/backend.md) for the bucket, the deliberate ROAS asymmetry, and
+the snapshot backfill it requires.

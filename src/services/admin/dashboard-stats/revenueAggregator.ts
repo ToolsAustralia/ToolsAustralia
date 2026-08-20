@@ -83,7 +83,12 @@ export async function aggregateRevenueForDay(
     // Giving merchandise its own revenue bucket is a reasonable alternative, but it
     // is an analytics decision (does merch belong in ad ROAS?), not a bug fix —
     // so this excludes rather than invents a bucket.
-    if ((ev as { packageType?: string }).packageType === "shop") continue;
+    // Merchandise IS headline revenue — it has its own bucket below and lands in
+    // `total`. It is deliberately NOT in the ads/ROAS numerator: a merch total carries
+    // shipping and is not comparable to a package price, and nobody buys a hoodie off a
+    // giveaway ad. Skipping ONLY the per-platform block (rather than the whole row, as
+    // this did until 2026-08-21) keeps the breakdown reconciling with the total above it.
+    const isShop = (ev as { packageType?: string }).packageType === "shop";
 
     const price = (ev as { data?: { price?: number } }).data?.price ?? 0;
 
@@ -102,7 +107,9 @@ export async function aggregateRevenueForDay(
     const isRenewal =
       (ev as { packageType?: string }).packageType === "membership" &&
       (ev as { data?: { billingReason?: string } }).data?.billingReason === "subscription_cycle";
-    if (isRenewal) {
+    if (isShop) {
+      // deliberately no per-platform accumulation — see the note above
+    } else if (isRenewal) {
       byPlatform[platform].renewalRevenue += price;
       // renewals are NOT ads revenue: excluded from newRevenue, conversions, byConfidence
     } else {

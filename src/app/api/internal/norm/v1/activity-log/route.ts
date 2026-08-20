@@ -13,6 +13,7 @@ const ACTIVITY_TYPES: readonly ActivityLogItemType[] = [
   "upsell_accepted",
   "draw_complete",
   "high_value_order",
+  "shop_order",
   "system_alert",
   "membership_upgrade",
   "subscription_past_due",

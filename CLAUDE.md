@@ -378,7 +378,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useOpenMembershipModalListener.ts",
         "src/app/(site)/membership/**"
       ],
-      "lastVerified": "2026-08-11"
+      "lastVerified": "2026-08-20"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -846,7 +846,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-08-11"
+      "lastVerified": "2026-08-20"
     },
     "internal-norm": {
       "docs": "docs/internal-norm/",

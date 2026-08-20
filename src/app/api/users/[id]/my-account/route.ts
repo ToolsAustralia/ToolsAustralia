@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
+import { PAID_ORDER_STATUSES } from "@/services/shop/orderQueries";
 import User, { type IUser } from "@/models/User";
 import Order from "@/models/Order";
 import MiniDraw from "@/models/MiniDraw";
@@ -193,8 +194,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // Order's owner field is `user` (see src/models/Order.ts + every other Order
       // query). Querying `userId` matched zero docs, so recentOrders/totalSpent were
       // permanently empty. Match the model field.
+      // `user:` stays the FIRST key — my-account-projection.test.ts asserts on the
+      // literal shape of this filter. PAID only: an abandoned checkout is not spend,
+      // and a duplicate one both inflated totalSpent and consumed a recentOrders slot.
       Order.find({
         user: userData._id,
+        status: { $in: PAID_ORDER_STATUSES },
       })
         .select(MY_ACCOUNT_ORDER_FIELDS)
         .sort({ createdAt: -1 })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import ProductCard from "@/components/ui/ProductCard";
@@ -12,6 +12,12 @@ import { Product as ProductType } from "@/types/product";
 import { useProducts, type Product as ReactQueryProduct } from "@/hooks/queries";
 import { SectionContainer } from "@/components/ui";
 import Dropdown from "@/components/modals/ui/Dropdown";
+
+/**
+ * Duration of the `sidebar-slide-in` / `sidebar-slide-out` keyframes in globals.css.
+ * Kept as a named constant so the close timeout and the CSS cannot drift apart silently.
+ */
+const SIDEBAR_ANIM_MS = 300;
 
 // Filter state interface
 interface FilterState {
@@ -83,6 +89,12 @@ export default function ShopContent({
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  /**
+   * Drives the slide-OUT. The panel is conditionally mounted, so without a closing
+   * state it vanishes the instant `isFiltersOpen` flips and only half the animation
+   * exists. Same two-state pattern as the header's mobile menu and cart.
+   */
+  const [isClosingFilters, setIsClosingFilters] = useState(false);
 
   // Parse sort parameters
   const [sortField, sortOrder] = sortBy.split("-");
@@ -184,9 +196,24 @@ export default function ShopContent({
   };
 
   // Handle closing mobile filters (useful after applying filters)
-  const handleCloseFilters = () => {
-    setIsFiltersOpen(false);
-  };
+  /**
+   * Closes through the 300ms slide-out rather than unmounting on the spot.
+   * `SIDEBAR_ANIM_MS` must stay in step with the `sidebar-slide-out` keyframe in
+   * globals.css — a shorter timeout cuts the animation off mid-flight, a longer one
+   * leaves an invisible scrim swallowing clicks.
+   */
+  const handleCloseFilters = useCallback(() => {
+    // Re-entrancy guard: Escape plus a backdrop click would otherwise queue two
+    // timeouts, and the second re-opens nothing but does clear the closing flag early.
+    setIsClosingFilters((closing) => {
+      if (closing) return closing;
+      setTimeout(() => {
+        setIsFiltersOpen(false);
+        setIsClosingFilters(false);
+      }, SIDEBAR_ANIM_MS);
+      return true;
+    });
+  }, []);
 
   // The mobile filter drawer paints a full-viewport scrim, which makes it modal by the
   // shared-ui R-MODAL test — so it owes the page behind it a scroll lock and a focus trap.
@@ -246,7 +273,7 @@ export default function ShopContent({
           sticky has nothing left to hold.
         */}
         <div className="hidden lg:block w-80 flex-shrink-0">
-          <div className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
+          <div className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto overscroll-contain brand-scrollbar pr-1">
             <ProductFilters selectedFilters={filters} onFilterChange={handleFilterChange} isMobile={false} />
           </div>
         </div>
@@ -256,7 +283,9 @@ export default function ShopContent({
           <div className="fixed inset-0 z-[110] lg:hidden">
             {/* Backdrop */}
             <div
-              className="absolute inset-0 bg-black bg-opacity-50 transition-opacity duration-300"
+              className={`absolute inset-0 bg-black/50 sidebar-overlay transition-opacity duration-300 ${
+                isClosingFilters ? "opacity-0" : "animate-fade-in"
+              }`}
               onClick={handleCloseFilters}
             />
 
@@ -268,7 +297,9 @@ export default function ShopContent({
               role="dialog"
               aria-modal="true"
               aria-label="Product filters"
-              className="absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto overscroll-contain brand-scrollbar transform transition-transform duration-300 ease-in-out border-r-2 border-gray-200 dark:border-red-900/40"
+              className={`absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto overscroll-contain brand-scrollbar border-r-2 border-gray-200 dark:border-red-900/40 ${
+                isClosingFilters ? "sidebar-slide-out" : "sidebar-slide-in"
+              }`}
             >
               <div className="p-4 border-b border-gray-200 dark:border-neutral-800 sticky top-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm z-10">
                 <div className="flex items-center justify-between">

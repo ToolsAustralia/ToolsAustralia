@@ -713,6 +713,38 @@ Source of truth: [docs/tracking/](docs/tracking/).
 - **Klaviyo**: page tracker, script loader, transactional handoffs (`src/lib/klaviyo.ts`).
 - **UTM persistence**: `useUTMPersistence` (`src/hooks/useUTMPersistence.ts`) → `src/utils/tracking/` (`utm-helpers.ts` / `utm-storage.ts` / `attribution-cookie.ts`) — sessionStorage plus first-touch and last-touch attribution cookies. `src/lib/utm/` holds only the Meta Ads Manager UTM template conventions (`META_ADS_UTM_TEMPLATE`), no persistence logic.
 
+### 14b-i. Merchandise is counted as revenue (2026-08-21)
+
+**Shop orders now contribute to reported revenue.** They previously contributed nothing at
+all: `finalizeShopOrder` returned before `processPaymentBenefits` whenever an order was worth
+no free entries, and that function is also what writes the `BenefitsGranted` PaymentEvent —
+the single authoritative revenue source in this codebase. Since `Product.includedEntries`
+defaults to `0`, that early return fired on **every merch order ever placed**, so merchandise
+income was invisible to the dashboard, the daily snapshot and Norm.
+
+Merchandise is **headline revenue but deliberately NOT ads revenue**:
+
+- It has its own `shop` revenue bucket, appears as **Merchandise** on the Overview revenue
+  breakdown, is drillable in the revenue-details panel, and is exposed to Norm.
+- It is **excluded from per-platform acquisition revenue and therefore from TRUE ROAS**. A
+  merch total carries shipping and is not comparable to a package price, and nobody buys a
+  hoodie off a giveaway ad. So `sum(byPlatform) + shop === total`, not `sum(byPlatform) ===
+  total`.
+- GST is **not** netted, matching every other package type — shop reports GST-inclusive gross.
+
+**Shop purchases also appear in the admin activity feed** (type `shop_order`, labelled
+"Ordered merchandise (SHOP-…)") on both the Overview card and the Activity Log page, from the
+same PaymentEvent-based source so the two cannot disagree.
+
+Operationally: the dashboard snapshot **source version moved 3 → 4**. Days snapshotted at v3
+hold no shop bucket and under-report the headline total until
+`backfill:dashboard-stats-snapshots` is re-run over the shop's live window.
+
+> The same change removed an **unfiltered** `Order`-based high-value feed that reported
+> abandoned checkouts as completed purchases, and added a paid-status filter to every admin
+> and customer surface that COUNTS or SUMS orders. Order counts and per-user spend figures
+> will therefore read lower than before — they are now purchases rather than attempts.
+
 ### 14b. Ad-platform analytics — server-side revenue live, ad-spend sync partial
 
 > **Channels currently running (as of 2026-07):** the only live **paid** ad channel is **Meta / Facebook Ads**; the live **owned** channels are **Klaviyo email + SMS**. **TikTok Ads is launching soon** — its pixel/CAPI + per-ad spend code is complete and creds-gated (goes live when the TikTok env creds are set). _Status 2026-07-29 — **TikTok Marketing API is LIVE.** The developer app was approved with all four scopes, an advertiser access token was generated and verified against advertiser 7561254031700557840, and the first real sync landed **86 ad×day rows / 31 ads** (30-day window: **$1,305.45 spend · 45 TikTok-reported purchases · $1,024.93 TikTok-reported value · 0.79× platform ROAS**). Verification found two of three hard-coded metric assumptions were WRONG and fixed them: the purchase-value metric `total_complete_payment_value` does not exist (value is derived from `value_per_complete_payment × complete_payment`, cross-checked to 99.95% against TikTok’s own ROAS), and `conversion` is the ad group’s optimization event, not purchases — it read ~300× high, so the purchase count is `complete_payment`. Currency (AUD) and timezone (Australia/Sydney) were confirmed correct. Stored figures match the live API to the cent (`npm run verify:tiktok-readpath`). **Remaining to go live in production:** put the token in Vercel + the main folder’s .env.local, then run `npm run seed:tiktok-insights -- --days=60` against production._ **Google Ads is not in use** (the `google` platform slot is reserved for a future `gclid` capture; no Google spend/clicks flow today), and **Snapchat** is pixel-only. So today, a converting platform of `meta`, `klaviyo_email`, or `klaviyo_sms` covers essentially all *attributable* revenue; TikTok begins contributing once it launches.

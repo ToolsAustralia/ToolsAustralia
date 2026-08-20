@@ -3,6 +3,7 @@ import Product from "@/models/Product";
 import Order, { type IOrder } from "@/models/Order";
 import { priceCart, dollarsToCents, centsToDollars, type CartLine } from "@/utils/shop/pricing";
 import { findVariantBySku } from "@/utils/shop/variants";
+import { PENDING_GRACE_MS } from "@/services/shop/orderQueries";
 
 /**
  * Turning a cart into a payable order.
@@ -202,8 +203,125 @@ export interface CreatePendingOrderResult {
   totalCents: number;
 }
 
+export interface ResolvePendingOrderResult extends CreatePendingOrderResult {
+  /**
+   * True when an existing pending order was reused rather than a new one created.
+   * The caller uses it to decide whether an existing PaymentIntent may be reused.
+   */
+  reused: boolean;
+}
+
+/**
+ * Do two carts hold the same things?
+ *
+ * `(product, sku)` is ALREADY this codebase's definition of a cart line's identity —
+ * declared on the cart subdocument in models/User.ts and relied on by the cart-clear
+ * `$pull` in finalizeShopOrder — so this compares on the same triple rather than
+ * inventing a cart hash and a schema field to store it in.
+ *
+ * Order-insensitive: the cart is a list, and two requests can serialise it differently
+ * without the customer having changed anything.
+ */
+function sameLines(
+  lines: readonly ResolvedLine[],
+  products: IOrder["products"]
+): boolean {
+  if (lines.length !== products.length) return false;
+
+  const key = (product: unknown, sku: string | undefined, quantity: number) =>
+    `${String(product)}|${sku ?? ""}|${quantity}`;
+
+  const remaining = new Map<string, number>();
+  for (const p of products) {
+    // `p.product` is an ObjectId on a freshly-read order and a populated doc only
+    // where a route asked for it; this path never populates, so String() is exact.
+    const k = key(p.product, p.sku, p.quantity);
+    remaining.set(k, (remaining.get(k) ?? 0) + 1);
+  }
+
+  for (const l of lines) {
+    const k = key(l.productId, l.sku, l.quantity);
+    const n = remaining.get(k);
+    if (!n) return false;
+    if (n === 1) remaining.delete(k);
+    else remaining.set(k, n - 1);
+  }
+
+  return remaining.size === 0;
+}
+
 export const ShopOrderService = {
   generateOrderNumber,
+
+  /**
+   * Reuse the caller's open pending order when it is for the same cart, or create one.
+   *
+   * WHY THIS EXISTS: every POST to /api/shop/checkout used to mint a new order, and the
+   * Stripe idempotency key was derived from that brand-new order — so it was unique per
+   * request by construction and could never deduplicate anything. A customer who
+   * refreshed the page at the card step (the client holds clientSecret in React state
+   * only, so a refresh drops it and re-enables the address form) got a second order and
+   * a second PaymentIntent. That is not only dirty data: `markPaid` gates per-order, so
+   * two intents that both confirmed would fulfil twice, decrement stock twice and grant
+   * entries twice.
+   *
+   * The address is deliberately NOT part of the match. Shipping is flat and
+   * address-independent, so editing an address cannot change the total, and a customer
+   * who refreshed to FIX a typo should update their order rather than open a second one.
+   */
+  async resolvePendingOrder(input: CreatePendingOrderInput): Promise<ResolvePendingOrderResult> {
+    if (input.items.length === 0) {
+      throw new CheckoutValidationError([
+        { productId: "", reason: "empty_cart", message: "Your cart is empty" },
+      ]);
+    }
+
+    const lines = await resolveLines(input.items);
+    const totals = priceCart(lines, { shopDiscountPercent: input.shopDiscountPercent ?? 0 });
+
+    // Only inside the abandonment window. An older pending order is not a checkout
+    // in progress, it is litter — the same threshold the customer's own order list
+    // uses to stop showing it.
+    const candidate = await Order.findOne({
+      user: input.userId,
+      status: "pending",
+      createdAt: { $gte: new Date(Date.now() - PENDING_GRACE_MS) },
+    }).sort({ createdAt: -1 });
+
+    if (candidate) {
+      // The total must match too: a member tier change or a catalogue price edit
+      // between attempts changes what is owed, and a PaymentIntent already holds the
+      // old amount.
+      const sameTotal = dollarsToCents(candidate.totalAmount) === totals.totalCents;
+      if (sameTotal && sameLines(lines, candidate.products)) {
+        candidate.shippingAddress = { ...input.shippingAddress, country: "Australia" };
+        await candidate.save();
+        return { order: candidate, totalCents: totals.totalCents, reused: true };
+      }
+
+      // Different cart: the old attempt is superseded. Retire it so it stops
+      // counting, rather than leaving a second open order behind.
+      await this.abandonPendingOrder(candidate, "Abandoned checkout — superseded");
+    }
+
+    const created = await this.createPendingOrder(input);
+    return { ...created, reused: false };
+  },
+
+  /**
+   * Retire a pending order that will never be paid.
+   *
+   * `status: "pending"` in the FILTER is the race guard — it mirrors `markPaid`, so
+   * this can never overwrite an order the webhook has already moved to `processing`.
+   * The reason goes in `notes` because `cancelled` now covers three distinct causes
+   * (stock loss, refund, and never-paid) and a human needs to tell them apart.
+   */
+  async abandonPendingOrder(order: IOrder, reason: string): Promise<void> {
+    await Order.findOneAndUpdate(
+      { _id: order._id, status: "pending" },
+      { status: "cancelled", notes: reason }
+    );
+  },
 
   async createPendingOrder(input: CreatePendingOrderInput): Promise<CreatePendingOrderResult> {
     if (input.items.length === 0) {

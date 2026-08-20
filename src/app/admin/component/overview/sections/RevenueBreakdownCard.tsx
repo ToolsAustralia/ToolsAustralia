@@ -116,6 +116,13 @@ export default function RevenueBreakdownCard({
       unit: "purchases",
       item: breakdown?.upsell,
     },
+    {
+      id: "shop",
+      label: "Merchandise",
+      color: "#0ea5e9",
+      unit: "orders",
+      item: breakdown?.shop,
+    },
   ];
 
   const items: BarItem[] = sources.map((s) => {

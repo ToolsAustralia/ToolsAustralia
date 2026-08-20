@@ -1674,3 +1674,39 @@ price label, including one that was already correct. `tsc` cannot see it and the
 Use a replacer **function** (`replace(re, () => text)`) when the replacement contains `$`, or edit
 the file directly. And read the rendered strings back, not just a screenshot — that is what caught
 it here.
+
+## The package-inclusions panel is a comparison table (2026-08-21)
+
+[`PackageInclusionsSlideUp.tsx`](../../src/components/modals/PackageInclusionsSlideUp.tsx) — the
+panel behind "see full package inclusion" in `MembershipSection` — renders a **table**, not a row of
+cards. The question a shopper opens it with is a comparison one, and a comparison spread across
+three separate bullet lists is one the reader has to perform themselves.
+
+**Every figure is resolved from the catalog, never parsed from marketing copy.** The old panel
+rendered `plan.features` — free text like `"50% Access to Partner Discounts"`. The rows now come
+from `getPackageById` plus the same helpers the rest of the app gates on
+(`getPartnerCatalogAccessPercentForMembershipPackageId`, `getPartnerCatalogUnlockedCount`), so the
+panel cannot advertise a number the platform does not honour.
+
+**The lookup key is `metadata.packageId`, not `plan.id`.** `LocalMembershipPlan.id` is derived from
+the package NAME (`"Tradie"` → `"tradie"`), so `getPackageById("tradie")` is undefined *and* the
+id-substring tier rules read a bare `"tradie"` as the one-time Tradie pack (40% → 734 offers) rather
+than the Tradie subscription (50% → 917). The adapter now carries the catalog `_id` for exactly this
+— see [subscription/frontend.md](../subscription/frontend.md).
+
+Row sets differ by tab: the membership tab compares monthly free entries, roll-over, partner offers,
+shop discount and cancel-anytime; the one-time tab compares included entries, partner offers, days of
+access, and states plainly that **pack entries do not roll over** (BUSINESS.md §5.3). Leaving that
+row out is what makes a pack look like a cheaper membership.
+
+Two layout rules learned the hard way:
+
+- **The scroll container is unconditional.** The rounded shell is `overflow-hidden`, so a table one
+  pixel too wide loses its last column *silently*. Three columns overflowed at 390px and the Boss
+  column simply vanished. `overflow-x-auto` is always on; the `min-w` only applies above three
+  columns, so three still fit a phone without scrolling. Assert `table.scrollWidth <=
+  container.clientWidth` rather than trusting a screenshot.
+- **Tier colour lives in the bar and the icon on a light ground.** The accents are tuned for the dark
+  package cards these figures used to sit on — Boss yellow and VIP gold are barely readable on white
+  and the gradient headings wash out entirely. Names and ticks fall back to near-black in light mode;
+  the colour bar above each column still identifies the tier.

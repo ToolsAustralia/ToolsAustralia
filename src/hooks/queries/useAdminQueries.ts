@@ -122,6 +122,9 @@ export interface AdminDashboardStats {
       additionalOneTimePurchase: RevenueBreakdownItem;
       miniDraw: RevenueBreakdownItem;
       upsell: RevenueBreakdownItem;
+      /** Merchandise. Present from snapshot source version 4 — optional so a client
+       *  reading an older snapshot does not crash on its absence. */
+      shop?: RevenueBreakdownItem;
     };
   };
   majorDraw: {
@@ -270,7 +273,8 @@ export type RevenueCategory =
   | "one-time-purchase"
   | "additional-one-time"
   | "mini-draw"
-  | "upsell";
+  | "upsell"
+  | "shop";
 
 export interface RevenueDetailPurchase {
   paymentEventId: string;

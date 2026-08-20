@@ -453,3 +453,36 @@ open-ended wait and a form that still looks editable invites a second submit. `S
 the same component the membership and pack flows use — then holds for three seconds with the
 order's own figures. It acknowledges the PAYMENT; the order is still finalised by the webhook, and
 the success page it lands on is what reads the finished order.
+
+## The checkout-success page states the order's ACTUAL state (2026-08-21)
+
+`CheckoutSuccessClient.tsx` renders three states off `isOrderPaid(order)` + `status === "cancelled"`,
+and everything money-shaped on the page follows that split rather than assuming a sale:
+
+| State | Headline | Total labelled | "paid by card" | Entries badge | "What happens next" |
+| --- | --- | --- | --- | --- | --- |
+| paid | Order confirmed | Total paid | yes | when `entriesGranted > 0` | yes |
+| pending | We're confirming your payment | Order total | **no** | no | no |
+| cancelled | This order was cancelled | Refund issued | **no** | no | no |
+
+Two rules behind that table, both of which the page previously broke:
+
+- **Never claim a payment that has not settled.** `pending` means the webhook has not landed, so
+  nothing has been captured; `cancelled` means the money has gone back. "Total paid" and "paid by
+  card" are assertions about a completed charge and are withheld in both. The GST line still
+  renders — it is the composition of the order total, not a claim that the total was collected.
+- **"Refund issued", not "Refunded".** The cancel path in `finalizeShopOrder` attempts the refund
+  and swallows a failure, so the refund is the intent and not a guarantee. See
+  [gotchas.md](gotchas.md).
+
+The page also shows the **whole money breakdown** — subtotal, each `appliedDiscounts` row, shipping,
+total, and the GST inside it — not just a total. GST is **inside** `totalAmount` (never added), so it
+is stated beneath the total as a note rather than as a row that would break the arithmetic on screen.
+
+The page metadata title is deliberately neutral (`"Your order | Tools Australia"`). It is static
+metadata and cannot branch on the order, so the old `"Order Confirmed"` sat in the browser tab above
+a cancelled, refunded order.
+
+Both themes are complete: every tone in `statusHeader` carries a `dark:` counterpart, and the page
+shell + Suspense fallback in `page.tsx` paint `dark:bg-neutral-950`. A `text-green-600` with no dark
+pair is exactly what made the headline disappear into its own ground.

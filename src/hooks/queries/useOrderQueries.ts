@@ -25,6 +25,22 @@ export interface OrderItem {
   name?: string;
   quantity: number;
   price: number;
+  /**
+   * The chosen variant, snapshotted alongside the sku. Rendered as
+   * `[colour, size]` joined — the same order `listOrders` builds its `variant`
+   * string in, so one order reads identically on the success page and in the
+   * order history.
+   */
+  size?: string;
+  colour?: string;
+  /**
+   * Free entries included with ONE unit, snapshotted at purchase.
+   *
+   * Present on the document but not the payout: what was actually granted is
+   * `entriesGranted` on the order. Read that for anything customer-facing, or a
+   * change to the multiplier after the fact would restate history.
+   */
+  includedEntries?: number;
 }
 
 /**
@@ -66,6 +82,14 @@ export interface Order {
   paymentIntentId?: string;
   trackingNumber?: string;
   notes?: string;
+  /**
+   * Free entries actually granted for this order, written once by the webhook.
+   *
+   * Absent or `0` is the normal state while merchandise entries ship dark at
+   * `includedEntries: 0`, so a surface must render this only above zero rather
+   * than announcing "0 free entries" — a promise we are not currently making.
+   */
+  entriesGranted?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -109,6 +133,8 @@ export interface OrderListRow {
   /** Admin surfaces only — omitted from a customer's own list. */
   customerName?: string;
   entriesGranted?: number;
+  /** Postage on this order, so a row's total reconciles with its own lines. */
+  shippingCost?: number;
   submittedAt?: string;
   trackingNumber?: string;
   items: { name: string; sku?: string; variant?: string; quantity: number; price: number }[];

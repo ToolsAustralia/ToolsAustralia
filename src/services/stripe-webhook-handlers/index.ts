@@ -1537,12 +1537,30 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
       return;
     }
 
-    // Update order status if it exists
-    const order = await Order.findOne({ paymentIntentId: paymentIntent.id });
-    if (order) {
-      order.status = "failed";
-      await order.save();
-    }
+    /*
+      Retire the order on a failed payment.
+
+      This used to assign `status = "failed"`, which is NOT a member of the enum on
+      models/Order.ts (`pending | processing | shipped | delivered | cancelled |
+      completed`). Mongoose validates enums on save(), so the write threw, the throw
+      was swallowed by this handler's outer catch, and every declined card left its
+      order stuck at `pending` FOREVER — a second, independent source of the orphan
+      pending rows that pollute admin counts. It also meant the one code path meant to
+      clean up after a failed payment never ran.
+
+      `cancelled` is reused rather than adding a status: it already covers the
+      stock-loss auto-refund and the full-refund path, and adding a seventh value
+      would mean touching the enum, the admin status filter and every consumer. The
+      reason lives in `notes`, which is what a human reads to tell the three apart.
+
+      findOneAndUpdate gated on `status: "pending"` is the race guard — the same one
+      markPaid uses — so a late failure webhook can never clobber an order the success
+      webhook has already moved to `processing`.
+    */
+    await Order.findOneAndUpdate(
+      { paymentIntentId: paymentIntent.id, status: "pending" },
+      { status: "cancelled", notes: "Payment failed" }
+    );
 
     // Extract payment type and details from metadata
     // Determine payment type: if has invoice, it's a subscription; otherwise check metadata

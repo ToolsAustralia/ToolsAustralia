@@ -36,6 +36,70 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+/**
+ * What each state actually means for the customer, in their terms.
+ *
+ * "Being made" begs the question it does not answer — every garment is printed to
+ * order, so the wait is real and worth naming rather than leaving someone to
+ * wonder whether their order is stuck.
+ */
+const STATUS_DETAIL: Record<string, string> = {
+  // Covers BOTH readings of `pending`. A shop order is written pending the moment the
+  // address is submitted — BEFORE any payment is attempted — so it is equally the state
+  // of a webhook still in flight and of a checkout abandoned at the card form. Copy that
+  // asserts a payment is being confirmed is simply false for the second, which is the
+  // more common of the two.
+  pending:
+    "If you've just paid, we're confirming it now — that usually takes a few seconds. If you didn't finish checkout, nothing has been charged.",
+  processing: "Your item is being printed to order. We'll email you when it ships.",
+  shipped: "On its way to you.",
+  delivered: "Delivered. Enjoy it.",
+  completed: "All done.",
+  // "a refund was issued", not "was refunded" — the same hedge `totalLabelFor` uses.
+  // finalizeShopOrder attempts the refund, swallows a failure, and marks the order
+  // cancelled regardless, so the refund is the intent and not a guarantee.
+  cancelled:
+    "This order was cancelled and a refund was issued. It can take a few business days to appear — email us if it doesn't.",
+};
+
+/**
+ * The journey every fulfilled order takes, in order.
+ *
+ * `pending` is deliberately NOT a step: it is a few seconds while Stripe's webhook
+ * lands, not a stage of fulfilment, and drawing it as one implies the customer is
+ * waiting on something they can act on. `cancelled` is not a step either — it is an
+ * exit from the journey, so those orders show no progress strip at all.
+ */
+const JOURNEY = [
+  { key: "processing", label: "Being made" },
+  { key: "shipped", label: "On its way" },
+  { key: "delivered", label: "Delivered" },
+] as const;
+
+/** -1 = not on the journey (pending or cancelled). */
+/**
+ * What the total at the foot of a card actually IS, in that order's state.
+ *
+ * Mirrors the checkout success page rather than hard-coding "Total paid": on a
+ * pending order nothing has been captured yet, and on a cancelled one the card
+ * has already said the money was refunded — calling it "paid" in the same card
+ * contradicts it.
+ *
+ * "Refund issued", not "Refunded": the cancel path in finalizeShopOrder attempts
+ * the refund and swallows a failure, so the refund is the intent, not a
+ * guarantee.
+ */
+const totalLabelFor = (status: string) => {
+  if (status === "pending") return "Order total";
+  if (status === "cancelled") return "Refund issued";
+  return "Total paid";
+};
+
+const journeyIndex = (status: string) => {
+  if (status === "completed") return JOURNEY.length - 1;
+  return JOURNEY.findIndex((s) => s.key === status);
+};
+
 const statusClass = (status: string) =>
   ({
     pending: "bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-300",
@@ -99,67 +163,151 @@ export default function OrdersPage() {
       )}
 
       <div className="mt-6 space-y-4">
-        {(orders ?? []).map((order) => (
-          <div
-            key={order.id}
-            className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900 sm:p-5"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-mono text-xs text-gray-500 dark:text-neutral-400">{order.orderNumber}</p>
-                <p className="text-sm text-gray-600 dark:text-neutral-400">
-                  {new Date(order.createdAt).toLocaleDateString("en-AU", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
+        {(orders ?? []).map((order) => {
+          const step = journeyIndex(order.status);
+          const isCancelled = order.status === "cancelled";
+          const hasEntries = (order.entriesGranted ?? 0) > 0;
+          return (
+            <article
+              key={order.id}
+              className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+            >
+              {/* Header: what it is and where it is. */}
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 p-4 dark:border-neutral-800 sm:p-5">
+                <div className="min-w-0">
+                  <h2 className="font-mono text-sm font-semibold text-gray-900 dark:text-white">
+                    {order.orderNumber}
+                  </h2>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-neutral-400">
+                    {new Date(order.createdAt).toLocaleDateString("en-AU", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                    {" · "}
+                    {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(
+                    order.status
+                  )}`}
+                >
+                  {STATUS_LABEL[order.status] ?? order.status}
+                </span>
+              </div>
+
+              {/*
+                The progress strip. This is the question a customer opens this page
+                to answer, so it sits above the line items rather than under them.
+
+                Hidden for cancelled orders and while payment is still confirming:
+                a journey with no progress on it reads as a stalled order rather
+                than one that never entered the journey.
+              */}
+              {step >= 0 && !isCancelled && (
+                <div className="px-4 pt-4 sm:px-5">
+                  <ol className="flex items-center gap-1.5">
+                    {JOURNEY.map((stage, i) => {
+                      const done = i <= step;
+                      return (
+                        <li key={stage.key} className="flex flex-1 flex-col gap-1.5">
+                          <span
+                            className={`h-1 rounded-full transition-colors ${
+                              done
+                                ? "bg-red-600 dark:bg-red-500"
+                                : "bg-gray-200 dark:bg-neutral-700"
+                            }`}
+                          />
+                          <span
+                            className={`text-[10px] font-semibold uppercase tracking-wide ${
+                              done
+                                ? "text-gray-900 dark:text-neutral-100"
+                                : "text-gray-500 dark:text-neutral-400"
+                            }`}
+                          >
+                            {stage.label}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              )}
+
+              <p className="px-4 pt-3 text-xs text-gray-600 dark:text-neutral-400 sm:px-5">
+                {STATUS_DETAIL[order.status] ?? ""}
+              </p>
+
+              <ul className="mt-4 space-y-2 px-4 sm:px-5">
+                {order.items.map((item, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start justify-between gap-3 text-sm"
+                  >
+                    <span className="flex min-w-0 items-start gap-2">
+                      <span className="mt-0.5 inline-flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-md bg-gray-100 px-1 text-[11px] font-bold text-gray-700 dark:bg-neutral-800 dark:text-neutral-200">
+                        {item.quantity}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-gray-900 dark:text-neutral-100">{item.name}</span>
+                        {/* The variant the customer chose ("Black · L"), not the internal sku. */}
+                        {item.variant && (
+                          <span className="block text-xs text-gray-500 dark:text-neutral-400">
+                            {item.variant}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                    <span className="shrink-0 tabular-nums text-gray-700 dark:text-neutral-300">
+                      ${(item.price * item.quantity).toFixed(2)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 p-4 dark:border-neutral-800 sm:p-5">
+                {(hasEntries || order.trackingNumber) && (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {/* Rendered only above zero. Merchandise entries ship switched off
+                      pending a permit, and "0 free entries" would state a promise we
+                      are not making. Rule 11: a free inclusion, never priced. */}
+                  {hasEntries && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                      <Ticket className="h-3.5 w-3.5" />
+                      Includes {order.entriesGranted} free{" "}
+                      {order.entriesGranted === 1 ? "entry" : "entries"}
+                    </span>
+                  )}
+                  {order.trackingNumber && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-700 dark:bg-neutral-800 dark:text-neutral-200">
+                      <Truck className="h-3.5 w-3.5" />
+                      <span className="font-mono">{order.trackingNumber}</span>
+                    </span>
+                  )}
+                </div>
+                )}
+                {/* ml-auto, not a spacer: with the badge strip gone the total still
+                    has to hold the right edge. */}
+                <p className="ml-auto text-right">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+                    {totalLabelFor(order.status)}
+                  </span>
+                  <span className="text-base font-bold tabular-nums text-gray-900 dark:text-white">
+                    ${order.totalAmount.toFixed(2)}
+                  </span>
+                  {/* Named only when it is non-zero, so the line reconciles with the
+                      items above it instead of reading as an unexplained gap. */}
+                  {(order.shippingCost ?? 0) > 0 && (
+                    <span className="block text-[11px] text-gray-500 dark:text-neutral-500">
+                      incl. ${(order.shippingCost ?? 0).toFixed(2)} postage
+                    </span>
+                  )}
                 </p>
               </div>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(order.status)}`}>
-                {STATUS_LABEL[order.status] ?? order.status}
-              </span>
-            </div>
-
-            <ul className="mt-4 space-y-1.5">
-              {order.items.map((item, i) => (
-                <li key={i} className="flex justify-between gap-3 text-sm text-gray-800 dark:text-neutral-100">
-                  <span>
-                    {item.quantity} × {item.name}
-                    {/* The variant the customer chose ("Black · L"), not the internal sku. */}
-                    {item.variant && (
-                      <span className="text-gray-500 dark:text-neutral-400"> · {item.variant}</span>
-                    )}
-                  </span>
-                  <span className="shrink-0">${(item.price * item.quantity).toFixed(2)}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3 dark:border-neutral-800">
-              <div className="flex flex-wrap items-center gap-3 text-xs">
-                {/* Rendered only above zero. Merchandise entries ship switched off
-                    pending a permit, and "0 free entries" would state a promise we
-                    are not making. Rule 11: a free inclusion, never priced. */}
-                {order.entriesGranted !== undefined && order.entriesGranted > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                    <Ticket className="h-3.5 w-3.5" />
-                    Includes {order.entriesGranted} free{" "}
-                    {order.entriesGranted === 1 ? "entry" : "entries"}
-                  </span>
-                )}
-                {order.trackingNumber && (
-                  <span className="inline-flex items-center gap-1.5 text-gray-600 dark:text-neutral-400">
-                    <Truck className="h-3.5 w-3.5" />
-                    Tracking: <span className="font-mono">{order.trackingNumber}</span>
-                  </span>
-                )}
-              </div>
-              <p className="text-sm font-bold text-gray-900 dark:text-white">
-                ${order.totalAmount.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        ))}
+            </article>
+          );
+        })}
       </div>
     </div>
   );

@@ -284,15 +284,17 @@ export default function CheckoutClient() {
           <section className="rounded-xl border border-gray-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900">
             <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">Delivery address</h2>
 
-            <form onSubmit={startCheckout} className="space-y-4">
+            <form onSubmit={startCheckout} className="space-y-3 sm:space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="First name" value={address.firstName} onChange={set("firstName")} required disabled={!!clientSecret} />
                 <Field label="Last name" value={address.lastName} onChange={set("lastName")} required disabled={!!clientSecret} />
               </div>
               <Field label="Address" value={address.addressLine1} onChange={set("addressLine1")} required disabled={!!clientSecret} />
               <Field label="Apartment, unit, etc. (optional)" value={address.addressLine2} onChange={set("addressLine2")} disabled={!!clientSecret} />
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Suburb" value={address.city} onChange={set("city")} required disabled={!!clientSecret} />
+              {/* Suburb takes the full row on a phone (names run long), with State and
+                  Postcode paired beneath it; all three sit on one row from sm up. */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+                <Field wrapperClassName="col-span-2 sm:col-span-1" label="Suburb" value={address.city} onChange={set("city")} required disabled={!!clientSecret} />
                 <label className="block">
                   <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-neutral-200">State</span>
                   <select
@@ -525,10 +527,19 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
 
 function Field({
   label,
+  wrapperClassName,
   ...props
-}: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+}: {
+  label: string;
+  /**
+   * Class for the LABEL wrapper, not the input. The input's own className is fixed
+   * by this component so every field looks identical; a caller only needs to control
+   * how the cell sits in its grid (`col-span-2`).
+   */
+  wrapperClassName?: string;
+} & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <label className="block">
+    <label className={`block ${wrapperClassName ?? ""}`}>
       <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-neutral-200">{label}</span>
       <input
         type="text"
