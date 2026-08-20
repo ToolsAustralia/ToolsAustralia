@@ -212,13 +212,31 @@ Four entry points, all agreeing by construction:
 
 `brandLaneSwitchExpr` is shared with `PromoAnalyticsRepository.getAggregatedByToolbox`, so the Page Analytics tab and the Overview's Brand Performance section cannot disagree about which lane a purchase belongs to. `npm run test:brand-lane` asserts the `$switch` and the JS resolver produce identical mappings for every registry entry in both lanes.
 
-## `resolvePreviousCalendarMonthAest` (2026-08-19)
+## `resolvePreviousPeriodAest` — what every admin comparison measures against (2026-08-20)
 
-In `src/utils/admin/resolveAestDateWindow.ts`, beside the preset resolver. Returns the literal 1st→last day of the previous calendar month in AEST as `yyyy-MM-dd` bounds — the fixed benchmark the admin period-comparison table measures against.
+In `src/utils/admin/resolveAestDateWindow.ts`, beside the preset resolver. Given the SELECTED window it returns `{ current, previous }`: **the same span, one calendar month earlier**, with the current side first **truncated at today**.
 
-**Not a replacement for `trendCalculationService.getComparisonPeriod`.** That returns the equal-length window immediately *preceding* the selection and drives the KPI trend arrows. Both are kept as separate, clearly-named functions rather than one function with a mode flag, because they answer different questions: "vs the previous equivalent stretch" versus "vs last month, a benchmark that doesn't move when you change the range".
+| Selected | `current` | `previous` |
+|---|---|---|
+| Today, 20 Aug | 20 Aug → 20 Aug | 20 Jul → 20 Jul |
+| Current draw, 28 Jul → 27 Aug | 28 Jul → **20 Aug** | 28 Jun → 20 Jul |
+| This month, 1 → 31 Aug | 1 Aug → **20 Aug** | 1 Jul → 20 Jul |
+| Custom, 31 Jul → 7 Aug | unchanged | **30 Jun** → 7 Jul |
+| Last draw, 28 Jun → 27 Jul | unchanged | 28 May → 27 Jun |
 
-**Anchored on the AEST calendar, never UTC.** Sydney is UTC+10/+11, so a late-UTC-evening instant is already the *next* AEST day — and on the last UTC day of a month, the AEST calendar has already rolled over. `2026-01-31T23:00Z` is 1 February in Sydney, so the previous calendar month is **January**, not December. Reading the UTC month there gives the wrong answer. Covered by `npm run test:previous-calendar-month`, which also pins the year boundary (January → previous December), leap/non-leap February, and both DST transitions.
+**Truncate first, then shift — that order is the whole point.** A draw window ends on the DRAW DATE, which is in the future while the draw is running. Shifting the *full* window would benchmark 24 days of live data against 31 days of history and manufacture a decline out of the calendar. This replaced `resolvePreviousCalendarMonthAest`, a FIXED "whole of last month" benchmark that did exactly that: on 20 Aug it put one day of revenue next to thirty-one days of it.
+
+**Returns `null`** for unresolved bounds (draw presets resolve to `""` until the draw dates load), an inverted range, or a window entirely in the future. Callers hide the comparison rather than render a fabricated one.
+
+**Month-shift clamping is deliberate.** 31 Jul − 1 month is 30 Jun, because June has no 31st. That is the one case where the shifted window comes out a day shorter than the selected one; the per-day normalisation in `periodComparisonModel` (`rateDelta`) absorbs it.
+
+**Not a replacement for `trendCalculationService.getComparisonPeriod`.** That returns the equal-length window immediately *preceding* the selection and drives the KPI trend arrows — "vs the stretch just before this one". This one answers "vs the same dates last month". Both are kept as separate, clearly-named functions rather than one function with a mode flag.
+
+**Anchored on the AEST calendar, never UTC.** The arithmetic runs on the date *numbers*; no UTC instant is ever constructed from them, so a 23h/25h DST day cannot slide a bound into the neighbouring date. `aestToday()` — the single definition of "what day is it" for admin analytics — also lives here. It used to be duplicated as a local closure in `resolveAestDateWindow` and again in `periodComparisonModel.ts`; three copies of "what day is it" is how two surfaces on one screen end up disagreeing about where today ends.
+
+Covered by `npm run test:previous-period`: all five rows above, the year boundary (January → previous December), leap/non-leap February clamping, both DST transitions, and every `null` case.
+
+**Wire protocol:** the query param is `compare=previous-period`, on both `/api/admin/analytics/brand-performance` and the Norm mirror. It is resolved SERVER-side from the requested window, so a client cannot benchmark against a window of its own choosing and no two surfaces can disagree about what "vs last month" means.
 
 The month arithmetic runs on calendar *numbers* pulled out of `formatInTimeZone(..., "yyyy-MM")`, so a 23h/25h DST day cannot shift either bound.
 

@@ -18,6 +18,14 @@ export interface PackagesFocusAdNode {
   totals: PackagesFocusTotals;
   /** Landing-URL strategy of this ad; not emitted by the breakdown endpoint today — set by the prize modal's mixed-bucket tree */
   packagesFocus?: "membership" | "one-time" | "unclassified";
+  /**
+   * The canonical landing URL this ad points at.
+   *
+   * A brand drill-down unions SEVERAL urls into one ad list ("5 landing URLs" in the header), so
+   * without this the reader can see that five exist but not which ad bought which. Undefined when
+   * the destination is unresolved — the same condition that makes `packagesFocus` "unclassified".
+   */
+  canonicalUrl?: string;
 }
 
 export interface PackagesFocusAdsetNode {

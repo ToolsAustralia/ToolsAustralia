@@ -920,7 +920,7 @@ Ad spend and return per **brand lane**, backing the Overview's Brand Performance
 &lane=toolset|toolbox                       (default toolset)
 &basis=landing-page|built-prize|platform    (default landing-page)
 &platform=meta|tiktok|all                   (default all)
-&compare=previous-calendar-month            (optional)
+&compare=previous-period                    (optional)
 ```
 
 **`basis` is the only thing that changes where outcomes come from.** Spend is always keyed on the canonical URL, for every basis, because `canonicalizeLandingUrl` strips query strings — the ad platform cannot know which combination a visitor built.

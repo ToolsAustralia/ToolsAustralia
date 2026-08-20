@@ -1609,7 +1609,7 @@ Phase 2 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-an
 | Lane | Toolset / Toolbox | which brand axis groups the rows |
 | Basis | Landing page / Built prize / Platform | where the OUTCOME figures come from |
 | Platform | All / Meta / TikTok | spend scope (and revenue scope under the platform basis) |
-| Compare | on/off | adds Δ chips vs the previous calendar month |
+| Compare | on/off | adds Δ chips vs the same span one month earlier (`compare=previous-period`) |
 
 Columns: **Brand · ROAS · Spend · Revenue · Purchases · New members · New memb %**. Purchases counts all five acquisition categories; New members counts `membership-purchase` only.
 
@@ -1627,7 +1627,7 @@ Columns: **Brand · ROAS · Spend · Revenue · Purchases · New members · New 
 
 **`ProgressBar` gained `tone`.** The New memb % bar passes `tone="neutral"`; the default `"risk"` scale (green<50 / amber / red>80) is a *budget* scale and would paint a healthy 85% share red. Existing callers are unaffected.
 
-## Period comparison — selected window vs previous calendar month (2026-08-19)
+## Period comparison — selected window vs the same span one month earlier (2026-08-19, semantics changed 2026-08-20)
 
 Phase 3 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-analytics-brand-performance-design.md). `overview/sections/PeriodComparisonCard.tsx` + `periodComparisonModel.ts`, mounted on `DashboardOverview` directly above Brand performance.
 
@@ -1636,7 +1636,7 @@ Phase 3 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-an
 | | Window | Used by |
 |---|---|---|
 | `trendCalculationService.getComparisonPeriod` | equal-length window immediately preceding the selection | KPI trend arrows |
-| `resolvePreviousCalendarMonthAest` | literal 1st→last day of the prior calendar month, AEST | this card |
+| `resolvePreviousPeriodAest` | the SAME span one calendar month earlier, current side truncated at today, AEST | this card + Brand Performance |
 
 An arrow wants "vs the previous equivalent stretch"; this table wants a **stable month-on-month benchmark that does not move when the reader changes the range**. Neither replaces the other, and the card names both windows in its subheading so nobody has to guess which is which.
 
@@ -1778,3 +1778,42 @@ cell colours on `good = invert ? !up : up` while the arrow keeps following the n
 periods. That is one number shown twice, dressed as a finding about history. The row was removed;
 the movement it seemed to promise is already present, honestly and date-scoped, as **New
 memberships** (in) and **Cancellations** (out). `testEveryRowIsDateScoped` keeps it out.
+
+## The comparison window follows the selection (2026-08-20)
+
+Superseding the "previous calendar month" benchmark described above.
+
+**What was wrong.** The benchmark was FIXED at the whole of last month, whatever the reader had selected. On 20 Aug, "Today" was compared against 1–31 July: **one day of revenue next to thirty-one days of it**. The earlier per-day normalisation (`rateDelta`) made that *readable* — but it was still answering a question nobody asked. The reader picks a window because that is the window they care about; the benchmark has to follow it.
+
+**The rule now:** `resolvePreviousPeriodAest(selected)` → **the same span, one calendar month earlier**, with the current side **truncated at today**.
+
+| Selected | Compared against |
+|---|---|
+| Today, 20 Aug | 20 Jul |
+| Current draw, 28 Jul → 27 Aug | **28 Jun → 20 Jul** |
+| This month, 1 → 31 Aug | 1 Jul → 20 Jul |
+| Custom, 31 Jul → 7 Aug | 30 Jun → 7 Jul |
+| Last draw, 28 Jun → 27 Jul | 28 May → 27 Jun |
+
+**Truncate first, then shift.** A draw window ends on the DRAW DATE, which is in the future while the draw runs. Shifting the *full* window gives 28 Jun → 27 Jul and pits 24 days of live data against 31 days of history — the same calendar artefact, one layer down. See [metrics-analytics/backend.md](../metrics-analytics/backend.md) for the resolver's full contract.
+
+**Both surfaces move together.** The Period Comparison card and Brand Performance's Compare toggle resolve through the same function, and for Brand Performance it happens SERVER-side (`compare=previous-period` on `/api/admin/analytics/brand-performance` and on the Norm mirror) — a client cannot pick its own benchmark, so two cards on one screen cannot disagree.
+
+**Knock-on effects, all good:**
+
+- The windows are now almost always **equal length**, so `rateDelta` compares raw totals and the "Δ / day" header plus the length-asymmetry footnote only appear in the one case that still differs — a month-end clamp (31 Jul → 30 Jun). The normalisation stays; it is now a safety net rather than the main path.
+- When there is nothing honest to compare — unresolved draw bounds, an inverted range, a window entirely in the future — the resolver returns `null`, the comparison fetch is disabled (`enabled: Boolean(previous)`) and the header reads "no comparable earlier period" instead of rendering a fabricated Δ.
+- The comparison query key now **moves with the selection**, so changing preset costs one fetch where the fixed benchmark cost none. Worth it: a benchmark that ignores your selection is not a benchmark. The closed-window freshness overrides (1h `staleTime`, no polling) still apply.
+
+## Brand ink, the per-ad landing URL, and two label fixes (2026-08-20)
+
+**Brand wordmarks are painted, not just rendered.** The SVGs under `/images/brands/name/` are flat black, so rendering them as plain `<img>` made every toolbox brand look identical and cost Kincrome the blue it carries everywhere else on the site. `BrandLaneDisplay` (`src/config/promo-landing-slugs.ts`) now carries `markColor: {light, dark}`, and the table paints the wordmark with a **CSS mask** — the same technique the customer-facing /promotions prize selector uses. The values are copied from `TOOLBOXES` in `src/components/sections/promo/prize-selection/constants.ts` **with their reasons**, so the admin table and the customer selector cannot drift.
+
+- Kincrome is the one brand needing a genuine per-theme pair (`#0047BB` / `#4A7ED4`) — blue is perceptually much darker than the two reds, so the deep official blue disappears on a dark surface.
+- **GearWrench is the exception and gets no `markColor`.** Its mark is two-tone ("GEAR" in theme ink, "WRENCH" in Molten Orange, plus an orange gear badge); a flat mask paints one colour and physically cannot render that. It ships `logoPathLight` instead and the cell swaps images per theme.
+- Resolved **client-side** from `laneId`, not plumbed through the API — a colour in the response would have meant a Norm schema change for something purely presentational.
+- Two spans / two images with `dark:` classes rather than a JS theme read, so the right ink is present on first paint.
+
+**Each ad now shows the landing URL it bought.** A brand drill-down unions several URLs into one ad list — the modal header said "5 landing URLs" but nothing told you which ad used which, the one thing the table is for. `canonicalUrl` now travels `SpendByUrlAggregationService` → `getSpendByUrlDetailFormatted` → `groupSpendByUrlDetailRowsByCampaign` → `CampaignTreeTable`, shown as the path only (the origin is identical on every row) with the full URL in `title`. ⚠️ The formatter uses an **explicit include-list**, so a field added upstream is silently dropped unless it is named there too.
+
+**Labels:** the `built-prize` basis now reads **"By prize"** — the internal value is unchanged, per the backend-term/UI-term split. The **NEW MEMB %** progress bar was removed: a share-of-total across five brands is read by comparing the numbers down the column, and the bar only added visual weight to the widest column.

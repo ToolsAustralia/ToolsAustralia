@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import Image from "next/image";
+import { getBrandLaneDisplay } from "@/config/promo-landing-slugs";
 import { Tags, RotateCw, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { subDays } from "date-fns";
@@ -11,7 +12,6 @@ import {
   SectionTitle,
   DataTable,
   Segmented,
-  ProgressBar,
   type Column,
 } from "@/components/admin/ui";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
@@ -50,7 +50,7 @@ const AEST_TIMEZONE = "Australia/Sydney";
  * Spend is ALWAYS URL-derived (ad platforms cannot see which combination a visitor built), which
  * is why the Spend header carries a `URL` tag whenever outcomes are keyed on something else.
  */
-type CompareMode = "off" | "previous-calendar-month";
+type CompareMode = "off" | "previous-period";
 
 /** Table row — `DataTable` requires an index signature and an `id`. */
 interface Row extends Record<string, unknown> {
@@ -65,7 +65,7 @@ const LANE_OPTIONS: { value: BrandLane; label: string }[] = [
 
 const BASIS_OPTIONS: { value: BrandPerformanceBasis; label: string }[] = [
   { value: "landing-page", label: "Landing page" },
-  { value: "built-prize", label: "Built prize" },
+  { value: "built-prize", label: "By prize" },
   { value: "platform", label: "Platform" },
 ];
 
@@ -83,6 +83,26 @@ const BASIS_HINT: Record<BrandPerformanceBasis, string> = {
   platform:
     "Revenue and conversions as the ad platform itself reports them — what you see in Ads Manager. Platform data carries no membership split.",
 };
+
+/**
+ * A wordmark painted as a flat brand colour via CSS mask — the SVG becomes a stencil, so one
+ * asset serves every theme. Matches the /promotions prize selector's treatment.
+ */
+const MASK_CLASS = "absolute inset-0 w-full h-full bg-current";
+
+function maskStyle(src: string, color: string): CSSProperties {
+  return {
+    color,
+    WebkitMaskImage: `url(${src})`,
+    maskImage: `url(${src})`,
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+    WebkitMaskPosition: "left center",
+    maskPosition: "left center",
+    WebkitMaskSize: "contain",
+    maskSize: "contain",
+  };
+}
 
 export default function BrandPerformanceCard({
   dateRange,
@@ -228,23 +248,59 @@ export default function BrandPerformanceCard({
     const prior = d.comparison;
 
     if (key === "brand") {
+      /**
+       * Brand ink, resolved CLIENT-side from the same config the /promotions prize selector uses.
+       *
+       * The wordmark SVGs are flat black, so rendering them as plain <img> made every toolbox
+       * brand look identical and cost Kincrome the blue it carries everywhere else on the site.
+       * Deliberately NOT plumbed through the API: the row already carries `laneId`, and adding a
+       * colour to the response would mean a Norm schema change for something purely presentational.
+       */
+      const display = getBrandLaneDisplay(d.laneId, lane);
+      const ink = display.markColor;
+
       return (
         <div className="flex items-center min-h-[2rem]">
-          {d.logoPath ? (
+          {!d.logoPath ? (
+            <span className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-300">
+              {d.displayName}
+            </span>
+          ) : ink ? (
+            // CSS mask, the same technique the prize selector uses. Two spans rather than a
+            // JS theme read, so the correct ink is present on first paint in either theme.
+            <span
+              className="relative w-20 h-7 flex items-center justify-start shrink-0"
+              title={d.displayName}
+            >
+              <span className="sr-only">{d.displayName}</span>
+              <span aria-hidden className={cn(MASK_CLASS, "dark:hidden")} style={maskStyle(d.logoPath, ink.light)} />
+              <span aria-hidden className={cn(MASK_CLASS, "hidden dark:block")} style={maskStyle(d.logoPath, ink.dark)} />
+            </span>
+          ) : (
+            // No ink: either a toolset wordmark that already carries its colours, or GearWrench,
+            // whose two-tone mark a flat mask physically cannot render — it ships a light variant.
             <span className="relative w-20 h-7 flex items-center justify-start shrink-0">
               <Image
-                src={d.logoPath}
+                src={display.logoPathLight ?? d.logoPath}
                 alt={d.displayName}
                 width={96}
                 height={48}
                 unoptimized
-                className="object-contain object-left max-h-7"
+                className={cn("object-contain object-left max-h-7", display.logoPathLight && "dark:hidden")}
                 sizes="96px"
               />
-            </span>
-          ) : (
-            <span className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-300">
-              {d.displayName}
+              {display.logoPathLight && (
+                <Image
+                  src={d.logoPath}
+                  alt=""
+                  aria-hidden
+                  width={96}
+                  height={48}
+                  unoptimized
+                  className="object-contain object-left max-h-7 hidden dark:block"
+                  sizes="96px"
+                />
+              )}
             </span>
           )}
         </div>
@@ -309,14 +365,10 @@ export default function BrandPerformanceCard({
     if (d.newMembershipCountPct == null) {
       return <span className="text-xs sm:text-sm text-neutral-400 dark:text-neutral-600">—</span>;
     }
-    return (
-      <div className="flex flex-col items-end gap-1">
-        <span className="num text-xs sm:text-sm">{d.newMembershipCountPct.toFixed(0)}%</span>
-        {/* tone="neutral": this is a share-of-total, not a budget. The default risk scale
-            would paint a healthy 85% red. */}
-        <ProgressBar pct={d.newMembershipCountPct} tone="neutral" className="h-1.5 w-14" />
-      </div>
-    );
+    // Number only — the bar was decoration. A share-of-total across five brands is read by
+    // comparing the numbers down the column, which a per-row bar does not help with; it just
+    // added a second visual weight to the widest column on the table.
+    return <span className="num text-xs sm:text-sm">{d.newMembershipCountPct.toFixed(0)}%</span>;
   };
 
   const openDrilldown = (d: BrandPerformanceRow) => {
@@ -408,7 +460,7 @@ export default function BrandPerformanceCard({
           <Segmented options={PLATFORM_OPTIONS} value={platform} onChange={setPlatform} size="sm" />
           <button
             type="button"
-            onClick={() => setCompare((c) => (c === "off" ? "previous-calendar-month" : "off"))}
+            onClick={() => setCompare((c) => (c === "off" ? "previous-period" : "off"))}
             aria-pressed={showCompare}
             title="Compare against the previous calendar month"
             className={cn(
@@ -560,7 +612,7 @@ export default function BrandPerformanceCard({
                 <p className="text-2xs text-amber-600 dark:text-amber-500 mt-3">
                   {basis === "built-prize"
                     ? `${data.meta.toolboxSpendModel === "mixed" ? "Some " : ""}Toolset landing-page spend has no visitor data in this window, so it falls back to each page's default toolbox — which concentrates it on one brand. Pick a more recent range for a split that reflects what visitors actually built.`
-                    : "Toolset landing pages don't name a toolbox, so their spend and revenue are both attributed to each page's default toolbox — which concentrates them on one brand. Switch to Built prize to split by what visitors actually chose."}
+                    : "Toolset landing pages don't name a toolbox, so their spend and revenue are both attributed to each page's default toolbox — which concentrates them on one brand. Switch to By prize to split by what visitors actually chose."}
                 </p>
               )}
             {data?.meta.blendedPlatformRevenue && (

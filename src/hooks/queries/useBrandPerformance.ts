@@ -57,7 +57,7 @@ export function useBrandPerformance(
       params.set("lane", lane);
       params.set("basis", basis);
       params.set("platform", platform);
-      if (compare) params.set("compare", "previous-calendar-month");
+      if (compare) params.set("compare", "previous-period");
 
       const res = await fetch(`/api/admin/analytics/brand-performance?${params.toString()}`);
       const json = (await res.json()) as BrandPerformanceResponse & { error?: string };

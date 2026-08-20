@@ -200,6 +200,18 @@
     "src/app/api/chat/route.ts": {
       "maxDuration": 60
     },
+    "src/app/api/admin/major-draw/history/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/admin/analytics/mer-by-draw/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/norm/v1/major-draw/history/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/internal/norm/v1/analytics/mer-by-draw/route.ts": {
+      "maxDuration": 60
+    },
     "src/app/api/**/route.ts": {
       "maxDuration": 10
     },
