@@ -272,13 +272,24 @@ export class BrandPerformanceService {
     }
 
     /**
-     * Toolbox lane only: the observed visitor mix per toolset landing page, so a bare
-     * `/promotions/<toolset>` page's spend can be split by the traffic it actually bought
-     * instead of piling onto the page's first-paint default. Not fetched for the toolset lane,
-     * where the URL already names the brand exactly.
+     * The observed visitor mix per toolset landing page — how a bare `/promotions/<toolset>`
+     * page's spend divides across toolbox lanes.
+     *
+     * ⚠️ Fetched ONLY for `lane=toolbox` AND `basis=built-prize`. Applying it under the other
+     * bases produced a genuinely misleading table (caught on production data, 2026-08-20):
+     * spend was split by what visitors BUILT while revenue under `landing-page` is keyed on
+     * `promotionSlug`, which resolves a bare toolset page to its DEFAULT toolbox — so the two
+     * sides of every ROAS were keyed differently. One brand collected 73% of the spend with
+     * zero revenue while another collected all the revenue on a fraction of the spend, and
+     * every per-row ROAS in that view was meaningless.
+     *
+     * The rule now: the mix belongs to the basis whose OUTCOMES are keyed on what was built.
+     *   built-prize   revenue by builtPrizeSlug   -> spend by observed mix   (consistent)
+     *   landing-page  revenue by promotionSlug    -> spend by page default   (consistent)
+     *   platform      revenue by canonical URL    -> spend by page default   (consistent)
      */
     let toolboxMix: ToolboxMixRow[] = [];
-    if (lane === "toolbox") {
+    if (lane === "toolbox" && basis === "built-prize") {
       const { dayStartUTC } = aestDayBounds(startDate);
       const { dayEndUTC } = aestDayBounds(endDate);
       try {
@@ -361,10 +372,11 @@ export function buildBrandPerformanceWindow(input: {
   // ── Spend (always URL-keyed, for every basis) ─────────────────────────────────────────
   //
   // A bare `/promotions/<toolset>` URL names no toolbox, so under the toolbox lane its spend
-  // is SPLIT across lanes by the visitor mix that page actually drew, rather than piling onto
-  // the page's first-paint default (which concentrated every page's spend on Milwaukee and
-  // measured the default rather than the market). `allocateBrandLanes` returns weights summing
-  // to 1, so nothing is created or lost and the Total still reconciles with the ad account.
+  // must be assigned by modelling. Which model is correct depends on how THIS basis keys its
+  // outcomes — the caller only supplies `toolboxMix` for `basis=built-prize`, so an empty mix
+  // here means "use the page default" and the two sides of every ROAS stay keyed the same way.
+  // `allocateBrandLanes` returns weights summing to 1 either way, so nothing is created or lost
+  // and the Total still reconciles with the ad account.
   const mixBySlug = indexToolboxMix(toolboxMix ?? []);
   const modelsUsed = new Set<ToolboxSpendModel>();
   const mixVisitors = (toolboxMix ?? []).reduce((t, r) => t + r.visitors, 0);

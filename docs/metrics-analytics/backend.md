@@ -246,3 +246,28 @@ Weights always sum to 1, so **no spend is created or lost**: total spend is iden
 **Fractional counts are expected.** Splitting a page's conversions by weight yields fractions per row. The split conserves totals exactly; the UI rounds per row on render only.
 
 **Under `basis=platform`, revenue and conversions take the SAME split** as spend — they are URL-keyed too, and dividing a modelled spend by an unmodelled revenue would produce a nonsense ROAS.
+
+### Correction: the toolbox mix belongs to the built-prize basis only (2026-08-20)
+
+Shipped applying the observed-mix split to spend under **every** basis. On production data that produced a table where one toolbox held 73% of the spend with **zero** revenue while another held all the revenue on a fraction of the spend — every per-row ROAS in the Toolbox × Landing-page view was meaningless.
+
+**Cause:** the two sides of the ROAS were keyed differently.
+
+| | Toolbox lane, `basis=landing-page` (before) |
+|---|---|
+| Spend | split by the visitor mix — *what people built* |
+| Revenue | `data.promotionSlug` → `getPageDefaultPrizeSlug` — *the page's default toolbox* |
+
+A bare `/promotions/<toolset>` page has no toolbox in either key, so spend followed the market and revenue followed the default, and they landed on different rows.
+
+**The rule now — the mix belongs to the basis whose OUTCOMES are keyed on what was built:**
+
+| basis | outcomes keyed on | spend model | consistent? |
+|---|---|---|---|
+| `built-prize` | `builtPrizeSlug` | observed mix | ✅ both follow what was built |
+| `landing-page` | `promotionSlug` | page default | ✅ both follow the page |
+| `platform` | canonical URL | page default | ✅ both follow the page |
+
+`BrandPerformanceService` now fetches the mix only when `lane === "toolbox" && basis === "built-prize"`; the pure builder treats an empty mix as "use the page default", so the invariant holds without a second code path. Pinned by `testSpendAndRevenueAreKeyedTheSameWay` in `test:brand-performance`.
+
+⚠️ **Consequence to read the table with:** under Toolbox × Landing page, every bare-toolset page's spend *and* revenue now sit on that page's default toolbox (today, Milwaukee). That view therefore answers "what did the pages I bought return?", not "which toolbox do buyers want" — the second question is the Built-prize basis, and only it.

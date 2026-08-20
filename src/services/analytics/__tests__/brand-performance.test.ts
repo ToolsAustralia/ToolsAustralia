@@ -289,6 +289,38 @@ function testPlatformBasisSplitsRevenueWithSpend() {
   assert.equal(result.totals.revenue, 400);
 }
 
+function testSpendAndRevenueAreKeyedTheSameWay() {
+  // THE BUG THIS PINS (caught on production data, 2026-08-20): the toolbox mix was applied to
+  // SPEND under every basis, while revenue under landing-page is keyed on promotionSlug — which
+  // resolves a bare toolset page to its DEFAULT toolbox. So one toolbox collected the spend and
+  // another collected the revenue, and every per-row ROAS in that view was meaningless.
+  //
+  // The service only passes `toolboxMix` for basis=built-prize. This asserts the builder honours
+  // an empty mix by falling back to the page default, so both sides key alike.
+  const spendRows = [spend("meta", [[`${ORIGIN}/promotions/ryobi`, 10_000]])];
+  const revenue = [ev("ryobi", "one-time", 100)]; // promotionSlug = bare toolset page
+
+  const landingPage = build({
+    lane: "toolbox",
+    basis: "landing-page",
+    spend: spendRows,
+    events: revenue,
+    toolboxMix: [], // what the service supplies for this basis
+  });
+
+  const pageDefault = "milwaukee"; // getDefaultPrizeForToolsetSlug prefers the Milwaukee toolbox
+  const row = rowFor(landingPage, pageDefault);
+  assert.equal(row.spend, 100, "all bare-toolset spend lands on the page default");
+  assert.equal(row.revenue, 100, "...and so does its revenue");
+  assert.equal(row.roas, 1, "so ROAS is meaningful — same key on both sides");
+  assert.equal(
+    landingPage.rows.length,
+    1,
+    "no second toolbox row holding spend with no revenue (or vice versa)",
+  );
+  assert.equal(landingPage.meta.toolboxSpendModel, "page-default");
+}
+
 function testToolsetLaneIsNeverModelled() {
   const result = build({
     lane: "toolset",
@@ -361,6 +393,7 @@ function run() {
   testToolboxLaneFallsBackToPageDefaultWithoutMix();
   testToolboxSpendIsSplitByObservedMix();
   testPlatformBasisSplitsRevenueWithSpend();
+  testSpendAndRevenueAreKeyedTheSameWay();
   testToolsetLaneIsNeverModelled();
   testMixedModelIsReported();
   testCashPrizeIsDroppedIntoUnattributed();

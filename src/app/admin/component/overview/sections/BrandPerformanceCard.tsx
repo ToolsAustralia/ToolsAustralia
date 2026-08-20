@@ -480,10 +480,9 @@ export default function BrandPerformanceCard({
               (data?.meta.toolboxSpendModel === "page-default" ||
                 data?.meta.toolboxSpendModel === "mixed") && (
                 <p className="text-2xs text-amber-600 dark:text-amber-500 mt-3">
-                  {data.meta.toolboxSpendModel === "mixed" ? "Some " : ""}Toolset landing-page
-                  spend has no visitor data in this window, so it falls back to each page&apos;s
-                  default toolbox — which concentrates it on one brand. Pick a more recent range
-                  for a split that reflects what visitors actually built.
+                  {basis === "built-prize"
+                    ? `${data.meta.toolboxSpendModel === "mixed" ? "Some " : ""}Toolset landing-page spend has no visitor data in this window, so it falls back to each page's default toolbox — which concentrates it on one brand. Pick a more recent range for a split that reflects what visitors actually built.`
+                    : "Toolset landing pages don't name a toolbox, so their spend and revenue are both attributed to each page's default toolbox — which concentrates them on one brand. Switch to Built prize to split by what visitors actually chose."}
                 </p>
               )}
             {data?.meta.blendedPlatformRevenue && (
