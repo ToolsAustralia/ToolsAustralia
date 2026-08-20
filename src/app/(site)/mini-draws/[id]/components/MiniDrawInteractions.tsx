@@ -3,6 +3,8 @@
 import { ShieldCheck, Zap, Lock } from "lucide-react";
 import MiniDrawPackages from "@/components/features/MiniDrawPackages";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
+import { useSession } from "next-auth/react";
+import { isEmployeeAccount } from "@/utils/giveaway-eligibility";
 
 interface MiniDrawInteractionsProps {
   miniDraw: {
@@ -32,7 +34,19 @@ export default function MiniDrawInteractions({ miniDraw }: MiniDrawInteractionsP
   const isCancelled = miniDraw.status === "cancelled";
   const isActive = miniDraw.status === "active";
   const isSoldOut = !isCancelled && entriesRemaining <= 0;
-  const showPackages = isActive && !isSoldOut;
+
+  /**
+   * Terms §5.5 — Tools Australia employees are ineligible to enter, so an internal account is
+   * shown the draw WITHOUT the buy widget.
+   *
+   * Presentation only. `POST /api/mini-draw/purchase` rejects internal sessions with a 403 and
+   * is the gate that actually holds; this just avoids walking a staff member up to a card form
+   * that is going to refuse them. Staff can reach this page since the 2026-08-20 middleware
+   * change (the admin UI links here from the mini-draw card), which is why it needs saying.
+   */
+  const { data: session } = useSession();
+  const isStaffViewer = isEmployeeAccount(session?.user?.userType);
+  const showPackages = isActive && !isSoldOut && !isStaffViewer;
 
   return (
     <div className="relative overflow-hidden rounded-[20px] border border-[#EFF0F3] bg-white shadow-[0_10px_26px_-20px_rgba(15,23,42,.5)] dark:border-neutral-800 dark:bg-neutral-900 dark:shadow-none">

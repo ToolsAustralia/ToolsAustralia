@@ -1,10 +1,28 @@
 /**
  * Giveaway eligibility utilities
- * Centralized logic for SA/ACT and under-18 ineligibility
+ * Centralized logic for SA/ACT, under-18 and employee ineligibility
  */
 
 const INADMISSIBLE_STATES = ["SA", "ACT"] as const;
 const MIN_AGE = 18;
+
+/**
+ * Terms §5.5 (Employee Exclusion) — "Tools Australia employees and immediate family … ineligible."
+ * Also stated in the major-draw competition terms.
+ *
+ * We can only see the EMPLOYEE half from the account: `userType` "staff" or "admin". Immediate
+ * family is not modelled anywhere and is handled off-platform.
+ *
+ * Kept beside the SA/ACT and under-18 rules because it is the same concept — who may not enter —
+ * and splitting the three across modules is how one of them gets forgotten at a new entry point.
+ *
+ * ⚠️ Deliberately NOT part of `isGiveawayIneligible`: that helper answers a PROFILE question
+ * (state + birthdate) for form validation, and its two callers pass profile fields they collect
+ * from the user. An internal account is a different axis, checked at the purchase boundary.
+ */
+export function isEmployeeAccount(userType?: string | null): boolean {
+  return userType === "staff" || userType === "admin";
+}
 
 /**
  * Check if the user is ineligible for giveaways based on state or age.

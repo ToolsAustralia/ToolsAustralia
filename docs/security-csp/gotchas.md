@@ -130,3 +130,19 @@ test:csp-inline-hashes` was run after the change and passed.
 **Fix:** both came off the list, and the rule moved out of `middleware.ts` into `src/utils/security/staffRouteAccess.ts` as a pure predicate so it can be unit-tested (`npm run test:staff-route-access`). Access control shouldn't be verified by reading an inline array.
 
 **The rule the list encodes:** block a route when visiting it would **create or expose customer state** — an account surface, a purchase flow, or a post-purchase confirmation. *Not* "is it outside `/admin`". `/mini-draw-success` therefore stays blocked while `/mini-draws` does not: viewing a draw is read-only, buying into one is not.
+
+---
+
+## Removing a route from the staff block-list removes what the block *incidentally* prevented (2026-08-20)
+
+**Symptom:** none visible. The fix directly above — taking `/mini-draws` off `STAFF_BLOCKED_PREFIXES` so team members could open the draw page the admin UI links to — also opened a **working purchase path** for internal accounts.
+
+**Cause:** `/mini-draws/<id>` renders `MiniDrawPackages` plus a sticky buy bar, and `POST /api/mini-draw/purchase` only ever checked `getServerSession` — its own comment read *"AUTHENTICATION-ONLY: Mini draws are now available to all authenticated users"*. The middleware block had been the *de facto* purchase guard without anyone deciding it should be. Terms §5.5 makes Tools Australia employees ineligible to **win**, so a staff member could be charged for entries that can never pay out.
+
+**Fix:** the guard moved to where it belongs — `isEmployeeAccount(user.userType)` in [`src/utils/giveaway-eligibility.ts`](../../src/utils/giveaway-eligibility.ts), checked at the top of the purchase route and returning 403. It reads the **freshly-loaded User doc, not `session.user.userType`**: the session is a JWT that still says `"customer"` until it refreshes, so a claim-based check would let a newly-promoted staff account through. The buy widget is hidden in the UI too (`MiniDrawInteractions`, and `MiniDrawsContent`'s quick-enter sheet) — but that is cosmetic, the endpoint is reachable directly.
+
+`isEmployeeAccount` lives beside the SA/ACT and under-18 rules deliberately: they are the same concept (who may not enter), and splitting them across modules is how one gets forgotten at a new entry point. It is **not** folded into `isGiveawayIneligible`, which answers a *profile* question (state + birthdate) for form validation — an internal account is a different axis, checked at the purchase boundary.
+
+**The general rule:** an access list is a *visibility* control, not an authorization one. Before removing a prefix, ask what the block was silently doing besides hiding the page — then put that guard at the endpoint where it belongs.
+
+**Covered by:** `npm run test:staff-route-access` (pins `isEmployeeAccount` for `staff`/`admin`/`customer`/absent).

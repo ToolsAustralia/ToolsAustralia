@@ -40,6 +40,20 @@ See [subscription R11-R13](../subscription/rules.md#billing-anchor-24th). Major-
 
 Don't reimplement the membership-state-to-eligibility logic per route or component. Use the shared helper.
 
+It holds **all three** terms exclusions, deliberately in one module — splitting them is how one gets forgotten at a new entry point:
+
+| Exclusion | Helper | Axis |
+| --- | --- | --- |
+| SA / ACT residents | `isGiveawayIneligible` / `getGiveawayIneligibilityReasons` | profile (state) |
+| Under 18 | same | profile (birthdate) |
+| **Tools Australia employees** (Terms §5.5) | `isEmployeeAccount(userType)` | **account** |
+
+`isEmployeeAccount` is **not** folded into `isGiveawayIneligible`: that one answers a *profile* question for form validation and its callers pass fields collected from the user. An internal account is a different axis and is checked at the **purchase boundary** — `POST /api/mini-draw/purchase` returns 403 for `userType` `"staff"` or `"admin"`.
+
+Read it from the **User document, not `session.user.userType`** — the session is a JWT that still says `"customer"` until it refreshes, so a claim-based check lets a newly-promoted staff account through.
+
+⚠️ This gate used to be an accident: staff were kept off `/mini-draws` by the middleware block-list, which prevented the purchase as a side effect. That block was lifted on 2026-08-20 so staff could open the draw page the admin UI links to. See [security-csp gotchas](../security-csp/gotchas.md).
+
 ## Tickets & entries
 
 ### R6. Entry refunds go through `remove-draw-entries.ts`
