@@ -38,7 +38,7 @@ const FOCUS_BADGE: Record<
   unclassified: { tone: "warning", label: "Unclassified" },
 };
 
-/** ROAS colouring matches PrizePerformanceCard: emerald ≥ 3, amber below. */
+/** ROAS colouring matches BrandPerformanceCard: emerald ≥ 3, amber below. */
 function roasClass(roas: number) {
   return roas >= 3
     ? "text-emerald-600 dark:text-emerald-400"

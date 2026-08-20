@@ -209,8 +209,19 @@ export const EXPORT_FIELDS: ExportFieldDefinition[] = [
     isDefault: true,
   },
   {
+    // Mini draws the user holds entries in that are ACTIVE right now. Resolved against the
+    // MiniDraw collection, so it always agrees with the "In an active mini draw" list filter.
     key: "miniDrawCount",
-    displayName: "Mini Draw Count",
+    displayName: "Active Mini Draws",
+    type: "number",
+    group: "entries",
+    isComputed: true,
+  },
+  {
+    // Lifetime entries received from buying a Mini Pack — a purchase fact, so it does not fall
+    // to zero when a draw completes. Pairs with the "Bought a Mini Pack" list filter.
+    key: "miniPackEntries",
+    displayName: "Mini Pack Entries",
     type: "number",
     group: "entries",
   },

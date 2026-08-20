@@ -75,11 +75,9 @@ export default function AllPlatformsManagement() {
 
   return (
     <div className="space-y-6">
-      {/* empty:hidden — on mobile the dropdown portals to the header slot, leaving this
-          wrapper childless; without it the empty wrapper would still claim a space-y slot. */}
-      <div className="flex justify-end empty:hidden">
-        <AdminDateRangeToolbar filter={df} />
-      </div>
+      {/* Direct child, NOT wrapped: the toolbar is sticky on desktop and a wrapper sized to
+          the control would be the only box it could travel within — pinning it to nothing. */}
+      <AdminDateRangeToolbar filter={df} />
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <MetricCard title="Total Ad Spend" value={fmtCompact(agg.totalSpend)} icon={DollarSign} loading={statsLoading} />

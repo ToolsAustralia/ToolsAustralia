@@ -194,10 +194,9 @@ export default function RepeatPurchaseAnalytics() {
 
   return (
     <div className="space-y-6">
-      {/* empty:hidden — on mobile the dropdown portals to the header slot, leaving this wrapper childless. */}
-      <div className="flex justify-end empty:hidden">
-        <AdminDateRangeToolbar filter={df} />
-      </div>
+      {/* Direct child, NOT wrapped: the toolbar is sticky on desktop and a wrapper sized to
+          the control would be the only box it could travel within — pinning it to nothing. */}
+      <AdminDateRangeToolbar filter={df} />
 
       {summaryError ? (
         <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-300">

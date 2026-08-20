@@ -10,6 +10,7 @@
 
 import mongoose from "mongoose";
 import MajorDraw from "@/models/MajorDraw";
+import MiniDraw from "@/models/MiniDraw";
 
 // UserFilters type is available but not directly imported here to avoid circular dependencies
 
@@ -163,6 +164,10 @@ export async function buildUserFilter(
     states?: string[];
     /** "yes" = has entries in active major draw; "no" = not in that set */
     inActiveMajorDraw?: string;
+    /** "yes" = has ever bought a Mini Pack; "no" = never has. A lifetime purchase fact. */
+    miniDrawPackage?: string;
+    /** "yes" = holds entries in a mini draw that is active RIGHT NOW; "no" = does not. */
+    inActiveMiniDraw?: string;
     /** Membership Streak: "none" = streak 0/absent; a number string = at least N consecutive paid renewals */
     streak?: string;
     /**
@@ -184,6 +189,8 @@ export async function buildUserFilter(
     state,
     states,
     inActiveMajorDraw,
+    miniDrawPackage,
+    inActiveMiniDraw,
     streak,
     segment,
   } = filters;
@@ -509,6 +516,77 @@ export async function buildUserFilter(
       if (!filter.$and) filter.$and = [];
       (filter.$and as Array<Record<string, unknown>>).push({ _id: { $nin: oidList } });
     }
+  }
+
+  /**
+   * Bought a Mini Pack, ever.
+   *
+   * Read off `miniDrawParticipation[].entriesBySource["mini-draw-package"]` — a PURCHASE FACT,
+   * so it needs no draw lookup and never goes stale. `$elemMatch` keeps both predicates on the
+   * same array element; without it Mongo would happily match a user whose package entries came
+   * from one draw and whose other condition matched a different one.
+   *
+   * "no" means never bought one — including users with no `miniDrawParticipation` array at all,
+   * which is why it is `$not: $elemMatch` rather than a negated value comparison.
+   */
+  if (miniDrawPackage === "yes" || miniDrawPackage === "no") {
+    const boughtAPack = {
+      miniDrawParticipation: {
+        $elemMatch: { "entriesBySource.mini-draw-package": { $gt: 0 } },
+      },
+    };
+    if (!filter.$and) filter.$and = [];
+    (filter.$and as Array<Record<string, unknown>>).push(
+      miniDrawPackage === "yes"
+        ? boughtAPack
+        : { miniDrawParticipation: { $not: { $elemMatch: { "entriesBySource.mini-draw-package": { $gt: 0 } } } } }
+    );
+  }
+
+  /**
+   * Holds entries in a mini draw that is active RIGHT NOW.
+   *
+   * ⚠️ Deliberately resolved from the MiniDraw collection (`status: "active"`) rather than the
+   * denormalised `miniDrawParticipation[].isActive` flag on the user, even though that flag is
+   * indexed and would be cheaper. The flag is only cleared when a WINNER IS SELECTED
+   * (`mini-draw/[id]/select-winner`); an admin flipping a draw's status via
+   * `/api/admin/mini-draw/update` does not cascade to participants, so it goes stale and would
+   * report people as "in an active draw" for a draw that was cancelled or completed without a
+   * winner. `status` is the field the model itself calls authoritative — `isActive` on MiniDraw
+   * is marked "backward compatibility - should use status instead".
+   *
+   * Mirrors how `inActiveMajorDraw` above resolves its cohort from the draw rather than a cache.
+   *
+   * `totalEntries > 0` so someone whose participation row exists but holds nothing is not
+   * counted as participating.
+   */
+  if (inActiveMiniDraw === "yes" || inActiveMiniDraw === "no") {
+    const activeDraws = await MiniDraw.find({ status: "active" }).select("_id").lean();
+    // `.lean()` widens `_id` to `unknown`; the ids come straight back to Mongo for an `$in`,
+    // so normalise to ObjectId rather than asserting the lean shape.
+    const activeIds = activeDraws.map((d) => new mongoose.Types.ObjectId(String(d._id)));
+
+    const inAnActiveDraw = {
+      miniDrawParticipation: {
+        $elemMatch: { miniDrawId: { $in: activeIds }, totalEntries: { $gt: 0 } },
+      },
+    };
+
+    if (!filter.$and) filter.$and = [];
+    if (inActiveMiniDraw === "yes") {
+      // No active draws => nobody qualifies. Return nothing rather than silently ignoring the
+      // filter, which would look like it had been applied and matched everyone.
+      (filter.$and as Array<Record<string, unknown>>).push(
+        activeIds.length === 0 ? { _id: { $in: [] } } : inAnActiveDraw
+      );
+    } else if (activeIds.length > 0) {
+      (filter.$and as Array<Record<string, unknown>>).push({
+        miniDrawParticipation: {
+          $not: { $elemMatch: { miniDrawId: { $in: activeIds }, totalEntries: { $gt: 0 } } },
+        },
+      });
+    }
+    // "no" with no active draws is a no-op: every user trivially satisfies it.
   }
 
   // Top 20% of active major-draw entry holders. Pushed onto `$and` like every other `_id`

@@ -711,9 +711,9 @@ Membership vs one-time landing-URL split surfaced across the Overview (data cont
 - **Prize Performance row click → upgraded [`PrizePerformanceAdsModal`](../../src/components/modals/PrizePerformanceAdsModal.tsx)** — `PrizePerformanceCard` attaches each brand's `canonicalUrls` to its row (captured before the zero-row filter, so every rendered row carries them) and opens the modal via the kit `DataTable`'s `onRowClick`. The modal keeps its original props + `useSpendByUrlDetailMany` source and adds: brand-level Membership / One-time summary tiles (Unclassified only when present), focus chips (All / Membership / One-time / Unclassified) filtering ONE mixed tree (each ad badges with its own focus — unlike the KPI modal's pre-split buckets), platform chips (TikTok = awaiting box, no fetch), and the client-side grouper `groupSpendByUrlDetailRowsByCampaign` ([spendByUrlAdBreakdown.ts](../../src/utils/admin/spendByUrlAdBreakdown.ts)) producing the same node shape `CampaignTreeTable` renders.
 - **Facebook Ads → Spend by URL surfaces** (`SpendByUrlSection.tsx`, `SpendByUrlAdBreakdownTable.tsx`): a non-interactive focus summary strip above the toolbar (Membership / One-time / + Unclassified tiles from `usePackagesFocusBreakdown`; hidden when the range isn't ready, on query error, or when total focus spend is 0), per-URL-row `M $x` / `OT $y` split chips under the URL (only when the row carries the `packagesFocus` split), and a focus `Badge` under the ad name in the per-ad drill-down table (membership/one-time only — no new column, COL_SPANs unchanged).
 
-- **[src/components/admin/overview/DateRangeDropdown.tsx](../../src/components/admin/overview/DateRangeDropdown.tsx)** — clean dropdown replacing the old chip-bar `DateRangeToggle` inside `OverviewToolbar`. Reuses the existing `DateRange` type and the toolbar prop contract (`selectedRange`, `onRangeChange`, `onCustomClick`, `displayDate`). Ranges: Today / Yesterday / Current Draw / Last Draw / All Time, plus a "Custom range…" row that calls `onCustomClick` (opens the existing `CustomDateRangeModal`). Anchored via the kit `Popover`. The shared `src/components/admin/DateRangeToggle.tsx` is unchanged but, as of the 2026-06-02 unification (below), is **no longer rendered anywhere** — it survives only as the canonical home of the exported `DateRange` type.
+- **[src/components/admin/overview/DateRangeDropdown.tsx](../../src/components/admin/overview/DateRangeDropdown.tsx)** — clean dropdown replacing the old chip-bar `DateRangeToggle` inside `OverviewToolbar` _(that wrapper was deleted 2026-08-19; the dropdown is now rendered by `AdminDateRangeToolbar`)_. Reuses the existing `DateRange` type and the toolbar prop contract (`selectedRange`, `onRangeChange`, `onCustomClick`, `displayDate`). Ranges: Today / Yesterday / Current Draw / Last Draw / All Time, plus a "Custom range…" row that calls `onCustomClick` (opens the existing `CustomDateRangeModal`). Anchored via the kit `Popover`. The shared `src/components/admin/DateRangeToggle.tsx` is unchanged but, as of the 2026-06-02 unification (below), is **no longer rendered anywhere** — it survives only as the canonical home of the exported `DateRange` type.
 
-- **[OverviewToolbar.tsx](../../src/app/admin/component/overview/OverviewToolbar.tsx)** now renders `DateRangeDropdown` in its shared `inner` block, so both `placement="page"` (desktop sticky) and `placement="layout"` (mobile portal) pick it up.
+- **OverviewToolbar.tsx** _(deleted 2026-08-19 — the Overview now renders the shared `AdminDateRangeToolbar`; see the last section of this doc)_ rendered `DateRangeDropdown` in its shared `inner` block, so both `placement="page"` (desktop sticky) and `placement="layout"` (mobile portal) pick it up.
 
 - **[DashboardOverview.tsx](../../src/app/admin/component/overview/DashboardOverview.tsx)** wrapper is now `space-y-5 md:space-y-6`; `KpiGrid` renders at the top. The remaining legacy breakdown sections (`RevenueBreakdownSection`, `RenewalsDashboardSection`, `AdvertisingBreakdownSection`) are temporarily rendered directly below it (extracted from being `KPIMetricsGrid` children) so the page keeps working until later phases replace them. The dead `handleRevenue*` toggles, `statsError`, and the unused users-performance toggle state were removed. **Section order (as of 2026-06-02):** KPI grid → Revenue Breakdown + Advertising (one row, `grid grid-cols-1 md:grid-cols-2`) → charts row (Revenue overview + Active memberships) → Prize performance → rows 4/5. The Breakdown+Advertising row sits **above** the charts per user request (it was briefly full-width-separated in the cycle-anchored-renewal polish).
 
@@ -784,7 +784,7 @@ After the reskin, the legacy Overview sections and their now-orphaned siblings w
 - Orphan-dead component-level files reachable only through the unused barrel: `src/app/admin/component/MembershipStats.tsx` (hardcoded mock), `AdminStatsCard.tsx`, `RecentOrders.tsx`, `TopProducts.tsx`, and the dead barrel `src/app/admin/component/index.ts` itself (zero importers — the components it re-exported that are still live, e.g. `AdminPage`, are imported by direct path).
 - Earlier in the reskin, `src/components/admin/RevenueOverview.tsx` was deleted (replaced by `RevenueChartCard`).
 
-**Kept** (still in use): `overview/DashboardOverview.tsx`, `overview/OverviewToolbar.tsx`, `overview/DashboardSection.tsx` (used by `UsersBreakdownSection`), `overview/UsersBreakdownSection.tsx`, and all `overview/sections/*` redesign cards. The `my-account` `RecentOrders.tsx` (a different, live file) was untouched. Detail modals the deleted sections used (`RevenueDetailModal`, `MembershipByPackageDetailModal`, `PrizePerformanceAdsModal`) were left in place — they live under `src/components/admin/` and are out of scope for the Overview reskin.
+**Kept** (still in use): `overview/DashboardOverview.tsx`, `overview/OverviewToolbar.tsx` _(deleted 2026-08-19 — replaced by the shared `AdminDateRangeToolbar`)_, `overview/DashboardSection.tsx` (used by `UsersBreakdownSection`), `overview/UsersBreakdownSection.tsx`, and all `overview/sections/*` redesign cards. The `my-account` `RecentOrders.tsx` (a different, live file) was untouched. Detail modals the deleted sections used (`RevenueDetailModal`, `MembershipByPackageDetailModal`, `PrizePerformanceAdsModal`) were left in place — they live under `src/components/admin/` and are out of scope for the Overview reskin.
 
 ## DashboardOverview — Users Breakdown section — 2026-05-04
 
@@ -1220,7 +1220,7 @@ For reference, a live probe of TikTok's `/report/integrated/get/` on 2026-07-29 
 
 ### Shared admin date filter (2026-06-03)
 
-- **`useAdminDateFilter(initial)`** (`src/hooks/useAdminDateFilter.ts`) + **`AdminDateRangeToolbar`** (`src/components/admin/`) — packages the date-preset logic the Facebook Ads tab does inline so the **All-Platforms / TikTok / Snapchat** tabs share **one** source of truth for the AEST math (every preset — today / yesterday / current-draw / last-draw / all-time / custom — resolves to `yyyy-MM-dd` in `Australia/Sydney`; the initial preset resolves synchronously so date-gated queries enable on first paint, draw presets fill in via an effect once `useCurrentAndLastDrawDates` loads). The toolbar renders the shared `DateRangeDropdown` + `CustomDateRangeModal`, portaling into the mobile header slot when the tab is in `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` (now includes `all-platforms`/`tiktok-ads`/`snapchat-ads`), else inline. Local state only (no URL sync). The **Klaviyo** tab does **not** use this — it has its own keyword selector (above).
+- **`useAdminDateFilter(initial)`** (`src/hooks/useAdminDateFilter.ts`) + **`AdminDateRangeToolbar`** (`src/components/admin/`) — packages the date-preset logic the Facebook Ads tab does inline so the **All-Platforms / TikTok / Snapchat** tabs share **one** source of truth for the AEST math (every preset — today / yesterday / current-draw / last-draw / all-time / custom — resolves to `yyyy-MM-dd` in `Australia/Sydney`; the initial preset resolves synchronously so date-gated queries enable on first paint, draw presets fill in via an effect once `useCurrentAndLastDrawDates` loads). The toolbar renders the shared `DateRangeDropdown` + `CustomDateRangeModal`, portaling into the mobile header slot when the tab is in `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` (now includes `all-platforms`/`tiktok-ads`/`snapchat-ads`), else inline. Local state only (no URL sync). _(Superseded 2026-08-19 — URL sync is now opt-in via `{ syncToUrl: true }`, the Overview uses it, and the toolbar is sticky on desktop.)_ The **Klaviyo** tab does **not** use this — it has its own keyword selector (above).
 
 ## Overview MER card — platform selector + mobile text sizing (2026-06-04)
 
@@ -1571,3 +1571,144 @@ Every block states an **answered denominator** above its bars — `N of M answer
 | Gender | `Not set` | No — and it conflates "declined" with "never asked" |
 
 **Why the bars are scoped this way rather than filtering the endpoint.** The request was to leave incomplete-profile users out of the breakdown. That is applied at **chart level only**. `signupSource`, `membershipStatus`, `membershipByPackage` and `purchaseHistory` still count **every** member, because the same `users` array feeds them: filtering the query would drop an active paying member who never set a birthdate out of the **active-member count**, and `meta.totalUsers` is the sum of `signupSource`, so the reported total would silently fall too — making `/admin` disagree with every other dashboard. A user-document filter would also not have helped performance meaningfully (the two `PaymentEvent` queries don't read that array at all, and the user query measures ~150ms for all 927 users).
+
+## One date filter for every analytics tab — sticky, URL-synced (2026-08-19)
+
+Phase 1 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-analytics-brand-performance-design.md). The admin analytics surface carried **two** implementations of the same control; this collapses them to one.
+
+**Removed:** `src/app/admin/component/overview/OverviewToolbar.tsx` (deleted), plus `DashboardOverview`'s own date state — four `useState`s, a `searchParams` sync effect, a ~40-line `updateDateFilter` with duplicated draw-preset branches, its `CustomDateRangeModal` instance, and its `useMajorDrawsForDateRange` call. All of it now lives in the shared hook + toolbar.
+
+**The single control** is `AdminDateRangeToolbar` + `useAdminDateFilter`, now used by **every** date-filtered tab including the Overview.
+
+- **Sticky on desktop.** The `isLgUp` branch is `sticky top-0 z-30` with `-mx-4 lg:-mx-6 -mt-4 lg:-mt-6` + matching padding, cancelling the scroll container's `p-4 lg:p-6` so the pinned bar spans the full content width and rows scroll *under* it. Previously only the Overview was sticky; All-Platforms / TikTok / Snapchat / Repeat-Purchases scrolled their filter off-screen.
+- **Mobile is unchanged** and always-visible by construction — the dropdown portals into `ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID`, which `AdminPage` renders in the header *above* the scroll container.
+- **`leading` prop.** Tabs with their own controls on that row (TikTok's Ads / Spend-by-URL switch) pass them as `leading` so they ride *inside* the sticky bar. See the footgun below for why they cannot simply share a wrapper.
+
+⚠️ **Render `AdminDateRangeToolbar` as a DIRECT child of the tab's root element.** A sticky element can only travel within its own parent's box, so the old `<div className="flex justify-end">{toolbar}</div>` wrapper — sized to the control itself — pins it to nothing. All four consumers had that wrapper and all four were unwrapped. The second way to lose it silently is a clipping/containing ancestor (`overflow` ≠ `visible`, or `transform`/`filter`/`contain`). Neither failure throws; verify visually when adding a new tab.
+
+The `backdrop-blur-sm` on the sticky bar *does* create a containing block for absolutely-positioned descendants, but `DateRangeDropdown` renders through the kit `Popover`, which already portals to `document.body` with `position: fixed` and re-places on scroll capture — so it escapes correctly. A future control added inside this bar must do the same.
+
+**URL sync** is opt-in: `useAdminDateFilter("today", { syncToUrl: true })`. Only the Overview passes it, preserving the deep-linkable `?dateRange=&startDate=&endDate=` it already had; the other tabs keep local-only state. See [client-state](../client-state/patterns.md).
+
+**AEST resolution is no longer forked.** `resolveAestDateWindow` (`src/utils/admin/`) is now the only preset → `yyyy-MM-dd` mapping; the hook's private `resolveRange` copy is gone and the util gained an optional 4th `drawDates` argument for the `current-draw`/`last-draw` presets. Dependency direction is util ← hook, never the reverse — the hook is `"use client"` and must never become a dependency of a plain util.
+
+**Behaviour note:** the Overview's custom-range *trigger label* is now the hook's compact `"1 Jun – 30 Jun"` rather than its old `"Jun 1 - Jun 30, 2025"` — the same string the other four tabs already showed. The longer form is still used for the per-card KPI tag (`formatAbbreviatedDate`, kept local to `DashboardOverview`).
+
+**Klaviyo and A/B Testing are deliberately still absent** from `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR`: neither uses this filter (Klaviyo drives its own `hourRange`; A/B Testing has no date filter). Adding them would mount an empty header slot.
+
+## Prize performance → Brand performance (2026-08-19)
+
+Phase 2 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-analytics-brand-performance-design.md). `overview/sections/PrizePerformanceCard.tsx` is **deleted**; `overview/sections/BrandPerformanceCard.tsx` takes its slot in `DashboardOverview`.
+
+**What changed and why.** The old card covered only the **toolset** lane (it parsed the first path segment of `/promotions/<slug>` and deliberately discarded the `-<toolbox>` suffix), and its revenue was **platform-reported** — so the four toolbox brands had no ROAS surface at all, and no view could answer "how much of this brand's return is new membership?".
+
+**Three `Segmented` controls plus a Compare toggle**, no explanatory paragraphs:
+
+| Control | Values | What it changes |
+|---|---|---|
+| Lane | Toolset / Toolbox | which brand axis groups the rows |
+| Basis | Landing page / Built prize / Platform | where the OUTCOME figures come from |
+| Platform | All / Meta / TikTok | spend scope (and revenue scope under the platform basis) |
+| Compare | on/off | adds Δ chips vs the previous calendar month |
+
+Columns: **Brand · ROAS · Spend · Revenue · Purchases · New members · New memb %**. Purchases counts all five acquisition categories; New members counts `membership-purchase` only.
+
+⚠️ **Milwaukee is in BOTH lanes** — same wordmark, different population. The brand cell renders the wordmark alone (name on `alt`), so the active Lane pill is the only thing distinguishing a Milwaukee-the-toolset row from a Milwaukee-the-toolbox one. Do not weaken that control.
+
+**Spend is always URL-derived, for every basis** — ad platforms cannot see which combination a visitor built (`canonicalizeLandingUrl` strips the query). Under the two non-landing-page bases the Spend column header therefore reads **"Spend · URL"**, and the basis `Segmented` carries a `title` explaining the join. One tooltip, not a paragraph.
+
+**Under `basis=platform`**, New members / New memb % render **`—`**, never `0` — platform data has no membership split, and a zero would read as "we sold none". With `platform=all` the response sets `meta.blendedPlatformRevenue` and the card shows the double-counting caveat (the same purchase can be claimed by Meta and TikTok).
+
+**The Unattributed footer row** carries spend whose URL resolved to no lane (`unknown://meta-ad/…` placeholders, non-promotion pages, `cash-prize` under the toolbox lane) *and* revenue whose event has no `promotionSlug`/`builtPrizeSlug`. It is included in the Total. Without it the Total would silently disagree with both the ad account and the Overview revenue card.
+
+**`PrizePerformanceAdsModal` is unchanged** and still the row drill-down — it is URL-keyed per-ad detail, which stays correct regardless of basis.
+
+**Display registry moved.** `BRAND_DISPLAY_NAME` used to live inside the card and covered only 5 of the 9 lanes. It is now `TOOLSET_LANE_DISPLAY` / `TOOLBOX_LANE_DISPLAY` + `getBrandLaneDisplay()` in `src/config/promo-landing-slugs.ts`, typed as `Record<ToolsetLandingSlug|ToolboxLaneId, …>` so a new brand fails compilation until its label and wordmark exist.
+
+**`ProgressBar` gained `tone`.** The New memb % bar passes `tone="neutral"`; the default `"risk"` scale (green<50 / amber / red>80) is a *budget* scale and would paint a healthy 85% share red. Existing callers are unaffected.
+
+## Period comparison — selected window vs previous calendar month (2026-08-19)
+
+Phase 3 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-analytics-brand-performance-design.md). `overview/sections/PeriodComparisonCard.tsx` + `periodComparisonModel.ts`, mounted on `DashboardOverview` directly above Brand performance.
+
+**Two comparison mechanisms now exist, deliberately, with different meanings:**
+
+| | Window | Used by |
+|---|---|---|
+| `trendCalculationService.getComparisonPeriod` | equal-length window immediately preceding the selection | KPI trend arrows |
+| `resolvePreviousCalendarMonthAest` | literal 1st→last day of the prior calendar month, AEST | this card |
+
+An arrow wants "vs the previous equivalent stretch"; this table wants a **stable month-on-month benchmark that does not move when the reader changes the range**. Neither replaces the other, and the card names both windows in its subheading so nobody has to guess which is which.
+
+**No new aggregation.** The comparison window is a second call to the *same* `useAdminDashboardStats` the dashboard already uses (`dateRange="custom"` + the resolved month bounds). The card introduces **no second definition of revenue** — it re-presents numbers the dashboard already computes. The selected window's payload is passed in as a prop from `DashboardOverview` rather than re-fetched.
+
+⚠️ **Length asymmetry is real and is surfaced, not hidden.** "Today" against a whole calendar month is not like-for-like. When the two windows differ in length a **Per day** column appears (current vs previous rate) alongside the raw figures, and a one-line note names both day counts. Ratio metrics (ROAS) are never normalised — they are already rates.
+
+**`deltaPct` is `null` when the prior value was 0**, and renders as "new" rather than ∞ or a flat 100%. A change from nothing has no meaningful percentage; showing one would read as a real measurement.
+
+**Card vs drawer.** The card shows the `headline` subset (total revenue, new memberships, purchases, new accounts, ad spend, ROAS). The corner **All metrics** button opens a right-hand drawer (same overlay/sticky-header pattern as `PastDueChargeHistoryDrawer`) with every metric grouped Revenue / Customers / Advertising, plus a **Biggest movers** toggle that flattens and sorts by |Δ%|. Metrics with no comparable percentage sort last rather than to either extreme. The drawer reuses the card's already-loaded data — no second fetch.
+
+**Why the table is hand-rolled rather than the kit `DataTable`.** The rows are *metrics*, not records: the label column is a `<th scope="row">`, each row formats its value differently (currency / count / ratio), and column sorting would be meaningless. Reusing `DataTable` would mean fighting its record-shaped API for no gain.
+
+**`RevenueBreakdownItem` is a live union** (bare number on older payloads, object on newer). Every read goes through the model's `itemRevenue` / `itemCount` helpers — reading `.purchaseCount` off the numeric form would yield `NaN`. Guarded by `npm run test:period-comparison`.
+
+**Deliberately absent: a "Contribution" / profit row.** `revenue.total` includes renewals while ad spend only buys acquisition, so `revenue − spend` here would flatter. The honest version of that metric is acquisition-scoped and already lives on the **All Platforms** tab (master spec §2). Adding an ambiguous second one would be a new source of truth, which is the thing this work exists to reduce.
+
+## Rendered verification + two fixes it caught (2026-08-19)
+
+The Brand Performance and Period Comparison work was verified **on screen** via the e2e harness (`npm run e2e:env`, isolated seeded DB at :3799, Playwright as `e2e.admin@e2e.local`) rather than by reasoning about the DOM. Two things only surfaced there:
+
+**1. Per-day normalisation was being applied to a stock metric.** "Active memberships" rendered as `1 vs 0.032 per day` — a point-in-time *level* divided by a day count, which is meaningless. `ComparisonMetric` now carries a `stock` flag and `perDay()` returns null for it, exactly as it already did for ratios. `activeSubscriptions` is the only stock in the set; `test:period-comparison` asserts that and that everything else stays a flow.
+
+**2. `PrizePerformanceAdsModal` was a naming fork.** The card became `BrandPerformanceCard` but the modal (and four code comments) still said `PrizePerformance*`, referencing a file that no longer exists. Renamed to `BrandPerformanceAdsModal`; comments in `spendByUrlAdBreakdown.ts`, `spend-by-url/route.ts`, `CampaignTreeTable.tsx` and `LandingPageMetricsDaily.ts` updated.
+
+**Confirmed working in the browser:**
+
+- **Sticky filter** — scrolled the admin container 2000px; the toolbar held at a constant 24px offset from the container top and stayed visible, with content scrolling *under* it. Ancestor chain verified: sticky bar → `space-y-5` parent (3240px) → `overflow-y-auto` container (827px), no `transform`/`filter`/`contain` in between.
+- **Period comparison** — both windows named ("Today vs 2026-07-01 → 2026-07-31"), per-day column appears on unequal lengths with the "1d vs 31d" note, `deltaPct === null` renders "new" rather than ∞, ROAS shows `—` for per-day.
+- **Drawer** — opens, groups Revenue / Customers / Advertising, carries Acquisition revenue + Contribution, "Biggest movers" sort present.
+- **Brand Performance** — all three `Segmented` controls plus Compare render; all 8 toggle combinations clicked with **zero console errors** and the card still mounted.
+
+⚠️ Not covered: the seeded e2e DB has no ad-spend rows, so Brand Performance was exercised only in its empty state. The populated table, the observed-mix split note and the Δ chips have been verified against production data through the API (see the Norm smoke) but not visually.
+
+## Mobile + dark verification, and the two bugs it found (2026-08-19)
+
+Both surfaces were rendered on a 390×844 viewport and in dark mode via the e2e harness, not reasoned about.
+
+**Dark mode needed no changes.** Measured rather than eyeballed — the active `Segmented` pill computes to `rgb(10,10,10)` on a `rgb(23,23,23)` card with white text; the Compare / Sync / All-metrics buttons all resolve to `neutral-900` surfaces with `neutral-300/400` text; the asymmetry note and Δ chips keep contrast. Every new class already carried a paired `dark:` variant.
+
+**Mobile found two real bugs:**
+
+**1. The Δ column was scrolled off-screen.** The comparison table scrolls horizontally on a phone, and Δ was 5th — behind the optional per-day column — so the single most important number was hidden by default. **Column order is now load-bearing:** `Metric · Selected · Last month · Δ · Per day`. Δ sits immediately after the two values it compares; per-day is supporting detail and trails it. This is better at every width, not just on mobile.
+
+**2. The drawer sat 20px below the viewport.** `PeriodComparisonCard` is a child of `DashboardOverview`'s `space-y-5` stack, and **`space-y-*` applies `margin-top` to every child after the first — including `position: fixed` ones.** The overlay and drawer inherited `margin: 20px 0 0`, so both rendered 20px down and left a strip of the admin header uncovered. Both are now portaled to `document.body`, which removes the margin and also guarantees they can never be trapped by a future transform/filter ancestor — the same reason the kit's `Popover` portals.
+
+⚠️ **General rule this exposes:** never render a `fixed` overlay as a direct child of a `space-y-*` / `gap` container. It looks correct in the JSX and silently offsets at runtime.
+
+**`DataTable` gained an opt-in `stickyFirstColumn`.** Default off, so no existing table changes (verified in-browser: Advertising and MER are untouched). Brand Performance turns it on — seven columns scroll on a phone, and without pinning the brand wordmark, which is the *only* thing identifying a row, scrolls away leaving anonymous numbers.
+
+**Confirmed on device:** no page-level horizontal scroll; the date filter portals into the always-visible header slot; wide tables scroll inside their own containers; the pinned metric column holds at `left:0` with an opaque matching background through a full horizontal scroll; the drawer fills the viewport at `top:0`.
+
+The `NEXTJS-PORTAL` element that paints over the drawer header under `npm run dev` is the Next.js dev-tools overlay — dev-only, not present in production builds.
+
+## Users: mini-draw filters (2026-08-20)
+
+Two new dropdowns on the Users tab, and both flow into the export.
+
+| Filter | Param | Means |
+|---|---|---|
+| Mini pack | `miniDrawPackage=yes\|no` | Ever bought a Mini Pack — a lifetime purchase fact |
+| Mini draw | `inActiveMiniDraw=yes\|no` | Holds entries in a draw that is active **right now** |
+
+**Two dropdowns rather than one**, because they answer different questions and compose. "Bought a Mini Pack but is NOT currently in a draw" is a re-engagement segment, and neither filter alone can express it.
+
+⚠️ **`inActiveMiniDraw` resolves from the MiniDraw collection (`status: "active"`), NOT from `miniDrawParticipation[].isActive`** — even though that flag is indexed and would be cheaper. The flag is only cleared when a **winner is selected**; an admin changing a draw's status via `/api/admin/mini-draw/update` does not cascade to participants, so it goes stale and would report people as being in a draw that was cancelled or completed without a winner. `MiniDraw.isActive` is itself marked "backward compatibility — should use status instead". This mirrors how `inActiveMajorDraw` resolves its cohort from the draw rather than a cache.
+
+**Query shape matters and is tested** (`npm run test:user-mini-draw-filters`): both use `$elemMatch` so the draw-id and entry-count predicates land on the **same** array element, and the "no" variants use `$not: { $elemMatch }` so users with no `miniDrawParticipation` array at all still match. With `inActiveMiniDraw=yes` and no active draws, the filter matches **nobody** rather than silently falling back to everybody — the same deliberate choice `inActiveMajorDraw` makes.
+
+**Export changes:**
+- Both filters apply (shared `buildUserFilter`) and appear in the export modal's filter summary and the generated filename.
+- **"Mini Draw Count" → "Active Mini Draws"**, and it now counts against the currently-active draw ids so it **agrees with the list filter**. It previously used the stale `isActive` flag, which meant filtering "in an active mini draw" and exporting produced a count column that disagreed with the rows it described.
+- New **"Mini Pack Entries"** column — lifetime entries from Mini Pack purchases. A purchase fact, so unlike the count it does not drop to zero when a draw completes.
+
+The active-draw ids are resolved **once per export**, not per user, and only when the column is selected.

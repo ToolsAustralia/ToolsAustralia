@@ -9,9 +9,11 @@ import type { ConvertingPlatform } from "@/types/attribution";
 import { listPrizes, getPrizeLabel } from "@/config/prizes";
 import {
   TOOLSET_LANDING_SLUGS,
-  PRIZE_LANE_SLUGS,
   getPageDefaultPrizeSlug,
 } from "@/config/promo-landing-slugs";
+// Lane bucketing is shared with BrandPerformanceService so the Page Analytics tab and the
+// Overview's Brand Performance section cannot disagree about which lane a purchase is in.
+import { brandLaneSwitchExpr, BRAND_LANE_PRIZE_SLUGS } from "@/utils/metrics/brand-lane";
 import { getPageTypeFromSlug } from "@/utils/promo-analytics/validate-promo-slug";
 // Type-only. Shared with the functional core so the write path cannot silently lose a field
 // again — see the note on `createVisit`.
@@ -1095,18 +1097,17 @@ export class PromoAnalyticsRepository {
   ): Promise<{ byToolbox: ToolboxMetrics[] }> {
     await connectDB();
 
-    // `$switch` over the lane registry. Anything unrecognised — notably `cash-prize`, which has
-    // no toolbox lane — resolves to null and is dropped, never bucketed somewhere plausible.
-    const laneOf = (field: string) => ({
-      $switch: {
-        branches: PRIZE_LANE_SLUGS.map(({ slug, toolbox }) => ({
-          case: { $eq: [field, slug] },
-          then: toolbox,
-        })),
-        default: null,
-      },
-    });
-    const LANE_SLUGS = PRIZE_LANE_SLUGS.map((l) => l.slug);
+    // `$switch` over the lane registry, SHARED with `BrandPerformanceService` via
+    // `brandLaneSwitchExpr`. This tab and the Overview's Brand Performance section are allowed
+    // to answer different questions, but never to contradict each other on the same one — so
+    // the lane mapping lives in exactly ONE place (src/utils/metrics/brand-lane.ts) and both
+    // import it. Guarded by `test:brand-performance-reconciliation`, which fails if the two
+    // surfaces' per-lane conversions/revenue ever diverge.
+    //
+    // Anything unrecognised — notably `cash-prize`, which has no toolbox lane — resolves to
+    // null and is dropped, never bucketed somewhere plausible.
+    const laneOf = (field: string) => brandLaneSwitchExpr(field, "toolbox");
+    const LANE_SLUGS = BRAND_LANE_PRIZE_SLUGS;
 
     const [builderAgg, signupAgg, convAgg] = await Promise.all([
       PromoAnalyticsVisit.aggregate<{ _id: string; builders: number; interactedBuilders: number }>([
@@ -1187,6 +1188,60 @@ export class PromoAnalyticsRepository {
 
     byToolbox.sort((a, b) => b.builders - a.builders || a.toolboxId.localeCompare(b.toolboxId));
     return { byToolbox };
+  }
+
+  /**
+   * Observed toolbox mix per TOOLSET landing page — how the visitors an ad bought actually
+   * distributed across toolbox lanes.
+   *
+   * Exists to de-skew toolbox ad-spend attribution. A bare `/promotions/ryobi` names no toolbox,
+   * so spend on it can only be assigned by modelling. The naive model — assign 100% to the
+   * page's first-paint default — concentrates every toolset page's spend on whichever toolbox
+   * is the default (today Milwaukee, via `getDefaultPrizeForToolsetSlug`), producing a Milwaukee
+   * row that is an artefact of the default rather than a measurement. This returns the real
+   * distribution so the spend can be split by the traffic it actually bought.
+   *
+   * Visitors are deduped per (page, toolbox) with the same `VISITOR_ID_EXPR` every other
+   * aggregation here uses, so this cannot disagree with the builder counts on the Page
+   * Analytics tab.
+   *
+   * ⚠️ `PromoAnalyticsVisit` carries a TTL (PROMO_VISIT_RETENTION_DAYS), so windows older than
+   * the retention period return NOTHING for those pages. That is not an error — the caller must
+   * fall back to the page default and say which model it used. Never silently drop the spend.
+   */
+  async getToolboxMixByToolsetPage(
+    startDate: Date,
+    endDate: Date
+  ): Promise<Array<{ slug: string; toolbox: string; visitors: number }>> {
+    await connectDB();
+
+    const rows = await PromoAnalyticsVisit.aggregate<{
+      _id: { slug: string; toolbox: string };
+      visitors: number;
+    }>([
+      {
+        $match: {
+          timestamp: { $gte: startDate, $lte: endDate },
+          pageType: "toolset",
+          slug: { $in: [...TOOLSET_LANDING_SLUGS] },
+          builtPrizeSlug: { $in: BRAND_LANE_PRIZE_SLUGS },
+        },
+      },
+      { $addFields: { _toolbox: brandLaneSwitchExpr("$builtPrizeSlug", "toolbox") } },
+      // Dedupe first: one visitor who fired several beacons on the same page for the same
+      // toolbox must weigh once, or a chatty session would skew the very mix this corrects.
+      { $group: { _id: { slug: "$slug", toolbox: "$_toolbox", v: VISITOR_ID_EXPR } } },
+      {
+        $group: {
+          _id: { slug: "$_id.slug", toolbox: "$_id.toolbox" },
+          visitors: { $sum: 1 },
+        },
+      },
+    ]).exec();
+
+    return rows
+      .filter((r) => r._id?.slug && r._id?.toolbox)
+      .map((r) => ({ slug: r._id.slug, toolbox: r._id.toolbox, visitors: r.visitors }));
   }
 
   /**

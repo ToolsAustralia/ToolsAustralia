@@ -450,6 +450,10 @@ export interface UserFilters {
   states?: string[];
   /** Active major draw with entries: yes | no */
   inActiveMajorDraw?: "yes" | "no" | "";
+  /** Ever bought a Mini Pack (lifetime purchase fact): yes | no */
+  miniDrawPackage?: "yes" | "no" | "";
+  /** Holds entries in a mini draw that is active RIGHT NOW: yes | no */
+  inActiveMiniDraw?: "yes" | "no" | "";
   /** Membership Streak: "none" = streak 0/absent; a number string ("2","6","12") = at least N consecutive paid renewals. */
   streak?: string;
   /**

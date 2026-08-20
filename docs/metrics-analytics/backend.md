@@ -183,3 +183,66 @@ number. Unanimous multi-URL destinations classify normally, so the common case i
 ## Dashboard redesign
 
 (Migrated stub from `docs/dashboard-redesign-implementation.md` — _TODO: read root._)
+
+## Brand-lane resolution (`src/utils/metrics/brand-lane.ts`, 2026-08-19)
+
+The single mapping from a promotion identifier to the brand row it belongs in. Two axes, both derived from `PRIZE_LANE_SLUGS` / `TOOLBOX_LANE_ORDER`:
+
+- **toolset** — the power-tool brand (`ryobi | milwaukee | dewalt | makita | hikoki`)
+- **toolbox** — the storage brand (`sidchrome | kincrome | milwaukee | gearwrench`)
+
+**Why it is one module rather than a resolver per caller.** Brand analytics joins two sources that can only ever be keyed differently: spend comes from `LandingPageMetricsDaily` keyed on the **canonical URL** (query strings are stripped, so a visitor's `?toolbox=` selection is invisible), while outcomes come from `PaymentEvent` keyed on `data.promotionSlug` or `data.builtPrizeSlug`. Applying the *same* rules to both keys is what makes the two sides bucket identically instead of by coincidence. Fork it and a brand's ad spend and the revenue it produced land in different rows with nothing to flag it.
+
+Four entry points, all agreeing by construction:
+
+| Function | Input | Notes |
+|---|---|---|
+| `resolveBrandLaneFromBuiltPrize` | `ryobi-kincrome` | exact — a built prize names both halves |
+| `resolveBrandLaneFromPromoSlug` | `/promotions/<slug>`'s slug | bare toolset slugs resolve their toolbox via `getPageDefaultPrizeSlug` |
+| `resolveBrandLaneFromCanonicalUrl` | full canonical URL | extracts the slug, then defers to the above |
+| `brandLaneSwitchExpr` | a Mongo field path | `$switch` for in-database bucketing |
+
+**The page-default fallback is load-bearing.** A bare `/promotions/ryobi` has no toolbox in the identifier, so the toolbox lane resolves through `getPageDefaultPrizeSlug('ryobi')` → `ryobi-milwaukee` → `milwaukee`. That is the toolbox the ad's traffic actually saw on first paint, and it is exactly what the server records for a visitor who never touched the builder — so both sides agree by construction.
+
+⚠️ **Known, accepted skew:** `getDefaultPrizeForToolsetSlug` prefers the Milwaukee toolbox, so bare-toolset-URL spend concentrates on Milwaukee in the toolbox view. That is the literal truth of what was advertised, not an error. The `built-prize` basis is the lens that shows how demand redistributes away from the default.
+
+**Unrecognised inputs resolve to `null` and are DROPPED, never bucketed somewhere plausible** — notably `cash-prize` (no toolbox lane) and the `unknown://meta-ad/<id>` placeholder rows the sync writes when a platform can't resolve an ad's destination. Callers surface these as an "Unattributed" row so totals still reconcile.
+
+**Server-safety:** this module is imported by services and repositories, so it must never import the prize-builder's `TOOLBOXES` / `TOOLSETS` constants (they live under `src/components/**`). `PRIZE_LANE_SLUGS` in `src/config/promo-landing-slugs.ts` is the server-safe registry.
+
+`brandLaneSwitchExpr` is shared with `PromoAnalyticsRepository.getAggregatedByToolbox`, so the Page Analytics tab and the Overview's Brand Performance section cannot disagree about which lane a purchase belongs to. `npm run test:brand-lane` asserts the `$switch` and the JS resolver produce identical mappings for every registry entry in both lanes.
+
+## `resolvePreviousCalendarMonthAest` (2026-08-19)
+
+In `src/utils/admin/resolveAestDateWindow.ts`, beside the preset resolver. Returns the literal 1st→last day of the previous calendar month in AEST as `yyyy-MM-dd` bounds — the fixed benchmark the admin period-comparison table measures against.
+
+**Not a replacement for `trendCalculationService.getComparisonPeriod`.** That returns the equal-length window immediately *preceding* the selection and drives the KPI trend arrows. Both are kept as separate, clearly-named functions rather than one function with a mode flag, because they answer different questions: "vs the previous equivalent stretch" versus "vs last month, a benchmark that doesn't move when you change the range".
+
+**Anchored on the AEST calendar, never UTC.** Sydney is UTC+10/+11, so a late-UTC-evening instant is already the *next* AEST day — and on the last UTC day of a month, the AEST calendar has already rolled over. `2026-01-31T23:00Z` is 1 February in Sydney, so the previous calendar month is **January**, not December. Reading the UTC month there gives the wrong answer. Covered by `npm run test:previous-calendar-month`, which also pins the year boundary (January → previous December), leap/non-leap February, and both DST transitions.
+
+The month arithmetic runs on calendar *numbers* pulled out of `formatInTimeZone(..., "yyyy-MM")`, so a 23h/25h DST day cannot shift either bound.
+
+## Toolbox spend de-skew — observed visitor mix (2026-08-19)
+
+**The problem.** A bare `/promotions/<toolset>` page names no toolbox, so under the toolbox lane its ad spend can only be assigned by modelling. The first model — assign 100% to the page's first-paint default — was wrong in a way that looked plausible: `getDefaultPrizeForToolsetSlug` prefers the Milwaukee toolbox, so *every* toolset page's spend piled onto Milwaukee. The Milwaukee row measured the default, not the market.
+
+**The correction.** `allocateBrandLanes` (`src/utils/metrics/brand-lane.ts`) splits that spend across toolbox lanes in proportion to the toolbox mix the page's visitors **actually built**, from `PromoAnalyticsRepository.getToolboxMixByToolsetPage`. Spend follows the traffic it bought.
+
+Measured on production data (1 Jul – 19 Aug 2026): `/promotions/makita` drew 5 builder visitors splitting milwaukee 60% / gearwrench 20% / kincrome 20%, so its $1,373.51 now divides $824.11 / $274.70 / $274.70 instead of all $1,373.51 landing on Milwaukee.
+
+**Two models, and the response says which ran** (`meta.toolboxSpendModel`):
+
+| Value | Meaning |
+|---|---|
+| `observed-mix` | split by the page's real visitor mix — the accurate model |
+| `page-default` | fallback: no visit data in the window (short range, or older than the `PromoAnalyticsVisit` TTL). **Skews** toward the page default |
+| `mixed` | both, on different pages |
+| `null` | toolset lane — the URL names the brand, nothing is modelled |
+
+Weights always sum to 1, so **no spend is created or lost**: total spend is identical whichever lane you group by. Verified against production — both groupings returned exactly `16762.5000`.
+
+⚠️ **The sample can be thin, and that is surfaced, not buried.** Builder beacons are far sparser than ad impressions — the production window above split thousands of dollars on 2–6 visitors per page. `meta.toolboxMixVisitors` reports the sample size; the admin card renders it in amber below 30 with "treat the split as indicative". A modelled split must never be presented as a measurement.
+
+**Fractional counts are expected.** Splitting a page's conversions by weight yields fractions per row. The split conserves totals exactly; the UI rounds per row on render only.
+
+**Under `basis=platform`, revenue and conversions take the SAME split** as spend — they are URL-keyed too, and dividing a modelled spend by an unmodelled revenue would produce a nonsense ROAS.
