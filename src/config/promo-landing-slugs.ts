@@ -112,8 +112,106 @@ export function getDefaultPrizeForToolsetSlug(slug: ToolsetLandingSlug): PrizeSl
  * `cash-prize` is deliberately absent — it has no toolbox lane, so it is excluded from
  * toolbox rollups rather than bucketed somewhere misleading.
  */
-const TOOLBOX_LANE_ORDER = ["sidchrome", "kincrome", "milwaukee", "gearwrench"] as const;
+export const TOOLBOX_LANE_ORDER = ["sidchrome", "kincrome", "milwaukee", "gearwrench"] as const;
 export type ToolboxLaneId = (typeof TOOLBOX_LANE_ORDER)[number];
+
+/**
+ * Display label + wordmark for every brand lane, both axes.
+ *
+ * Lives here beside the registries it describes rather than inside a single admin component,
+ * which is where the toolset half used to live — a fork that covered only 5 of the 9 lanes and
+ * had already gone stale once (HiKOKI was missing from the ROAS table for its whole first run).
+ *
+ * The `Record<…>` types are load-bearing: adding a brand to `TOOLSET_LANDING_SLUGS` or
+ * `TOOLBOX_LANE_ORDER` fails compilation here until its label and wordmark are supplied, so a
+ * new brand cannot silently appear as an unlabelled row.
+ *
+ * ⚠️ Milwaukee appears in BOTH maps with the same label and wordmark — it is genuinely both a
+ * power-toolset brand and a toolbox brand. Any UI showing these must make the active lane
+ * obvious, because the artwork alone cannot distinguish the two rows.
+ */
+export interface BrandLaneDisplay {
+  label: string;
+  /** Wordmark under /public/images/brands/name/. */
+  logoPath: string;
+  /**
+   * Light-mode variant, when the wordmark is multi-colour and therefore cannot be recoloured
+   * by a CSS mask. Only GearWrench needs one — see `TOOLBOX_LANE_DISPLAY`.
+   */
+  logoPathLight?: string;
+  /**
+   * The brand ink to paint a single-colour wordmark, per theme.
+   *
+   * The raw SVGs are flat black, so rendered as plain `<img>` every brand looks identical and
+   * Kincrome loses the blue it has everywhere else on the site. Consumers paint it with a CSS
+   * mask, which is the same technique the /promotions prize selector uses — these values are
+   * deliberately the SAME ones as `TOOLBOXES` in
+   * `src/components/sections/promo/prize-selection/constants.ts`, so the admin table and the
+   * customer-facing selector cannot drift apart.
+   *
+   * Omitted where the mark carries its own colour (GearWrench) or is genuinely black.
+   */
+  markColor?: { light: string; dark: string };
+}
+
+const wordmark = (slug: string) => `/images/brands/name/${slug}Text.svg`;
+
+export const TOOLSET_LANE_DISPLAY: Record<ToolsetLandingSlug, BrandLaneDisplay> = {
+  ryobi: { label: "Ryobi", logoPath: wordmark("ryobi") },
+  milwaukee: { label: "Milwaukee", logoPath: wordmark("milwaukee") },
+  dewalt: { label: "Dewalt", logoPath: wordmark("dewalt") },
+  makita: { label: "Makita", logoPath: wordmark("makita") },
+  hikoki: { label: "HiKOKI", logoPath: wordmark("hikoki") },
+};
+
+/**
+ * Colours mirror `TOOLBOXES` in the /promotions prize selector so a brand reads the same on both
+ * screens. Each value is copied WITH its reason; do not "tidy" one without the other.
+ */
+export const TOOLBOX_LANE_DISPLAY: Record<ToolboxLaneId, BrandLaneDisplay> = {
+  sidchrome: {
+    label: "Sidchrome",
+    logoPath: wordmark("sidchrome"),
+    // Sidchrome's own accent, not the handoff's magenta-cast #c41230 — a true red at the same
+    // perceived weight as Milwaukee, so the two red brands sit consistently side by side.
+    markColor: { light: "#d21f2a", dark: "#d21f2a" },
+  },
+  kincrome: {
+    label: "Kincrome",
+    logoPath: wordmark("kincrome"),
+    // The site's canonical `kincrome-blue` ramp (`LANDING_PAGE_BRAND`, packageColorScheme.ts):
+    // `primaryDark` on light, `primaryLight` on dark. Kincrome is the one brand that genuinely
+    // needs a per-theme pair — blue is perceptually much darker than the two reds, so the deep
+    // official blue disappears on a dark surface.
+    markColor: { light: "#0047BB", dark: "#4A7ED4" },
+  },
+  milwaukee: {
+    label: "Milwaukee",
+    logoPath: wordmark("milwaukee"),
+    // EXACTLY the fill of milwaukeeText.svg, so the toolbox row and the toolset row of the same
+    // brand are the same red on the same screen.
+    markColor: { light: "#c92a28", dark: "#c92a28" },
+  },
+  gearwrench: {
+    label: "GearWrench",
+    logoPath: wordmark("gearwrench"),
+    // The ONLY two-tone mark: "GEAR" in theme ink, "WRENCH" in Molten Orange, plus an orange
+    // gear badge. A CSS mask paints one flat colour and physically cannot render that, so this
+    // pair ships two files and NO markColor — consumers must use the image path directly.
+    logoPathLight: "/images/brands/name/gearwrenchText-light.svg",
+  },
+};
+
+/** Label + wordmark for a lane id, or a titlecased fallback for an id the registries don't know. */
+export function getBrandLaneDisplay(laneId: string, lane: "toolset" | "toolbox"): BrandLaneDisplay {
+  const map = lane === "toolset" ? TOOLSET_LANE_DISPLAY : TOOLBOX_LANE_DISPLAY;
+  return (
+    (map as Record<string, BrandLaneDisplay | undefined>)[laneId] ?? {
+      label: laneId.charAt(0).toUpperCase() + laneId.slice(1),
+      logoPath: "",
+    }
+  );
+}
 
 export const PRIZE_LANE_SLUGS: ReadonlyArray<{
   slug: PrizeSlug;

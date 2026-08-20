@@ -23,7 +23,7 @@ const aggService = new SpendByUrlAggregationService();
  * "all" option: spend across platforms is additive, but platform-REPORTED revenue is each
  * platform's own attribution and the same purchase can be claimed by both — a blended row
  * would inflate revenue and ROAS with no way for the reader to see it. Callers that want a
- * company-wide view request each platform and combine explicitly (see PrizePerformanceCard).
+ * company-wide view request each platform and combine explicitly (see BrandPerformanceCard).
  */
 export async function GET(request: NextRequest) {
   try {

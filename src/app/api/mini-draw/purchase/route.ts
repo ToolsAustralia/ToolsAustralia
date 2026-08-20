@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isEmployeeAccount } from "@/utils/giveaway-eligibility";
 import { z } from "zod";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -97,8 +98,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ AUTHENTICATION-ONLY: Mini draws are now available to all authenticated users
-    // Membership check removed - any logged-in user can purchase mini draw packages
+    // ✅ AUTHENTICATION-ONLY for CUSTOMERS: no membership required, any logged-in customer may buy.
+    //
+    // Internal accounts are the one exception. Terms §5.5 (Employee Exclusion) makes Tools
+    // Australia employees ineligible to WIN, so letting a staff session be charged for entries
+    // takes money for something that can never pay out.
+    //
+    // This gate is the one that actually holds. Staff used to be kept off `/mini-draws` entirely
+    // by the middleware block-list, which prevented the purchase as a side effect; that block was
+    // lifted on 2026-08-20 so staff could open the public draw page the admin UI links to, and
+    // the side effect went with it. Hiding the buy widget in the UI is cosmetic — the endpoint is
+    // reachable directly.
+    // Read from the User doc just loaded above, NOT `session.user.userType`: the session is a
+    // JWT that still says "customer" until it refreshes, so a freshly-promoted staff account
+    // would slip through a claim-based check.
+    if (isEmployeeAccount(user.userType)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Tools Australia staff accounts are not eligible to enter draws (Terms §5.5).",
+        },
+        { status: 403 }
+      );
+    }
 
     // Create or retrieve Stripe customer ID
     let stripeCustomerId = user.stripeCustomerId;

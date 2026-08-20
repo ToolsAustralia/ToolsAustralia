@@ -910,3 +910,33 @@ Three deliberate choices:
 
 Search resolves against `User` first and then filters the embedded `entries` array, because the
 searchable fields live on the user document, not on the entry. The regex is escaped before use.
+
+## `GET /api/admin/analytics/brand-performance` (2026-08-19)
+
+Ad spend and return per **brand lane**, backing the Overview's Brand Performance card. Permission `facebookAds.view`, matching every sibling under `analytics/`. Thin route → `BrandPerformanceService`.
+
+```
+?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD   (required)
+&lane=toolset|toolbox                       (default toolset)
+&basis=landing-page|built-prize|platform    (default landing-page)
+&platform=meta|tiktok|all                   (default all)
+&compare=previous-period                    (optional)
+```
+
+**`basis` is the only thing that changes where outcomes come from.** Spend is always keyed on the canonical URL, for every basis, because `canonicalizeLandingUrl` strips query strings — the ad platform cannot know which combination a visitor built.
+
+| basis | outcome source | lane key | membership split |
+|---|---|---|---|
+| `landing-page` | `PaymentEvent` | `data.promotionSlug` | yes — full 5-category split |
+| `built-prize` | `PaymentEvent` | `data.builtPrizeSlug` | yes — full 5-category split |
+| `platform` | `LandingPageMetricsDaily` | canonical URL | **no** — fields are `null` |
+
+**`platform=all` IS offered here, unlike the `spend-by-url` sibling which refuses it.** For the two server bases revenue comes from our own ledger and is read once, so combining platforms only combines *spend* — safe. Under `basis=platform` it is still offered but the response sets `meta.blendedPlatformRevenue: true` so the UI can flag the double-count (the same purchase can be claimed by Meta and TikTok) rather than the route refusing outright.
+
+**The comparison window is resolved server-side** (`resolvePreviousCalendarMonthAest`), not accepted from the client — otherwise two surfaces on the same screen could benchmark against different definitions of "last month". When `compare` is set, every row carries a `comparison` of the same shape; a lane with no prior activity gets an explicit **zero row**, not `undefined`, because "first spend this month" is a real reading.
+
+**Response invariants** (Advertising Analytics Suite master spec §3.1): renewals excluded via `data.billingReason === "subscription_cycle"` (never `isRenewal`), refunds netted whole-row, ROAS recomputed from summed spend ÷ summed revenue. All three come free from delegating to `classifyAcquisitionCategory` and `excludeRefundedBenefitsGrantedStages()` rather than re-writing the predicates.
+
+`unattributed` holds spend/outcomes that resolved to no lane and **is included in `totals`** — that is what keeps the Total reconciled with the ad account and with the Overview revenue card.
+
+`maxDuration = 60`: on-read freshness may sync trailing days, and `compare` doubles the outcome aggregation.

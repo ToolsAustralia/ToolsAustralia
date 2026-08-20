@@ -14,6 +14,7 @@ import { getPackageById } from "@/data/membershipPackages";
 import { SUBSCRIBED_SUBSCRIPTION_STATUSES } from "@/utils/admin/userFilterBuilder";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
+import MiniDraw from "@/models/MiniDraw";
 
 /**
  * User data type from database (lean document)
@@ -43,7 +44,15 @@ export type UserLeanDocument = {
     autoRenew?: boolean;
     [key: string]: unknown; // Allow other properties from MongoDB
   };
-  miniDrawParticipation?: Array<{ isActive?: boolean; [key: string]: unknown }>;
+  miniDrawParticipation?: Array<{
+    isActive?: boolean;
+    miniDrawId?: unknown;
+    totalEntries?: number;
+    entriesBySource?: { "mini-draw-package"?: number; [k: string]: unknown };
+    [key: string]: unknown;
+  }>;
+  /** Purchase ledger — one row per mini-draw package bought, $pull-ed on refund. */
+  miniDrawPackages?: Array<{ entriesGranted?: number; packageId?: string; [k: string]: unknown }>;
   rewardsPoints?: number;
   accumulatedEntries?: number;
   [key: string]: unknown; // Allow other properties from MongoDB
@@ -234,6 +243,16 @@ export function transformUserData(
   computedFields: {
     totalSpent: number;
     majorDrawEntries: number;
+    /**
+     * Ids of mini draws that are active RIGHT NOW, resolved once per export.
+     *
+     * Required for the Mini Draw Count column to agree with the `inActiveMiniDraw` FILTER. Both
+     * now read the MiniDraw collection instead of the denormalised
+     * `miniDrawParticipation[].isActive` flag, which is only cleared on winner selection and goes
+     * stale when an admin changes a draw's status. Before this, filtering "in an active mini
+     * draw" and exporting produced a count column that disagreed with the rows describing it.
+     */
+    activeMiniDrawIds: Set<string>;
   }
 ): TransformedUserData {
   const transformed: TransformedUserData = {};
@@ -279,8 +298,25 @@ export function transformUserData(
       // Special handling for packageName (needs to be extracted from subscription.packageId)
       value = packageName;
     } else if (fieldKey === "miniDrawCount") {
-      // Count mini draws user is participating in
-      value = (user.miniDrawParticipation || []).filter((p) => p.isActive !== false).length;
+      // Mini draws the user currently holds entries in, counted against the CURRENTLY-ACTIVE
+      // draw ids so this matches the inActiveMiniDraw filter exactly — see computedFields.
+      value = (user.miniDrawParticipation || []).filter(
+        (p) =>
+          (p.totalEntries ?? 0) > 0 &&
+          p.miniDrawId != null &&
+          computedFields.activeMiniDrawIds.has(String(p.miniDrawId))
+      ).length;
+    } else if (fieldKey === "miniPackEntries") {
+      // Entries granted by mini-draw package PURCHASES, lifetime.
+      //
+      // Read off the purchase ledger, not entriesBySource — that bucket is reset to 0 for every
+      // participant when a winner is selected, and is also written by upsells and admin entry
+      // edits. `miniDrawPackages` survives winner selection and is $pull-ed on refund, so this
+      // is genuinely lifetime and genuinely a purchase.
+      value = (user.miniDrawPackages || []).reduce((sum, p) => sum + (p.entriesGranted ?? 0), 0);
+    } else if (fieldKey === "miniPacksBought") {
+      // How many mini-draw packages they have bought and kept (refunds are $pull-ed).
+      value = (user.miniDrawPackages || []).length;
     } else if (fieldKey === "id") {
       // Use userId as id
       value = userId;
@@ -317,10 +353,18 @@ export async function transformUsersForExport(
   // Calculate computed fields in parallel
   const needsTotalSpent = selectedFields.includes("totalSpent");
   const needsMajorDrawEntries = selectedFields.includes("majorDrawEntries");
+  const needsActiveMiniDraws = selectedFields.includes("miniDrawCount");
 
-  const [totalSpentMap, majorDrawEntriesMap] = await Promise.all([
+  const [totalSpentMap, majorDrawEntriesMap, activeMiniDrawIds] = await Promise.all([
     needsTotalSpent ? calculateTotalSpent(userIds) : Promise.resolve(new Map<string, number>()),
     needsMajorDrawEntries ? calculateMajorDrawEntries(userIds) : Promise.resolve(new Map<string, number>()),
+    // One query for the whole export, not one per user.
+    needsActiveMiniDraws
+      ? MiniDraw.find({ status: "active" })
+          .select("_id")
+          .lean()
+          .then((docs) => new Set(docs.map((d: { _id: unknown }) => String(d._id))))
+      : Promise.resolve(new Set<string>()),
   ]);
 
   // Transform each user
@@ -332,6 +376,7 @@ export async function transformUsersForExport(
       {
         totalSpent: totalSpentMap.get(userId) || 0,
         majorDrawEntries: majorDrawEntriesMap.get(userId) || 0,
+        activeMiniDrawIds,
       }
     );
   });

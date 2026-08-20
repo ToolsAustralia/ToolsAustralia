@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { isEmployeeAccount } from "@/utils/giveaway-eligibility";
 import { motion } from "framer-motion";
 import {
   ArrowUpDown,
@@ -84,6 +86,14 @@ export default function MiniDrawsContent({
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [isDesktopSortOpen, setIsDesktopSortOpen] = useState(false);
   const [quickEnterDrawId, setQuickEnterDrawId] = useState<string | null>(null);
+
+  /**
+   * Terms §5.5 — employees are ineligible, so an internal account gets no quick-enter sheet.
+   * Mirrors the detail page (`MiniDrawInteractions`); `POST /api/mini-draw/purchase` is the gate
+   * that actually holds. Staff can reach this page since the 2026-08-20 middleware change.
+   */
+  const { data: session } = useSession();
+  const isStaffViewer = isEmployeeAccount(session?.user?.userType);
 
   const [sortField, sortOrder] = sortBy.split("-");
 
@@ -339,7 +349,7 @@ export default function MiniDrawsContent({
               miniDraw={miniDraw}
               index={index}
               viewMode={viewMode}
-              onEnter={() => setQuickEnterDrawId(miniDraw._id)}
+              onEnter={isStaffViewer ? undefined : () => setQuickEnterDrawId(miniDraw._id)}
             />
           ))}
         </div>

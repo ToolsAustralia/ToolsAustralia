@@ -110,6 +110,16 @@ function getFilterSummary(filters: UserFilters): string {
       filters.inActiveMajorDraw === "yes" ? "In active major draw" : "Not in active major draw"
     );
   }
+  if (filters.miniDrawPackage) {
+    parts.push(
+      filters.miniDrawPackage === "yes" ? "Bought a Mini Pack" : "Never bought a Mini Pack"
+    );
+  }
+  if (filters.inActiveMiniDraw) {
+    parts.push(
+      filters.inActiveMiniDraw === "yes" ? "In an active mini draw" : "Not in an active mini draw"
+    );
+  }
   if (filters.streak) {
     parts.push(filters.streak === "none" ? "No streak" : `Streak: ${filters.streak}+ renewals`);
   }
@@ -249,6 +259,8 @@ export default function UserExportModal({ isOpen, onClose, filters, totalUsers }
         }
       }
       if (filters.inActiveMajorDraw) params.set("inActiveMajorDraw", filters.inActiveMajorDraw);
+      if (filters.miniDrawPackage) params.set("miniDrawPackage", filters.miniDrawPackage);
+      if (filters.inActiveMiniDraw) params.set("inActiveMiniDraw", filters.inActiveMiniDraw);
       if (filters.streak) params.set("streak", filters.streak);
 
       const response = await fetch(`/api/admin/users/export?${params.toString()}`, {

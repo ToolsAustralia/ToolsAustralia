@@ -3,7 +3,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { getPackageById } from "@/data/membershipPackages";
 import { normalizeMembershipPlanId } from "@/utils/membership/additional-package-mapping";
-import { getMiniDrawPackageById } from "@/data/miniDrawPackages";
+import { isMiniDrawPackageId } from "@/data/miniDrawPackages";
 import { stripe } from "@/lib/stripe";
 import Stripe from "stripe";
 // Referral processing moved to webhook - no longer needed here
@@ -129,47 +129,39 @@ export async function POST(request: NextRequest) {
     }
 
     // Get the package (check both regular membership packages and mini draw packages)
+    /**
+     * A mini-draw package cannot be sold here — reject BEFORE any money moves. See the twin guard
+     * in `create-one-time-purchase/route.ts` for the full history.
+     *
+     * Checked on BOTH the raw and canonical id. `normalizeMembershipPlanId` only strips `-member`,
+     * so `-mini` survives it and the two forms agree today — belt and braces so a future
+     * normalisation rule cannot open the hole by rewriting a mini id into something that passes.
+     *
+     * 400, not 404: the id is real, the endpoint is wrong.
+     */
     const canonicalPackageId = normalizeMembershipPlanId(validatedData.packageId);
+    if (isMiniDrawPackageId(validatedData.packageId) || isMiniDrawPackageId(canonicalPackageId)) {
+      return NextResponse.json(
+        {
+          error: "Mini draw packages must be purchased through the mini draw flow",
+          code: "MINI_DRAW_PACKAGE_WRONG_ENDPOINT",
+        },
+        { status: 400 }
+      );
+    }
+
     let membershipPackage = getPackageById(canonicalPackageId);
     if (!membershipPackage && validatedData.packageId !== canonicalPackageId) {
       membershipPackage = getPackageById(validatedData.packageId);
     }
-    let isMiniDrawPackage = false;
-
-    // If not found in regular packages, check mini draw packages
-    if (!membershipPackage) {
-      const miniDrawPackage =
-        getMiniDrawPackageById(validatedData.packageId) ?? getMiniDrawPackageById(canonicalPackageId);
-      if (miniDrawPackage && miniDrawPackage.isActive) {
-        // Convert mini draw package to membership package format for compatibility
-        membershipPackage = {
-          _id: miniDrawPackage._id,
-          name: miniDrawPackage.name,
-          price: miniDrawPackage.price,
-          totalEntries: miniDrawPackage.entries,
-          isActive: miniDrawPackage.isActive,
-          type: "one-time" as const,
-          description: miniDrawPackage.description,
-          features: [
-            `${miniDrawPackage.entries} Free Entries`,
-            `${miniDrawPackage.partnerDiscountDays} Days Partner Discounts`,
-          ],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        isMiniDrawPackage = true;
-        // console.log("🎲 Mini draw package detected:", miniDrawPackage.name);
-      }
-    }
-
     if (!membershipPackage || !membershipPackage.isActive) {
       return NextResponse.json({ error: "Invalid or inactive package" }, { status: 400 });
     }
 
-    if (!isMiniDrawPackage) {
-      const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
-      if (gateResponse) return gateResponse;
-    }
+    // Unconditional now that mini packages are rejected above — they were the only family that
+    // skipped the major-draw freeze gate, and they can no longer reach this route.
+    const gateResponse = await enforceMajorDrawOpenForNewPurchasesOr403();
+    if (gateResponse) return gateResponse;
 
     // Create or retrieve Stripe customer
     let stripeCustomerId = existingUser.stripeCustomerId;
@@ -397,13 +389,13 @@ export async function POST(request: NextRequest) {
       customer: customer.id,
       paymentMethod: paymentMethodId,
       confirm: true,
-      paymentType: isMiniDrawPackage ? "mini-draw" : "one-time",
+      paymentType: "one-time",
       description: membershipPackage.name,
       setupFutureUsage: "off_session", // ✅ Save payment method for future use (required for production/staging)
       metadata: {
         items: JSON.stringify([
           {
-            type: isMiniDrawPackage ? "mini-draw" : "membership",
+            type: "membership",
             id: membershipPackage._id,
             name: membershipPackage.name,
             price: membershipPackage.price,
@@ -413,8 +405,8 @@ export async function POST(request: NextRequest) {
         userId: existingUser._id.toString(),
         userEmail: existingUser.email, // ✅ CRITICAL: Add userEmail for webhook fallback lookup
         packageName: membershipPackage.name,
-        type: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
-        packageType: isMiniDrawPackage ? "mini-draw" : "one-time", // ✅ Also set 'packageType' for consistency
+        type: "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
+        packageType: "one-time", // ✅ Also set 'packageType' for consistency
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
         price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
         // ✅ ADD: Store payment method ID for webhook to save after payment succeeds

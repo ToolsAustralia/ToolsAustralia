@@ -10,6 +10,7 @@
 
 import mongoose from "mongoose";
 import MajorDraw from "@/models/MajorDraw";
+import MiniDraw from "@/models/MiniDraw";
 
 // UserFilters type is available but not directly imported here to avoid circular dependencies
 
@@ -163,6 +164,10 @@ export async function buildUserFilter(
     states?: string[];
     /** "yes" = has entries in active major draw; "no" = not in that set */
     inActiveMajorDraw?: string;
+    /** "yes" = has ever bought a mini-draw package (any tier); "no" = never has. */
+    miniDrawPackage?: string;
+    /** "yes" = holds entries in a mini draw that is active RIGHT NOW; "no" = does not. */
+    inActiveMiniDraw?: string;
     /** Membership Streak: "none" = streak 0/absent; a number string = at least N consecutive paid renewals */
     streak?: string;
     /**
@@ -184,6 +189,8 @@ export async function buildUserFilter(
     state,
     states,
     inActiveMajorDraw,
+    miniDrawPackage,
+    inActiveMiniDraw,
     streak,
     segment,
   } = filters;
@@ -509,6 +516,87 @@ export async function buildUserFilter(
       if (!filter.$and) filter.$and = [];
       (filter.$and as Array<Record<string, unknown>>).push({ _id: { $nin: oidList } });
     }
+  }
+
+  /**
+   * Bought a package for a mini draw, ever — ANY of them: `mini-pack-1..3`, the retired
+   * `mini-pack-4..8`, or the member-facing `additional-*-pack-mini` records that replaced 4–8
+   * and display as "Tradie Pack" / "Foreman Pack" / "Boss Pack" / "Power Pack" / "VIP Pack".
+   * Nothing here branches on package id, so a rename or a new tier needs no change.
+   *
+   * ⚠️ Reads `User.miniDrawPackages` — the PURCHASE LEDGER — NOT
+   * `miniDrawParticipation[].entriesBySource["mini-draw-package"]`, which this filter used until
+   * an audit on 2026-08-20 showed that bucket is wrong in both directions:
+   *
+   *   FALSE NEGATIVES — selecting a winner RESETS it. `mini-draw/[id]/select-winner` sets
+   *     `entriesBySource.mini-draw-package: 0` for every participant of the drawn cycle, so a
+   *     genuine buyer answers "never bought" the moment their draw is drawn. It also stays 0
+   *     when `addToMiniDraw` returns early on the capacity guard — the money is captured but no
+   *     entries are granted, which the higher-entry additional packs (25–500) hit far more often
+   *     than Mini Pack 1–3 (1/5/10).
+   *   FALSE POSITIVES — the bucket is written hard-coded by EVERY path into `addToMiniDraw`,
+   *     including mini-draw upsells and admin "Add Entry" edits (`syncMiniDrawParticipation`
+   *     force-writes it), so staff-granted entries read as a purchase.
+   *
+   * `miniDrawPackages` has none of that: it is `$push`ed only under `packageType === "mini-draw"`
+   * (before the capacity guard can bail), untouched by winner selection, and `$pull`ed by
+   * `stripePaymentIntentId` on refund — so it means "bought and kept". `packageId` is
+   * `required: true` on the schema, so its presence is exactly "has at least one purchase row".
+   *
+   * `"miniDrawPackages.packageId"` rather than `"miniDrawPackages.0"` so the multikey index can
+   * be used. Absence covers users with no array at all.
+   */
+  if (miniDrawPackage === "yes" || miniDrawPackage === "no") {
+    if (!filter.$and) filter.$and = [];
+    (filter.$and as Array<Record<string, unknown>>).push({
+      "miniDrawPackages.packageId": { $exists: miniDrawPackage === "yes" },
+    });
+  }
+
+  /**
+   * Holds entries in a mini draw that is active RIGHT NOW.
+   *
+   * ⚠️ Deliberately resolved from the MiniDraw collection (`status: "active"`) rather than the
+   * denormalised `miniDrawParticipation[].isActive` flag on the user, even though that flag is
+   * indexed and would be cheaper. The flag is only cleared when a WINNER IS SELECTED
+   * (`mini-draw/[id]/select-winner`); an admin flipping a draw's status via
+   * `/api/admin/mini-draw/update` does not cascade to participants, so it goes stale and would
+   * report people as "in an active draw" for a draw that was cancelled or completed without a
+   * winner. `status` is the field the model itself calls authoritative — `isActive` on MiniDraw
+   * is marked "backward compatibility - should use status instead".
+   *
+   * Mirrors how `inActiveMajorDraw` above resolves its cohort from the draw rather than a cache.
+   *
+   * `totalEntries > 0` so someone whose participation row exists but holds nothing is not
+   * counted as participating.
+   */
+  if (inActiveMiniDraw === "yes" || inActiveMiniDraw === "no") {
+    const activeDraws = await MiniDraw.find({ status: "active" }).select("_id").lean();
+    // `.lean()` widens `_id` to `unknown`; the ids come straight back to Mongo for an `$in`,
+    // so normalise to ObjectId rather than asserting the lean shape.
+    const activeIds = activeDraws.map((d) => new mongoose.Types.ObjectId(String(d._id)));
+
+    const inAnActiveDraw = {
+      miniDrawParticipation: {
+        $elemMatch: { miniDrawId: { $in: activeIds }, totalEntries: { $gt: 0 } },
+      },
+    };
+
+    if (!filter.$and) filter.$and = [];
+    if (inActiveMiniDraw === "yes") {
+      // No active draws => nobody qualifies. Return nothing rather than silently ignoring the
+      // filter, which would look like it had been applied and matched everyone.
+      (filter.$and as Array<Record<string, unknown>>).push(
+        activeIds.length === 0 ? { _id: { $in: [] } } : inAnActiveDraw
+      );
+    } else if (activeIds.length > 0) {
+      (filter.$and as Array<Record<string, unknown>>).push({
+        miniDrawParticipation: {
+          $not: { $elemMatch: { miniDrawId: { $in: activeIds }, totalEntries: { $gt: 0 } } },
+        },
+      });
+    }
+    // "no" with no active draws is a no-op: every user trivially satisfies it.
   }
 
   // Top 20% of active major-draw entry holders. Pushed onto `$and` like every other `_id`

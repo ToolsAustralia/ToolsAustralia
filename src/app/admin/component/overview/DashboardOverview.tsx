@@ -1,141 +1,80 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { createPortal } from "react-dom";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import React, { useState, useMemo } from "react";
 import { format } from "date-fns";
-import OverviewToolbar from "./OverviewToolbar";
 import KpiGrid from "./sections/KpiGrid";
 import RevenueChartCard from "./sections/RevenueChartCard";
 import MembershipCard from "./sections/MembershipCard";
 import RevenueBreakdownCard from "./sections/RevenueBreakdownCard";
 import AdvertisingPlatformCard from "./sections/AdvertisingPlatformCard";
 import MerByDrawCard from "./sections/MerByDrawCard";
-import PrizePerformanceCard from "./sections/PrizePerformanceCard";
+import BrandPerformanceCard from "./sections/BrandPerformanceCard";
+import PeriodComparisonCard from "./sections/PeriodComparisonCard";
 import TopDrawsCard from "./sections/TopDrawsCard";
 import UpcomingRenewalsCard from "./sections/UpcomingRenewalsCard";
 import ActivityCard from "./sections/ActivityCard";
 import QuickActionsCard from "./sections/QuickActionsCard";
 import UsersBreakdownSection from "./UsersBreakdownSection";
-import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
-import { DateRange } from "@/components/admin/DateRangeToggle";
+import { AdminDateRangeToolbar } from "@/components/admin/AdminDateRangeToolbar";
 import {
   useAdminDashboardStats,
   useCurrentAndLastDrawDates,
-  useMajorDrawsForDateRange,
   useMembershipByPackage,
 } from "@/hooks/queries/useAdminQueries";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { useAdminDateFilter } from "@/hooks/useAdminDateFilter";
 import { useAdminUserModal } from "@/contexts/AdminUserModalContext";
 
 export default function DashboardOverview() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-
-  // Date filter state
-  const [dateRange, setDateRange] = useState<DateRange>("today");
-  const [customStartDate, setCustomStartDate] = useState<string>("");
-  const [customEndDate, setCustomEndDate] = useState<string>("");
-  const [isCustomDateModalOpen, setIsCustomDateModalOpen] = useState(false);
+  /**
+   * Date filter — the SHARED hook every other analytics tab uses, with URL sync on so the
+   * range survives a refresh and stays deep-linkable (the behaviour this page had when it
+   * carried ~90 lines of its own state machinery, an effect, and a duplicate AEST resolver).
+   * The toolbar hosts its own custom-range modal and fetches its own major-draw list, so both
+   * are gone from here too.
+   */
+  const df = useAdminDateFilter("today", { syncToUrl: true });
+  const { dateRange } = df;
 
   // Section expand/collapse state — mobile starts collapsed; desktop always shows breakdowns via isLgUp || …
   const [isUsersBreakdownExpanded, setIsUsersBreakdownExpanded] = useState(false);
-
-  const { isLgUp, slotEl: mobileToolbarRoot } = useAdminMobileDateToolbarSlot();
 
   // Click-to-open user modal — passed down to the detail modals hosted inside the
   // Membership and Revenue breakdown cards.
   const { openUserModal } = useAdminUserModal();
 
-  // Sync date filter state with URL params on mount and when URL changes
-  useEffect(() => {
-    const urlDateRange = (searchParams.get("dateRange") as DateRange) || "today";
-    const urlStartDate = searchParams.get("startDate") || "";
-    const urlEndDate = searchParams.get("endDate") || "";
-
-    setDateRange(urlDateRange);
-    setCustomStartDate(urlStartDate);
-    setCustomEndDate(urlEndDate);
-  }, [searchParams]);
-
-  // Fetch current and last draw dates
+  // Draw names for the per-card KPI labels (the toolbar resolves draw WINDOWS itself).
   const { data: drawDates } = useCurrentAndLastDrawDates();
 
-  // Fetch major draws for date range selection
-  const { data: majorDraws = [] } = useMajorDrawsForDateRange();
+  /**
+   * Explicit dates are forwarded to children only for the presets that CARRY them.
+   *
+   * `useAdminDateFilter` always resolves a concrete window, but the query hooks treat a
+   * present start/end as part of their cache key and only forward it to the route for
+   * custom/draw ranges. Passing a resolved "today" pair would therefore re-key every cached
+   * query once per day for no behavioural gain. This preserves the exact contract the page
+   * had before the hook was adopted.
+   */
+  const carriesDates =
+    dateRange === "custom" || dateRange === "current-draw" || dateRange === "last-draw";
+  const childStartDate = carriesDates ? df.startDate || undefined : undefined;
+  const childEndDate = carriesDates ? df.endDate || undefined : undefined;
 
   // Fetch admin dashboard stats with date range filtering
   const {
     data: dashboardStats,
     isLoading: statsLoading,
     refetch: refetchStats,
-  } = useAdminDashboardStats(
-    dateRange,
-    customStartDate ? customStartDate : undefined,
-    customEndDate ? customEndDate : undefined
-  );
+  } = useAdminDashboardStats(dateRange, childStartDate, childEndDate);
 
   // Fetch membership data for the KPI grid + membership donut
   const { data: membershipByPackageData, isLoading: membershipLoading } = useMembershipByPackage(
     dateRange,
-    customStartDate ? customStartDate : undefined,
-    customEndDate ? customEndDate : undefined
+    childStartDate,
+    childEndDate
   );
 
-  // Update URL params when date filter changes
-  const updateDateFilter = (range: DateRange, start?: string, end?: string) => {
-    // Handle draw-based date ranges
-    if (range === "current-draw" && drawDates?.currentDraw) {
-      setDateRange(range);
-      setCustomStartDate(drawDates.currentDraw.startDate);
-      setCustomEndDate(drawDates.currentDraw.endDate);
-
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("dateRange", range);
-      params.set("startDate", drawDates.currentDraw.startDate);
-      params.set("endDate", drawDates.currentDraw.endDate);
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-      return;
-    }
-
-    if (range === "last-draw" && drawDates?.lastDraw) {
-      setDateRange(range);
-      setCustomStartDate(drawDates.lastDraw.startDate);
-      setCustomEndDate(drawDates.lastDraw.endDate);
-
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("dateRange", range);
-      params.set("startDate", drawDates.lastDraw.startDate);
-      params.set("endDate", drawDates.lastDraw.endDate);
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-      return;
-    }
-
-    // Update state immediately for responsive UI
-    setDateRange(range);
-    if (range === "custom" && start && end) {
-      setCustomStartDate(start);
-      setCustomEndDate(end);
-    } else {
-      setCustomStartDate("");
-      setCustomEndDate("");
-    }
-
-    // Update URL params
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("dateRange", range);
-    if (range === "custom" && start && end) {
-      params.set("startDate", start);
-      params.set("endDate", end);
-    } else {
-      params.delete("startDate");
-      params.delete("endDate");
-    }
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  };
-
-  // Format abbreviated date for display
+  // Format abbreviated date for the per-card KPI tag (longer than the toolbar's own compact
+  // trigger label, which the shared hook derives).
   const formatAbbreviatedDate = (startDate: string, endDate: string): string => {
     if (!startDate || !endDate) return "";
 
@@ -152,23 +91,6 @@ export default function DashboardOverview() {
       return "";
     }
   };
-
-  // Get display date for collapsed view
-  const displayDate = useMemo(() => {
-    if (dateRange === "custom" && customStartDate && customEndDate) {
-      return formatAbbreviatedDate(customStartDate, customEndDate);
-    }
-    if (dateRange === "all-time") {
-      return "All Time";
-    }
-    if (dateRange === "current-draw" && drawDates?.currentDraw) {
-      return "Current Draw";
-    }
-    if (dateRange === "last-draw" && drawDates?.lastDraw) {
-      return "Last Draw";
-    }
-    return undefined;
-  }, [dateRange, customStartDate, customEndDate, drawDates]);
 
   // Per-card date tag for the KPI grid — e.g. "Revenue (Today)" / "(Nov 2025 – present)"
   // / the active draw name. Draw names + the all-time launch month live here (KpiGrid
@@ -188,44 +110,19 @@ export default function DashboardOverview() {
         return start ? `${format(new Date(start), "MMM yyyy")} – present` : "All time";
       }
       case "custom":
-        return customStartDate && customEndDate
-          ? formatAbbreviatedDate(customStartDate, customEndDate)
+        return df.startDate && df.endDate
+          ? formatAbbreviatedDate(df.startDate, df.endDate)
           : "Custom";
       default:
         return "";
     }
-  }, [dateRange, drawDates, dashboardStats, customStartDate, customEndDate]);
-
-  const overviewToolbarProps = {
-    dateRange,
-    onRangeChange: (range: DateRange) => {
-      if (range === "custom") {
-        setIsCustomDateModalOpen(true);
-      } else {
-        updateDateFilter(range);
-      }
-    },
-    onCustomClick: () => setIsCustomDateModalOpen(true),
-    displayDate,
-  } as const;
-
-  const toolbarMobileInLayout =
-    !isLgUp && mobileToolbarRoot
-      ? createPortal(<OverviewToolbar {...overviewToolbarProps} placement="layout" />, mobileToolbarRoot)
-      : null;
-
-  const toolbarMobileUntilPortal =
-    !isLgUp && !mobileToolbarRoot ? (
-      <OverviewToolbar {...overviewToolbarProps} placement="layout" />
-    ) : null;
-
-  const toolbarDesktop = isLgUp ? <OverviewToolbar {...overviewToolbarProps} placement="page" /> : null;
+  }, [dateRange, drawDates, dashboardStats, df.startDate, df.endDate]);
 
   return (
     <div className="space-y-5 md:space-y-6">
-      {toolbarMobileInLayout}
-      {toolbarMobileUntilPortal}
-      {toolbarDesktop}
+      {/* Direct child, NOT wrapped: the toolbar is sticky on desktop and a wrapper sized to
+          the control would be the only box it could travel within — pinning it to nothing. */}
+      <AdminDateRangeToolbar filter={df} />
 
       {/* New KPI grid (redesign Phase 2) — replaces the old KPIMetricsGrid */}
       <KpiGrid
@@ -235,8 +132,8 @@ export default function DashboardOverview() {
         rangeLabel={kpiRangeLabel}
         statsLoading={statsLoading}
         membershipLoading={membershipLoading}
-        startDate={customStartDate || undefined}
-        endDate={customEndDate || undefined}
+        startDate={childStartDate}
+        endDate={childEndDate}
       />
 
       {/* Revenue breakdown + advertising by platform — same row, above the charts */}
@@ -245,16 +142,16 @@ export default function DashboardOverview() {
           stats={dashboardStats}
           loading={statsLoading}
           dateRange={dateRange}
-          startDate={customStartDate || undefined}
-          endDate={customEndDate || undefined}
+          startDate={childStartDate}
+          endDate={childEndDate}
           onUserClick={openUserModal}
         />
         <AdvertisingPlatformCard
           stats={dashboardStats}
           loading={statsLoading}
           dateRange={dateRange}
-          startDate={customStartDate || undefined}
-          endDate={customEndDate || undefined}
+          startDate={childStartDate}
+          endDate={childEndDate}
           onUserClick={openUserModal}
         />
       </div>
@@ -279,11 +176,21 @@ export default function DashboardOverview() {
         </div>
       </div>
 
-      {/* Prize performance — ad spend & return by prize (redesign Phase 4, row 3b) */}
-      <PrizePerformanceCard
+      {/* Selected period vs the previous calendar month. Sits directly above Brand
+          performance so the two "how did we do" reads are together. */}
+      <PeriodComparisonCard
+        stats={dashboardStats}
+        statsLoading={statsLoading}
+        startDate={df.startDate}
+        endDate={df.endDate}
+        rangeLabel={kpiRangeLabel}
+      />
+
+      {/* Brand performance — spend & return by brand lane (toolset / toolbox) */}
+      <BrandPerformanceCard
         dateRange={dateRange}
-        startDate={customStartDate || undefined}
-        endDate={customEndDate || undefined}
+        startDate={childStartDate}
+        endDate={childEndDate}
       />
 
       {/* Row 4 — top draws (placeholder) + upcoming renewals (redesign Phase 5) */}
@@ -312,17 +219,8 @@ export default function DashboardOverview() {
         onToggleExpand={() => setIsUsersBreakdownExpanded(!isUsersBreakdownExpanded)}
       />
 
-      {/* Custom Date Range Modal */}
-      <CustomDateRangeModal
-        isOpen={isCustomDateModalOpen}
-        onClose={() => setIsCustomDateModalOpen(false)}
-        onApply={(startDate, endDate) => {
-          updateDateFilter("custom", startDate, endDate);
-        }}
-        currentStartDate={customStartDate}
-        currentEndDate={customEndDate}
-        majorDraws={majorDraws}
-      />
+      {/* The custom-range modal and its major-draw list live inside AdminDateRangeToolbar —
+          one copy for every date-filtered admin tab, rather than one per page. */}
     </div>
   );
 }

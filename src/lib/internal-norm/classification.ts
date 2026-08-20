@@ -40,6 +40,7 @@ import {
   NormPromoAnalyticsSummarySchema,
 } from "./schemas/promo-analytics";
 import { NormPartnerDiscountAnalyticsSummarySchema } from "./schemas/partner-discount-analytics";
+import { NormBrandPerformanceSchema } from "./schemas/brand-performance";
 import {
   NormMetricsDebugSchema,
   NormUserMajorDrawComparisonSchema,
@@ -541,6 +542,16 @@ export const NORM_ENDPOINTS = {
       "Membership vs one-time landing-URL split of Meta ad spend/ROAS: bucket summary (materialized, any range) + campaign→adset→ad detail (live join, ~60-day insights window). platform=tiktok returns supported:false until its URL mapping ships.",
     rateLimit: { perMinute: 10 },
     responseSchema: NormAnalyticsPackagesFocusSchema,
+  },
+  "analytics.brand-performance": {
+    tier: "read",
+    requiredPermission: "facebookAds.view",
+    path: "/v1/analytics/brand-performance",
+    method: "GET",
+    summary:
+      "Ad spend and return per BRAND LANE. lane=toolset (ryobi/milwaukee/dewalt/makita/hikoki) or lane=toolbox (sidchrome/kincrome/milwaukee/gearwrench) — Milwaukee is in BOTH lanes, so read meta.lane before naming a row. basis selects where outcome figures come from: landing-page and built-prize read our own PaymentEvent ledger (acquisition-only, renewals excluded via billingReason, refunds netted) and carry a new-membership split; platform reports what Meta/TikTok themselves claim and has no membership split (those fields are null). Spend is ALWAYS keyed on the landing URL an ad bought. Under lane=toolbox a bare toolset page names no toolbox, so its spend is split across lanes by the toolbox mix its visitors actually built — meta.toolboxSpendModel says whether that observed mix or the page-default fallback was used. Optional compare=previous-period adds a comparison window to meta: the SAME span one calendar month earlier, with the current side truncated at today (so current draw 28 Jul-27 Aug read on 20 Aug compares 28 Jul-20 Aug against 28 Jun-20 Jul, like-for-like). Absent when the requested window has no comparable earlier period.",
+    rateLimit: { perMinute: 10 },
+    responseSchema: NormBrandPerformanceSchema,
   },
   "analytics.hourly-revenue": {
     tier: "read",

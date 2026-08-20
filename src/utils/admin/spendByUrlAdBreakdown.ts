@@ -143,7 +143,7 @@ export function spendByUrlDetailRowsFingerprint(rows: SpendByUrlDetailRow[]): st
 
 /**
  * Group per-ad detail rows into the campaign → adset → ad tree shape shared with
- * the packages-focus breakdown endpoint, so PrizePerformanceAdsModal and
+ * the packages-focus breakdown endpoint, so BrandPerformanceAdsModal and
  * AdSpendFocusModal render through one CampaignTreeTable. Detail rows are
  * pre-aggregated per ad, so node totals are simple sums; each ad node carries
  * its packagesFocus for badge display + chip filtering.
@@ -178,7 +178,7 @@ export function groupSpendByUrlDetailRowsByCampaign(rows: SpendByUrlDetailRow[])
     add(s.acc, r);
     const adAcc = newAcc();
     add(adAcc, r);
-    s.ads.push({ adId: r.adId, adName: r.adName, adFormat: r.adFormat, totals: toTotals(adAcc), packagesFocus: r.packagesFocus });
+    s.ads.push({ adId: r.adId, adName: r.adName, adFormat: r.adFormat, totals: toTotals(adAcc), packagesFocus: r.packagesFocus, canonicalUrl: r.canonicalUrl });
     c.adsets.set(sid, s);
     campaigns.set(cid, c);
   }

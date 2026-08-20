@@ -78,5 +78,11 @@ Direct) show `—` for spend/MER.
 
 ## Norm
 
-This is a new admin read endpoint. It is **not** mirrored to the internal-norm/OpenClaw
-gateway yet (CLAUDE.md rule 10) — flagged for the owner to decide.
+**Mirrored** at `/api/internal/norm/v1/analytics/mer-by-draw`, wrapping the same
+`getMerByDraw` service (CLAUDE.md rule 10). This section previously said it was *not* mirrored;
+that was stale — the route exists. Keep the Norm schema and `docs/internal-norm/norm-context.md`
+in lockstep with any change to the service's output shape.
+
+⚠️ The mirror inherits the same cost profile, so it carries the same `maxDuration: 60` override in
+`vercel.json`. Both halves were timing out at the 10s catch-all until 2026-08-20 — see
+[gotchas.md](./gotchas.md).

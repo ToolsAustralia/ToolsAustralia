@@ -4,9 +4,25 @@
 
 Mini-draw customer copy must sell the **pack**, not entries — the canonical product name is **"Mini Pack"** (`upsellPackages.ts` `displayName`), and entries are a **free inclusion**. Fixed the hero ("Entries start from $1" → "Mini packs start from $1"; "Per Entry" → "Per Pack"), `MiniDrawTabs` ("Purchase entry packages" / "entries can be purchased" → "mini pack"), `HowMiniDrawsWork`, and `MiniDrawEntrySheet` ("entry pack" → "mini pack"). Never price entries per unit and never say "buy entries". This is the site-wide legal rule — see **CLAUDE.md §11** (game-of-chance trade promotion; entries never sold; no odds/chance/gambling framing).
 
-## Mini-draw entries auth = NextAuth session, not a bearer token (2026-06-19)
+## `/api/mini-draws/entries` deleted — it was dead code against a schema that no longer exists (2026-08-20)
 
-`/api/mini-draws/entries` (GET/POST/PUT) used a private `getUserFromToken` that read `Authorization: Bearer <token>`. It now authorizes via `requireAuthenticatedUserDoc()` (NextAuth `getServerSession`, in [api-auth.ts](../../src/lib/api-auth.ts)), and the mutating POST/PUT call `requireSameOrigin(request)` for CSRF. Clients send no `Authorization` header — the session cookie is auto-attached. Part of the JWT/auth remediation; see [docs/auth/jwt-auth-remediation-spec.md](../auth/jwt-auth-remediation-spec.md).
+**Removed:** `src/app/api/mini-draws/entries/route.ts` (GET/POST/PUT, 257 lines). This closes the task [dashboard-account/gotchas.md](../dashboard-account/gotchas.md) flagged as "needs its own draws-domain task".
+
+**Why it was safe.** Zero callers — repo-wide, nothing referenced the bare `/api/mini-draws/entries` path. The one client hook that looked related, `useCancelMiniDrawEntry`, called `/api/mini-draws/entries/<entryId>`, a **sub-path that never had a route**; it is itself unused.
+
+**Why it had to go.** It was written against an obsolete **ticket-based** MiniDraw schema. `MiniDraw` has no `tickets`, `soldTickets`, `totalTickets`, `ticketPrice`, `startDate` or `endDate` — so:
+
+- the capacity check computed `undefined - undefined` = `NaN`, and `NaN < quantity` is `false`, so it never blocked;
+- the window check `now < startDate || now > endDate` compared against `undefined` — always `false`, so only `!isActive` blocked;
+- `miniDraw.tickets.push(...)` then threw a **TypeError on `undefined`**, 500-ing the request before any save.
+
+So it never actually granted anything. Worth stating plainly because on a first read the POST looks like it grants `quantity` entries with **no payment** for any authenticated caller (`useFreeEntries` defaults to `false`, which deducts nothing) — an alarming shape that only the missing schema made inert. Had those fields ever been re-added to the model, it would have become exactly that.
+
+The real purchase path is [`POST /api/mini-draw/purchase`](../../src/app/api/mini-draw/purchase/route.ts) (singular `mini-draw`) → Stripe → webhook grant. Entries are granted from the webhook, never by a direct client write.
+
+⚠️ **Related dead cluster, NOT removed.** `useMiniDrawQueries.ts` still exports hooks pointing at routes that do not exist: `useMiniDrawEntries` + `prefetchMiniDrawEntries` → `/api/mini-draws/<id>/entries`, `useMiniDrawResults` → `/api/mini-draws/results`, `useUserMiniDrawEntries` → `/api/mini-draws/user-entries`, `useEnterMiniDraw` → `/api/mini-draws/enter`, `useCancelMiniDrawEntry` → `/api/mini-draws/entries/<id>`. The three bare names would fall into the `[id]` segment and 404/500 on an invalid ObjectId. None have live consumers (`usePrefetching`, the only consumer of the prefetch pair, has no consumers itself). Left in place as a separate call.
+
+_Superseded note (2026-06-19):_ the route had been converted from a private bearer-token `getUserFromToken` to `requireAuthenticatedUserDoc()` + `requireSameOrigin()` during the JWT/auth remediation ([spec](../auth/jwt-auth-remediation-spec.md)). That hardening is moot now the route is gone; the spec's other System-2 consumers are unaffected.
 
 ## Renewal entry-loss under billing spikes (`addToMajorDraw` swallow) + the reconciler
 

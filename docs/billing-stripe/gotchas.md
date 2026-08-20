@@ -471,3 +471,31 @@ source of truth for the reason string (do **not** coin a parallel "adaptive acce
 the cooldown policy is `shouldCooldownForExcessiveRetry` in
 [chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts). See
 [docs/admin/backend.md](../admin/backend.md#excessive-retry-cooldown).
+
+---
+
+## `type: "mini-draw"` without `miniDrawId` is a money-in / nothing-out shape (fixed 2026-08-20)
+
+**The shape.** `handleMiniDrawWebhook` grants entries *against a specific draw*, read from `paymentIntent.metadata.miniDrawId`. A PaymentIntent stamped `type: "mini-draw"` **without** that key can never be granted — there is no draw to grant into. Stripe has already captured the money (nothing sets `capture_method`, so capture is automatic).
+
+**How it happened.** Both `create-one-time-purchase` and `…-existing-user` resolved package ids against the *mini-draw* catalogue as a fallback, synthesised a one-time package from the match, and stamped `type/packageType: "mini-draw"` — but neither route has a draw in scope and neither Zod schema even accepted a `miniDrawId`. `grep miniDrawId src/app/api/stripe/**` returned zero matches. The webhook then bailed at `if (!miniDrawId)`, logged to `console`, and returned.
+
+**Two things made it invisible rather than merely broken:**
+
+1. `webhookLog` is `console`-based, and production builds strip `console.log/info/debug/warn` (`next.config.ts` `compiler.removeConsole`). No durable trace anywhere a human looks.
+2. **It poisoned idempotency.** The dispatch did a bare `await handleMiniDrawWebhook(...)`, ignoring the return. `dispatchStripeEvent` computes `shouldMarkAsProcessed = paymentProcessed !== false`, so a bailed grant still ACKed the event — a Stripe retry or an admin replay would be **skipped**. The one-time branch eight lines below already did `return false`; the mini branch simply never matched it.
+
+**The two controls now in place:**
+
+- **Boundary (the seal).** `isMiniDrawPackageId` in [`src/data/miniDrawPackages.ts`](../../src/data/miniDrawPackages.ts) — a **catalogue** membership test, not a string-shape test, because the ids are two unrelated families (`mini-pack-1..8` and `additional-*-pack-mini`) and either a prefix or a suffix rule would miss one. Both one-time routes reject a match with **400 `MINI_DRAW_PACKAGE_WRONG_ENDPOINT`** before any Stripe call, and the fake-package fallback branches are deleted. Verified against `membershipPackages`: **zero id collisions**, so it cannot 400 a legitimate purchase — pinned by `npm run test:mini-draw-package-id`.
+- **Webhook (the net).** `handleMiniDrawWebhook` now returns `Promise<boolean>` — `false` on both metadata guards plus a durable `ErrorReport` via `reportStrandedMiniDrawPayment`, and `return result.success` at the end. The dispatch honours it. A non-ACKed event stays **replayable**, so a repaired PaymentIntent can be re-driven.
+
+⚠️ **`return result.success` is a deliberate behaviour change**: a genuine *processing* failure now also un-ACKs, where before it was ACKed and lost. That is the correct outcome — a retry can fix a transient failure, unlike a metadata defect. It does mean mini-draw processing failures will now be retried by Stripe.
+
+⚠️ **The success path MUST return a boolean.** If `handleMiniDrawWebhook` ever falls through to an implicit `undefined`, `if (!granted) return false` treats every *successful* grant as a failure and Stripe retries the event forever.
+
+**No auto-refund, deliberately.** There is no `refunds.create` anywhere in `src/`. Firing one on "metadata looks wrong" would refund a legitimate purchase whose metadata was merely truncated, and would bypass the refund-reversal ledger ([REFUND_REVERSAL.md](../REFUND_REVERSAL.md)). Grant-vs-refund is a human call.
+
+**Historical check:** `npm run find:stranded-mini-draw-payments` — read-only, scans Stripe for captured mini-draw PaymentIntents with no `miniDrawId` and cross-checks `PaymentEvent{BenefitsGranted}` + `users.miniDrawPackages.stripePaymentIntentId` to prove whether anything was granted. Expected result is zero: no live UI ever posted a mini id to those routes.
+
+**Still latent, watch it:** `MembershipModal` carries seven live `activePlan.id.startsWith("mini-pack-")` branches that feed these routes. Nothing sets such an `activePlan.id` today, and the server guard now neutralises them — but they are why this was worth sealing rather than documenting.
