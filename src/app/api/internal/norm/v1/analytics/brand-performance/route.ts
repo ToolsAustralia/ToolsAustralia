@@ -6,7 +6,7 @@ import {
   type BrandPerformanceBasis,
   type BrandPerformancePlatformScope,
 } from "@/services/analytics/BrandPerformanceService";
-import { resolvePreviousCalendarMonthAest } from "@/utils/admin/resolveAestDateWindow";
+import { resolvePreviousPeriodAest } from "@/utils/admin/resolveAestDateWindow";
 import type { BrandLane } from "@/utils/metrics/brand-lane";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -17,7 +17,7 @@ const QuerySchema = z.object({
   lane: z.enum(["toolset", "toolbox"]).default("toolset"),
   basis: z.enum(["landing-page", "built-prize", "platform"]).default("landing-page"),
   platform: z.enum(["meta", "tiktok", "all"]).default("all"),
-  compare: z.literal("previous-calendar-month").optional(),
+  compare: z.literal("previous-period").optional(),
 });
 
 /**
@@ -50,8 +50,10 @@ export const GET = withNorm(
     }
 
     // Resolved server-side, exactly as the admin route does, so both surfaces benchmark against
-    // the same definition of "last month".
-    const compareTo = compare ? resolvePreviousCalendarMonthAest() : undefined;
+    // the same window: the SAME span one calendar month earlier, current side truncated at today.
+    const compareTo = compare
+      ? resolvePreviousPeriodAest({ startDate, endDate })?.previous
+      : undefined;
 
     const result = await brandPerformanceService.getBrandPerformance({
       startDate,

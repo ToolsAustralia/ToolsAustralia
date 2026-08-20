@@ -2827,7 +2827,7 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
 | `lane` | no | `toolset` | `toolset` \| `toolbox` |
 | `basis` | no | `landing-page` | `landing-page` \| `built-prize` \| `platform` |
 | `platform` | no | `all` | `meta` \| `tiktok` \| `all` — spend scope |
-| `compare` | no | — | `previous-calendar-month` |
+| `compare` | no | — | `previous-period` — adds `meta.comparison`: the SAME span one calendar month earlier, current side truncated at today. Requesting the current draw (28 Jul–27 Aug) on 20 Aug compares 28 Jul–20 Aug against 28 Jun–20 Jul. Absent from `meta` when the window has no comparable earlier period. |
 
 ⚠️ **Milwaukee is a member of BOTH lanes.** A row labelled "Milwaukee" is a power-toolset brand under `lane=toolset` and a storage brand under `lane=toolbox` — two different populations. Always read `meta.lane` before naming a row.
 

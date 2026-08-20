@@ -1,4 +1,4 @@
-import { formatInTimeZone } from "date-fns-tz";
+import { aestToday } from "@/utils/admin/resolveAestDateWindow";
 import type { AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
 
 /**
@@ -376,10 +376,7 @@ export function inclusiveDayCount(startDate: string, endDate: string, clampEndTo
 }
 
 /**
- * Today as `yyyy-MM-dd` in Australia/Sydney — the calendar every admin date filter resolves
- * against (`resolveAestDateWindow`). Split out from `inclusiveDayCount` so that stays pure and
- * unit-testable; this one-liner is the only impure part.
+ * Re-exported so the two cards keep importing "today" from the module they already use. The one
+ * definition lives in `resolveAestDateWindow` — see the note there about why there is only one.
  */
-export function aestToday(): string {
-  return formatInTimeZone(new Date(), "Australia/Sydney", "yyyy-MM-dd");
-}
+export { aestToday };

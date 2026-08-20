@@ -55,6 +55,24 @@ export interface CampaignTreeTableProps {
  * Expandable campaign → ad set → ad tree, styled like SpendByUrlAdBreakdownTable.
  * Reused by the Ad Spend KPI modal (per-bucket) and Task 9's prize modal (mixed).
  */
+/**
+ * The readable part of a canonical landing URL — path + any trailing segment, origin dropped.
+ *
+ * Every row in a drill-down shares an origin, so showing it costs horizontal space on the
+ * narrowest column and tells the reader nothing. `unknown://` placeholders (an ad whose
+ * destination never resolved) are shown verbatim, because "unknown" IS the useful signal there.
+ * The full URL stays in the `title` attribute.
+ */
+function shortenLandingUrl(url: string): string {
+  if (url.startsWith("unknown://")) return url;
+  try {
+    const u = new URL(url);
+    return u.pathname === "/" ? u.hostname : u.pathname;
+  } catch {
+    return url;
+  }
+}
+
 export default function CampaignTreeTable({
   campaigns,
   ariaLabel = "Campaign breakdown",
@@ -217,6 +235,19 @@ export default function CampaignTreeTable({
                                       </span>
                                       {focus && <Badge tone={focus.tone}>{focus.label}</Badge>}
                                     </span>
+                                    {/* Which landing URL this ad actually bought. A brand
+                                        drill-down unions several URLs into one list, so the
+                                        header's "5 landing URLs" is unreadable without it.
+                                        Path only — the origin is the same on every row and
+                                        would push the ad name out of view. */}
+                                    {ad.canonicalUrl && (
+                                      <span
+                                        className="mt-0.5 block font-mono text-3xs text-sky-700 dark:text-sky-400 truncate"
+                                        title={ad.canonicalUrl}
+                                      >
+                                        {shortenLandingUrl(ad.canonicalUrl)}
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
                                 <td className={numCell}>{formatAud(ad.totals.spend)}</td>

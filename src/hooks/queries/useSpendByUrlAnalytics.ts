@@ -94,6 +94,8 @@ export interface SpendByUrlDetailRow {
   adsetName?: string;
   /** Landing-URL strategy of this ad; "unclassified" = destination unresolved */
   packagesFocus: "membership" | "one-time" | "unclassified";
+  /** The canonical landing URL this ad points at. Undefined when the destination is unresolved. */
+  canonicalUrl?: string;
 }
 
 export interface SpendByUrlDetailResponse {

@@ -303,3 +303,24 @@ to make the drag handler filter-aware:
 **General rule: a drag-to-reorder list must render exactly the array it writes.** If
 a view can filter or sort it, reordering has to be gated on that view being the
 identity view.
+
+---
+
+## `/api/admin/major-draw/history` + `/api/analytics/mer-by-draw` 504s — the budget was smaller than the connection-failure path (2026-08-20)
+
+**Symptom:** both returned `504 Vercel Runtime Timeout Error: Task timed out after 10 seconds`, consistently (not intermittently), many times a day. Sibling admin routes on the same deploy returned 200.
+
+**Shared root cause: neither declared `maxDuration`,** so both fell through the catch-all `"src/app/api/**/route.ts": { "maxDuration": 10 }` in `vercel.json`, while every comparable admin analytics route already carries an explicit 60s override (`dashboard/stats`, `metrics/users`, `activity-log`, `major-draw/export`, `major-draw/participants`). They were later additions that were simply missed.
+
+That 10s ceiling is **smaller than `connectDB`'s own failure path**: `serverSelectionTimeoutMS: 10000` plus a `[1000, 2000, 4000]` TLS retry ladder ≈ 17s. A function budgeted below that **cannot report a connection error — it can only 504**. Identical to the `/api/admin/metrics/users` incident of 2026-08-17, whose queries measured 904ms.
+
+**Both Norm mirrors were broken the same way** (`/api/internal/norm/v1/major-draw/history`, `/api/internal/norm/v1/analytics/mer-by-draw`) and got the same override. Fixing only the admin half is the mistake to avoid here.
+
+**`mer-by-draw` was also genuinely mis-shaped**, so the ceiling alone would have been under-building — it grows by one draw every month and would come back:
+
+- It ran a **sequential `for…of` with `await` inside**, one full `readStatsForRange` per draw. Now chunked at `POOL_SIZE = 4` (not 8 — mongoose runs `maxPoolSize: 5`, so a wider pool just queues). Rows are written **by index**, because the most-recent-first order from the `.sort()` must survive and pushing from a pool interleaves by completion time.
+- Each of those calls unconditionally ran `computeDistinctUserCounts` — a PaymentEvent aggregation with a correlated `$lookup` self-join plus `$addToSet` under `allowDiskUse` — **whose result MER never reads** (it consumes only `adChannels` and `attributedRevenue`). `readStatsForRange` now takes `includeDistinctUserCounts` (default **true**, so both dashboard callers are untouched) and MER passes `false`.
+
+**Deliberately NOT done:** no new indexes. MER's draw lookup is already served by `{status:1, activationDate:-1}`, and the five-field index `distinctUserCounts.ts` asks for would be permanent write amplification on the hottest collection bought for a query now removed from this path. No MER snapshot model either — after the two fixes each draw is one indexed `find` on a unique index, and caching that is machinery for no measured win.
+
+⚠️ **Still worth measuring:** the snapshot cron writes a **90-day sliding window**, while MER's window opens earlier. Any day without a snapshot is recomputed **live**, which includes an untimed Meta Graph call (`fetchFacebookInsights` passes no `AbortSignal`; `outboundAgent` sets only a connect timeout, so undici's 300s header/body defaults stand). If MER is still slow after this, check `dashboardstatsdailysnapshots` coverage first and run `backfill:dashboard-stats-snapshots`.

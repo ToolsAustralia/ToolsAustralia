@@ -178,7 +178,7 @@ export function groupSpendByUrlDetailRowsByCampaign(rows: SpendByUrlDetailRow[])
     add(s.acc, r);
     const adAcc = newAcc();
     add(adAcc, r);
-    s.ads.push({ adId: r.adId, adName: r.adName, adFormat: r.adFormat, totals: toTotals(adAcc), packagesFocus: r.packagesFocus });
+    s.ads.push({ adId: r.adId, adName: r.adName, adFormat: r.adFormat, totals: toTotals(adAcc), packagesFocus: r.packagesFocus, canonicalUrl: r.canonicalUrl });
     c.adsets.set(sid, s);
     campaigns.set(cid, c);
   }

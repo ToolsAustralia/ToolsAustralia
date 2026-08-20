@@ -6,7 +6,7 @@ import {
   type BrandPerformancePlatformScope,
 } from "@/services/analytics/BrandPerformanceService";
 import { isAdPlatform } from "@/services/analytics/adPlatformAccounts";
-import { resolvePreviousCalendarMonthAest } from "@/utils/admin/resolveAestDateWindow";
+import { resolvePreviousPeriodAest } from "@/utils/admin/resolveAestDateWindow";
 import type { BrandLane } from "@/utils/metrics/brand-lane";
 
 export const dynamic = "force-dynamic";
@@ -76,12 +76,16 @@ export async function GET(request: NextRequest) {
     }
     const platform = platformParam as BrandPerformancePlatformScope;
 
-    // The comparison window is resolved SERVER-side so every caller compares against the same
-    // definition of "last month" — a client passing its own dates would let two surfaces on the
-    // same screen benchmark against different windows.
+    // The comparison window is resolved SERVER-side so every caller benchmarks against the same
+    // definition — a client passing its own dates would let two surfaces on the same screen
+    // compare against different windows.
+    //
+    // It is derived from the REQUESTED window: the same span one calendar month earlier, with the
+    // current side truncated at today. So "current draw" on 20 Aug (28 Jul → 27 Aug) compares
+    // against 28 Jun → 20 Jul — 24 days against 24 days, not 24 against 31.
     const compareTo =
-      searchParams.get("compare") === "previous-calendar-month"
-        ? resolvePreviousCalendarMonthAest()
+      searchParams.get("compare") === "previous-period"
+        ? resolvePreviousPeriodAest({ startDate, endDate })?.previous
         : undefined;
 
     const result = await brandPerformanceService.getBrandPerformance({

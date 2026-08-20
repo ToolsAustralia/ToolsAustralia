@@ -6,7 +6,7 @@ import { CalendarRange, Maximize2, X, ArrowUpDown } from "lucide-react";
 import { Card, SectionTitle } from "@/components/admin/ui";
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useAdminDashboardStats, type AdminDashboardStats } from "@/hooks/queries/useAdminQueries";
-import { resolvePreviousCalendarMonthAest } from "@/utils/admin/resolveAestDateWindow";
+import { resolvePreviousPeriodAest } from "@/utils/admin/resolveAestDateWindow";
 import { cn } from "@/utils/cn";
 import {
   buildPeriodComparison,
@@ -51,31 +51,46 @@ export default function PeriodComparisonCard({
   const { formatCurrency, formatNumber } = useMetricsFormatting();
   const [isOpen, setIsOpen] = useState(false);
 
-  const previousMonth = useMemo(() => resolvePreviousCalendarMonthAest(), []);
+  /**
+   * The benchmark window: the SAME span, one calendar month earlier — with the current side
+   * first truncated at today. Selecting the current draw (28 Jul → 27 Aug) on 20 Aug therefore
+   * compares 28 Jul → 20 Aug against 28 Jun → 20 Jul, not against the whole of last month.
+   *
+   * `null` means there is nothing honest to compare (unresolved bounds, or a window that has
+   * not started); the card then renders the selected figures with no Δ rather than inventing one.
+   */
+  const windows = useMemo(
+    () => resolvePreviousPeriodAest({ startDate, endDate }),
+    [startDate, endDate],
+  );
+  const previous = windows?.previous;
 
   /**
    * The comparison window is always an explicit custom range — the preset the reader picked
    * describes the CURRENT window only.
    *
-   * Its cache key is STABLE across date-range changes (last month doesn't move), so flipping
-   * presets costs nothing after the first fetch. The freshness overrides matter though: the
-   * hook's defaults poll this fairly heavy route every 5 minutes, which is right for a window
-   * containing today and pure waste for a closed calendar month that can only change if a late
-   * refund lands. One fetch per hour, no polling.
+   * Unlike the fixed "last calendar month" this replaced, the key MOVES with the selection, so
+   * changing preset does cost one fetch. Worth it: a benchmark that ignores what you selected
+   * is not a benchmark. The freshness overrides still matter — the hook's defaults poll this
+   * fairly heavy route every 5 minutes, which is right for a window containing today and pure
+   * waste for a closed past window that can only change if a late refund lands.
    */
   const { data: previousStats, isLoading: previousLoading } = useAdminDashboardStats(
     "custom",
-    previousMonth.startDate,
-    previousMonth.endDate,
-    { staleTime: 60 * 60 * 1000, refetchInterval: false },
+    previous?.startDate ?? "",
+    previous?.endDate ?? "",
+    { staleTime: 60 * 60 * 1000, refetchInterval: false, enabled: Boolean(previous) },
   );
 
-  // Clamped to today: a still-running window (this month, the current draw) must be divided by
-  // the days it has LIVED, not the days it will eventually have. The previous calendar month is
-  // always closed, so the clamp is a no-op there and the two sides stay like-for-like.
+  // Both sides are already truncated at today by the resolver, so these agree by construction.
+  // The clamp stays as a belt-and-braces guard for a caller that passes raw bounds.
   const today = aestToday();
-  const currentDays = inclusiveDayCount(startDate, endDate, today);
-  const previousDays = inclusiveDayCount(previousMonth.startDate, previousMonth.endDate, today);
+  const currentDays = inclusiveDayCount(
+    windows?.current.startDate ?? "",
+    windows?.current.endDate ?? "",
+    today,
+  );
+  const previousDays = inclusiveDayCount(previous?.startDate ?? "", previous?.endDate ?? "", today);
   const unequal = currentDays > 0 && previousDays > 0 && currentDays !== previousDays;
 
   const metrics = useMemo(
@@ -126,10 +141,12 @@ export default function PeriodComparisonCard({
 
   const headline = metrics.filter((m) => m.headline);
 
-  const windowLine = (
+  const windowLine = previous ? (
     <span className="tabular-nums">
-      {rangeLabel} vs {previousMonth.startDate} → {previousMonth.endDate}
+      {rangeLabel} vs {previous.startDate} → {previous.endDate}
     </span>
+  ) : (
+    <span>no comparable earlier period</span>
   );
 
   return (
@@ -137,7 +154,7 @@ export default function PeriodComparisonCard({
       <Card className="p-5">
         <SectionTitle
           title="Period comparison"
-          subtitle="vs previous calendar month"
+          subtitle="vs the same span, one month earlier"
           icon={CalendarRange}
           right={
             <button
