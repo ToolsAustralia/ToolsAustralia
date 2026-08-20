@@ -9,6 +9,31 @@ export interface IUser extends Document {
   mobile?: string;
   state?: string; // Australian state/territory code (e.g., "NSW", "VIC", "ACT")
   profession?: string; // User's profession (e.g., "Builder", "Electrician", "Other", or custom value)
+  /**
+   * The delivery address from this customer's last COMPLETED shop order, kept so the
+   * next checkout can prefill instead of asking them to retype it.
+   *
+   * Field names mirror `Order.shippingAddress` exactly — same concept, same vocabulary,
+   * so the two can be copied between without a mapping layer that could drift.
+   *
+   * DISTINCT from the top-level `state` field above, which exists for draw eligibility
+   * (SA/ACT exclusion) and is not a postal address. Do not conflate them.
+   *
+   * Written only on a PAID order (finalizeShopOrder), never at checkout-start: an
+   * abandoned attempt should not overwrite the address that actually received goods.
+   */
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    deliveryInstructions?: string;
+  };
   birthdate?: Date; // User's date of birth (required for setup; used for age-based eligibility)
   profileSetupCompleted?: boolean; // Flag to track if user has completed profile setup
   role: "user" | "admin";
@@ -420,6 +445,27 @@ const UserSchema = new Schema<IUser>(
       type: String,
       trim: true,
       maxlength: [100, "Profession cannot be more than 100 characters"],
+    },
+    // Last-used delivery address, for prefilling the next checkout. Mirrors
+    // Order.shippingAddress field-for-field. See the IUser docblock.
+    shippingAddress: {
+      firstName: { type: String, trim: true },
+      lastName: { type: String, trim: true },
+      phone: { type: String, trim: true },
+      addressLine1: { type: String, trim: true },
+      addressLine2: { type: String, trim: true },
+      /** Labelled "Suburb" in the UI. */
+      city: { type: String, trim: true },
+      // Enum, same as the order: a courier cannot deliver to "Vic."
+      state: {
+        type: String,
+        trim: true,
+        uppercase: true,
+        enum: ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"],
+      },
+      postalCode: { type: String, trim: true },
+      country: { type: String, trim: true, default: "Australia" },
+      deliveryInstructions: { type: String, trim: true, maxlength: 280 },
     },
     birthdate: {
       type: Date,

@@ -269,9 +269,38 @@ export async function finalizeShopOrder(
     ...(line.sku ? { sku: line.sku } : {}),
   }));
 
+  /*
+    Clear the purchased lines AND remember the delivery address, in one write.
+
+    The address is saved HERE — on a paid order — rather than at checkout-start, so an
+    abandoned attempt can never overwrite the address that actually received goods. It
+    is what prefills the next checkout, so the customer types it once.
+
+    Field-for-field from the order's own snapshot, which is already Zod-validated at
+    the route boundary (AU state enum, 4-digit postcode), so nothing unvalidated
+    reaches the user document.
+  */
+  const remembered = order.shippingAddress
+    ? {
+        firstName: order.shippingAddress.firstName,
+        lastName: order.shippingAddress.lastName,
+        phone: order.shippingAddress.phone,
+        addressLine1: order.shippingAddress.addressLine1,
+        addressLine2: order.shippingAddress.addressLine2,
+        city: order.shippingAddress.city,
+        state: order.shippingAddress.state,
+        postalCode: order.shippingAddress.postalCode,
+        country: order.shippingAddress.country,
+        deliveryInstructions: order.shippingAddress.deliveryInstructions,
+      }
+    : null;
+
   await User.updateOne(
     { _id: order.user },
-    { $pull: { cart: { $or: purchasedLines } } }
+    {
+      $pull: { cart: { $or: purchasedLines } },
+      ...(remembered ? { $set: { shippingAddress: remembered } } : {}),
+    }
   ).catch((err) => {
     // Non-fatal: the order is paid and will be fulfilled. A stale cart line is
     // an annoyance, not a lost sale, and must not fail the webhook.

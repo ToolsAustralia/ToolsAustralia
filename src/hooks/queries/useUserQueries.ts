@@ -21,6 +21,24 @@ export interface UserData {
   profession?: string;
   birthdate?: string; // ISO date string
   profileSetupCompleted?: boolean;
+  /**
+   * Delivery address from the customer's last COMPLETED shop order, used to prefill
+   * checkout. Written only by finalizeShopOrder on a paid order.
+   *
+   * Distinct from `state` above, which is draw eligibility, not a postal address.
+   */
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    deliveryInstructions?: string;
+  };
   subscription?: {
     packageId: string;
     isActive: boolean;

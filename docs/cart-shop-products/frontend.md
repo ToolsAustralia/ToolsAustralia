@@ -486,3 +486,57 @@ a cancelled, refunded order.
 Both themes are complete: every tone in `statusHeader` carries a `dark:` counterpart, and the page
 shell + Suspense fallback in `page.tsx` paint `dark:bg-neutral-950`. A `text-green-600` with no dark
 pair is exactly what made the headline disappear into its own ground.
+
+## Checkout remembers the address, and offers wallets (2026-08-21)
+
+### The address is typed once
+
+Three layers, in priority order when prefilling:
+
+1. **`sessionStorage` draft** (`utils/shop/checkout-address-draft.ts`) — what this person was
+   typing before they refreshed. Newer than anything stored, and losing it is the part that
+   actually annoys.
+2. **`User.shippingAddress`** — where their last **paid** order went. Written by
+   `finalizeShopOrder`, not at checkout-start, so an abandoned attempt can never overwrite
+   the address that received goods.
+3. **Profile first/last name**, so even a first-time buyer types less.
+
+The prefill effect runs **once**, guarded by a `prefilled` flag: `userData` resolves
+asynchronously, and an effect keyed on it would re-run on every refetch and overwrite live
+typing. The draft is written on every change *after* the prefill has run — writing before it
+would persist the empty form over a real draft.
+
+**Privacy:** a delivery address is PII, so `ta-checkout-address-draft` is registered in
+`USER_SESSION_KEYS` in `utils/auth/total-sign-out.ts`. Without that, the next person to sign
+in on a shared device would find the previous customer's home address already in the form.
+The draft is cleared on payment too — the durable copy is on the user document by then.
+
+### Wallets and saved cards
+
+`ExpressCheckoutElement` renders **above** the card form — Apple Pay, Google Pay and Link, one
+tap. It is a separate Element from `PaymentElement` deliberately: rendering wallets as tabs
+*inside* the payment element buries them behind a click, and skipping the form is the entire
+value of a wallet. Both share the one PaymentIntent.
+
+The "or pay by card" divider is conditional on `onReady` reporting `availablePaymentMethods`.
+Apple Pay needs Safari + HTTPS + a Stripe-registered domain; Google Pay needs a card in the
+browser profile. On a machine with neither the element renders nothing, and an unconditional
+divider would sit under empty space.
+
+**One confirm path** serves both, parameterised by source — a wallet payment and a card
+payment differ only in which Element collected the details, and duplicating the confirm is how
+the two drift on `return_url` or error handling. `payment_method_data.billing_details` is sent
+on the **card path only**: wallets supply their own billing details from the device.
+
+`fields.billingDetails.address: "never"` removes Stripe's own country/postcode block, because
+this page already collected a validated Australian address — Stripe's duplicate country
+selector was defaulting off IP and offering a Sydney buyer "Philippines". Hiding those fields
+**requires** passing `billing_details` on confirm, or confirmation fails.
+
+`payment_method_save: "enabled"` on the Customer Session puts a "Save payment details for
+future purchases" checkbox in the form, so a card entered once is redisplayed next time. The
+buyer chooses — nothing is stored silently.
+
+> Saved cards only redisplay if the stored payment method carries `allow_redisplay` of
+> `always` or `limited`. A card saved by an older flow without it will not appear, however
+> correct the Customer Session is.

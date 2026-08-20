@@ -15,6 +15,11 @@ import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
 import ShopCheckoutPaymentElement from "@/components/payment/ShopCheckoutPaymentElement";
 import SuccessScreen from "@/components/loading/SuccessScreen";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
+import {
+  readCheckoutAddressDraft,
+  writeCheckoutAddressDraft,
+  clearCheckoutAddressDraft,
+} from "@/utils/shop/checkout-address-draft";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 
 /**
@@ -95,6 +100,13 @@ export default function CheckoutClient() {
   // is the package schema and demands package_id / package_type.
   const { trackInitiateCheckout: trackKlaviyoStartedCheckout } = useKlaviyoTracking();
   const [address, setAddress] = useState<AddressForm>(EMPTY_ADDRESS);
+  /**
+   * Guards the prefill so it runs ONCE and can never overwrite typing.
+   *
+   * `userData` arrives asynchronously, so a naive effect keyed on it would re-run and
+   * stomp whatever the customer had already entered the moment the query refetched.
+   */
+  const [prefilled, setPrefilled] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [customerSessionClientSecret, setCustomerSessionClientSecret] = useState<string | null>(null);
   /** Set the moment Stripe confirms; drives the success interstitial. */
@@ -105,6 +117,51 @@ export default function CheckoutClient() {
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [itemErrors, setItemErrors] = useState<string[]>([]);
+
+  /*
+    PREFILL, in priority order:
+      1. the sessionStorage DRAFT — what this person was typing before they refreshed;
+         it is newer than anything stored, and losing it is the thing that annoys.
+      2. `userData.shippingAddress` — where their last PAID order went.
+      3. their profile first/last name, so even a first-time buyer types less.
+
+    Runs once (`prefilled`), because userData resolves asynchronously and a re-run
+    would overwrite live typing on every refetch.
+  */
+  useEffect(() => {
+    if (prefilled) return;
+    // Wait for the session to settle: prefilling from a half-loaded userData would
+    // fill some fields and then never fill the rest.
+    if (sessionStatus === "loading") return;
+
+    const saved = userData?.shippingAddress;
+    const draft = readCheckoutAddressDraft();
+    if (!saved && !draft && !userData) return;
+
+    setAddress((current) => ({
+      ...current,
+      firstName: draft?.firstName ?? saved?.firstName ?? userData?.firstName ?? current.firstName,
+      lastName: draft?.lastName ?? saved?.lastName ?? userData?.lastName ?? current.lastName,
+      phone: draft?.phone ?? saved?.phone ?? current.phone,
+      addressLine1: draft?.addressLine1 ?? saved?.addressLine1 ?? current.addressLine1,
+      addressLine2: draft?.addressLine2 ?? saved?.addressLine2 ?? current.addressLine2,
+      city: draft?.city ?? saved?.city ?? current.city,
+      state: draft?.state ?? saved?.state ?? current.state,
+      postalCode: draft?.postalCode ?? saved?.postalCode ?? current.postalCode,
+      deliveryInstructions:
+        draft?.deliveryInstructions ?? saved?.deliveryInstructions ?? current.deliveryInstructions,
+    }));
+    setPrefilled(true);
+  }, [prefilled, sessionStatus, userData]);
+
+  // Keep the draft in step with the form, so a refresh at the card step restores it.
+  // Only after the prefill has run — writing before it would persist the empty form
+  // over a real draft and defeat the whole point.
+  useEffect(() => {
+    if (!prefilled) return;
+    writeCheckoutAddressDraft(address);
+  }, [address, prefilled]);
+
 
   const productItems = items.filter((i) => i.type === "product");
   const set = (k: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -249,7 +306,7 @@ export default function CheckoutClient() {
 
   if (productItems.length === 0) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-20 text-center">
+      <div className="mx-auto max-w-2xl px-4 pb-20 pt-[calc(var(--app-header-h)+4rem)] text-center sm:pt-[calc(var(--app-header-h-lg)+4rem)]">
         <ShoppingBag className="mx-auto mb-4 h-12 w-12 text-gray-300 dark:text-neutral-600" />
         <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">Your cart is empty</h1>
         <p className="mb-6 text-gray-600 dark:text-neutral-400">
@@ -275,7 +332,7 @@ export default function CheckoutClient() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+    <div className="mx-auto max-w-5xl px-4 pb-8 pt-[calc(var(--app-header-h)+1.5rem)] sm:pb-12 sm:pt-[calc(var(--app-header-h-lg)+2rem)]">
       <h1 className="mb-8 text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">Checkout</h1>
 
       <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
@@ -285,7 +342,10 @@ export default function CheckoutClient() {
             <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">Delivery address</h2>
 
             <form onSubmit={startCheckout} className="space-y-3 sm:space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+              {/* Paired at EVERY width, not just sm+. Nine full-width rows stacked on a
+                  phone turned a short form into a scroll, and a first/last name pair is
+                  legible in half a 390px viewport. */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <Field label="First name" value={address.firstName} onChange={set("firstName")} required disabled={!!clientSecret} />
                 <Field label="Last name" value={address.lastName} onChange={set("lastName")} required disabled={!!clientSecret} />
               </div>
@@ -357,6 +417,24 @@ export default function CheckoutClient() {
                 clientSecret={clientSecret}
                 customerSessionClientSecret={customerSessionClientSecret}
                 orderId={orderId ?? ""}
+                /*
+                  The address the customer already gave us, handed to Stripe as billing
+                  details so PaymentElement can hide its own address block. Country is
+                  hard-coded AU: the delivery form only accepts Australian states and a
+                  4-digit Australian postcode, so anything else would be a lie.
+                */
+                billingDetails={{
+                  name: `${address.firstName} ${address.lastName}`.trim() || undefined,
+                  phone: address.phone || undefined,
+                  address: {
+                    line1: address.addressLine1,
+                    line2: address.addressLine2 || undefined,
+                    city: address.city,
+                    state: address.state,
+                    postal_code: address.postalCode,
+                    country: "AU",
+                  },
+                }}
                 totalLabel={money(totals.total)}
                 /*
                   Confirm -> success breakdown -> success page.
@@ -371,7 +449,12 @@ export default function CheckoutClient() {
                   acknowledgement of the payment, not of fulfilment, and the
                   success page it lands on is what reads the finished order.
                 */
-                onPaid={() => setPaid(true)}
+                onPaid={() => {
+                  // The durable copy now lives on the user document — finalizeShopOrder
+                  // writes it on the paid order — so the session draft has done its job.
+                  clearCheckoutAddressDraft();
+                  setPaid(true);
+                }}
               />
             </section>
           )}

@@ -41,6 +41,9 @@ export const MY_ACCOUNT_USER_FIELDS = [
   "mobile",
   "state",
   "profession",
+  // Last-used delivery address, so checkout can prefill instead of asking the
+  // customer to retype it. Distinct from "state" above, which is draw eligibility.
+  "shippingAddress",
   "birthdate",
   "profileSetupCompleted",
   "role",

@@ -71,6 +71,10 @@ const USER_SESSION_KEYS = [
   "showReferFriendAfterSetup",
   "setupJustCompleted",
   "membership_subscription_checkout",
+  // The half-typed shop delivery address (utils/shop/checkout-address-draft.ts). This is
+  // PII — a home address. Left behind, the next person to sign in on a shared device
+  // would find the previous customer's address already filled into the checkout form.
+  "ta-checkout-address-draft",
 ];
 
 /** User-scoped sessionStorage key prefixes. */

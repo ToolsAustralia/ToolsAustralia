@@ -53,3 +53,42 @@ regression tests for `src/utils/partner-discounts/{unlock-packages,portal-return
 ## Webhook
 
 [src/utils/webhook/](../../src/utils/webhook/) — generic webhook helpers (signature verification, payload parsing, retry handling). Stripe webhook is handled in [billing-stripe](../billing-stripe/).
+
+## Product image formats (2026-08-21)
+
+`src/constants/product-images.ts` is the single list, imported by both the client picker
+(`ImageUpload`) and the server guard (`/api/upload`). It was previously typed out in three
+places, which is how a format ends up accepted by the file input and rejected by the API —
+the upload appears to start and dies with "File type not supported".
+
+Accepted: **JPEG, PNG, WebP, AVIF, HEIC/HEIF**. HEIC is the one that mattered in practice —
+it is what an iPhone photographs in by default, so staff shooting a product on a phone hit
+the rejection constantly with no hint that the fix was "export as JPEG". Cloudinary
+transcodes all of them on ingest, so `next/image` never sees a HEIC.
+
+Deliberately excluded: `image/gif` (animation has no place in a product shot) and
+`image/svg+xml` (an SVG can carry script — an XSS vector, not a photograph).
+
+The server list is the one that matters. The client `accept` attribute only filters the file
+picker and a determined caller can POST anything; never rely on the client half for safety.
+
+## `cleanup:abandoned-shop-orders` (2026-08-21)
+
+Retires pending shop orders left by two now-fixed bugs (the duplicate-checkout mint and the
+invalid `"failed"` status write — see [cart-shop-products/backend.md](../cart-shop-products/backend.md)).
+Both fixes are forward-only; this clears what is already in the collection.
+
+```bash
+npm run cleanup:abandoned-shop-orders:dry     # always first
+npm run cleanup:abandoned-shop-orders
+```
+
+**The safety rule:** an order is only retired once STRIPE says its payment cannot succeed.
+The PaymentIntent is retrieved first, and anything `succeeded` or `processing` is left
+untouched and written to the CSV as needing reconciliation — that is a **paid order whose
+webhook never landed**, and touching it would destroy the only record of money owed goods
+for. The final summary calls that count out separately for exactly that reason.
+
+Retire means `status: "cancelled"` with a `notes` reason, not deletion — the audit trail
+survives and every counting surface already excludes cancelled. The update is gated on
+`status: "pending"`, so a webhook landing mid-sweep always wins.
