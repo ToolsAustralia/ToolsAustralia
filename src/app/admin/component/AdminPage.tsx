@@ -7,9 +7,9 @@ import { adminTabLabel } from "./adminTabs";
 import DashboardOverview from "./overview/DashboardOverview";
 import AllPlatformsManagement from "./AllPlatformsManagement";
 import {
-  ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID,
-  adminTabUsesMobileLayoutDateToolbar,
-} from "./adminMobileDateToolbarSlot";
+  ADMIN_DATE_TOOLBAR_SLOT_ID,
+  adminTabUsesDateToolbar,
+} from "./adminDateToolbarSlot";
 import MajorDrawManagement from "./MajorDrawManagement";
 import MiniDrawManagement from "./MiniDrawManagement";
 import DrawResults from "./DrawResults";
@@ -182,9 +182,12 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {/* Mobile: date filter sits inline in the header, beside the theme toggle */}
-              {adminTabUsesMobileLayoutDateToolbar(selectedTab ?? "") && (
-                <div className="lg:hidden" id={ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID} />
+              {/* The date filter portals in here on EVERY breakpoint — a dropdown on mobile, an
+                  inline preset row on desktop. In the header rather than the page so it sits
+                  above the scroll container and needs no sticky positioning (and therefore no
+                  backdrop over the content). */}
+              {adminTabUsesDateToolbar(selectedTab ?? "") && (
+                <div className="min-w-0" id={ADMIN_DATE_TOOLBAR_SLOT_ID} />
               )}
               <HeaderThemeToggle className="shrink-0" />
             </div>

@@ -3,44 +3,45 @@
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
+import { DateRangePresetRow } from "@/components/admin/overview/DateRangePresetRow";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
 import type { AdminDateFilter } from "@/hooks/useAdminDateFilter";
 
 /**
- * THE admin date-range toolbar (preset dropdown + custom-range modal), wired to a
- * `useAdminDateFilter` instance. Every date-filtered admin tab renders this one component —
- * the Overview used to ship its own near-identical `OverviewToolbar`, which is how one surface
- * ended up sticky and the other eight did not.
+ * THE admin date-range toolbar, wired to a `useAdminDateFilter` instance. Every date-filtered
+ * admin tab renders this one component — the Overview used to ship its own near-identical
+ * `OverviewToolbar`, which is how one surface ended up sticky and the other eight did not.
  *
- * Three mutually exclusive placements, exactly one of which renders:
- *  - mobile + slot present → portal into the header slot (tab must be in
- *    ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR). Always visible for free: the slot lives in
- *    the admin header, ABOVE the scroll container.
- *  - mobile, slot not yet mounted → inline fallback for that first paint.
- *  - desktop → inline, and STICKY (see below).
+ * It renders into the ADMIN HEADER on every breakpoint, via a portal into
+ * `ADMIN_DATE_TOOLBAR_SLOT_ID`. Two forms, chosen by breakpoint:
  *
- * Desktop stickiness: `sticky top-0` pins the control to the top of the admin scroll container
- * (`AdminPage.tsx`, the `flex-1 overflow-y-auto` pane) so the filter stays reachable on these
- * very long analytics pages instead of scrolling away. The negative inset margins cancel that
- * container's `p-4 lg:p-6` so the pinned bar's backdrop covers the full content width and rows
- * scroll UNDER it rather than beside it.
+ *  - **mobile** → `DateRangeDropdown`, a compact trigger + popover. Six presets will not fit on
+ *    a phone.
+ *  - **desktop** → `DateRangePresetRow`, every preset inline as one right-aligned row. No
+ *    dropdown: with the room available, hiding five of six choices behind a click is pure cost.
  *
- * ⚠️ TWO ways to silently lose the stickiness, both of which look fine in review:
+ * ── Why the header, and not the page (2026-08-20) ──────────────────────────────────────────
  *
- *  1. **A short parent.** A sticky element can only travel within its own parent's box, so
- *     wrapping this in a `<div className="flex justify-end">` sized to the control pins it to
- *     nothing. Render it as a DIRECT child of the tab's root scroll-height element.
- *  2. **A clipping/containing ancestor.** `overflow` other than `visible`, or any
- *     `transform` / `filter` / `contain`, re-parents the sticky and it scrolls away.
+ * Desktop previously rendered a `sticky top-0` bar INSIDE the scroll container. Because content
+ * scrolled underneath it, the bar had to paint an opaque backdrop with negative insets to cover
+ * the full content width — and that backdrop is what sat over the rows behind it. It also cost
+ * every analytics page a permanent band of vertical space.
  *
- * Neither throws. Verify visually when adding this to a new tab.
+ * The header is already ABOVE the scroll container, so putting the control there makes it
+ * permanently visible for free: no sticky positioning, no backdrop, no reserved band, and no
+ * chance of the two classic sticky failures (a short parent, or a clipping/transformed ancestor)
+ * silently un-pinning it.
  *
- * `leading` exists so a tab with its own controls on that row (TikTok's Ads / Spend-by-URL
- * switch) puts them INSIDE the sticky bar instead of wrapping the whole row in a short parent
- * and defeating rule 1. On mobile `leading` renders inline while the dropdown portals away.
+ * A tab must be listed in `ADMIN_TABS_WITH_DATE_TOOLBAR` for the slot to exist. When it is not —
+ * or on the very first paint, before the layout effect resolves the slot — the control falls back
+ * to rendering inline so it is never simply missing.
+ *
+ * `leading` is for a tab with its own controls to sit beside the filter (TikTok's Ads /
+ * Spend-by-URL switch). It always renders INLINE in the page, never in the header: the header row
+ * is shared with the page title and the theme toggle and has no room for per-tab controls.
  */
 export function AdminDateRangeToolbar({
   filter,
@@ -49,48 +50,43 @@ export function AdminDateRangeToolbar({
 }: {
   filter: AdminDateFilter;
   accent?: string;
-  /** Controls rendered at the left of the sticky bar, sharing its row. */
+  /** Per-tab controls, rendered inline in the page above the content. */
   leading?: ReactNode;
 }) {
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { isLgUp, slotEl } = useAdminDateToolbarSlot();
   const { data: majorDraws } = useMajorDrawsForDateRange();
 
-  const dropdown = (
-    <DateRangeDropdown
+  const control = isLgUp ? (
+    <DateRangePresetRow
       selectedRange={filter.dateRange}
       onRangeChange={filter.handleRangeChange}
       onCustomClick={() => filter.setIsCustomOpen(true)}
       displayDate={filter.displayDate || undefined}
       accent={accent}
     />
+  ) : (
+    <AdminMobileLayoutDateRangeShell>
+      <DateRangeDropdown
+        selectedRange={filter.dateRange}
+        onRangeChange={filter.handleRangeChange}
+        onCustomClick={() => filter.setIsCustomOpen(true)}
+        displayDate={filter.displayDate || undefined}
+        accent={accent}
+      />
+    </AdminMobileLayoutDateRangeShell>
   );
 
   return (
     <>
-      {!isLgUp && slotEl ? (
-        <>
-          {createPortal(
-            <AdminMobileLayoutDateRangeShell>{dropdown}</AdminMobileLayoutDateRangeShell>,
-            slotEl,
-          )}
-          {leading ? <div className="flex flex-wrap items-center gap-2">{leading}</div> : null}
-        </>
-      ) : null}
-      {!isLgUp && !slotEl ? (
-        <div className="flex flex-col gap-2 min-w-0 w-full max-w-full">
-          {leading ? <div className="flex flex-wrap items-center gap-2">{leading}</div> : null}
-          <div className="flex-shrink-0 min-w-0 w-full max-w-full">
-            <AdminMobileLayoutDateRangeShell>{dropdown}</AdminMobileLayoutDateRangeShell>
-          </div>
-        </div>
-      ) : null}
-      {isLgUp ? (
-        // Negative insets cancel the scroll container's `p-4 lg:p-6` so the pinned bar's
-        // backdrop spans the full content width and rows scroll UNDER it, not beside it.
-        // `-mt-*` + matching `pt-*` closes the gap above it so nothing peeks over the top edge.
-        <div className="sticky top-0 z-30 -mx-4 lg:-mx-6 -mt-4 lg:-mt-6 px-4 lg:px-6 pt-4 lg:pt-6 pb-3 flex flex-wrap items-center gap-2 bg-gray-50/95 dark:bg-neutral-950/95 backdrop-blur-sm">
-          {leading ? <div className="flex flex-wrap items-center gap-2 min-w-0">{leading}</div> : null}
-          <div className="flex-shrink-0 min-w-0 max-w-full sm:w-auto ml-auto">{dropdown}</div>
+      {slotEl ? createPortal(control, slotEl) : null}
+
+      {/* Inline row: `leading` always, plus the control itself when the header slot is absent
+          (a tab not in ADMIN_TABS_WITH_DATE_TOOLBAR, or the first paint before the slot resolves).
+          Renders nothing at all when there is neither — no empty box, no stray gap. */}
+      {leading || !slotEl ? (
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          {leading}
+          {!slotEl ? <div className="min-w-0 flex-shrink-0">{control}</div> : null}
         </div>
       ) : null}
 

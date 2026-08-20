@@ -45,9 +45,8 @@ export default function TikTokAdsManagement() {
 
   return (
     <div className="space-y-6">
-      {/* The view switch rides INSIDE the sticky bar via `leading` rather than sharing a
-          wrapper with it — a wrapper sized to this row would be the only box the sticky
-          toolbar could travel within, pinning it to nothing. */}
+      {/* The date filter portals into the admin header; `leading` keeps this view switch
+          inline on the page, where a per-tab control belongs. */}
       <AdminDateRangeToolbar
         filter={df}
         leading={

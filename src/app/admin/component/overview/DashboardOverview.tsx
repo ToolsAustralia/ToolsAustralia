@@ -120,8 +120,8 @@ export default function DashboardOverview() {
 
   return (
     <div className="space-y-5 md:space-y-6">
-      {/* Direct child, NOT wrapped: the toolbar is sticky on desktop and a wrapper sized to
-          the control would be the only box it could travel within — pinning it to nothing. */}
+      {/* Portals into the admin header on every breakpoint, so this renders nothing here.
+          Kept mounted because it also owns the custom-range modal and the filter wiring. */}
       <AdminDateRangeToolbar filter={df} />
 
       {/* New KPI grid (redesign Phase 2) — replaces the old KPIMetricsGrid */}

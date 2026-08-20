@@ -33,7 +33,7 @@ import type { DateRangeOption, InsightLevel, FacebookAdsBreakdownItem } from "@/
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
@@ -67,7 +67,7 @@ export default function FacebookAdsManagement() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { isLgUp, slotEl } = useAdminDateToolbarSlot();
 
   // State management - synced with URL params
   const [dateRange, setDateRange] = useState<DateRange>("today");

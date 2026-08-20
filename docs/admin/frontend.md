@@ -1817,3 +1817,24 @@ Superseding the "previous calendar month" benchmark described above.
 **Each ad now shows the landing URL it bought.** A brand drill-down unions several URLs into one ad list — the modal header said "5 landing URLs" but nothing told you which ad used which, the one thing the table is for. `canonicalUrl` now travels `SpendByUrlAggregationService` → `getSpendByUrlDetailFormatted` → `groupSpendByUrlDetailRowsByCampaign` → `CampaignTreeTable`, shown as the path only (the origin is identical on every row) with the full URL in `title`. ⚠️ The formatter uses an **explicit include-list**, so a field added upstream is silently dropped unless it is named there too.
 
 **Labels:** the `built-prize` basis now reads **"By prize"** — the internal value is unchanged, per the backend-term/UI-term split. The **NEW MEMB %** progress bar was removed: a share-of-total across five brands is read by comparing the numbers down the column, and the bar only added visual weight to the widest column.
+
+## The date filter moved into the header, and desktop lost the dropdown (2026-08-20)
+
+**What was wrong.** On desktop the filter was a `sticky top-0` bar rendered INSIDE the scroll container. Because content scrolled underneath it, the bar had to paint an opaque backdrop with negative insets (`-mx-4 lg:-mx-6`) to cover the full content width — and that backdrop is what sat over the rows behind it. It also cost every analytics page a permanent band of vertical space, and carried two silent failure modes (a short parent, or a clipping/transformed ancestor) that could un-pin it with nothing thrown.
+
+**Now:** the control portals into the admin **header** on every breakpoint, via `ADMIN_DATE_TOOLBAR_SLOT_ID`. The header already sits above the scroll container, so the filter is permanently visible **for free** — no sticky positioning, no backdrop, no reserved band, and no way to overlap content. Mobile already worked this way; desktop simply joined it.
+
+| Breakpoint | Form | Why |
+|---|---|---|
+| `< lg` | `DateRangeDropdown` — trigger + popover | six presets do not fit on a phone |
+| `≥ lg` | `DateRangePresetRow` — every preset inline, right-aligned | with the room available, hiding five of six choices behind a click is pure cost |
+
+Presets come from `DATE_RANGE_PRESETS`, exported from `DateRangeDropdown` and shared by both forms, so the two cannot drift into offering different ranges. Below `xl` the row uses each preset's `short` label so six presets plus the page title still fit a 1024px viewport — measured at 298px wide with no overlap.
+
+**Renames** (the old names said "mobile", which stopped being true): `ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID` → `ADMIN_DATE_TOOLBAR_SLOT_ID`, `adminMobileDateToolbarSlot.ts` → `adminDateToolbarSlot.ts`, `useAdminMobileDateToolbarSlot` → `useAdminDateToolbarSlot`, `adminTabUsesMobileLayoutDateToolbar` → `adminTabUsesDateToolbar`.
+
+**`leading` changed meaning.** It used to place a tab's own controls INSIDE the sticky bar (the only way to avoid wrapping the sticky element in a short parent). With no sticky bar, `leading` now renders inline in the page where a per-tab control belongs — the header row is shared with the title and theme toggle and has no room. TikTok's Ads / Spend-by-URL switch is the only user.
+
+**Scope:** this covers the five tabs that render `AdminDateRangeToolbar` (overview, all-platforms, repeat-purchases, tiktok-ads, snapchat-ads). `facebook-ads`, `promo-analytics` and `cancellation-flow` call `useAdminDateToolbarSlot` directly and gate on `!isLgUp && slotEl`, so they still render their own control inline on desktop — they never had the sticky bar, so they were never part of this problem. Migrating them is a separate task.
+
+**Verified on the e2e harness**, not reasoned about: at 1440px the row renders full labels flush in the header; at 1024px it falls back to short labels at 298px wide with no title overlap and no viewport overflow; the control's bounding box ends at 53px while the scroll pane starts at 147px, so it *cannot* overlap content; `document.querySelectorAll('.sticky.top-0.z-30').length === 0`; at 390px the dropdown renders and the preset row does not, with no horizontal body scroll; clicking a preset in light mode applies the accent pill and syncs `?dateRange=`.

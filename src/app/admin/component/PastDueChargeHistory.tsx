@@ -22,7 +22,7 @@ import { type DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { AdminMobileLayoutDateRangeShell } from "./AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import {
   useCurrentAndLastDrawDates,
   useMajorDrawsForDateRange,
@@ -106,7 +106,7 @@ function RetryStatusBadge({ status }: { status: string }) {
 }
 
 export default function PastDueChargeHistory() {
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { isLgUp, slotEl } = useAdminDateToolbarSlot();
 
   const initialRange = useMemo(() => defaultLast30Days(), []);
   const [dateRange, setDateRange] = useState<DateRange>("custom");

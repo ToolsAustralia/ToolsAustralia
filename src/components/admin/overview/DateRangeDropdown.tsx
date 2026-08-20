@@ -4,7 +4,17 @@ import { Calendar, ChevronDown, Check } from "lucide-react";
 import { Popover } from "@/components/admin/ui";
 import type { DateRange } from "@/components/admin/DateRangeToggle";
 
-const RANGES: { id: DateRange; label: string; short: string }[] = [
+/**
+ * THE preset list for the admin date filter, in display order.
+ *
+ * Exported because the control has two forms — this dropdown (mobile) and
+ * `DateRangePresetRow` (desktop). A private copy in each is how one surface ends up offering a
+ * range the other does not.
+ *
+ * `short` is used where horizontal space is tight (a narrow phone trigger, or the desktop row
+ * below the xl breakpoint).
+ */
+export const DATE_RANGE_PRESETS: { id: DateRange; label: string; short: string }[] = [
   { id: "today", label: "Today", short: "Today" },
   { id: "yesterday", label: "Yesterday", short: "Yest." },
   { id: "current-draw", label: "Current Draw", short: "Current" },
@@ -20,7 +30,7 @@ export function DateRangeDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
-  const cur = RANGES.find((r) => r.id === selectedRange);
+  const cur = DATE_RANGE_PRESETS.find((r) => r.id === selectedRange);
   const triggerLabel = selectedRange === "custom" ? (displayDate ?? "Custom") : (cur?.label ?? "Date range");
   const triggerShort = selectedRange === "custom" ? (displayDate ?? "Custom") : (cur?.short ?? "Range");
   return (
@@ -35,7 +45,7 @@ export function DateRangeDropdown({
       <Popover open={open} onClose={() => setOpen(false)} anchorRef={ref} width={240} align="end">
         <div className="p-1.5">
           <p className="px-2.5 py-1.5 text-2xs font-bold uppercase tracking-wider text-neutral-400">Date range</p>
-          {RANGES.map((r) => {
+          {DATE_RANGE_PRESETS.map((r) => {
             const on = r.id === selectedRange;
             return (
               <button key={r.id} onClick={() => { onRangeChange(r.id); setOpen(false); }}

@@ -25,7 +25,7 @@ import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { type DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import {
   useCurrentAndLastDrawDates,
   useMajorDrawsForDateRange,
@@ -158,7 +158,7 @@ function EligibilityBadge({ row }: { row: BlockedRow }) {
 
 export default function BlockedTransactionsManagement() {
   const { showToast } = useToast();
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { isLgUp, slotEl } = useAdminDateToolbarSlot();
 
   const initialRange = useMemo(() => defaultLast30Days(), []);
   const [dateRange, setDateRange] = useState<DateRange>("custom");

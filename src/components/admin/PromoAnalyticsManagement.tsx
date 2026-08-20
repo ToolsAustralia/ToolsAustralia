@@ -32,7 +32,7 @@ import { getToolbox } from "@/components/sections/promo/prize-selection";
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { useCurrentAndLastDrawDates, useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
@@ -96,7 +96,7 @@ export default function PromoAnalyticsManagement() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { isLgUp, slotEl } = useAdminDateToolbarSlot();
   const [dateRange, setDateRange] = useState<DateRange>("today");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");

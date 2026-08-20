@@ -22,7 +22,7 @@ import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import { useCancellationFlowAnalytics } from "@/hooks/queries/admin/useCancellationFlowAnalytics";
 import {
   useCurrentAndLastDrawDates,
@@ -90,7 +90,7 @@ export default function CancellationFlowAnalytics() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { isLgUp, slotEl } = useAdminDateToolbarSlot();
 
   const [dateRange, setDateRange] = useState<DateRange>("today");
   const [startDate, setStartDate] = useState<string>("");

@@ -23,7 +23,7 @@ import { type DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { AdminMobileLayoutDateRangeShell } from "./AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import {
   useCurrentAndLastDrawDates,
   useMajorDrawsForDateRange,
@@ -132,7 +132,7 @@ function ReceiptAmount({ row }: { row: ReceiptRow }) {
 }
 
 export default function ReceiptsManagement() {
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { isLgUp, slotEl } = useAdminDateToolbarSlot();
   const { has } = usePermissions();
   const canExport = has("receipts.export");
 
