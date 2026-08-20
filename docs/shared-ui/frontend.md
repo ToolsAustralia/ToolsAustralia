@@ -1637,3 +1637,40 @@ fix one field's copy.
 
 Worth remembering as a class of bug: a component that collapses "zero" and "empty" is fine until a
 field comes along where the difference is the whole point.
+
+## Product card: price, discount and entry marks (2026-08-20)
+
+`MemberPriceLine` (card variant) now renders the **whole price block**, not a footnote under it.
+It was a 12px green line beneath a 20px black one, which put the visual weight on the number a
+member does not pay:
+
+```
+$85.45   $89.95   [5% OFF]        ← discounted figure is the headline
+Tradie price — saves $4.50           struck original, tier-coloured badge
+```
+
+The percentage badge takes its palette from the shopper's own tier via
+`getElectricPackageColorScheme(packageId)`, so the saving is legibly attached to a membership
+level rather than a generic green that ties it to nothing. Non-members see the same treatment for
+the best available tier — it is an offer and should look like one. `resolveMemberShopPrice` gained
+`packageId`, `fullPriceLabel` and `savingLabel` to support this.
+
+The plain price and the discounted block are **mutually exclusive** (`memberPriceApplies`), so the
+two can never both render and disagree about which number is the price.
+
+**Entry marks sit above the price** — they are the reason to choose the item, not a detail of its
+cost. `entryMultiplier` arrives already resolved from `/api/products`: the server collapses
+product → category → shop-wide because the last two are admin config the browser has no business
+holding, and resolving from a partial view is how a card and the product page print different
+numbers. Rule 11 applies — entries are a free inclusion, never priced per unit.
+
+### A trap that cost real time here
+
+`String.replace` treats **`$$` in the replacement string as an escaped `$`**. A codemod inserting
+`` `$${value}` `` therefore writes `` `${value}` `` — silently stripping the dollar sign from every
+price label, including one that was already correct. `tsc` cannot see it and the page renders
+"85.45" perfectly happily.
+
+Use a replacer **function** (`replace(re, () => text)`) when the replacement contains `$`, or edit
+the file directly. And read the rendered strings back, not just a screenshot — that is what caught
+it here.

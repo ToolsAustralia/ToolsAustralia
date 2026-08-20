@@ -4,7 +4,8 @@ import React, { useCallback, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Star, ShoppingCart, Ticket, Check, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Star, ShoppingCart, Ticket, Check, Loader2, AlertCircle, RefreshCw, Tag, Zap } from "lucide-react";
+import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { useCart } from "@/contexts/CartContext";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
@@ -125,12 +126,37 @@ export function MemberPriceLine({
   if (!memberPrice) return null;
 
   if (variant === "card") {
+    // The discounted figure is the HEADLINE, not a footnote under the full price.
+    // It was a 12px green line below a 20px black one, which put the visual weight
+    // on the number a member does not pay.
+    //
+    // Coloured from the tier's own palette rather than a generic green, so the
+    // saving is legibly attached to a membership level. Non-members see the same
+    // treatment for the BEST tier — it is an offer, and it should look like one.
+    const scheme = getElectricPackageColorScheme(memberPrice.packageId);
     return (
-      <p className="mt-1 text-[11px] sm:text-[12px] font-semibold text-emerald-700 dark:text-emerald-400">
-        {memberPrice.isMember
-          ? `Your price ${memberPrice.priceLabel}`
-          : `Members from ${memberPrice.priceLabel}`}
-      </p>
+      <div className="mt-1 space-y-1">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="text-[17px] sm:text-[19px] lg:text-[21px] font-extrabold leading-none text-gray-900 dark:text-white">
+            {memberPrice.priceLabel}
+          </span>
+          <span className="text-[12px] sm:text-[13px] font-medium leading-none text-gray-400 line-through dark:text-neutral-500">
+            {memberPrice.fullPriceLabel}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-wide text-black"
+            style={{ backgroundImage: scheme.bgGradient }}
+          >
+            <Tag className="h-3 w-3" aria-hidden="true" />
+            {memberPrice.percent}% off
+          </span>
+        </div>
+        <p className="text-[11px] font-medium text-gray-500 dark:text-neutral-400">
+          {memberPrice.isMember
+            ? `${memberPrice.tierName} price — saves ${memberPrice.savingLabel}`
+            : `${memberPrice.tierName} members save ${memberPrice.savingLabel}`}
+        </p>
+      </div>
     );
   }
 
@@ -354,6 +380,30 @@ export default function ProductCard({
   };
 
   const productData = getProductData();
+
+  // Free entries and the item's multiplier, read defensively: `product` is a
+  // union of the static ProductData fixtures and the DB shape, and only the
+  // latter carries either field. Widening the type would make the fixtures lie.
+  //
+  // `entryMultiplier` arrives ALREADY RESOLVED from /api/products — the server
+  // collapses product -> category -> shop-wide, because the last two are admin
+  // config the browser has no business holding. Resolving here from a partial
+  // view is how a card and the product page end up printing different numbers.
+  const rawEntries = (product as { includedEntries?: unknown }).includedEntries;
+  const entryCount = typeof rawEntries === "number" && rawEntries > 0 ? rawEntries : 0;
+  const rawMultiplier = (product as { entryMultiplier?: unknown }).entryMultiplier;
+  const entryMultiplier =
+    typeof rawMultiplier === "number" && rawMultiplier > 0 ? rawMultiplier : 1;
+
+  // The multiplier mark borrows the BOSS palette deliberately — it is the tier
+  // whose colour already reads as "the biggest entry number" across the
+  // membership cards, so a shopper meets one visual language for entries.
+  const multiplierScheme = getElectricPackageColorScheme("boss-subscription");
+
+  // Whether MemberPriceLine will render anything. Computed here so the plain
+  // price and the discounted block are mutually exclusive rather than both
+  // trying to be the headline figure.
+  const memberPriceApplies = Boolean(resolveMemberShopPrice(productData.price, userData));
   // Garment mockups are shot whole on a white ground, so cropping them to fill
   // lops off sleeves and hems. Tools are photographed to fill the frame and still
   // look best cropped, and trackInventory is what already separates the two:
@@ -647,12 +697,46 @@ export default function ProductCard({
             {/* Price */}
             {!productData.isPrize && (
               <div>
-                <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
-                  <span>${productData.price.toFixed(2)}</span>
-                </div>
+                {/*
+                  The free-entry and multiplier marks sit ABOVE the price, because
+                  they are the reason to choose this item rather than a detail of
+                  what it costs.
+
+                  Rule 11: entries are a free INCLUSION with the product. Never
+                  price them per unit and never imply they were bought.
+                */}
+                {entryCount > 0 && (
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-[3px] text-[10px] font-bold uppercase leading-none tracking-wide text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
+                      <Ticket className="h-3 w-3" aria-hidden="true" />
+                      {entryCount} free {entryCount === 1 ? "entry" : "entries"}
+                    </span>
+                    {entryMultiplier > 1 && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-wide text-black"
+                        style={{ backgroundImage: multiplierScheme.bgGradient }}
+                      >
+                        <Zap className="h-3 w-3" aria-hidden="true" />
+                        {entryMultiplier}× entries
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* Mini draws are excluded above: their figure is a prize VALUE,
-                    not a price anyone pays, so no discount applies to it. */}
-                <MemberPriceLine price={productData.price} />
+                    not a price anyone pays, so no discount applies to it.
+
+                    MemberPriceLine renders the FULL price block when a discount
+                    applies — discounted figure, struck original, tier badge. The
+                    plain figure below is the no-discount fallback, so the two can
+                    never both render and disagree about which number is the price. */}
+                {memberPriceApplies ? (
+                  <MemberPriceLine price={productData.price} />
+                ) : (
+                  <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
+                    <span>${productData.price.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
             )}
 

@@ -55,6 +55,16 @@ export interface MemberShopPrice {
   tierName: string;
   /** True when the figure is the signed-in shopper's OWN price, not an example. */
   isMember: boolean;
+  /**
+   * The package this discount comes from, so a surface can colour itself with
+   * the tier's own palette (`getElectricPackageColorScheme`) instead of picking
+   * a generic green that ties the saving to no tier in particular.
+   */
+  packageId: string;
+  /** The undiscounted price, formatted, for a struck-through original. */
+  fullPriceLabel: string;
+  /** Whole dollars saved on one unit, formatted — `"$44.90"`. */
+  savingLabel: string;
 }
 
 /**
@@ -67,8 +77,8 @@ export interface MemberShopPrice {
  * Skips an inactive package: quoting a price off a tier nobody can subscribe to
  * advertises a saving the shopper has no way to obtain.
  */
-function findBestShopDiscountTier(): { percent: number; tierName: string } | null {
-  let best: { percent: number; tierName: string } | null = null;
+function findBestShopDiscountTier(): { percent: number; tierName: string; packageId: string } | null {
+  let best: { percent: number; tierName: string; packageId: string } | null = null;
 
   for (const pkg of membershipPackages) {
     if (!pkg.isActive) continue;
@@ -76,7 +86,7 @@ function findBestShopDiscountTier(): { percent: number; tierName: string } | nul
       subscription: { isActive: true, packageId: pkg._id },
     });
     if (percent > 0 && (best === null || percent > best.percent)) {
-      best = { percent, tierName: pkg.name };
+      best = { percent, tierName: pkg.name, packageId: pkg._id };
     }
   }
 
@@ -104,12 +114,18 @@ export function resolveMemberShopPrice(
   // A giveaway row or a mispriced one has no member price worth stating.
   if (!Number.isFinite(priceDollars) || priceDollars <= 0) return null;
 
-  let tier: { percent: number; tierName: string; isMember: boolean } | null = null;
+  let tier: { percent: number; tierName: string; isMember: boolean; packageId: string } | null = null;
 
   const ownPercent = user ? resolveShopDiscountPercent(user) : 0;
   if (ownPercent > 0) {
     const ownPackage = getPackageById(user?.subscription?.packageId ?? "");
-    if (ownPackage) tier = { percent: ownPercent, tierName: ownPackage.name, isMember: true };
+    if (ownPackage)
+      tier = {
+        percent: ownPercent,
+        tierName: ownPackage.name,
+        isMember: true,
+        packageId: ownPackage._id,
+      };
   }
 
   if (!tier) {
@@ -129,5 +145,8 @@ export function resolveMemberShopPrice(
     priceLabel: `$${centsToDollars(subtotalCents - discountCents).toFixed(2)}`,
     tierName: tier.tierName,
     isMember: tier.isMember,
+    packageId: tier.packageId,
+    fullPriceLabel: `$${centsToDollars(subtotalCents).toFixed(2)}`,
+    savingLabel: `$${centsToDollars(discountCents).toFixed(2)}`,
   };
 }
