@@ -462,11 +462,16 @@ export default function ProductCard({
         gradient: getElectricPackageColorScheme(memberPrice.packageId).bgGradient,
       }
     : null;
-  // Garment mockups are shot whole on a white ground, so cropping them to fill
-  // lops off sleeves and hems. Tools are photographed to fill the frame and still
-  // look best cropped, and trackInventory is what already separates the two:
-  // print-to-order apparel carries false.
-  const imageFit = productData.trackInventory ? "object-cover" : "object-contain";
+  // NOTHING is cropped. `object-cover` was used for tools on the theory that they
+  // are shot to fill the frame — but supplier photography is not that consistent,
+  // and cropping a drill through the chuck or a tool case through its handle looks
+  // like a broken image rather than a tight one.
+  //
+  // The mini-draw grid already shows every prize whole on a light ground and reads
+  // cleanly; this matches it. The ground is painted below rather than left
+  // transparent, because a contained photo does not fill its box and a bare card
+  // background behind a product cut-out looks like a rendering fault.
+  const imageFit = "object-contain";
   const brandAccent = productData.brandAccent;
 
   // The cart's own item list is the single source of truth for "added": addToCart writes it
@@ -620,7 +625,7 @@ export default function ProductCard({
         <div className="relative">
           {/* Product Image */}
           <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
-            <div className="relative w-full h-[200px] sm:h-[220px] lg:h-[240px] overflow-hidden">
+            <div className="relative w-full h-[200px] sm:h-[220px] lg:h-[240px] overflow-hidden bg-white dark:bg-neutral-100">
               <Image
                 src={productData.images[0] || "/images/placeholder.jpg"}
                 alt={productData.name}

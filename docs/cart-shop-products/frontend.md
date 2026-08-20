@@ -395,3 +395,24 @@ rather than "now" — promising immediacy here is what makes a working feature r
 Verified end-to-end: reversing the order through `POST /api/admin/products/order` flipped the
 storefront from `Alpha, Bravo, Charlie, Delta` to `Delta, Charlie, Bravo, Alpha`, with a control
 query on `createdAt` returning a genuinely different order to prove the fixture discriminated.
+
+## Shop layout: sticky rail and uncropped photos (2026-08-20)
+
+**The filter rail follows the scroll**, matching `MiniDrawsContent`. `sticky top-24` goes on an
+INNER div — making the flex column itself sticky pins a box whose height is the whole column,
+which has nowhere to travel. `max-h-[calc(100vh-8rem)]` with `overflow-y-auto` keeps a long brand
+list scrolling inside the rail rather than making the rail taller than the viewport, at which
+point sticky has nothing left to hold.
+
+**Nothing is cropped.** `object-cover` was used for tools on the theory that they are shot to fill
+the frame; supplier photography is not that consistent, and cropping a drill through the chuck
+reads as a broken image rather than a tight one. Every card is `object-contain` on a painted
+ground — a contained photo does not fill its box, and a bare card background behind a product
+cut-out looks like a rendering fault.
+
+**A debugging note that cost time here:** the rail appeared not to stick, and the ancestor chain
+was clean of the usual sticky-killers (`transform`, `filter`, `contain`, `overflow`). The real
+cause was the test: only one product had loaded, so the flex row was 778px and the rail had 185px
+of travel before running out. With 12 products the row is 2371px and the rail pins correctly at
+y=96. **Check the containing block's height before hunting for an overflow ancestor** — sticky
+with nowhere to travel looks identical to sticky that is broken.

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import {
   ModalContainer,
   ModalHeader,
@@ -182,6 +182,12 @@ export default function AdminProductModal({
   // Quick-add state. Apparel is a size RUN, not a list of unrelated items: adding a
   // tee meant hand-typing five near-identical rows and getting the SKU pattern right
   // five times, which is both slow and the easiest place to typo.
+  // Variant editing state. A 383-variant tee rendered every row at once — roughly
+  // 1,900 form controls — which is what made the modal unusable on staging. Rows
+  // are now grouped by colour and only one group is mounted at a time.
+  const [variantSearch, setVariantSearch] = useState("");
+  const [openColour, setOpenColour] = useState<string | null>(null);
+
   const [runColour, setRunColour] = useState("Black");
   const [runSizes, setRunSizes] = useState<string[]>(["S", "M", "L"]);
   const SIZE_RUN = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
@@ -212,6 +218,39 @@ export default function AdminProductModal({
       return next.length > 0 ? next : [emptyVariant()];
     });
   };
+
+  /**
+   * Variants grouped by colour, each row keeping its INDEX in the flat array.
+   *
+   * The index is what updateVariant and removeVariant address, so grouping is a
+   * display concern only — the underlying array is never reordered. Reordering it
+   * would silently rewrite which row an in-flight edit lands on.
+   */
+  const variantGroups = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; rows: { variant: ProductVariantFormItem; index: number }[] }>();
+    variants.forEach((variant, index) => {
+      const raw = (variant.colour ?? "").trim();
+      const key = raw.toLowerCase() || "__none";
+      if (!groups.has(key)) {
+        groups.set(key, { key, label: raw || "No colour set", rows: [] });
+      }
+      groups.get(key)!.rows.push({ variant, index });
+    });
+    return [...groups.values()];
+  }, [variants]);
+
+  /** Matches a colour OR a sku, because an admin usually arrives holding one of the two. */
+  const visibleGroups = useMemo(() => {
+    const q = variantSearch.trim().toLowerCase();
+    if (!q) return variantGroups;
+    return variantGroups
+      .map((g) => {
+        if (g.label.toLowerCase().includes(q)) return g;
+        const rows = g.rows.filter((r) => (r.variant.sku ?? "").toLowerCase().includes(q));
+        return rows.length > 0 ? { ...g, rows } : null;
+      })
+      .filter((g): g is NonNullable<typeof g> => g !== null);
+  }, [variantGroups, variantSearch]);
 
   const updateVariant = (index: number, patch: Partial<ProductVariantFormItem>) => {
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, ...patch } : v)));
@@ -617,7 +656,65 @@ export default function AdminProductModal({
                   {variants.filter((v) => v.gtin?.trim()).length} with a GTIN
                 </p>
               )}
-              {variants.map((variant, index) => (
+              {/*
+                Grouped by colour, one group open at a time.
+
+                A garment is stocked as a colour with a size run — 383 variants on the
+                Staple Tee is 51 colours by roughly 7 sizes — so the colour IS the unit
+                an admin edits. Rendering all 383 rows mounted ~1,900 inputs and made
+                the modal lag badly enough to be unusable on staging.
+
+                Only the open group's rows are mounted. Collapsed groups are a single
+                summary button each, so the cost is 51 buttons rather than 383 forms.
+              */}
+              {variantGroups.length > 6 && (
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-neutral-500" />
+                  <input
+                    type="search"
+                    value={variantSearch}
+                    onChange={(e) => setVariantSearch(e.target.value)}
+                    placeholder="Search colour or SKU"
+                    className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                  />
+                </div>
+              )}
+
+              {visibleGroups.length === 0 && variantSearch.trim() !== "" && (
+                <p className="rounded-lg border border-dashed border-gray-300 p-3 text-xs text-gray-500 dark:border-neutral-600 dark:text-neutral-400">
+                  No colour or SKU matches “{variantSearch.trim()}”.
+                </p>
+              )}
+
+              {visibleGroups.map((group) => {
+                const isOpen = openColour === group.key;
+                const active = group.rows.filter((r) => r.variant.isActive).length;
+                const withGtin = group.rows.filter((r) => r.variant.gtin?.trim()).length;
+                return (
+                  <div key={group.key} className="rounded-lg border border-gray-200 dark:border-neutral-700">
+                    <button
+                      type="button"
+                      onClick={() => setOpenColour(isOpen ? null : group.key)}
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-gray-900 dark:text-neutral-100">
+                          {group.label}
+                        </span>
+                        <span className="block text-xs text-gray-500 dark:text-neutral-400">
+                          {group.rows.length} {group.rows.length === 1 ? "size" : "sizes"}
+                          {" · "}{active} active
+                          {withGtin > 0 ? ` · ${withGtin} with a GTIN` : ""}
+                        </span>
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {isOpen && (
+                      <div className="space-y-3 border-t border-gray-200 p-3 dark:border-neutral-700">
+                    {group.rows.map(({ variant, index }) => (
                 <div
                   key={index}
                   className="rounded-lg border border-gray-200 p-3 dark:border-neutral-700"
@@ -663,7 +760,12 @@ export default function AdminProductModal({
                     )}
                   </div>
                 </div>
-              ))}
+                    ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               <button
                 type="button"
                 onClick={() => setVariants((prev) => [...prev, emptyVariant()])}

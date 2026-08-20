@@ -1758,3 +1758,23 @@ is doing".
 to set merch above the pack rate. Now it is a number an admin types, so a rate that makes a
 garment better value per entry than a pack is reachable. Worth a warning in this panel; there
 is not one yet.
+
+## Editing a 383-variant garment (2026-08-20)
+
+`AdminProductModal` grouped every variant into one flat list. The Staple Tee carries **383
+variants** — 51 colours by roughly 7 sizes — which mounted about 1,900 form controls and made the
+modal unusable on staging.
+
+Variants are now **grouped by colour, one group open at a time**, because the colour is the unit
+an admin actually edits: a garment is stocked as a colour with a size run. A collapsed group is a
+single summary button (`Black · 7 sizes · 7 active`), so the cost is 51 buttons rather than 383
+forms. Measured after the change: **14 mounted inputs**, 49 with a group expanded.
+
+A search box appears above 6 groups and matches **colour or SKU** — an admin arrives holding one
+or the other, usually the SKU off an order line.
+
+**Grouping is a display concern only.** Each row keeps its `index` in the flat `variants` array,
+because that index is what `updateVariant` and `removeVariant` address. Reordering the array to
+match the grouping would silently rewrite which variant an in-flight edit lands on. Verified by
+editing one SKU inside a searched, expanded group and reading the document back: exactly one row
+changed, it was the right one (Vapour / XS), and every other group was intact.

@@ -236,8 +236,19 @@ export default function ShopContent({
     <SectionContainer className="py-8">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Filters - Desktop */}
+        {/*
+          `sticky top-24` on an INNER div, matching MiniDrawsContent. The outer
+          column has to stay a normal flex child: making it sticky itself pins a
+          box whose height is the whole column, which has nowhere to travel.
+
+          max-h + overflow-y-auto so a long brand list scrolls inside the rail
+          rather than making the rail taller than the viewport, at which point
+          sticky has nothing left to hold.
+        */}
         <div className="hidden lg:block w-80 flex-shrink-0">
-          <ProductFilters selectedFilters={filters} onFilterChange={handleFilterChange} isMobile={false} />
+          <div className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
+            <ProductFilters selectedFilters={filters} onFilterChange={handleFilterChange} isMobile={false} />
+          </div>
         </div>
 
         {/* Mobile/Tablet Filter Overlay */}
