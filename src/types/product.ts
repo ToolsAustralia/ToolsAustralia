@@ -39,22 +39,28 @@ export interface Product {
    * rendering it must apply the multiplier too or it understates the offer
    * during a promo.
    *
-   * The effective multiplier is the current one-time promo rate, lowered by any
-   * admin ceiling in force — resolve it through
-   * `services/shop/resolveShopEntryMultiplier`, never from the promo alone, or
-   * the surface will promise more than the grant pays out.
+   * Resolve the effective multiplier through `utils/shop/entry-multiplier`'s
+   * `resolveEntryMultiplierFor` (fed by `services/shop/resolveShopEntryMultiplier`),
+   * which is the same helper the fulfilment webhook uses — so a surface promises
+   * exactly what the grant pays out.
    *
    * `0` (the default) means the product includes no entries and the promise must
    * not be rendered at all.
    */
   includedEntries?: number;
   /**
-   * Ceiling on the promo multiplier for THIS product. null/absent falls through
-   * to the category ceiling, then the shop-wide one, then to inheriting the
-   * one-time promo unchanged.
+   * The entry multiplier for THIS product.
    *
-   * A ceiling, never a rate: the grant applies `min(inherited, cap)`, so it can
-   * only hold merchandise below the pack multiplier, never lift it above.
+   * MOST SPECIFIC WINS, and each tier is an absolute RATE:
+   *
+   *     product  ->  category  ->  whole shop  ->  1x
+   *
+   * `null`/absent means "no opinion" and falls through to the next tier.
+   *
+   * NOT a ceiling. These docblocks described `min(inherited, cap)` until 2026-08-21,
+   * which `utils/shop/entry-multiplier.ts` has never implemented — it returns the
+   * most specific value unchanged and applies no min() anywhere. The code is
+   * authoritative; this comment was the drift.
    */
   entryMultiplier?: number | null;
   /**

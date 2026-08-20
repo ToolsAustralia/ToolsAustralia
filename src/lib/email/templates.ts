@@ -603,3 +603,66 @@ export function createShopOrderShippedTemplate(params: {
     contentHtml: content,
   });
 }
+
+/**
+ * A merchandise order that was cancelled and refunded.
+ *
+ * WHY THIS EXISTS: stock is taken AFTER payment, because a print-to-order catalogue
+ * mostly has none to take. That makes "paid, but we cannot supply it" a real branch —
+ * `finalizeShopOrder` refunds and marks the order `cancelled`. Until this template,
+ * that branch sent NOTHING: the customer paid, watched the money leave, and heard
+ * nothing at all. The same silence applied to a staff-initiated refund.
+ *
+ * Deliberately money-light. It states that a refund was ISSUED, never that it has
+ * landed — `finalizeShopOrder` wraps `stripe.refunds.create` in a catch that only
+ * logs and marks the order cancelled regardless, so the refund is the intent and not
+ * a guarantee. Telling someone their money "has been returned" when the call failed
+ * is worse than telling them it is on its way.
+ */
+export function createShopOrderRefundedTemplate(params: {
+  firstName: string;
+  orderNumber: string;
+  items: { name: string; variant?: string; quantity: number }[];
+  refundAmount: string;
+  /** Why it was cancelled, in the customer's terms. Keep it short and plain. */
+  reason: string;
+  orderUrl: string;
+  supportEmail: string;
+}): string {
+  const safeName = escapeHtml(params.firstName || 'mate');
+  const safeOrder = escapeHtml(params.orderNumber);
+
+  const itemLines = params.items.map((i) => ({
+    label: escapeHtml(i.name),
+    value: escapeHtml([i.variant, `× ${i.quantity}`].filter(Boolean).join(' · ')),
+  }));
+
+  const content =
+    chip('Cancelled') +
+    spacer(14) +
+    heading(`We've refunded this one, ${safeName}`) +
+    spacer(16) +
+    lede(
+      `Order <strong>${safeOrder}</strong> has been cancelled and a refund of ` +
+        `<strong>${escapeHtml(params.refundAmount)}</strong> has been issued.`
+    ) +
+    spacer(24) +
+    bodyHeading('Why') +
+    bodyText(escapeHtml(params.reason)) +
+    spacer(22) +
+    bodyHeading("What was on the order") +
+    infoTable([...itemLines, { label: 'Order number', value: safeOrder }]) +
+    spacer(24) +
+    button({ href: params.orderUrl, label: 'View your orders', variant: 'red', width: 260 }) +
+    spacer(18) +
+    note(
+      `Refunds usually take a few business days to appear on your statement, depending on your bank. ` +
+        `If it hasn't turned up after that, reply to this email or contact us at ${escapeHtml(params.supportEmail)} and we'll chase it up.`
+    );
+
+  return renderBrandEmail({
+    title: `Order ${safeOrder} cancelled and refunded`,
+    preheader: `We couldn't fulfil order ${safeOrder}, so we've refunded it.`,
+    contentHtml: content,
+  });
+}

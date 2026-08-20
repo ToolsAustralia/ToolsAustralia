@@ -62,6 +62,7 @@
     "test:plan-package-id": "tsx src/utils/membership/__tests__/plan-package-id.test.ts",
     "cleanup:abandoned-shop-orders:dry": "tsx scripts/cleanup-abandoned-shop-orders.ts --dry-run",
     "cleanup:abandoned-shop-orders": "tsx scripts/cleanup-abandoned-shop-orders.ts",
+    "test:shop-multiplier-panel": "tsx src/app/api/admin/shop/entry-multiplier/__tests__/panel-contract.test.ts",
     "test:shop-checkout-reuse": "tsx src/services/shop/__tests__/checkout-reuse.test.ts",
     "test:shop-discount": "tsx src/utils/shop/__tests__/member-discount.test.ts",
     "test:discount-visit": "tsx src/utils/partner-discounts/__tests__/record-discount-visit.test.ts",

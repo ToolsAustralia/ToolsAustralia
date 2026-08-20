@@ -47,9 +47,11 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
     if (!order.totalAmount || order.totalAmount <= 0) return;
     // firedRef only survives one mount; Meta's event_id dedup only ~48h. Re-fires
     // inside that window are merged by Meta and recover a swallowed first fire —
-    // which matters most here, since shop has no CAPI counterpart to anchor the
-    // real conversion. Only a revisit BEYOND the window (which Meta would count
-    // as a brand-new conversion) is suppressed.
+    // which matters most here. (There IS a server CAPI counterpart —
+    // finalizeShopOrder fires one on the same orderNumber event id — so a swallowed
+    // browser fire is not total loss, but the browser half carries the richer
+    // client-side match signals.) Only a revisit BEYOND the window (which Meta would
+    // count as a brand-new conversion) is suppressed.
     const purchaseEventId = order.orderNumber ?? orderId;
     if (shouldSuppressPurchasePixel(purchaseEventId)) {
       firedRef.current = true;
@@ -65,7 +67,20 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
         customData: {
           orderId: order.orderNumber ?? orderId,
           contentType: "product",
-          numItems: order.products?.length,
+          /*
+            These MUST match the server half. finalizeShopOrder fires a CAPI
+            Purchase with the SAME event_id (orderNumber), so Meta keeps ONE copy
+            and discards the other — and which one it keeps is not ours to choose.
+            When the two disagreed, the surviving event's num_items was a coin
+            flip between the LINE COUNT (this half) and the SUM OF QUANTITIES (the
+            server half), and content_ids were present or absent at random.
+          */
+          numItems: order.products?.reduce((n, i) => n + (i.quantity ?? 0), 0),
+          contentIds: order.products
+            ?.map((i) =>
+              i.sku ?? (typeof i.product === "object" ? i.product?._id : i.product)
+            )
+            .filter((id): id is string => Boolean(id)),
         },
         eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
       }),

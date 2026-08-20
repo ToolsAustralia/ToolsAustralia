@@ -179,10 +179,16 @@ export default function ProductInteractions({
 
       // Track AddToCart event (standard Meta Pixel event)
       // This replaces the non-standard ButtonClick event with the official AddToCart event
+      // num_items and content_name are what let Meta and TikTok tell a 1-unit add
+      // from a 4-unit one, and what makes the event usable for catalogue matching.
+      // Without numItems, buildMetaCustomData omits num_items entirely and the
+      // TikTok provider then omits contents[].quantity too.
       trackAddToCart({
         value: (product.price as number) * quantity,
         currency: "AUD",
         productId: productIdValue,
+        numItems: quantity,
+        contentName: product.name,
       });
 
       // Track Klaviyo add to cart event

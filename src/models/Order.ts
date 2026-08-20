@@ -106,6 +106,17 @@ export interface IOrder extends Document {
    * normal state while the feature ships dark at `includedEntries: 0`.
    */
   entriesGranted?: number;
+  /**
+   * When the confirmation email (the customer's receipt and tax invoice) was sent.
+   *
+   * ABSENT means never sent, which is what makes a lost send repairable: a webhook
+   * that died between markPaid and the email left a paying customer with no
+   * receipt and NO WAY to get one, because the redelivery path returns
+   * `already_processed` without re-sending. Same shape as `entriesGranted` — a
+   * missing value is distinguishable from a completed one, so a retry can tell
+   * what still needs doing.
+   */
+  confirmationSentAt?: Date;
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -138,10 +149,10 @@ const OrderSchema = new Schema<IOrder>(
         // from price — there is no dollar-to-entry rate in this system, by law
         // (CLAUDE.md rule 11).
         includedEntries: { type: Number, default: 0, min: 0 },
-        // The product's own multiplier ceiling, frozen at checkout with the
+        // The product's own multiplier, frozen at checkout with the
         // rest of its snapshot. The webhook never loads products, so without
         // this the per-product tier would apply on the page and silently not
-        // apply to the grant. The category and shop-wide caps are config, not
+        // apply to the grant. the category and shop-wide tiers are config, not
         // product data, and resolve live at webhook time alongside the promo.
         entryMultiplier: { type: Number, default: null, min: 1, max: 10 },
         // What the grant actually multiplied by, per line. Not order-level:
@@ -261,6 +272,9 @@ const OrderSchema = new Schema<IOrder>(
     // No `default: 0` on purpose — see IOrder: absent must stay distinguishable
     // from a granted zero, or a failed grant looks identical to a zero-entry order.
     entriesGranted: { type: Number, min: 0 },
+    // No default, for the same reason as entriesGranted above: absent must stay
+    // distinguishable from done, or a lost receipt is indistinguishable from a sent one.
+    confirmationSentAt: { type: Date },
     trackingNumber: {
       type: String,
       trim: true,

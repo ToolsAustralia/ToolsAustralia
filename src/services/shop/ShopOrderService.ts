@@ -64,9 +64,10 @@ interface ResolvedLine extends CartLine {
   /** Base free entries for one unit, read from the catalog and frozen onto the order. */
   includedEntries: number;
   /**
-   * This product's own multiplier ceiling, frozen with the rest of its snapshot.
-   * The fulfilment webhook never loads products, so without carrying it here the
-   * per-product tier would show on the page and never reach the grant.
+   * This product's own multiplier tier (a RATE, not a ceiling — see models/Product),
+   * frozen with the rest of its snapshot. The fulfilment webhook never loads
+   * products, so without carrying it here the per-product tier would show on the
+   * page and never reach the grant.
    */
   entryMultiplier?: number | null;
   /** Category at purchase time — what the order lists filter on. */

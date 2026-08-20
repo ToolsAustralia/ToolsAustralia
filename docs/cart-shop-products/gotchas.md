@@ -101,7 +101,7 @@ The trap is the name collision: `useCart` is exported by both files, so a grep f
 
 ## Success-page Purchase pixel must stay guarded by localStorage, not just `firedRef` (2026-07-08)
 
-`CheckoutSuccessClient.tsx` and `PurchaseSuccessClient.tsx` guard the browser Purchase fire with `shouldSuppressPurchasePixel` / `markPurchasePixelFired` ([src/utils/tracking/purchase-pixel-fired-storage.ts](../../src/utils/tracking/purchase-pixel-fired-storage.ts)). A per-mount `firedRef` is NOT enough: it dies with the mount, and Meta's event_id dedup only lasts ~48h, so reopening the success URL later re-fired a fully-valued Purchase that inflated Meta-reported ROAS. The guard is window-aware: re-fires within 46h of the first fire stay allowed — Meta merges them, and on the shop path they are the ONLY recovery for a swallowed first fire, since shop checkout has **no server CAPI counterpart**; only re-fires older than 46h (the ones Meta would count as new) are suppressed. Three invariants to preserve: (1) never suppress the first legitimate fire; (2) re-marks must not move the first-fire timestamp (Meta's dedup window anchors at the first received event); (3) the guard key is deliberately NOT cleared on sign-out — it holds no user data, and clearing it would reintroduce the >48h re-fire.
+`CheckoutSuccessClient.tsx` and `PurchaseSuccessClient.tsx` guard the browser Purchase fire with `shouldSuppressPurchasePixel` / `markPurchasePixelFired` ([src/utils/tracking/purchase-pixel-fired-storage.ts](../../src/utils/tracking/purchase-pixel-fired-storage.ts)). A per-mount `firedRef` is NOT enough: it dies with the mount, and Meta's event_id dedup only lasts ~48h, so reopening the success URL later re-fired a fully-valued Purchase that inflated Meta-reported ROAS. The guard is window-aware: re-fires within 46h of the first fire stay allowed — Meta merges them, and on the shop path they are the ONLY recovery for a swallowed first fire, since a swallowed browser fire on the shop path leaves only the server CAPI half (which DOES exist — `finalizeShopOrder`, keyed on the same `orderNumber`; this line said otherwise until 2026-08-21); only re-fires older than 46h (the ones Meta would count as new) are suppressed. Three invariants to preserve: (1) never suppress the first legitimate fire; (2) re-marks must not move the first-fire timestamp (Meta's dedup window anchors at the first received event); (3) the guard key is deliberately NOT cleared on sign-out — it holds no user data, and clearing it would reintroduce the >48h re-fire.
 
 ## `/checkout/success` depended on a broken `useOrder` response shape (fixed 2026-07-08)
 
@@ -451,3 +451,42 @@ longer than the product list it filtered and matched nearly everything in it.
 
 `?size=` and `?colour=` still work on `/api/products` — the `$elemMatch` filter is correct and a
 future colour-swatch surface may want it. Only the rail was removed.
+
+## The entry multiplier is a RATE, not a ceiling (corrected 2026-08-21)
+
+`resolveEntryMultiplierFor` returns the **most specific value unchanged**:
+
+```
+product  ->  category  ->  whole shop  ->  1x
+```
+
+`null`/absent at a tier means "no opinion" and falls through. There is **no `min()`
+anywhere in the chain** — a control search for `Math.min` across the multiplier path
+returns zero hits against three in sibling shop files.
+
+Every docblock on `Product.entryMultiplier`, `Order.products[].entryMultiplier`, the
+resolved-line type, and all of the admin panel's copy previously described the
+opposite: a ceiling applying `min(inherited, cap)` that "can never lift merchandise
+above the packs". That model has never been implemented. An admin trusting it would
+set a "harmless ceiling" of 10 and get a live **10× rate**.
+
+There is no customer-facing divergence — the page renders through the same helper the
+grant uses, so a shopper is shown what they receive. The exposure was entirely in what
+an operator believed they were configuring.
+
+## The multiplier panel had never saved anything (fixed 2026-08-21)
+
+`ShopEntryMultiplierPanel` PUT the shop-wide value under the key `cap`; the route's Zod
+schema requires `multiplier` and strips unknown keys, so **every save 400'd**. The read
+half was broken the same way — `config.cap` against a response carrying `multiplier` —
+so every dropdown showed the blank option no matter what was stored. All three tiers
+save on one button, so the entire feature was unconfigurable in production.
+
+`tsc` cannot see this class of bug: `res.json()` is untyped and the request body is an
+object literal, so neither side of the wire shares a type. `npm run
+test:shop-multiplier-panel` now asserts the actual wire keys and parses the panel's real
+request body against the route's own schema, with a control that the old `cap` body is
+rejected.
+
+One name, everywhere: **`multiplier`**. It is what the model, the API, the resolver and
+the tests already call it.

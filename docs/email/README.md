@@ -49,3 +49,41 @@ ticket that starts with "I never got a confirmation".
 
 GST is shown as a line inside the total ("Includes GST"), never added — an Australian tax invoice
 has to show the component.
+
+## Shop order emails (2026-08-21)
+
+Three, all best-effort by contract — the caller catches and the sender never throws. An
+SMTP outage must never fail the shop webhook, because failing it retries the **whole**
+fulfilment (stock, cart clear, entry grant), and a customer would rather have a missing
+email than a double-printed garment.
+
+| Email | Trigger | Sender |
+| --- | --- | --- |
+| Confirmation / tax invoice | paid order, after the entry grant | `sendShopOrderConfirmation` |
+| Dispatched | an admin sets a tracking number, or moves the order to `shipped` | `sendShopOrderShipped` |
+| Cancelled + refunded | stock lost after payment, **or** a full staff refund | `sendShopOrderRefunded` |
+
+**The confirmation is sent exactly once, across webhook redeliveries.** `Order
+.confirmationSentAt` is stamped only after a successful send, and the redelivery path
+(`already_processed`) sends it when the stamp is unset. Before this, a webhook that died
+between `markPaid` and the email left a paying customer with **no receipt and no way to
+get one** — the redelivery returned early without re-sending, and nothing recorded that
+it had never gone. Same shape as `entriesGranted`: absent must stay distinguishable from
+done, or a lost send looks identical to a completed one.
+
+**The refund email did not exist at all until 2026-08-21.** Stock is taken *after*
+payment (a print-to-order catalogue mostly has none to take), so "paid, but we cannot
+supply it" is a real branch — it refunded, marked the order `cancelled`, and returned in
+silence. The customer paid, watched the money leave, and heard nothing. A staff refund
+was equally silent.
+
+That email says a refund **was issued**, never that it has landed: `finalizeShopOrder`
+wraps `stripe.refunds.create` in a catch that only logs and marks the order cancelled
+regardless, so the refund is the intent and not a guarantee. It is the same hedge the
+order-history and success pages use for the same reason.
+
+**Recipient rule** for all three: the address typed at checkout
+(`order.shippingAddress.email`) wins, with the account email as fallback — a customer may
+deliberately use a different address from the one on their account. A missing address is
+logged loudly, because a paid customer receiving nothing is a support ticket that starts
+with "I never got a confirmation".

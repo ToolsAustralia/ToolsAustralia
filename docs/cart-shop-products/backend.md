@@ -230,12 +230,17 @@ the export changes today — this note exists so the next reader does not re-der
 The service boundary is the same one an API adapter would sit behind, so switching later changes
 `fulfilmentExport.ts` and not its callers.
 
-### Column names deliberately do not match their template
+##### CSV column names MATCH the provider's template
 
-Their upload screen has a **Field Mapping** step (`Product ID* → Select Field`, and so on), so the
-admin maps our headers to their fields once. That makes explicit, unambiguous headers
-(`product_id`, `address_line_1`, `postcode`) the right choice rather than guessing at their
-template's exact spelling — a guess would silently mis-map.
+Corrected 2026-08-21 — this section previously said the opposite ("Column names
+deliberately do not match their template") and named headers the code does not emit
+(`product_id`, `address_line_1`, `postcode`). The exporter emits `address_1` and
+`zip`, and its own comment states the matching rationale. An operator following the
+old text would have hand-renamed columns the provider already accepts, and broken
+the import.
+
+Read the header list from `src/services/shop/fulfilmentExport.ts` rather than from
+here — a column list in prose is exactly what drifted.
 
 ### One row per item
 

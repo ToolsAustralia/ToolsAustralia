@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { sendShopOrderRefunded } from "@/services/shop/sendOrderRefunded";
 import { stripe } from "@/lib/stripe";
 import Order, { type IOrder } from "@/models/Order";
 
@@ -179,6 +180,21 @@ export async function refundShopOrder(params: {
         "The refund went through in Stripe but this order could not be updated. " +
         "It may still be in the print queue — check it before anything ships.",
     };
+  }
+
+  // Tell the customer. A staff refund was as silent as the stock-loss one — the
+  // money went back and nothing explained why. Best-effort: the refund has already
+  // succeeded and the record is written, so an email problem must not turn a
+  // completed refund into a reported failure.
+  if (isFull) {
+    await sendShopOrderRefunded(
+      order,
+      params.reason?.trim()
+        ? params.reason.trim()
+        : "We cancelled this order and sent your money back."
+    ).catch((err) => {
+      console.error("[shop] refund email failed", { orderNumber: order.orderNumber, err });
+    });
   }
 
   return {

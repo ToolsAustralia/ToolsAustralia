@@ -1644,14 +1644,26 @@ async function grantBenefits(
     }
     }
   } else {
-    // ✅ DEFENSIVE LOGGING: Log when skipping Facebook tracking for renewal
+    // DEFENSIVE LOGGING. The reason is computed, not assumed: this branch has TWO
+    // causes and the message used to hard-code "renewal" for both, so a merch order
+    // showed up in the logs as a skipped RENEWAL — which reads as a bug in renewal
+    // classification and sends the next person debugging Meta tracking down the wrong
+    // path entirely. Shop is skipped here because finalizeShopOrder fires its own CAPI
+    // Purchase keyed on orderNumber (matching the browser pixel so Meta can dedupe);
+    // firing it here on paymentIntentId would double-count every merch sale.
     const trackingId = paymentIntentId || "unknown";
-    console.log(`⏭️ [Facebook Tracking] Skipping Purchase event for renewal:`, {
-      paymentIntentId: trackingId,
-      packageType: packageData.packageType,
-      billingReason: billingReason || "N/A",
-      reason: "Renewals should not be sent to Facebook per best practices",
-    });
+    const skipReason = packageData.packageType === "shop"
+      ? "Shop orders fire CAPI from finalizeShopOrder, keyed on orderNumber to dedupe with the browser pixel"
+      : "Renewals should not be sent to Facebook per best practices";
+    console.log(
+      `⏭️ [Facebook Tracking] Skipping Purchase event (${packageData.packageType === "shop" ? "shop" : "renewal"}):`,
+      {
+        paymentIntentId: trackingId,
+        packageType: packageData.packageType,
+        billingReason: billingReason || "N/A",
+        reason: skipReason,
+      }
+    );
   }
 
   // ✅ CRITICAL: Process affiliate commissions (non-blocking, only on successful payments)

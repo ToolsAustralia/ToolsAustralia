@@ -147,7 +147,7 @@ No outstanding **functional** or **EMQ** gaps. The reporting-param items from th
 - **`content_id` on funnel pixel events** — ✅ fixed via `fireFunnelEvent`; each funnel caller passes `contentIds`/`productId` (resolved the "content_id not received" Pixel-Helper warning).
 - **Multi-item `quantity`** — ✅ `quantity` (and `content_name`) are per-row; the order-wide `numItems` is only stamped as `quantity` when there's a single `content_id`, so multi-line carts won't duplicate the total across rows.
 - **Per-item `price` in `contents`** — **N/A by design.** TikTok's `price` is a per-item catalog / Video-Shopping-Ads field. Tools Australia has no product feed, and the order-wide `value` is the revenue signal TikTok uses for ROAS. Deriving a unit `price` would be speculative data, so we intentionally omit it. Revisit only if a product catalog + VSA campaigns are introduced.
-- **Shop checkout (`CheckoutSuccessClient`)** — browser-only Purchase (no server CAPI), so `content_name` parity is moot there. A shop-order **server** CAPI is a separate, pre-existing follow-up (from the Meta parity spec), not a TikTok gap.
+- **Shop checkout (`CheckoutSuccessClient`)** — Purchase fires BOTH browser and server CAPI, keyed on `orderNumber` so Meta dedupes them (see rules.md R9), so `content_name` parity is moot there. A shop-order **server** CAPI is a separate, pre-existing follow-up (from the Meta parity spec), not a TikTok gap.
 
 ---
 

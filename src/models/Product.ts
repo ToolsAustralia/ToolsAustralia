@@ -65,14 +65,19 @@ export interface IProduct extends Document {
    */
   includedEntries: number;
   /**
-   * Ceiling on the promo multiplier for THIS product. null/absent falls
-   * through to the category cap, then the shop-wide cap, then to inheriting
-   * the one-time promo unchanged.
+   * The entry multiplier for THIS product.
    *
-   * A ceiling, never a rate: the grant applies `min(inherited, cap)`, so this
-   * can only ever hold merchandise BELOW the pack multiplier, never lift it
-   * above. That is what keeps a garment from becoming a cheaper route into a
-   * draw than the packs during a promo.
+   * MOST SPECIFIC WINS, and each tier is an absolute RATE:
+   *
+   *     product  ->  category  ->  whole shop  ->  1x
+   *
+   * `null`/absent means "no opinion" and falls through to the next tier.
+   *
+   * NOT a ceiling. This docblock described `min(inherited, cap)` until 2026-08-21,
+   * a model `utils/shop/entry-multiplier.ts` has never implemented — it returns the
+   * most specific value unchanged and applies no min() anywhere. The code is
+   * authoritative; the comment was the drift. An admin who trusted it would set a
+   * "harmless ceiling" of 10 and get a live 10x rate.
    */
   entryMultiplier?: number | null;
   /**

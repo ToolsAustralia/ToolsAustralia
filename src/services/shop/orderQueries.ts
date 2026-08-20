@@ -322,22 +322,41 @@ export async function updateOrderFulfilment(
   const CAN_SHIP_FROM: readonly OrderStatus[] = ["processing", "shipped"];
   const wantsImpliedShip = !patch.status && Boolean(patch.trackingNumber?.trim());
 
+  /*
+    ONE atomic write, and the filter carries the legality gate.
+
+    Two bugs lived in the previous two-step version:
+
+    1. The implied ship was a SECOND, non-atomic write. Two staff saving a tracking
+       number at the same moment both read a pre-image of "processing", both passed
+       the guard, and both sent the dispatch email — the customer was told twice
+       that the same parcel had left.
+
+    2. CAN_SHIP_FROM gated only the IMPLIED ship. A caller-supplied status was
+       written unconditionally, so `pending -> shipped` was accepted — the exact
+       unrecoverable state the guard exists to prevent, since markPaid matches on
+       `pending` and can never afterwards mark that order paid.
+
+    Putting the allowed pre-image states in the FILTER fixes both: the loser of a
+    race gets `null` (its filter no longer matches) and sends nothing, and an
+    illegal explicit transition simply does not apply.
+  */
+  const shipsNow = wantsImpliedShip || update.status === "shipped";
+  const writeFilter: FilterQuery<IOrder> = shipsNow
+    ? { _id: orderId, status: { $in: CAN_SHIP_FROM } }
+    : { _id: orderId };
+  if (shipsNow) update.status = "shipped";
+
   // Returns the document as it was BEFORE the write, which is the only thing that
-  // can tell a real dispatch from a re-save. `findOneAndUpdate` is atomic, so two
-  // staff hitting "shipped" at once produce exactly one pre-image that was not
-  // already shipped — and therefore exactly one email.
-  const previous = await Order.findByIdAndUpdate(orderId, { $set: update }, { new: false })
+  // can tell a real dispatch from a re-save.
+  const previous = await Order.findOneAndUpdate(writeFilter, { $set: update }, { new: false })
     .select("status trackingNumber")
     .lean<{ _id: mongoose.Types.ObjectId; status: OrderStatus; trackingNumber?: string } | null>();
 
-  if (!previous) return null;
-
-  // Now the pre-image is known, apply the implied transition if it is legal. A
-  // second write rather than a cleverer single one: the pre-image is what tells a
-  // real dispatch from a re-save, and it is also what the email guard below reads.
-  if (wantsImpliedShip && CAN_SHIP_FROM.includes(previous.status)) {
-    update.status = "shipped";
-    await Order.updateOne({ _id: orderId }, { $set: { status: "shipped" } });
+  if (!previous) {
+    // Either the order does not exist, or it was not in a state it could ship from.
+    // Both are a no-op that must NOT send an email.
+    return null;
   }
 
   const status = update.status ?? previous.status;

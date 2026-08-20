@@ -5,6 +5,7 @@ import Order, { type IOrder } from "@/models/Order";
 import { ShopOrderService } from "@/services/shop/ShopOrderService";
 import { processPaymentBenefits } from "@/utils/payment/payment-processing";
 import { sendShopOrderConfirmation } from "@/services/shop/sendOrderConfirmation";
+import { sendShopOrderRefunded } from "@/services/shop/sendOrderRefunded";
 import { trackPixelPurchase } from "@/utils/tracking/pixel-purchase-tracking";
 import { trackShopPlacedOrder } from "@/utils/integrations/klaviyo/klaviyo-revenue-service";
 import { normalizeEpochToUnixSeconds } from "@/lib/tracking/canonical-event";
@@ -164,6 +165,32 @@ async function grantShopEntries(
   }
 }
 
+/**
+ * Send the confirmation exactly once per order, across webhook redeliveries.
+ *
+ * The stamp is written only after a successful send, and the send is best-effort:
+ * an SMTP problem must never fail the webhook, which would retry the WHOLE
+ * fulfilment. A failed send simply leaves the stamp unset, so the next redelivery
+ * tries again — which is the repair path.
+ */
+async function sendOrderConfirmationOnce(order: IOrder): Promise<void> {
+  if (order.confirmationSentAt) return;
+  try {
+    await sendShopOrderConfirmation(order);
+    // Gated on the field still being unset, so two concurrent redeliveries cannot
+    // both stamp — and, more importantly, cannot both send.
+    await Order.updateOne(
+      { _id: order._id, confirmationSentAt: { $exists: false } },
+      { $set: { confirmationSentAt: new Date() } }
+    );
+  } catch (err) {
+    console.error("[shop] order confirmation email failed", {
+      orderNumber: order.orderNumber,
+      err,
+    });
+  }
+}
+
 export async function finalizeShopOrder(
   paymentIntent: Stripe.PaymentIntent,
   { requestContext }: FinalizeShopOrderOptions
@@ -212,6 +239,12 @@ export async function finalizeShopOrder(
         ? await grantShopEntries(existing, paymentIntent.id)
         : existing.entriesGranted;
 
+    // Repair a receipt the first delivery never managed to send. Same reasoning as
+    // the grant retry directly above: if the webhook died between markPaid and the
+    // email, the customer has paid and holds no receipt or tax invoice, and nothing
+    // else in the system will ever produce one.
+    await sendOrderConfirmationOnce(existing);
+
     return { status: "already_processed", orderNumber: existing.orderNumber, entriesGranted };
   }
 
@@ -248,6 +281,17 @@ export async function finalizeShopOrder(
     order.status = "cancelled";
     order.notes = `Auto-refunded: out of stock after payment (${failed.join(", ")})`;
     await order.save();
+
+    // TELL THEM. Until this, the branch refunded and returned in silence: the
+    // customer paid, watched the money leave, and heard nothing at all. Best-effort
+    // like every other send here — this branch has already moved money, and failing
+    // the webhook would retry the whole fulfilment.
+    await sendShopOrderRefunded(
+      order,
+      "One of the items sold out between your payment and us picking it, so we couldn't make this order."
+    ).catch((err) => {
+      console.error("[shop] refund email failed", { orderNumber: order.orderNumber, err });
+    });
 
     return { status: "refunded_stock_lost", orderNumber: order.orderNumber };
   }
@@ -330,12 +374,7 @@ export async function finalizeShopOrder(
   // Safe to sequence here: grantShopEntries catches its own failures and never
   // throws, so a failed grant still produces a receipt. Best-effort — an SMTP
   // problem must never fail the webhook, which would retry the whole fulfilment.
-  await sendShopOrderConfirmation(order).catch((err) => {
-    console.error("[shop] order confirmation email failed", {
-      orderNumber: order.orderNumber,
-      err,
-    });
-  });
+  await sendOrderConfirmationOnce(order);
 
   // The canonical Purchase, server-side (docs/tracking/rules.md R1).
   //

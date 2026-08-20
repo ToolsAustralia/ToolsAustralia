@@ -6,22 +6,26 @@ import { usePermissions } from "@/hooks/usePermissions";
 import SelectMenu, { type SelectMenuOption } from "@/components/ui/SelectMenu";
 
 /**
- * Hold merchandise below the pack multiplier during a promo.
+ * The merchandise entry multiplier, at three tiers.
  *
- * Merchandise INHERITS the one-time pack multiplier, so a 10x pack weekend
- * multiplies garment entries too. This panel sets a ceiling on that at any of
- * three tiers, and the most specific one wins:
+ * Most specific wins, and each tier is an absolute RATE — not a ceiling on some
+ * other number:
  *
- *     product  ->  category  ->  whole shop  ->  inherit unchanged
+ *     product  ->  category  ->  whole shop  ->  1x
  *
- * A ceiling, never a rate. The grant applies `min(promo, ceiling)`, so nothing
- * set here can lift merchandise ABOVE the packs; it can only hold it below. That
- * is what stops a garment becoming a cheaper route into a draw than the packs,
- * and it is why three tiers of control are safe rather than three ways to get it
- * wrong.
+ * So a product set to 3x gives 3x even when the shop-wide value is 10x, and one
+ * set to 10x gives 10x even when the shop-wide value is 2x. Blank at a tier means
+ * "no opinion" and falls through to the next; blank everywhere means 1x.
+ *
+ * THIS COPY WAS WRONG UNTIL 2026-08-21. The panel described a ceiling model
+ * (`min(promo, ceiling)`, "can never lift merchandise above the packs") that the
+ * resolver has never implemented — see utils/shop/entry-multiplier.ts, which
+ * returns the most specific value unchanged and applies no min() anywhere. An
+ * admin trusting the old copy would set a "harmless ceiling" of 10 and get a live
+ * 10x rate.
  *
  * All three tiers save on ONE button, through one endpoint. Saving them
- * separately would let a page show a ceiling that only partly landed.
+ * separately would let a page show a value that only partly landed.
  *
  * Categories and products are OFFERED, never typed. `Product.category` is free
  * text with no enum, and the catalogue already holds "Apparel" beside
@@ -37,30 +41,30 @@ interface ProductRow {
   id: string;
   name: string;
   category: string;
-  cap: number | null;
+  multiplier: number | null;
 }
 
 interface ConfigResponse {
-  cap: number | null;
+  multiplier: number | null;
   categoryMultipliers: Record<string, number>;
   categories: CategoryOption[];
   products: ProductRow[];
   updatedAt: string | null;
 }
 
-/** Blank = no ceiling at this tier. Kept as strings so a field can be cleared. */
+/** Blank = no opinion at this tier; falls through. Strings so a field can be cleared. */
 interface Draft {
-  cap: string;
+  multiplier: string;
   categoryMultipliers: Record<string, string>;
   productMultipliers: Record<string, string>;
 }
 
 /**
- * "" is the no-ceiling option, and it must come first: it is the default state
+ * "" is the inherit option, and it must come first: it is the default state
  * and the one an admin reaches for to undo a mistake.
  */
 const CAP_OPTIONS: SelectMenuOption[] = [
-  { value: "", label: "No ceiling" },
+  { value: "", label: "Inherit" },
   ...Array.from({ length: 10 }, (_, i) => ({
     value: String(i + 1),
     label: `${i + 1}×`,
@@ -69,7 +73,7 @@ const CAP_OPTIONS: SelectMenuOption[] = [
 
 function toDraft(config: ConfigResponse): Draft {
   return {
-    cap: config.cap == null ? "" : String(config.cap),
+    multiplier: config.multiplier == null ? "" : String(config.multiplier),
     categoryMultipliers: Object.fromEntries(
       config.categories.map((c) => [
         c.key,
@@ -77,7 +81,7 @@ function toDraft(config: ConfigResponse): Draft {
       ])
     ),
     productMultipliers: Object.fromEntries(
-      config.products.map((p) => [p.id, p.cap == null ? "" : String(p.cap)])
+      config.products.map((p) => [p.id, p.multiplier == null ? "" : String(p.multiplier)])
     ),
   };
 }
@@ -90,7 +94,7 @@ export default function ShopEntryMultiplierPanel() {
   const canEdit = has("shop.edit");
 
   const [config, setConfig] = useState<ConfigResponse | null>(null);
-  const [draft, setDraft] = useState<Draft>({ cap: "", categoryMultipliers: {}, productMultipliers: {} });
+  const [draft, setDraft] = useState<Draft>({ multiplier: "", categoryMultipliers: {}, productMultipliers: {} });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(
@@ -129,7 +133,11 @@ export default function ShopEntryMultiplierPanel() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cap: toValue(draft.cap),
+          // MUST be the key `multiplier`. The route's Zod schema requires it and
+          // strips unknown keys, so the old `cap` key made EVERY save 400 — and
+          // because res.json() is untyped and this is an object literal, tsc could
+          // not see it. The panel had never successfully saved anything.
+          multiplier: toValue(draft.multiplier),
           categoryMultipliers: Object.fromEntries(
             Object.entries(draft.categoryMultipliers).map(([k, v]) => [k, toValue(v)])
           ),
@@ -157,7 +165,7 @@ export default function ShopEntryMultiplierPanel() {
    * text instead of an inert-looking control — which reads better than a dropdown
    * that silently does nothing.
    */
-  const capControl = (id: string, value: string, onChange: (next: string) => void) =>
+  const multiplierControl = (id: string, value: string, onChange: (next: string) => void) =>
     canEdit && !isSaving ? (
       <SelectMenu
         id={id}
@@ -168,7 +176,7 @@ export default function ShopEntryMultiplierPanel() {
       />
     ) : (
       <span className="w-36 text-sm text-gray-600 dark:text-neutral-400">
-        {value === "" ? "No ceiling" : `${value}×`}
+        {value === "" ? "Inherit" : `${value}×`}
       </span>
     );
 
@@ -184,7 +192,7 @@ export default function ShopEntryMultiplierPanel() {
         <p className="truncate text-sm text-gray-800 dark:text-neutral-200">{label}</p>
         {sub && <p className="truncate text-xs text-gray-500 dark:text-neutral-500">{sub}</p>}
       </div>
-      {capControl(`cap-${key}`, value, onChange)}
+      {multiplierControl(`multiplier-${key}`, value, onChange)}
     </li>
   );
 
@@ -196,10 +204,10 @@ export default function ShopEntryMultiplierPanel() {
           Merchandise entry multiplier
         </h3>
         <p className="mt-1 text-xs text-gray-600 dark:text-neutral-400 sm:text-sm">
-          Merchandise follows the one-time pack multiplier. A ceiling holds it below that during a
-          promo — it can never lift merchandise above the packs.{" "}
-          <strong className="font-semibold">Most specific wins:</strong> a product ceiling beats its
-          category, which beats the shop-wide one.
+          How many free entries a merchandise line gives, as a multiple of the item&apos;s own
+          included count.{" "}
+          <strong className="font-semibold">Most specific wins:</strong> a product value beats its
+          category, which beats the shop-wide one. Blank means inherit; blank everywhere means 1×.
         </p>
       </div>
 
@@ -217,11 +225,11 @@ export default function ShopEntryMultiplierPanel() {
                 <div>
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">Whole shop</p>
                   <p className="text-xs text-gray-600 dark:text-neutral-400">
-                    Applies wherever no category or product ceiling is set.
+                    Applies wherever no category or product value is set.
                   </p>
                 </div>
-                {capControl("cap-shop", draft.cap, (next) =>
-                  setDraft((d) => ({ ...d, cap: next }))
+                {multiplierControl("multiplier-shop", draft.multiplier, (next) =>
+                  setDraft((d) => ({ ...d, multiplier: next }))
                 )}
               </div>
             </section>
@@ -250,7 +258,7 @@ export default function ShopEntryMultiplierPanel() {
               <p className="text-sm font-semibold text-gray-900 dark:text-white">By product</p>
               <p className="text-xs text-gray-600 dark:text-neutral-400">
                 The same field also sits on each product&apos;s edit form — this list is here so you
-                can see every ceiling at once.
+                can see every multiplier at once.
               </p>
               {config.products.length === 0 ? (
                 <p className="mt-1 text-xs text-gray-600 dark:text-neutral-400">
@@ -276,7 +284,7 @@ export default function ShopEntryMultiplierPanel() {
                 disabled={isSaving}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
-                {isSaving ? "Saving…" : "Save ceilings"}
+                {isSaving ? "Saving…" : "Save multipliers"}
               </button>
             )}
           </div>

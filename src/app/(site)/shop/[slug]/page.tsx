@@ -76,7 +76,7 @@ async function getRelatedProducts(productId: string, brand: string, category: st
       // carries every review body and reviewer userId, and this is serialised into
       // the page like everything else here. The card only needs the count.
       .select(
-        "_id name price images brand category stock trackInventory includedEntries rating reviewCount displayRating displayReviewCount isFeatured"
+        "_id name price images brand category stock trackInventory includedEntries entryMultiplier rating reviewCount displayRating displayReviewCount isFeatured"
       )
       .limit(4)
       .lean();
@@ -202,16 +202,34 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
   // Serialize Mongoose documents to plain objects for client components
   const serializedProduct = JSON.parse(JSON.stringify(product));
 
-  // The multiplier CEILING in force for this product, resolved server-side
-  // because two of its three tiers (category, shop-wide) are admin config the
-  // browser has no business reading in full. The live promo rate is still read
-  // on the client, and the same `min` is applied there — so the number this
-  // page prints and the number the webhook grants come from one helper.
+  // The multiplier in force for this product, resolved server-side because two of
+  // its three tiers (category, shop-wide) are admin config the browser has no
+  // business reading in full. Most specific wins: product, then category, then
+  // shop-wide, then 1x. One helper serves this page, the listing API and the
+  // webhook grant, so what is printed is what is granted.
+  const shopMultipliers = await loadShopEntryMultipliers();
   const entryMultiplier = resolveEntryMultiplierFor(
     { category: product.category, entryMultiplier: product.entryMultiplier },
-    await loadShopEntryMultipliers()
+    shopMultipliers
   );
-  const serializedRelatedProducts = JSON.parse(JSON.stringify(relatedProducts));
+
+  /*
+    The related grid needs the SAME treatment.
+
+    It queries Product directly rather than going through /api/products, so nothing
+    resolved its tiers — ProductCard fell back to 1x and the multiplier badge
+    vanished on this grid alone, while the identical card on /shop showed it. The
+    config is already loaded above, so this costs no extra read.
+  */
+  const serializedRelatedProducts = (
+    JSON.parse(JSON.stringify(relatedProducts)) as ProductType[]
+  ).map((related) => ({
+    ...related,
+    entryMultiplier: resolveEntryMultiplierFor(
+      { category: related.category, entryMultiplier: related.entryMultiplier },
+      shopMultipliers
+    ),
+  }));
 
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
   const productUrl = `${baseUrl}/shop/${product._id}`;
