@@ -111,6 +111,47 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    /*
+      A CUSTOMER SESSION is what makes the buyer's saved cards appear in
+      PaymentElement, with "add a new card" still available underneath.
+
+      It is Stripe's supported mechanism for this — the alternative is a
+      hand-rolled saved-card picker that confirms with an explicit
+      `payment_method`, which is what the membership modal does. That predates
+      PaymentElement and reimplements selection, removal and the new-card form
+      by hand; bolting it onto this integration would mean maintaining two
+      payment UIs for one checkout.
+
+      payment_method_save is off: a shop purchase is one-off, and silently
+      storing a card from it is not something the buyer asked for. Cards saved
+      by the MEMBERSHIP flow are redisplayed here, which is the case that
+      matters — a member paying for merch should not retype a card the account
+      already holds.
+    */
+    let customerSessionClientSecret: string | null = null;
+    try {
+      const customerSession = await stripe.customerSessions.create({
+        customer: stripeCustomerId,
+        components: {
+          payment_element: {
+            enabled: true,
+            features: {
+              payment_method_redisplay: "enabled",
+              payment_method_save: "disabled",
+              payment_method_remove: "disabled",
+            },
+          },
+        },
+      });
+      customerSessionClientSecret = customerSession.client_secret;
+    } catch (sessionError) {
+      // Non-fatal by design. Without it PaymentElement still renders a normal
+      // card form, so the buyer can always pay — they just have to type the
+      // card. Failing the whole checkout because a convenience could not be
+      // set up would be the wrong trade.
+      console.error("[shop] customer session failed — falling back to card entry", sessionError);
+    }
+
     const paymentIntent = await stripe.paymentIntents.create(config, {
       // Keyed on the order, so a double-submitted checkout form reuses one
       // PaymentIntent instead of creating a second charge.
@@ -126,6 +167,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         clientSecret: paymentIntent.client_secret,
+        customerSessionClientSecret,
         orderId: String(order._id),
         orderNumber: order.orderNumber,
         totals: {

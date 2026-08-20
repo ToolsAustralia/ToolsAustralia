@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useEffect, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2, ShoppingBag } from "lucide-react";
+import Link from "next/link";
+import { Minus, Plus } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useUserContext } from "@/contexts/UserContext";
+import { resolveShopDiscountPercent } from "@/utils/shop/member-discount";
+import { priceCart, centsToDollars, dollarsToCents } from "@/utils/shop/pricing";
 import { useSession } from "next-auth/react";
 import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
 import ShopCheckoutPaymentElement from "@/components/payment/ShopCheckoutPaymentElement";
+import SuccessScreen from "@/components/loading/SuccessScreen";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 
@@ -63,7 +68,14 @@ const money = (n: number) => `$${n.toFixed(2)}`;
 
 export default function CheckoutClient() {
   const router = useRouter();
-  const { items, summary, isLoading: isCartLoading } = useCart();
+  const {
+    items,
+    summary,
+    isLoading: isCartLoading,
+    updateCartItem,
+    removeFromCart,
+  } = useCart();
+  const { userData } = useUserContext();
 
   // A guest could previously fill in their entire delivery address and only
   // then be told "Unauthorized" in a red box — the 401 body from the checkout
@@ -84,6 +96,9 @@ export default function CheckoutClient() {
   const { trackInitiateCheckout: trackKlaviyoStartedCheckout } = useKlaviyoTracking();
   const [address, setAddress] = useState<AddressForm>(EMPTY_ADDRESS);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [customerSessionClientSecret, setCustomerSessionClientSecret] = useState<string | null>(null);
+  /** Set the moment Stripe confirms; drives the success interstitial. */
+  const [paid, setPaid] = useState(false);
   const [serverTotals, setServerTotals] = useState<ServerTotals | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -130,6 +145,7 @@ export default function CheckoutClient() {
       }
 
       setClientSecret(data.data.clientSecret);
+      setCustomerSessionClientSecret(data.data.customerSessionClientSecret ?? null);
       setServerTotals(data.data.totals);
       setOrderNumber(data.data.orderNumber);
       setOrderId(data.data.orderId);
@@ -200,6 +216,29 @@ export default function CheckoutClient() {
     }
   };
 
+  /*
+    Before the server prices the cart, the member discount is computed HERE.
+
+    CartContext deliberately leaves `summary.discount` at 0 — it has no session
+    and cannot know the tier. That was fine when the summary was only a badge,
+    but on checkout it meant the customer saw the undiscounted total right up
+    until they pressed Continue to payment, at which point it dropped. A total
+    that changes after you commit to paying is the wrong moment to be surprised.
+
+    serverTotals still WINS the moment it exists: the server prices from the
+    catalogue and is the only figure the PaymentIntent is built from. This is a
+    preview that happens to agree, not a second source of truth.
+  */
+  const previewDiscount = useMemo(() => {
+    const percent = resolveShopDiscountPercent(userData ?? {});
+    if (percent <= 0) return 0;
+    const priced = priceCart(
+      productItems.map((i) => ({ priceCents: dollarsToCents(i.price), quantity: i.quantity })),
+      { shopDiscountPercent: percent }
+    );
+    return centsToDollars(priced.discountCents);
+  }, [productItems, userData]);
+
   if (isCartLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -226,12 +265,13 @@ export default function CheckoutClient() {
     );
   }
 
+
   const totals = serverTotals ?? {
     subtotal: summary.subtotal,
-    discount: summary.discount ?? 0,
+    discount: previewDiscount,
     shipping: summary.shipping,
     gst: summary.tax,
-    total: summary.totalAmount,
+    total: Math.max(0, summary.totalAmount - previewDiscount),
   };
 
   return (
@@ -313,9 +353,23 @@ export default function CheckoutClient() {
               )}
               <ShopCheckoutPaymentElement
                 clientSecret={clientSecret}
+                customerSessionClientSecret={customerSessionClientSecret}
                 orderId={orderId ?? ""}
                 totalLabel={money(totals.total)}
-                onPaid={() => router.push(`/checkout/success?orderId=${orderId}`)}
+                /*
+                  Confirm -> success breakdown -> success page.
+
+                  The jump straight to /checkout/success was abrupt: the customer
+                  pressed Pay and the page simply changed, with no moment that said
+                  the payment landed. SuccessScreen (the same component the
+                  membership and pack flows use) holds for three seconds with the
+                  order's own figures, then navigates.
+
+                  The ORDER is still finalised by the Stripe webhook — this is
+                  acknowledgement of the payment, not of fulfilment, and the
+                  success page it lands on is what reads the finished order.
+                */
+                onPaid={() => setPaid(true)}
               />
             </section>
           )}
@@ -326,7 +380,30 @@ export default function CheckoutClient() {
             exactly when the customer is deciding whether to pay. `h-fit` stays: it keeps
             the card at content height rather than stretching down the grid row. */}
         <aside className="h-fit rounded-xl border border-gray-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900 lg:sticky lg:top-24">
-          <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">Your order</h2>
+          <div className="mb-4 flex items-baseline justify-between gap-3">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Your order</h2>
+            {!clientSecret && (
+              <Link
+                href="/shop"
+                className="text-xs font-semibold text-red-600 hover:underline dark:text-red-400"
+              >
+                Add more items
+              </Link>
+            )}
+          </div>
+
+          {/*
+            The cart stays editable until the PaymentIntent exists, and is frozen
+            after. Changing quantities once Stripe holds an amount would leave the
+            customer paying the old total for a different cart — the intent is
+            created from server-priced lines at Continue, and nothing re-prices it.
+          */}
+          {clientSecret && (
+            <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-200">
+              Your order is locked while payment is open. Cancel and return to the shop to
+              change it.
+            </p>
+          )}
 
           <ul className="mb-4 space-y-3">
             {productItems.map((item) => (
@@ -338,9 +415,45 @@ export default function CheckoutClient() {
                   <p className="truncate text-sm font-medium text-gray-900 dark:text-neutral-100">
                     {item.product?.name ?? "Item"}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-neutral-400">
-                    {item.sku && <span className="mr-1">{item.sku}</span>}× {item.quantity}
-                  </p>
+                  {item.sku && (
+                    <p className="truncate text-xs text-gray-500 dark:text-neutral-400">{item.sku}</p>
+                  )}
+                  {clientSecret ? (
+                    <p className="text-xs text-gray-500 dark:text-neutral-400">× {item.quantity}</p>
+                  ) : (
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        aria-label="Decrease quantity"
+                        onClick={() =>
+                          item.quantity <= 1
+                            ? void (item.productId && removeFromCart(item.productId, "product", item.sku))
+                            : void updateCartItem({ productId: item.productId, sku: item.sku, quantity: item.quantity - 1 })
+                        }
+                        className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="min-w-[1.5rem] text-center text-xs font-semibold text-gray-900 dark:text-neutral-100">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Increase quantity"
+                        onClick={() => void updateCartItem({ productId: item.productId, sku: item.sku, quantity: item.quantity + 1 })}
+                        className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void (item.productId && removeFromCart(item.productId, "product", item.sku))}
+                        className="ml-1 text-xs font-medium text-gray-500 hover:text-red-600 dark:text-neutral-400 dark:hover:text-red-400"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-neutral-100">
                   {money(item.price * item.quantity)}
@@ -367,6 +480,27 @@ export default function CheckoutClient() {
           </dl>
         </aside>
       </div>
+      {paid && (
+        <SuccessScreen
+          title="Payment received"
+          subtitle={`Order ${orderNumber ?? ""} — we are getting it ready.`}
+          benefits={[
+            { text: `${money(totals.total)} paid`, icon: "tag", highlight: true },
+            {
+              text: `${productItems.reduce((n, i) => n + i.quantity, 0)} item${
+                productItems.reduce((n, i) => n + i.quantity, 0) === 1 ? "" : "s"
+              }`,
+              icon: "gift",
+            },
+            ...(totals.discount > 0
+              ? [{ text: `${money(totals.discount)} member discount applied`, icon: "star" as const }]
+              : []),
+          ]}
+          autoCloseDelay={3000}
+          onAutoClose={() => router.push(`/checkout/success?orderId=${orderId}`)}
+        />
+      )}
+
       {showSignIn && (
         <SignInToBuyModal
           isOpen={showSignIn}

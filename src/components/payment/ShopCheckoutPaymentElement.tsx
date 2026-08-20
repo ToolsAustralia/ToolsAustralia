@@ -124,7 +124,27 @@ function PayForm({ totalLabel, orderId, onPaid }: PayFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="relative space-y-4">
+      {/*
+        A real overlay while stripe.confirmPayment is in flight, not just a
+        spinner inside the button.
+
+        This wait is genuinely open-ended — a 3DS challenge can take tens of
+        seconds — and a card form that still looks editable invites a second
+        submit. It covers the form rather than replacing it so the Element is
+        never unmounted mid-confirm.
+      */}
+      {isPaying && (
+        <div className="pointer-events-auto absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-white/85 backdrop-blur-sm dark:bg-neutral-900/85">
+          <Loader2 className="h-7 w-7 animate-spin text-red-600 dark:text-red-400" />
+          <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
+            Processing your payment…
+          </p>
+          <p className="max-w-[16rem] text-center text-xs text-gray-500 dark:text-neutral-400">
+            Do not close this page. Your bank may ask you to confirm.
+          </p>
+        </div>
+      )}
       <PaymentElement />
 
       {error && (
@@ -163,6 +183,12 @@ function PayForm({ totalLabel, orderId, onPaid }: PayFormProps) {
 
 export interface ShopCheckoutPaymentElementProps {
   clientSecret: string;
+  /**
+   * Stripe Customer Session secret. Present = the buyer's saved cards are
+   * offered above the card form. Absent (the session call failed) = a normal
+   * card form, which still takes payment.
+   */
+  customerSessionClientSecret?: string | null;
   /** Pre-formatted, e.g. "$89.95". */
   totalLabel: string;
   onPaid: () => void;
@@ -172,6 +198,7 @@ export interface ShopCheckoutPaymentElementProps {
 
 export default function ShopCheckoutPaymentElement({
   clientSecret,
+  customerSessionClientSecret,
   totalLabel,
   orderId,
   onPaid,
@@ -182,8 +209,17 @@ export default function ShopCheckoutPaymentElement({
   // Remounting <Elements> resets the customer's typed card details, so the
   // options object must be referentially stable across re-renders.
   const options = useMemo(
-    () => ({ clientSecret, appearance: buildAppearance(isDark) }),
-    [clientSecret, isDark]
+    () => ({
+      clientSecret,
+      // Spread rather than set to undefined: Stripe rejects the key being
+      // present-but-undefined, and it is legitimately absent whenever the
+      // customer-session call failed.
+      ...(customerSessionClientSecret
+        ? { customerSessionClientSecret }
+        : {}),
+      appearance: buildAppearance(isDark),
+    }),
+    [clientSecret, customerSessionClientSecret, isDark]
   );
 
   return (

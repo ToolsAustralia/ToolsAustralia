@@ -416,3 +416,40 @@ cause was the test: only one product had loaded, so the flex row was 778px and t
 of travel before running out. With 12 products the row is 2371px and the rail pins correctly at
 y=96. **Check the containing block's height before hunting for an overflow ancestor** — sticky
 with nowhere to travel looks identical to sticky that is broken.
+
+## Checkout: editable order, discount before commit, and the pay flow (2026-08-20)
+
+**The member discount is shown before the customer commits.** `CartContext` deliberately leaves
+`summary.discount` at 0 — it has no session and cannot know the tier — which was fine while the
+summary was a badge. On checkout it meant the undiscounted total stood until *Continue to payment*,
+at which point it dropped. A total that changes after you commit to paying is the wrong moment to
+be surprised. `CheckoutClient` now computes a preview from `resolveShopDiscountPercent(userData)`.
+
+`serverTotals` still wins the instant it exists: the server prices from the catalogue and is the
+only figure the PaymentIntent is built from. The preview is a figure that happens to agree, not a
+second source of truth.
+
+**The order is editable until the PaymentIntent exists, and frozen after.** Quantity controls and
+Remove sit on each line, with an "Add more items" link back to the shop. Once `clientSecret` is
+set the controls are replaced by a plain quantity and a notice, because changing the cart while
+Stripe holds an amount would leave the customer paying the old total for a different cart — the
+intent is created from server-priced lines at Continue and nothing re-prices it.
+
+**Saved cards** come from a Stripe **Customer Session** (`customerSessions.create`, Basil), passed
+to `<Elements>` as `customerSessionClientSecret`. That is Stripe's supported mechanism for
+redisplaying saved methods in `PaymentElement`. The alternative — the hand-rolled picker in
+`StripePaymentModal` that confirms with an explicit `payment_method` — predates PaymentElement and
+reimplements selection, removal and the new-card form by hand; bolting it on would mean two
+payment UIs for one checkout.
+
+`payment_method_save` is **disabled**: a shop purchase is one-off and silently storing a card is
+not something the buyer asked for. Cards saved by the membership flow are redisplayed, which is
+the case that matters. The session call is non-fatal — without it PaymentElement still renders a
+card form, and failing checkout because a convenience could not be set up is the wrong trade.
+
+**The pay flow is confirm → processing overlay → success breakdown → success page.** The overlay
+covers the form (never unmounting the Element mid-confirm) because a 3DS challenge is an
+open-ended wait and a form that still looks editable invites a second submit. `SuccessScreen` —
+the same component the membership and pack flows use — then holds for three seconds with the
+order's own figures. It acknowledges the PAYMENT; the order is still finalised by the webhook, and
+the success page it lands on is what reads the finished order.
