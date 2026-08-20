@@ -6,13 +6,23 @@ import Product from "@/models/Product";
  * Manual fulfilment export — paid shop orders, as a CSV for the print provider's
  * bulk upload screen.
  *
- * WHY THIS EXISTS RATHER THAN AN API CALL. The provider's documented GraphQL API is
- * enterprise-gated and unreachable on our account: our key authenticates (a bogus one
- * 403s, ours does not) but every path returns `404 Cannot POST /graphql`, and their
- * own portal does not use it — see the print-provider-fulfilment spec. Their portal
- * does have a working CSV upload, so this is the path that exists today. The service
- * boundary is the same one an API adapter would sit behind, so swapping later changes
- * this file, not its callers.
+ * WHY THIS EXISTS RATHER THAN AN API CALL — and why that reason has EXPIRED.
+ *
+ * Built 2026-08-17 because the provider's order API looked unreachable: our key
+ * authenticated (a bogus one 403s, ours did not) yet every path returned
+ * `404 Cannot POST /graphql`, and their own portal talks to Firestore instead.
+ * Their portal does have a working CSV upload, so that became the path.
+ *
+ * 2026-08-20: the provider resolved the 404 and explained the miss. Order creation
+ * lives on their GraphQL surface (`createOrder` / `createOrderFromGtin`) behind a
+ * SECOND key — `RIVERR_GRAPHQL_API_KEY`, not the REST `RIVERR_REST_API_KEY` this
+ * repo already had — with `RIVERR_SHOP_ID` now populated. Verified: `getAllShops`
+ * returns our shop.
+ *
+ * CSV is still the shipping path, deliberately: an adapter that books real orders
+ * into a supplier's queue needs writing and testing before it replaces a working
+ * manual step. The service boundary is the same one that adapter sits behind, so
+ * the swap changes this file and not its callers.
  *
  * Column names and order follow their own template
  * (`order-csv-template-app-shipping.csv`), so the upload screen's Field Mapping step

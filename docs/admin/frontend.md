@@ -8,10 +8,39 @@
 > deliberately keeps a static `@/config/prizes` import (admin-chunk only, never in the landing
 > graph). See [config-and-data architecture](../config-and-data/architecture.md) "Prize catalog split".
 
-## Products tab (2026-08-17)
+## Shop group — Products / Orders / Entry Multipliers (2026-08-20)
+
+Shop is its **own sidebar group**, not a tab inside Operations. It was one Products tab until
+2026-08-20, by which point it stacked five unrelated panels in a single scroll: the printer
+sync, the catalogue, the entry-multiplier control, the fulfilment queue and the full order
+history.
+
+Split by **job**, not by data type — which is why Orders holds two panels that look similar
+but answer different questions:
+
+| Tab | id | Panels | The job |
+| --- | --- | --- | --- |
+| Products | `products` | `PrintProviderSync`, `ProductManagement` | Stock the shelf — pull a garment from the printer, price it, publish it |
+| Orders | `shop-orders` | `FulfilmentQueue`, `OrdersManagement` | Get it made and shipped, then find it again afterwards |
+| Entry Multipliers | `shop-multipliers` | `ShopEntryMultiplierPanel` | Tune what a purchase grants during a promo |
+
+All three are gated on `shop.view`; write actions inside each still check `shop.edit`
+separately, so a read-only role sees the pages without the buttons.
+
+**`products` deliberately keeps its id** even though its siblings are `shop-`prefixed. It is an
+existing URL and an existing permission pairing; renaming it would break bookmarks and buy
+nothing. A new reader should not take the inconsistency as a naming rule to copy — new shop
+tabs get the `shop-` prefix.
+
+**Why the fulfilment queue and the order history sit together rather than apart:** the queue
+lists only what is still waiting to be sent. Support's actual question is usually about an
+order that has *already* shipped, so the searchable history has to be one scroll away, not one
+tab away.
+
+### Products tab (2026-08-17)
 
 Shop catalog management — the first admin surface for `Product`. Lives under
-**Operations → Products**, gated on `shop.view`.
+**Shop → Products**, gated on `shop.view`.
 
 | File | Role |
 |---|---|
@@ -1535,14 +1564,22 @@ we send them an order referencing a **GTIN** plus artwork we host.
 So the provider's catalogue constrains *which colours are possible*; it does not supply the
 product page. Changing a colour offering is an admin edit here (add or deactivate a variant),
 not a sync. See [print-provider-fulfilment spec](../superpowers/specs/2026-08-17-print-provider-fulfilment-design.md)
-— note the API is currently **enterprise-gated and unreachable**, which does not block authoring
-or selling, only automated order submission.
+— note that spec records the order API as unreachable, which was true when written and was
+corrected on 2026-08-20: order submission is available on the provider's GraphQL surface. Either
+way it never blocked authoring or selling, only automated order submission.
 
 ## Send to printer — the fulfilment queue (2026-08-17)
 
 `FulfilmentQueue` sits under the catalogue on the **Products** tab. It is the manual hand-off to
-the print provider, used because their GraphQL API is enterprise-gated and unreachable on this
-account (our key authenticates; every path 404s).
+the print provider. It was built because the provider's order API appeared unreachable — every
+GraphQL path 404'd while our key authenticated fine.
+
+**That is no longer true (2026-08-20).** The provider resolved the 404 and confirmed order
+creation lives on GraphQL (`createOrder` / `createOrderFromGtin`) behind a second key,
+`RIVERR_GRAPHQL_API_KEY`, with `RIVERR_SHOP_ID` now populated. An API adapter would sit behind
+the same service boundary this queue uses, so replacing the manual step changes
+`fulfilmentExport.ts` and not this screen. **Until that adapter exists and has been tested,
+CSV remains the real path** — nothing below has changed.
 
 The loop: **Download CSV → upload it on their site → Mark as sent.**
 
@@ -1626,3 +1663,84 @@ answer "where was this sent?". Closing it means adding the rest of
 `shippingAddress` to the `isAdminSurface` branch of the projection; the modal's
 Delivery section is already built and says plainly what is missing rather than
 rendering a blank that reads as a data fault.
+
+## Merchandise entry multiplier panel (2026-08-20)
+
+`components/admin/ShopEntryMultiplierPanel.tsx`, the whole of **Shop → Entry Multipliers**.
+
+**All three tiers are editable on this one page** — whole shop, per category, and per product —
+and they save together on one button through one endpoint. The per-product ceiling *also*
+appears on each product's edit form, which is the natural place to set it while editing that
+product; the list here exists so an admin can see every ceiling at once rather than opening
+eight modals to find out which products are capped.
+
+Saving all tiers through a single `PUT` is deliberate: writing product ceilings through the
+product routes instead would mean one request per changed row, and a partial failure would
+leave the page showing ceilings that were never written.
+
+Controls are [`SelectMenu`](../../src/components/ui/SelectMenu.tsx), the repo's custom dropdown,
+not a native `<select>` — matching every other admin surface. It has no `disabled` prop, so a
+read-only admin (`shop.view` without `shop.edit`) gets the resolved value as plain text rather
+than a dropdown that silently refuses to do anything.
+
+It has a page to itself because it is a promo-shaped decision rather than a catalogue edit,
+and it applies across the whole shop rather than to any one product. (The **per-product**
+ceiling is a field on the product modal instead, next to `includedEntries`, because that one
+genuinely is a per-product decision.)
+
+Sets a **ceiling** on the promo multiplier for merchandise, shop-wide or per category (the
+per-product one lives on the product modal). Merchandise inherits the one-time pack multiplier;
+a ceiling can only hold it *below* that, never lift it above — which is what keeps a garment from
+becoming a cheaper route into a draw than the packs, and why three tiers of control are safe
+rather than three ways to get it wrong.
+
+Categories are **offered from the catalogue, never typed**. `Product.category` is free text with
+no enum and the data is already forked (`"Apparel"` beside `"power-tools"`), so a hand-typed key
+would silently match nothing. The select's blank option is "No ceiling", and saving a blank
+removes the row — a panel that can add a ceiling but not remove one is worse than no panel.
+
+Reads `shop.view`, writes `shop.edit`; the save button is hidden without the latter.
+
+## Destructive actions use ConfirmationModal, never window.confirm (2026-08-20)
+
+`ProductManagement` (delete) and `FulfilmentQueue` (mark-as-sent, undo) asked through
+`window.confirm`. That dialog is chrome-styled — it renders "localhost:3000 says", ignores the
+admin theme entirely, and **blocks the JS thread** while open. It also cannot say *which* row is
+about to go, which matters on a list that renders a Delete button per product.
+
+They now use [`ConfirmationModal`](../../src/components/modals/ConfirmationModal.tsx).
+
+**The porting trap:** `window.confirm` returns a boolean *inline*, so the handler could ask and act
+in one function. A real modal cannot. Each pending action moves into state (`pendingDelete`,
+`pendingAction`), the button only opens the modal, and the handler runs from `onConfirm` — it no
+longer asks at all.
+
+Type choice is deliberate: product delete is `type="delete"`; the fulfilment actions are
+`type="warning"`, because neither destroys anything. Marking as sent moves orders out of the queue
+(reversible via Undo) and Undo puts one back — the risk is a **duplicate print**, not a loss, and
+the copy says so.
+
+**Still outstanding:** roughly ten other admin components still call native `confirm()` — A/B
+testing, affiliates, alternating multipliers, bonus-entry promos, error reports. Out of scope for
+the shop work; listed here so the inconsistency is known rather than discovered.
+
+## Products: search, filters and drag reordering (2026-08-20)
+
+Ported from `MiniDrawManagement`, which already had all three — same `@dnd-kit` sensors, same
+reorder-mode toggle with save/cancel, same client-side filtering.
+
+**Search covers name, brand, category AND sku.** The sku matters most in practice: an admin
+looking up a product usually has it from an order line or the printer's CSV, not the display name.
+
+**Reorder mode is disabled while filtered**, and the button says why on hover. Positions are saved
+as 1..N over the list being shown, so dragging a filtered subset would silently reposition every
+row the admin cannot see. Entering reorder mode also hides the filter bar, and `visibleProducts`
+falls back to the unfiltered list as a second guard.
+
+**The drag handle is a separate control, not the whole card.** Product cards carry Edit /
+Deactivate / Delete buttons, and a card-wide drag listener swallows their clicks.
+
+`SortableProductRow` is declared at module scope: a component defined during render is a new type
+every render, which would remount every card mid-drag.
+
+Nothing is written until **Save order**; Cancel refetches, so the server stays the source of truth.

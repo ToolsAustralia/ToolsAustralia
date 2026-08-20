@@ -98,6 +98,62 @@ become a third copy of that wrapper (the webhook handler and the upsell purchase
 hold two). Both sides move together, so merch can never become better value per entry than the
 packs during a promo.
 
+### The multiplier CEILING — three tiers, downward only (2026-08-20)
+
+Inheriting is the default, not the whole story: an admin can hold merchandise **below** the
+inherited rate, never above it. The ceiling resolves most-specific-first, and the clamp is
+applied once, at the end:
+
+```
+cap = line.entryMultiplierCap                     // 1. this product
+   ?? config.categoryCaps[norm(line.category)]    // 2. its category
+   ?? config.cap                                  // 3. the whole shop
+   ?? null                                        // 4. inherit unchanged
+
+applied = cap == null ? inherited : Math.min(inherited, cap)
+```
+
+`Math.min` sits **outside** the tier chain deliberately. Because it runs once, after resolution,
+no tier — however specific — can return a value above `inherited`. The "merchandise cannot
+overtake the packs" invariant therefore holds *by construction* rather than by a runtime check
+at each of four tiers, three of which somebody would eventually forget. It is also why three
+tiers of control are safe: they are three ways to set a **ceiling**, not three ways to set a
+rate.
+
+One helper — `services/shop/resolveShopEntryMultiplier` — is called by both the product page and
+the grant. Two call sites resolving independently is how a page promises 40 and the webhook
+writes 8.
+
+**Entries are summed PER LINE, not sum-then-multiply.** `Σ(includedEntries × qty) × multiplier`
+is only correct while every product shares one rate; per-product ceilings make a mixed cart
+reachable, and a single scalar would silently apply one line's rate to the other. The grant
+loops, resolves per line, and records `entryMultiplierApplied` on each line — per line rather
+than per order, because a cart holding a capped tee beside an uncapped hoodie has no single
+multiplier to record.
+
+**The product tier is snapshotted onto the order line** (`Order.products[].entryMultiplierCap`,
+copied from the catalog in `ShopOrderService.createPendingOrder`). The webhook never loads
+products, so without the snapshot the per-product ceiling would apply on the page and silently
+never reach the grant. The rule that decides where each tier lives: **product data is
+snapshotted, config resolves live** — so the category and shop-wide ceilings are read at webhook
+time alongside the promo itself.
+
+**Category keys are normalised** (`trim().toLowerCase()`) on write *and* on read.
+`Product.category` is free text with no enum, behind a free-text admin input, and the vocabulary
+is already forked — the print sync writes `"Apparel"` while the seeded tools carry
+`"power-tools"` and `"measuring"`. Keyed on the raw string, a ceiling stops matching the moment
+somebody retypes the category, with no error anywhere. Normalising only one side would be worse
+than neither: the mismatch would then depend on which value happened to be saved first.
+
+**On a failed config read the loader returns NO ceilings — never a ceiling of 1.** A database
+blip must not silently withhold entries the product page promised; falling back to "inherit" can
+only ever grant what the promo already permits.
+
+Admin surface: `PUT /api/admin/shop/entry-multiplier` (`shop.edit`) for the shop-wide and
+per-category ceilings, and `entryMultiplierCap` on the product itself through the existing
+product routes. Both product routes had to declare it in their Zod schema — those strip unknown
+keys before Mongoose sees them, so a model field alone would never save.
+
 ### Ordering inside `finalizeShopOrder` — all three constraints are load-bearing
 
 `markPaid` → stock → clear cart → **grant**.
@@ -163,12 +219,20 @@ refund reversal of a shop grant.
 Paid shop orders are handed to the print provider by **exporting a CSV and uploading it to their
 bulk screen**, not by an API call.
 
-**Why.** Their documented GraphQL API is enterprise-gated and unreachable on this account: our key
-authenticates (a bogus key 403s, ours gets past the gateway) but every path returns
-`404 Cannot POST /graphql`, and their own portal does not use it — it talks to Firestore. Their
-portal *does* have a working CSV upload. The owner chose the manual path rather than keep waiting
-on API access.
+**Why (as decided 2026-08-17).** The documented GraphQL API appeared unreachable: our key
+authenticated (a bogus key 403s, ours got past the gateway) but every path returned
+`404 Cannot POST /graphql`, and their portal talks to Firestore rather than using it. Their
+portal *does* have a working CSV upload, so the owner chose the manual path rather than keep
+waiting on API access.
 
+**Superseded 2026-08-20 — the API route now exists.** The provider confirmed the 404 is
+resolved and that order creation lives on GraphQL (`createOrder` / `createOrderFromGtin`)
+behind a *second* key, `RIVERR_GRAPHQL_API_KEY`, with `RIVERR_SHOP_ID` now populated
+(`qTJGkvBReIRL3NU6DrLA`). Verified end-to-end: `getAllShops` returns our shop.
+
+**CSV remains the shipping path until an adapter is written and tested.** Nothing about
+the export changes today — this note exists so the next reader does not re-derive the
+"no API available" conclusion from a rationale that has expired.
 The service boundary is the same one an API adapter would sit behind, so switching later changes
 `fulfilmentExport.ts` and not its callers.
 

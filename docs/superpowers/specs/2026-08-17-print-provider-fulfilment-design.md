@@ -146,7 +146,7 @@ means a real failure. Treating an error as "not shipped" polls forever on a dead
 | 2 | Reconciliation lookup before any retry | Same as above, on the timeout path | **silent** |
 | 3 | Poller skips orders already `shipped`/`cancelled` | Unbounded polling growth against a rate-limit-free API we are asked to be polite to `[D]` | **silent** |
 | 4 | Cloudinary cleanup exclusion for print artwork | Reprints fail months later on a dead URL | **silent** |
-| 5 | `RIVERR_API_KEY` / `RIVERR_SHOP_ID` in `.env.example`, main folder `.env.local`, and Vercel | Works locally, 403s in production | loud |
+| 5 | `RIVERR_REST_API_KEY` / `RIVERR_SHOP_ID` in `.env.example`, main folder `.env.local`, and Vercel | Works locally, 403s in production | loud |
 
 ## 6. Tests
 
@@ -205,7 +205,7 @@ are not built. No customer-facing difference, and specs 1 and 2 are entirely una
 
 ## Addendum — 2026-08-19: the API is reachable, and it is REST, not GraphQL
 
-Re-probed with the approved `RIVERR_API_KEY` (28-char Firebase UID). **The earlier conclusion
+Re-probed with the approved `RIVERR_REST_API_KEY` (28-char Firebase UID). **The earlier conclusion
 that the API is unreachable was half wrong**, and the half that was wrong is the important one.
 
 ### GraphQL is still not mounted — anywhere
@@ -401,3 +401,56 @@ the shopId, publish the blank cost + freight tables, and say whether GraphQL or 
 
 **Nothing built depends on this.** CSV remains the fulfilment route. What changed is that
 sourcing product imagery and the colour matrix no longer waits on the supplier.
+
+---
+
+## Addendum — 2026-08-20: the docs were right all along
+
+The provider replied. Two of this spec's load-bearing conclusions were wrong, and the way they
+were reached matters more than the conclusions themselves.
+
+### What was actually true
+
+| This spec said | Reality |
+| --- | --- |
+| "The published docs describe an endpoint that does not exist. **Stop treating the docs as the contract.**" | The docs were correct. `api.riverr.app/graphql` with `x-uid` is exactly right. Their deployment was down; they have since fixed it — *"The earlier 404 on that URL is resolved."* |
+| "The live API is REST." | There are **two** APIs. The REST paths found by sweeping resource names are their internal **dashboard** API. The partner API is the documented GraphQL one. |
+| "Our API key authenticates but is not linked to an enterprise/organisation record." | The account was correctly linked the whole time. `/shops` returned `[]` because it is a dashboard endpoint, not because we owned no shops. `getAllShops` on GraphQL returns `qTJGkvBReIRL3NU6DrLA` · Tools Australia. |
+| "`POST /shops` fails with a Firestore error → provisioning bug on their side." | It is their internal store-create path. Not a bug, not ours to call. |
+
+Both documentation hosts (`developers.riverr.app`, `riverr-openapi-docs.web.app`) were re-fetched
+2026-08-20 and carry **identical** content: GraphQL only, one endpoint, `x-uid`. There was no
+stale mirror and no misreading.
+
+### The actual failure mode — worth more than the corrections
+
+**Not a reading failure. A re-testing failure.**
+
+The docs were read three times, carefully enough to discover that the reference page renders
+client-side and that `/sitemap.xml` was needed to enumerate all 30 operations. That part was fine.
+
+What went wrong: a **point-in-time probe became a permanent fact.** `POST /graphql` 404'd on
+2026-08-19. That supported exactly one claim — *this endpoint is not answering right now*. What
+got written down was *their documentation is unreliable*, which is a claim about a different
+thing entirely, and it was propagated into `client.ts`, `fulfilmentExport.ts`, `gotchas.md`,
+`architecture.md`, `backend.md` and `docs/admin/frontend.md` as settled truth. Nothing re-probed
+it for a day, and every subsequent observation was then interpreted *through* that model rather
+than used to test it.
+
+The same shape recurred on 2026-08-20: the rotated `rv_live_` key was tested against REST only,
+returned 403, and was declared dead — without ever being tried on the surface it was issued for.
+A control was used for *authentication* but not for *surface*. Key × surface is a 2×2; one cell
+was tested and the result generalised to all four.
+
+### Rules this produces
+
+1. **A negative result about a third party's infrastructure carries an expiry date.** Record when
+   it was observed and re-probe before building on it. "Their endpoint 404s" is not the same
+   class of fact as "our function returns Y" — one of them can change without anyone telling us.
+2. **"Stop trusting the docs" is a signal to ask the vendor, not to go exploring.** Undocumented
+   endpoints found by sweeping resource names are undocumented *for a reason*. Here they were an
+   internal dashboard API, and their responses were actively misleading.
+3. **Vary every axis before concluding.** If there are two keys and two surfaces, that is four
+   probes, not one.
+4. **State the claim the evidence supports, not the claim it suggests.** "This route is not
+   answering" and "these docs are wrong" are different assertions with different blast radii.

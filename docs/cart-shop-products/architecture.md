@@ -86,7 +86,7 @@ the shop by accident.
 
 | File | Role |
 | --- | --- |
-| `src/lib/print-provider/client.ts` | The only module that knows the vendor. REST, not the GraphQL the docs describe. |
+| `src/lib/print-provider/client.ts` | The only module that knows the vendor. Wraps the **REST** surface (product reads) with `RIVERR_REST_API_KEY`. The **GraphQL** surface — order creation, `RIVERR_GRAPHQL_API_KEY` — is a separate key and is not wired yet. |
 | `src/services/shop/printProviderSync.ts` | Maps provider payload to `Product`, mirrors images, upserts. |
 | `src/app/api/admin/shop/print-provider/route.ts` | `GET` lists what is available, `POST` syncs one or all. |
 | `src/stores/useProductColourStore.ts` | Joins the gallery and the picker across a server component. |

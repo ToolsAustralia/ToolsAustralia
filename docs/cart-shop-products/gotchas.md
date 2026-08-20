@@ -229,15 +229,29 @@ The CSV branch of the fulfilment route is the exception — it returns a file an
 
 ## The print provider's API will mislead you
 
-- **The published docs describe GraphQL. The deployment is REST.** `POST /graphql`
-  returns Express's default `Cannot POST /graphql`. Auth runs BEFORE routing, so
-  no key gives a JSON 403 and a valid key gives the HTML 404 — that pair is how
-  you tell "bad key" from "route absent".
-- **Collection endpoints return empty, get-by-id works.** `/products`, `/shops`,
-  `/orders`, `/designs` all answer `[]`. Do not read that as an empty account.
-- **Query parameters are ignored on collection routes.** `GET /blank-products`
-  and `GET /blank-products?limit=1` return byte-identical 182,464-byte payloads.
-- **`GET /blank-products/{id}` returns MORE than the list, not less.** The wrapper
+- **There are TWO APIs and TWO keys, and they are not interchangeable.** This is the
+  single most expensive thing to not know about this provider.
+
+  | Surface | Auth | Carries |
+  | --- | --- | --- |
+  | REST `api.riverr.app/…` | `RIVERR_REST_API_KEY` (28-char UID) | `/design-library`, product detail |
+  | GraphQL `api.riverr.app/graphql` | `RIVERR_GRAPHQL_API_KEY` (`rv_live_…`) | `getAllShops`, `createOrder`, `createOrderFromGtin` |
+
+  Verified 2026-08-20 by probing the 2×2. **Using the wrong key presents as an auth
+  outage, not a config error** — the UID gets `500 Context creation failed: User not
+  found` on GraphQL, and the `rv_live_` key gets a flat `403` on REST. We misread that
+  403 once as a revoked key and nearly reported a non-existent outage to the supplier.
+
+- **HISTORICAL, now false: "the deployment is REST, `/graphql` 404s".** That was true
+  when first probed and is recorded here because the note survives in old commits and
+  spec text. The provider resolved the 404; GraphQL is current as of 2026-08-20.
+
+- **Collection endpoints return empty on REST, and that is BY DESIGN.** `/products`,
+  `/shops`, `/orders`, `/designs` all answer `[]`. Per the provider, those are their
+  *dashboard* REST API, not the partner API — the populated equivalents are GraphQL
+  queries. Do not read the empty arrays as an empty or unlinked account. Likewise
+  `POST /shops` failing with a Firestore empty-`documentPath` error is their internal
+  store-create path, not our bug.
   carries `blankProduct`, `blankProductSettings`, `blankVariants` and `mockups` as
   SIBLINGS. Looking for settings *inside* `blankProduct` finds nothing and reads
   as "the detail endpoint is thinner" — it is not.
