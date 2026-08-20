@@ -1160,3 +1160,25 @@ both keep toggling in each direction. Moving the pointer away still closes it vi
 **The general rule: when a surface can be opened two ways, "toggle" is not a safe default for
 either.** A click must mean "open" or "keep", never "undo what hover just did" — decide from what
 opened it, not from the boolean alone.
+
+---
+
+## MembershipModal: the mini-pack branches were dead and are now removed (2026-08-20)
+
+`MembershipModal` carried ~19 references to `activePlan.id.startsWith("mini-pack-")` threading through promo multipliers, tracking payloads, the upsell context and a full ~95-line mini-draw purchase branch. **None of it could ever run.**
+
+**The proof, because "looks dead" was not enough:**
+
+- `activePlan` has exactly ONE definition — `selectedPlan || placeholder`. `selectedPlan` is a **prop**; every host passes `useMembershipModal().selectedPlan`.
+- Every producer builds plans from `useMemberships()`, which reads the **static** catalogue (`src/data/membershipPackages.ts`) — *not* Mongo — and derives `id` by slugifying the package **name**. The 15 static names can only yield `tradie|foreman|boss|*-pack|additional-*-pack(-member)`.
+- `/api/memberships` also serves the static data, so no admin can introduce a `mini-pack-*` id through the database.
+- The `?packageId=` deep link is matched against that same static list and re-derived, so a URL cannot inject one.
+- Since `603d8995` the server ALSO 400s mini ids at both one-time purchase routes.
+
+**The one branch that looked live wasn't.** `if (isMiniDrawPackage || processingPackageType === "mini-draw")` appeared to have a live second half — but the *only* `setProcessingPackageType("mini-draw")` call sat **inside** the dead `if (isMiniDrawPackage)` purchase branch. The whole cluster was dead transitively, through a chain three sites long. Worth spelling out: a compound condition is only as dead as its most-reachable half, and establishing that took tracing a setter in a different function 1,000 lines away.
+
+**Also removed:** `useResolvedMultiplier("mini-packages", "display")` — a hook whose only two consumers were dead branches, so the modal was resolving a promo multiplier it could never display.
+
+**Not removed:** `getMiniDrawPackageById` is still passed as the `mini:` resolver to `getReceiptLabelByPackageId`. That is a lookup map, not a branch — harmless, and removing it would change how a shared helper is called.
+
+Mini packs are bought at `/mini-draws/<id>` via `POST /api/mini-draw/purchase`, which is the only route that stamps the `miniDrawId` the webhook needs. See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md).

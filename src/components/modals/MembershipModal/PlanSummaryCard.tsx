@@ -84,8 +84,7 @@ const PlanSummaryCard: React.FC<PlanSummaryCardProps> = ({
           const discount = isUpsellOffer ? null : getAdditionalPackDiscount(promoEnhancedPlan?.id || "");
           const isPackageCard = Boolean(
             promoEnhancedPlan?.id &&
-              (promoEnhancedPlan.id.startsWith("mini-pack-") ||
-                promoEnhancedPlan.id.includes("apprentice") ||
+              (promoEnhancedPlan.id.includes("apprentice") ||
                 promoEnhancedPlan.id.includes("tradie") ||
                 promoEnhancedPlan.id.includes("foreman") ||
                 promoEnhancedPlan.id.includes("boss") ||
