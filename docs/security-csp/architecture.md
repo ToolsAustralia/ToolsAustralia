@@ -178,3 +178,10 @@ above: one named host is auditable, `https://*.somevendor.com` is not.
 _(`script-src` does carry `https://*.contentsquare.net` since 2026-08-07. Not a counter-example:
 that wildcard widens a vendor domain already granted script execution, rather than granting a new
 capability to a host we don't otherwise trust. See gotchas.md.)_
+
+## Build output directory (2026-08-21)
+
+`distDir` is `process.env.NEXT_DIST_DIR || ".next"`. The e2e harness sets it to
+`.next-e2e` so its `NEXT_PUBLIC_*` values — which Next inlines into client chunks at
+compile time — never land in the cache `npm run dev` serves from. See
+`docs/e2e/gotchas.md` for the CORS failure this fixes.

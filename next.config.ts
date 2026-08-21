@@ -39,6 +39,19 @@ const securityHeaders =
 const webhookHeaders = buildSecurityHeadersForWebhook(); // Excludes COEP to allow Stripe webhook POSTs
 
 const nextConfig: NextConfig = {
+  // Build output directory, overridable per process.
+  //
+  // WHY THIS IS NOT JUST ".next": NEXT_PUBLIC_* values are INLINED into client
+  // chunks at compile time, and the e2e harness boots the app with
+  // NEXT_PUBLIC_API_URL pointed at its own port (e2e/lib/env.ts). Sharing one
+  // .next/ between `npm run dev` and `npm run e2e:env` therefore leaves chunks
+  // carrying the e2e port in the cache the dev server then serves — the browser
+  // fetches the wrong origin and every request dies in CORS preflight, with
+  // nothing wrong in .env.local to explain it.
+  //
+  // Measured before the split: 13 files under .next/static contained
+  // localhost:3799 while 38 contained localhost:3000 — one cache, two origins.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // External packages for server components
   // "@opentelemetry/api": the `ai` package pulls in the real @opentelemetry/api; if Turbopack
   // bundles it into server chunks it alters the module graph enough that Next's built-in /500

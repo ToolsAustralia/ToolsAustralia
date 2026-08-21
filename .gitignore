@@ -30,6 +30,9 @@ seed-*.csv
 
 # next.js
 /.next/
+# The e2e harness compiles here instead, so its NEXT_PUBLIC_* values never
+# land in the cache the dev server serves (next.config.ts distDir).
+/.next-e2e/
 /out/
 
 # production

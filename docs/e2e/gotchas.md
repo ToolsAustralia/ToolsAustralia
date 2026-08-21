@@ -549,3 +549,46 @@ npx tsx e2e/run.ts --grep "the complete story" --project chromium-desktop
    `page.getByRole("button", { name: /^purchase$/i })`, unscoped, so it can
    resolve to a Purchase button behind the membership modal rather than inside
    it. Not diagnosed further here; it is not a shop regression.
+
+## The e2e harness used to poison the dev server's build cache (fixed 2026-08-21)
+
+**Symptom:** `npm run dev` serves on :3000, the browser loads the page fine, and then
+every client fetch dies:
+
+```
+Access to fetch at 'http://localhost:3799/api/winners/all' from origin
+'http://localhost:3000' has been blocked by CORS policy
+```
+
+Nothing in `.env.local` is wrong — `NEXT_PUBLIC_API_URL` correctly reads
+`http://localhost:3000`. That is what makes this expensive to diagnose.
+
+**Cause:** `NEXT_PUBLIC_*` values are **inlined into client chunks at compile time**,
+not read at runtime. `e2e/lib/env.ts` boots the app with `NEXT_PUBLIC_API_URL` and
+`NEXT_PUBLIC_APP_URL` pointed at the e2e port, and the harness shared one `.next/`
+directory with the dev server. Chunks compiled by an e2e run therefore carried
+`localhost:3799`, and the dev server on :3000 happily served them.
+
+Measured before the fix: **13 files under `.next/static` contained `localhost:3799`
+while 38 contained `localhost:3000`** — one cache, two origins, and which one you got
+depended on which process compiled that chunk last.
+
+**Fix:** `next.config.ts` takes `distDir` from `NEXT_DIST_DIR`, and `e2e/lib/env.ts`
+sets it to `.next-e2e`. The two builds can no longer see each other. `.next-e2e/` is
+gitignored.
+
+**If you hit this on an older checkout,** or after any run that predates the split:
+kill the servers, `rm -rf .next`, restart — **and hard-refresh the browser**
+(Ctrl+Shift+R). The browser caches the poisoned chunks independently of the server,
+so a server-side clean alone still shows the old behaviour.
+
+## `PORT` in `.env.local` does not change the dev port (verified 2026-08-21)
+
+`.env.local` carries `PORT=3043`, and `next dev` still binds **3000**. The Next CLI
+reads `process.env.PORT` before it loads `.env` files, so the value there is inert.
+
+This matters because `NEXT_PUBLIC_API_URL` must match the port the app actually serves
+on. If a future Next version starts honouring it, the app would move to 3043 while the
+baked API base still said 3000 — the same CORS failure as above, from the other
+direction. Set the port with `PORT=3043 npm run dev` on the command line if you want a
+different one, and change `NEXT_PUBLIC_API_URL` to match in the same breath.
