@@ -10,6 +10,8 @@ export interface UserMajorDrawStats {
   totalEntries: number;
   membershipEntries: number;
   oneTimeEntries: number;
+  /** Free entries included with a merchandise order — own bucket, never in oneTime. */
+  shopEntries: number;
   /** Membership Streak auto-grants — own bucket, never folded into oneTimeEntries. */
   streakEntries: number;
   currentDrawEntries: number;
@@ -114,6 +116,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
         membershipEntries: 0,
         oneTimeEntries: 0,
         streakEntries: 0,
+        shopEntries: 0,
         currentDrawEntries: 0,
         totalDrawsEntered: 0,
         entriesByPackage: [],
@@ -132,6 +135,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
         membershipEntries: 0,
         oneTimeEntries: 0,
         streakEntries: 0,
+        shopEntries: 0,
         currentDrawEntries: 0,
         totalDrawsEntered: 0,
         entriesByPackage: [],
@@ -148,12 +152,12 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       (userEntry.entriesBySource.referral || 0) +
       (userEntry.entriesBySource["bonus-entry-promo"] || 0) +
       (userEntry.entriesBySource["cancellation-upsell"] || 0) +
-      (userEntry.entriesBySource["promo-link"] || 0) +
-      // Free entries included with a merchandise order. Folded into this bucket
-      // rather than given its own, matching how every non-membership, non-streak
-      // source is already grouped — the load-bearing property is that the sum
-      // agrees with userEntry.totalEntries, which is read straight off the doc.
-      (userEntry.entriesBySource["shop"] || 0);
+      (userEntry.entriesBySource["promo-link"] || 0);
+    // Shop entries get their OWN bucket (2026-08-21), like streak. They were folded
+    // into one-time, which told a customer their merch entries came from a pack they
+    // never bought. Anything summing these buckets must include it, or
+    // the displayed total falls short of userEntry.totalEntries.
+    const shopEntries = userEntry.entriesBySource["shop"] || 0;
     // Membership Streak auto-grants — a distinct bucket (NOT folded into
     // one-time) so the wallet can render it as its own line (P3).
     const streakEntries = userEntry.entriesBySource["streak"] || 0;
@@ -179,6 +183,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       membershipEntries,
       oneTimeEntries,
       streakEntries,
+      shopEntries,
       currentDrawEntries: totalEntries,
       totalDrawsEntered: entriesByPackage.length,
       entriesByPackage,
@@ -190,6 +195,7 @@ export async function getUserMajorDrawStats(userId: string, majorDrawId: string)
       membershipEntries: 0,
       oneTimeEntries: 0,
       streakEntries: 0,
+      shopEntries: 0,
       currentDrawEntries: 0,
       totalDrawsEntered: 0,
       entriesByPackage: [],
@@ -247,6 +253,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
         membershipEntries: 0,
         oneTimeEntries: 0,
         streakEntries: 0,
+        shopEntries: 0,
         currentDrawEntries: 0,
         totalDrawsEntered: 0,
         entriesByPackage: [],
@@ -269,6 +276,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
         membershipEntries: 0,
         oneTimeEntries: 0,
         streakEntries: 0,
+        shopEntries: 0,
         currentDrawEntries: 0,
         totalDrawsEntered: 0,
         entriesByPackage: [],
@@ -287,12 +295,12 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
       (userEntry.entriesBySource.referral || 0) +
       (userEntry.entriesBySource["bonus-entry-promo"] || 0) +
       (userEntry.entriesBySource["cancellation-upsell"] || 0) +
-      (userEntry.entriesBySource["promo-link"] || 0) +
-      // Free entries included with a merchandise order. Folded into this bucket
-      // rather than given its own, matching how every non-membership, non-streak
-      // source is already grouped — the load-bearing property is that the sum
-      // agrees with userEntry.totalEntries, which is read straight off the doc.
-      (userEntry.entriesBySource["shop"] || 0);
+      (userEntry.entriesBySource["promo-link"] || 0);
+    // Shop entries get their OWN bucket (2026-08-21), like streak. They were folded
+    // into one-time, which told a customer their merch entries came from a pack they
+    // never bought. Anything summing these buckets must include it, or
+    // the displayed total falls short of userEntry.totalEntries.
+    const shopEntries = userEntry.entriesBySource["shop"] || 0;
     // Membership Streak auto-grants — a distinct bucket (NOT folded into
     // one-time) so the wallet can render it as its own line (P3).
     const streakEntries = userEntry.entriesBySource["streak"] || 0;
@@ -318,6 +326,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
       membershipEntries,
       oneTimeEntries,
       streakEntries,
+      shopEntries,
       currentDrawEntries: totalEntries,
       totalDrawsEntered: entriesByPackage.length,
       entriesByPackage,
@@ -329,6 +338,7 @@ export async function getUserCurrentMajorDrawStats(userId: string): Promise<User
       membershipEntries: 0,
       oneTimeEntries: 0,
       streakEntries: 0,
+      shopEntries: 0,
       currentDrawEntries: 0,
       totalDrawsEntered: 0,
       entriesByPackage: [],

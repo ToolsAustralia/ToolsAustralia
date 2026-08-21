@@ -142,7 +142,10 @@ export default function CheckoutClient() {
       ...current,
       firstName: draft?.firstName ?? saved?.firstName ?? userData?.firstName ?? current.firstName,
       lastName: draft?.lastName ?? saved?.lastName ?? userData?.lastName ?? current.lastName,
-      phone: draft?.phone ?? saved?.phone ?? current.phone,
+      // `mobile` is the account's own number — the last fallback, after a draft and
+      // after the number used on the last delivery. Someone who has given us a mobile
+      // should not type it again to have a courier call them.
+      phone: draft?.phone ?? saved?.phone ?? userData?.mobile ?? current.phone,
       addressLine1: draft?.addressLine1 ?? saved?.addressLine1 ?? current.addressLine1,
       addressLine2: draft?.addressLine2 ?? saved?.addressLine2 ?? current.addressLine2,
       city: draft?.city ?? saved?.city ?? current.city,

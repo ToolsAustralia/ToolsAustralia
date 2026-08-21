@@ -9,7 +9,7 @@ import type { DashboardAccountState } from "@/utils/dashboard/dashboard-state-th
 
 interface EntryWalletProps {
   acct: DashboardAccountState;
-  entries: { membership: number; oneTime: number; streak?: number };
+  entries: { membership: number; oneTime: number; streak?: number; shop?: number };
   tierHex?: string | null;
   drawName: string;
   drawDateIso: string | null;
@@ -94,9 +94,14 @@ export default function EntryWallet({
   // Streak = Membership Streak milestone free entries (their own gold bucket —
   // never folded into one-time; matches the medallion identity on the streak card).
   const streak = isCompleted ? 0 : (entries.streak ?? 0);
-  const total = membership + entries.oneTime + streak;
+  // Shop is its own bucket, like streak — merch entries used to be counted as
+  // one-time, which told a customer they came from a pack they never bought.
+  // It MUST be in this total: the buckets have to sum to the entries actually held.
+  const shop = isCompleted ? 0 : (entries.shop ?? 0);
+  const total = membership + entries.oneTime + streak + shop;
   const memberPct = total > 0 ? (membership / total) * 100 : 0;
   const streakPct = total > 0 ? (streak / total) * 100 : 0;
+  const shopPct = total > 0 ? (shop / total) * 100 : 0;
 
   const target = drawDateIso ? new Date(drawDateIso).getTime() : NaN;
   const ms = Number.isFinite(target) ? Math.max(0, target - now) : 0;
@@ -145,6 +150,9 @@ export default function EntryWallet({
         {streak > 0 && (
           <span className="h-full" style={{ width: `${streakPct}%`, background: "linear-gradient(90deg,#fbbf24,#d97706)" }} />
         )}
+        {shop > 0 && (
+          <span className="h-full" style={{ width: `${shopPct}%`, background: "linear-gradient(90deg,#38bdf8,#0284c7)" }} />
+        )}
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[12px]">
         <span className="inline-flex items-center gap-2 text-muted-token">
@@ -163,6 +171,14 @@ export default function EntryWallet({
           <span className="inline-flex items-center gap-2 text-muted-token">
             <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: "linear-gradient(90deg,#fbbf24,#d97706)" }} />
             Streak <b className="num text-[#b45309] dark:text-amber-400">{streak.toLocaleString()}</b>
+          </span>
+        )}
+        {/* Only above zero. Merchandise entries ship dark at includedEntries: 0, and a
+            "Shop 0" row would state a promise we are not currently making. */}
+        {shop > 0 && (
+          <span className="inline-flex items-center gap-2 text-muted-token">
+            <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: "linear-gradient(90deg,#38bdf8,#0284c7)" }} />
+            Shop <b className="num text-sky-700 dark:text-sky-400">{shop.toLocaleString()}</b>
           </span>
         )}
       </div>

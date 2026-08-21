@@ -183,6 +183,22 @@ export async function startShopCheckout(
           enabled: true,
           features: {
             payment_method_redisplay: "enabled",
+            /*
+              WITHOUT THIS, a member with five saved cards saw an empty card form.
+
+              `payment_method_redisplay: "enabled"` is necessary but NOT sufficient:
+              PaymentElement additionally filters saved methods by their own
+              `allow_redisplay` value, and this filter DEFAULTS TO ["always"]. Nothing in
+              this codebase has ever set allow_redisplay (verified: zero occurrences
+              repo-wide), so every card saved by the membership SetupIntent flow carries
+              the Stripe default of "unspecified" and was filtered straight out.
+
+              Widening the filter fixes every EXISTING card at once, with no backfill and
+              no per-payment-method mutation. These are cards the member deliberately
+              saved on this account and can already see in the membership modal — showing
+              them at shop checkout reveals nothing new.
+            */
+            payment_method_allow_redisplay_filters: ["always", "limited", "unspecified"],
             // A card entered here IS offered for saving, and a saved one is reusable
             // next time. The buyer chooses via the Element's own checkbox — nothing is
             // stored silently.

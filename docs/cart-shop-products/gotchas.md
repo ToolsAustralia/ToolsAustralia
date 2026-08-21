@@ -490,3 +490,45 @@ rejected.
 
 One name, everywhere: **`multiplier`**. It is what the model, the API, the resolver and
 the tests already call it.
+
+## Saved cards need TWO Customer Session settings, not one (2026-08-21)
+
+A member with five saved cards was shown an empty card form at shop checkout, while the
+membership modal happily listed "VISA •••• 4242 · Default Payment Method".
+
+`payment_method_redisplay: "enabled"` is **necessary but not sufficient**. PaymentElement
+*additionally* filters saved methods by each method's own `allow_redisplay` value, and
+that filter **defaults to `["always"]`**.
+
+Nothing in this codebase has ever set `allow_redisplay` — verified, zero occurrences
+repo-wide, against a control search for `setupIntents.create` that returns two. So every
+card saved by the membership SetupIntent flow carries Stripe's default of `"unspecified"`
+and was filtered straight out.
+
+The fix is on the Customer Session, not on the cards:
+
+```ts
+payment_method_allow_redisplay_filters: ["always", "limited", "unspecified"],
+```
+
+That reaches every **existing** card at once — no backfill, no per-payment-method
+mutation. These are cards the member deliberately saved on this account and can already
+see in the membership modal, so surfacing them at shop checkout reveals nothing new.
+
+> A first attempt set `payment_method_options.card.allow_redisplay` on the SetupIntent.
+> The Stripe SDK rejects it — that is not a SetupIntent parameter. When a Stripe option
+> will not type-check, read `node_modules/stripe/types/*.d.ts` for where the API actually
+> accepts it rather than reshaping the call until the compiler stops complaining.
+
+## Shop entries are their own wallet bucket (2026-08-21)
+
+`entriesBySource.shop` has always been a distinct key on `MajorDraw`, but
+`getUserMajorDrawStats` folded it into `oneTimeEntries` — so a customer's wallet told them
+their merchandise entries came from a one-time pack they never bought.
+
+It is now its own bucket, exactly as `streak` already was. **Anything summing these
+buckets must include it**, or the displayed total falls short of the entries actually held:
+`EntryWallet` counts `membership + oneTime + streak + shop`.
+
+The legend row renders only above zero — merchandise entries ship dark at
+`includedEntries: 0`, and a "Shop 0" line would state a promise we are not making.
