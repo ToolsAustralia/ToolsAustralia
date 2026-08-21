@@ -9,6 +9,7 @@ import { getPackageIcon, getPackageIconWrapperScaleClass } from "@/utils/images/
 import VerticalAccumulationChart from "@/components/ui/VerticalAccumulationChart";
 import { getMembershipSectionColorScheme } from "@/utils/package-colors/packageColorScheme";
 import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
+import { getPackageAccentHex } from "@/utils/package-colors/packageCardSurface";
 import { getPackageById } from "@/data/membershipPackages";
 import {
   getPartnerCatalogAccessPercentForMembershipPackageId,
@@ -110,15 +111,12 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({
   const isMembershipTab = showAccumulationChart;
 
   const resolve = (plan: LocalMembershipPlan): ResolvedInclusions => {
-    const lowerId = plan.id.toLowerCase();
     const colorScheme = isMembershipTab
       ? getMembershipSectionColorScheme(plan.id, true)
       : getElectricPackageColorScheme(plan.id);
-    // Same tier-colour overrides as the live cards (accent + border + heading):
-    let accent = colorScheme.accentHex;
-    if (isMembershipTab && lowerId.includes("tradie")) accent = getElectricPackageColorScheme("foreman-pack").accentHex;       // membership Tradie → cyan
-    else if (isMembershipTab && lowerId.includes("boss")) accent = getElectricPackageColorScheme("power-pack").accentHex;       // membership Boss → red
-    else if (!isMembershipTab && lowerId.includes("boss")) accent = getMembershipSectionColorScheme("foreman-subscription", true).accentHex; // one-time Boss → DeWalt yellow
+    // The three cross-tier remaps live in ONE place now — this used to hand-copy them,
+    // which is exactly how the header badge ended up out of step with the cards.
+    const accent = getPackageAccentHex(plan.id, isMembershipTab);
 
     /**
      * `plan.id` is derived from the package NAME, so it is not a lookup key —

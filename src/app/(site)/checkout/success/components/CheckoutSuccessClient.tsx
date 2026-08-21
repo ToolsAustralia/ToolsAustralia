@@ -291,7 +291,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
               </ul>
 
               {/*
-                The full composition, not just a total. An Australian tax invoice
+                The full composition, not just a total. An Australian invoice
                 has to show the GST, and GST is already INSIDE totalAmount — it is
                 stated beneath the total as a note, never added as a row, or the
                 arithmetic on screen would not sum.
@@ -376,7 +376,7 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
                       {
                         Icon: Mail,
                         title: "Confirmation email",
-                        body: "Your confirmation and tax invoice are on their way to your inbox.",
+                        body: "Your confirmation and invoice are on their way to your inbox.",
                       },
                       {
                         Icon: Package,

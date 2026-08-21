@@ -19,6 +19,8 @@ import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
+import { priceCart, centsToDollars, dollarsToCents } from "@/utils/shop/pricing";
+import { resolveShopDiscountPercent } from "@/utils/shop/member-discount";
 import { formatDisplayName, formatNamePart } from "@/utils/display-name";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -2046,25 +2048,84 @@ export default function Header({ isFixed = true }: HeaderProps) {
             <div className="border-t border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex-shrink-0">
               {cartItems.length > 0 ? (
                 <div className="p-4">
-                  {/* Subtotal */}
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-lg font-semibold text-gray-900 dark:text-white">Subtotal:</span>
-                    <span className="text-xl font-bold text-red-600">
-                      $
-                      {cartItems
-                        .reduce((total: number, item) => {
-                          const cartItem = item;
-                          const itemPrice =
-                            cartItem.type === "product" && cartItem.product
-                              ? cartItem.product.price
-                              : cartItem.type === "ticket" && cartItem.miniDraw
-                              ? cartItem.miniDraw.ticketPrice
-                              : 0;
-                          return total + itemPrice * cartItem.quantity;
-                        }, 0)
-                        .toFixed(2)}
-                    </span>
-                  </div>
+                  {/*
+                    THE SAME BREAKDOWN THE CHECKOUT PAGE SHOWS.
+
+                    This was a bare Subtotal that ignored the member discount and never
+                    mentioned delivery — so a Foreman saw $89.95 here and $90.95 at
+                    checkout, with the difference unexplained until the page after.
+
+                    Computed with `priceCart` and `resolveShopDiscountPercent`, the exact
+                    functions the checkout route prices with, so the two cannot disagree.
+                    Estimate only: the server re-prices from the database at Continue, and
+                    ITS figures are authoritative — same contract as the checkout page.
+                  */}
+                  {(() => {
+                    const productLines = cartItems.filter((i) => i.type === "product" && i.product);
+                    const ticketTotal = cartItems
+                      .filter((i) => i.type === "ticket" && i.miniDraw)
+                      .reduce((t, i) => t + (i.miniDraw?.ticketPrice ?? 0) * i.quantity, 0);
+
+                    const shopTotals = priceCart(
+                      productLines.map((i) => ({
+                        priceCents: dollarsToCents(i.product?.price ?? 0),
+                        quantity: i.quantity,
+                      })),
+                      { shopDiscountPercent: resolveShopDiscountPercent(userData ?? {}) }
+                    );
+
+                    const discount = centsToDollars(shopTotals.discountCents);
+                    const delivery = centsToDollars(shopTotals.shippingCents);
+                    const subtotal = centsToDollars(shopTotals.subtotalCents) + ticketTotal;
+                    const total = centsToDollars(shopTotals.totalCents) + ticketTotal;
+                    const gst = centsToDollars(shopTotals.gstCents);
+                    const line = "flex items-center justify-between text-sm";
+
+                    return (
+                      <dl className="mb-4 space-y-1.5">
+                        <div className={line}>
+                          <dt className="text-gray-600 dark:text-neutral-400">Subtotal</dt>
+                          <dd className="tabular-nums text-gray-900 dark:text-neutral-100">
+                            ${subtotal.toFixed(2)}
+                          </dd>
+                        </div>
+
+                        {/* Only when it applies — a $0.00 discount row advertises nothing. */}
+                        {discount > 0 && (
+                          <div className={line}>
+                            <dt className="text-emerald-700 dark:text-emerald-400">Member discount</dt>
+                            <dd className="tabular-nums text-emerald-700 dark:text-emerald-400">
+                              −${discount.toFixed(2)}
+                            </dd>
+                          </div>
+                        )}
+
+                        {productLines.length > 0 && (
+                          <div className={line}>
+                            <dt className="text-gray-600 dark:text-neutral-400">Delivery</dt>
+                            <dd className="tabular-nums text-gray-900 dark:text-neutral-100">
+                              {delivery > 0 ? `$${delivery.toFixed(2)}` : "Free"}
+                            </dd>
+                          </div>
+                        )}
+
+                        <div className="flex items-baseline justify-between border-t border-gray-200 pt-2 dark:border-neutral-700">
+                          <dt className="text-lg font-semibold text-gray-900 dark:text-white">Total</dt>
+                          <dd className="text-xl font-bold tabular-nums text-red-600">
+                            ${total.toFixed(2)}
+                          </dd>
+                        </div>
+
+                        {/* GST is INSIDE the total, never added — stated as a note so the
+                            arithmetic above still sums. */}
+                        {gst > 0 && (
+                          <p className="text-right text-xs text-gray-500 dark:text-neutral-500">
+                            includes ${gst.toFixed(2)} GST
+                          </p>
+                        )}
+                      </dl>
+                    );
+                  })()}
 
                   {/* Checkout Button — pointed at /shop until 2026-08-17, which
                       made this a dead end: the button existed but checkout did not. */}

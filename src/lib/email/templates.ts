@@ -419,7 +419,12 @@ const TAX_INVOICE_SUPPLIER = {
 } as const;
 
 /**
- * Order confirmation for a merchandise purchase — and the customer's tax invoice.
+ * Order confirmation for a merchandise purchase — and the customer's invoice.
+ *
+ * WORDING (2026-08-21): the customer-facing strings say "Order confirmed" and
+ * "Invoice", not "Tax invoice", at the owner's direction. Nothing about the
+ * DOCUMENT changed — the supplier identity, ABN, issue date and the GST line are all
+ * still here, and those are what let it serve as a tax invoice. Only the label moved.
  *
  * Sent from the Stripe webhook once the order is actually paid — never from the
  * checkout page, which a customer can leave before the payment settles.
@@ -477,7 +482,7 @@ export function createShopOrderConfirmationTemplate(params: {
   ];
 
   const content =
-    chip('Order confirmed · Tax invoice') +
+    chip('Order confirmed') +
     spacer(14) +
     heading(`Thanks, ${safeName}`) +
     spacer(16) +
@@ -485,7 +490,7 @@ export function createShopOrderConfirmationTemplate(params: {
       `We've got your order <strong>${safeOrder}</strong> and it's on its way to being made. Your items are printed to order, so give us a little time before they ship.`
     ) +
     spacer(24) +
-    bodyHeading('Tax invoice') +
+    bodyHeading('Invoice') +
     infoTable([
       { label: 'Supplier', value: TAX_INVOICE_SUPPLIER.legalName },
       { label: 'ABN', value: TAX_INVOICE_SUPPLIER.abn },
@@ -523,8 +528,8 @@ export function createShopOrderConfirmationTemplate(params: {
     );
 
   return renderBrandEmail({
-    title: `Tax invoice — order ${safeOrder}`,
-    preheader: `Order ${safeOrder} confirmed — we're getting it made. Your tax invoice is inside.`,
+    title: `Order confirmed — ${safeOrder}`,
+    preheader: `Order ${safeOrder} confirmed — we're getting it made. Your invoice is inside.`,
     contentHtml: content,
   });
 }

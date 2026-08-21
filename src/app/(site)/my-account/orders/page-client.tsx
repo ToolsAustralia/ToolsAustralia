@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Package, Ticket, Truck } from "lucide-react";
+import { Loader2, Package, ShoppingBag, Ticket, Truck } from "lucide-react";
 import { useOrders, type OrderListRow } from "@/hooks/queries/useOrderQueries";
 
 /**
@@ -135,10 +135,29 @@ export default function OrdersPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">Your orders</h1>
-      <p className="mt-1 text-sm text-gray-600 dark:text-neutral-400">
-        Everything you&apos;ve bought from the shop.
-      </p>
+      {/*
+        The shop link lives HERE, not only in the empty state.
+
+        A customer with orders had no route back to the shop from this page at all —
+        the only "Browse the shop" button was the one that appears when the list is
+        empty, so buying once removed the way to buy again. The bottom nav carries
+        Dashboard / Rewards / Draws / Membership / Support and no Shop either.
+      */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">Your orders</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-neutral-400">
+            Everything you&apos;ve bought from the shop.
+          </p>
+        </div>
+        <Link
+          href="/shop"
+          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
+        >
+          <ShoppingBag className="h-4 w-4" />
+          Shop
+        </Link>
+      </div>
 
       {error && (
         <div className="mt-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
