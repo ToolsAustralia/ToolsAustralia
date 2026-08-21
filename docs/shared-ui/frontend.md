@@ -1710,3 +1710,36 @@ Two layout rules learned the hard way:
   package cards these figures used to sit on — Boss yellow and VIP gold are barely readable on white
   and the gradient headings wash out entirely. Names and ticks fall back to near-black in light mode;
   the colour bar above each column still identifies the tier.
+
+## The cart drawer wears the member's tier (2026-08-21)
+
+The drawer takes the colour of whatever package the member holds — a flowing edge, a
+low-alpha wash behind the header, a tinted cart icon, and a `TIER · N% OFF` chip — so the
+cart reads as *theirs* rather than as generic chrome.
+
+Every colour comes from a single CSS variable the component sets from
+`getRemappedPackageScheme`, the same resolver the package cards and the header badge use.
+A tier therefore cannot be painted here in a colour it is not painted in elsewhere. The
+styles live in `globals.css` as `.ta-tier-flow` / `.ta-tier-wash` / `.ta-tier-rail`, and
+**none of them apply without `--ta-tier`** — a signed-out visitor, or a member on a package
+with no shop discount, gets the plain drawer with no extra branches in the JSX.
+
+The flow is a slow gradient drift rather than a bright sweep: it sits under a header the
+member reads, and a repeating flash there is a distraction, not a delight. It carries a
+`prefers-reduced-motion` gate (CLAUDE.md performance footgun #6) — the rail keeps its
+colour, it just stops moving.
+
+The **cart icon badge** shows the item count when there is one and the member's discount
+when the cart is empty. An empty badge is dead space, and a member who has forgotten they
+get 20% off has no reminder anywhere in the header — but the discount never competes with
+the count, which is the more urgent number once something is in there.
+
+## Cobber yields to the side drawers (2026-08-21)
+
+The floating bubble sits bottom-right above page content, which is exactly where the cart
+drawer puts **Continue Shopping** — so the robot covered the control and ate the tap.
+
+Both the bubble (`SupportChatWidgetMount`) and the panel (`SupportChatWidget`) now hide
+while `isCartOpen || isMobileMenuOpen`, read from `SidebarContext` where that state already
+lives. Same reasoning as the existing `/my-account` and dashboard-sheet suppressions: when
+another surface owns the screen, Cobber is not the affordance in front of the customer.

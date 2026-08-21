@@ -3784,3 +3784,63 @@ html[data-promo-dock] body {
 html[data-promo-dock] .promo-dock-stacks-above {
   bottom: var(--promo-dock-h, 6rem);
 }
+
+/* ── Cart drawer, themed by the member's tier ──────────────────────────────
+   The drawer takes the colour of whatever package the member holds, so the cart
+   reads as *theirs* rather than as generic chrome. Every colour comes from a CSS
+   variable the component sets from `getRemappedPackageScheme` — the same resolver
+   the package cards and the header badge use — so a tier can never be painted here
+   in a colour it is not painted in elsewhere.
+
+   Signed-out visitors and members with no shop discount set no variable and get the
+   plain drawer; nothing below applies without `--ta-tier`. */
+
+.ta-tier-rail {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ta-tier, transparent) 18%,
+    var(--ta-tier, transparent) 82%,
+    transparent 100%
+  );
+}
+
+/* The flowing edge. A slow gradient drift rather than a bright sweep — this sits
+   under a header the member reads, and a repeating flash there is a distraction, not
+   a delight. */
+@keyframes ta-tier-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.ta-tier-flow {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--ta-tier, transparent) 25%,
+    color-mix(in srgb, var(--ta-tier, transparent) 35%, white) 50%,
+    var(--ta-tier, transparent) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: ta-tier-flow 5.5s linear infinite;
+  will-change: background-position;
+}
+
+/* CLAUDE.md performance footgun #6: a new always-on animation needs a
+   reduced-motion gate. The rail keeps its colour, it just stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  .ta-tier-flow {
+    animation: none;
+  }
+}
+
+/* The tier glow behind the drawer header. Kept low-alpha: it should read as the
+   member's colour bleeding in, not as a coloured panel. */
+.ta-tier-wash {
+  background-image: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--ta-tier, transparent) 16%, transparent) 0%,
+    transparent 62%
+  );
+}

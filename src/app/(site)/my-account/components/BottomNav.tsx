@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Gift, Ticket, CreditCard, MessageCircle, Package, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Gift, Ticket, CreditCard, MessageCircle, Package, ShoppingBag, type LucideIcon } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { usePartnerCatalogueSpotlight, SpotlightDot, rewardsTabPulseKey } from "./PartnerCatalogueSpotlight";
@@ -33,6 +33,10 @@ export const DASHBOARD_NAV: DashboardNavItem[] = [
   { id: "account-membership", label: "Membership", href: "/my-account/membership", icon: CreditCard },
   { id: "support", label: "Support", href: "/my-account/support", icon: MessageCircle },
   { id: "orders", label: "Orders", href: "/my-account/orders", icon: Package, desktopOnly: true },
+  // The only item that leaves /my-account, and deliberately so: a member had no route
+  // to the shop from the dashboard at all. `isNavItemActive` prefix-matches, and no
+  // dashboard route begins with /shop, so this never renders as the active tab.
+  { id: "shop", label: "Shop", href: "/shop", icon: ShoppingBag, desktopOnly: true },
 ];
 
 /** Exact match for the dashboard home, prefix match for every sub-route. */

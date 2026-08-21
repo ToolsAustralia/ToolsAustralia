@@ -20,7 +20,9 @@ import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
 import { priceCart, centsToDollars, dollarsToCents } from "@/utils/shop/pricing";
-import { resolveShopDiscountPercent } from "@/utils/shop/member-discount";
+import { resolveShopDiscountPercent, type ShopDiscountUserInput } from "@/utils/shop/member-discount";
+import { getRemappedPackageScheme } from "@/utils/package-colors/packageCardSurface";
+import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
 import { formatDisplayName, formatNamePart } from "@/utils/display-name";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -169,6 +171,29 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const cartItemCount = summary?.totalItems || 0;
   const { userData, isAuthenticated, loading } = useUserContext();
   const { isStaff } = usePermissions();
+
+  /**
+   * The member's tier, as a colour and a discount — what themes the cart drawer.
+   *
+   * The colour comes from `getRemappedPackageScheme`, the same resolver the package
+   * cards and the header badge use, so the drawer can never paint a tier in a colour
+   * it is not painted in elsewhere. Null for a signed-out visitor and for anyone whose
+   * package carries no shop discount — they get the plain drawer, and nothing in the
+   * CSS applies without `--ta-tier`.
+   */
+  const cartTier = useMemo(() => {
+    if (!userData) return null;
+    const discountPercent = resolveShopDiscountPercent(userData as ShopDiscountUserInput);
+    if (discountPercent <= 0) return null;
+
+    const active = getActivePackage(userData as unknown as ActivePackageUserInput);
+    const pkg = active?.packageData;
+    if (!pkg) return null;
+
+    const planId = derivePlanIdFromPackage(pkg, active.source === "subscription" ? "subscription" : "one-time");
+    const scheme = getRemappedPackageScheme(planId, active.source === "subscription");
+    return { accentHex: scheme.accentHex, discountPercent, name: pkg.name };
+  }, [userData]);
 
   const resolvedActivePackage = useMemo(
     () => (userData ? getActivePackage(userData as unknown as ActivePackageUserInput) : null),
@@ -1255,11 +1280,26 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-110 hover:shadow-lg active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11"
               >
                 <ShoppingCart className="h-4 w-4 text-gray-700 dark:text-neutral-200 sm:h-5 sm:w-5" />
-                {cartItemCount > 0 && (
+                {/*
+                  The count when there IS one; otherwise the member's shop discount.
+
+                  An empty badge is dead space, and a member who has forgotten they get
+                  20% off has no reminder anywhere in the header. The discount shows only
+                  while the cart is empty, so it can never compete with the count — the
+                  more urgent number once something is in there.
+                */}
+                {cartItemCount > 0 ? (
                   <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white shadow-md">
                     {cartItemCount > 99 ? "99+" : cartItemCount}
                   </span>
-                )}
+                ) : cartTier ? (
+                  <span
+                    className="absolute -right-1 -top-1 flex h-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-none shadow-md"
+                    style={{ background: cartTier.accentHex, color: "#0b0e13" }}
+                  >
+                    {cartTier.discountPercent}%
+                  </span>
+                ) : null}
               </button>
             </div>
             {/* Login Button for Mobile - Show when not authenticated (user or affiliate) */}
@@ -1900,21 +1940,52 @@ export default function Header({ isFixed = true }: HeaderProps) {
             className="absolute inset-0 h-full w-full cursor-default bg-black/50 sidebar-overlay animate-fade-in"
           />
 
-          {/* Cart Sidebar */}
+          {/* Cart Sidebar — themed by the member's tier (see .ta-tier-* in globals.css) */}
           <div
             className={`cart-sidebar-container absolute top-0 right-0 h-full w-96 max-w-[90vw] bg-white dark:bg-neutral-900 z-10 shadow-2xl ${
               isClosingCart ? "sidebar-slide-out-right" : "sidebar-slide-in-right"
             } flex flex-col`}
+            style={cartTier ? ({ "--ta-tier": cartTier.accentHex } as React.CSSProperties) : undefined}
           >
+            {/* The flowing tier edge. Sits on the drawer's leading edge so it frames the
+                whole panel rather than decorating one corner. */}
+            {cartTier && (
+              <span aria-hidden className="ta-tier-flow pointer-events-none absolute left-0 top-0 h-full w-[3px]" />
+            )}
             {/* Cart Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-neutral-800 dark:to-neutral-900 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="h-6 w-6 text-gray-700 dark:text-neutral-200" />
+            <div className="relative flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-neutral-800 dark:to-neutral-900 flex-shrink-0">
+              {/* Tier wash — the member's colour bleeding into the header, low-alpha so it
+                  reads as a tint rather than a coloured panel. */}
+              {cartTier && (
+                <span aria-hidden className="ta-tier-wash pointer-events-none absolute inset-0" />
+              )}
+              <div className="relative flex items-center gap-3">
+                <ShoppingCart
+                  className="h-6 w-6 text-gray-700 dark:text-neutral-200"
+                  style={cartTier ? { color: cartTier.accentHex } : undefined}
+                />
                 <div>
                   <h2 className="text-gray-900 dark:text-white font-bold text-lg">Shopping Cart</h2>
-                  <p className="text-gray-600 dark:text-neutral-400 text-sm">
-                    {cartItemCount} {cartItemCount === 1 ? "item" : "items"}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="text-gray-600 dark:text-neutral-400 text-sm">
+                      {cartItemCount} {cartItemCount === 1 ? "item" : "items"}
+                    </p>
+                    {/* The member's discount, stated up front. It is applied to every line
+                        below and in the totals — saying so here is what makes the drawer
+                        feel like THEIR cart rather than a generic one. */}
+                    {cartTier && (
+                      <span
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide"
+                        style={{
+                          color: cartTier.accentHex,
+                          background: `color-mix(in srgb, ${cartTier.accentHex} 14%, transparent)`,
+                          boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${cartTier.accentHex} 45%, transparent)`,
+                        }}
+                      >
+                        {cartTier.name} · {cartTier.discountPercent}% off
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
