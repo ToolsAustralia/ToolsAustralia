@@ -320,7 +320,11 @@ export async function getActivityLog(input: ActivityLogInput): Promise<ActivityL
     } else if (payment.packageType === "shop") {
       // `packageId` is the ORDER NUMBER for a shop payment (finalizeShopOrder passes
       // order.orderNumber), which is the identifier staff search by.
-      action = `Ordered merchandise (${payment.packageId ?? packageName})`;
+      // "Shop order", not "Ordered merchandise": Shop is the name of the source
+      // everywhere else staff see it — the revenue buckets, the entry wallet, the
+      // nav — and a second word for one thing makes a reader ask whether they are
+      // two different things.
+      action = `Shop order (${payment.packageId ?? packageName})`;
       type = "shop_order";
     } else if (payment.packageType === "mini-draw") {
       const miniDrawId = paymentData?.miniDrawId as string | undefined;

@@ -201,7 +201,7 @@ export default function ShopEntryMultiplierPanel() {
       <div className="border-b border-gray-200 p-4 dark:border-neutral-700 sm:p-6">
         <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white sm:text-xl">
           <Gauge className="h-5 w-5 text-red-600 dark:text-red-400" />
-          Merchandise entry multiplier
+          Shop entry multiplier
         </h3>
         <p className="mt-1 text-xs text-gray-600 dark:text-neutral-400 sm:text-sm">
           How many free entries a merchandise line gives, as a multiple of the item&apos;s own

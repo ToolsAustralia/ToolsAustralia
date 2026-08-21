@@ -122,7 +122,11 @@ async function grantShopEntries(
       {
         packageType: "shop",
         packageId: order.orderNumber,
-        packageName: `Merchandise order ${order.orderNumber}`,
+        // Reads back out in the admin revenue drill-down, so it uses the same word
+        // as every other shop surface. Only NEW events carry it; PaymentEvents
+        // already written keep the old string, which is correct — they are a
+        // historical record, not a display cache.
+        packageName: `Shop order ${order.orderNumber}`,
         entries,
         points: 0,
         price: order.totalAmount,
@@ -401,7 +405,7 @@ export async function finalizeShopOrder(
     orderId: order.orderNumber,
     packageType: "shop",
     packageId: order.orderNumber,
-    packageName: `Merchandise order ${order.orderNumber}`,
+    packageName: `Shop order ${order.orderNumber}`,
     userId: order.user.toString(),
     userEmail: buyer?.email,
     userPhone: buyer?.mobile,

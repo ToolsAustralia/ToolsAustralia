@@ -518,3 +518,32 @@ error is logged for an order that never wanted one.
 Downstream, merchandise is **headline revenue but not ads revenue** — see
 [admin/backend.md](../admin/backend.md) for the bucket, the deliberate ROAS asymmetry, and
 the snapshot backfill it requires.
+
+## One word for the shop (2026-08-21)
+
+Staff-visible strings called the same thing three names: the admin activity feed said
+`Ordered merchandise`, the revenue drill-down said `Merchandise order SHOP-…` (from
+`PaymentEvent.packageName`), and the multiplier panel was headed `Merchandise entry
+multiplier` — while the nav, the revenue buckets and the customer's entry wallet all
+said **Shop**. A reader cannot tell whether two names refer to one thing, so all three
+now say Shop.
+
+**Only new `PaymentEvent`s carry the new `packageName`.** Events already written keep
+`Merchandise order …`, and that is correct — a PaymentEvent is a historical record of
+what was granted, not a display cache to be rewritten. The activity feed prefers
+`packageId` (the order number) over `packageName` anyway, so old rows read the same.
+
+Docblocks and `/terms` still use the word "merchandise" deliberately: it is the domain
+noun, and the rename was about the *label* staff read, not the vocabulary.
+
+## Shop entries default to what the product advertises (verified 2026-08-21)
+
+A shop order granted `entriesGranted: 0` on a live run, which looks broken and is not.
+`loadShopEntryMultipliers` falls back to **1×** — the advertised entries unmultiplied —
+and the product itself carried `includedEntries: 0`. Zero advertised × any multiplier
+is zero.
+
+So the multiplier is exactly that: a multiplier, never a source of entries. **A product
+with `includedEntries: 0` grants nothing no matter what any tier of the hierarchy is set
+to.** An admin who sets a shop-wide 3× and sees no entries appear is looking at a
+catalogue that advertises none, not a broken multiplier.

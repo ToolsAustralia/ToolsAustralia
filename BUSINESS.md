@@ -846,3 +846,5 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **Gap period** — the **~3h 30min between draw end (8:30 PM) and next-draw activation (12:00 AM)** when no draw has `status: "active"`. New-entry purchases are blocked; renewals route to the next draw via `getTargetMajorDraw`'s explicit gap branch.
 - **Ledger pattern** — `PaymentEvent` records of benefit grants/reversals, so refunds can replay the ledger backward.
 - **Past-due** — subscription state when Stripe has failed to collect; recoverable via the admin tool or auto-recovery on next successful charge.
+
+<!-- 2026-08-21: staff-facing shop labels unified on "Shop" (no business fact changed; see docs/cart-shop-products/backend.md). -->

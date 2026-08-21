@@ -1778,3 +1778,9 @@ because that index is what `updateVariant` and `removeVariant` address. Reorderi
 match the grouping would silently rewrite which variant an in-flight edit lands on. Verified by
 editing one SKU inside a searched, expanded group and reading the document back: exactly one row
 changed, it was the right one (Vapour / XS), and every other group was intact.
+
+## Shop, not Merchandise (2026-08-21)
+
+`ShopEntryMultiplierPanel`'s heading now reads **Shop entry multiplier**, and the
+activity feed logs `Shop order (SHOP-…)`. See `docs/cart-shop-products/backend.md`
+for the full rename and why already-written `PaymentEvent`s keep the old string.
