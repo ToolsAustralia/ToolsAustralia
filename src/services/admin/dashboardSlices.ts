@@ -532,14 +532,30 @@ export async function getRecentActivities(input: { page: number; limit: number }
 
 // ─── Revenue details ─────────────────────────────────────────────────────────
 
-export type RevenueDetailsCategory =
-  | "membership-purchase"
-  | "membership-renewal"
-  | "one-time-purchase"
-  | "additional-one-time"
-  | "mini-draw"
-  | "upsell"
-  | "shop";
+/**
+ * Every revenue category the drill-down can be asked for.
+ *
+ * A CONST ARRAY, with the type derived from it — not a bare union with the list
+ * re-typed wherever a runtime check is needed. The API route kept its own
+ * hand-maintained `VALID_CATEGORIES` allowlist, and adding `shop` to the union did
+ * NOT add it there: the array was annotated `RevenueDetailsCategory[]`, and a SUBSET
+ * satisfies that type perfectly, so tsc had nothing to complain about. The result was
+ * a 400 the modal rendered as a permanent "Loading revenue details…" spinner.
+ *
+ * Import this array anywhere a runtime membership test is needed, so a new category
+ * cannot be half-added again.
+ */
+export const REVENUE_DETAILS_CATEGORIES = [
+  "membership-purchase",
+  "membership-renewal",
+  "one-time-purchase",
+  "additional-one-time",
+  "mini-draw",
+  "upsell",
+  "shop",
+] as const;
+
+export type RevenueDetailsCategory = (typeof REVENUE_DETAILS_CATEGORIES)[number];
 
 export type RevenueDetailsDateRange =
   | "today"

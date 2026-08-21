@@ -236,7 +236,7 @@ export default function FulfilmentQueue() {
   const visibleOrders = orders.slice(0, VISIBLE_ORDERS);
 
   return (
-    <div className="mt-6 rounded-lg border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none">
+    <div className="mt-6 min-w-0 max-w-full rounded-lg border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none">
       <div className="border-b border-gray-200 p-4 dark:border-neutral-700 sm:p-6">
         <div className="flex items-start justify-between gap-3 sm:items-center">
           <div>
@@ -314,24 +314,45 @@ export default function FulfilmentQueue() {
               )
                 .filter((group) => group.items.length > 0)
                 .map((group) => (
-                  <div
+                  /*
+                    COLLAPSED BY DEFAULT.
+
+                    Two of these stack above the queue, and each listed every affected
+                    line in full — the same orders, twice, in a wall of amber text taller
+                    than the queue it was warning about. The count and the fix are what a
+                    person needs at a glance; WHICH lines is a second question, and the
+                    rows are already flagged inline in the table below.
+                  */
+                  <details
                     key={group.key}
-                    className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/40"
+                    className="group mb-3 rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/40"
                   >
-                    <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-300">
-                      <AlertTriangle className="h-4 w-4" />
-                      {group.title(group.items.length)}
-                    </p>
-                    <p className="mt-1 text-xs text-amber-800 dark:text-amber-200/90">{group.detail}</p>
-                    <ul className="mt-2 space-y-0.5 text-xs text-amber-900 dark:text-amber-200">
+                    <summary className="flex cursor-pointer list-none items-start gap-2 p-3 text-sm">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
+                      <span className="min-w-0 flex-1">
+                        <span className="font-semibold text-amber-900 dark:text-amber-300">
+                          {group.title(group.items.length)}
+                        </span>{" "}
+                        <span className="text-xs text-amber-800 dark:text-amber-200/90">
+                          {group.detail}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-xs font-medium text-amber-700 underline-offset-2 group-open:hidden dark:text-amber-400">
+                        Show
+                      </span>
+                      <span className="hidden shrink-0 text-xs font-medium text-amber-700 group-open:inline dark:text-amber-400">
+                        Hide
+                      </span>
+                    </summary>
+                    <ul className="space-y-0.5 border-t border-amber-300/60 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:text-amber-200">
                       {group.items.slice(0, 8).map((m, i) => (
-                        <li key={`${m.orderNumber}-${m.sku}-${i}`}>
+                        <li key={`${m.orderNumber}-${m.sku}-${i}`} className="break-words">
                           {m.orderNumber} · {m.productName} · {m.sku || "no sku"}
                         </li>
                       ))}
                       {group.items.length > 8 && <li>…and {group.items.length - 8} more</li>}
                     </ul>
-                  </div>
+                  </details>
                 ))}
 
             <div className="mb-5 overflow-x-auto">

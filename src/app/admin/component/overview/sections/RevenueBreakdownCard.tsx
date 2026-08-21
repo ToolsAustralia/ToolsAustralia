@@ -118,7 +118,7 @@ export default function RevenueBreakdownCard({
     },
     {
       id: "shop",
-      label: "Merchandise",
+      label: "Shop",
       color: "#0ea5e9",
       unit: "orders",
       item: breakdown?.shop,

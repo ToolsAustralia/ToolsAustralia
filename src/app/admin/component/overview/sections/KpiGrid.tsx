@@ -223,6 +223,9 @@ export default function KpiGrid({
           { id: "additionalOneTimePurchase", label: "One-Time Add'l", color: "#6366f1", value: breakdownRevenue(revenue.breakdown.additionalOneTimePurchase) },
           { id: "miniDraw", label: "Mini Draws", color: "#a855f7", value: breakdownRevenue(revenue.breakdown.miniDraw) },
           { id: "upsell", label: "Upsells", color: "#ec4899", value: breakdownRevenue(revenue.breakdown.upsell) },
+          // Shop was absent here while its money was already inside `revenue.total`, so
+          // the card read "$181.90 from all sources" above six rows summing to $0.
+          { id: "shop", label: "Shop", color: "#0ea5e9", value: breakdownRevenue(revenue.breakdown.shop) },
         ] as BreakdownRow[]
       ).sort((a, b) => b.value - a.value)
     : [];

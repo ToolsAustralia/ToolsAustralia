@@ -151,7 +151,7 @@ export default function OrdersManagement() {
     "h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100";
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none">
+    <div className="min-w-0 max-w-full rounded-lg border border-gray-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-none">
       <div className="border-b border-gray-200 p-4 dark:border-neutral-700 sm:p-6">
         <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900 dark:text-white sm:text-xl">
           <ShoppingBag className="h-5 w-5 text-red-600 dark:text-red-400" />

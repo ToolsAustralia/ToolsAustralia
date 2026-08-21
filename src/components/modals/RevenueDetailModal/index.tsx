@@ -28,7 +28,7 @@ const categoryLabels: Record<RevenueCategory, string> = {
   "additional-one-time": "One-Time Additional",
   "mini-draw": "Mini Draws",
   upsell: "Upsells",
-  shop: "Merchandise",
+  shop: "Shop",
 };
 
 export default function RevenueDetailModal({

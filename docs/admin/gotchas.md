@@ -273,3 +273,34 @@ That produced a silent contradiction: the headline **Ad Spend KPI counted the sp
 Caught on localhost, where the dev DB has ad spend but little attributed revenue: the headline read **$20,945.78** while the table listed only `direct`. It is not a dev-only bug — any production window where attribution has a gap (or a channel genuinely converts nothing) hits it, and **the worst-performing channel is exactly the one that disappears**.
 
 The skip test now includes `spend > 0`. Pinned by `npm run test:advertising-card-model` ("spend-with-no-return still renders"). When adding a new reason a row should exist, extend that condition — never assume revenue implies presence.
+
+## A runtime allowlist that `tsc` cannot keep in sync (2026-08-21)
+
+Adding `shop` to `RevenueDetailsCategory` did **not** add it to the API route's
+hand-maintained `VALID_CATEGORIES` array — so the drill-down modal 400'd and rendered a
+permanent "Loading revenue details…" spinner.
+
+**Why the compiler was silent:** the array was annotated `RevenueDetailsCategory[]`, and a
+**subset** satisfies that type perfectly. The annotation says "these are valid values", not
+"all of them".
+
+Fixed at the root: `REVENUE_DETAILS_CATEGORIES` is now a `const` array and the type is
+derived from it (`(typeof …)[number]`). The route imports the array. Anywhere else needing
+a runtime membership test must import it too, rather than re-typing the list.
+
+Three other copies of this list exist and were checked in the same pass — the Norm
+revenue-details enum (updated), the Norm by-platform enum and `ACQUISITION_CATEGORY_META`
+(both deliberately **exclude** shop, because they are the ads/ROAS drill-down).
+
+## A wide table can push the whole page sideways (2026-08-21)
+
+`OrdersManagement` and `FulfilmentQueue` both wrap their table in `overflow-x-auto` with a
+`min-w-[…]`, which is correct — yet the admin page still scrolled horizontally on a phone.
+
+The cause is upstream: a flex/grid child defaults to `min-width: auto`, so it **refuses to
+shrink below its content**. The scroll container therefore sized itself to the 1140px
+table and pushed the card — and the page — wider than the viewport. `min-w-0` on the card
+root restores the ability to shrink, so the scrolling happens where it was designed to.
+
+If a table is correctly wrapped and the page still scrolls sideways, look at the
+ancestors, not the wrapper.

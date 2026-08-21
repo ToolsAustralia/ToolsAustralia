@@ -307,7 +307,7 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({
       >
         <div className="overflow-x-auto">
           <table
-            className={`w-full border-collapse text-left ${scrolls ? "min-w-[640px]" : ""}`}
+            className={`w-full border-collapse text-left ${scrolls ? "min-w-[440px] sm:min-w-[640px]" : ""}`}
           >
             <caption className="sr-only">
               What each package includes, compared side by side
@@ -317,7 +317,7 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({
               <tr>
                 <th
                   scope="col"
-                  className={`sticky left-0 z-10 ${labelCellBg} w-[38%] min-w-[116px] max-w-[190px] px-2.5 py-4 align-bottom text-[11px] font-semibold uppercase tracking-wider ${
+                  className={`sticky left-0 z-10 ${labelCellBg} w-[26%] min-w-[88px] max-w-[112px] px-2 py-4 align-bottom sm:w-[34%] sm:min-w-[150px] sm:max-w-[200px] sm:px-3 text-[11px] font-semibold uppercase tracking-wider ${
                     isDark ? "text-white/50" : "text-slate-500"
                   } sm:px-4`}
                 >
@@ -327,7 +327,7 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({
                   <th
                     key={p.id}
                     scope="col"
-                    className="px-1.5 py-4 text-center align-bottom sm:px-3"
+                    className="px-1 py-4 text-center align-bottom sm:px-3"
                   >
                     {/* The tier's own colour bar — the identity the cards carried,
                         kept so a column is recognisable at a glance. */}
@@ -390,9 +390,12 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({
                     >
                       {row.label}
                     </span>
+                    {/* Hidden on a phone: the notes are the longest strings in the table,
+                        and on a narrow screen they widen this column at the direct cost of
+                        a package column. The row labels carry the meaning on their own. */}
                     {row.note && (
                       <span
-                        className={`mt-0.5 block text-[11px] leading-snug ${
+                        className={`mt-0.5 hidden text-[11px] leading-snug sm:block ${
                           isDark ? "text-white/45" : "text-slate-500"
                         }`}
                       >
@@ -406,7 +409,7 @@ const PackageInclusionsExpanded: React.FC<PackageInclusionsExpandedProps> = ({
                     return (
                       <td
                         key={p.id}
-                        className="px-1.5 py-3 text-center align-middle sm:px-3"
+                        className="px-1 py-3 text-center align-middle sm:px-3"
                       >
                         {typeof value === "boolean" ? (
                           value ? (
