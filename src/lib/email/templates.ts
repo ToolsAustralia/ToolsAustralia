@@ -18,6 +18,7 @@ import {
   prizePanel,
   spacer,
   infoTable,
+  lineItemsTable,
   messageBlock,
   bodyText,
   bodyHeading,
@@ -465,17 +466,18 @@ export function createShopOrderConfirmationTemplate(params: {
     timeZone: 'Australia/Sydney',
   });
 
-  const itemLines = params.items
-    .map((i) => ({
-      label: escapeHtml(`${i.quantity} × ${i.name}${i.variant ? ` (${i.variant})` : ''}`),
-      value: escapeHtml(i.lineTotal),
-    }));
+  const itemLines = params.items.map((i) => ({
+    name: escapeHtml(i.name),
+    variant: i.variant ? escapeHtml(i.variant) : undefined,
+    quantity: i.quantity,
+    amount: escapeHtml(i.lineTotal),
+  }));
 
   const moneyRows = [
     { label: 'Subtotal', value: escapeHtml(params.subtotal) },
     ...(params.discount ? [{ label: 'Member discount', value: escapeHtml(params.discount) }] : []),
     { label: 'Delivery', value: escapeHtml(params.shipping) },
-    { label: 'Total paid', value: escapeHtml(params.total) },
+    { label: 'Total paid', value: escapeHtml(params.total), emphasis: true },
     // Australian tax invoices must show the GST component. It is INSIDE the total,
     // never added to it.
     { label: 'Includes GST', value: escapeHtml(params.gst) },
@@ -499,7 +501,11 @@ export function createShopOrderConfirmationTemplate(params: {
     ]) +
     spacer(22) +
     bodyHeading('What you ordered') +
-    infoTable([...itemLines, ...moneyRows]) +
+    // Two tables, not one. Line items and money totals are different kinds of row
+    // and were sharing a component that could only be right for one of them.
+    lineItemsTable(itemLines) +
+    spacer(10) +
+    infoTable(moneyRows) +
     spacer(22) +
     (params.freeEntries && params.freeEntries > 0
       ? entriesCallout({
@@ -564,8 +570,12 @@ export function createShopOrderShippedTemplate(params: {
   const tracking = params.trackingNumber?.trim();
 
   const itemLines = params.items.map((i) => ({
-    label: escapeHtml(i.name),
-    value: escapeHtml([i.variant, `× ${i.quantity}`].filter(Boolean).join(' · ')),
+    name: escapeHtml(i.name),
+    variant: i.variant ? escapeHtml(i.variant) : undefined,
+    quantity: i.quantity,
+    // Deliberately blank, not a price: the confirmation is the invoice, and a
+    // dollar figure on a dispatch notice reads as a second charge.
+    amount: '',
   }));
 
   const content =
@@ -581,8 +591,9 @@ export function createShopOrderShippedTemplate(params: {
     ) +
     spacer(24) +
     bodyHeading("What's on its way") +
+    lineItemsTable(itemLines) +
+    spacer(10) +
     infoTable([
-      ...itemLines,
       { label: 'Order number', value: safeOrder },
       ...(tracking ? [{ label: 'Tracking number', value: escapeHtml(tracking) }] : []),
     ]) +
@@ -638,8 +649,13 @@ export function createShopOrderRefundedTemplate(params: {
   const safeOrder = escapeHtml(params.orderNumber);
 
   const itemLines = params.items.map((i) => ({
-    label: escapeHtml(i.name),
-    value: escapeHtml([i.variant, `× ${i.quantity}`].filter(Boolean).join(' · ')),
+    name: escapeHtml(i.name),
+    variant: i.variant ? escapeHtml(i.variant) : undefined,
+    quantity: i.quantity,
+    // No per-line money: the refund is quoted once, as a total, in the lede above.
+    // Repeating figures beside each line invites the reader to add them up and
+    // arrive at a different number.
+    amount: '',
   }));
 
   const content =
@@ -656,7 +672,9 @@ export function createShopOrderRefundedTemplate(params: {
     bodyText(escapeHtml(params.reason)) +
     spacer(22) +
     bodyHeading("What was on the order") +
-    infoTable([...itemLines, { label: 'Order number', value: safeOrder }]) +
+    lineItemsTable(itemLines) +
+    spacer(10) +
+    infoTable([{ label: 'Order number', value: safeOrder }]) +
     spacer(24) +
     button({ href: params.orderUrl, label: 'View your orders', variant: 'red', width: 260 }) +
     spacer(18) +
