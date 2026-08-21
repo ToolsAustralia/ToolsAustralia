@@ -1743,3 +1743,32 @@ Both the bubble (`SupportChatWidgetMount`) and the panel (`SupportChatWidget`) n
 while `isCartOpen || isMobileMenuOpen`, read from `SidebarContext` where that state already
 lives. Same reasoning as the existing `/my-account` and dashboard-sheet suppressions: when
 another surface owns the screen, Cobber is not the affordance in front of the customer.
+
+## The shop discount is a tag, not a count (2026-08-21)
+
+The cart's discount badge began as a copy of the item-count badge — same 20px circle,
+same 10px text — and at that size it read louder than the cart glyph it belongs to, on
+a button only 36–44px across. A count earns that weight because it is the urgent
+number; a standing member discount does not.
+
+It is now **13px** (30% of the button height, down from 45%) and, more importantly, a
+**rounded rectangle rather than a circle**. The shape is the actual signal: circular
+badges read as counts, tags read as offers, so a member knows which kind of number it
+is before the digits are legible at all. The `%` is set smaller and lighter than the
+figure for the same reason a price tag does it — the number is what you read, the unit
+only confirms it.
+
+The same tag appears on **both** `/shop` nav links, so the discount sits on the thing
+that takes a member to the shop as well as on the thing that holds what they picked:
+
+| Surface | Content | Why |
+| --- | --- | --- |
+| Cart button | `5%` | Corner of a 44px button — every pixel is contested. |
+| Desktop nav | `5%` | Inline in a horizontal row; a longer chip widens the nav. |
+| Mobile sidebar | `5% off` · `ml-auto` | A list row has width to spare, and hard-right is where a list scans. |
+
+All three read `cartTier`, which is `null` below a 1% discount — so a signed-out
+visitor or a member on a package with no shop benefit gets the plain control with no
+extra branches in the JSX. Colour comes from `getRemappedPackageScheme`, the same
+resolver behind the account pill and the cart drawer, so the tier can never be one
+colour here and another there.

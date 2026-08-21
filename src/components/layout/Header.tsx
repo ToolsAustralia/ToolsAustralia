@@ -922,6 +922,26 @@ export default function Header({ isFixed = true }: HeaderProps) {
               aria-current={isActiveLink("/shop") ? "page" : undefined}
             >
               Shop
+              {/*
+                The member's shop discount, on the link that takes them there.
+                Same tag vocabulary as the cart badge — tier colour, dark text,
+                rounded rectangle — so the two read as one fact stated twice
+                rather than as two unrelated markers.
+
+                Only rendered when a discount exists (cartTier is null at 0%), so
+                a signed-out visitor sees the plain word and nothing else.
+              */}
+              {cartTier && (
+                <span
+                  className="ml-1.5 inline-flex items-center gap-[0.5px] rounded-[4px] px-[3px] py-[1px] align-middle"
+                  style={{ background: cartTier.accentHex, color: "#0b0e13" }}
+                >
+                  <span className="text-[9px] font-extrabold leading-none tracking-tight">
+                    {cartTier.discountPercent}
+                  </span>
+                  <span className="text-[7px] font-bold leading-none opacity-70">%</span>
+                </span>
+              )}
             </Link>
             {/* Explore Dropdown — Become a Partner + FAQ + Contact */}
             <div
@@ -1293,11 +1313,27 @@ export default function Header({ isFixed = true }: HeaderProps) {
                     {cartItemCount > 99 ? "99+" : cartItemCount}
                   </span>
                 ) : cartTier ? (
+                  /*
+                    SHAPED AS A TAG, NOT A BUBBLE. This started life as a copy of the
+                    count badge above — same 20px circle, same 10px text — and at that
+                    size it read louder than the cart icon it belongs to, on a button
+                    only 36px across. A count earns that weight because it is the
+                    urgent number; a standing discount does not.
+                    
+                    The rounded rectangle is the actual signal: circular badges read as
+                    counts, tags read as offers, so the shape says "discount" before
+                    the digits are legible at all. The % is set smaller and lighter
+                    than the number for the same reason a price tag does it — the
+                    figure is what you read, the unit is what confirms it.
+                  */
                   <span
-                    className="absolute -right-1 -top-1 flex h-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold leading-none shadow-md"
+                    className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-[13px] items-center justify-center gap-[0.5px] rounded-[4px] px-[2.5px] shadow-sm ring-1 ring-white dark:ring-black"
                     style={{ background: cartTier.accentHex, color: "#0b0e13" }}
                   >
-                    {cartTier.discountPercent}%
+                    <span className="text-[8.5px] font-extrabold leading-none tracking-tight">
+                      {cartTier.discountPercent}
+                    </span>
+                    <span className="text-[6.5px] font-bold leading-none opacity-70">%</span>
                   </span>
                 ) : null}
               </button>
@@ -1798,6 +1834,17 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 >
                   <Store className="w-5 h-5" />
                   Shop
+                  {cartTier && (
+                    <span
+                      className="ml-auto inline-flex items-center gap-[1px] rounded-[5px] px-1.5 py-[3px]"
+                      style={{ background: cartTier.accentHex, color: "#0b0e13" }}
+                    >
+                      <span className="text-[11px] font-extrabold leading-none tracking-tight">
+                        {cartTier.discountPercent}%
+                      </span>
+                      <span className="text-[9px] font-bold leading-none opacity-70">off</span>
+                    </span>
+                  )}
                 </Link>
 
                 {/* Explore Collapsible — Become a Partner + FAQ + Contact */}
