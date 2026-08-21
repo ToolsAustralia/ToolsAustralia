@@ -187,6 +187,17 @@ export interface IUser extends Document {
      * items and on product lines added before variants existed.
      */
     sku?: string;
+    /**
+     * The chosen variant in HUMAN terms, snapshotted at add-to-cart.
+     *
+     * The sku is an internal string ("ajrAx-2XL-Bot8043-BAC-2_11") and checkout was
+     * showing it to the customer for want of anything better. Snapshotted rather than
+     * joined on read for the same reason the ORDER line snapshots it: the cart's
+     * product projection carries no variants, and a 383-variant garment is not
+     * something to ship to a browser to resolve one label.
+     */
+    colour?: string;
+    size?: string;
     quantity: number;
     price?: number; // Store price at time of adding to cart
   }>;
@@ -898,6 +909,11 @@ const UserSchema = new Schema<IUser>(
           type: String,
           trim: true,
         },
+        // Snapshotted variant labels. MUST exist on the schema or Mongoose strict
+        // mode drops them silently on save — the same footgun the sku note above
+        // was written for.
+        colour: { type: String, trim: true },
+        size: { type: String, trim: true },
         quantity: {
           type: Number,
           required: true,

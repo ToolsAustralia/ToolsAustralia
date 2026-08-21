@@ -71,6 +71,17 @@ const EMPTY_ADDRESS: AddressForm = {
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
+/**
+ * The chosen variant as a person reads it — "Black · 2XL".
+ *
+ * Colour before size, matching the order-history list and the confirmation email, so
+ * one purchase never reads as two different variants on two screens. Empty when the
+ * line has no variant (a product without options, or a line added before the labels
+ * were snapshotted), and the caller falls back to the sku.
+ */
+const variantLabel = (item: { colour?: string; size?: string }) =>
+  [item.colour, item.size].filter(Boolean).join(" · ");
+
 export default function CheckoutClient() {
   const router = useRouter();
   const {
@@ -496,15 +507,51 @@ export default function CheckoutClient() {
           <ul className="mb-4 space-y-3">
             {productItems.map((item) => (
               <li key={`${item.productId}-${item.sku ?? ""}`} className="flex gap-3">
+                {/*
+                  The image and the name link to the product page.
+
+                  Two jobs: a customer double-checking what they picked should not have to
+                  find it again from the shop, and the product page is where the VARIANT
+                  picker lives — the colourway swatches with their own photography and the
+                  size grid. Reproducing that here would be a second picker to keep in step
+                  with the first, for a garment that can carry 383 variants.
+                */}
                 {item.product?.images?.[0] && (
-                  <Image src={item.product.images[0]} alt="" width={48} height={48} className="h-12 w-12 rounded-lg border border-gray-200 object-cover dark:border-neutral-700" />
+                  <Link
+                    href={`/shop/${item.productId}`}
+                    className="shrink-0 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+                  >
+                    <Image src={item.product.images[0]} alt="" width={48} height={48} className="h-12 w-12 rounded-lg border border-gray-200 object-cover dark:border-neutral-700" />
+                  </Link>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-gray-900 dark:text-neutral-100">
+                  <Link
+                    href={`/shop/${item.productId}`}
+                    className="block truncate text-sm font-medium text-gray-900 hover:underline dark:text-neutral-100"
+                  >
                     {item.product?.name ?? "Item"}
-                  </p>
-                  {item.sku && (
-                    <p className="truncate text-xs text-gray-500 dark:text-neutral-400">{item.sku}</p>
+                  </Link>
+                  {/*
+                    "Black · 2XL", not "ajrAx-2XL-Bot8043-BAC-2_11". The sku is an internal
+                    string and was being shown to the customer for want of anything better;
+                    the labels are now snapshotted onto the cart line at add-to-cart. Falls
+                    back to the sku for lines added before that existed.
+                  */}
+                  {(variantLabel(item) || item.sku) && (
+                    <p className="truncate text-xs text-gray-500 dark:text-neutral-400">
+                      {variantLabel(item) || item.sku}
+                      {!clientSecret && (
+                        <>
+                          {" · "}
+                          <Link
+                            href={`/shop/${item.productId}`}
+                            className="font-medium text-red-600 hover:underline dark:text-red-400"
+                          >
+                            Change
+                          </Link>
+                        </>
+                      )}
+                    </p>
                   )}
                   {clientSecret ? (
                     <p className="text-xs text-gray-500 dark:text-neutral-400">× {item.quantity}</p>

@@ -540,3 +540,41 @@ buyer chooses — nothing is stored silently.
 > Saved cards only redisplay if the stored payment method carries `allow_redisplay` of
 > `always` or `limited`. A card saved by an older flow without it will not appear, however
 > correct the Customer Session is.
+
+## The cart line carries its variant in human terms (2026-08-21)
+
+Checkout was showing the raw sku — `ajrAx-2XL-Bot8043-BAC-2_11` — under the product
+name, because that was the only variant information the cart line held.
+
+`colour` and `size` are now snapshotted onto the cart line at add-to-cart, from the
+variant the route has already looked up and validated. Snapshotted rather than joined on
+read, for the same reason the **order** line snapshots them: the cart's product projection
+carries no variants, and a 383-variant garment is not something to ship to a browser to
+resolve one label. Joined at `[colour, size].join(" · ")` — colour first, matching the
+order-history list and the confirmation email, so one purchase never reads as two
+different variants on two screens.
+
+Falls back to the sku for lines added before the fields existed.
+
+> Both are declared on the cart subdocument in `models/User.ts`. Mongoose strict mode
+> drops unknown keys **silently on save** — the same footgun the `sku` note there was
+> written for.
+
+## The order summary links to the product (2026-08-21)
+
+The image and the name link to `/shop/[id]`, and the variant line carries a **Change**
+link to the same place (hidden once the PaymentIntent exists and the cart is frozen).
+
+Change goes to the product page rather than opening a picker in the summary. That is where
+the variant picker already lives — colourway swatches with their own photography, the size
+grid, stock state — and a second picker in the checkout column would be a copy to keep in
+step with the first, for a garment that can carry 383 variants.
+
+## The drawer scrims were inert (2026-08-21)
+
+Both the mobile menu and the cart drawer rendered a full-screen `bg-black/50` scrim with
+**no click handler**, so the only way out was the X. A full-screen dark overlay reads as
+dismissable to everyone.
+
+Both are now buttons routing through the existing `handleCloseMobileMenu` /
+`handleCloseCart`, so the slide-out animation still plays rather than the panel vanishing.

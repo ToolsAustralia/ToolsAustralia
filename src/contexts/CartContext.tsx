@@ -17,6 +17,9 @@ interface CartItem {
    * product are two lines. Undefined on tickets and on legacy lines.
    */
   sku?: string;
+  /** The chosen variant in human terms, snapshotted at add-to-cart. */
+  colour?: string;
+  size?: string;
   quantity: number;
   price: number;
   product?: {
@@ -74,6 +77,9 @@ export interface CartContextType extends OptimisticCartState {
     productId?: string;
     miniDrawId?: string;
     sku?: string;
+  /** The chosen variant in human terms, snapshotted at add-to-cart. */
+  colour?: string;
+  size?: string;
     quantity: number;
     price: number;
     product?: CartItem["product"];
@@ -83,6 +89,9 @@ export interface CartContextType extends OptimisticCartState {
     productId?: string;
     miniDrawId?: string;
     sku?: string;
+  /** The chosen variant in human terms, snapshotted at add-to-cart. */
+  colour?: string;
+  size?: string;
     quantity: number;
   }) => Promise<void>;
   removeFromCart: (itemId: string, itemType?: "product" | "ticket", sku?: string) => Promise<void>;
@@ -397,6 +406,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       productId?: string;
       miniDrawId?: string;
       sku?: string;
+  /** The chosen variant in human terms, snapshotted at add-to-cart. */
+  colour?: string;
+  size?: string;
       quantity: number;
       price: number;
       product?: CartItem["product"];

@@ -1443,7 +1443,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
       {isMobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-[110]">
           {/* Backdrop Overlay with Blur */}
-          <div className="absolute inset-0 bg-black/50 sidebar-overlay animate-fade-in" />
+          {/*
+            Clicking the scrim closes the panel.
+
+            It had no handler at all, so the only way out was the X — and a full-screen
+            dark overlay reads as dismissable to everyone. It routes through the same
+            close handler as the button, so the slide-out animation still plays.
+          */}
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={handleCloseMobileMenu}
+            className="absolute inset-0 h-full w-full cursor-default bg-black/50 sidebar-overlay animate-fade-in"
+          />
 
           {/* Sidebar */}
           <div
@@ -1872,7 +1884,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
       {isCartOpen && (
         <div className="fixed inset-0 z-[110]">
           {/* Backdrop Overlay with Blur */}
-          <div className="absolute inset-0 bg-black/50 sidebar-overlay animate-fade-in" />
+          {/*
+            Clicking the scrim closes the panel.
+
+            It had no handler at all, so the only way out was the X — and a full-screen
+            dark overlay reads as dismissable to everyone. It routes through the same
+            close handler as the button, so the slide-out animation still plays.
+          */}
+          <button
+            type="button"
+            aria-label="Close cart"
+            onClick={handleCloseCart}
+            className="absolute inset-0 h-full w-full cursor-default bg-black/50 sidebar-overlay animate-fade-in"
+          />
 
           {/* Cart Sidebar */}
           <div

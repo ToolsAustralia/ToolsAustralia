@@ -14,6 +14,9 @@ type CartItem = {
   miniDrawId?: Types.ObjectId;
   /** Chosen variant. Part of a product line's identity — see findCartItem. */
   sku?: string;
+  /** The same variant in human terms, snapshotted at add-to-cart. */
+  colour?: string;
+  size?: string;
   quantity: number;
   price?: number;
 };
@@ -24,6 +27,8 @@ type CartItemWithDetails = {
   productId?: string;
   miniDrawId?: string;
   sku?: string;
+  colour?: string;
+  size?: string;
   quantity: number;
   price?: number;
   product?: {
@@ -153,6 +158,8 @@ export async function GET() {
           productId: item.productId?.toString(),
           miniDrawId: item.miniDrawId?.toString(),
           sku: item.sku,
+          colour: item.colour,
+          size: item.size,
           quantity: item.quantity,
           price: item.price,
           product: product,
@@ -215,7 +222,12 @@ export async function POST(request: NextRequest) {
 
       // A variant-bearing product must be added as a specific variant, and that
       // variant has to exist and be active. Never trust a client-supplied sku.
-      const variants: Array<{ sku: string; isActive: boolean }> = product.variants ?? [];
+      const variants: Array<{ sku: string; isActive: boolean; colour?: string; size?: string }> =
+        product.variants ?? [];
+      // Captured from the matched variant below, so the cart can label the line the
+      // way a person reads it ("Black · 2XL") instead of showing the internal sku.
+      let chosenColour: string | undefined;
+      let chosenSize: string | undefined;
       if (variants.length > 0) {
         if (!validatedData.sku) {
           return NextResponse.json(
@@ -230,6 +242,8 @@ export async function POST(request: NextRequest) {
         if (!variant.isActive) {
           return NextResponse.json({ error: "That option is unavailable" }, { status: 400 });
         }
+        chosenColour = variant.colour;
+        chosenSize = variant.size;
       }
 
       // Identity is (productId, sku) — two sizes are two lines.
@@ -249,6 +263,8 @@ export async function POST(request: NextRequest) {
           type: "product",
           productId: new Types.ObjectId(validatedData.productId),
           sku: validatedData.sku,
+          colour: chosenColour,
+          size: chosenSize,
           quantity: validatedData.quantity,
           price: product.price,
         });
