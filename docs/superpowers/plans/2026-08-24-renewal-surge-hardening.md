@@ -252,7 +252,13 @@ const granted = await handleInvoicePaymentSucceeded(event.data.object);
 shouldMarkAsProcessed = granted !== false;
 ```
 
-Also fix `index.ts:4369` — add the missing else so a `processPaymentBenefits` returning `{success: false}` propagates instead of being swallowed. Mirror `:1511-1522`.
+Also fix `index.ts:4369` / its `else` at `:4765`. The else **exists** — it is
+`webhookLog("error", \`Failed to process subscription benefits: ${result.error}\`)` and then falls
+through, so a `{success: false}` is logged and still acked. Make that branch cause the handler to
+report failure (return `false`), mirroring the payment_intent path at `:1511-1522`.
+
+> Corrected 2026-08-24 after Task 1's implementer verified the file: an earlier draft of this step
+> said "add the missing else". The consequence is unchanged; the fix is not.
 
 **Do not remove the `isZeroAmountTrialUpdateInvoice` guard at `:3490`** — a skipped $0 trial invoice is a legitimate "nothing to grant" and must still ack `true`.
 

@@ -48,10 +48,15 @@ whole body in one `try`. An inner catch at `:3698-3701` rethrows, but the outer 
 `shouldMarkAsProcessed = true` at `:5527`, and `processQueuedEvent.ts:52-57` acks
 `ProcessedStripeEvent` and calls `markSucceeded`. `markFailed` at `:58-61` never runs.
 
-The same hole exists a second way: `index.ts:4369` is `if (result.success)` with **no else
-branch**, so a `processPaymentBenefits` returning `{success: false}` is swallowed identically.
-Contrast `index.ts:1511-1522` on the payment_intent path, which correctly returns
-`result.success` so the event is not acked.
+The same hole exists a second way: `index.ts:4369` is `if (result.success)`, and its `else` at
+`:4765` **only logs** — `webhookLog("error", \`Failed to process subscription benefits: ${result.error}\`)`
+— then falls through. So a `processPaymentBenefits` returning `{success: false}` produces a log
+line and an acked event, granting nothing. Contrast `index.ts:1511-1522` on the payment_intent
+path, which correctly returns `result.success` so the event is not acked.
+
+*(Corrected 2026-08-24: an earlier draft of this spec said "no else branch". The branch exists;
+it is non-propagating. The consequence is unchanged, the fix is not — the else must make the
+handler report failure, not merely log it.)*
 
 This is verbatim the outcome the comment at `:5519-5525` says must never happen.
 
