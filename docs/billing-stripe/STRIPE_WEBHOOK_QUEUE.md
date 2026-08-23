@@ -150,29 +150,54 @@ real handler — production always uses the default `dispatchStripeEvent`.)
 
 | Flag | Question | Who sets it |
 |---|---|---|
-| `shouldMarkAsProcessed` | Write the `ProcessedStripeEvent` dedup row (the payment-idempotency ACK)? | Only the money-moving events. ~19 of the 21 subscribed event types leave it `false`, and that is **healthy success**. |
+| `shouldMarkAsProcessed` | Write the `ProcessedStripeEvent` dedup row (the payment-idempotency ACK)? | Only the money-moving events — **2 of the dispatcher's 27 `case` labels** set it (`payment_intent.succeeded`, `invoice.payment_succeeded`). Every other handled event type leaves it `false` on a fully successful run, and that is **healthy success**. |
 | `handlerFailed` | Did the handler run to completion but *not do its work* — e.g. a renewal whose entry grant never landed? | `invoice.payment_succeeded` only, from `handleInvoicePaymentSucceeded`'s return value. |
 
-**Gate `markSucceeded` on `handlerFailed`, never on `shouldMarkAsProcessed`.** Gating on the latter would dead-letter every `invoice.created`, `customer.subscription.updated`, `charge.refunded`… i.e. almost the whole event surface. `ack-gate.test.ts` case B pins this specifically.
+**Gate `markSucceeded` on `handlerFailed`, never on `shouldMarkAsProcessed`.** Gating on the latter would dead-letter every `invoice.created`, `customer.subscription.updated`, `charge.refunded`… i.e. almost the whole event surface (25 of the 27 `case` labels). `ack-gate.test.ts` case B pins this specifically.
+
+**Failures carry their own reason.** `handleInvoicePaymentSucceeded` returns `{granted:false, reason}` — never a bare boolean — and `processQueuedEvent` writes that `reason` to the row's `lastError`. This is load-bearing, not decoration: two of the failure paths log via `webhookLog("warn", …)`, which production strips **twice** (`webhookLog` early-returns for non-error at `index.ts:90-93`, and `next.config.ts` `removeConsole` drops `console.warn` at build), so without the reason on the row a dead-lettered renewal would carry no diagnostic at all. `reason` is a required field of the `granted:false` variant so a future failure path cannot be added without one. The two worst-affected paths were also promoted to `webhookLog("error", …)`.
 
 **What it prevents.** On 2026-08-23 14:00 UTC (anchor-24 renewal burst), Stripe returned HTTP 429 inside `handleInvoicePaymentSucceeded`. Its outer catch swallowed the error and returned normally; the dispatcher's hard-coded `shouldMarkAsProcessed = true` then acked it, and `processQueuedEvent` called `markSucceeded` unconditionally. **11 members were charged $300.00 in total, received no entries, and the queue rows read `succeeded`.** Worse, the `ProcessedStripeEvent` row that got written is unique-indexed, so a later Stripe replay was rejected — the standard healing path was closed off. Both halves are now fixed: the handler reports grant success, and the worker honours it.
 
-**Retries are safe.** `PaymentEvent._id = BenefitsGranted-invoice_<invoiceId>` is unique, so a retried `invoice.payment_succeeded` cannot double-grant. That is what makes un-acking the correct response rather than a double-charge risk.
+**Retries cannot double-grant — but they do not always re-grant either.** `PaymentEvent._id = BenefitsGranted-invoice_<invoiceId>` is unique, so a retried `invoice.payment_succeeded` can never grant twice. That is what makes un-acking safe rather than a double-charge risk. It is **not** a guarantee that a retry heals the member, and the difference matters:
+
+> `processPaymentBenefits` creates the `PaymentEvent` (`payment-processing.ts:546`) **before** it calls `grantBenefits` (`:651`). If `grantBenefits` throws, attempt 1 returns `{success:false}` and the ACK gate correctly requeues — but attempt 2 hits the duplicate-key path and returns `{success:true, alreadyProcessed:true}` (`:593`), so the handler reports success and the row **ACKs with nothing granted**. The unique key stops a double-grant; it does not make a retry re-grant.
+>
+> The 24 Aug incident sat **upstream** of this (it died before `processPaymentBenefits` was ever reached), so the ACK gate genuinely fixes that case. But the write-ordering hole is real and the gate does not cover it. **Task 3's Stripe-anchored reconciler is the net for it** — it starts from paid Stripe invoices rather than from `PaymentEvent` rows, so it sees exactly this shape. Re-ordering `grantBenefits` before the `PaymentEvent` write is deliberately out of Task 2's scope.
+
+### Why a `{success:false}` grant may outlive its retry budget
+
+`result.error` has at least four distinct causes, and one is semi-permanent:
+
+| Cause | Heals on retry? |
+|---|---|
+| Transient DB / Mongo contention inside `grantBenefits` | Yes, usually on the next attempt |
+| `grantBenefits` threw on attempt 1 | **No** — attempt 2 short-circuits on the duplicate `PaymentEvent` (see the caveat above) |
+| `PaymentEvent creation failed silently` (`:602`) | Usually |
+| **Major-draw gate closed** (`payment-processing.ts:342-352`) | **Only when the next draw opens** |
+
+The last one is the operational trap. The gate (`checkMajorDrawActiveForNewPurchases`) is applied to every membership invoice that is **not** a renewal — so `subscription_create` and upgrades, but not `subscription_cycle`. If one lands while no draw is accepting entries, it returns `{success:false}` for as long as the gap lasts. The retry budget is ~7.5h total; a draw gap can be longer. **A cluster of dead rows at a draw boundary, all `subscription_create`/upgrade, is this — not a code regression.** Replay them from `/admin/stripe-webhook-queue` once the next draw is active.
 
 **`handleInvoicePaymentSucceeded` return contract** (`src/services/stripe-webhook-handlers/index.ts`):
 
+Returns `InvoiceGrantOutcome` = `{granted:true}` | `{granted:false, reason}`. The `reason` is required on the failure variant and is written verbatim to the row's `lastError`.
+
 | Outcome | Returns | Why |
 |---|---|---|
-| Grant succeeded (`processPaymentBenefits` → `{success:true}`) | `true` | Work done. |
-| `isZeroAmountTrialUpdateInvoice` — Stripe's $0 trial-bookkeeping invoice | `true` | **Legitimate "nothing to grant."** Un-acking it would spin an infinite retry → dead-letter loop on every past-due reanchor / anchor-billing migration / join-anchor. Pinned by `test:zero-trial-guard` and `ack-gate.test.ts` case D. |
-| No subscription id (invoice, pending, or canonical) | `true` | Not a membership subscription invoice — there is nothing to grant, and a retry resolves to the same nothing. |
-| Unrecognised `billing_reason` | `true` | Explicit classification: this invoice type grants nothing. |
-| `processPaymentBenefits` → `{success:false}` | `false` | Previously only logged and fell through — half of RC-1. |
-| Missing `packageId` / unknown package / customer mismatch / non-manageable subscription status / user not found / no customer on invoice | `false` | Money collected, nothing granted. Must surface as a queue failure, not vanish. |
+| Grant succeeded (`processPaymentBenefits` → `{success:true}`) | `granted` | Work done. |
+| `isZeroAmountTrialUpdateInvoice` — Stripe's $0 trial-bookkeeping invoice | `granted` | **Legitimate "nothing to grant."** Un-acking it would spin an infinite retry → dead-letter loop on every past-due reanchor / anchor-billing migration / join-anchor. Pinned by `test:zero-trial-guard` and `ack-gate.test.ts` case D. |
+| No subscription id (invoice, pending, or canonical) | `granted` | Not a membership subscription invoice — there is nothing to grant, and a retry resolves to the same nothing. |
+| **Unknown customer AND the invoice carries no subscription of its own** | `granted` | Same classification as the row above, but it must be made **before** the unknown-customer check or the two disagree — see the ordering note below. `ack-gate.test.ts` case E. |
+| Unrecognised `billing_reason` | `granted` | Explicit classification: this invoice type grants nothing. |
+| `processPaymentBenefits` → `{success:false}` | `not granted` | Previously only logged and fell through — half of RC-1. **Several distinct causes that do not heal in the same window — see below.** |
+| **Unknown customer on a genuine subscription invoice** | `not granted` | The signup / SCA-3DS race — the `User` row may not carry `stripeCustomerId` yet, and a backoff retry genuinely heals it. `ack-gate.test.ts` case F. |
+| Missing `packageId` / unknown package / customer mismatch / non-manageable subscription status / no customer on invoice | `not granted` | Money collected, nothing granted. Must surface as a queue failure, not vanish. |
 | An exception, and no grant had landed yet | **throws** | So the real error text (e.g. Stripe's 429) reaches the row's `lastError`, instead of a generic message. |
-| An exception *after* the grant landed (affiliate commission, Klaviyo, endDate sync) | `true` | The entries are already granted; un-acking would retry a completed renewal for nothing. The handler tracks this with a `benefitsGranted` flag read by the outer catch. |
+| An exception *after* the grant landed (affiliate commission, Klaviyo, endDate sync) | `granted` | The entries are already granted; un-acking would retry a completed renewal for nothing. The handler tracks this with a `benefitsGranted` flag read by the outer catch. |
 
-**Test:** `npm run test:ack-gate` (`src/services/stripe-webhook-queue/__tests__/ack-gate.test.ts`). Cases A/B drive the `deps` seam; **C and D drive the real dispatcher and handler** with only `stripe.invoices.retrieve` stubbed, so they pin production wiring rather than the mock.
+**Ordering note — classify before you gate.** The "no subscription of its own" test runs *inside* the `!user` branch, ahead of the un-acking return. Without it, the same stray non-subscription invoice ACKs for a **known** customer (it falls through to the "no subscription id" row) but dead-letters for an **unknown** one. It is deliberately **not** hoisted above the user lookup entirely: invoices that legitimately resolve their subscription from the user's `pendingStripeSubscriptionId` or canonical `stripeSubscriptionId` would then be skipped, silently dropping real grants.
+
+**Test:** `npm run test:ack-gate` (`src/services/stripe-webhook-queue/__tests__/ack-gate.test.ts`) — 6 cases, 27 assertions. A/B drive the `deps` seam; **C–F drive the real dispatcher and handler** with only `stripe.invoices.retrieve` stubbed, so they pin production wiring rather than the mock.
 
 ## Sweeper Route
 

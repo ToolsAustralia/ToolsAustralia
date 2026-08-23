@@ -282,9 +282,9 @@ return { processed: false, error: "not_granted" };
 > **Corrected 2026-08-24 during implementation — the snippet above is NOT what shipped.** Gating
 > `markSucceeded` on `shouldMarkAsProcessed` would have dead-lettered almost the entire event
 > surface: `shouldMarkAsProcessed` is initialised `false` at `index.ts:5429` and only the
-> money-moving cases ever set it, so ~19 of the 21 subscribed event types (`invoice.created`,
-> `customer.subscription.updated`, `charge.refunded`, …) legitimately return `false` on a fully
-> successful run. The pre-existing `processQueuedEvent.test.ts` case (a) encodes exactly that
+> money-moving cases ever set it — 2 of the dispatcher's 27 `case` labels — so the other 25
+> (`invoice.created`, `customer.subscription.updated`, `charge.refunded`, …) legitimately leave it
+> `false` on a fully successful run. The pre-existing `processQueuedEvent.test.ts` case (a) encodes exactly that
 > contract. The two flags answer different questions, so `dispatchStripeEvent` now returns
 > `{ shouldMarkAsProcessed, handlerFailed }` (exported as `StripeDispatchResult`) and the worker
 > gates on **`handlerFailed`**, which only `invoice.payment_succeeded` sets. `ack-gate.test.ts`

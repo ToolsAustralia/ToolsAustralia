@@ -23,8 +23,9 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
  * was ever granted or retried.
  *
  * The four cases below pin the corrected behaviour. B is as important as A: gating on
- * `shouldMarkAsProcessed` instead of `handlerFailed` would dead-letter ~19 of the 21
- * subscribed event types, all of which legitimately leave that flag false.
+ * `shouldMarkAsProcessed` instead of `handlerFailed` would dead-letter almost the whole
+ * event surface — only 2 of the dispatcher's 27 `case` labels ever set that flag, so
+ * every other handled event type leaves it false on a fully successful run.
  *
  * A and B drive the seam. C and D drive the REAL dispatcher + handler with only
  * `stripe.invoices.retrieve` stubbed, so they pin production wiring, not the mock.
@@ -74,6 +75,26 @@ function invoiceEvent(eventId: string, invoiceId: string): Stripe.Event {
   } as unknown as Stripe.Event;
 }
 
+/**
+ * A paid invoice for a customer with NO User row. `subscriptionId` decides whether it is
+ * a membership invoice (retry the signup race) or a stray one (nothing to grant, ACK).
+ * `resolveInvoiceSubscriptionId` reads the legacy top-level `subscription` field.
+ */
+function unknownCustomerInvoice(invoiceId: string, subscriptionId?: string): Stripe.Invoice {
+  return {
+    id: invoiceId,
+    object: "invoice",
+    status: "paid",
+    billing_reason: subscriptionId ? "subscription_cycle" : "manual",
+    total: 2000,
+    amount_paid: 2000,
+    customer: TEST_CUSTOMER_ID,
+    ...(subscriptionId ? { subscription: subscriptionId } : {}),
+    lines: { data: [], has_more: false, object: "list", url: "" },
+    metadata: {},
+  } as unknown as Stripe.Invoice;
+}
+
 /** Stripe's $0 trial-bookkeeping invoice — a legitimate "nothing to grant". */
 function zeroTrialInvoice(invoiceId: string): Stripe.Invoice {
   return {
@@ -119,7 +140,11 @@ async function run() {
     const idA = `${PREFIX}_a`;
     await StripeWebhookQueue.create(queueRow(idA, "invoice.payment_succeeded", invoiceEvent(idA, "in_ack_gate_a")));
     const rA = await processQueuedEvent(idA, {
-      dispatch: async () => ({ shouldMarkAsProcessed: false, handlerFailed: true }),
+      dispatch: async () => ({
+        shouldMarkAsProcessed: false,
+        handlerFailed: true,
+        handlerFailureReason: "ack-gate-test: seeded grant failure",
+      }),
     });
 
     // Proves the gate was actually REACHED. `claimNextAttempt` runs first and returns
@@ -133,18 +158,19 @@ async function run() {
     expect("A: row is NOT succeeded", rowA?.status === "succeeded", false);
     expect("A: row requeued for retry", rowA?.status, "queued");
     expect("A: attempts incremented", rowA?.attempts, 1);
-    expect("A: lastError recorded", rowA?.lastError, "handler reported grant did not complete");
+    expect("A: handler's own failure reason reached lastError", rowA?.lastError, "ack-gate-test: seeded grant failure");
 
     const ackA = await ProcessedStripeEvent.countDocuments({ eventId: idA });
     expect("A: no ProcessedStripeEvent row (replay stays possible)", ackA, 0);
 
-    // ── Case B — the ordinary non-payment event. ~19 of the 21 subscribed event types
-    //    leave `shouldMarkAsProcessed` false and that is healthy success. Gating on it
-    //    (rather than on handlerFailed) would dead-letter every one of them.
+    // ── Case B — the ordinary non-payment event. Only 2 of the dispatcher's 27 `case`
+    //    labels set `shouldMarkAsProcessed`; every other handled type leaves it false on a
+    //    fully successful run. Gating on it (rather than on handlerFailed) would
+    //    dead-letter every one of them.
     const idB = `${PREFIX}_b`;
     await StripeWebhookQueue.create(queueRow(idB, "customer.updated", { id: idB, type: "customer.updated", data: { object: { id: "cus_x" } } }));
     const rB = await processQueuedEvent(idB, {
-      dispatch: async () => ({ shouldMarkAsProcessed: false }),
+      dispatch: async () => ({ shouldMarkAsProcessed: false, handlerFailed: false }),
     });
     expect("B: non-payment event still processed", rB.processed, true);
     const rowB = await StripeWebhookQueue.findOne({ eventId: idB }).lean<{ status?: string } | null>();
@@ -188,6 +214,48 @@ async function run() {
     expect("D: $0 trial invoice is processed", rD.processed, true);
     const rowD = await StripeWebhookQueue.findOne({ eventId: idD }).lean<{ status?: string } | null>();
     expect("D: $0 trial invoice is marked succeeded (no retry loop)", rowD?.status, "succeeded");
+    // Mirror of A's "no ProcessedStripeEvent row": pins `shouldMarkAsProcessed = granted`
+    // from the other side, so a regression that stopped acking legitimate skips (and so
+    // stopped protecting them from Stripe resends) fails here.
+    const ackD = await ProcessedStripeEvent.countDocuments({ eventId: idD });
+    expect("D: dedup row IS written on the ack-true path", ackD, 1);
+
+    // ── Case E — a paid invoice that carries NO subscription of its own, for a Stripe
+    //    customer with no User row. It cannot be a membership invoice for anyone, so it
+    //    must ACK. Before the classification was moved ahead of the unknown-customer
+    //    gate, this dead-lettered while the byte-identical invoice for a KNOWN customer
+    //    acked — the noisiest possible asymmetry.
+    const idE = `${PREFIX}_e`;
+    const invoiceIdE = "in_ack_gate_e";
+    await StripeWebhookQueue.create(queueRow(idE, "invoice.payment_succeeded", invoiceEvent(idE, invoiceIdE)));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (stripe.invoices as any).retrieve = async () => unknownCustomerInvoice(invoiceIdE);
+    const rE = await processQueuedEvent(idE); // default deps → real dispatchStripeEvent
+    expect("E: non-subscription invoice for an unknown customer is processed", rE.processed, true);
+    const rowE = await StripeWebhookQueue.findOne({ eventId: idE }).lean<{ status?: string } | null>();
+    expect("E: non-subscription invoice for an unknown customer ACKs", rowE?.status, "succeeded");
+
+    // ── Case F — the other half of the same reorder. A genuine SUBSCRIPTION invoice for
+    //    an unknown customer is the signup / SCA-3DS race, which a backoff retry heals,
+    //    so it must still be un-acked. Guards against "fix E" being widened into
+    //    "ACK every unknown customer", which would re-open the original hole.
+    const idF = `${PREFIX}_f`;
+    const invoiceIdF = "in_ack_gate_f";
+    await StripeWebhookQueue.create(queueRow(idF, "invoice.payment_succeeded", invoiceEvent(idF, invoiceIdF)));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (stripe.invoices as any).retrieve = async () => unknownCustomerInvoice(invoiceIdF, "sub_ack_gate_f");
+    const rF = await processQueuedEvent(idF); // default deps → real dispatchStripeEvent
+    expect("F: subscription invoice for an unknown customer is NOT processed", rF.processed, false);
+    const rowF = await StripeWebhookQueue.findOne({ eventId: idF }).lean<{ status?: string; lastError?: string } | null>();
+    expect("F: row is NOT succeeded (signup race stays retryable)", rowF?.status === "succeeded", false);
+    expect("F: row requeued for retry", rowF?.status, "queued");
+    expect(
+      "F: the specific reason reached lastError, not a generic constant",
+      (rowF?.lastError ?? "").includes("no user for Stripe customer"),
+      true
+    );
+    const ackF = await ProcessedStripeEvent.countDocuments({ eventId: idF });
+    expect("F: no ProcessedStripeEvent row (replay stays possible)", ackF, 0);
   } finally {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (stripe.invoices as any).retrieve = originalRetrieve;

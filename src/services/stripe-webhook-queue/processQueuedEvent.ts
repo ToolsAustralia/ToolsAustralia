@@ -50,7 +50,8 @@ export async function processQueuedEvent(
   }
 
   try {
-    const { shouldMarkAsProcessed, handlerFailed } = await deps.dispatch(payload);
+    const { shouldMarkAsProcessed, handlerFailed, handlerFailureReason } =
+      await deps.dispatch(payload);
 
     // ACK GATE (2026-08-24). A handler that returns normally is not automatically a
     // success: `handlerFailed` means it ran to completion but did NOT do its work — a
@@ -58,13 +59,16 @@ export async function processQueuedEvent(
     // 11 members be charged $300.00 with no entries and no retry on 2026-08-23.
     //
     // Gate on `handlerFailed`, NOT on `shouldMarkAsProcessed`: the latter only asks
-    // "write the ProcessedStripeEvent dedup row?", and ~19 of the 21 subscribed event
-    // types legitimately leave it false. Gating on it would dead-letter all of them.
+    // "write the ProcessedStripeEvent dedup row?", and only 2 of the dispatcher's 27
+    // `case` labels ever set it — every other handled event type leaves it false on a
+    // fully successful run. Gating on it would dead-letter almost the entire surface.
     //
     // Never ACK an ungranted event into ProcessedStripeEvent either — that unique row
     // is precisely what blocks a later Stripe replay from healing the member.
     if (handlerFailed) {
-      await markFailed(eventId, "handler reported grant did not complete");
+      // The reason matters: some of the producing paths log at a level that production
+      // strips, so this string can be the ONLY diagnostic a dead row carries.
+      await markFailed(eventId, handlerFailureReason ?? "handler reported grant did not complete");
       return { processed: false, error: "not_granted" };
     }
 
