@@ -3455,14 +3455,33 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 /**
  * Handle invoice.payment_succeeded events for subscription activations
  * This is Stripe's canonical event for subscription payment processing
+ *
+ * @returns `true` when the event is safe to ACK — either the entry grant landed, or this
+ * invoice legitimately grants nothing (Stripe's $0 trial-bookkeeping invoice, a
+ * non-subscription invoice, an unrecognised billing_reason). `false` when money was
+ * collected and the grant did NOT complete; the caller must then leave the queue row
+ * un-acked so `markFailed()` retries it with backoff.
+ *
+ * Throws when an exception killed an ungranted invoice, so the real error text (e.g.
+ * Stripe's 429) reaches the queue row's `lastError` instead of a generic message.
+ *
+ * Incident 2026-08-23: this used to return `void` and swallow every error in its outer
+ * catch, so the dispatcher hard-coded `shouldMarkAsProcessed = true` and 11 members were
+ * charged $300.00 with no entries and no retry. Never let a non-grant ACK silently.
  */
-async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
+async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<boolean> {
+  // Set once `processPaymentBenefits` reports success. Read by the outer catch so a throw
+  // in a POST-grant best-effort step (affiliate commission, Klaviyo, endDate sync) does not
+  // un-ACK — and re-grant — an invoice whose entries already landed.
+  let benefitsGranted = false;
   try {
     // ✅ Type guard: Invoice ID is always present in webhook events
     const invoiceId = invoice.id;
     if (!invoiceId) {
       webhookLog("error", `Invoice ID is missing`);
-      return;
+      // Defensive/unreachable. If it ever fires, money moved and we cannot identify the
+      // invoice — surface it as a queue failure rather than acking it away.
+      return false;
     }
 
     webhookLog("info", `🎯 INVOICE PAYMENT SUCCEEDED HANDLER CALLED for ${invoiceId}`);
@@ -3492,7 +3511,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         "info",
         `Skipping $0 trial-period subscription_update invoice ${invoiceId} (Stripe trial_end bookkeeping; no benefits/activity).`
       );
-      return;
+      // ACK true: a legitimate "nothing to grant". Returning false here would un-ACK a $0
+      // invoice that can never grant, producing an infinite retry → dead-letter loop.
+      return true;
     }
 
     // ✅ CRITICAL FIX: ATOMIC PaymentEvent creation to prevent race conditions
@@ -3521,12 +3542,15 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       user = await User.findOne({ stripeCustomerId: customerId });
     } else {
       webhookLog("error", `No customer ID in invoice`);
-      return;
+      // A paid invoice we cannot attribute to anyone — fail loud, don't ACK.
+      return false;
     }
 
     if (!user) {
       webhookLog("warn", `User not found for customer: ${expandedInvoice.customer}`);
-      return;
+      // Racy: the User row may not carry stripeCustomerId yet. A backoff retry
+      // genuinely helps here, so do not ACK.
+      return false;
     }
 
     /** DB subscription status before this payment (e.g. past_due recovery vs regular renewal) */
@@ -3608,7 +3632,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     if (!subscriptionId) {
       webhookLog("warn", `No subscription ID found for user: ${user.email}`);
-      return;
+      // Not a membership subscription invoice (no invoice sub, no pending, no canonical) —
+      // there is no membership to grant, so ACK. A retry would resolve to the same nothing.
+      return true;
     }
 
     if (expandedInvoice.billing_reason === "subscription_cycle" && expandedInvoice.id) {
@@ -3711,7 +3737,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         "error",
         `Invoice customer ${invoiceCustomerId} does not match subscription customer ${subscriptionCustomerId}; skipping benefit grant`
       );
-      return;
+      // Deliberate safety skip on a PAID invoice — must surface in the queue, not vanish.
+      return false;
     }
 
     if (!isManageableStripeSubscriptionStatus(subscription.status)) {
@@ -3719,7 +3746,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         "warn",
         `Paid invoice resolved subscription ${subscription.id}, but status ${subscription.status} is not manageable; skipping benefit grant`
       );
-      return;
+      // Paid but not granted — the exact shape of the 2026-08-23 loss. Do not ACK.
+      return false;
     }
 
     if (user.stripeSubscriptionId !== paidSubscriptionId) {
@@ -3844,7 +3872,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     if (!packageId) {
       webhookLog("error", `No packageId found in subscription metadata`);
-      return;
+      // A paid membership invoice with no grant. Mirrors the payment_intent path's
+      // metadata-defect handling (:848-:920): report failure so it does not ACK.
+      return false;
     }
 
     webhookLog("info", `Processing subscription payment for package: ${packageId}`, {
@@ -3855,7 +3885,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     const membershipPackage = getPackageById(packageId);
     if (!membershipPackage) {
       webhookLog("error", `Membership package not found: ${packageId}`);
-      return;
+      // Same class as the missing packageId above — paid, ungranted, must not ACK.
+      return false;
     }
 
     // Resubscribe: use subscription metadata first (API may have set user.subscription.isActive before webhook runs)
@@ -4107,7 +4138,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         "warn",
         `Unknown billing reason ${expandedInvoice.billing_reason} for package ${packageId} - skipping benefits`
       );
-      return; // Skip processing for unknown billing reasons
+      // Explicit classification: this invoice type grants nothing, so ACK. A retry would
+      // classify identically and only burn the retry budget.
+      return true; // Skip processing for unknown billing reasons
     }
 
     // ✅ Let processPaymentBenefits handle atomic PaymentEvent creation
@@ -4367,6 +4400,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     if (result.success) {
+      // The entry grant landed. From here on the event is ACK-safe: a throw in any of the
+      // best-effort steps below must NOT un-ACK it (the outer catch reads this flag).
+      benefitsGranted = true;
       // pause_collection is cleared before processPaymentBenefits (see above) so collection is not left paused on timeout/benefit errors.
 
       // ✅ Safety net: Sync canonical subscription state and clear pending initial checkout bridge.
@@ -4763,6 +4799,11 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         }
       }
     } else {
+      // `benefitsGranted` stays false, so this handler returns false and the queue row is
+      // marked FAILED for a backoff retry. Before 2026-08-24 this branch only logged and
+      // fell through, so a `{success:false}` grant was acked as permanently complete —
+      // half of RC-1. Retries are safe: `PaymentEvent._id = BenefitsGranted-invoice_<id>`
+      // is unique, so a re-run cannot double-grant.
       webhookLog("error", `Failed to process subscription benefits: ${result.error}`);
     }
 
@@ -4846,8 +4887,19 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         );
       }
     }
+
+    return benefitsGranted;
   } catch (error) {
     webhookLog("error", `Error processing invoice.payment_succeeded: ${error}`);
+    // If the grant already landed, the failure is in a post-grant best-effort step —
+    // swallow it and ACK, exactly as before. Re-throwing would un-ACK a paid, granted
+    // renewal and send it round the retry loop for nothing.
+    if (benefitsGranted) return true;
+    // Otherwise the member was charged and got nothing. Re-throw so the real error text
+    // (on 2026-08-23, Stripe's HTTP 429 from the inner rethrow at the subscriptions.retrieve
+    // catch) lands in the queue row's `lastError` and `markFailed()` schedules a retry.
+    // This catch used to swallow here, which is what made RC-1 invisible.
+    throw error;
   }
 }
 
@@ -5366,15 +5418,36 @@ async function _handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent)
 }
 
 /**
+ * Result of dispatching one Stripe event.
+ *
+ * The two flags are deliberately NOT the same question:
+ *
+ * - `shouldMarkAsProcessed` — write the `ProcessedStripeEvent` dedup row (the
+ *   payment-idempotency ACK). Only the money-moving events set it; the ~19 other
+ *   subscribed event types leave it `false` and that is normal, healthy success.
+ * - `handlerFailed` — the handler reported it did NOT complete its work (a renewal
+ *   whose entry grant did not land). The worker must `markFailed()` so the queue
+ *   retries with backoff instead of burying the failure as `succeeded`.
+ *
+ * Conflating them would dead-letter every non-payment event, so keep them separate.
+ */
+export interface StripeDispatchResult {
+  shouldMarkAsProcessed: boolean;
+  handlerFailed?: boolean;
+}
+
+/**
  * Dispatch a Stripe event to the appropriate handler. Equivalent to the
  * switch that used to live inside the webhook route, lifted out so the
  * async worker route can drive it without going through NextRequest.
  *
  * Returns shouldMarkAsProcessed so the caller can decide whether to call
- * ackProcessedStripeEventOnce for payment-idempotency purposes.
+ * ackProcessedStripeEventOnce for payment-idempotency purposes, plus
+ * handlerFailed so it can decide between markSucceeded() and markFailed().
  */
-export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ shouldMarkAsProcessed: boolean }> {
+export async function dispatchStripeEvent(event: Stripe.Event): Promise<StripeDispatchResult> {
   let shouldMarkAsProcessed = false;
+  let handlerFailed = false;
 
   switch (event.type) {
     case "payment_intent.succeeded":
@@ -5523,8 +5596,15 @@ export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ should
       // no benefits granted and no retry, so the silence is no longer safe.
       // Layer-4 PaymentEvent (`BenefitsGranted-invoice_<id>`) makes retries
       // idempotent — re-throwing here is correct.
-      await handleInvoicePaymentSucceeded(event.data.object);
-      shouldMarkAsProcessed = true;
+      //
+      // 2026-08-24: `shouldMarkAsProcessed = true` used to be hard-coded here, and the
+      // handler's outer catch swallowed everything, so the "let errors bubble" intent
+      // above was never realised — 11 members were charged $300.00 and got no entries,
+      // with the queue rows sitting at `succeeded`. The handler now REPORTS whether the
+      // grant landed; a `false` un-ACKs the event AND fails the row so it is retried.
+      const invoiceGranted = await handleInvoicePaymentSucceeded(event.data.object);
+      shouldMarkAsProcessed = invoiceGranted;
+      handlerFailed = !invoiceGranted;
       break;
 
     case "invoice.created":
@@ -5592,7 +5672,7 @@ export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ should
     // ✅ CRITICAL: Don't mark unhandled events as processed!
   }
 
-  return { shouldMarkAsProcessed };
+  return { shouldMarkAsProcessed, handlerFailed };
 }
 
 // Re-export helpers the receiver uses pre-cutover (sig verification path

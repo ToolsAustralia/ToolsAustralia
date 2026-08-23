@@ -1,5 +1,25 @@
 # Billing-Stripe — Gotchas
 
+## A webhook handler returning normally is NOT proof it did its work (2026-08-24)
+
+**A returned promise that did not reject means "no exception escaped" — nothing more.** `handleInvoicePaymentSucceeded` wrapped its entire ~1,400-line body in one `try` whose outer catch logged and returned normally, so `dispatchStripeEvent` reached its hard-coded `shouldMarkAsProcessed = true` and `processQueuedEvent` called `markSucceeded()` on the non-throwing path. A Stripe HTTP 429 mid-handler therefore produced: money captured, no entries granted, queue row `succeeded`, no retry, and no error visible to any automated check.
+
+**Cost:** during the anchor-24 renewal burst at 2026-08-23 14:00 UTC (914 renewals in one minute), **11 members were charged $300.00 in total and received nothing.** July's baseline for the same failure was 1 of 864 (0.12%); August was 1.62% — a 13× rise.
+
+**The second trap — acking closes the healing path.** Because `shouldMarkAsProcessed` was true, `ackProcessedStripeEventOnce` wrote a `ProcessedStripeEvent` row. That collection's `eventId` is **unique**, so replaying the event from the Stripe dashboard was rejected as already-processed. The standard "just replay it" recovery does not work on these; they need a backfill script. **When you skip a grant, never write the dedup row.**
+
+**Fix (both halves — either alone is insufficient):**
+1. `handleInvoicePaymentSucceeded` now returns `Promise<boolean>` — `true` only when the grant landed *or* the invoice legitimately grants nothing; `false` otherwise; and it **re-throws** when an exception killed an ungranted invoice so the real error text reaches the queue row's `lastError`.
+2. `processQueuedEvent` gates `markSucceeded()` on a new `handlerFailed` flag from `dispatchStripeEvent`.
+
+**Do not gate on `shouldMarkAsProcessed`.** It is a *different question* — "write the dedup row?" — and ~19 of the 21 subscribed event types legitimately leave it `false`. Gating `markSucceeded` on it would dead-letter almost the entire event surface. The two flags stay separate deliberately; see [STRIPE_WEBHOOK_QUEUE.md → The ACK gate](./STRIPE_WEBHOOK_QUEUE.md#the-ack-gate-added-2026-08-24-after-the-renewal-surge-incident) for the full return-contract table.
+
+**Un-acking is safe, but only because idempotency already existed.** `PaymentEvent._id = BenefitsGranted-invoice_<invoiceId>` is unique, so a retried `invoice.payment_succeeded` cannot double-grant. Before adding a retry path to any handler, confirm that handler has a comparable unique key — otherwise a retry storm becomes a double-grant storm.
+
+**Two branches must still ACK `true`, or you create an infinite retry loop:** the `isZeroAmountTrialUpdateInvoice` guard (Stripe's $0 trial-bookkeeping invoice, auto-created on every past-due reanchor / anchor-billing migration / join-anchor) and an unrecognised `billing_reason`. Both are legitimate "nothing to grant". Guarded by `npm run test:zero-trial-guard` and `npm run test:ack-gate` (case D).
+
+**Related still-open gap:** `payment_intent.succeeded` has the same shape — `handlePaymentSuccess` returns `false` for metadata defects, which un-acks the dedup row but still lets the queue row go `succeeded`. Deliberately left alone here: several of those `false` returns are defects no retry can fix, so gating them would dead-letter noisily. Needs its own decision.
+
 ## Confirm-time card declines are THROWN by the SDK, not returned (2026-07-16)
 
 With `confirm: true`, `stripe.paymentIntents.create` — and likewise `stripe.invoices.pay` and `stripe.subscriptions.update(payment_behavior: "error_if_incomplete")` — **reject with a `StripeCardError`** on an issuer decline instead of resolving with a failed intent. A branch that inspects `paymentIntent.last_payment_error` after `create()` resolves (both one-time-purchase routes have one) **never sees these declines** — they land in the catch block. Previously the generic catch-alls turned them into HTTP 500 with a generic message; production bug: `decline_code: invalid_account` → 500 "Failed to create one-time purchase".

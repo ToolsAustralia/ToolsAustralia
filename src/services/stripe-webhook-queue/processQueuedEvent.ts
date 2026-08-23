@@ -5,6 +5,7 @@ import { markFailed, markSucceeded } from "@/services/stripe-webhook-queue/markR
 import {
   ackProcessedStripeEventOnce,
   dispatchStripeEvent,
+  type StripeDispatchResult,
 } from "@/services/stripe-webhook-handlers";
 
 export interface ProcessQueuedEventResult {
@@ -14,7 +15,7 @@ export interface ProcessQueuedEventResult {
 }
 
 interface ProcessDeps {
-  dispatch: (event: Stripe.Event) => Promise<{ shouldMarkAsProcessed: boolean }>;
+  dispatch: (event: Stripe.Event) => Promise<StripeDispatchResult>;
 }
 
 const defaultDeps: ProcessDeps = { dispatch: dispatchStripeEvent };
@@ -49,7 +50,24 @@ export async function processQueuedEvent(
   }
 
   try {
-    const { shouldMarkAsProcessed } = await deps.dispatch(payload);
+    const { shouldMarkAsProcessed, handlerFailed } = await deps.dispatch(payload);
+
+    // ACK GATE (2026-08-24). A handler that returns normally is not automatically a
+    // success: `handlerFailed` means it ran to completion but did NOT do its work — a
+    // renewal whose entry grant never landed. Marking that row `succeeded` is what let
+    // 11 members be charged $300.00 with no entries and no retry on 2026-08-23.
+    //
+    // Gate on `handlerFailed`, NOT on `shouldMarkAsProcessed`: the latter only asks
+    // "write the ProcessedStripeEvent dedup row?", and ~19 of the 21 subscribed event
+    // types legitimately leave it false. Gating on it would dead-letter all of them.
+    //
+    // Never ACK an ungranted event into ProcessedStripeEvent either — that unique row
+    // is precisely what blocks a later Stripe replay from healing the member.
+    if (handlerFailed) {
+      await markFailed(eventId, "handler reported grant did not complete");
+      return { processed: false, error: "not_granted" };
+    }
+
     if (shouldMarkAsProcessed) {
       await ackProcessedStripeEventOnce(payload);
     }

@@ -24,6 +24,7 @@ Stripe → POST /api/stripe/webhook  (receiver, maxDuration: 60s)
             ├─ claimNextAttempt(eventId)        ← atomic queued → processing
             ├─ ProcessedStripeEvent short-circuit → markSucceeded, skipped "already_processed"
             ├─ dispatchStripeEvent(payload)     ← runs the lifted handler
+            ├─ ACK GATE: handlerFailed? → markFailed, NO ack   ← never bury an ungranted renewal
             ├─ ackProcessedStripeEventOnce(payload)  if handler flagged it
             ├─ markSucceeded on success
             └─ markFailed on error  → attempts++, backoff or dead
@@ -135,12 +136,43 @@ real handler — production always uses the default `dispatchStripeEvent`.)
 **Flow:**
 1. `claimNextAttempt(eventId)` — atomic `queued → processing`. If not claimable (already processing, or no such row), returns `{ processed: false, skipped: "not_claimable" }`.
 2. **Relocated layer-2 dedup:** `ProcessedStripeEvent.findOne({ eventId: payload.id })`. Stripe dashboard *resends* carry a fresh `event.id` and bypass enqueue idempotency, so this short-circuit must run on the processing path (it used to be inline at the receiver). If already processed → `markSucceeded(eventId)`, return `{ processed: false, skipped: "already_processed" }`.
-3. `dispatchStripeEvent(payload)` → `{ shouldMarkAsProcessed }`.
-4. If `shouldMarkAsProcessed`, `ackProcessedStripeEventOnce(payload)`.
-5. `markSucceeded(eventId)`, return `{ processed: true }`.
-6. On any throw: `markFailed(eventId, message)` (attempts++, backoff or dead), return `{ processed: false, error: message }`.
+3. `dispatchStripeEvent(payload)` → `{ shouldMarkAsProcessed, handlerFailed }`.
+4. **ACK GATE** — if `handlerFailed`, `markFailed(eventId, "handler reported grant did not complete")` and return `{ processed: false, error: "not_granted" }`. No `ProcessedStripeEvent` row is written.
+5. If `shouldMarkAsProcessed`, `ackProcessedStripeEventOnce(payload)`.
+6. `markSucceeded(eventId)`, return `{ processed: true }`.
+7. On any throw: `markFailed(eventId, message)` (attempts++, backoff or dead), return `{ processed: false, error: message }`.
 
-**The four-result shape:** `{processed:true}` (handled), `{skipped:"not_claimable"}` (another worker/claim won the row), `{skipped:"already_processed"}` (resend of a done event), `{error}` (handler threw — row already scheduled for retry). Callers never throw on a failed event; the queue row owns retry state.
+**The five-result shape:** `{processed:true}` (handled), `{skipped:"not_claimable"}` (another worker/claim won the row), `{skipped:"already_processed"}` (resend of a done event), `{error:"not_granted"}` (handler ran but did not do its work — row scheduled for retry), `{error}` (handler threw — row already scheduled for retry). Callers never throw on a failed event; the queue row owns retry state.
+
+## The ACK gate (added 2026-08-24 after the renewal-surge incident)
+
+**A handler that returns normally is not automatically a success.** `dispatchStripeEvent` returns two flags that answer *different* questions, and conflating them is a production incident in either direction:
+
+| Flag | Question | Who sets it |
+|---|---|---|
+| `shouldMarkAsProcessed` | Write the `ProcessedStripeEvent` dedup row (the payment-idempotency ACK)? | Only the money-moving events. ~19 of the 21 subscribed event types leave it `false`, and that is **healthy success**. |
+| `handlerFailed` | Did the handler run to completion but *not do its work* — e.g. a renewal whose entry grant never landed? | `invoice.payment_succeeded` only, from `handleInvoicePaymentSucceeded`'s return value. |
+
+**Gate `markSucceeded` on `handlerFailed`, never on `shouldMarkAsProcessed`.** Gating on the latter would dead-letter every `invoice.created`, `customer.subscription.updated`, `charge.refunded`… i.e. almost the whole event surface. `ack-gate.test.ts` case B pins this specifically.
+
+**What it prevents.** On 2026-08-23 14:00 UTC (anchor-24 renewal burst), Stripe returned HTTP 429 inside `handleInvoicePaymentSucceeded`. Its outer catch swallowed the error and returned normally; the dispatcher's hard-coded `shouldMarkAsProcessed = true` then acked it, and `processQueuedEvent` called `markSucceeded` unconditionally. **11 members were charged $300.00 in total, received no entries, and the queue rows read `succeeded`.** Worse, the `ProcessedStripeEvent` row that got written is unique-indexed, so a later Stripe replay was rejected — the standard healing path was closed off. Both halves are now fixed: the handler reports grant success, and the worker honours it.
+
+**Retries are safe.** `PaymentEvent._id = BenefitsGranted-invoice_<invoiceId>` is unique, so a retried `invoice.payment_succeeded` cannot double-grant. That is what makes un-acking the correct response rather than a double-charge risk.
+
+**`handleInvoicePaymentSucceeded` return contract** (`src/services/stripe-webhook-handlers/index.ts`):
+
+| Outcome | Returns | Why |
+|---|---|---|
+| Grant succeeded (`processPaymentBenefits` → `{success:true}`) | `true` | Work done. |
+| `isZeroAmountTrialUpdateInvoice` — Stripe's $0 trial-bookkeeping invoice | `true` | **Legitimate "nothing to grant."** Un-acking it would spin an infinite retry → dead-letter loop on every past-due reanchor / anchor-billing migration / join-anchor. Pinned by `test:zero-trial-guard` and `ack-gate.test.ts` case D. |
+| No subscription id (invoice, pending, or canonical) | `true` | Not a membership subscription invoice — there is nothing to grant, and a retry resolves to the same nothing. |
+| Unrecognised `billing_reason` | `true` | Explicit classification: this invoice type grants nothing. |
+| `processPaymentBenefits` → `{success:false}` | `false` | Previously only logged and fell through — half of RC-1. |
+| Missing `packageId` / unknown package / customer mismatch / non-manageable subscription status / user not found / no customer on invoice | `false` | Money collected, nothing granted. Must surface as a queue failure, not vanish. |
+| An exception, and no grant had landed yet | **throws** | So the real error text (e.g. Stripe's 429) reaches the row's `lastError`, instead of a generic message. |
+| An exception *after* the grant landed (affiliate commission, Klaviyo, endDate sync) | `true` | The entries are already granted; un-acking would retry a completed renewal for nothing. The handler tracks this with a `benefitsGranted` flag read by the outer catch. |
+
+**Test:** `npm run test:ack-gate` (`src/services/stripe-webhook-queue/__tests__/ack-gate.test.ts`). Cases A/B drive the `deps` seam; **C and D drive the real dispatcher and handler** with only `stripe.invoices.retrieve` stubbed, so they pin production wiring rather than the mock.
 
 ## Sweeper Route
 

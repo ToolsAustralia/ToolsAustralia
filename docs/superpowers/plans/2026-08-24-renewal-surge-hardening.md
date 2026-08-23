@@ -279,6 +279,24 @@ return { processed: false, error: "not_granted" };
 
 **Widen `ProcessDeps.dispatch` at `:17` if the return shape changes**, or `defaultDeps` at `:20` fails `tsc`.
 
+> **Corrected 2026-08-24 during implementation — the snippet above is NOT what shipped.** Gating
+> `markSucceeded` on `shouldMarkAsProcessed` would have dead-lettered almost the entire event
+> surface: `shouldMarkAsProcessed` is initialised `false` at `index.ts:5429` and only the
+> money-moving cases ever set it, so ~19 of the 21 subscribed event types (`invoice.created`,
+> `customer.subscription.updated`, `charge.refunded`, …) legitimately return `false` on a fully
+> successful run. The pre-existing `processQueuedEvent.test.ts` case (a) encodes exactly that
+> contract. The two flags answer different questions, so `dispatchStripeEvent` now returns
+> `{ shouldMarkAsProcessed, handlerFailed }` (exported as `StripeDispatchResult`) and the worker
+> gates on **`handlerFailed`**, which only `invoice.payment_succeeded` sets. `ack-gate.test.ts`
+> case B pins the non-payment path against this regression.
+>
+> Two further deviations, both deliberate: (1) the handler **re-throws** when an exception killed an
+> ungranted invoice, so the real error text (Stripe's 429) reaches the row's `lastError` instead of
+> a generic string — while an exception *after* the grant landed is still swallowed and acked, so a
+> failing best-effort step cannot un-ack completed entries; (2) `payment_intent.succeeded` is
+> deliberately left unchanged (out of Task 2's scope, and several of its `false` returns are
+> metadata defects no retry can fix). See `docs/billing-stripe/STRIPE_WEBHOOK_QUEUE.md → The ACK gate`.
+
 - [ ] **Step 5: Run the test and verify it passes**
 
 Run: `npx tsx src/services/stripe-webhook-queue/__tests__/ack-gate.test.ts` → PASS
