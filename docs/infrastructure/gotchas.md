@@ -147,11 +147,10 @@ owns the decision. Prefer this for any new time-sensitive cron.
 
 It never refunds. `miniDrawId` is unrecoverable for a stranded row (the metadata never held it), so the intended draw cannot be inferred — remediation is a human decision, and the script says so in its exit message.
 
-## `backfill:missing-renewal-grants` — a prod-targeting ops script, and the two things it must get right (2026-08-23)
+
+## `backfill:missing-renewal-grants` — the five guards a prod-writing ops script needs (2026-08-23)
 
 `scripts/backfill-missing-renewal-grants.ts` credits renewals that were charged but granted nothing (defect: [billing-stripe/gotchas.md](../billing-stripe/gotchas.md); detection rationale: [draws/gotchas.md](../draws/gotchas.md)).
-
-**npm entries** (`:dry` variants are the default-safe ones):
 
 ```bash
 npm run backfill:missing-renewal-grants:dry           # local/dev DB, report only
@@ -159,8 +158,18 @@ npm run backfill:missing-renewal-grants:prod:dry      # PRODUCTION, report only
 npm run backfill:missing-renewal-grants:prod -- --expect=11   # PRODUCTION, WRITES
 ```
 
-**Prod targeting follows the `--production` → `.env.production` convention** already used by `backfill:missing-refunds:prod` — *and* forces the database name through `injectDbName()` from [`scripts/connect-ops-db.ts`](../../scripts/connect-ops-db.ts). This is not belt-and-braces: the prod Atlas string may carry no `/<dbName>` path, and a bare connect then lands on an empty `test` DB. For a script whose whole job is counting absences, that failure mode reports **"0 gaps — all clear"** and looks like success. Every prod-targeting audit script must pin the DB name for the same reason. The startup banner prints `PRODUCTION · db="Production" @ <host>` — no connection string, ever.
+Each guard below exists because its absence was a live footgun, not for symmetry. Reuse the set when writing the next prod-writing script.
 
-**Exit codes:** `0` clean · `2` gaps found (dry-run) or per-row errors/skips (apply) · `3` fatal, or the `--expect` guard tripped before any write · `1` unhandled. The `--expect=N` guard aborts before writing if the derived set is not exactly N rows — cheap insurance against granting on a set that moved between review and apply.
+**1. `--dry-run` beats `--apply`.** The `:prod` npm entry already contains `--apply`, so `npm run …:prod -- --dry-run` — the exact thing muscle memory types — would otherwise perform a **live production write** while the operator believed they were dry-running. `--dry-run` now wins unconditionally and says so in a banner and in the summary. **If an npm entry bakes in a destructive flag, the safety flag must override it, not sit beside it.**
 
-**CSV audit** lands in `temp/` (gitignored), append-mode, one row flushed per record so a crash still leaves the trail.
+**2. Apply requires an explicit `--expect=N`** and refuses if the derived set is a different size. Baking `11` into `package.json` would rot the moment the incident closed; requiring the operator to restate the number they just reviewed does not.
+
+**3. Lifecycle pre-flight.** The grant path (`grantBenefits` → `handleSubscriptionPackage`) unconditionally `$set`s `subscription.isActive: true` / `status: "active"` and `$unset`s `cancelledAt`. That is harmless when the webhook does it at charge time and **actively destructive days later** — it would erase a cancellation the member made after being charged, while Stripe still holds `cancel_at_period_end`. The script prints every target's lifecycle state and refuses to apply if any is cancelled/paused/inactive, unless `--allow-lifecycle-change`. **A backfill replays a code path outside the time window it was written for; re-read every unconditional write in that path with "…but days later" in mind.**
+
+**4. The prod DB name is pinned** via `injectDbName()` from [`scripts/connect-ops-db.ts`](../../scripts/connect-ops-db.ts). The prod Atlas string may carry no `/<dbName>` path, and a bare connect then lands on an empty `test` DB. For a script whose whole job is counting *absences*, that reports **"0 gaps — all clear"** and looks like success. The banner prints `PRODUCTION · db="Production" @ <host>` — never the connection string.
+
+**5. The CSV audit uses `appendFileSync`, not a `WriteStream`.** A stream's `write()` buffers; every `process.exit` path can drop the tail. `appendFileSync` puts the row on disk before the next row is touched. At ops-script row counts the cost is irrelevant and the guarantee is absolute.
+
+**Exit codes:** `0` clean · `2` gaps found (dry-run) or per-row errors/skips/SIGINT-abort (apply) · `3` fatal or a guard refused · `1` unhandled.
+
+**Why it also reads Stripe.** The Mongo join alone has a structural blind spot — `MembershipRenewalCycle` is written by the same handler that failed, after its first Stripe call, and only for `billing_reason=subscription_cycle`. A second pass lists paid Stripe invoices in the window and checks each against `PaymentEvent`, which is the only anchor that cannot lie by omission. Pass 2 is report-only; non-cycle invoices have different entry maths and are never auto-granted. Disable with `--no-stripe-check` (the script then says the count may understate the damage).
