@@ -146,3 +146,21 @@ owns the decision. Prefer this for any new time-sensitive cron.
 **Exit codes:** `0` clean · `1` stranded payments found · `2` the script itself failed. CSV to **stdout**, progress and summary to **stderr**, so `> findings.csv` yields a clean file.
 
 It never refunds. `miniDrawId` is unrecoverable for a stranded row (the metadata never held it), so the intended draw cannot be inferred — remediation is a human decision, and the script says so in its exit message.
+
+## `backfill:missing-renewal-grants` — a prod-targeting ops script, and the two things it must get right (2026-08-23)
+
+`scripts/backfill-missing-renewal-grants.ts` credits renewals that were charged but granted nothing (defect: [billing-stripe/gotchas.md](../billing-stripe/gotchas.md); detection rationale: [draws/gotchas.md](../draws/gotchas.md)).
+
+**npm entries** (`:dry` variants are the default-safe ones):
+
+```bash
+npm run backfill:missing-renewal-grants:dry           # local/dev DB, report only
+npm run backfill:missing-renewal-grants:prod:dry      # PRODUCTION, report only
+npm run backfill:missing-renewal-grants:prod -- --expect=11   # PRODUCTION, WRITES
+```
+
+**Prod targeting follows the `--production` → `.env.production` convention** already used by `backfill:missing-refunds:prod` — *and* forces the database name through `injectDbName()` from [`scripts/connect-ops-db.ts`](../../scripts/connect-ops-db.ts). This is not belt-and-braces: the prod Atlas string may carry no `/<dbName>` path, and a bare connect then lands on an empty `test` DB. For a script whose whole job is counting absences, that failure mode reports **"0 gaps — all clear"** and looks like success. Every prod-targeting audit script must pin the DB name for the same reason. The startup banner prints `PRODUCTION · db="Production" @ <host>` — no connection string, ever.
+
+**Exit codes:** `0` clean · `2` gaps found (dry-run) or per-row errors/skips (apply) · `3` fatal, or the `--expect` guard tripped before any write · `1` unhandled. The `--expect=N` guard aborts before writing if the derived set is not exactly N rows — cheap insurance against granting on a set that moved between review and apply.
+
+**CSV audit** lands in `temp/` (gitignored), append-mode, one row flushed per record so a crash still leaves the trail.

@@ -499,3 +499,28 @@ the cooldown policy is `shouldCooldownForExcessiveRetry` in
 **Historical check:** `npm run find:stranded-mini-draw-payments` — read-only, scans Stripe for captured mini-draw PaymentIntents with no `miniDrawId` and cross-checks `PaymentEvent{BenefitsGranted}` + `users.miniDrawPackages.stripePaymentIntentId` to prove whether anything was granted. Expected result is zero: no live UI ever posted a mini id to those routes.
 
 **Still latent, watch it:** `MembershipModal` carries seven live `activePlan.id.startsWith("mini-pack-")` branches that feed these routes. Nothing sets such an `activePlan.id` today, and the server guard now neutralises them — but they are why this was worth sealing rather than documenting.
+
+## A swallowed Stripe error still acks the event — charged, marked succeeded, granted nothing (2026-08-23)
+
+The 24 Aug anchor-24 renewal burst (~914 renewals in one minute) rate-limited our Stripe fan-out. **11 members were charged $300.00 in total and got no entries.**
+
+**The hole.** `handleInvoicePaymentSucceeded` ([`stripe-webhook-handlers/index.ts`](../../src/services/stripe-webhook-handlers/index.ts)) wraps its entire body in a single `try`. An inner catch rethrows, but the **outer catch swallows and returns normally**. The dispatcher then sets `shouldMarkAsProcessed = true`; [`processQueuedEvent`](../../src/services/stripe-webhook-queue/processQueuedEvent.ts) writes `ProcessedStripeEvent` and calls `markSucceeded`. `markFailed` never runs, so the queue's retry machinery — which would have fixed this by itself — is never engaged.
+
+There is a second way in: the `if (result.success)` branch around the `processPaymentBenefits` call **does** have an else, but it only `webhookLog("error", …)`s — it neither rethrows nor signals failure upward, so a `{success: false}` return is acked exactly like a swallowed throw. (A logged failure is not a handled one.) The `payment_intent` path gets this right — it returns `result.success` so the event is not acked. Compare the two before touching either.
+
+**Consequences that make it hard to spot:**
+- `stripewebhookqueue` shows `succeeded`. `ProcessedStripeEvent` holds the id, so a replay is refused as a duplicate.
+- `MembershipRenewalCycle` shows `status: "succeeded"` — the money is real.
+- **No `PaymentEvent` is written**, so every ledger-anchored reconciler is blind (see [draws/gotchas.md](../draws/gotchas.md)).
+
+**Auditing for it.** Anchor on the charge record, not the ledger:
+
+```bash
+npm run backfill:missing-renewal-grants:prod:dry     # read-only; exit 2 means gaps exist
+```
+
+`scripts/backfill-missing-renewal-grants.ts` left-joins `MembershipRenewalCycle{succeeded, subscription_cycle}` against `PaymentEvent._id = BenefitsGranted-invoice_<invoiceId>` and reports the absences. `--apply` grants through the normal `processPaymentBenefits` path (so the `PaymentEvent`, accumulators and draw credit are created exactly as the webhook would have), passing the **original** `succeededAt` so draw routing lands the right month, then sets `subscription.lastMonthAccumulatedEntries` the way the handler does after a successful grant — omit that and the *next* renewal accumulates from a stale baseline and under-grants. `--expect=N` refuses to write unless the derived gap set is exactly N rows.
+
+**Not covered by the backfill:** the affiliate *recurring* commission is a separate webhook step; use `backfill:affiliate-recurring-commissions:all:dry` for those invoices.
+
+**When editing this handler:** an error inside it must reach `markFailed`. Bounded queue attempts plus dead-lettering already exist — letting the error through is what turns a lost grant into a retried one.
