@@ -189,3 +189,75 @@ Per-page cost is bounded — independent of the date-window size.
 **Why `console.error`, not `ErrorReport`.** `ErrorReport` is for user-submitted toast errors (a different abstraction). System-monitoring drift uses console.error, which Vercel's log drains pick up.
 
 **Unit-tested helper.** `computeDriftRatio` is exported and covered by `npm run test:reconcile-drift` ([src/app/api/cron/reconcile-blocked-transactions/__tests__/computeDriftRatio.test.ts](../../src/app/api/cron/reconcile-blocked-transactions/__tests__/computeDriftRatio.test.ts)) — both-zero, perfect-match, mongo-only, stripe-only, ±20% drift, and 100% drift cases.
+
+## Renewal-grant reconciliation — the paid-but-not-granted detector (2026-08-24)
+
+[src/services/reconciliation/renewalGrantReconciler.ts](../../src/services/reconciliation/renewalGrantReconciler.ts), surfaced by [src/app/api/cron/reconcile-renewal-grants/route.ts](../../src/app/api/cron/reconcile-renewal-grants/route.ts).
+
+### Why this one is not redundant with the others
+
+Every other check in the repo starts from a `BenefitsGranted` `PaymentEvent`:
+
+| Check | Anchor | Can it see a renewal with no `PaymentEvent`? |
+|---|---|---|
+| `reconcileActiveMajorDrawEntries` ([src/utils/draws/reconcile-major-draw-entries.ts](../../src/utils/draws/reconcile-major-draw-entries.ts)) | `PaymentEvent.find({eventType:"BenefitsGranted"})` with empty `data.grants.drawGrants` | **No** |
+| `scripts/fix-major-draw-renewal-entries.ts` | same | **No** |
+| `scripts/verify-major-draw-entries.ts` | same | **No** |
+| `reconcile-blocked-transactions` | `BlockedTransaction` vs Stripe blocked charges | **No** — different failure entirely |
+| **`renewalGrantReconciler`** | **`MembershipRenewalCycle` — the paid invoice** | **Yes** |
+
+They heal a grant row that exists but is incomplete. A renewal that died *before* writing one has no grant row, so it is not even a candidate. That is RC-2 of the [renewal-surge design](../superpowers/specs/2026-08-24-renewal-surge-hardening-design.md), and it is why 11 members charged $300.00 on 2026-08-23 were invisible to every automated check we had.
+
+### The join
+
+```
+MembershipRenewalCycle { createdAt in [since, until), status: "succeeded",
+                         billingReason: "subscription_cycle" }
+  LEFT JOIN PaymentEvent on _id == "BenefitsGranted-invoice_" + stripeInvoiceId
+  WHERE the PaymentEvent is absent
+```
+
+Run as one aggregation: `$addFields` computes the grant `_id`, `$lookup` point-reads `paymentevents._id`, `$match { grant: { $size: 0 } }` keeps the misses. The `_id` is deterministic — `benefitsGrantedEventId("invoice_" + invoiceId)` ([src/types/payment-ledger.ts](../../src/types/payment-ledger.ts)), matching what the handler writes at [index.ts:3536-3537](../../src/services/stripe-webhook-handlers/index.ts) and what `processPaymentBenefits` writes at [payment-processing.ts:327](../../src/utils/payment/payment-processing.ts). Reuse that helper rather than re-typing the prefix — a drift of one character silently returns "everything is a gap".
+
+`status: "succeeded"` excludes `failed` and `refunded` cycles: neither is money we kept.
+
+### Mongo-only — deliberate, with a stated limit
+
+**No Stripe call per row.** `MembershipRenewalCycle` is written straight from Stripe's invoice payload, so the paid set is already local; a per-row round-trip would reintroduce the API fan-out that *caused* the incident (RC-3: 182 req/s against a 100 req/s account cap). A controller-run reconciliation on 2026-08-23 measured the anchor as complete for that window: Stripe reported **688** paid `subscription_cycle` invoices, Mongo held **693** cycle rows, and **zero** Stripe-paid invoices lacked a cycle row.
+
+**The limit, stated plainly:** the cycle row is written by the *same handler that can fail* — [index.ts:3685](../../src/services/stripe-webhook-handlers/index.ts), **after** its first Stripe call at `:3507`. A failure between those two points leaves no cycle row, and this reconciler cannot see it. For ad-hoc audits, `scripts/backfill-missing-renewal-grants.ts` (Phase 0) carries an optional Stripe-side pass that closes that hole. The daily cron accepts the gap in exchange for staying off Stripe's limiter. See [gotchas.md](./gotchas.md#the-renewal-grant-reconciler-has-exactly-one-blind-spot-2026-08-24).
+
+### Settle margin — why a gap is not reported immediately
+
+`until` defaults to **now − 8 hours**, `since` to `until − 48 hours`.
+
+The webhook queue's full retry ladder is `0 + 1m + 5m + 15m + 1h + 6h = 7h21m` from first attempt to last (`BACKOFF_SCHEDULE_MS`, [src/services/stripe-webhook-queue/backoff.ts](../../src/services/stripe-webhook-queue/backoff.ts)). A renewal younger than that may be legitimately mid-retry — reporting it would make the alert cry wolf, which is precisely how a real alert gets ignored. 8h clears the ladder with margin. The 48h lookback means each burst is inspected by two consecutive runs, so one failed run does not create a hole.
+
+At the `40 3 * * *` schedule the window is roughly `[D−3 19:40, D−1 19:40)`, which contains both of the last two 14:00 UTC renewal bursts.
+
+### Dead webhook rows — reported, not windowed
+
+The same run reports every `stripewebhookqueue` row in `dead`. Before the 2026-08-24 ACK gate a silently-failing handler was ACKed as a success, so `dead` was barely reachable; the gate made it reachable for six previously-silent paths (missing `packageId`, unknown package, customer mismatch, non-manageable subscription status, user not found, no customer) and **four of those cannot self-heal**. Deliberately **not** windowed: ageing a dead row out of the alert after 48h would rebuild the same blind spot in a new place. The alert persists until the row is replayed/deleted or the 30-day TTL drops it.
+
+The listing is capped at 50 rows; `deadCount` is never capped.
+
+### Read-only by design
+
+The cron writes nothing to Mongo and calls Stripe not at all. Healing is a deliberate human step (`scripts/backfill-missing-renewal-grants.ts`) because a grant carries a **draw-routing timestamp** — `paymentMetadata.created` decides which major draw the entries land in ([payment-processing.ts](../../src/utils/payment/payment-processing.ts)) — and a blind auto-heal run at 03:40 would credit the wrong draw for anything charged before a freeze.
+
+### Auth fails CLOSED
+
+Most sibling crons do `if (!cronSecret) return true`, leaving the endpoint open whenever the env var is missing. This one refuses instead, matching [charge-past-due](../../src/app/api/cron/charge-past-due/route.ts):
+
+```ts
+const secret = process.env.CRON_SECRET;
+if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+```
+
+### Where it logs
+
+Findings go to **`console.error`** on two greppable prefixed lines —
+`[reconcile-renewal-grants] PAID BUT NOT GRANTED: <n> renewal(s), <cents> cents, window …` and
+`[reconcile-renewal-grants] DEAD WEBHOOK ROWS: <n> — …`. Production builds strip `console.log/info/debug/warn` (`next.config.ts` `compiler.removeConsole`), so anything logged below `error` would be invisible in Vercel. The clean-run `OK` line is `console.log` and therefore dev-only; the JSON response carries the same numbers for a manual check.

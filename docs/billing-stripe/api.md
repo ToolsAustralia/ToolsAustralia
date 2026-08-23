@@ -55,6 +55,40 @@ Both one-time routes **reject mini-draw catalogue ids** (`mini-pack-1..8`, `addi
 
 > _TODO: read each handler to fill in exact auth requirements, request/response shapes, and error codes. Currently the routes are inventoried but not fully spec-documented._
 
+## Cron routes owned by this domain
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/cron/process-stripe-webhook-queue` | Bearer `CRON_SECRET` (**fails open** when unset) | Sweeps orphans + dispatches due queue rows — see [STRIPE_WEBHOOK_QUEUE.md](./STRIPE_WEBHOOK_QUEUE.md) |
+| GET | `/api/cron/reconcile-blocked-transactions` | Bearer `CRON_SECRET` | 48h `BlockedTransaction` vs Stripe drift + self-heal — see [architecture.md](./architecture.md#reconciliation-cron--phase-d) |
+| GET | `/api/cron/reconcile-renewal-grants` | Bearer `CRON_SECRET` (**fails CLOSED**) | `40 3 * * *`. Detects renewals Stripe was paid for whose entry grant never landed, plus every `dead` webhook-queue row. Read-only — no Mongo write, no Stripe call. See [architecture.md](./architecture.md#renewal-grant-reconciliation--the-paid-but-not-granted-detector-2026-08-24) |
+
+### `GET /api/cron/reconcile-renewal-grants`
+
+`200` response:
+
+```jsonc
+{
+  "success": true,
+  "since": "2026-08-21T19:40:00.000Z",   // now − 8h − 48h
+  "until": "2026-08-23T19:40:00.000Z",   // now − 8h (settle margin)
+  "ungranted": [
+    { "stripeInvoiceId": "in_…", "userId": "…", "amountPaidCents": 2000, "chargedAt": "…" }
+  ],
+  "ungrantedCount": 1,
+  "ungrantedCents": 2000,
+  "dead": [
+    { "eventId": "evt_…", "type": "invoice.payment_succeeded", "attempts": 6, "lastError": "…", "diedAt": "…" }
+  ],
+  "deadCount": 1,
+  "durationMs": 963
+}
+```
+
+`401 { "error": "Unauthorized" }` when `CRON_SECRET` is unset **or** the Bearer token does not match. `500 { "success": false, "error": … }` on an unexpected failure.
+
+The service behind it, [`renewalGrantReconciler`](../../src/services/reconciliation/renewalGrantReconciler.ts), also exports `findUngrantedRenewals(since, until)` and `findDeadWebhookEvents(limit?)` for ops scripts that need an arbitrary window — use those rather than re-deriving the join, so there is only ever one definition of "ungranted".
+
 ## Cross-domain admin routes
 
 These live under `/api/admin/**` (in the [admin](../admin/) domain) but are tightly coupled to Stripe:

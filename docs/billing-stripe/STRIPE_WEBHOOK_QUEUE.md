@@ -270,6 +270,20 @@ removed from the synchronous webhook path, and
 | `npm run test:webhook-queue-replay-safe` | No double-grant on replay |
 | `npm run test:webhook-queue-orphan-recovery` | Orphan rows are recovered |
 
+## Dead rows are alerted on (added 2026-08-24)
+
+The ACK gate made `dead` reachable for six previously-silent failure paths — missing `packageId`, unknown package, customer mismatch, non-manageable subscription status, user not found, no customer — and **four of them cannot self-heal**. A dead row nobody looks at is the same blind spot the gate was built to close, just relocated.
+
+[`/api/cron/reconcile-renewal-grants`](../../src/app/api/cron/reconcile-renewal-grants/route.ts) (`40 3 * * *`) therefore reports every dead row alongside its renewal-gap findings, on one greppable `console.error` line:
+
+```
+[reconcile-renewal-grants] DEAD WEBHOOK ROWS: <n> — [{"eventId":…,"type":…,"attempts":…,"lastError":…,"diedAt":…}]
+```
+
+**Not windowed, on purpose.** Ageing a dead row out of the alert after N hours would let an unhealed one go quiet. The alert persists until the row is replayed/deleted (playbook below) or the 30-day TTL drops it — so in steady state the count is zero and any non-zero number is an action item. The listing caps at 50 rows; the count never caps.
+
+`diedAt` prefers `processedAt` and falls back to `updatedAt`, because the sweeper's orphan branch marks a row `dead` **without** setting `processedAt` (the same omission described in [Backfilling `processedAt` on dead rows](#backfilling-processedat-on-dead-rows) — which also means those rows never TTL out).
+
 ## Operational playbook
 
 **A user reports missing benefits after a successful Stripe charge:**

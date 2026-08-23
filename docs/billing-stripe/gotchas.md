@@ -28,6 +28,26 @@ The 24 Aug incident died *upstream* of `processPaymentBenefits`, so the ACK gate
 
 **Related still-open gap:** `payment_intent.succeeded` has the same shape — `handlePaymentSuccess` returns `false` for metadata defects, which un-acks the dedup row but still lets the queue row go `succeeded`. Deliberately left alone here: several of those `false` returns are defects no retry can fix, so gating them would dead-letter noisily. Needs its own decision.
 
+## The renewal-grant reconciler has exactly one blind spot (2026-08-24)
+
+`/api/cron/reconcile-renewal-grants` is the net for "charged but never granted", and it is genuinely the only detector we have for that shape ([architecture.md](./architecture.md#renewal-grant-reconciliation--the-paid-but-not-granted-detector-2026-08-24)). But **it is anchored on `MembershipRenewalCycle`, which is written by the same handler that can fail.**
+
+`handleInvoicePaymentSucceeded` writes the cycle row at [index.ts:3685](../../src/services/stripe-webhook-handlers/index.ts) — **after** its first Stripe call at `:3507`. So:
+
+| Where the renewal dies | Cycle row? | Grant row? | Reconciler sees it? |
+|---|---|---|---|
+| After the cycle write, before the grant | yes | no | **yes** — this is the 24 Aug shape |
+| Between `:3507` and `:3685` (e.g. a 429 on `invoices.retrieve`) | **no** | no | **no** |
+| Before the event is even enqueued (RC-4's HTTP 500s) | no | no | no — but Stripe redelivers, so it self-heals |
+
+The middle row is the hole. It is narrow (one Stripe call wide) and, since the ACK gate landed, such an event now **retries** and eventually dead-letters — which the same cron reports separately as a `dead` row. So the two signals together cover it in practice: no cycle row *and* a dead `invoice.payment_succeeded` row is the tell.
+
+**Do not "fix" this by adding a per-row Stripe call to the cron.** That is RC-3 — the API fan-out that caused the incident (182 req/s against a 100 req/s account cap). For an ad-hoc audit that must be Stripe-complete, use `scripts/backfill-missing-renewal-grants.ts`'s optional Stripe-side pass, which walks Stripe's paid `subscription_cycle` invoices directly. The right permanent fix is to move the cycle write ahead of the first Stripe call — a separate change with its own idempotency analysis.
+
+**Also on the reconciler:** the `createdAt` range is **not** index-backed (`membershiprenewalcycles` indexes `stripeInvoiceId`, `userId`, `stripeSubscriptionId`, `status`, `dueAt`, `{dueAt,billingReason,status}`, `{userId,dueAt}` — none lead with `createdAt`). At current volume the daily scan is cheap; if the collection passes a few hundred thousand rows, add `{ status: 1, createdAt: -1 }` rather than widening the window.
+
+**Do not switch the window to `dueAt` to get an index.** `dueAt` is the invoice's `period_end`, not when it was charged — a renewal's `dueAt` sits a month away from the money moving, so the window would select the wrong invoices entirely.
+
 ## Confirm-time card declines are THROWN by the SDK, not returned (2026-07-16)
 
 With `confirm: true`, `stripe.paymentIntents.create` — and likewise `stripe.invoices.pay` and `stripe.subscriptions.update(payment_behavior: "error_if_incomplete")` — **reject with a `StripeCardError`** on an issuer decline instead of resolving with a failed intent. A branch that inspects `paymentIntent.last_payment_error` after `create()` resolves (both one-time-purchase routes have one) **never sees these declines** — they land in the catch block. Previously the generic catch-alls turned them into HTTP 500 with a generic message; production bug: `decline_code: invalid_account` → 500 "Failed to create one-time purchase".
