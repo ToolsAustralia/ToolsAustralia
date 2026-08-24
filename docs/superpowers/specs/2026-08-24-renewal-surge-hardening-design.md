@@ -204,6 +204,22 @@ Removing the three avoidable `/v1/subscriptions` calls takes that endpoint from 
 **Chosen:** do both. Call removal fixes the bucket that fired; the shared token bucket is what
 keeps the system correct at 2,000 renewals as well as 900.
 
+*(Corrected 2026-08-24, during Task 6's review.) The second half of that sentence claimed more
+than the limiter delivers, and the correction matters for how much risk this phase actually
+retires.* The limiter is **per-lambda-instance**, and the inbound receiver
+(`/api/stripe/webhook`) handles **one event per invocation** via `after()`. At ~900 events across
+~56 concurrent instances, each instance issues on the order of 2 Stripe calls/sec — two orders of
+magnitude below an 80/sec bucket. **So the limiter will essentially never engage on the path that
+caused this incident.** What it genuinely meters is the queue-**drain** path
+(`process-stripe-webhook-queue`, `SWEEP_BATCH_SIZE = 20` fanned out via `Promise.allSettled`,
+~140 requests at once from a single instance).
+
+The honest framing: **the limiter reduces the depth of a 429 storm's retry backlog; it does not
+prevent the storm.** Account-level rate-limit compliance rests on D-3's *first* half — Task 5's
+call-count reduction (10 → 7 per renewal, `/v1/subscriptions` 73 → 18/sec). Do not let Task 6
+retire the account-cap risk in anyone's mental model. A genuinely global governor needs shared
+state (Redis or a Mongo token bucket) and is deliberately not in this spec's scope.
+
 ### D-4 — Preserve anchor-24 through the trial upgrade
 
 The upgrade route is deliberately **pay-first**: `proration_behavior: "none"`,
