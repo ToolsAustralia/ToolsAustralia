@@ -153,6 +153,11 @@ export function buildPeriodComparison(
     format: MetricFormat;
     /** Omitted = a rise is good. See ComparisonMetric.invert. */
     invert?: true;
+    /**
+     * A level measured at an instant rather than an amount accumulated over the window, so it
+     * is never divided by the window length. Same escape hatch `ratio` already had.
+     */
+    stock?: true;
     headline: boolean;
     group: ComparisonMetric["group"];
     read: (s: AdminDashboardStats | undefined) => number;
@@ -241,17 +246,33 @@ export function buildPeriodComparison(
       read: (s) => s?.users.newInRange ?? 0,
     },
     /**
-     * ⚠️ "Active memberships" is deliberately NOT a row here, and must not be added back.
+     * ⚠️ `users.activeSubscriptions` is STILL not a row here, and must not be added back.
      *
-     * `users.activeSubscriptions` is `User.countDocuments(getActiveSubscriptionFilter())` —
-     * a live standing count with NO date bound (DashboardStatsService). Both windows therefore
-     * read the same number, so the row renders "1,234 vs 1,234 · 0%" and invites the reader to
-     * conclude memberships were flat across the two periods. That is a claim the data cannot
-     * support: it is one number shown twice.
+     * It is `User.countDocuments(getActiveSubscriptionFilter())` — a live standing count with NO
+     * date bound (DashboardStatsService). Both windows read the same number, so it renders
+     * "4,504 vs 4,504 · 0%" and invites the reader to conclude memberships were flat across the
+     * two periods. That is a claim the data cannot support: it is one number shown twice.
      *
-     * The movement it seems to promise is already here, honestly and date-scoped: New
-     * memberships (in) and Cancellations (out).
+     * "Total memberships" below is the DATE-SCOPED field added for this, and is a different
+     * number: `users.activeMembershipsAtEnd` measures each window at ITS OWN end date (membership
+     * daily snapshot; live only when the window ends today). Two genuine measurements, so the Δ
+     * means something. It is dropped entirely when either side is unavailable — see the filter
+     * below — because a missing stock must never fall back to the other window's figure.
      */
+    {
+      key: "activeMembershipsAtEnd",
+      label: "Total memberships",
+      format: "count",
+      headline: false,
+      group: "Customers",
+      /**
+       * A STOCK, not a flow: it is a level at an instant, not an amount accumulated over the
+       * window. Dividing it by the window length would print a meaningless "150.1/day", so it
+       * opts out of per-day normalisation the same way ROAS does.
+       */
+      stock: true,
+      read: (s) => s?.users.activeMembershipsAtEnd ?? 0,
+    },
     {
       key: "cancelledMemberships",
       label: "Cancellations",
@@ -261,6 +282,39 @@ export function buildPeriodComparison(
       headline: false,
       group: "Customers",
       read: (s) => s?.users.cancelledMemberships ?? 0,
+    },
+    {
+      /**
+       * Successful renewals in the window — the same figure the Renewals KPI tile shows as
+       * "N renewed", read from the range-scoped membership analytics bundle rather than
+       * recomputed here (`succeededInRange` is the membershipRenewal bucket's purchaseCount).
+       *
+       * Renewal REVENUE already has a row above; this is the count behind it, and the two are
+       * deliberately sourced from the same bucket so they can never disagree.
+       */
+      key: "membershipRenewals",
+      label: "Renewals",
+      format: "count",
+      headline: false,
+      group: "Customers",
+      read: (s) => s?.users.membershipRenewals?.succeededInRange ?? 0,
+    },
+    {
+      /**
+       * DISTINCT members who entered `past_due` in the window (MembershipStatusHistory, sourced
+       * from the invoice-payment-failed webhook). A rise is bad — a member entering past due is
+       * a renewal that did not collect — so it inverts like Cancellations.
+       *
+       * Counts MEMBERS, not failed invoices: one member whose invoice retries three times is one
+       * entry here. `membershipRenewals.failedInvoicesInRange` is the invoice-level figure.
+       */
+      key: "becamePastDue",
+      label: "Became past due",
+      format: "count",
+      invert: true,
+      headline: false,
+      group: "Customers",
+      read: (s) => s?.users.membershipRenewals?.becamePastDueInRange ?? 0,
     },
 
     // ── Advertising ──────────────────────────────────────────────────────────────────────
@@ -311,25 +365,35 @@ export function buildPeriodComparison(
 
   const { currentDays, previousDays } = windows;
 
-  return spec.map(({ read, invert, ...rest }) => {
-    const cur = read(current);
-    const prev = read(previous);
-    // A ratio is already a rate; dividing it by days would be meaningless.
-    const comparable = rest.format !== "ratio";
-    const d = rateDelta(cur, prev, { currentDays, previousDays, comparable });
+  /**
+   * "Total memberships" is dropped unless BOTH windows actually measured it. A window whose end
+   * date has no membership snapshot (normal for ~3.5h after AEST midnight) would otherwise read
+   * as 0 and print a −100% collapse that never happened.
+   */
+  const bothMeasuredStock =
+    current?.users.activeMembershipsAtEnd != null && previous?.users.activeMembershipsAtEnd != null;
 
-    return {
-      ...rest,
-      invert: invert === true,
-      current: cur,
-      previous: prev,
-      delta: cur - prev,
-      deltaPct: d?.pct ?? null,
-      normalised: d?.normalised ?? false,
-      currentPerDay: comparable && currentDays > 0 ? cur / currentDays : null,
-      previousPerDay: comparable && previousDays > 0 ? prev / previousDays : null,
-    };
-  });
+  return spec
+    .filter((m) => m.key !== "activeMembershipsAtEnd" || bothMeasuredStock)
+    .map(({ read, invert, stock, ...rest }) => {
+      const cur = read(current);
+      const prev = read(previous);
+      // A ratio is already a rate, and a stock is a level — dividing either by days is meaningless.
+      const comparable = rest.format !== "ratio" && stock !== true;
+      const d = rateDelta(cur, prev, { currentDays, previousDays, comparable });
+
+      return {
+        ...rest,
+        invert: invert === true,
+        current: cur,
+        previous: prev,
+        delta: cur - prev,
+        deltaPct: d?.pct ?? null,
+        normalised: d?.normalised ?? false,
+        currentPerDay: comparable && currentDays > 0 ? cur / currentDays : null,
+        previousPerDay: comparable && previousDays > 0 ? prev / previousDays : null,
+      };
+    });
 }
 
 /**

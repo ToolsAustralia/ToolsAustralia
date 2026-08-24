@@ -12,6 +12,13 @@ const SLIDING_WINDOW_DAYS = 90;
 /**
  * WHY THIS CRON RUNS THREE TIMES A DAY — the schedule is load-bearing, not redundancy.
  *
+ * The window it writes is the last 90 **COMPLETE** AEST days — the in-progress day is never a
+ * member (`resolveSlidingWindowKeys`). It used to include today, which is what made the 03:20 UTC
+ * fire (13:20 AEST) freeze a half-finished day; the reader then served that partial as soon as
+ * the day rolled over. See the guard docblock on `writeSnapshotForDate`. A consequence worth
+ * knowing: between 14:00 UTC (the AEST day closing) and the 17:30 UTC fire, the day that just
+ * closed has NO snapshot, and the reader computes it live — correct, just slower.
+ *
  * `vercel.json` schedules this at **17:30, 20:30 and 03:20 UTC** (moved off 14:00/15:00 UTC on
  * 2026-08-24 — see docs/infrastructure/gotchas.md — via a same-day, later-reverted 18:00/19:00
  * attempt that collided with the ad-sync crons' DST-gated schedule; see below). The first two

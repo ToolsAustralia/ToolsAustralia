@@ -2,7 +2,12 @@ import User from "@/models/User";
 import MajorDraw from "@/models/MajorDraw";
 import { readStatsForRange } from "@/services/admin/dashboard-stats/DashboardStatsSnapshotReader";
 import { DashboardMetricsService } from "@/services/admin/DashboardMetricsService";
-import { MembershipAnalyticsService } from "@/services/admin/MembershipAnalyticsService";
+import {
+  MembershipAnalyticsService,
+  SUBSCRIPTION_PACKAGE_IDS,
+} from "@/services/admin/MembershipAnalyticsService";
+import MembershipDailySnapshot from "@/models/MembershipDailySnapshot";
+import { formatInTimeZone } from "date-fns-tz";
 import {
   parseAdminDashboardDateRange,
   type AdminDashboardDateRangeKey,
@@ -123,6 +128,42 @@ export class DashboardStatsService {
       User.countDocuments(cancelledMembershipsQuery),
       User.countDocuments(totalScheduledCancellationQuery),
     ]);
+
+    /**
+     * Active memberships AS OF THE END OF THE SELECTED WINDOW — the date-scoped counterpart to
+     * `activeSubscriptions`, which is a standing count with no date bound.
+     *
+     * This exists so period comparison can show a membership STOCK honestly. `activeSubscriptions`
+     * cannot: both windows read the same live number, so it renders "4,504 vs 4,504 · 0%" and
+     * invites the reader to conclude the member base was flat (see the note in
+     * periodComparisonModel.ts). Measuring each window at ITS OWN end date is a real comparison.
+     *
+     * Source rules, in order:
+     *  - Window ends today → the live count IS the end-of-window state, and it is already loaded.
+     *  - Otherwise → sum `activeCount` from MembershipDailySnapshot for that AEST day. Verified
+     *    2026-08-25 to be the same population as the live count: the snapshot census matches on
+     *    `getActiveSubscriptionFilter` and only the three subscription packages exist.
+     *  - No snapshot row for a PAST day → leave it undefined and let the row disappear. Falling
+     *    back to the live count here would silently label today's number as that period's, which
+     *    is the exact class of lie this field was added to avoid. A gap is normal for ~3.5h after
+     *    AEST midnight, before `membership-daily-snapshot`'s 17:30 UTC fire.
+     */
+    const endKeyAest = formatInTimeZone(endDate, "Australia/Sydney", "yyyy-MM-dd");
+    const todayKeyAest = formatInTimeZone(new Date(), "Australia/Sydney", "yyyy-MM-dd");
+    let activeMembershipsAtEnd: number | undefined;
+    if (endKeyAest >= todayKeyAest) {
+      activeMembershipsAtEnd = activeSubscriptions;
+    } else {
+      const endDayRows = await MembershipDailySnapshot.find({
+        date: endKeyAest,
+        packageId: { $in: [...SUBSCRIPTION_PACKAGE_IDS] },
+      })
+        .select("activeCount")
+        .lean<{ activeCount?: number }[]>();
+      if (endDayRows.length > 0) {
+        activeMembershipsAtEnd = endDayRows.reduce((sum, r) => sum + (r.activeCount ?? 0), 0);
+      }
+    }
 
     // Signups per acquisition platform for the same window — feeds the Advertising
     // card's per-platform signup count. Same date basis as `newSignupsInRange` above,
@@ -536,6 +577,7 @@ export class DashboardStatsService {
         total: totalUsers,
         ...(totalUsersTrend && { totalTrend: totalUsersTrend }),
         activeSubscriptions,
+        ...(activeMembershipsAtEnd != null && { activeMembershipsAtEnd }),
         newInRange: newSignupsInRange,
         ...(newInRangeTrend && { newInRangeTrend }),
         profileCompletion: profileCompletionRate,
