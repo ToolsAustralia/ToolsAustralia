@@ -207,7 +207,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "22",
       question: "What happens when I upgrade my membership?",
       answer:
-        "Upgrading takes effect straight away. You pay the new tier's full monthly price immediately, your billing cycle resets to today, and the extra monthly entries are added to the current draw right away. You can upgrade from [My Account → Membership](/my-account/membership) → **Manage plan**. (Upgrades aren't available while a payment is past due — resolve that first.)",
+        "Upgrading takes effect straight away: you pay the new tier's full monthly price now, and its extra free entries land in the current draw immediately. Your billing cycle resets to today — unless your renewal is anchored to the 24th, which stays put (moving to the following month if it's less than a fortnight away, so you're never charged twice in the same fortnight). Upgrade from [My Account → Membership](/my-account/membership) → **Manage plan**. (Not available while a payment is past due — resolve that first.)",
       category: "PAYMENTS",
     },
     {
@@ -424,7 +424,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "51",
       question: "If I upgrade to a higher tier mid-cycle, do I keep the free entries I've already built up? And do I get credit for the unused days on my old tier?",
       answer:
-        "Good news on your entries: upgrading mid-cycle keeps everything you've already built up. Your accumulated free entries carry over, and on top of that your new tier's free entries are added right away, so you're never worse off for upgrading early. On the billing side, an upgrade charges the new tier's full price straight away and resets your billing cycle to that date — there's no pro-rata credit for the unused days on your old tier, so it's usually best to upgrade close to your renewal date. You can review your tier and renewal date any time in [My Account → Membership](/my-account/membership).",
+        "Good news on your entries: upgrading mid-cycle keeps everything you've already built up. Your accumulated free entries carry over, and on top of that your new tier's free entries are added right away, so you're never worse off for upgrading early. On the billing side, an upgrade charges the new tier's full price straight away and resets your billing cycle to that date — unless your renewal is anchored to the 24th, which stays put (shifting to the following month if it's under a fortnight away, so a shifted renewal is always a full month ahead rather than days away). There's no pro-rata credit for the unused days on your old tier, so the later in your cycle you upgrade, the more you leave behind. Check your tier and renewal date any time in [My Account → Membership](/my-account/membership).",
       category: "PAYMENTS",
     },
     {

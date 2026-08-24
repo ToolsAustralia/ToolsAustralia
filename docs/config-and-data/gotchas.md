@@ -1,5 +1,25 @@
 # Config & Data — Gotchas
 
+## Two upgrade FAQs asserted "your billing cycle resets to today" (2026-08-24)
+
+Cobber ids **22** and **51** both stated flatly that upgrading resets the billing cycle to the
+upgrade date. That became wrong for anchored members when the trial-aware upgrade shipped: a member
+anchored to the 24th is charged today but **keeps their renewal day**. Both answers now qualify the
+reset rather than asserting it unconditionally. Corpus size is unchanged (no ids added or removed),
+so the `faqs.test.ts` count assertion did not move.
+
+**id51's closing advice was actively harmful and was reversed.** It ended with *"it's usually best to
+upgrade close to your renewal date"* — which, for the anchored cohort, steered members straight into
+the double-charge window the 14-day floor now guards (pay a full month, get billed again days later).
+It now explains the floor and says the opposite: the later in the cycle you upgrade, the more of the
+old tier you leave behind. **A copy edit that survives a code change is not automatically still
+true** — re-read the *whole* answer, not just the clause you came to fix.
+
+Re-run `npm run build:chat-knowledge-pack` then `npm run test:chat-faqs` after any corpus edit —
+the generated pack in `src/generated/chatKnowledgePack.ts` is what Cobber actually answers from, and
+an un-rebuilt pack leaves it reciting the old copy. Background:
+[BUSINESS.md §9b/§10c](../../BUSINESS.md), [subscription/gotchas.md](../subscription/gotchas.md).
+
 ## Cobber FAQ corpus is now 68 entries — knowledge-gap batch (2026-07-15)
 
 `supportChatFaqs.ts` grew **39 → 68** with the knowledge-gap batch: ids **40-68** cover referrals/affiliate (40-43), account+auth (44-46), promo codes & the after-checkout offer (47-50), upgrade/downgrade/anchor billing (51-53), past-due lifecycle (54-59), advanced partner discounts (60-62), and mini-draws/prizes (63-68). id24 was **extended** (reactivation timing/grace window), not added. `faqs.test.ts` count assertion bumped 39 → **68** (+ an **id54** guard).

@@ -1,5 +1,66 @@
 # Billing-Stripe — Gotchas
 
+## `billing_cycle_anchor: "now"` and a pending `trial_end` are mutually exclusive (2026-08-24)
+
+Stripe rejects `subscriptions.update` outright when the requested anchor lands before a trial that
+has not ended: *"Trial end (…) cannot be after billing_cycle_anchor (…). Consider ending the trial
+(trial_end=now)."* It is a **400 on every attempt**, not an intermittent failure.
+
+That is exactly the collision the tier-upgrade route shipped with. Upgrades are deliberately
+pay-first (`proration_behavior: "none"` + `billing_cycle_anchor: "now"`), and anchor-24 members —
+25th/26th/27th joiners, plus anyone re-anchored by past-due recovery — sit on a pending `trial_end`
+by design. **Result: the entire anchored cohort could not upgrade at all**, permanently.
+
+**The fix is a three-step sequence, and each step's position is load-bearing:**
+
+1. `trial_end: "now"` **in the same pay-first call** (only when the sub is `trialing`) so the anchor
+   is legal and the full new-tier charge lands.
+2. Read `latest_invoice` / `prorationAmount` and run the existing under-charge check.
+3. A **second** `subscriptions.update` re-applying the member's own `trial_end` for the next cycle
+   (`proration_behavior: "none"`; falls back to the shared `getNextAnchorTimestamp` only if the
+   captured anchor has already lapsed; non-fatal on failure — the charge already succeeded).
+
+**Trap 1 — step 3 before step 2 returns HTTP 500 to a correctly-charged member.** The re-apply makes
+Stripe spawn its $0 "Trial period" invoice, which becomes `latest_invoice`. Read it and the route's
+"charge must be ≥ half the expected amount" guard trips and returns *"Upgrade pricing error"*.
+
+**Trap 2 — `trialing` is a success state here.** After step 3 the subscription reports
+`status: "trialing"`, so both of the route's `status === "active"` success checks had to widen or the
+request drops through to the generic 500. A `trialing` member is fully paid and active
+([PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md)); the UI already maps `trialing → "Active"`.
+
+**Trap 3 — `trial_end` is a BILLING boundary, so the re-applied anchor needs a floor.** Stripe
+charges the FULL amount at `trial_end`. Re-applying the captured anchor unconditionally would charge
+an upgrading member twice within days whenever they upgrade near their anchor (full price on the
+20th, full price again on the 24th), with `proration_behavior: "none"` meaning no credit. The route
+keeps their anchor **day** but advances to the next **occurrence** when the nearest is under **14
+days** away, via `getReanchorTrialEndTimestamp` (next same-day occurrence strictly after, short-month
+safe). Any future change to that re-apply must preserve a floor — this is the same class of bug the
+past-due reanchor exists to prevent.
+
+**Trap 4 — the spawned $0 invoice must not grant.** It arrives as `subscription_update` with its own
+fresh id, moments after the real paid `subscription_update` upgrade invoice — so nothing about the id
+or the ordering distinguishes them. Only `isZeroAmountTrialUpdateInvoice` does, and it already
+matched this shape, so **no classifier change was required**. The regression lock is **Case D** of
+`npm run test:zero-trial-guard`, which dispatches the pair with distinct ids and asserts paid-grants /
+$0-skipped. Read the pre-flight checklist in [PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) before
+touching any of this.
+
+**Trap 5 — the webhook's pending-upgrade gate must accept `trialing`.** An anchored upgrade's LAST
+`customer.subscription.updated` carries `trialing`, because the route re-applies the anchor after
+charging. `handleSubscriptionUpdated`'s activation gate was the lone `status === "active"` holdout in
+that file (every sibling check already accepted `trialing`), and the re-apply widens the race by
+adding a Stripe round-trip before the route's own `user.save()`. If the gate loses that race and
+rejects, `pendingChange` is never cleared — and a stuck `pendingChange` makes every subsequent
+`customer.subscription.updated` early-return, silently suppressing cancel / pause / past_due handling
+until the next renewal. It now accepts both.
+
+**Verified against live Stripe, not inferred.** `npm run stripe:probe-upgrade-anchor` runs the whole
+sequence in test mode (10/10 green): the control reproduces the original 400 verbatim, the pay-first
+call is confirmed to produce **exactly one** invoice (full price, no $0 sibling — so `latest_invoice`
+is trustworthy), and the re-apply's $0 invoice is confirmed to satisfy `isZeroAmountTrialUpdateInvoice`
+as a real Stripe object. Re-run it before changing either update call.
+
 ## A webhook handler returning normally is NOT proof it did its work (2026-08-24)
 
 **A returned promise that did not reject means "no exception escaped" — nothing more.** `handleInvoicePaymentSucceeded` wrapped its entire ~1,400-line body in one `try` whose outer catch logged and returned normally, so `dispatchStripeEvent` reached its hard-coded `shouldMarkAsProcessed = true` and `processQueuedEvent` called `markSucceeded()` on the non-throwing path. A Stripe HTTP 429 mid-handler therefore produced: money captured, no entries granted, queue row `succeeded`, no retry, and no error visible to any automated check.

@@ -149,3 +149,47 @@ export function getReanchorTrialEndTimestamp(recoveryDate: Date): number {
   }
   return Math.floor(candidate.getTime() / 1000);
 }
+
+/**
+ * Minimum runway between an upgrade and the anchor `trial_end` re-applied after it.
+ *
+ * `trial_end` is a BILLING boundary, not a grace date — Stripe charges the FULL amount when it
+ * arrives. An upgrading member has just paid a full month up front, so re-applying an anchor that
+ * is only days away bills them twice within days, and `proration_behavior: "none"` means no credit
+ * for the overlap. (A 26-July joiner anchored to 24 Aug who upgrades on 20 Aug would pay full price
+ * on the 20th and full price again on the 24th.)
+ *
+ * 14 days is half a monthly cycle. Erring generous is deliberate: the failure mode on the other
+ * side is double-charging a paying member, which costs refunds, chargebacks and trust.
+ */
+export const MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS = 14 * 24 * 60 * 60;
+
+/**
+ * Decide which occurrence of a member's anchor to re-apply after a paid tier upgrade.
+ *
+ * Keeps the member's anchor **day** and only chooses the **occurrence**: if the captured anchor is
+ * at least {@link MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS} away it is returned unchanged, otherwise it
+ * advances to the next occurrence of the same day-of-month via {@link getReanchorTrialEndTimestamp}
+ * — strictly-after and short-month safe (a kept 31 becomes Feb 28/29).
+ *
+ * **One advance always clears the floor**: the shortest gap between two occurrences of the same
+ * day-of-month is 28 days (Feb), and the floor is 14.
+ *
+ * Extracted from the upgrade route so the decision itself is unit-testable — the helper it calls is
+ * well covered, but the *decision to call it* is what guards ~200 members against a double charge.
+ *
+ * @param capturedAnchorSeconds The member's pending `trial_end` (unix seconds), or the fallback anchor.
+ * @param nowSeconds Current time in unix seconds (injected so tests are deterministic).
+ * @returns Unix seconds for the `trial_end` to re-apply.
+ * @throws If `capturedAnchorSeconds` is not a usable instant (propagated from
+ *   `getReanchorTrialEndTimestamp`); callers abort the re-anchor non-fatally.
+ */
+export function resolveReappliedAnchor(capturedAnchorSeconds: number, nowSeconds: number): number {
+  if (!Number.isFinite(capturedAnchorSeconds) || capturedAnchorSeconds <= 0) {
+    throw new Error("resolveReappliedAnchor: invalid capturedAnchorSeconds");
+  }
+  if (capturedAnchorSeconds >= nowSeconds + MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS) {
+    return capturedAnchorSeconds;
+  }
+  return getReanchorTrialEndTimestamp(new Date(capturedAnchorSeconds * 1000));
+}

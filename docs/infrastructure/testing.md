@@ -397,6 +397,27 @@ npm run test:force-charge-mint-map     # pure unit test: mint failure reason →
 npm run test:rebill-classification     # pure unit test: isRebillPayment / effectiveBillingReasonForRebill (a past-due re-bill success is a RENEWAL, normalized to subscription_cycle everywhere)
 ```
 
+### Trial-aware upgrade probe (2026-08-24)
+
+`scripts/stripe-probe-upgrade-anchor.ts` is the **merge gate** for the trial-aware tier upgrade
+(`docs/PAST_DUE_REANCHOR.md` → *Third `trial_end` trigger*). Same `sk_test_`-only refusal and
+auto-cleanup as its siblings; no MongoDB, no test clock needed (~15-30s).
+
+```bash
+npm run stripe:probe-upgrade-anchor:dry   # validate the test key + print the plan; create nothing
+npm run stripe:probe-upgrade-anchor       # the full 10-assertion gate
+npx tsx scripts/stripe-probe-upgrade-anchor.ts --keep   # leave objects for dashboard inspection
+```
+
+It exists for one question the docs could not answer: **how many invoices does the pay-first call
+produce, and which is `latest_invoice`?** The route hard-fails an upgrade whose `latest_invoice` is
+under half the expected charge, so a $0 bookkeeping invoice landing last would return HTTP 500 to a
+correctly-charged member *and* skip the anchor re-apply. **U5** answers it: exactly one invoice, full
+price, no $0 sibling. **U0** is a control that reproduces the original production 400 verbatim, so
+the probe fails loudly if Stripe ever changes the behaviour the workaround is built on. **U8**
+confirms `isZeroAmountTrialUpdateInvoice` classifies the real spawned Stripe object, not just the
+fixture used by `npm run test:zero-trial-guard`.
+
 A re-bill SUCCESS is `billing_reason: subscription_update` (same as an upgrade) but is a **renewal** — the webhook normalizes it to `subscription_cycle` so labels, revenue/ROAS, and conversion tracking treat it as one (see [docs/billing-stripe/gotchas.md](../billing-stripe/gotchas.md)). Historical events created before that shipped are corrected by the **dry-run-safe, Stripe-confirmed** backfill:
 
 ```bash
