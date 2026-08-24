@@ -632,6 +632,8 @@ Monetary fields here are in **cents** (`spendCents` / `revenueCents`), unlike mo
 
 Several fields are date-range-independent (`users.total`, `majorDraw.totalEntries`, `users.activeSubscriptions`, `users.totalScheduledCancellation`) — they always reflect current state regardless of `dateRange`.
 
+> **Also not mirrored, deliberately (2026-08-25):** `DashboardStatsService` now emits `users.activeMembershipsAtEnd` — active memberships as of the END of the requested window (membership daily snapshot; live only when the window ends today), the date-scoped counterpart to the standing `users.activeSubscriptions` above. The Norm route projects its fields explicitly, so this addition does NOT change the Norm response shape and needs no schema/manifest change. It would be worth wiring if Norm ever needs "how many members did we have on date X" — the same four-step lockstep as above. Flagged rather than silently skipped, per CLAUDE.md rule 10.
+
 **Inputs (query params)**:
 | Param | Required | Default | Notes |
 |---|---|---|---|

@@ -81,6 +81,13 @@ export interface AdminDashboardStats {
     total: number;
     totalTrend?: TrendData;
     activeSubscriptions: number;
+    /**
+     * Active memberships as of the END of the selected window — the date-scoped counterpart to
+     * the standing `activeSubscriptions`. Absent when a past window has no membership snapshot
+     * for its end date (normal for ~3.5h after AEST midnight); consumers must drop the figure
+     * rather than substitute the live count. See DashboardStatsService for the source rules.
+     */
+    activeMembershipsAtEnd?: number;
     newInRange: number;
     newInRangeTrend?: TrendData;
     profileCompletion: number;

@@ -1654,6 +1654,28 @@ An arrow wants "vs the previous equivalent stretch"; this table wants a **stable
 
 **Deliberately absent: a "Contribution" / profit row.** `revenue.total` includes renewals while ad spend only buys acquisition, so `revenue − spend` here would flatter. The honest version of that metric is acquisition-scoped and already lives on the **All Platforms** tab (master spec §2). Adding an ambiguous second one would be a new source of truth, which is the thing this work exists to reduce.
 
+### Membership rows added 2026-08-25: Renewals, Became past due, Total memberships
+
+Three rows joined the **Customers** group. The first two are pure model additions — `users.membershipRenewals` was already on the payload and already range-scoped, it simply was not surfaced here:
+
+| Row | Source | Notes |
+|---|---|---|
+| **Renewals** | `users.membershipRenewals.succeededInRange` | The count behind the existing *Renewal revenue* row, from the same bucket, so the two can never disagree. Equals the "N renewed" on the Renewals KPI tile for the same window. |
+| **Became past due** | `users.membershipRenewals.becamePastDueInRange` | DISTINCT members entering `past_due` (`MembershipStatusHistory`, invoice-payment-failed webhook) — not failed invoices. One member retried three times counts once; `failedInvoicesInRange` is the invoice-level figure. **Inverts** — a rise is bad news, like Cancellations. |
+| **Total memberships** | `users.activeMembershipsAtEnd` | New field. See below — this is the one with a trap. |
+
+⚠️ **"Total memberships" is NOT `users.activeSubscriptions`, and that distinction is load-bearing.** `activeSubscriptions` is a live standing count with no date bound, so both windows read the *same* number and the row would render "4,504 vs 4,504 · 0%" — one number shown twice, dressed as a finding about history. That row was removed once already and the model still carries a comment forbidding it.
+
+`activeMembershipsAtEnd` (computed in `DashboardStatsService`) measures each window **at its own end date**, so the Δ is two genuine measurements:
+
+- Window ends **today** → the live count *is* the end-of-window state, and it is already loaded.
+- Otherwise → sum `activeCount` across the three subscription packages in `MembershipDailySnapshot` for that AEST day. Verified 2026-08-25 to be the same population as the live count (same `getActiveSubscriptionFilter`, and only the three subscription package IDs exist).
+- **No snapshot for a past day → the field is omitted and the row disappears entirely.** Falling back to the live count would label today's number as that period's. A 0 would print a −100% collapse of the member base that never happened. Expect the row to be absent for ~3.5h after AEST midnight, before `membership-daily-snapshot`'s 17:30 UTC fire.
+
+**Total memberships is a STOCK, not a flow** — a level at an instant, not an amount accumulated over the window. It carries `stock: true`, which opts it out of per-day normalisation exactly as `format: "ratio"` does: "4,504 members ÷ 30 days = 150.1/day" is meaningless. Any future level-type metric (standing counts, balances) needs the same flag. Pinned by `test:period-comparison` (`testTotalMembershipsIsAStockAndNeverNormalises`, `testTotalMembershipsOnlyAppearsWhenBothWindowsMeasuredIt`, `testRenewalAndPastDueCountsComeFromMembershipRenewals`).
+
+`activeMembershipsAtEnd` is **not** mirrored to Norm — the Norm dashboard route projects its fields explicitly, so the addition cannot affect its output. Worth mirroring if Norm ever needs "how many members did we have on date X".
+
 ## Rendered verification + two fixes it caught (2026-08-19)
 
 The Brand Performance and Period Comparison work was verified **on screen** via the e2e harness (`npm run e2e:env`, isolated seeded DB at :3799, Playwright as `e2e.admin@e2e.local`) rather than by reasoning about the DOM. Two things only surfaced there:
