@@ -75,8 +75,9 @@ import {
 } from "@/utils/payment/recovery/recovery-claim";
 import { buildBulkChargeIdempotencyKey } from "@/server/admin/past-due-charge-idempotency";
 import {
-  ORPHAN_RUN_THRESHOLD_MS,
   aggregateRunTotals,
+  isOrphanRun,
+  runLivenessAt,
   type ChargeLogRowForAggregation,
 } from "@/server/admin/charge-past-due-totals";
 import { classifySkipReasonFromMessage } from "@/utils/admin/chargeSkipReasons";
@@ -180,20 +181,34 @@ async function recomputeTotalsFromLogs(
 }
 
 /**
- * Finalize any `running` ChargeJobRun aged past the orphan threshold: recompute
- * its real totals from logs and mark it `aborted`. Mirrors fix-stuck-charge-jobs.ts
- * but runs inline at the next kickoff so the history self-heals.
+ * Finalize any STALLED `running` ChargeJobRun: recompute its real totals from
+ * logs and mark it `aborted`. Mirrors fix-stuck-charge-jobs.ts but runs inline at
+ * the next kickoff so the history self-heals.
+ *
+ * "Stalled" means NO PROGRESS for `ORPHAN_RUN_THRESHOLD_MS` — not "started that
+ * long ago". This previously queried `startedAt: { $lt: cutoff }`, which killed
+ * every real run mid-flight (see `isOrphanRun` for the measured damage).
+ *
+ * The threshold rule is NOT restated as a Mongo query. Mongo cannot express
+ * `lastProgressAt ?? startedAt` without an index-defeating `$expr`, and a second
+ * copy of the rule is exactly how the two drifted apart in the first place. So we
+ * prefilter on `status: "running"` — at most a handful of documents ever, and an
+ * index prefix — and let the shared `isOrphanRun` predicate decide. It also runs
+ * BEFORE the per-run totals recompute, so healthy long runs cost two queries
+ * rather than four.
  */
 export async function sweepOrphanRuns(): Promise<void> {
-  const cutoff = new Date(Date.now() - ORPHAN_RUN_THRESHOLD_MS);
-  const orphans = await ChargeJobRun.find({ status: "running", startedAt: { $lt: cutoff } })
-    .select({ _id: 1, totals: 1 })
+  const now = new Date();
+  const candidates = await ChargeJobRun.find({ status: "running" })
+    .select({ _id: 1, totals: 1, status: 1, startedAt: 1, lastProgressAt: 1 })
     .lean();
-  for (const run of orphans) {
+  for (const run of candidates) {
+    if (!isOrphanRun(run, now)) continue; // still making progress — leave it alone.
     const totals = await recomputeTotalsFromLogs(
       run._id as mongoose.Types.ObjectId,
       run.totals?.eligibleCount ?? 0
     );
+    const quietFor = Math.round((now.getTime() - runLivenessAt(run).getTime()) / 60000);
     await ChargeJobRun.updateOne(
       { _id: run._id, status: "running" },
       {
@@ -201,7 +216,7 @@ export async function sweepOrphanRuns(): Promise<void> {
           status: "aborted",
           finishedAt: new Date(),
           totals,
-          error: "Aborted by orphan sweep — exceeded lock window without finalize (totals recomputed from logs)",
+          error: `Aborted by orphan sweep — no progress for ${quietFor} min (totals recomputed from logs)`,
         },
       }
     );
@@ -763,6 +778,10 @@ export async function processChargePastDueChunk(params: {
     (await InvoiceChargeLog.distinct("invoiceId", { chargeRunId: runObjId })) as string[]
   );
   const remaining = items.filter((it) => !loggedIds.has(it.invoiceId));
+  // Worklist items already logged BEFORE this chunk ran. Compared against the
+  // post-chunk count below to decide whether the run actually advanced — which
+  // is what the orphan sweep's liveness heartbeat means.
+  const processedBefore = items.length - remaining.length;
 
   // Already finished (or nothing left) → finalize once and release the lock.
   if (run.status !== "running" || remaining.length === 0) {
@@ -779,7 +798,7 @@ export async function processChargePastDueChunk(params: {
       total: items.length,
       // Count logged WORKLIST items only — `loggedIds` may also contain the recovery
       // pay rows' NEW invoice ids, which are not worklist items.
-      processed: items.length - remaining.length,
+      processed: processedBefore,
       processedThisChunk: 0,
       done: true,
       totals,
@@ -827,7 +846,18 @@ export async function processChargePastDueChunk(params: {
     );
     await releaseLock();
   } else {
-    await ChargeJobRun.updateOne({ _id: runObjId, status: "running" }, { $set: { totals } });
+    // Mid-run progress write — the orphan sweep's LIVENESS HEARTBEAT.
+    //
+    // Stamped ONLY when the run genuinely advanced (at least one more worklist
+    // item now carries a log row). Stamping unconditionally would let a run whose
+    // every item throws before writing a row refresh its own liveness on each
+    // chunk and never be swept — trading yesterday's "kill every healthy run" for
+    // "never kill a wedged one". Progress, not activity, is the signal.
+    const progressed = processed > processedBefore;
+    await ChargeJobRun.updateOne(
+      { _id: runObjId, status: "running" },
+      { $set: progressed ? { totals, lastProgressAt: new Date() } : { totals } }
+    );
   }
 
   return {

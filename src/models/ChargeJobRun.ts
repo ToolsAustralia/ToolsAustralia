@@ -34,6 +34,19 @@ export interface IChargeJobRun extends Document {
    *  and are treated as "admin". */
   trigger?: "admin" | "cron";
   startedAt: Date;
+  /**
+   * Heartbeat — when this run last made REAL progress (a chunk that logged at
+   * least one new worklist item). The orphan sweep keys on this, not on
+   * `startedAt`: a run that is still charging is alive however long it has been
+   * going, and a run that has stopped advancing is dead however recently it began.
+   *
+   * OPTIONAL on purpose — runs written before 2026-08-24 have no value, and
+   * readers must fall back to `startedAt` (see `isOrphanRun`) so a legacy row can
+   * never stick `running` forever. Deliberately NOT stamped on every chunk: a
+   * chunk that logs nothing is not progress, so a permanently-failing loop cannot
+   * refresh its own liveness and evade the sweep.
+   */
+  lastProgressAt?: Date | null;
   finishedAt: Date | null;
   status: ChargeJobRunStatus;
   totals: ChargeJobRunTotals;
@@ -73,6 +86,9 @@ const ChargeJobRunSchema = new Schema<IChargeJobRun>(
     kind: { type: String, enum: ["charge", "recover"], required: true, default: "charge", index: true },
     trigger: { type: String, enum: ["admin", "cron"], default: "admin", index: true },
     startedAt: { type: Date, required: true, default: Date.now },
+    // No default: absent means "no chunk has advanced yet" and readers fall back
+    // to startedAt. A default would silently make every legacy row look fresh.
+    lastProgressAt: { type: Date },
     finishedAt: { type: Date, default: null },
     status: {
       type: String,

@@ -351,7 +351,13 @@ Located at: `src/components/admin/ChargePastDueModal.tsx`
 3. **No Eligible Invoices**: Check that users have `subscription.status === "past_due"` in database
 4. **All Skipped**: Verify invoice filtering criteria are met
 5. **High Failure Rate**: Check Stripe dashboard for decline patterns
-6. **Mass "This invoice can no longer be paid" failures**: these are stranded invoices (see "Stranded invoices in the bulk run" above). Since 2026-07-19 the bulk run auto-recovers the retries-EXHAUSTED ones (`next_payment_attempt == null`). A residual few can still surface where Stripe **still has a retry scheduled** (`next_payment_attempt` set) but the current PaymentIntent is unpayable — since 2026-07-20 those are recorded as **skipped → "Awaiting Stripe retry"** with an accurate message (Stripe auto-retries them), not as scary failures. If you see the raw "consider voiding" text at scale again, verify `decideBulkChargeAction` is applied, `payments` is expanded, and the reclassification branch in `payOpenInvoiceAsPastDueAdmin` is intact.
+6. **Run ended `aborted` with "no progress for N min"**: the orphan sweep found the run genuinely
+   stalled — no worklist item gained an `InvoiceChargeLog` row for 35+ minutes. That is a real
+   wedge (Stripe hanging, a chunk crashing before it can log), **not** a run that merely took a
+   long time. Check `InvoiceChargeLog` for the run's last row timestamp and the function logs
+   around it. If you instead see the legacy message `"exceeded lock window without finalize"`, the
+   run predates 2026-08-24 and was killed by the elapsed-time bug below, not by a real stall.
+7. **Mass "This invoice can no longer be paid" failures**: these are stranded invoices (see "Stranded invoices in the bulk run" above). Since 2026-07-19 the bulk run auto-recovers the retries-EXHAUSTED ones (`next_payment_attempt == null`). A residual few can still surface where Stripe **still has a retry scheduled** (`next_payment_attempt` set) but the current PaymentIntent is unpayable — since 2026-07-20 those are recorded as **skipped → "Awaiting Stripe retry"** with an accurate message (Stripe auto-retries them), not as scary failures. If you see the raw "consider voiding" text at scale again, verify `decideBulkChargeAction` is applied, `payments` is expanded, and the reclassification branch in `payOpenInvoiceAsPastDueAdmin` is intact.
 
 ### Skip breakdown buckets
 
@@ -401,3 +407,37 @@ Stripe call and fails open. Skips land in the `excessiveRetryCooldown` bucket, s
 
 Full detail: [docs/admin/backend.md](./admin/backend.md#excessive-retry-cooldown) and
 [docs/billing-stripe/gotchas.md](./billing-stripe/gotchas.md#adaptive-acceptance-blocks-are-not-overridable-by-the-radar-allow-list).
+
+## Run liveness: the orphan sweep keys on last progress (2026-08-24)
+
+A `running` `ChargeJobRun` is aborted by `sweepOrphanRuns` only when it has made **no progress**
+for `ORPHAN_RUN_THRESHOLD_MS` (35 min) — never because it has simply been running that long.
+
+Until 2026-08-24 the sweep selected `{ status: "running", startedAt: { $lt: cutoff } }`. Real runs
+take **36.5–39.0 minutes**, and the charge cron ticks every 5 minutes with the sweep running first,
+so **every run was aborted mid-charge at ~48% of its worklist**, five days in a row. Once
+`aborted`, the resume path stopped finding it and the one-run-per-local-day guard blocked a
+restart, so the day's collection halted permanently. Because the worklist is in Stripe's
+newest-first order, the same front half was retried daily (94% overlap day-to-day, up to 24
+attempts per invoice in 30 days) while **229 of 1,157 past-due members were never attempted at
+all** — and that retry velocity is what feeds the excessive-retry blocks described in the section
+above. One bug, both symptoms.
+
+**How it works now.** `ChargeJobRun.lastProgressAt` (optional `Date`) is stamped by
+`processChargePastDueChunk`'s mid-run progress write, but **only when the chunk actually advanced**
+— at least one more worklist item gained a log row. `isOrphanRun` keys on
+`lastProgressAt ?? startedAt`; runs written before 2026-08-24 have no heartbeat and fall back to
+`startedAt`, so nothing sticks `running` forever. The same rule is applied by the ops script
+`scripts/fix-stuck-charge-jobs.ts`.
+
+Consequences worth internalising:
+
+- **A run may now take as long as it needs.** A 90-minute run that keeps logging rows is never
+  swept; the cron resumes it tick after tick until the worklist is drained.
+- **A genuinely wedged run is still cleaned up** within ~35 minutes of its last logged row, and its
+  totals are still recomputed from `InvoiceChargeLog` before it is marked `aborted`.
+- **Raising the threshold is not the fix** and was explicitly rejected: eligible members went
+  813 → 1,103 in the five days the bug was measured, so any fixed elapsed-time budget breaks again.
+
+Guarded by `npm run test:orphan-progress`. Full incident detail:
+[docs/admin/gotchas.md](./admin/gotchas.md#the-orphan-sweep-killed-every-healthy-charge-run-for-five-days-2026-08-24).

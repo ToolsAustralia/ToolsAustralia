@@ -28,7 +28,9 @@ Already covered in [mongodb R3](../mongodb/rules.md#r3-migrations-are-idempotent
 
 `migrate:`, `backfill:`, `sync:`, `stripe:`, `find:`, `fix:` scripts almost all support `--dry-run`. Always run dry first.
 
-`fix:stuck-charge-jobs` (`scripts/fix-stuck-charge-jobs.ts`, added 2026-06-24) finalizes orphaned `running` `ChargeJobRun` docs — it recomputes their real totals from `InvoiceChargeLog`, marks them `aborted`, and releases an expired global charge lock. Variants: `fix:stuck-charge-jobs[:dry]` (local) and `fix:stuck-charge-jobs:prod[:dry]` (loads `MONGODB_URI` from `.env.production`). Always run the `:dry` variant first.
+`fix:stuck-charge-jobs` (`scripts/fix-stuck-charge-jobs.ts`, added 2026-06-24) finalizes **stalled** `running` `ChargeJobRun` docs — it recomputes their real totals from `InvoiceChargeLog`, marks them `aborted`, and releases an expired global charge lock. Variants: `fix:stuck-charge-jobs[:dry]` (local) and `fix:stuck-charge-jobs:prod[:dry]` (loads `MONGODB_URI` from `.env.production`). Always run the `:dry` variant first.
+
+**"Stalled" means no progress, not "started a while ago" (changed 2026-08-24).** The script keys on `lastProgressAt ?? startedAt` — the same liveness rule as `isOrphanRun` in [`src/server/admin/charge-past-due-totals.ts`](../../src/server/admin/charge-past-due-totals.ts). It was `startedAt` alone, which is unsafe now that real charge runs legitimately exceed the 35-minute default (36–39 min in production, and rising with the past-due population): an operator running this against a healthy in-flight run would have aborted it mid-charge. `--older-than-min=N` overrides the quiet-time threshold, not an age. The `:dry` output now also reports how many `running` runs were **left alone because they are still progressing**. Rationale + the measured incident: [admin/gotchas.md](../admin/gotchas.md#the-orphan-sweep-killed-every-healthy-charge-run-for-five-days-2026-08-24).
 
 ## R8. No server-only imports in client components (lint-enforced)
 

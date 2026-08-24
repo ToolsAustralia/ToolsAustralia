@@ -96,6 +96,68 @@ Two consequences worth remembering:
 - **Totals are recomputed from `InvoiceChargeLog` rows every chunk**, never from in-memory counters — so a tab close / crash / orphan-sweep abort still reports the real succeeded/failed/skipped/revenue, not 0/0/0. The orphan sweep (`sweepOrphanRuns`) and the standalone ops script `scripts/fix-stuck-charge-jobs.ts` ([infrastructure](../infrastructure/)) both recompute the same way before marking a stuck `running` run `aborted`.
 - **Progress/resumability is derived from which worklist invoices already have a log row** for the run, so a killed chunk resumes from the unlogged remainder. Double-charge safety still comes from `payOpenInvoiceAsPastDueAdmin` (30s debounce, 6h recent-attempt lock) plus the **run-scoped** idempotency key `admin-charge-${invoiceId}-run-${runId}` — stable within a run (a resumed chunk re-touching an invoice dedupes to one charge) but fresh across runs. The chunk worker calls that primitive with the run-scoped key.
 
+## The orphan sweep killed every healthy charge run for five days (2026-08-24)
+
+**Never key a liveness/timeout check on "time since started". Key it on "time since last progress".**
+
+`ORPHAN_RUN_THRESHOLD_MS = 35 * 60 * 1000` and `sweepOrphanRuns` selected orphans with
+`{ status: "running", startedAt: { $lt: cutoff } }` — *elapsed time since start*. Real production
+runs take **36.5–39.0 minutes**. The charge cron ticks every 5 minutes and sweeps first, so every
+single run was marked `aborted` while it was **actively charging**, at roughly the 35-minute mark:
+
+| Run (AEST) | Duration | Eligible | Attempted | Succeeded | Recovered |
+|---|---|---|---|---|---|
+| 20/8 07:01 | 39.0 min | 813 | 425 (52%) | 11 | $420 |
+| 21/8 07:02 | 38.2 min | 846 | 419 (50%) | 25 | $880 |
+| 22/8 07:02 | 38.1 min | 864 | 427 (49%) | 20 | $620 |
+| 23/8 07:03 | 36.5 min | 868 | 420 (48%) | 15 | $320 |
+| 24/8 07:0x | 39.0 min | 1103 | 376 (34%) | 21 | $580 |
+
+Every one carried `error: "Aborted by orphan sweep — exceeded lock window without finalize"`.
+
+**Why the day then stopped dead.** Once `aborted`, the resume path
+(`ChargeJobRun.findOne({ status: "running" })`) no longer finds the run, and the
+one-run-per-local-day guard blocks a fresh start. Collection permanently halted at ~48% of the
+worklist. Because the worklist is snapshotted in Stripe's newest-first list order, the *same*
+front half was retried every day and the tail was never reached:
+
+- **94% of each day's attempts were the same members as the day before** (362 of 387 overlapped);
+  individual invoices reached 17–24 attempts in 30 days.
+- **229 of 1,157 past-due members were never attempted once in 30 days.**
+
+That repeated hammering of the same cards is also the mechanism behind
+[billing-stripe/gotchas.md](../billing-stripe/gotchas.md)'s finding that **835 of 1,024 blocked
+transactions (82%)** carry Stripe's Adaptive Acceptance block. One bug, both symptoms.
+
+**The fix — and the fix that was rejected.** Raising `ORPHAN_RUN_THRESHOLD_MS` only moves the
+cliff: the eligible population went 813 → 1,103 in those same five days, so any fixed elapsed-time
+budget breaks again as the member base grows. The lock was **already** renewed per chunk, so a
+correct liveness signal existed — the sweep just never consulted it. Now:
+
+- `ChargeJobRun.lastProgressAt` (optional `Date`, no schema default) is stamped by
+  `processChargePastDueChunk` on its mid-run progress write.
+- `isOrphanRun` keys on `lastProgressAt ?? startedAt` and is the **only** place the rule lives.
+  `sweepOrphanRuns` prefilters `{ status: "running" }` and calls it; `scripts/fix-stuck-charge-jobs.ts`
+  applies the same `lastProgressAt ?? startedAt` rule.
+
+**Two traps to not fall into when touching this again:**
+
+1. **Don't stamp the heartbeat on every chunk.** It is gated on `processed > processedBefore` — the
+   chunk must have added at least one worklist item's log row. A run whose every item throws before
+   writing a row is *activity, not progress*; stamping unconditionally would let it refresh its own
+   liveness forever and never be swept. That would trade "kill every healthy run" for "never kill a
+   wedged one", which is worse.
+2. **Don't restate the threshold as a Mongo query.** The original bug survived because the rule
+   existed twice — `isOrphanRun` (exported, and not actually called by the sweep) and a hand-written
+   `startedAt: { $lt: cutoff }` predicate. Mongo cannot express `lastProgressAt ?? startedAt` without
+   an index-defeating `$expr`, so the sweep prefilters on `status` and filters in TypeScript. The
+   `running` set is at most a handful of documents; this is not a scan risk.
+
+Guarded by `npm run test:orphan-progress`
+([`orphan-progress.test.ts`](../../src/server/admin/__tests__/orphan-progress.test.ts)), which
+asserts a 60-minute run with a 1-minute-old heartbeat is alive, a stalled run is swept, and legacy
+rows without the field still fall back to `startedAt`.
+
 ## Past-due charge keys MUST vary across runs — Stripe replays a stable key for 24h ($0 incident)
 
 **Incident 2026-06-29:** a bulk charge run reported **668/668 "failed", $0 collected, 54s** — but Stripe showed **no actual charge attempts**. Root cause: the bulk path paid every invoice with a **static** `admin-charge-${invoiceId}` Stripe idempotency key. Stripe **retains an idempotency key for 24h and replays the cached response for any reuse within that window — without re-charging** (response header `idempotent-replayed: true`). The daily run lands <24h after the prior one, so **656/668** invoices replayed the previous run's decline. Confirmed three ways: the `idempotent-replayed: true` header on 656 rows, the invoice `attempt_count` staying at 1, and the success rate correlating exactly with whether the inter-run gap crossed 24h.

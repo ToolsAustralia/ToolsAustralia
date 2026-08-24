@@ -25,11 +25,16 @@
  * Options:
  *   --dry-run        Report what would change; perform no writes.
  *   --prod           Target production (loads MONGODB_URI from .env.production).
- *   --older-than-min Override the orphan age threshold in minutes (default 35).
+ *   --older-than-min Override the orphan QUIET-TIME threshold in minutes (default 35).
  *
  * Safety:
- *   - Only touches runs with status === "running" AND startedAt older than the
- *     threshold (default 35 min) — never an in-flight run.
+ *   - Only touches runs with status === "running" that have made NO PROGRESS for
+ *     longer than the threshold (default 35 min) — never an in-flight run.
+ *     Liveness is `lastProgressAt ?? startedAt`, matching `isOrphanRun`
+ *     (src/server/admin/charge-past-due-totals.ts). Keying on `startedAt` alone was
+ *     the 2026-08-24 bug: real runs take 36-39 min, so an elapsed-time rule aborts
+ *     healthy runs mid-charge. `lastProgressAt` is absent on runs created before
+ *     that date, hence the fallback.
  *   - Lock is released ONLY when it is held AND its lockedUntil has passed.
  *   - Idempotent: a second run finds nothing to do.
  *
@@ -70,12 +75,22 @@ async function main(): Promise<void> {
   const now = new Date();
   const cutoff = new Date(now.getTime() - OLDER_THAN_MIN * 60 * 1000);
 
-  // 1. Find orphaned runs (running past the threshold).
-  const orphans = await ChargeJobRun.find({ status: "running", startedAt: { $lt: cutoff } })
-    .sort({ startedAt: 1 })
-    .lean();
+  // 1. Find STALLED runs — `running` with no progress for longer than the threshold.
+  //    Filtered in memory rather than in the query: Mongo cannot express
+  //    `lastProgressAt ?? startedAt` without an index-defeating `$expr`, and the
+  //    `running` set is at most a handful of documents.
+  const livenessAt = (r: { startedAt: Date; lastProgressAt?: Date | null }): Date =>
+    r.lastProgressAt ?? r.startedAt;
+  const runningRuns = await ChargeJobRun.find({ status: "running" }).sort({ startedAt: 1 }).lean();
+  const orphans = runningRuns.filter((r) => livenessAt(r) < cutoff);
+  const stillProgressing = runningRuns.length - orphans.length;
 
-  console.log(`\nFound ${orphans.length} orphaned 'running' run(s) older than ${OLDER_THAN_MIN} min.`);
+  console.log(
+    `\nFound ${orphans.length} stalled 'running' run(s) with no progress for ${OLDER_THAN_MIN}+ min.` +
+      (stillProgressing > 0
+        ? ` (${stillProgressing} other 'running' run(s) still progressing — left alone.)`
+        : "")
+  );
 
   let fixedRuns = 0;
   for (const run of orphans) {
@@ -108,7 +123,8 @@ async function main(): Promise<void> {
       },
     };
 
-    const note = `Finalized by fix-stuck-charge-jobs: orphaned 'running' since ${run.startedAt?.toISOString?.() ?? run.startedAt}. Recomputed from logs: ${attempted} attempted of ${eligibleCount} eligible (${succeeded} succeeded, ${failed} failed, ${skippedTotal} skipped).`;
+    const quietSince = livenessAt(run);
+    const note = `Finalized by fix-stuck-charge-jobs: 'running' with no progress since ${quietSince?.toISOString?.() ?? quietSince} (started ${run.startedAt?.toISOString?.() ?? run.startedAt}). Recomputed from logs: ${attempted} attempted of ${eligibleCount} eligible (${succeeded} succeeded, ${failed} failed, ${skippedTotal} skipped).`;
 
     console.log(
       `\n  run ${String(run._id)} (kind=${run.kind ?? "charge"}) → eligible=${eligibleCount} attempted=${attempted} succeeded=${succeeded} failed=${failed} skipped=${skippedTotal} revenue=$${(revenueCents / 100).toFixed(2)}`
@@ -128,7 +144,11 @@ async function main(): Promise<void> {
 
   // 2. Release the global lock if held but expired (and no genuinely-active run remains).
   const lock = await ChargeJobLock.findById(LOCK_ID).lean();
-  const activeRunsRemaining = await ChargeJobRun.countDocuments({ status: "running", startedAt: { $gte: cutoff } });
+  // Same liveness rule: a LONG but still-progressing run must keep holding the lock.
+  const orphanIds = new Set(orphans.map((o) => String(o._id)));
+  const activeRunsRemaining = runningRuns.filter(
+    (r) => !orphanIds.has(String(r._id))
+  ).length;
   if (lock?.isLocked) {
     const expired = lock.lockedUntil ? new Date(lock.lockedUntil) <= now : true;
     if (expired && activeRunsRemaining === 0) {
@@ -141,14 +161,14 @@ async function main(): Promise<void> {
     } else if (!expired) {
       console.log(`\n  lock is held and NOT expired (lockedUntil=${lock.lockedUntil}) → left untouched (a run may be active)`);
     } else if (activeRunsRemaining > 0) {
-      console.log(`\n  lock held + ${activeRunsRemaining} recent running run(s) → left untouched`);
+      console.log(`\n  lock held + ${activeRunsRemaining} still-progressing run(s) → left untouched`);
     }
   } else {
     console.log(`\n  global charge lock is already free.`);
   }
 
   console.log(
-    `\n=== Summary ===\n  orphaned runs found: ${orphans.length}\n  runs finalized:      ${DRY_RUN ? 0 : fixedRuns}${DRY_RUN ? " (dry-run)" : ""}`
+    `\n=== Summary ===\n  running runs scanned: ${runningRuns.length}\n  stalled runs found:   ${orphans.length}\n  runs finalized:       ${DRY_RUN ? 0 : fixedRuns}${DRY_RUN ? " (dry-run)" : ""}`
   );
 
   await mongoose.disconnect();

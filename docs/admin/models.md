@@ -71,7 +71,16 @@ Added alongside `adChannels`. Stores per-platform payment attribution data for t
 
 One document per bulk past-due charge run. Created by the `start` action of `POST /api/admin/invoices/charge-past-due` (see [api.md](./api.md#post-apiadmininvoicescharge-past-due--chunked-charge-job)) and updated as each `chunk` drains the worklist; finalized when the worklist is empty or the admin stops.
 
-**Lifecycle states:** `running` → `completed` | `failed` | `aborted`. An orphan sweep (`sweepOrphanRuns` in [`chargePastDueJob.ts`](../../src/server/admin/chargePastDueJob.ts)) sets any `running` document older than 35 minutes to `aborted` on the next bulk-run start, **recomputing its real totals from `InvoiceChargeLog` rows first** so a crashed run no longer reports 0/0/0.
+**Lifecycle states:** `running` → `completed` | `failed` | `aborted`. An orphan sweep (`sweepOrphanRuns` in [`chargePastDueJob.ts`](../../src/server/admin/chargePastDueJob.ts)) sets any **stalled** `running` document to `aborted` on the next bulk-run start (and on every cron tick), **recomputing its real totals from `InvoiceChargeLog` rows first** so a crashed run no longer reports 0/0/0.
+
+**`lastProgressAt` — the liveness heartbeat (optional `Date`, added 2026-08-24).** "Stalled" means *no progress* for `ORPHAN_RUN_THRESHOLD_MS` (35 min), **not** "started 35 min ago". `processChargePastDueChunk` stamps `lastProgressAt` on its mid-run progress write, and **only when the chunk actually advanced** — i.e. at least one more worklist item gained an `InvoiceChargeLog` row. `isOrphanRun` (in [`charge-past-due-totals.ts`](../../src/server/admin/charge-past-due-totals.ts)) then keys on `lastProgressAt ?? startedAt`.
+
+Both halves matter:
+
+- Keying on `startedAt` **aborted every healthy run mid-charge** — production runs take 36.5–39.0 min against the 35-min window, so the next 5-minute cron tick killed each one at ~48% of its worklist, five days running (see [gotchas.md](./gotchas.md)).
+- Stamping on *every* chunk rather than only on progress would let a run whose items all throw before writing a row refresh its own liveness forever and never be swept. Progress, not activity, is the signal.
+
+The field is **optional with no schema default**: documents written before 2026-08-24 have no value and fall back to `startedAt`, so no legacy row can stick `running` forever. A default would have made every legacy row look freshly alive.
 
 **Totals shape** (`ChargeJobRunTotals`, recomputed from `InvoiceChargeLog` rows each chunk — not from in-memory counters):
 

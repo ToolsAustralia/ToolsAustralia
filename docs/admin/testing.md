@@ -6,6 +6,7 @@
 |---|---|---|
 | `npm run test:past-due-admin-charge` | `src/server/admin/__tests__/chargePastDueShared.test.ts` | shared charge-past-due utilities |
 | `npm run test:past-due-history` | `src/server/admin/__tests__/charge-past-due-totals.test.ts` | `aggregateRunTotals`, `isOrphanRun`, `ORPHAN_RUN_THRESHOLD_MS` |
+| `npm run test:orphan-progress` | `src/server/admin/__tests__/orphan-progress.test.ts` | **Regression guard (2026-08-24):** `isOrphanRun` must key on **last progress**, not elapsed time. Asserts a 60-min run with a 1-min-old `lastProgressAt` is alive, a run quiet past the threshold is swept, the `>=` boundary, legacy rows (absent **and** explicit-`null` `lastProgressAt`) falling back to `startedAt`, a fresh pre-first-chunk run being alive, and terminal statuses never sweeping. See [gotchas.md](./gotchas.md#the-orphan-sweep-killed-every-healthy-charge-run-for-five-days-2026-08-24). |
 | `npm run test:recover-stranded-past-due-policy` | `src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts` | pure helpers for stranded invoice recovery: idempotency keys, eligibility, draft-picking, 24h lock |
 | `npm run test:force-charge-policy` | `src/server/admin/__tests__/forceChargePastDuePolicy.test.ts` | pure helpers for force-charge past-due flow: idempotency key, target picker, period-paid guard, 24h success lock |
 | `npm run test:charge-or-recover-policy` | `src/server/admin/__tests__/chargeOrRecoverPolicy.test.ts` | Pure decision function — open-but-dead invoices route to recover; live opens route to pay. |

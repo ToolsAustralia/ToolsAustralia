@@ -18,6 +18,14 @@
 
   Totals are **recomputed from `InvoiceChargeLog` rows** (via `recomputeTotalsFromLogs` → `aggregateRunTotals`), not in-memory counters, so a crashed/killed run never shows 0/0/0. (Operational tooling for orphaned runs lives in the [infrastructure](../infrastructure/) domain — `scripts/fix-stuck-charge-jobs.ts`, npm `fix:stuck-charge-jobs`.)
 
+  **The orphan sweep keys on LAST PROGRESS, never on elapsed time (2026-08-24).** `sweepOrphanRuns` used to query `{ status: "running", startedAt: { $lt: cutoff } }`, i.e. *time since the run began*. Real runs take 36.5–39.0 minutes against a 35-minute `ORPHAN_RUN_THRESHOLD_MS`, so **every single run was aborted mid-charge** by the next 5-minute cron tick — see [gotchas.md § "The orphan sweep killed every healthy charge run"](./gotchas.md#the-orphan-sweep-killed-every-healthy-charge-run-for-five-days-2026-08-24) for the measured damage. Three things changed:
+
+  1. `ChargeJobRun.lastProgressAt` (optional `Date`) is the heartbeat. `processChargePastDueChunk` stamps it on its mid-run progress write **only when the chunk actually advanced** (`processed > processedBefore` — at least one more worklist item gained a log row). A chunk whose every item throws before writing a row is *activity without progress* and deliberately does not refresh liveness, so a wedged run is still swept.
+  2. `isOrphanRun(run, now)` (in `charge-past-due-totals.ts`) now keys on `lastProgressAt ?? startedAt` and is the **single authority**. Runs written before 2026-08-24 have no heartbeat and fall back to `startedAt`, so nothing can stick `running` forever.
+  3. `sweepOrphanRuns` no longer restates the threshold as a Mongo predicate — that duplicate is how the two drifted apart. It prefilters on `{ status: "running" }` (at most a handful of documents, and an index prefix) and calls `isOrphanRun` per candidate, **before** the per-run totals recompute, so a healthy long run costs two queries instead of four. Mongo cannot express `lastProgressAt ?? startedAt` without an index-defeating `$expr`. The abort message now reads `no progress for N min` rather than `exceeded lock window without finalize`.
+
+  Raising the threshold was rejected (design doc D-2): it moves the cliff without removing it, and the eligible population grew 813 → 1,103 in the five days the bug was measured. Progress-based liveness needs no retuning at any worklist size.
+
   **Skip-reason vocabulary (`src/utils/admin/chargeSkipReasons.ts`, 2026-07-20).** Pure, dependency-free module shared by the totals aggregator, `recomputeTotalsFromLogs`'s `classifySkipReason`, and the admin drawer, so all three bucket skips identically. Named buckets: `noHeldDraft` (stranded member, no re-billable held draft yet — self-heals next cycle), `awaitingRetry` (no payable attempt now but Stripe has a scheduled retry — `payOpenInvoiceAsPastDueAdmin` reclassifies the old "This invoice can no longer be paid"/`payment_intent_unexpected_state`-with-`next_payment_attempt` case here, with an accurate message instead of Stripe's dev-facing "consider voiding"), plus the pre-existing `recentlyAttempted`/`noLongerPastDue`/`alreadyPaid`/`missingPaymentMethod`/`other`. `PastDueChargeHistoryDrawer` recomputes the SKIP BREAKDOWN client-side from the run's rows via `classifySkipBucketFromMessage` so historical runs (persisted totals predate the new buckets) display correctly, and adds a per-run **"Why charges declined"** chip panel (failed rows grouped by `declineCode ?? errorCode`) that filters the per-invoice attempts list by decline reason. Tested by `npm run test:past-due-history` (`chargeSkipReasons.test.ts`). Norm mirrors the run totals — the two new fields were added to `src/lib/internal-norm/schemas/charge-past-due.ts` + `docs/internal-norm/norm-context.md` in lockstep.
 - `chargePastDueShared.ts` — shared logic for past-due charge retry (used by single + bulk endpoints). `payOpenInvoiceAsPastDueAdmin` enforces the 6h DB skip window via `InvoiceChargeLog` (`RECENT_ATTEMPT_WINDOW_HOURS`) and takes a **required** `idempotencyKey` for `stripe.invoices.pay` — there is no stable default. Each caller MUST scope the key to its dedupe unit (bulk → per-run, per-user click → per-invocation), because Stripe **replays** a reused key for 24h without re-charging (incident 2026-06-29 — see [gotchas](./gotchas.md) and [CHARGE_PAST_DUE_CUSTOMERS.md](../CHARGE_PAST_DUE_CUSTOMERS.md)). See [billing-stripe/gotchas#multi-layer-protection-on-the-bulk-endpoint](../billing-stripe/gotchas.md#multi-layer-protection-on-the-bulk-endpoint).
 
@@ -563,6 +571,12 @@ guard entirely.
 `running` by a closed browser tab would disable the cron indefinitely while every tick returned
 HTTP 200. Standing down for a live admin run also `console.error`s, because a silent skip means the
 day collected nothing.
+
+Because it runs on **every** tick, this is precisely where the elapsed-time sweep did its damage:
+the tick that was meant to *resume* the day's run instead aborted it at minute 35 of a 39-minute
+job. With the progress heartbeat, the sweep at the top of each tick sees a run that logged rows
+seconds ago, leaves it alone, and the tick resumes it as intended. See the `lastProgressAt` note
+under [Server-only code](#server-only-code).
 
 **Tick model.** Vercel caps the function at 300s, so a run is never one long process. The invocation
 deadline is passed **into** the chunk and enforced per item — a chunk cost is dominated by Stripe

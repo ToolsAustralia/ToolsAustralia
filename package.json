@@ -327,6 +327,7 @@
     "test:recover-stranded-past-due-policy": "tsx src/server/admin/__tests__/recoverStrandedPastDuePolicy.test.ts",
     "test:charge-or-recover-policy": "tsx src/server/admin/__tests__/chargeOrRecoverPolicy.test.ts",
     "test:past-due-history": "tsx src/server/admin/__tests__/charge-past-due-totals.test.ts && tsx src/services/admin/__tests__/chargePastDueHistory.test.ts && tsx src/utils/admin/__tests__/chargeSkipReasons.test.ts && tsx src/utils/admin/__tests__/chargeDeclineReasons.test.ts",
+    "test:orphan-progress": "tsx src/server/admin/__tests__/orphan-progress.test.ts",
     "test:payment-method-delete-flow": "tsx src/utils/payment/__tests__/payment-method-delete-flow.test.ts",
     "reconcile:stale-active": "tsx scripts/reconcile-stale-active-subscriptions.ts",
     "reconcile:stale-active:dry": "tsx scripts/reconcile-stale-active-subscriptions.ts --dry-run",

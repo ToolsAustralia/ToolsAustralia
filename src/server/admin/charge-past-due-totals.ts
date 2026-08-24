@@ -7,7 +7,12 @@
 import type { ChargeJobRunTotals } from "@/models/ChargeJobRun";
 import { skipReasonToBucket } from "@/utils/admin/chargeSkipReasons";
 
-/** Orphan-run cleanup window — 30min lock auto-expiry + 5min skew buffer. */
+/**
+ * Orphan-run cleanup window — 30min lock auto-expiry + 5min skew buffer.
+ *
+ * Measured against LAST PROGRESS, never against elapsed time since start. See
+ * `isOrphanRun` for why, and why raising this number is the wrong fix.
+ */
 export const ORPHAN_RUN_THRESHOLD_MS = 35 * 60 * 1000;
 
 /** Minimal row shape needed for totals aggregation — matches InvoiceChargeLog. */
@@ -102,11 +107,53 @@ export function aggregateRunTotals(
   return totals;
 }
 
-/** True when a `running` ChargeJobRun has aged past the cleanup threshold. */
+/**
+ * The instant a run last proved it was alive: its progress heartbeat, or — for
+ * rows written before `lastProgressAt` existed — the time it started.
+ *
+ * Exported so every caller applies ONE rule: `sweepOrphanRuns` (via `isOrphanRun`),
+ * the abort message it writes, and the `fix-stuck-charge-jobs` ops script. The rule
+ * is deliberately not restated as a Mongo predicate — a second copy is how the
+ * sweep and `isOrphanRun` drifted apart in the first place, and Mongo cannot
+ * evaluate `??` without an index-defeating `$expr`.
+ */
+export function runLivenessAt(run: {
+  startedAt: Date;
+  lastProgressAt?: Date | null;
+}): Date {
+  return run.lastProgressAt ?? run.startedAt;
+}
+
+/**
+ * True when a `running` ChargeJobRun has gone quiet for longer than the cleanup
+ * window — i.e. it is genuinely wedged, not merely long.
+ *
+ * KEYED ON LAST PROGRESS, NOT ON ELAPSED TIME (2026-08-24). This used to be
+ * `now - startedAt`, and the sweep query duplicated that as
+ * `startedAt: { $lt: cutoff }`. Real production runs take 36.5-39.0 minutes
+ * against a 35-minute window, so every single run was aborted mid-flight by the
+ * next 5-minute cron tick at ~48% of its worklist — five consecutive days,
+ * ~$2,800 of attempted recovery left uncollected, 229 of 1,157 past-due members
+ * never attempted at all in 30 days, and 94% of each day's attempts repeated on
+ * the same cards (which is what manufactures Stripe's excessive-retry blocks).
+ *
+ * Raising the threshold would only move the cliff: the eligible population went
+ * 813 -> 1103 in those same five days. The lock is already renewed per chunk, so
+ * a true liveness signal exists — a run writing InvoiceChargeLog rows is alive by
+ * definition, at any worklist size, with nothing to retune as the base grows.
+ *
+ * Legacy rows have no heartbeat and fall back to `startedAt`, so nothing written
+ * before this change can stick `running` forever.
+ */
 export function isOrphanRun(
-  run: { status: "running" | "completed" | "failed" | "aborted"; startedAt: Date },
+  run: {
+    status: "running" | "completed" | "failed" | "aborted";
+    startedAt: Date;
+    /** Absent on runs created before 2026-08-24 → falls back to `startedAt`. */
+    lastProgressAt?: Date | null;
+  },
   now: Date = new Date()
 ): boolean {
   if (run.status !== "running") return false;
-  return now.getTime() - run.startedAt.getTime() >= ORPHAN_RUN_THRESHOLD_MS;
+  return now.getTime() - runLivenessAt(run).getTime() >= ORPHAN_RUN_THRESHOLD_MS;
 }
