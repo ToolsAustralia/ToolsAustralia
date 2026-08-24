@@ -3,8 +3,13 @@
  *
  * GET /api/cron/major-draw-transition
  *
- * Runs daily at 2:00 PM UTC (12:00 AM AEST / 1:00 AM AEDT) as the primary scheduled transition handler.
- * This schedule aligns with midnight AEST/AEDT for queued draw activation.
+ * Runs daily at 18:15 UTC (~4:15 AM AEST / 5:15 AM AEDT) as the primary scheduled transition
+ * handler. Moved off 14:00 UTC (12:00 AM AEST / 1:00 AM AEDT) on 2026-08-24 to clear the
+ * ~900-membership renewal-webhook-burst hour — see docs/infrastructure/gotchas.md. This is a
+ * BACKSTOP, not the primary freshness mechanism (see "This cron job" below): real-time
+ * traffic-driven transitions on webhook/page-view paths run well before this fires, so a few
+ * hours' delay on the scheduled backstop does not delay a draw's actual activation for anyone
+ * who visits the site.
  *
  * ARCHITECTURE: Major draw transitions are handled by a dedicated service
  * (src/utils/draws/major-draw-transition-service.ts) which is called:

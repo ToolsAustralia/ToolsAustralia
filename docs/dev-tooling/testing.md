@@ -86,6 +86,10 @@ Flags: `--limit=N` (optional cap), `--live`, `--admin-email=` (required when `--
 - Set `NODE_ENV=production` locally → all dev routes must 404
 - Run a fix script twice → second run must skip
 
+## Membership-snapshot DST verification
+
+`npm run test:membership-snapshot-dst` ([scripts/test-membership-snapshot-dst.ts](../../scripts/test-membership-snapshot-dst.ts)) — pins the `membership-daily-snapshot` cron's "yesterday in `Australia/Sydney`" date-key formula across DST transition boundaries (mid-AEST, mid-AEDT, and the day before/of/after each AEDT start/end). Pure date math, no DB/network. The fixture `cronTimes` track whatever the CURRENT production schedule is (`30 17`/`30 20 * * *` UTC as of 2026-08-24 — see [infrastructure/gotchas.md](../infrastructure/gotchas.md)); the formula itself is invariant to which fixed UTC hour is chosen (only which side of Sydney midnight / which side of the DST transition instant matters), so a future reschedule needs this file's `cronTimes` updated to stay a literal fixture, but the assertions would still pass even if left stale — read the docstring before assuming a stale fixture means a stale formula.
+
 ## iGoDirect / MyRewards SSO connectivity probe
 
 `npm run test:igodirect-sso` ([scripts/test-igodirect-sso.ts](../../scripts/test-igodirect-sso.ts)) — proves we can mint a valid MyRewards SSO token and round-trip it. **Production-safe:** it only ever sends iGoDirect's own emailed sample identity (`member_id: tools_reward_user`), which already exists on their side, so `/generatetoken` returns "User found" and creates no new permanent record. Steps: (1) offline secret proof (recomputes the HMAC over their sample token — no network); (2) mint with the production signer + POST `/generatetoken`; (3) replica-encoding retry only if the standard token is rejected; (4) read-only `/verifytoken` 302 check. `--no-network` runs only the offline proof. Needs `IGODIRECT_SSO_SECRET` in `.env.local`.
