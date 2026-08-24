@@ -10,6 +10,16 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 
 > `.env.example` — `NEXT_PUBLIC_CONTENTSQUARE_ID` (added 2026-07-22) is the **inverse** of the streak flag above: production-only, blank everywhere else. It replaces a tag id previously hardcoded into `src/app/layout.tsx`'s Contentsquare `<Script>` (no env gate — loaded for every visitor in every environment); blank now renders nothing (mirrors `GoogleTagManager`'s `!gtmId` no-op). See [docs/tracking/rules.md R8](../tracking/rules.md).
 
+> `.env.example` — `STRIPE_RATE_LIMIT_GLOBAL_PER_SECOND` (default `80`) and
+> `STRIPE_RATE_LIMIT_ENDPOINT_PER_SECOND` (default `20`), added 2026-08-24, tune the client-side
+> token bucket in front of the Stripe singleton (`src/lib/stripe-rate-limiter.ts`). Both are
+> **optional tuning knobs whose defaults live in code**, so the declared values in `.env.example`
+> only restate them — leaving them unset in Vercel changes nothing. Defaults are 80% of Stripe's
+> published caps (100/sec global live, 25/sec sandbox global, 25/sec per endpoint); the sandbox
+> global default drops to `20` automatically when `STRIPE_SECRET_KEY` is a `_test_` key. `0`
+> disables that bucket. **The limiter is per-lambda-instance, so N concurrent invocations multiply
+> the aggregate rate** — see [billing-stripe/architecture.md](../billing-stripe/architecture.md#-per-instance-not-global).
+
 ## Index
 
 - [architecture.md](./architecture.md) — what lives here vs other domains

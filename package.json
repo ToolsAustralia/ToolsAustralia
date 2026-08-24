@@ -85,6 +85,7 @@
     "test:recover-stranded-bulk-run": "tsx src/server/admin/__tests__/recoverStrandedBulk.test.ts",
     "test:outbound-fetch": "tsx src/lib/http/__tests__/outbound.test.ts",
     "test:zero-trial-guard": "tsx src/services/stripe-webhook-handlers/__tests__/zero-trial-invoice-guard.test.ts",
+    "test:stripe-rate-limiter": "tsx src/lib/__tests__/stripe-rate-limiter.test.ts",
     "test:renewal-grant-reconciler": "tsx src/services/reconciliation/__tests__/renewalGrantReconciler.test.ts",
     "test:streak": "tsx src/utils/subscription/__tests__/streak.test.ts",
     "test:streak-milestones": "tsx src/services/milestones/__tests__/streak-milestones.test.ts",

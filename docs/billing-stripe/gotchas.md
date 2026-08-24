@@ -143,9 +143,49 @@ cost only shows up on the one night of the month when 900 of them land in the sa
 add a Stripe call to a webhook handler, count what that handler already costs per event first.
 
 **Still open after this change:** the global bucket. 7 calls/renewal is ~127/sec at burst — over
-100/sec with no headroom — so the shared client-side token bucket in `src/lib/stripe.ts` is still
-required, and `maxNetworkRetries: 2` does **not** cover you (the SDK's retry logic has no 429
-branch: `node_modules/stripe/cjs/RequestSender.js`).
+100/sec with no headroom — so a shared client-side token bucket was still required, and
+`maxNetworkRetries: 2` does **not** cover you (the SDK's retry logic has no 429 branch:
+`node_modules/stripe/cjs/RequestSender.js:138`). That limiter now exists —
+[`src/lib/stripe-rate-limiter.ts`](../../src/lib/stripe-rate-limiter.ts), see
+[architecture.md](./architecture.md#client-side-rate-limiter).
+
+## Don't wrap the Stripe singleton in a `Proxy` — it breaks `for await` and `constructEvent` (2026-08-24)
+
+Adding the client-side rate limiter meant putting *something* in front of
+`src/lib/stripe.ts`'s singleton, which every payment in the app runs through (~83 importers).
+The obvious move — a recursive `Proxy` whose `get` trap returns
+`async (...args) => { await acquire(); return fn.apply(target, args); }` — **looks** transparent
+and is not. Measured against stripe@18.5.0:
+
+| Probe | Proxy result |
+|---|---|
+| `list[Symbol.asyncIterator]` | `undefined` |
+| `list.autoPagingEach` | `undefined` |
+| `for await (const c of stripe.customers.list(…))` | **TypeError: not async iterable** |
+| `stripe.webhooks.constructEvent(…)` | returns a **Promise**, not an event |
+
+Two separate ways to break production:
+
+1. **`.list()` / `.search()` return an `ApiListPromise`** — a promise that is *also* an async
+   iterator, carrying `autoPagingEach` / `autoPagingToArray`. An `async` wrapper function returns
+   a plain `Promise`, so all of that is stripped. Six call sites drive these with `for await`
+   (`cron/reconcile-blocked-transactions`, `backfill-blocked-transactions`,
+   `investigate-blocked-transactions`, `audit-receipts-refund-accuracy`,
+   `backfill-missing-refund-events`, `find-stranded-mini-draw-payments`).
+2. **`stripe.webhooks.constructEvent` is synchronous.**
+   [`webhook/route.ts:36`](../../src/app/api/stripe/webhook/route.ts) does
+   `event = stripe.webhooks.constructEvent(...)`. Through the proxy that assigns a *Promise*, so
+   `event.type` is `undefined` and **every webhook silently falls through the dispatcher** — and
+   a signature failure becomes an unhandled rejection instead of a caught 400.
+
+A proxy also **misses** calls it should meter: auto-pagination's follow-up page requests and the
+SDK's own network retries don't go back through the public resource method.
+
+**Do it at the HTTP layer instead.** `new Stripe(key, { httpClient })` takes a client the SDK
+calls exactly twice — `getClientName()` and `makeRequest()`
+(`RequestSender.js:366`, `stripe.core.js:283`) — and `makeRequest` is already awaited internally,
+so awaiting a token inside it is invisible to everything above. Return shapes, nested namespaces,
+per-call options, error classes and sync helpers are untouched *because you never touch them*.
 
 ## Confirm-time card declines are THROWN by the SDK, not returned (2026-07-16)
 

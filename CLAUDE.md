@@ -351,6 +351,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "paths": [
         "src/utils/billing/**",
         "src/lib/stripe.ts",
+        "src/lib/stripe-rate-limiter.ts",
+        "src/lib/__tests__/stripe-rate-limiter.test.ts",
         "src/lib/stripe-client.ts",
         "src/services/allowlist/**",
         "src/services/stripe-webhook-queue/**",

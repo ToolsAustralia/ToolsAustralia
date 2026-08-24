@@ -10,6 +10,71 @@ This domain is the **Stripe boundary layer**. It owns:
 
 Other domains (subscription, payment, rewards) consume this layer's helpers and read the ledger; they don't talk to Stripe directly.
 
+## Client-side rate limiter
+
+[`src/lib/stripe-rate-limiter.ts`](../../src/lib/stripe-rate-limiter.ts) puts a token bucket in
+front of **every** request the server singleton makes. Added 2026-08-24 after the renewal burst
+that charged 11 members without granting entries — see
+[gotchas: one renewal cost 10 Stripe API calls](./gotchas.md#one-renewal-cost-10-stripe-api-calls--three-were-pure-waste-2026-08-24).
+
+```
+stripe.subscriptions.retrieve(id)      ← ~83 importers, unchanged
+        │
+   StripeResource → RequestSender._request()
+        │
+   httpClient.makeRequest(host, port, path, …)   ← the shim
+        │  await limiter.acquire(endpointKeyFromPath(path))
+        ▼
+   NodeHttpClient.makeRequest(…)        ← the SDK's own default client
+```
+
+**Two buckets, both must yield a token before a request goes out:**
+
+| Bucket | Env var | Default | Stripe's cap |
+|---|---|---|---|
+| Global (all endpoints) | `STRIPE_RATE_LIMIT_GLOBAL_PER_SECOND` | 80 live / 20 sandbox | 100/sec live, 25/sec sandbox |
+| Per endpoint (`/v1/subscriptions`, …) | `STRIPE_RATE_LIMIT_ENDPOINT_PER_SECOND` | 20 | 25/sec |
+
+Defaults are **80% of the published caps**, so a single instance can never exhaust the account's
+budget on its own, with 20% left for traffic outside this singleton (Dashboard, Stripe CLI). Set
+either to `0` to disable that bucket. Capacity equals the rate, so a bucket holds at most one
+second of traffic — never a larger stored burst.
+
+Endpoint keys come from the real request path, so `/v1/subscriptions/sub_1` and
+`/v1/subscriptions?limit=100` share one bucket (the SDK appends the query string to the path,
+`StripeResource.js:162-167`, so it is stripped first).
+
+### ⚠️ Per-instance, not global
+
+State lives in module scope, so **each warm lambda has its own pair of buckets**. Vercel ran ~56
+concurrent invocations during the burst, so the aggregate ceiling is 80 × 56 ≈ **4,480/sec** — far
+above Stripe's 100/sec account cap. This is a **safety valve, not a global governor**. What it
+actually buys:
+
+1. **It meters a single invocation's fan-out.** The webhook queue drains `SWEEP_BATCH_SIZE = 20`
+   events *concurrently* ([process-stripe-webhook-queue/route.ts](../../src/app/api/cron/process-stripe-webhook-queue/route.ts)),
+   and a renewal costs ~7 calls, so one instance can fire ~140 requests at once. Those now go out
+   at 80/sec (20/sec per endpoint) instead of all at once.
+2. **No single instance can exhaust the account budget alone.**
+3. **It is an env-only knob** — turn it down without a code change if 429s reappear.
+
+A genuinely global limiter needs shared state (Redis / Mongo counter). Deliberately out of scope:
+it adds a network round-trip and a new failure mode to the hot path of every payment. That is the
+follow-up if per-instance metering proves insufficient.
+
+### Why the shim is at the HTTP layer
+
+`httpClient` is the only interception point that is transparent by construction — the SDK calls
+just `getClientName()` and `makeRequest()` on it, and `makeRequest` is already awaited internally.
+Wrapping the singleton in a `Proxy` instead **breaks `for await` auto-pagination and turns the
+synchronous `webhooks.constructEvent` into a Promise**; see
+[gotchas](./gotchas.md#dont-wrap-the-stripe-singleton-in-a-proxy--it-breaks-for-await-and-constructevent-2026-08-24).
+
+Fairness is strict FIFO across a single queue with a single pending timer: starvation-free,
+deadlock-free (buckets refill on a wall clock nothing here can stop), and no timer outlives the
+queue. The trade is head-of-line blocking — a throttled endpoint can briefly hold up a free one —
+which costs nothing during the burst this exists for, because every endpoint is saturated then.
+
 ## Webhook flow
 
 ```

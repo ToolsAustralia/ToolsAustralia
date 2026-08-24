@@ -108,6 +108,27 @@ Also gate every *write*: `pause_collection: ""` on an unpaused subscription, or 
 value equals the current one, is a full request for nothing. See
 [gotchas.md → One renewal cost 10 Stripe API calls](./gotchas.md#one-renewal-cost-10-stripe-api-calls--three-were-pure-waste-2026-08-24).
 
+## The Stripe singleton
+
+### R13. Never wrap the `stripe` singleton in a `Proxy`
+
+`src/lib/stripe.ts` exports one client and ~83 server modules import it, so anything wrapping it
+must be perfectly transparent. A `Proxy` is not: an `async` `get` trap strips `ApiListPromise`'s
+async-iterator (breaking six `for await` call sites) and turns the **synchronous**
+`stripe.webhooks.constructEvent` into a Promise, which silently disables the whole webhook
+dispatcher. If you need to intercept Stripe calls, do it via the `httpClient` config option —
+the SDK calls exactly `getClientName()` and `makeRequest()` on it and already awaits the latter.
+Evidence and the measured probe: [gotchas](./gotchas.md#dont-wrap-the-stripe-singleton-in-a-proxy--it-breaks-for-await-and-constructevent-2026-08-24).
+
+### R14. Don't rely on `maxNetworkRetries` for 429s
+
+`maxNetworkRetries: 2` (`src/lib/stripe.ts`) covers connection errors and a narrow set of status
+codes. `RequestSender._shouldRetry` (`node_modules/stripe/cjs/RequestSender.js:138`) has **no 429
+branch** — a rate-limited request fails straight through to the caller. Staying under the cap is
+the client's job, which is what [`stripe-rate-limiter.ts`](../../src/lib/stripe-rate-limiter.ts)
+does. Remember it is **per lambda instance**, so it bounds one invocation's fan-out, not the
+account-wide rate — see [architecture](./architecture.md#-per-instance-not-global).
+
 ## Logging
 
 ### R11. Sanitise Stripe responses before persisting
