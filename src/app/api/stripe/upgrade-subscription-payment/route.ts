@@ -17,24 +17,11 @@ import {
   getSubscriptionPeriodStart,
   getSubscriptionPeriodEnd,
 } from "@/utils/payment/stripe/subscription-period";
-import { getNextAnchorTimestamp, getReanchorTrialEndTimestamp } from "@/utils/billing/anchor-billing";
-
-/**
- * Minimum runway between an upgrade and the anchor `trial_end` we re-apply after it.
- *
- * `trial_end` is a BILLING boundary, not a grace date — Stripe charges the FULL amount when it
- * arrives. The upgrading member has just paid a full month up front, so re-applying an anchor that
- * is only days away would charge them twice within days, and `proration_behavior: "none"` means no
- * credit for the overlap. (Concretely: a 26-July joiner anchored to 24 Aug who upgrades on 20 Aug
- * would pay full price on the 20th and full price again on the 24th.)
- *
- * 14 days is half a monthly cycle: they paid for a month, so they get at least half of one before
- * the next charge. Erring generous is deliberate — the failure mode on the other side is
- * double-charging a paying member, which costs refunds, chargebacks and trust. This mirrors the
- * strictly-after intent already baked into `getReanchorTrialEndTimestamp`, which exists so a
- * recovered member is not re-billed a fortnight later on a stale anchor.
- */
-const MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS = 14 * 24 * 60 * 60;
+import {
+  getNextAnchorTimestamp,
+  resolveReappliedAnchor,
+  MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS,
+} from "@/utils/billing/anchor-billing";
 
 const upgradeSubscriptionPaymentSchema = z.object({
   newPackageId: z.string().min(1, "New package ID is required"),
@@ -393,17 +380,24 @@ export async function POST(request: NextRequest) {
             ? pendingTrialEnd
             : getNextAnchorTimestamp(new Date());
 
-        // ⚠️ DOUBLE-CHARGE FLOOR — see MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS. Keep the member's
-        // anchor DAY, but push to the next OCCURRENCE of it when the nearest one is under half
-        // a cycle away, so they are not billed the full amount again days after paying for the
-        // upgrade. `getReanchorTrialEndTimestamp` is exactly the right tool: it returns the next
-        // occurrence of that same day-of-month STRICTLY AFTER the instant given, short-month
-        // safe (a kept 31 becomes Feb 28/29). One advance always clears the floor, because a
-        // month is at least 28 days and the floor is 14.
-        trialEndToReapply =
-          capturedAnchor < nowSeconds + MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS
-            ? getReanchorTrialEndTimestamp(new Date(capturedAnchor * 1000))
-            : capturedAnchor;
+        // ⚠️ DOUBLE-CHARGE FLOOR. `trial_end` is a BILLING boundary — Stripe charges the full
+        // amount when it arrives — so an anchor a few days out would bill this member again days
+        // after they paid for the upgrade, uncredited. `resolveReappliedAnchor` keeps their anchor
+        // DAY and only advances the OCCURRENCE when the nearest is under half a cycle away. It is
+        // a pure, unit-tested decision (`npm test`) precisely because it is what guards the money.
+        trialEndToReapply = resolveReappliedAnchor(capturedAnchor, nowSeconds);
+
+        if (trialEndToReapply !== capturedAnchor) {
+          // A full-month move with no MembershipStatusHistory row and an in-place `endDate`
+          // overwrite would otherwise leave support unable to answer "why did my renewal jump to
+          // September?". `console.error`, not `log`/`warn` — production strips those.
+          console.error(
+            `ℹ️ [UPGRADE] Anchor floor fired for ${user.stripeSubscriptionId}: captured trial_end ` +
+              `${capturedAnchor} (${new Date(capturedAnchor * 1000).toISOString()}) was inside the ` +
+              `${MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS / 86400}-day runway; re-applying ${trialEndToReapply} ` +
+              `(${new Date(trialEndToReapply * 1000).toISOString()}) instead to avoid a second full charge.`
+          );
+        }
       } catch (anchorError) {
         // `getReanchorTrialEndTimestamp` throws on malformed input rather than guessing. Leave
         // `trialEndToReapply` null and skip below — the upgrade itself has already succeeded.
@@ -433,18 +427,32 @@ export async function POST(request: NextRequest) {
           // Mirror `endDate` from the SAME computed timestamp, exactly as
           // `reanchorAfterPastDueRecovery` does — never read it back from Stripe, which can lag,
           // and the two `customer.subscription.updated` events from this request can arrive out
-          // of order. Every return branch below calls `user.save()`, so this needs no extra
-          // write. It matters most on the floor path above, where the anchor really does move.
+          // of order. It matters most on the floor path above, where the anchor really does move.
+          //
+          // Persist it HERE rather than relying on a later save. NOT every return branch below
+          // saves: the duplicate-request return and both 500s return first, so a deferred write
+          // would be silently dropped on those paths — while Klaviyo had already been pushed a
+          // value Mongo never received. Save first, push second, so the two cannot diverge.
           user.subscription.endDate = new Date(trialEndToReapply * 1000);
+          let endDatePersisted = false;
+          try {
+            await user.save();
+            endDatePersisted = true;
+          } catch (saveError) {
+            console.error(`⚠️ [UPGRADE] Could not persist re-anchored endDate (non-fatal):`, saveError);
+          }
 
           // Klaviyo holds `next_renewal_date` / `subscription_end_date` as pushed SNAPSHOTS, so
-          // unlike every in-app surface they do not self-correct on the next fetch. Fire-and-
-          // forget, same as the sibling reanchor.
-          try {
-            const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
-            ensureUserProfileSynced(user);
-          } catch (klaviyoError) {
-            console.error(`⚠️ [UPGRADE] Klaviyo re-sync after anchor re-apply failed (non-fatal):`, klaviyoError);
+          // unlike every in-app surface they do not self-correct on the next fetch. Only pushed
+          // once the value is actually in Mongo — see above. Fire-and-forget, like the sibling
+          // reanchor. (The `customer.subscription.updated` webhook re-syncs both as a backstop.)
+          if (endDatePersisted) {
+            try {
+              const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
+              ensureUserProfileSynced(user);
+            } catch (klaviyoError) {
+              console.error(`⚠️ [UPGRADE] Klaviyo re-sync after anchor re-apply failed (non-fatal):`, klaviyoError);
+            }
           }
 
           // Deliberately NO `MembershipStatusHistory` row. That model records subscription STATE
