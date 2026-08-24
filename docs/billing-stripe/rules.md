@@ -114,20 +114,34 @@ value equals the current one, is a full request for nothing. See
 
 `src/lib/stripe.ts` exports one client and ~83 server modules import it, so anything wrapping it
 must be perfectly transparent. A `Proxy` is not: an `async` `get` trap strips `ApiListPromise`'s
-async-iterator (breaking six `for await` call sites) and turns the **synchronous**
-`stripe.webhooks.constructEvent` into a Promise, which silently disables the whole webhook
-dispatcher. If you need to intercept Stripe calls, do it via the `httpClient` config option —
+async-iterator (breaking the three `for await` call sites that use the singleton) and turns the
+**synchronous** `stripe.webhooks.constructEvent` into a Promise, which silently disables the whole
+webhook dispatcher. If you need to intercept Stripe calls, do it via the `httpClient` config option —
 the SDK calls exactly `getClientName()` and `makeRequest()` on it and already awaits the latter.
 Evidence and the measured probe: [gotchas](./gotchas.md#dont-wrap-the-stripe-singleton-in-a-proxy--it-breaks-for-await-and-constructevent-2026-08-24).
 
 ### R14. Don't rely on `maxNetworkRetries` for 429s
 
 `maxNetworkRetries: 2` (`src/lib/stripe.ts`) covers connection errors and a narrow set of status
-codes. `RequestSender._shouldRetry` (`node_modules/stripe/cjs/RequestSender.js:138`) has **no 429
-branch** — a rate-limited request fails straight through to the caller. Staying under the cap is
-the client's job, which is what [`stripe-rate-limiter.ts`](../../src/lib/stripe-rate-limiter.ts)
-does. Remember it is **per lambda instance**, so it bounds one invocation's fan-out, not the
-account-wide rate — see [architecture](./architecture.md#-per-instance-not-global).
+codes. `RequestSender._shouldRetry` (`node_modules/stripe/cjs/RequestSender.js:138`) has **no
+branch on status 429** — it retries connection errors, 409 and ≥500. It *does* honour a
+`stripe-should-retry: true` response header, which Stripe may send on a rate-limit response, but
+that is Stripe's choice rather than ours, so it is not something to design against. Staying under
+the cap is the client's job, which is what
+[`stripe-rate-limiter.ts`](../../src/lib/stripe-rate-limiter.ts) does — for calls that go through
+the singleton, on the paths it actually meters. Read
+[architecture](./architecture.md#what-it-meters--and-what-it-does-not) before citing it as
+account-level protection: it is **per lambda instance**, and it barely engages on the inbound
+webhook path.
+
+### R15. New Stripe calls go through the singleton — don't `new Stripe(...)` in app code
+
+`src/app/api/**` must import `{ stripe } from "@/lib/stripe"`. An ad-hoc client silently opts out
+of the rate limiter and of any future singleton-level config. `cancel-incomplete-subscription`
+was the last route doing this and was migrated on 2026-08-24. Ops scripts under `scripts/` that
+build their own client are tolerated (they run by hand via tsx, never in a lambda, so they cannot
+multiply across instances) but are listed in
+[architecture](./architecture.md#coverage-what-is-not-behind-the-limiter) so the gap stays visible.
 
 ## Logging
 

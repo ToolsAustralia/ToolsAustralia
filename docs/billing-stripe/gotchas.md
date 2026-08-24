@@ -144,8 +144,13 @@ add a Stripe call to a webhook handler, count what that handler already costs pe
 
 **Still open after this change:** the global bucket. 7 calls/renewal is ~127/sec at burst — over
 100/sec with no headroom — so a shared client-side token bucket was still required, and
-`maxNetworkRetries: 2` does **not** cover you (the SDK's retry logic has no 429 branch:
-`node_modules/stripe/cjs/RequestSender.js:138`). That limiter now exists —
+`maxNetworkRetries: 2` is **not** cover for it: `_shouldRetry`
+(`node_modules/stripe/cjs/RequestSender.js:138`) has no branch on status 429 (it retries
+connection errors, 409 and ≥500). It *does* honour a `stripe-should-retry: true` response header,
+which Stripe may send on a rate-limit response — but that is Stripe's choice, not ours, so it
+cannot be relied on. **This call-count reduction, not the limiter, is what carries account-level
+compliance** — see [architecture: what the limiter does and does not meter](./architecture.md#what-it-meters--and-what-it-does-not).
+That limiter now exists —
 [`src/lib/stripe-rate-limiter.ts`](../../src/lib/stripe-rate-limiter.ts), see
 [architecture.md](./architecture.md#client-side-rate-limiter).
 
@@ -168,10 +173,14 @@ Two separate ways to break production:
 
 1. **`.list()` / `.search()` return an `ApiListPromise`** — a promise that is *also* an async
    iterator, carrying `autoPagingEach` / `autoPagingToArray`. An `async` wrapper function returns
-   a plain `Promise`, so all of that is stripped. Six call sites drive these with `for await`
-   (`cron/reconcile-blocked-transactions`, `backfill-blocked-transactions`,
-   `investigate-blocked-transactions`, `audit-receipts-refund-accuracy`,
-   `backfill-missing-refund-events`, `find-stranded-mini-draw-payments`).
+   a plain `Promise`, so all of that is stripped. **Three** call sites drive these with `for await`
+   *on the singleton* — [`cron/reconcile-blocked-transactions/route.ts:62,83`](../../src/app/api/cron/reconcile-blocked-transactions/route.ts),
+   [`scripts/backfill-blocked-transactions.ts:117,164`](../../scripts/backfill-blocked-transactions.ts),
+   [`scripts/investigate-blocked-transactions.ts:52,78`](../../scripts/investigate-blocked-transactions.ts)
+   (all three via `await import("@/lib/stripe")`). Three more — `audit-receipts-refund-accuracy.ts`,
+   `backfill-missing-refund-events.ts`, `find-stranded-mini-draw-payments.ts` — build their own
+   `new Stripe(...)`, so a Proxy would not have broken them, and the limiter does not meter them
+   either (see [architecture](./architecture.md#coverage-what-is-not-behind-the-limiter)).
 2. **`stripe.webhooks.constructEvent` is synchronous.**
    [`webhook/route.ts:36`](../../src/app/api/stripe/webhook/route.ts) does
    `event = stripe.webhooks.constructEvent(...)`. Through the proxy that assigns a *Promise*, so

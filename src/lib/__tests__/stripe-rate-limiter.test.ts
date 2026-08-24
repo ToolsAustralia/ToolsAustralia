@@ -230,6 +230,38 @@ async function run() {
     );
   }
 
+  // THE WIRING. Everything else either calls limiter.acquire() directly or runs the SDK
+  // through a limiter that never throttles -- delete the `await limiter.acquire(...)` line
+  // in the shim and all of it still passes. This is the case that fails if the shim stops
+  // consulting the limiter, and it also pins that the key reaching acquire() is the
+  // COLLAPSED endpoint key: sub_1 and sub_2 are different paths but must share one bucket.
+  {
+    const limiter = createRateLimiter({ globalPerSecond: 1, perEndpointPerSecond: 1 });
+    const { stripe, seen } = stripeWithFakeTransport(
+      [
+        { status: 200, json: { id: "sub_1", object: "subscription" } },
+        { status: 200, json: { id: "sub_2", object: "subscription" } },
+      ],
+      limiter
+    );
+    await stripe.subscriptions.retrieve("sub_1");
+    const t0 = Date.now();
+    await stripe.subscriptions.retrieve("sub_2");
+    const elapsed = Date.now() - t0;
+    assert.ok(elapsed >= 400, `the SDK call itself was throttled by the shim (${elapsed}ms)`);
+    assert.equal(limiter.stats().throttledCount, 1, "the shim consulted the limiter");
+    assert.deepEqual(
+      seen.map((r) => r.path),
+      ["/v1/subscriptions/sub_1", "/v1/subscriptions/sub_2"],
+      "two distinct instance paths..."
+    );
+    assert.equal(
+      endpointKeyFromPath(seen[0].path),
+      endpointKeyFromPath(seen[1].path),
+      "...collapsed to one shared endpoint bucket"
+    );
+  }
+
   // A plain resource call still returns a parsed Stripe object, and is metered under
   // the resource's endpoint key rather than the full instance path.
   {

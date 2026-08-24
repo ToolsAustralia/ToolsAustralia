@@ -13,10 +13,12 @@ import Stripe from "stripe";
  *   - Global API rate limit ......... 100 req/sec live mode, 25 req/sec sandbox
  *   - Individual API endpoints ....... 25 req/sec  (per endpoint)
  *
- * The SDK does NOT protect us: `maxNetworkRetries` only retries connection errors and a
- * narrow set of status codes -- `RequestSender._shouldRetry`
- * (node_modules/stripe/cjs/RequestSender.js:138) has **no 429 branch**. A rate-limited
- * request fails straight through to the caller.
+ * The SDK does NOT reliably protect us. `RequestSender._shouldRetry`
+ * (node_modules/stripe/cjs/RequestSender.js:138) has **no branch on status 429**: it retries
+ * connection errors, 409 and >=500. It DOES honour a `stripe-should-retry: true` response
+ * header, which Stripe may send on a rate-limit response -- so a 429 is retried only if
+ * Stripe volunteers that header, which is not something we control or can rely on. Treat
+ * `maxNetworkRetries: 2` as no cover for 429.
  *
  * --- KNOWN LIMITATION: THIS LIMITER IS PER-LAMBDA-INSTANCE, NOT GLOBAL ---------
  * State lives in module scope, so each warm serverless instance keeps its own pair of
@@ -27,13 +29,25 @@ import Stripe from "stripe";
  *
  * So this is a **safety valve, not a global governor**. What it actually buys:
  *
- *   1. It caps the fan-out of a single invocation. The webhook queue drains
- *      SWEEP_BATCH_SIZE = 20 events *concurrently*
+ *   1. It meters the fan-out of a single invocation on the queue-DRAIN path. That cron
+ *      drains SWEEP_BATCH_SIZE = 20 events *concurrently* via Promise.allSettled
  *      (src/app/api/cron/process-stripe-webhook-queue/route.ts:7,84) and a renewal costs
  *      ~7 Stripe calls, so one instance can fire ~140 requests essentially at once.
  *      This meters that spike into an 80/sec (20/sec per endpoint) stream.
  *   2. It guarantees no *single* instance can exhaust the account's budget on its own.
  *   3. It is the knob to turn down (env only, no code change) if 429s reappear.
+ *
+ * ** What it does NOT do, stated plainly: it will essentially never engage on the path
+ * that caused the 24 Aug incident. ** The inbound receiver (/api/stripe/webhook) handles
+ * ONE event per invocation via after(), so ~900 events spread over ~56 instances is ~2
+ * calls/sec per instance -- two orders of magnitude under an 80/sec bucket. The honest
+ * framing: this reduces the DEPTH of a 429 storm's retry backlog by metering the drain;
+ * it does not prevent the storm. Account-level compliance rests on the call-count
+ * reduction (10 -> 7 calls per renewal), not on this limiter.
+ *
+ * It also only covers calls made through THIS singleton. Three ops scripts build their
+ * own `new Stripe(...)` and are unmetered -- see docs/billing-stripe/architecture.md.
+ * They run via tsx by hand, never inside a lambda, so they do not multiply.
  *
  * A truly global limiter needs shared state (Redis / Mongo counter). That was
  * deliberately out of scope: it adds a network round-trip and a new failure mode to the
@@ -46,9 +60,10 @@ import Stripe from "stripe";
  * (`stripe.testHelpers.testClocks.retrieve`), per-call options objects
  * (`{ idempotencyKey }` as a 2nd/3rd arg), the synchronous
  * `stripe.webhooks.constructEvent`, and -- the killer -- `ApiListPromise`, the
- * promise-plus-async-iterator returned by `.list()` / `.search()` that six call sites
- * drive with `for await`. An `async` proxy method returns a plain Promise and silently
- * breaks every one of those iterators.
+ * promise-plus-async-iterator returned by `.list()` / `.search()` that three call sites on
+ * this singleton drive with `for await` (`cron/reconcile-blocked-transactions`,
+ * `scripts/backfill-blocked-transactions`, `scripts/investigate-blocked-transactions`).
+ * An `async` proxy method returns a plain Promise and silently breaks every one of them.
  *
  * `httpClient` avoids all of those hazards by construction. The SDK calls exactly two
  * methods on it -- `getClientName()` and `makeRequest()` (RequestSender.js:366,

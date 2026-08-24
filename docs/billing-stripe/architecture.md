@@ -62,6 +62,34 @@ A genuinely global limiter needs shared state (Redis / Mongo counter). Deliberat
 it adds a network round-trip and a new failure mode to the hot path of every payment. That is the
 follow-up if per-instance metering proves insufficient.
 
+### What it meters — and what it does not
+
+**This limiter will essentially never engage on the path that caused the 24 Aug incident.** The
+inbound receiver ([`/api/stripe/webhook`](../../src/app/api/stripe/webhook/route.ts)) handles
+**one** event per invocation via `after()`, so ~900 events spread across ~56 instances is roughly
+**2 calls/sec per instance** — two orders of magnitude under an 80/sec bucket. What it genuinely
+meters is the queue-**drain** path (`process-stripe-webhook-queue`, 20 events concurrently via
+`Promise.allSettled`, ~140 requests at once from one instance).
+
+So the honest framing: **this reduces the depth of a 429 storm's retry backlog; it does not
+prevent the storm.** Account-level compliance rests on the call-count reduction (10 → 7 calls per
+renewal) in [gotchas](./gotchas.md#one-renewal-cost-10-stripe-api-calls--three-were-pure-waste-2026-08-24),
+not on this limiter. Cite them in that order.
+
+### Coverage: what is NOT behind the limiter
+
+Only calls made through the `stripe` singleton are metered. As of 2026-08-24 **no route or service
+under `src/` constructs its own client** — `cancel-incomplete-subscription` was the last one and now
+imports the singleton (rule [R15](./rules.md#r15-new-stripe-calls-go-through-the-singleton--dont-new-stripe-in-app-code)).
+
+These **ops scripts** still build their own `new Stripe(...)` and are unmetered:
+`audit-receipts-refund-accuracy`, `backfill-missing-refund-events`, `find-stranded-mini-draw-payments`,
+`backfill-rebill-payment-events`, `confirm-stuck-pi`, `find-duplicate-stripe-subscriptions`,
+`reconcile-stale-active-subscriptions`, `seed-active-member`, `seed-past-due-member`, and the
+`stripe-probe-*` set. They run by hand via `tsx`, one process at a time, never inside a lambda —
+so they cannot multiply across instances the way the serverless paths can. Left as-is deliberately;
+listed here so the gap stays visible rather than being assumed away.
+
 ### Why the shim is at the HTTP layer
 
 `httpClient` is the only interception point that is transparent by construction — the SDK calls
