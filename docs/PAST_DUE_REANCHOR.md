@@ -65,7 +65,25 @@ by this document's flow — therefore got a hard 400 on **every** upgrade attemp
    still in the future (that IS their anchor, whichever rule set it), else the shared
    `getNextAnchorTimestamp` used by the join rule and `migrate-anchor-billing-24`. Always with
    `proration_behavior: "none"`, so it neither charges nor credits. Non-fatal: a failure here costs
-   one off-anchor renewal date, never the (already paid) upgrade.
+   one off-anchor renewal date, never the (already paid) upgrade. `endDate` is mirrored from the
+   same computed timestamp (never read back from Stripe, which lags) and Klaviyo is re-pushed —
+   both for the same reasons this document gives for `reanchorAfterPastDueRecovery`.
+
+**⚠️ The 14-day double-charge floor.** `trial_end` is a **billing boundary**, not a grace date:
+Stripe charges the FULL amount when it arrives. Naively re-applying the captured anchor therefore
+re-creates the exact bug this whole document exists to prevent — *"re-billing a member ~2 weeks
+later on the old anchor"* — only worse, because the member has just paid a full month for the
+upgrade. A 26-July joiner anchored to 24 Aug who upgrades on **20 Aug** would pay full price on the
+20th and full price again on the **24th**, four days apart, with `proration_behavior: "none"` so no
+credit. The window is 1–29 days wide and hits the entire anchored cohort.
+
+The route therefore keeps the member's anchor **day** and advances to the next **occurrence** when
+the nearest one is under 14 days out, reusing `getReanchorTrialEndTimestamp` — which returns the
+next occurrence of the same day-of-month **strictly after** the instant given, short-month safe
+(a kept 31 becomes Feb 28/29). That is precisely the "guarantee roughly a full cycle" intent the
+helper already encodes. 14 days is half a cycle; one advance always clears the floor because a
+month is at least 28 days. **Err generous here** — the failure mode on the other side is
+double-charging a paying member, which costs refunds, chargebacks and trust.
 
 **Two ordering traps, both live:**
 
@@ -80,6 +98,31 @@ by this document's flow — therefore got a hard 400 on **every** upgrade attemp
 
 **Do not "optimize" the re-apply to `billing_cycle_anchor`** — see *Why `trial_end`* above. It
 cannot target a future date, so it cannot land the clamped 24th.
+
+**Stripe behaviour — VERIFIED, not assumed.** `npm run stripe:probe-upgrade-anchor`
+(`scripts/stripe-probe-upgrade-anchor.ts`, test-mode only, auto-cleanup) ran **10/10 green** against
+live Stripe:
+
+- **U0 (control)** reproduces the original production failure verbatim on a trialing sub:
+  *"Trial end (…) cannot be after billing_cycle_anchor (…). Consider ending the trial
+  (`trial_end=now`)."* If this assertion ever stops failing, Stripe changed the behaviour and the
+  workaround should be revisited.
+- **U5 — the one that mattered.** The pay-first call (`trial_end:"now"` + `billing_cycle_anchor:"now"`
+  + item swap) creates **exactly one** invoice: `subscription_update`, total 4000, **no $0 invoice**.
+  So `latest_invoice` after that call is genuinely the real charge, and the route's
+  `amount_due` read is safe. Had a $0 invoice landed last, the route would have returned HTTP 500
+  *"Upgrade pricing error"* to a member who had just been charged correctly — and returned before the
+  re-apply, destroying the anchor as well. That was the open risk; it is now closed by measurement.
+- **U8** confirms the re-apply spawns exactly one $0 `subscription_update` invoice and that
+  `isZeroAmountTrialUpdateInvoice` returns `true` for the **real Stripe object**, not just a fixture.
+- U1/U2/U3/U4 (one full-price charge, `active` after it), U6/U7 (`trialing`,
+  `current_period_end == trial_end`), U9 (the re-apply charges nothing).
+
+**Webhook gate.** `handleSubscriptionUpdated`'s pending-upgrade activation gate accepts `trialing`
+as well as `active`. It has to: an anchored upgrade's LAST `customer.subscription.updated` carries
+`trialing`, and if the gate rejected it `pendingChange` would never clear — after which every later
+`customer.subscription.updated` early-returns, silently suppressing cancel / pause / past_due
+handling until the next renewal.
 
 **Guard coverage.** The spawned $0 invoice is `subscription_update` + `total 0` + `amount_paid 0`,
 which `isZeroAmountTrialUpdateInvoice` **already** matched — no classifier change was needed. What

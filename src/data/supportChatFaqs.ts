@@ -424,7 +424,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "51",
       question: "If I upgrade to a higher tier mid-cycle, do I keep the free entries I've already built up? And do I get credit for the unused days on my old tier?",
       answer:
-        "Good news on your entries: upgrading mid-cycle keeps everything you've already built up. Your accumulated free entries carry over, and on top of that your new tier's free entries are added right away, so you're never worse off for upgrading early. On the billing side, an upgrade charges the new tier's full price straight away and resets your billing cycle to that date, unless your renewal is anchored to the 24th — that stays put. There's no pro-rata credit for the unused days on your old tier, so it's usually best to upgrade close to your renewal date. Check your tier and renewal date any time in [My Account → Membership](/my-account/membership).",
+        "Good news on your entries: upgrading mid-cycle keeps everything you've already built up. Your accumulated free entries carry over, and on top of that your new tier's free entries are added right away, so you're never worse off for upgrading early. On the billing side, an upgrade charges the new tier's full price straight away and resets your billing cycle to that date — unless your renewal is anchored to the 24th, which stays put (shifting to the following month if it's under a fortnight away, so you always get a full month for what you paid). There's no pro-rata credit for the unused days on your old tier, so the later in your cycle you upgrade, the more you leave behind. Check your tier and renewal date any time in [My Account → Membership](/my-account/membership).",
       category: "PAYMENTS",
     },
     {

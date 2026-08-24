@@ -8,6 +8,13 @@ anchored to the 24th is charged today but **keeps their renewal day**. Both answ
 reset rather than asserting it unconditionally. Corpus size is unchanged (no ids added or removed),
 so the `faqs.test.ts` count assertion did not move.
 
+**id51's closing advice was actively harmful and was reversed.** It ended with *"it's usually best to
+upgrade close to your renewal date"* — which, for the anchored cohort, steered members straight into
+the double-charge window the 14-day floor now guards (pay a full month, get billed again days later).
+It now explains the floor and says the opposite: the later in the cycle you upgrade, the more of the
+old tier you leave behind. **A copy edit that survives a code change is not automatically still
+true** — re-read the *whole* answer, not just the clause you came to fix.
+
 Re-run `npm run build:chat-knowledge-pack` then `npm run test:chat-faqs` after any corpus edit —
 the generated pack in `src/generated/chatKnowledgePack.ts` is what Cobber actually answers from, and
 an un-rebuilt pack leaves it reciting the old copy. Background:

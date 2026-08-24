@@ -17,7 +17,24 @@ import {
   getSubscriptionPeriodStart,
   getSubscriptionPeriodEnd,
 } from "@/utils/payment/stripe/subscription-period";
-import { getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
+import { getNextAnchorTimestamp, getReanchorTrialEndTimestamp } from "@/utils/billing/anchor-billing";
+
+/**
+ * Minimum runway between an upgrade and the anchor `trial_end` we re-apply after it.
+ *
+ * `trial_end` is a BILLING boundary, not a grace date — Stripe charges the FULL amount when it
+ * arrives. The upgrading member has just paid a full month up front, so re-applying an anchor that
+ * is only days away would charge them twice within days, and `proration_behavior: "none"` means no
+ * credit for the overlap. (Concretely: a 26-July joiner anchored to 24 Aug who upgrades on 20 Aug
+ * would pay full price on the 20th and full price again on the 24th.)
+ *
+ * 14 days is half a monthly cycle: they paid for a month, so they get at least half of one before
+ * the next charge. Erring generous is deliberate — the failure mode on the other side is
+ * double-charging a paying member, which costs refunds, chargebacks and trust. This mirrors the
+ * strictly-after intent already baked into `getReanchorTrialEndTimestamp`, which exists so a
+ * recovered member is not re-billed a fortnight later on a stale anchor.
+ */
+const MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS = 14 * 24 * 60 * 60;
 
 const upgradeSubscriptionPaymentSchema = z.object({
   newPackageId: z.string().min(1, "New package ID is required"),
@@ -357,22 +374,48 @@ export async function POST(request: NextRequest) {
     // changing anything in this block.
     if (wasTrialing) {
       const nowSeconds = Math.floor(Date.now() / 1000);
-      // Re-apply the member's OWN pending anchor when it is still ahead of us — that IS
-      // their renewal day, whichever rule set it (`join_25_27_to_24`, or a past-due
-      // reanchor whose clamped day is not the 24th). Only if it has already lapsed do we
-      // fall back to the shared next-24th helper — the same `getNextAnchorTimestamp` the
-      // join rule and `migrate-anchor-billing-24` use. No date math is re-derived here.
-      const trialEndToReapply =
-        pendingTrialEnd && pendingTrialEnd > nowSeconds + 60
-          ? pendingTrialEnd
-          : getNextAnchorTimestamp(new Date());
+      let trialEndToReapply: number | null = null;
+
+      try {
+        // Re-apply the member's OWN pending anchor when it is still ahead of us — that IS
+        // their renewal day, whichever rule set it (`join_25_27_to_24`, or a past-due
+        // reanchor whose clamped day is not the 24th). No date math is re-derived here.
+        //
+        // The fallback is the shared `getNextAnchorTimestamp` (the join rule's and
+        // `migrate-anchor-billing-24`'s helper) and it always lands the 24th, so it CANNOT
+        // preserve a non-24 anchor day — a member reanchored to, say, the 9th would be moved
+        // to the 24th. Accepted deliberately: this branch needs a lapsed or missing
+        // `trial_end`, which a `trialing` subscription by definition does not have, and a
+        // stale timestamp is not a trustworthy anchor to rebuild a day from. The 24th is the
+        // platform's canonical anchor, so that is where an unknown lands.
+        const capturedAnchor =
+          pendingTrialEnd && pendingTrialEnd > nowSeconds + 60
+            ? pendingTrialEnd
+            : getNextAnchorTimestamp(new Date());
+
+        // ⚠️ DOUBLE-CHARGE FLOOR — see MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS. Keep the member's
+        // anchor DAY, but push to the next OCCURRENCE of it when the nearest one is under half
+        // a cycle away, so they are not billed the full amount again days after paying for the
+        // upgrade. `getReanchorTrialEndTimestamp` is exactly the right tool: it returns the next
+        // occurrence of that same day-of-month STRICTLY AFTER the instant given, short-month
+        // safe (a kept 31 becomes Feb 28/29). One advance always clears the floor, because a
+        // month is at least 28 days and the floor is 14.
+        trialEndToReapply =
+          capturedAnchor < nowSeconds + MIN_REAPPLIED_ANCHOR_RUNWAY_SECONDS
+            ? getReanchorTrialEndTimestamp(new Date(capturedAnchor * 1000))
+            : capturedAnchor;
+      } catch (anchorError) {
+        // `getReanchorTrialEndTimestamp` throws on malformed input rather than guessing. Leave
+        // `trialEndToReapply` null and skip below — the upgrade itself has already succeeded.
+        console.error(`⚠️ [UPGRADE] Could not compute the re-applied anchor (non-fatal):`, anchorError);
+      }
 
       // Future-floor. Stripe does NOT reject a past `trial_end` — it ends the trial
       // immediately and charges — so a non-future value must abort the re-anchor rather
       // than be sent. Same guard the past-due reanchor applies to its computed timestamp.
-      if (trialEndToReapply <= nowSeconds + 60) {
+      if (trialEndToReapply === null || trialEndToReapply <= nowSeconds + 60) {
         console.error(
-          `⚠️ [UPGRADE] Skipping anchor re-apply for ${user.stripeSubscriptionId}: computed trial_end ${trialEndToReapply} is not in the future.`
+          `⚠️ [UPGRADE] Skipping anchor re-apply for ${user.stripeSubscriptionId}: computed trial_end ${trialEndToReapply} is not usable.`
         );
       } else {
         try {
@@ -386,6 +429,29 @@ export async function POST(request: NextRequest) {
               billing_anchor_rule: "upgrade_reanchor",
             },
           });
+
+          // Mirror `endDate` from the SAME computed timestamp, exactly as
+          // `reanchorAfterPastDueRecovery` does — never read it back from Stripe, which can lag,
+          // and the two `customer.subscription.updated` events from this request can arrive out
+          // of order. Every return branch below calls `user.save()`, so this needs no extra
+          // write. It matters most on the floor path above, where the anchor really does move.
+          user.subscription.endDate = new Date(trialEndToReapply * 1000);
+
+          // Klaviyo holds `next_renewal_date` / `subscription_end_date` as pushed SNAPSHOTS, so
+          // unlike every in-app surface they do not self-correct on the next fetch. Fire-and-
+          // forget, same as the sibling reanchor.
+          try {
+            const { ensureUserProfileSynced } = await import("@/utils/integrations/klaviyo/klaviyo-profile-sync");
+            ensureUserProfileSynced(user);
+          } catch (klaviyoError) {
+            console.error(`⚠️ [UPGRADE] Klaviyo re-sync after anchor re-apply failed (non-fatal):`, klaviyoError);
+          }
+
+          // Deliberately NO `MembershipStatusHistory` row. That model records subscription STATE
+          // transitions, and the past-due reanchor writes one because a recovery moves the anchor
+          // DAY. Here the day is preserved by construction — only the occurrence can shift, by one
+          // cycle — and the member is active throughout. The Stripe-side audit is the
+          // `billing_anchor_rule: "upgrade_reanchor"` tag plus `subscription.lastUpgradeDate`.
         } catch (reanchorError) {
           // Non-fatal. The upgrade is paid and the member has their new tier; losing the
           // re-anchor costs one off-anchor renewal date, not the upgrade. Failing the

@@ -7,9 +7,9 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 ## The knowledge pack is already over its own token ceiling (2026-08-24)
 
 `npm run test:chat-knowledge` asserts the generated pack stays under **14,000** approx tokens
-(`text.length / 4`). It is currently **~14,087** and was **~14,067** before the trial-aware-upgrade
-copy fix below — i.e. **this test was already red on `feature/renewal-surge` and is not caused by
-that change.** The ceiling's own comment says not to bump it: every token here is paid on **every
+(`text.length / 4`). It is currently **~14,118** and was **~14,067** before the trial-aware-upgrade
+copy fix below — i.e. **this test was already red on `feature/renewal-surge` (and on `main`) and is
+not caused by that change.** The ceiling's own comment says not to bump it: every token here is paid on **every
 turn**, and the real fix is prompt caching on the system block, not a bigger number.
 
 Treat this as a standing debt with a clear owner-decision attached: either land prompt caching, or
@@ -20,10 +20,13 @@ green, and do not add "nice to have" entries until it is back under budget.
 "resets your billing cycle to today". That is now wrong for anchored members — the trial-aware
 upgrade charges them today but **preserves their renewal day** (see
 [subscription/gotchas.md](../subscription/gotchas.md), [BUSINESS.md §9b/§10c](../../BUSINESS.md)).
-Both answers were rewritten to qualify the reset **and tightened**, so the accuracy fix cost only
-+20 tokens rather than +49. Corpus size is unchanged (87), so the `faqs.test.ts` count assertion did
-not move. `build:chat-knowledge-pack` was re-run — an un-rebuilt pack leaves Cobber reciting the old
-copy no matter what the corpus file says.
+Both answers were rewritten to qualify the reset **and tightened**. id51's closing advice — *"it's
+usually best to upgrade close to your renewal date"* — was also **reversed**, because after the
+14-day double-charge floor that advice pointed members at the exact window the floor exists to guard.
+Net cost of both corrections: **+51 tokens** (14,067 → 14,118), most of it the safety clause. Corpus
+size is unchanged (87), so the `faqs.test.ts` count assertion did not move.
+`build:chat-knowledge-pack` was re-run — an un-rebuilt pack leaves Cobber reciting the old copy no
+matter what the corpus file says.
 
 ---
 

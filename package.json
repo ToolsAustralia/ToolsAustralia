@@ -187,6 +187,7 @@
     "stripe:list-active-paused-subscriptions": "tsx scripts/list-active-paused-subscriptions.ts",
     "stripe:resume-active-paused-subscriptions:dry": "tsx scripts/list-active-paused-subscriptions.ts --limit=200",
     "stripe:probe-reanchor": "tsx scripts/stripe-probe-reanchor.ts",
+    "stripe:probe-upgrade-anchor": "tsx scripts/stripe-probe-upgrade-anchor.ts",
     "stripe:probe-recovery-marker": "tsx scripts/stripe-probe-recovery-marker.ts",
     "stripe:probe-rebill-cycle": "tsx scripts/stripe-probe-rebill-cycle.ts",
     "stripe:probe-member-resolve-mint": "tsx scripts/stripe-probe-member-resolve-mint.ts",
@@ -195,6 +196,7 @@
     "test:force-charge-mint-map": "tsx src/server/admin/__tests__/forceChargeMintMap.test.ts",
     "test:rebill-classification": "tsx src/utils/billing/__tests__/rebill-classification.test.ts",
     "stripe:probe-reanchor:dry": "tsx scripts/stripe-probe-reanchor.ts --dry-run",
+    "stripe:probe-upgrade-anchor:dry": "tsx scripts/stripe-probe-upgrade-anchor.ts --dry-run",
 
     "find:stranded-mini-draw-payments": "tsx scripts/find-stranded-mini-draw-payments.ts",
     "find:direct-attribution": "tsx scripts/find-direct-attribution.ts",

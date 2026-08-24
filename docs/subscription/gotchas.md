@@ -23,8 +23,16 @@ member surface says "Trial". `subscription.endDate` is re-synced by the `custome
 webhook, which already handles `trialing` subs, so `/my-account` shows the right next renewal date
 without the route writing it.
 
-Mechanism, ordering traps, and the $0-invoice guard: [billing-stripe/gotchas.md](../billing-stripe/gotchas.md)
-and [PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md).
+**And they are never charged twice in a fortnight.** The re-applied anchor is a *billing* date, so
+an upgrade a few days before it would take the full new-tier price twice within days, uncredited.
+When the anchor is under **14 days** out the renewal moves to the following month — the member's
+renewal *day* is unchanged, only which occurrence is next. This is why the upgrade FAQ no longer
+advises members to "upgrade close to your renewal date".
+
+Mechanism, ordering traps, the 14-day floor, and the $0-invoice guard:
+[billing-stripe/gotchas.md](../billing-stripe/gotchas.md) and
+[PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md). Live-Stripe gate:
+`npm run stripe:probe-upgrade-anchor`.
 
 ## `useMembershipModalDeepLink` must not use `useSearchParams()` (2026-07-27)
 

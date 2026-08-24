@@ -1957,10 +1957,17 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     // previousSubscription in user model handles benefit preservation automatically
     // Webhook just processes subscription updates normally
 
+    // `trialing` counts as active here, as it already does at every other status check in this
+    // file. It is load-bearing since the trial-aware upgrade shipped: an anchor-24 member's LAST
+    // `customer.subscription.updated` of an upgrade carries `trialing` (the route re-applies their
+    // anchor `trial_end` after charging). If this gate rejected it, `pendingChange` would never be
+    // cleared — and a stuck `pendingChange` makes every later `customer.subscription.updated`
+    // early-return below, silently suppressing cancel / pause / past_due handling until the next
+    // renewal. See docs/PAST_DUE_REANCHOR.md and the upgrade route.
     if (
       pendingUpgrade &&
       (pendingUpgrade.stripeSubscriptionId === subscription.id || isProrationUpgrade) &&
-      subscription.status === "active"
+      (subscription.status === "active" || subscription.status === "trialing")
     ) {
       const changeType = pendingUpgrade.changeType;
 
