@@ -13,7 +13,7 @@
 
 | Path | Schedule (UTC) | `maxDuration` | Purpose |
 |---|---|---|---|
-| `/api/cron/dashboard-stats-daily-snapshot` | `0 14 * * *`, `0 15 * * *` **and `20 3 * * *`** | 300s | Re-upserts 90-day sliding window of `DashboardStatsDailySnapshot` rows. Idempotent. Second fire heals first-run failures. **The third (03:20 UTC) fire is an ORDERING fix, not redundancy** — it runs after `sync-tiktok-ads` (02:45 UTC) so the day just closed is re-derived from TikTok's settled figures. See the ordering note below. |
+| `/api/cron/dashboard-stats-daily-snapshot` | `0 18 * * *`, `0 19 * * *` **and `20 3 * * *`** | 300s | Re-upserts 90-day sliding window of `DashboardStatsDailySnapshot` rows. Idempotent. Second fire heals first-run failures. **Moved off `0 14`/`0 15` on 2026-08-24** — those are the ~900-membership renewal-webhook burst and its trailing Stripe payment wave (2,235 / 3,551 events respectively); `18:00`/`19:00` UTC is `04:00`/`05:00` AEST and `05:00`/`06:00` AEDT, still after Sydney midnight so it correctly writes "yesterday" in either DST regime. **The third (03:20 UTC) fire is an ORDERING fix, not redundancy** — it runs after `sync-tiktok-ads` so the day just closed is re-derived from TikTok's settled figures. See the ordering note below. |
 | `/api/cron/cancellation-retention-resume` | `0 16 * * *` | 300s | Backstop for the `paused` retention-pause state (flips `active→paused` at `pausedFrom`; **payment-gated** restore `paused→active` when Stripe has resumed — only restores to `active` on a confirmed PAID resume invoice, mirrors `past_due`/`unpaid`) + clears stale `pauseReason="retention"` metadata after the pause window (next cycle boundary) elapses. Webhook is the primary driver; this catches missed events. See [architecture.md](./architecture.md#vercel-cron-schedules). |
 | `/api/cron/cancellation-retention-maturity` | `0 17 * * *` | 300s | Matures saved cancellation-flow events ≥90 days old: sets `retention90` to `retained`/`churned` based on the member's CURRENT subscription state. Read-only on user/subscription. Idempotent. See [architecture.md](./architecture.md#vercel-cron-schedules). |
 | `/api/cron/reconcile-major-draw-entries` | `30 16 * * *` | 300s | Self-heals membership renewals that failed to credit the active `MajorDraw` (the swallowed-`addToMajorDraw` bug). Delegates to [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts). Heals only confirmed gaps (latest in-window renewal has empty `drawGrants` + active sub + not refunded + draw < actual grant), idempotent. Runs after the ~14:00–15:00 UTC anchor-billing spike. See `docs/draws/gotchas.md`. |
@@ -153,11 +153,12 @@ Runs `runMetaSpendByUrlSync` over a trailing 7-day window so the admin Prize-per
 `GET /api/cron/sync-tiktok-ads` — `src/app/api/cron/sync-tiktok-ads/route.ts`. Scheduled `45 2 * * *` (`maxDuration: 300s`). The TikTok analogue of `sync-meta-ads`: re-pulls a trailing 8-day window (`since = now - 7d`, `until = now`, `Australia/Sydney`-formatted) and runs the **full spend-by-URL pipeline** via `runSpendByUrlSync(tiktokSpendByUrlDescriptor(), …)` — insights into `TikTokAdInsightsDaily`, then ad→landing-URL destinations into `AdDestination`, then the per-URL daily rebuild into `LandingPageMetricsDaily`. The wide re-pull captures TikTok's later revisions to recent days.
 
 > **⚠️ ORDERING INVARIANT (2026-08-11): `dashboard-stats-daily-snapshot` must run AFTER this.**
-> An AEST day ends at 14:00 UTC and the snapshot fires at 14:00/15:00 UTC — but this sync does
-> not run until **02:45 UTC the next day**, ~12¾ hours later, and TikTok keeps attributing
-> conversions well past midnight (these ad sets are 7-day-click / 1-day-view). So the 14:00
-> snapshot always captured TikTok **mid-attribution** and froze a partial number, which the
-> overview Advertising card then showed as "Yesterday".
+> An AEST day ends at 14:00 UTC and the snapshot's first two fires (`0 18`/`0 19 * * *` UTC as of
+> 2026-08-24, moved off `0 14`/`0 15` to clear the renewal-surge hour — see architecture.md) still
+> land well before this sync's next settled run, and TikTok keeps attributing conversions well
+> past midnight (these ad sets are 7-day-click / 1-day-view). So an early snapshot always
+> captured TikTok **mid-attribution** and froze a partial number, which the overview Advertising
+> card then showed as "Yesterday".
 >
 > Measured on production for AEST 2026-08-10 — the snapshot said spend **$386.82** / revenue
 > **$40.00** / ROAS **0.103**, while the actual settled TikTok data was **$410.93** / **$90.00** /

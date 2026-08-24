@@ -138,7 +138,7 @@ Read path:
 - Each row stores a snapshot of `unitPriceCents` at write time, so historical revenue is **immutable** if a package price changes later.
 - `confidence: "live"` always — there is no historical reconstruction.
 
-Schedule: fires twice daily for redundancy at `0 14 * * *` and `0 15 * * *` UTC. Both correspond to early hours of a fresh Sydney local day (00:00–02:00 local across AEST and AEDT). The handler upserts on `{date, packageId}`, so the second fire is a no-op overwrite if the first succeeded.
+Schedule: fires twice daily at `0 18 * * *` and `0 19 * * *` UTC (moved off `0 14`/`0 15` on 2026-08-24 — those land in the ~900-membership renewal-webhook burst and its trailing Stripe payment wave; see `docs/infrastructure/gotchas.md`). Both correspond to early hours of a fresh Sydney local day (04:00–06:00 local across AEST and AEDT). **Write-once guard (2026-08-24):** the handler upserts on `{date, packageId}` only when no row already exists for that key (`upsertMembershipSnapshotRow`) — the first fire to reach a given day wins, and the second is a true no-op fallback for a missed/failed first run, not an unconditional overwrite. This matters because the two fires can otherwise disagree on renewal-burst nights: the first captures the true end-of-day count, the second (an hour later) captures counts contaminated by the next day's renewal processing.
 
 DST safety: the handler computes the local date string via `formatInTimeZone(yesterdayDate, "Australia/Sydney", "yyyy-MM-dd")`. The IANA zone is DST-aware automatically. Verified by [`scripts/test-membership-snapshot-dst.ts`](../../scripts/test-membership-snapshot-dst.ts) across both October (AEDT-start) and April (AEDT-end) transition boundaries.
 

@@ -22,19 +22,19 @@
     },
     {
       "path": "/api/cron/membership-daily-snapshot",
-      "schedule": "0 14 * * *"
+      "schedule": "0 18 * * *"
     },
     {
       "path": "/api/cron/membership-daily-snapshot",
-      "schedule": "0 15 * * *"
+      "schedule": "0 19 * * *"
     },
     {
       "path": "/api/cron/dashboard-stats-daily-snapshot",
-      "schedule": "0 14 * * *"
+      "schedule": "0 18 * * *"
     },
     {
       "path": "/api/cron/dashboard-stats-daily-snapshot",
-      "schedule": "0 15 * * *"
+      "schedule": "0 19 * * *"
     },
     {
       "path": "/api/cron/dashboard-stats-daily-snapshot",

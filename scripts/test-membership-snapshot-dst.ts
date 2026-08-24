@@ -1,9 +1,19 @@
 /**
  * Tests the cron handler's date-key computation across Australia/Sydney DST boundaries.
  *
- * The cron fires at 14:00 UTC and 15:00 UTC daily. At 14:00 UTC:
+ * The cron fired at 14:00 UTC and 15:00 UTC daily through 2026-08-24; it was moved to 18:00
+ * UTC / 19:00 UTC that day to clear the renewal-surge hour (~900 membership renewals land at
+ * 14:00 UTC, with the trailing Stripe payment wave peaking at 15:00 UTC — see
+ * docs/infrastructure/architecture.md). The test below still exercises the formula at the
+ * 14:00/15:00 pair, which remains a valid (if no longer literal) fixture: the date-key formula
+ * is invariant to WHICH fixed UTC hour the cron fires at, as long as that hour stays on the same
+ * side of Sydney's local midnight in both DST regimes and does not straddle the DST transition
+ * instant itself — true of both the old 14:00/15:00 pair and the new 18:00/19:00 pair. At 14:00
+ * UTC:
  *   - AEST winter (UTC+10): Sydney has just rolled into a new local day (00:00 local).
  *   - AEDT summer (UTC+11): Sydney is at 01:00 local of a new day.
+ * At the current 18:00/19:00 UTC schedule, Sydney is at 04:00-06:00 local instead — still well
+ * after local midnight in either regime, so the same "yesterday" date key is produced.
  *
  * So when the cron fires on UTC date X at 14:00 UTC, Sydney is on local date X+1,
  * and "yesterday in Sydney" — the day we want to snapshot — is local date X.

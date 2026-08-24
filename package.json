@@ -336,6 +336,7 @@
     "cleanup:abandoned-incomplete:dry": "tsx scripts/cleanup-abandoned-incomplete-subscriptions.ts --dry-run",
     "test:stripe-collection-pause": "tsx src/services/subscription/__tests__/SubscriptionCollectionPauseService.test.ts && tsx src/utils/payment/__tests__/failed-invoice-pause-selection.test.ts",
     "test:membership-snapshot-dst": "tsx scripts/test-membership-snapshot-dst.ts",
+    "test:membership-snapshot-write-once": "tsx src/app/api/cron/__tests__/membership-daily-snapshot.test.ts",
     "test:mini-draw-packages": "tsx src/data/__tests__/miniDrawPackages.test.ts",
     "find:stuck-paused-users": "tsx scripts/find-stuck-paused-users.ts",
     "ops:force-charge:dry": "tsx scripts/test-force-charge.ts",
