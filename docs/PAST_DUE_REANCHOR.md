@@ -41,6 +41,59 @@ The clamp is what forces this choice. On an **existing** subscription, `subscrip
 
 Only `trial_end` can land the clamped 24th without charging — which is also why the migration script (`migrate-anchor-billing-24`) and the join-anchor rule use the same trick. The live probe (below) confirmed it: no new charge, and `current_period_end == trial_end`. **Do not "optimize" this to `billing_cycle_anchor`** — it cannot honor the clamp.
 
+## Third `trial_end` trigger: the tier upgrade (2026-08-24)
+
+There are now **three** places that set `trial_end` on an existing subscription, not two. The tier
+upgrade route ([`upgrade-subscription-payment`](../src/app/api/stripe/upgrade-subscription-payment/route.ts))
+joined the list.
+
+**Why it had to.** The upgrade is deliberately pay-first — `proration_behavior: "none"` +
+`billing_cycle_anchor: "now"` + `payment_behavior: "error_if_incomplete"` ("charge full price now
+and reset billing cycle"). Stripe **rejects** a `billing_cycle_anchor` that lands before a pending
+trial end: *"Trial end (…) cannot be after billing_cycle_anchor (…). Consider ending the trial
+(trial_end=now)."* Every anchored member — the whole 25/26/27-joiner cohort plus anyone reanchored
+by this document's flow — therefore got a hard 400 on **every** upgrade attempt.
+
+**The shape.** Not "clear the trial" (that silently discards anchor-24 for the member), but:
+
+1. **End the trial in the same pay-first call** — `trial_end: "now"`, sent only when the sub is
+   `trialing`. This is literally what Stripe's own rejection message tells you to do, and it makes
+   `billing_cycle_anchor: "now"` legal, so the full new-tier charge lands.
+2. **Read `latest_invoice` / `prorationAmount` and run the under-charge check** — unchanged, and it
+   must stay ahead of step 3.
+3. **Re-apply the trial for the next cycle** — the member's own captured `trial_end` when it is
+   still in the future (that IS their anchor, whichever rule set it), else the shared
+   `getNextAnchorTimestamp` used by the join rule and `migrate-anchor-billing-24`. Always with
+   `proration_behavior: "none"`, so it neither charges nor credits. Non-fatal: a failure here costs
+   one off-anchor renewal date, never the (already paid) upgrade.
+
+**Two ordering traps, both live:**
+
+- **Re-apply AFTER the invoice reads.** Step 3 spawns the $0 "Trial period" invoice, which becomes
+  `latest_invoice`. Re-applying before step 2 makes the route read $0, fail its
+  "is the charge at least half the expected amount?" check, and return **HTTP 500 "Upgrade pricing
+  error"** to a member who was just charged correctly.
+- **`trialing` is a success state.** After step 3 the subscription reports `status: "trialing"`, so
+  the route's two `status === "active"` success checks had to widen to accept it — otherwise the
+  request falls through to the generic HTTP 500. Per *Member-facing status* below, a `trialing`
+  member is fully paid and active, and the UI already maps `trialing → "Active"`.
+
+**Do not "optimize" the re-apply to `billing_cycle_anchor`** — see *Why `trial_end`* above. It
+cannot target a future date, so it cannot land the clamped 24th.
+
+**Guard coverage.** The spawned $0 invoice is `subscription_update` + `total 0` + `amount_paid 0`,
+which `isZeroAmountTrialUpdateInvoice` **already** matched — no classifier change was needed. What
+was missing was the regression lock, now **Case D** of `npm run test:zero-trial-guard`: it dispatches
+the real paid upgrade invoice and the spawned $0 one as a pair with **distinct ids**, asserting the
+first grants and the second is skipped with no `BenefitsGranted` row. That pairing is the assertion
+the pre-existing Cases A/C could not make, because both reused a single invoice id and so could not
+show that per-invoice-id idempotency is *not* what separates the two.
+
+**Metadata.** The re-apply stamps `billing_anchor_rule: "upgrade_reanchor"` — a newly coined value,
+parallel to `past_due_reanchor`, naming the trigger that last moved the anchor. Like
+`past_due_reanchor` it overwrites `join_25_27_to_24` on those subs; the field records the most
+recent anchor move, not the original one.
+
 ## Member-facing status (`trialing` shows as "Active")
 
 Setting `trial_end` puts the Stripe subscription into `status = 'trialing'` until the new anchor date. **This is cosmetic.** A `trialing` member is a fully paid, **active** member (`isActive = true`, benefits intact) — we never sell a real free trial. The member UI therefore maps `trialing → "Active"` (`getSubscriptionStatusText`; see `docs/client-state/gotchas.md`). Do not surface "Trial" to members. Stripe's own dashboard/MRR views show `trialing` until the next bill; our DB-based analytics are unaffected.
@@ -120,12 +173,13 @@ It also empirically showed `attempt_count` stays `1` under `pause_collection` �
 
 ## Gotcha: Stripe's $0 "Trial period" invoice (do NOT grant benefits for it)
 
-Setting `trial_end` makes Stripe auto-create a **separate $0 invoice** (`billing_reason="subscription_update"`, line "Trial period for X") and mark it paid. That fires a second `invoice.payment_succeeded`. It is **not** a real payment. The webhook **must skip it** — otherwise it double-grants renewal entries (the real renewal is the `subscription_cycle` invoice) and logs a spurious "Subscribed to X" admin activity row. Guarded by `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`); the webhook early-returns. This affected every `trial_end` flow (reanchor + the `migrate-anchor-billing-24` migration + join-anchoring) — **audit** via `npm run find:duplicate-trial-entry-grants`, **remediate** via `npm run reverse:duplicate-trial-entry-grants:dry` (dry-run; add `--apply` to write). No double *charge* (the invoice is $0).
+Setting `trial_end` makes Stripe auto-create a **separate $0 invoice** (`billing_reason="subscription_update"`, line "Trial period for X") and mark it paid. That fires a second `invoice.payment_succeeded`. It is **not** a real payment. The webhook **must skip it** — otherwise it double-grants renewal entries (the real renewal is the `subscription_cycle` invoice) and logs a spurious "Subscribed to X" admin activity row. Guarded by `isZeroAmountTrialUpdateInvoice()` (`src/utils/billing/trial-invoice.ts`); the webhook early-returns. This affected every `trial_end` flow (reanchor + the `migrate-anchor-billing-24` migration + join-anchoring, and since 2026-08-24 the upgrade anchor re-apply) — **audit** via `npm run find:duplicate-trial-entry-grants`, **remediate** via `npm run reverse:duplicate-trial-entry-grants:dry` (dry-run; add `--apply` to write). No double *charge* (the invoice is $0).
 
 The remediation script only auto-reverses **clean** duplicates — ones where the dup's scoped `data.grants.drawGrants` fully account for its `data.entries` (so `draw == realSibling + dup`). For each it: scope-decrements the draw via `removeMajorDrawEntries` (drawId from the ledger), `$inc accumulatedEntries −data.entries`, and SETs `lastMonthAccumulatedEntries` to the **real sibling renewal's `data.entries`** when the dup is the latest cycle. That last step matters because `lastMonthAccumulatedEntries` is an absolute `$set` baseline read back at every future renewal: decrement-by-`lastMonthDelta` is wrong in the concurrent-write case (both invoices computed the same value, so the dup's net effect was 0), whereas setting it to the real renewal's value is correct in every ordering. The `BenefitsReversed` marker is written **first** as an atomic idempotency claim. **Anomalous** dups (`data.entries` > scoped `drawGrants`, e.g. an empty ledger from a swallowed draw credit) and **standalone** `subscription_update` grants are FLAGGED for manual review, never auto-reversed.
 
 ## Related
 
-- `docs/BILLING_ANCHOR_24.md` (join-anchor rule; reanchor is the second anchor-move trigger)
+- `docs/BILLING_ANCHOR_24.md` (join-anchor rule; reanchor is the second anchor-move trigger, the upgrade re-apply the third)
+- `docs/billing-stripe/gotchas.md`, `docs/subscription/gotchas.md` (the trial-aware upgrade)
 - `docs/STRIPE_COLLECTION_PAUSE_RECOVERY.md`, `docs/CHARGE_PAST_DUE_CUSTOMERS.md`, `docs/FAILED_RENEWAL_PAY_NOW.md`
 - Design spec: `docs/superpowers/specs/2026-06-01-past-due-reanchor-design.md`

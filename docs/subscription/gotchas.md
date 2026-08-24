@@ -2,6 +2,30 @@
 
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
+## Anchor-24 members could not upgrade at all (2026-08-24)
+
+**Symptom:** every tier upgrade by a member whose renewal is anchored failed with a Stripe 400.
+Not flaky — deterministic, for the whole cohort, since anchoring shipped.
+
+**Cause:** the upgrade is pay-first by design (`billing_cycle_anchor: "now"`), and anchored members
+are held on a pending `trial_end` by design (25th–27th joiners → the 24th; past-due recoveries →
+their clamped catch-up day). Stripe refuses an anchor that lands before an unfinished trial.
+
+**Why not just clear the trial:** ending it and walking away silently discards anchor-24 for that
+member — their renewal drifts off the 24th and loses the ≥3-day buffer before the major draw that
+the whole rule exists to guarantee. The fix is **end trial → charge now → re-apply the anchor for
+the next cycle**, so pay-first semantics and the anchor both survive.
+
+**What this means for the member journey:** an upgrading anchored member is charged the new tier's
+full price today (unchanged) but **keeps their renewal day** instead of resetting it to today. Their
+Stripe subscription is left `trialing`; `getSubscriptionStatusText` maps that to **"Active"** and no
+member surface says "Trial". `subscription.endDate` is re-synced by the `customer.subscription.updated`
+webhook, which already handles `trialing` subs, so `/my-account` shows the right next renewal date
+without the route writing it.
+
+Mechanism, ordering traps, and the $0-invoice guard: [billing-stripe/gotchas.md](../billing-stripe/gotchas.md)
+and [PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md).
+
 ## `useMembershipModalDeepLink` must not use `useSearchParams()` (2026-07-27)
 
 The Klaviyo abandoned-checkout deep-link hook

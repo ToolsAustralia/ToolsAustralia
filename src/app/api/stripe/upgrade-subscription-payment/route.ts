@@ -17,6 +17,7 @@ import {
   getSubscriptionPeriodStart,
   getSubscriptionPeriodEnd,
 } from "@/utils/payment/stripe/subscription-period";
+import { getNextAnchorTimestamp } from "@/utils/billing/anchor-billing";
 
 const upgradeSubscriptionPaymentSchema = z.object({
   newPackageId: z.string().min(1, "New package ID is required"),
@@ -186,6 +187,18 @@ export async function POST(request: NextRequest) {
     const currentSubPeriodStart = getSubscriptionPeriodStart(currentSubscription);
     const currentSubPeriodEnd = getSubscriptionPeriodEnd(currentSubscription);
 
+    // ── Anchor-24 members are on a Stripe "trial" ──────────────────────────────────
+    // Joining on the 25th-27th (AEST) intentionally puts the member on a pending
+    // `trial_end` so their billing re-anchors to the 24th — `billing_anchor_rule:
+    // "join_25_27_to_24"`. (Past-due reanchor does the same with its own clamped day.)
+    // Stripe REJECTS the pay-first `billing_cycle_anchor: "now"` below while a trial end
+    // is pending — "Trial end (...) cannot be after billing_cycle_anchor (...)" — which is
+    // why every upgrade from these members failed with a 400. We capture the pending
+    // anchor here, end the trial in the update below so the charge can land, and put the
+    // anchor back afterwards (see the re-apply block after the proration validation).
+    const wasTrialing = currentSubscription.status === "trialing";
+    const pendingTrialEnd = typeof currentSubscription.trial_end === "number" ? currentSubscription.trial_end : null;
+
     const currentSubscriptionItem = currentSubscription.items.data[0];
     // console.log(`📦 Current subscription item:`, {
     //   id: currentSubscriptionItem.id,
@@ -224,7 +237,7 @@ export async function POST(request: NextRequest) {
       (process.env.NEXTAUTH_URL ? `${process.env.NEXTAUTH_URL}/my-account` : undefined)
     );
 
-    const updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+    let updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
       items: [
         {
           id: currentSubscriptionItem.id,
@@ -234,6 +247,10 @@ export async function POST(request: NextRequest) {
       // ✅ NO PRORATION UPGRADE: charge full price now and reset billing cycle
       proration_behavior: "none",
       billing_cycle_anchor: "now",
+      // End the anchor trial in the SAME call so "now" is a legal anchor (this is exactly
+      // what Stripe's own rejection message tells you to do). Only sent for a trialing
+      // member — the anchor is re-applied for the next cycle after the charge is proven.
+      ...(wasTrialing ? { trial_end: "now" as const } : {}),
       // A member can upgrade while scheduled to cancel at period end. Stripe (API > 2018-02-28) does NOT
       // auto-clear a pending cancel on an item swap, so we must clear it explicitly — otherwise the upgrade
       // "sticks" in the DB (webhook sets autoRenew=true) but Stripe still cancels at period end. Charge-safe:
@@ -317,8 +334,76 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if payment is already completed
-    if (latestInvoice?.status === "paid" && updatedSubscription.status === "active") {
+    // ── Re-apply the anchor-24 trial for the NEXT cycle ────────────────────────────
+    // Ending the trial above was only half the job: leaving it ended would silently drop
+    // this member's anchor-24 billing date, quietly undoing the join rule for them.
+    //
+    // Placement is load-bearing, twice over:
+    //  - AFTER the `latest_invoice` / `prorationAmount` reads above. This update makes
+    //    Stripe spawn a $0 "Trial period" invoice that becomes `latest_invoice`; reading
+    //    it first would see $0 and trip the "Upgrade pricing error" 500 above.
+    //  - AFTER `payment_behavior: "error_if_incomplete"` has proven the charge landed —
+    //    that param throws on an unpaid invoice, so reaching this line means paid.
+    //
+    // Footgun (docs/PAST_DUE_REANCHOR.md): setting `trial_end` on an EXISTING subscription
+    // makes Stripe auto-create AND auto-pay a separate $0 invoice
+    // (`billing_reason: "subscription_update"`, total 0), firing a second
+    // `invoice.payment_succeeded`. It must NOT grant entries — the real grant comes from
+    // the paid upgrade invoice above, and idempotency-by-id will not save us because the
+    // $0 invoice carries its own fresh id. `isZeroAmountTrialUpdateInvoice`
+    // (src/utils/billing/trial-invoice.ts) already classifies exactly this shape and the
+    // webhook early-returns; Case D of `npm run test:zero-trial-guard` pins it for THIS
+    // flow specifically (the paid + $0 pair, distinct ids). Read that checklist before
+    // changing anything in this block.
+    if (wasTrialing) {
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      // Re-apply the member's OWN pending anchor when it is still ahead of us — that IS
+      // their renewal day, whichever rule set it (`join_25_27_to_24`, or a past-due
+      // reanchor whose clamped day is not the 24th). Only if it has already lapsed do we
+      // fall back to the shared next-24th helper — the same `getNextAnchorTimestamp` the
+      // join rule and `migrate-anchor-billing-24` use. No date math is re-derived here.
+      const trialEndToReapply =
+        pendingTrialEnd && pendingTrialEnd > nowSeconds + 60
+          ? pendingTrialEnd
+          : getNextAnchorTimestamp(new Date());
+
+      // Future-floor. Stripe does NOT reject a past `trial_end` — it ends the trial
+      // immediately and charges — so a non-future value must abort the re-anchor rather
+      // than be sent. Same guard the past-due reanchor applies to its computed timestamp.
+      if (trialEndToReapply <= nowSeconds + 60) {
+        console.error(
+          `⚠️ [UPGRADE] Skipping anchor re-apply for ${user.stripeSubscriptionId}: computed trial_end ${trialEndToReapply} is not in the future.`
+        );
+      } else {
+        try {
+          updatedSubscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+            trial_end: trialEndToReapply,
+            // Explicit, never Stripe's `create_prorations` default: the member has just
+            // paid the full new tier price, so this must neither charge nor credit.
+            proration_behavior: "none",
+            metadata: {
+              ...updatedSubscription.metadata,
+              billing_anchor_rule: "upgrade_reanchor",
+            },
+          });
+        } catch (reanchorError) {
+          // Non-fatal. The upgrade is paid and the member has their new tier; losing the
+          // re-anchor costs one off-anchor renewal date, not the upgrade. Failing the
+          // request here would tell an already-charged member their upgrade failed.
+          console.error(`⚠️ [UPGRADE] Anchor trial re-apply failed (non-fatal):`, reanchorError);
+        }
+      }
+    }
+
+    // Check if payment is already completed.
+    // `trialing` is a success state here: the re-apply above deliberately puts an
+    // anchor-24 member back on a Stripe trial for the next cycle. They are fully paid and
+    // active (docs/PAST_DUE_REANCHOR.md — "Member-facing status"), and the member UI maps
+    // trialing -> "Active" via `getSubscriptionStatusText`. Nothing below surfaces "Trial".
+    if (
+      latestInvoice?.status === "paid" &&
+      (updatedSubscription.status === "active" || updatedSubscription.status === "trialing")
+    ) {
       // console.log(`✅ Payment already processed - invoice is paid, subscription is active`);
 
       // 🔒 Enhanced verification for immediate activation
@@ -435,8 +520,10 @@ export async function POST(request: NextRequest) {
     if (!paymentIntent) {
       // console.log(`⚠️ No payment intent found - invoice may be already paid or proration is $0`);
 
-      // Check if subscription is already active (payment succeeded immediately)
-      if (updatedSubscription.status === "active") {
+      // Check if subscription is already active (payment succeeded immediately).
+      // `trialing` counts as active here for the same reason as the branch above — an
+      // anchor-24 member carries a re-applied `trial_end` for the next cycle.
+      if (updatedSubscription.status === "active" || updatedSubscription.status === "trialing") {
         // console.log(`✅ Subscription already active - treating as immediate success`);
 
         // Update user subscription immediately

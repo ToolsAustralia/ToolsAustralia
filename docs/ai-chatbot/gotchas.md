@@ -4,6 +4,29 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## The knowledge pack is already over its own token ceiling (2026-08-24)
+
+`npm run test:chat-knowledge` asserts the generated pack stays under **14,000** approx tokens
+(`text.length / 4`). It is currently **~14,087** and was **~14,067** before the trial-aware-upgrade
+copy fix below — i.e. **this test was already red on `feature/renewal-surge` and is not caused by
+that change.** The ceiling's own comment says not to bump it: every token here is paid on **every
+turn**, and the real fix is prompt caching on the system block, not a bigger number.
+
+Treat this as a standing debt with a clear owner-decision attached: either land prompt caching, or
+trim ~350 characters of lower-value corpus content. Do **not** raise the assertion to make a build
+green, and do not add "nice to have" entries until it is back under budget.
+
+**Copy fix that landed alongside it.** Cobber ids **22** and **51** asserted flatly that an upgrade
+"resets your billing cycle to today". That is now wrong for anchored members — the trial-aware
+upgrade charges them today but **preserves their renewal day** (see
+[subscription/gotchas.md](../subscription/gotchas.md), [BUSINESS.md §9b/§10c](../../BUSINESS.md)).
+Both answers were rewritten to qualify the reset **and tightened**, so the accuracy fix cost only
++20 tokens rather than +49. Corpus size is unchanged (87), so the `faqs.test.ts` count assertion did
+not move. `build:chat-knowledge-pack` was re-run — an un-rebuilt pack leaves Cobber reciting the old
+copy no matter what the corpus file says.
+
+---
+
 ## Knowledge-gap batch: corpus 39 → 68, and a specific rule MUST beat a broad one (2026-07-15)
 
 Added ids **40-68** to close answerable-but-dodged questions (referrals/affiliate, account+auth, promo/after-checkout offer, upgrade/downgrade/anchor billing, past-due lifecycle, advanced partner discounts, mini-draws/prizes); extended **id24** (reactivation timing). All answers were code-verified and compliance-checked (free-entry framing, no odds/chance/lottery).
