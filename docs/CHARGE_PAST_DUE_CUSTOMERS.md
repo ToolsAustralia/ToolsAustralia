@@ -450,8 +450,11 @@ exists to avoid, and which the Radar allow list cannot override.
 
 - **Automated/bulk path only.** The per-user "Charge past due" button, Force Charge and member
   self-serve are unchanged (6h `RECENT_ATTEMPT_WINDOW_HOURS` + per-path budgets).
-- **Counts `success`/`failed` rows only** — counting the cap's own `skipped` rows would push the
-  next eligible date forward forever.
+- **Counts only rows that reached an issuer** — excludes `skipped` rows (the cap's own output would
+  push the next eligible date forward forever), recovery step-audit rows, and `invoice_unavailable`
+  failures (Stripe unreachable, no card touched).
+- **2h grace on the boundary** so a day-3 touch landing minutes early is not slipped to day 4;
+  effective floor 70h, still far above 48h.
 - **Fails closed** — a lookup error holds the card back and writes the skip row, so the item still
   leaves `remaining` and the run still finishes.
 - **Effect:** ~1,157 eligible invoices become ~386 real submissions per day (averaged over the
@@ -468,6 +471,9 @@ prefix `[chargePastDue][ALERT]`; `console.log` is stripped from production build
 
 - **`aborted`** — any run finalizing `aborted`/`failed`, with the reason and coverage numbers.
   This is what five consecutive silently-aborted runs would have surfaced.
+- **`zero_coverage`** — a terminal run with `eligibleCount > 0` that attempted **nobody**. This is
+  the cap's own collapse mode: a systematic lookup failure holds everything, the run finalizes
+  `completed`, and neither other alert can see it.
 - **`low_success_rate`** — `succeeded / attempted` below **8%** with at least 50 attempts. The
   five pre-fix runs scored 2.59–5.97%, so all five would have fired; the 2026-06-29
   idempotency-replay incident (656/668 failures, $0 collected) would have fired too.

@@ -237,10 +237,35 @@ export function shouldSkipForRecentAttempt(
  */
 export const BULK_ATTEMPT_SPACING_DAYS = 3;
 
+/**
+ * Slack on the "3 days have passed" test.
+ *
+ * A daily run does NOT touch a given invoice at the same clock time each cycle: the
+ * worklist is re-snapshotted every day, the population churns, and an item's position
+ * in it moves. So day-3's touch routinely lands a few minutes EARLIER than day-0's —
+ * and a strict `now >= last + 72h` then holds it for one more whole day. The rule
+ * silently becomes a 3-to-4 day cadence, which is both slower collection and a
+ * different rule from the one Stripe's guidance describes.
+ *
+ * 2h is chosen to absorb ordinary intra-run drift (a ~40-minute run, plus the 2-hour
+ * START_WINDOW_HOURS a delayed day may begin within) without ever letting two
+ * submissions land inside the same 24-hour period — the failure this cap exists to
+ * prevent. Effective floor: 70h between submissions on the same invoice.
+ */
+export const BULK_ATTEMPT_SPACING_GRACE_MS = 2 * 60 * 60 * 1000;
+
 /** Skip-reason value written to InvoiceChargeLog when the spacing rule holds an item back. */
 export const SKIP_REASON_ATTEMPT_SPACING = "attempt_spacing" as const;
 
-/** Earliest `attemptedAt` that still blocks a fresh automated submission. */
+/**
+ * Earliest `attemptedAt` that still blocks a fresh automated submission.
+ *
+ * Deliberately NOT graced: it is the Mongo query bound, and it must be at least as
+ * WIDE as the predicate's window. Narrowing it by the grace would let a row the
+ * predicate would have blocked fall outside the query, so the rule would silently stop
+ * firing for exactly the rows nearest the boundary. Wider-than-needed is free (the
+ * predicate re-checks); narrower is a silent hole. Guarded by `npm run test:attempt-spacing`.
+ */
 export function cutoffForBulkAttemptSpacing(
   now: Date = new Date(),
   spacingDays: number = BULK_ATTEMPT_SPACING_DAYS
@@ -275,7 +300,9 @@ export function shouldSkipForBulkAttemptSpacing(params: {
 
   const now = params.now ?? new Date();
   const spacingDays = params.spacingDays ?? BULK_ATTEMPT_SPACING_DAYS;
-  const retryAfter = new Date(lastRealAttemptAt.getTime() + spacingDays * 24 * 60 * 60 * 1000);
+  const retryAfter = new Date(
+    lastRealAttemptAt.getTime() + spacingDays * 24 * 60 * 60 * 1000 - BULK_ATTEMPT_SPACING_GRACE_MS
+  );
   if (now.getTime() >= retryAfter.getTime()) return { skip: false };
 
   const daysRemaining = Math.max(

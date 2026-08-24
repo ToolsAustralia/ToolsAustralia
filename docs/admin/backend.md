@@ -519,10 +519,30 @@ cause Stripe support named as *"too many payment attempts were made in a short t
 the recommendation to **wait 2–3 days between retries of the same transaction**. Every one of
 those 24 was invisible to the reactive cooldown. At a 3-day gap the ceiling is **10 per 30 days**.
 
-**Only `success`/`failed` rows count.** A `skipped` row never reached the issuer. Counting one
-would be self-reinforcing — *this rule's own* skip rows would push the next eligible date forward
-on every run and the invoice would never be charged again. Same definition `aggregateRunTotals`
-uses for `attempted`.
+**Only rows that actually reached an issuer count.** Three exclusions, each load-bearing:
+
+1. **`skipped` rows.** Counting one would be self-reinforcing — *this rule's own* skip rows would
+   push the next eligible date forward on every run and the invoice would never be charged again.
+2. **Recovery step-audit rows** (`result.recovery.step`) — void / create / finalize machinery
+   written milliseconds apart, not card outcomes. The 6h guard excludes them for the same reason;
+   this window is 12x longer, so the cost of getting it wrong is 12x larger. Recovery's `bulk`
+   *summary* row is **not** excluded — that one is a real submission.
+3. **`invoice_unavailable` failures.** `retrieveWorklistInvoice` writes `failed` when Stripe could
+   not be reached after retries — a 429 or 5xx, **no card touched**. Left in, a Stripe incident or
+   rate-limit episode would sit a large slice of the worklist out for three days for attempts that
+   never happened, during exactly the conditions where collection matters most.
+
+The outer `Unexpected error during charge` catch is **not** excluded: it wraps the pay call itself,
+so a throw there may well have submitted the card. Over-counting holds a member one extra cycle;
+under-counting re-hammers a card Stripe already saw.
+
+**A 2-hour grace on the boundary** (`BULK_ATTEMPT_SPACING_GRACE_MS`). A daily run does not reach a
+given invoice at the same clock time each cycle — the worklist is re-snapshotted daily and the
+population churns — so a strict `now >= last + 72h` holds any day-3 touch that lands minutes early
+and slips it to day 4, silently turning the rule into a 3-to-4 day cadence. The effective floor is
+**70h**, still comfortably above 48h, so two submissions can never land in the same 24 hours. The
+Mongo cutoff is deliberately **not** graced — it must stay at least as *wide* as the predicate
+window, or rows nearest the boundary fall outside the query and the rule silently stops firing.
 
 **Fails CLOSED** — the opposite of the cooldown below, deliberately. If a lookup error let the
 item through, a systematic failure (a bad query, a degraded replica) would silently disable the
@@ -667,7 +687,18 @@ the lines; `emitChargeRunAlerts` in the job module `console.error`s them — **`
 | Alert | Fires when |
 |---|---|
 | `aborted` | a run finalizes `aborted` or `failed` — orphan sweep, or an admin stopping one. Carries the abort reason and `eligible/attempted/succeeded/failed/skipped/revenue`. |
+| `zero_coverage` | a terminal run with `eligibleCount > 0` attempted **nobody**. |
 | `low_success_rate` | a terminal run's `succeeded / attempted` is below **8%** (`LOW_SUCCESS_RATE_FLOOR`) with at least **50** attempts (`LOW_SUCCESS_RATE_MIN_ATTEMPTS`). |
+
+**Why `zero_coverage` exists — it covers the collapse mode the attempt cap introduced.** If the
+spacing lookup fails systematically (a bad query, a degraded replica, a predicate bug) every item
+is held and the run finalizes **`completed`** with `attempted === 0`. Neither other alert can see
+that: `aborted` never fires because nothing aborted, and `low_success_rate` is suppressed by its
+own 50-attempt floor. Collecting nothing while reporting success is the precise failure class this
+whole plan exists to eliminate, so it gets an unconditional check. `eligibleCount > 0` keeps it
+quiet on a genuinely empty worklist. A **partial** lookup failure is covered separately: the
+fail-closed catch emits its own `[chargePastDue][ALERT]` line per held card — silent in health,
+loud in failure.
 
 **Why 8%.** The five runs before this shipped scored 2.59%, 5.97%, 4.68%, 3.57%, 5.59%
 (11/425, 25/419, 20/427, 15/420, 21/376), so any floor above 5.97% fires on all five; 8% leaves
@@ -677,11 +708,13 @@ shape this job has already produced once — the 2026-06-29 idempotency-replay i
 IS the finding. The 50-attempt minimum exists because 0/6 is 0% and means nothing; steady-state
 automated volume is ~386 real attempts/day, so it only ever suppresses a genuinely tiny run.
 
-**Emitted from every finalize site**, not from the cron route: the route never observes a
-sweep-abort of an admin run, never observes an admin-driven run finalizing at all, and a run
-finalized by the same tick that hit its deadline would be missed. The completed-run alerts sit
-inside the same `status: "running"` guard as the finalize write, so a later poll on an
-already-completed run cannot re-alert every tick.
+**Emitted from every finalize site** — the orphan sweep, the admin abort, both chunk-complete
+branches, the empty-worklist short-circuit in `startChargePastDueJob`, and both terminal writes in
+`recoverStrandedBulk` — rather than from the cron route, which never observes a sweep-abort of an
+admin run, never observes an admin-driven run finalizing at all, and would miss a run finalized by
+the same tick that hit its deadline. The completed-run alerts sit inside the same
+`status: "running"` guard as the finalize write, so a later poll on an already-completed run
+cannot re-alert every tick.
 
 **Tick model.** Vercel caps the function at 300s, so a run is never one long process. The invocation
 deadline is passed **into** the chunk and enforced per item — a chunk cost is dominated by Stripe

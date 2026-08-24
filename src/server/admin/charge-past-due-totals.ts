@@ -199,7 +199,7 @@ export const LOW_SUCCESS_RATE_FLOOR = 0.08;
 export const LOW_SUCCESS_RATE_MIN_ATTEMPTS = 50;
 
 export interface ChargeRunAlert {
-  kind: "aborted" | "low_success_rate";
+  kind: "aborted" | "zero_coverage" | "low_success_rate";
   message: string;
 }
 
@@ -233,6 +233,30 @@ export function buildChargeRunAlerts(run: {
       message:
         `[chargePastDue][ALERT] run ${run.runId} finalized ${run.status.toUpperCase()} ` +
         `(trigger=${run.trigger ?? "admin"}): ${run.error ?? "no reason recorded"} — ${summary}`,
+    });
+  }
+
+  // ZERO COVERAGE — a run that finished cleanly having charged nobody.
+  //
+  // This is the collapse mode the attempt cap INTRODUCED, and neither other alert can
+  // see it: the run `completed` (so `aborted` never fires) with `attempted === 0` (so
+  // the rate alert is suppressed by its own minimum-attempts floor). A systematic
+  // spacing-lookup failure — a bad query, a degraded replica, a predicate bug — holds
+  // every item back and produces exactly this shape. So does any future filter that
+  // over-matches. Collecting nothing while reporting success is the precise failure
+  // class this whole plan exists to eliminate, so it gets its own unconditional check.
+  //
+  // `eligibleCount > 0` is what keeps it quiet on a genuinely empty worklist (nothing
+  // past due is not a fault). It CAN fire on a legitimate trough day of the cap's
+  // first rotation cycle — that is accepted: a day where not even a newly-past-due
+  // member was reachable is worth one log line, and new arrivals (~58/day) mean a true
+  // zero is not a steady state.
+  if (t.eligibleCount > 0 && t.attempted === 0) {
+    alerts.push({
+      kind: "zero_coverage",
+      message:
+        `[chargePastDue][ALERT] run ${run.runId} finished ${run.status.toUpperCase()} having attempted ` +
+        `ZERO of ${t.eligibleCount} eligible invoices — nothing was submitted to Stripe. ${summary}`,
     });
   }
 

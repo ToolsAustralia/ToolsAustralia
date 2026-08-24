@@ -36,7 +36,28 @@ deliberate and worth preserving: a lookup error that let items through would, on
 failure, silently disable the entire cap and put every card back on a daily cadence. Holding one
 member back for a day is recoverable; re-hammering the whole past-due base is not.
 
-**Trap 5 — fixing the abort bug WITHOUT this cap would have been a net regression.** Runs used to
+**Trap 5 — the cap's OWN failure mode finalizes as `completed`.** A systematic spacing-lookup
+failure holds every item, and the run finishes cleanly with `attempted: 0`. `aborted` never fires
+(nothing aborted) and `low_success_rate` is suppressed by its 50-attempt floor — so without a
+dedicated check the job would stop collecting entirely and report success. That is the
+`zero_coverage` alert (`eligibleCount > 0 && attempted === 0`), plus an ALERT-prefixed line per
+fail-closed hold to catch a *partial* failure the totals would hide. **Any future filter added to
+this path needs the same question asked of it.**
+
+**Trap 6 — a `failed` row is not proof a card was submitted.** `retrieveWorklistInvoice` writes
+`failed` when Stripe was unreachable after retries (429/5xx, no card touched), and recovery
+step-audit rows carry `success`/`failed` for void/create/finalize machinery. Counting either as an
+attempt costs the member a 3-day hold for something that never reached an issuer — worst during a
+Stripe incident, i.e. exactly when collection matters. The 6h guard already excludes step rows;
+this window is 12x longer, so it excludes both.
+
+**Trap 7 — a strict boundary is not a 3-day cadence.** A daily run reaches a given invoice at a
+slightly different time each cycle, so `now >= last + 72h` holds any day-3 touch landing minutes
+early and slips it to day 4. `BULK_ATTEMPT_SPACING_GRACE_MS` (2h) absorbs that. The Mongo cutoff
+must **not** be graced — it has to stay at least as wide as the predicate window or boundary rows
+fall outside the query.
+
+**Trap 8 — fixing the abort bug WITHOUT this cap would have been a net regression.** Runs used to
 die at ~34–52% of the worklist, so only ~400 invoices were ever reached. Making runs complete puts
 all ~1,157 on a daily cadence — strictly more of exactly what Stripe is blocking. The two changes
 must ship together.

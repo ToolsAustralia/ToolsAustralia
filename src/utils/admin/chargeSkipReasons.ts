@@ -37,7 +37,14 @@ export type SkipBucketKey =
 
 /** Human labels for each bucket (admin UI). */
 export const SKIP_BUCKET_LABELS: Record<SkipBucketKey, string> = {
-  attemptSpacing: "Spaced out (3 days)",
+  // No day count here ON PURPOSE. `chargeSkipReasons.ts` is the dependency-free,
+  // client-safe vocabulary module, so it cannot import the policy constant
+  // (`BULK_ATTEMPT_SPACING_DAYS` lives under src/server/) without inverting the
+  // repo's layering for a label string. Hardcoding the number instead would let the
+  // label lie the moment the constant changes. The concrete window IS interpolated
+  // from the constant — in the per-row message, which is where an admin reads the
+  // actual dates ("last submitted ... eligible again ...").
+  attemptSpacing: "Spaced out (attempt cap)",
   excessiveRetryCooldown: "Retry in 3 days",
   noHeldDraft: "No held draft (stranded)",
   awaitingRetry: "Awaiting Stripe retry",

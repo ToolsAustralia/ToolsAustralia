@@ -27,6 +27,7 @@
 import assert from "node:assert/strict";
 import {
   BULK_ATTEMPT_SPACING_DAYS,
+  BULK_ATTEMPT_SPACING_GRACE_MS,
   SKIP_REASON_ATTEMPT_SPACING,
   cutoffForBulkAttemptSpacing,
   shouldSkipForBulkAttemptSpacing,
@@ -46,6 +47,7 @@ import {
   classifySkipReasonFromMessage,
   skipReasonToBucket,
 } from "@/utils/admin/chargeSkipReasons";
+import { RECOVERY_DECLINE_CODES } from "@/utils/admin/chargeDeclineReasons";
 
 const NOW = new Date("2026-08-24T08:00:00Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -69,15 +71,21 @@ function testAttemptYesterdayIsHeldBack() {
   const d = shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: daysAgo(1), now: NOW });
   assert.equal(d.skip, true, "a card submitted yesterday must sit out");
   if (!d.skip) throw new Error("unreachable");
-  assert.equal(d.retryAfter.getTime(), daysAgo(1).getTime() + BULK_ATTEMPT_SPACING_DAYS * DAY_MS);
+  assert.equal(
+    d.retryAfter.getTime(),
+    daysAgo(1).getTime() + BULK_ATTEMPT_SPACING_DAYS * DAY_MS - BULK_ATTEMPT_SPACING_GRACE_MS
+  );
   assert.equal(d.daysRemaining, 2);
   assert.equal(d.lastAttemptAt.getTime(), daysAgo(1).getTime());
 }
 
 function testDailyCadenceIsBrokenAtEveryPointInsideTheWindow() {
-  // The measured 17-24 attempts-per-invoice-per-30-days pattern is exactly this:
-  // every day inside the window must be refused.
-  for (const hours of [0, 1, 6, 24, 47, 48, 71, 71.99]) {
+  // The measured 17-24 attempts-per-invoice-per-30-days pattern is exactly this: every
+  // point inside the effective window must be refused. 24h and 48h are the load-bearing
+  // ones — they are literally "the daily run came back" — and the grace must never reach
+  // far enough down to admit them.
+  const effectiveHours = BULK_ATTEMPT_SPACING_DAYS * 24 - BULK_ATTEMPT_SPACING_GRACE_MS / 3600000;
+  for (const hours of [0, 1, 6, 24, 47, 48, effectiveHours - 1, effectiveHours - 0.01]) {
     assert.equal(
       shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: hoursAgo(hours), now: NOW }).skip,
       true,
@@ -86,22 +94,12 @@ function testDailyCadenceIsBrokenAtEveryPointInsideTheWindow() {
   }
 }
 
-function testBoundaryIsInclusiveAtExactlyThreeDays() {
-  // >= retryAfter proceeds. A run that starts a few seconds early on day 3 must not be
-  // pushed to day 4 — that would silently stretch a 3-day rule into a 4-day one.
-  const exact = daysAgo(BULK_ATTEMPT_SPACING_DAYS);
+function testBoundaryProceedsAtThreeDaysAndBeyond() {
   assert.equal(
-    shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: exact, now: NOW }).skip,
+    shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: daysAgo(BULK_ATTEMPT_SPACING_DAYS), now: NOW })
+      .skip,
     false,
-    "exactly at the boundary must proceed"
-  );
-  assert.equal(
-    shouldSkipForBulkAttemptSpacing({
-      lastRealAttemptAt: new Date(exact.getTime() + 1000),
-      now: NOW,
-    }).skip,
-    true,
-    "one second inside the window must still hold back"
+    "exactly at 3 days must proceed"
   );
   assert.equal(
     shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: daysAgo(4), now: NOW }).skip,
@@ -114,10 +112,67 @@ function testBoundaryIsInclusiveAtExactlyThreeDays() {
   );
 }
 
+function testGraceStopsTheRuleDriftingIntoAFourDayCadence() {
+  // THE BUG THIS GUARDS. A daily run does not reach a given invoice at the same clock
+  // time each cycle — the worklist is re-snapshotted daily and the population churns.
+  // With a strict `now >= last + 72h`, a day-3 touch landing even minutes earlier than
+  // day-0's is held and slips to day 4, silently turning a 3-day rule into a 3-to-4 day
+  // one. The grace absorbs that drift.
+  const fortyFiveMinutesShy = new Date(NOW.getTime() - (3 * DAY_MS - 45 * 60 * 1000));
+  assert.equal(
+    shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: fortyFiveMinutesShy, now: NOW }).skip,
+    false,
+    "a day-3 touch arriving 45 min early must proceed, not slip to day 4"
+  );
+
+  // The grace is a boundary, not a licence: it is inclusive at exactly 3d − grace, and
+  // one second earlier than that still holds.
+  const atGraceEdge = new Date(NOW.getTime() - (3 * DAY_MS - BULK_ATTEMPT_SPACING_GRACE_MS));
+  assert.equal(
+    shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: atGraceEdge, now: NOW }).skip,
+    false,
+    "exactly at 3d − grace must proceed"
+  );
+  assert.equal(
+    shouldSkipForBulkAttemptSpacing({
+      lastRealAttemptAt: new Date(atGraceEdge.getTime() + 1000),
+      now: NOW,
+    }).skip,
+    true,
+    "one second inside 3d − grace must still hold back"
+  );
+
+  // The grace must never be large enough to admit two submissions in the same 24h — the
+  // exact failure the cap exists to prevent. 3 days minus the grace must clear 48h.
+  assert.ok(BULK_ATTEMPT_SPACING_GRACE_MS < DAY_MS, "grace must be well under a day");
+  assert.ok(
+    BULK_ATTEMPT_SPACING_DAYS * DAY_MS - BULK_ATTEMPT_SPACING_GRACE_MS >= 2 * DAY_MS,
+    "the effective floor must stay at or above 48h"
+  );
+}
+
+function testDriftingRunTimesStillYieldAThreeDayCadence() {
+  // Same 30-day walk, but each daily run reaches this item 30 minutes earlier than the
+  // last — the drift pattern that produced the 4-day slip. Must still be 10, not 8.
+  let lastRealAttemptAt: Date | null = null;
+  let submissions = 0;
+  for (let day = 0; day < 30; day++) {
+    const now = new Date(NOW.getTime() + day * DAY_MS - day * 30 * 60 * 1000);
+    if (!shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt, now }).skip) {
+      submissions++;
+      lastRealAttemptAt = now;
+    }
+  }
+  assert.equal(submissions, 10, "drifting run times must not stretch the cadence past 3 days");
+}
+
 function testDaysRemainingIsNeverZero() {
   // Surfaced to admins as "Eligible again ... (N days)". A floor of 1 keeps that honest
-  // for a card that clears in under an hour.
-  const almost = new Date(NOW.getTime() - (BULK_ATTEMPT_SPACING_DAYS * DAY_MS - 60 * 1000));
+  // for a card that clears in under a minute.
+  const almost = new Date(
+    NOW.getTime() -
+      (BULK_ATTEMPT_SPACING_DAYS * DAY_MS - BULK_ATTEMPT_SPACING_GRACE_MS - 60 * 1000)
+  );
   const d = shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: almost, now: NOW });
   assert.equal(d.skip, true);
   if (!d.skip) throw new Error("unreachable");
@@ -146,12 +201,35 @@ function testCutoffMatchesTheSpacingWindow() {
     cutoffForBulkAttemptSpacing(NOW).getTime(),
     NOW.getTime() - BULK_ATTEMPT_SPACING_DAYS * DAY_MS
   );
-  // Any row the query CAN return must be inside the predicate's window.
-  const oldestReturnable = new Date(cutoffForBulkAttemptSpacing(NOW).getTime() + 1);
+  // The invariant is DIRECTIONAL, not equality: the query bound must be at least as WIDE
+  // as the predicate's window. Narrower would let a row the predicate would have blocked
+  // fall outside the query, so the rule silently stops firing for exactly the rows nearest
+  // the boundary. Wider is free — the predicate re-checks. The grace makes the predicate
+  // window strictly narrower, which is the safe direction.
+  const oldestBlockedByPredicate = new Date(
+    NOW.getTime() - (BULK_ATTEMPT_SPACING_DAYS * DAY_MS - BULK_ATTEMPT_SPACING_GRACE_MS) + 1
+  );
   assert.equal(
-    shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: oldestReturnable, now: NOW }).skip,
-    true,
-    "query cutoff and predicate window must agree"
+    shouldSkipForBulkAttemptSpacing({ lastRealAttemptAt: oldestBlockedByPredicate, now: NOW }).skip,
+    true
+  );
+  assert.ok(
+    cutoffForBulkAttemptSpacing(NOW).getTime() <= oldestBlockedByPredicate.getTime(),
+    "the Mongo cutoff must be wide enough to return every row the predicate blocks"
+  );
+}
+
+function testInvoiceUnavailableExclusionConstantIsReal() {
+  // The spacing lookup excludes `errorCode: { $ne: RECOVERY_DECLINE_CODES.invoiceUnavailable }`
+  // — rows where `invoices.retrieve` could not reach Stripe (429/5xx), so NO card was
+  // touched. If that constant were ever renamed away, the expression becomes
+  // `{ $ne: undefined }`, the exclusion silently stops working, and a Stripe incident
+  // would sit a large slice of the worklist out for three days for attempts that never
+  // happened — precisely when collection matters most.
+  assert.equal(typeof RECOVERY_DECLINE_CODES.invoiceUnavailable, "string");
+  assert.ok(
+    RECOVERY_DECLINE_CODES.invoiceUnavailable.length > 0,
+    "a falsy code would neuter the exclusion"
   );
 }
 
@@ -297,6 +375,50 @@ function testZeroCollectionIncidentShapeFires() {
   assert.ok(alerts.some((a) => a.kind === "low_success_rate"));
 }
 
+function testZeroCoverageRunAlertsEvenThoughItCompleted() {
+  // THE COLLAPSE MODE THE ATTEMPT CAP INTRODUCED. If the spacing lookup fails
+  // systematically (bad query, degraded replica, predicate bug) every item is held, the
+  // run finalizes `completed`, and neither other alert can see it: `aborted` never fires
+  // because nothing aborted, and `low_success_rate` is suppressed by its own 50-attempt
+  // floor. Collecting nothing while reporting success is the exact failure class this
+  // plan exists to eliminate.
+  const held = emptyTotals(1157);
+  held.skipped.total = 1157;
+  held.skipped.attemptSpacing = 1157;
+  const alerts = buildChargeRunAlerts({ runId: "held-everything", status: "completed", totals: held });
+  assert.ok(
+    alerts.some((a) => a.kind === "zero_coverage"),
+    "a completed run that attempted nobody must alert"
+  );
+  assert.ok(alerts.every((a) => a.kind !== "low_success_rate"), "the rate alert stays suppressed");
+  const zero = alerts.find((a) => a.kind === "zero_coverage")!;
+  assert.ok(zero.message.includes("[chargePastDue][ALERT]"));
+  assert.ok(zero.message.includes("ZERO of 1157"));
+}
+
+function testEmptyWorklistIsSilent() {
+  // Nothing past due is not a fault. `eligibleCount > 0` is the whole guard — this is
+  // also the shape the empty-worklist finalize site emits.
+  assert.deepEqual(
+    buildChargeRunAlerts({ runId: "empty", status: "completed", totals: emptyTotals(0) }),
+    []
+  );
+}
+
+function testAbortedRunThatAttemptedNobodyAlertsTwice() {
+  // Swept before the first chunk logged anything: both signals are true and both are
+  // worth saying — one names the abort, the other names the zero collection.
+  const kinds = buildChargeRunAlerts({
+    runId: "swept-early",
+    status: "aborted",
+    error: "Aborted by orphan sweep — no progress for 36 min (totals recomputed from logs)",
+    totals: emptyTotals(868),
+  })
+    .map((a) => a.kind)
+    .sort();
+  assert.deepEqual(kinds, ["aborted", "zero_coverage"]);
+}
+
 function testHealthyRunIsSilent() {
   const alerts = buildChargeRunAlerts({
     runId: "healthy",
@@ -373,10 +495,13 @@ function run() {
   testNeverAttemptedIsChargedImmediately();
   testAttemptYesterdayIsHeldBack();
   testDailyCadenceIsBrokenAtEveryPointInsideTheWindow();
-  testBoundaryIsInclusiveAtExactlyThreeDays();
+  testBoundaryProceedsAtThreeDaysAndBeyond();
+  testGraceStopsTheRuleDriftingIntoAFourDayCadence();
+  testDriftingRunTimesStillYieldAThreeDayCadence();
   testDaysRemainingIsNeverZero();
   testCapCeilingIsTenAttemptsPerThirtyDays();
   testCutoffMatchesTheSpacingWindow();
+  testInvoiceUnavailableExclusionConstantIsReal();
   testSpacingDaysIsOverridable();
 
   testAttemptSpacingBucketsAsItselfNotAsRecentlyAttempted();
@@ -386,6 +511,9 @@ function run() {
 
   testLowRateFloorFiresOnAllFiveRealRuns();
   testZeroCollectionIncidentShapeFires();
+  testZeroCoverageRunAlertsEvenThoughItCompleted();
+  testEmptyWorklistIsSilent();
+  testAbortedRunThatAttemptedNobodyAlertsTwice();
   testHealthyRunIsSilent();
   testTinyRunIsNotJudgedOnRate();
   testAbortedRunAlwaysAlerts();

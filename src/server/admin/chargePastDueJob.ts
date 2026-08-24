@@ -167,7 +167,7 @@ const classifySkipReason = classifySkipReasonFromMessage;
  * Never throws. This sits inside the money path — a malformed totals document must
  * not be able to break a chunk or leave the global lock held.
  */
-function emitChargeRunAlerts(run: {
+export function emitChargeRunAlerts(run: {
   runId: string;
   status: "running" | "completed" | "failed" | "aborted";
   trigger?: string | null;
@@ -215,14 +215,36 @@ async function holdForAttemptSpacing(
   let errorMessage: string;
 
   try {
-    // Only `success`/`failed` rows count. A `skipped` row never reached the issuer, and
-    // counting one would be self-reinforcing: THIS rule's own skip rows would push the
-    // next eligible date forward on every run and the invoice would never be charged
-    // again. Same definition `aggregateRunTotals` uses for `attempted`.
+    // WHAT COUNTS AS AN ATTEMPT — three exclusions, each load-bearing.
+    //
+    // 1. `skipped` rows. A skip never reached the issuer, and counting one would be
+    //    self-reinforcing: THIS rule's own skip rows would push the next eligible date
+    //    forward on every run and the invoice would never be charged again. Same
+    //    definition `aggregateRunTotals` uses for `attempted`.
+    //
+    // 2. Recovery STEP-AUDIT rows (`result.recovery.step`). Machinery — void / create /
+    //    finalize — written milliseconds apart, not card outcomes. The 6h guard in
+    //    `chargePastDueShared` excludes them for exactly this reason; this window is 12x
+    //    longer, so the cost of getting it wrong is 12x larger. (Recovery's `bulk`
+    //    SUMMARY row is NOT excluded — that one does represent a real submission.)
+    //
+    // 3. `invoice_unavailable` failures. `retrieveWorklistInvoice` writes `failed` when
+    //    Stripe could not be reached after retries — a 429 or 5xx, NO CARD TOUCHED. Left
+    //    in, a Stripe incident or rate-limit episode would sit a large slice of the
+    //    worklist out for three days for attempts that never happened, during precisely
+    //    the conditions where collection matters most.
+    //
+    // NOT excluded: the outer `Unexpected error during charge` catch. That wraps the pay
+    // call itself, so a throw there may well have submitted the card. Over-counting holds
+    // a member one extra cycle; under-counting re-hammers a card Stripe already saw — the
+    // asymmetry says count it.
     const lastReal = await InvoiceChargeLog.findOne({
       invoiceId: item.invoiceId,
       status: { $in: ["success", "failed"] },
       attemptedAt: { $gte: cutoffForBulkAttemptSpacing() },
+      "result.recovery.step": { $exists: false },
+      // `$ne` also matches documents with no `errorCode` at all — which is the common case.
+      errorCode: { $ne: RECOVERY_DECLINE_CODES.invoiceUnavailable },
     })
       .sort({ attemptedAt: -1 })
       .select({ attemptedAt: 1 })
@@ -240,8 +262,13 @@ async function holdForAttemptSpacing(
       `${decision.lastAttemptAt.toISOString()}; this card sits out ${BULK_ATTEMPT_SPACING_DAYS} days ` +
       `between attempts. Eligible again ${decision.retryAfter.toISOString()} (${days} day${days === 1 ? "" : "s"}).`;
   } catch (err) {
+    // ALERT-prefixed, not a plain error line. A SYSTEMATIC lookup failure holds every
+    // item back and the run still finalizes `completed`; the run-level `zero_coverage`
+    // alert catches a TOTAL collapse, but a PARTIAL one (half the lookups failing) would
+    // otherwise be invisible in the totals. One line per held card is loud in failure and
+    // silent in health, which is the right way round.
     console.error(
-      `[chargePastDue] attempt-spacing lookup failed for ${item.invoiceId} — holding the card back:`,
+      `[chargePastDue][ALERT] attempt-spacing lookup failed for ${item.invoiceId} — holding the card back rather than risk an extra submission:`,
       err
     );
     errorMessage =
@@ -450,6 +477,15 @@ export async function startChargePastDueJob(params: {
         { $set: { status: "completed", finishedAt: new Date() } }
       );
       await releaseLock();
+      // Wired for completeness so EVERY finalize site goes through one emitter. With
+      // `eligibleCount: 0` the alerts stay silent by design — a genuinely empty worklist
+      // is not a fault — but if this site ever finalizes a non-empty run, it is covered.
+      emitChargeRunAlerts({
+        runId: String(runId),
+        status: "completed",
+        trigger,
+        totals: { eligibleCount: 0 },
+      });
       return { runId: String(runId), total: 0, done: true };
     }
 
