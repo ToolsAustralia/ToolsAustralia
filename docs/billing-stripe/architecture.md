@@ -211,7 +211,8 @@ They heal a grant row that exists but is incomplete. A renewal that died *before
 ### The join
 
 ```
-MembershipRenewalCycle { createdAt in [since, until), status: "succeeded",
+MembershipRenewalCycle { updatedAt in [since, until),
+                         status in ["succeeded", "recovered"],
                          billingReason: "subscription_cycle" }
   LEFT JOIN PaymentEvent on _id == "BenefitsGranted-invoice_" + stripeInvoiceId
   WHERE the PaymentEvent is absent
@@ -219,19 +220,29 @@ MembershipRenewalCycle { createdAt in [since, until), status: "succeeded",
 
 Run as one aggregation: `$addFields` computes the grant `_id`, `$lookup` point-reads `paymentevents._id`, `$match { grant: { $size: 0 } }` keeps the misses. The `_id` is deterministic — `benefitsGrantedEventId("invoice_" + invoiceId)` ([src/types/payment-ledger.ts](../../src/types/payment-ledger.ts)), matching what the handler writes at [index.ts:3536-3537](../../src/services/stripe-webhook-handlers/index.ts) and what `processPaymentBenefits` writes at [payment-processing.ts:327](../../src/utils/payment/payment-processing.ts). Reuse that helper rather than re-typing the prefix — a drift of one character silently returns "everything is a gap".
 
-`status: "succeeded"` excludes `failed` and `refunded` cycles: neither is money we kept.
+`status` accepts `succeeded` **and** `recovered`, excluding `failed` (not money we kept) and `refunded` (money we gave back). No writer sets `recovered` today, but it is in the schema enum and in every other paid-cycle query in the repo (`MembershipAnalyticsService.ts:372`, `refund-ledger-reversal.ts:378`, `backfill-membership-streaks.ts:99`, `find-renewal-rate.ts`), so matching them means a future writer cannot silently drop rows out of this net.
+
+### The window is on `updatedAt`, and that is load-bearing
+
+These rows are **upserted, not inserted.** `upsertRenewalCycleFromFailedInvoice` creates the row at **failure** time with `status: "failed"`; a later successful retry flips it to `succeeded` with `findOneAndUpdate`, which leaves `createdAt` pinned to the failure date. A `createdAt` window therefore goes **false-clean** for every dunning-recovered renewal — declined on the 24th, paid on the 29th, grant then fails, and the row sits five days outside every window the cron will ever run. That is the past-due-recovery population this whole spec exists to protect, so it is the worst possible miss.
+
+Mongoose's `timestamps: true` bumps `updatedAt` on **both** the insert and the failed→succeeded flip, so it is the one field covering both directions (`succeededAt` alone would miss a webhook Stripe delivers days late). Timestamps only move forward, so an `updatedAt` window has no false-clean direction. Full reasoning and the regression test: [gotchas.md](./gotchas.md#the-window-must-be-on-updatedat--createdat-is-false-clean-for-dunning-recoveries).
+
+The projected `chargedAt` stays `succeededAt ?? createdAt` — when the money actually moved, which for a recovery is *not* the row's creation date.
 
 ### Mongo-only — deliberate, with a stated limit
 
 **No Stripe call per row.** `MembershipRenewalCycle` is written straight from Stripe's invoice payload, so the paid set is already local; a per-row round-trip would reintroduce the API fan-out that *caused* the incident (RC-3: 182 req/s against a 100 req/s account cap). A controller-run reconciliation on 2026-08-23 measured the anchor as complete for that window: Stripe reported **688** paid `subscription_cycle` invoices, Mongo held **693** cycle rows, and **zero** Stripe-paid invoices lacked a cycle row.
 
-**The limit, stated plainly:** the cycle row is written by the *same handler that can fail* — [index.ts:3685](../../src/services/stripe-webhook-handlers/index.ts), **after** its first Stripe call at `:3507`. A failure between those two points leaves no cycle row, and this reconciler cannot see it. For ad-hoc audits, `scripts/backfill-missing-renewal-grants.ts` (Phase 0) carries an optional Stripe-side pass that closes that hole. The daily cron accepts the gap in exchange for staying off Stripe's limiter. See [gotchas.md](./gotchas.md#the-renewal-grant-reconciler-has-exactly-one-blind-spot-2026-08-24).
+**The limit, stated plainly:** the cycle row is written by the *same handler that can fail* — [index.ts:3685](../../src/services/stripe-webhook-handlers/index.ts), **after** its first Stripe call at `:3507`. A failure between those two points leaves no cycle row, and this reconciler cannot see it. For ad-hoc audits, `scripts/backfill-missing-renewal-grants.ts` (Phase 0) carries an optional Stripe-side pass that closes that hole. The daily cron accepts the gap in exchange for staying off Stripe's limiter.
+
+**And it is not the net for a grant row that exists but is empty** — that shape belongs to `reconcileActiveMajorDrawEntries`. Both limits, and which reconciler owns which shape: [gotchas.md](./gotchas.md#the-renewal-grant-reconciler-what-it-covers-and-the-two-things-it-does-not-2026-08-24).
 
 ### Settle margin — why a gap is not reported immediately
 
-`until` defaults to **now − 8 hours**, `since` to `until − 48 hours`.
+`until` defaults to **now − 8 hours**, `since` to `until − 48 hours`, both measured against `updatedAt` — i.e. "this row has not been touched for 8 hours".
 
-The webhook queue's full retry ladder is `0 + 1m + 5m + 15m + 1h + 6h = 7h21m` from first attempt to last (`BACKOFF_SCHEDULE_MS`, [src/services/stripe-webhook-queue/backoff.ts](../../src/services/stripe-webhook-queue/backoff.ts)). A renewal younger than that may be legitimately mid-retry — reporting it would make the alert cry wolf, which is precisely how a real alert gets ignored. 8h clears the ladder with margin. The 48h lookback means each burst is inspected by two consecutive runs, so one failed run does not create a hole.
+The webhook queue's full retry ladder is `0 + 1m + 5m + 15m + 1h + 6h = 7h21m` from first attempt to last (`BACKOFF_SCHEDULE_MS`, [src/services/stripe-webhook-queue/backoff.ts](../../src/services/stripe-webhook-queue/backoff.ts)). A renewal younger than that may be legitimately mid-retry — reporting it would make the alert cry wolf, which is precisely how a real alert gets ignored. 8h clears the ladder with margin, and because it is measured from `updatedAt` it is self-adjusting: every retry that re-runs the cycle upsert restarts the clock. The 48h lookback means each burst is inspected by two consecutive runs, so one failed run does not create a hole.
 
 At the `40 3 * * *` schedule the window is roughly `[D−3 19:40, D−1 19:40)`, which contains both of the last two 14:00 UTC renewal bursts.
 
@@ -260,4 +271,6 @@ if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
 
 Findings go to **`console.error`** on two greppable prefixed lines —
 `[reconcile-renewal-grants] PAID BUT NOT GRANTED: <n> renewal(s), <cents> cents, window …` and
-`[reconcile-renewal-grants] DEAD WEBHOOK ROWS: <n> — …`. Production builds strip `console.log/info/debug/warn` (`next.config.ts` `compiler.removeConsole`), so anything logged below `error` would be invisible in Vercel. The clean-run `OK` line is `console.log` and therefore dev-only; the JSON response carries the same numbers for a manual check.
+`[reconcile-renewal-grants] DEAD WEBHOOK ROWS: <n> — …`. Production builds strip `console.log/info/debug/warn` (`next.config.ts` `compiler.removeConsole`), so anything logged below `error` would be invisible in Vercel.
+
+**The clean run logs at `error` too** — a one-line daily heartbeat, `[reconcile-renewal-grants] OK: 0 ungranted, 0 dead, window …`. Without it, "ran and found nothing" is indistinguishable from "never fired" in production logs, and a safety net that cannot prove it ran is not much of a net. One line a day is a cheap price for that.

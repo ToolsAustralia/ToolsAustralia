@@ -71,11 +71,13 @@ export async function GET(request: Request) {
     }
 
     if (result.ungrantedCount === 0 && result.deadCount === 0) {
-      console.log("[reconcile-renewal-grants] OK", {
-        since: result.since,
-        until: result.until,
-        durationMs,
-      });
+      // Heartbeat, deliberately at `error` level. A clean run logged via
+      // console.log is STRIPPED in production, which makes "ran and found
+      // nothing" indistinguishable from "never fired" — and a safety net that
+      // cannot prove it ran is not much of a net. One short line a day.
+      console.error(
+        `[reconcile-renewal-grants] OK: 0 ungranted, 0 dead, window ${result.since}..${result.until}, ${durationMs}ms`
+      );
     }
 
     return NextResponse.json({ success: true, ...result, durationMs });

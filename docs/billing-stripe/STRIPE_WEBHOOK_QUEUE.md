@@ -73,7 +73,7 @@ MongoDB treats `expireAfterSeconds` as **immutable per index**. `Mongoose.syncIn
 
 ### Backfilling `processedAt` on dead rows
 
-Before commit `b28795a6`, `markFailed`'s dead transition did not set `processedAt`, so any dead rows that already exist in production have `processedAt: null`. MongoDB TTL skips null/missing values, so those rows would never expire. To anchor them so the 30-day TTL applies:
+Two paths used to leave `processedAt: null` on a dead row: `markFailed`'s dead transition before commit `b28795a6`, and the sweeper's orphan branch until 2026-08-24. Any dead row written by either still has `processedAt: null`. MongoDB TTL skips null/missing values, so those rows would never expire. To anchor them so the 30-day TTL applies:
 
 ```bash
 npm run backfill:webhook-queue-processed-at:dry   # count + sample
@@ -282,7 +282,9 @@ The ACK gate made `dead` reachable for six previously-silent failure paths — m
 
 **Not windowed, on purpose.** Ageing a dead row out of the alert after N hours would let an unhealed one go quiet. The alert persists until the row is replayed/deleted (playbook below) or the 30-day TTL drops it — so in steady state the count is zero and any non-zero number is an action item. The listing caps at 50 rows; the count never caps.
 
-`diedAt` prefers `processedAt` and falls back to `updatedAt`, because the sweeper's orphan branch marks a row `dead` **without** setting `processedAt` (the same omission described in [Backfilling `processedAt` on dead rows](#backfilling-processedat-on-dead-rows) — which also means those rows never TTL out).
+**Fixed alongside it: orphan-swept dead rows used never to expire.** The sweeper's orphan branch set `status: "dead"` **without** `processedAt`, and MongoDB TTL skips non-date values — so `dead_processedAt_ttl` never reaped them. Combined with an un-windowed alert, one immortal orphan-dead row would have meant a `DEAD WEBHOOK ROWS` `console.error` every day forever: the exact alert-fatigue failure the settle margin was designed to avoid. The branch now sets `processedAt: new Date()`, like `markFailed` does. Rows written before this fix still need the [backfill](#backfilling-processedat-on-dead-rows).
+
+`diedAt` still prefers `processedAt` and falls back to `updatedAt`, to stay correct for those pre-fix rows.
 
 ## Operational playbook
 

@@ -22,8 +22,22 @@
  * window: Stripe reported 688 paid `subscription_cycle` invoices, Mongo held 693
  * cycle rows, and ZERO Stripe-paid invoices lacked a cycle row.
  *
- * THE ONE LIMIT, STATED PLAINLY. The cycle row is written by the SAME handler
- * that can fail — `handleInvoicePaymentSucceeded` writes it at
+ * WINDOW FIELD — `updatedAt`, NOT `createdAt`. These rows are UPSERTED, not
+ * inserted. `upsertRenewalCycleFromFailedInvoice` creates the row with
+ * `status: "failed"` at FAILURE time (from `invoice.payment_failed`,
+ * handlers/index.ts:2989); a later successful retry — Stripe dunning, or
+ * /api/cron/charge-past-due — flips it to "succeeded" via `findOneAndUpdate`,
+ * which leaves `createdAt` pinned to the original failure date. So a renewal
+ * that declined on the 24th, was recovered on the 29th, and whose grant then
+ * failed would sit five days outside every window this cron ever runs:
+ * permanently invisible, and precisely the past-due-recovery population this
+ * spec exists to protect. Mongoose's `timestamps: true` bumps `updatedAt` on
+ * BOTH the fresh insert and the failed→succeeded flip, so it is the one field
+ * that covers both directions (`succeededAt` alone would miss the opposite
+ * case — a webhook Stripe delivers days late).
+ *
+ * KNOWN LIMIT. The cycle row is written by the SAME handler that can fail —
+ * `handleInvoicePaymentSucceeded` writes it at
  * `src/services/stripe-webhook-handlers/index.ts:3685`, AFTER its first Stripe
  * call at `:3507`. A failure between those two points leaves no cycle row, and
  * this reconciler cannot see it. `scripts/backfill-missing-renewal-grants.ts`
@@ -74,13 +88,16 @@ export interface RenewalGrantReconciliation {
 export const DEFAULT_LOOKBACK_HOURS = 48;
 
 /**
- * How long a renewal must have been settled before its absence counts as a gap.
+ * How long a row must have been UNTOUCHED before its missing grant counts as a gap.
  *
  * The webhook queue's full retry ladder is 0 + 1m + 5m + 15m + 1h + 6h = 7h21m
  * from first attempt to last (`BACKOFF_SCHEDULE_MS` in
  * src/services/stripe-webhook-queue/backoff.ts). A renewal younger than that may
  * be legitimately mid-retry, and reporting it would make this alert cry wolf —
  * which is how a real alert gets ignored. 8h clears the ladder with margin.
+ *
+ * Measured from `updatedAt`, so it is self-adjusting: every retry that re-runs
+ * the cycle upsert re-bumps the row and restarts the 8h clock.
  */
 export const SETTLE_MARGIN_MS = 8 * 60 * 60 * 1000;
 
@@ -118,9 +135,16 @@ export async function findUngrantedRenewals(since: Date, until: Date): Promise<U
   const rows = await MembershipRenewalCycle.aggregate<UngrantedAggregateRow>([
     {
       $match: {
-        createdAt: { $gte: since, $lt: until },
-        // "succeeded" only: a failed or refunded cycle is not money we kept.
-        status: "succeeded",
+        // `updatedAt`, NOT `createdAt` — see the WINDOW FIELD note above. A
+        // dunning-recovered renewal's createdAt is pinned to its FAILURE date.
+        updatedAt: { $gte: since, $lt: until },
+        // Money we kept. "failed" is not; "refunded" we gave back. "recovered"
+        // has no writer today but is in the schema enum and in every other
+        // paid-cycle query in the repo (MembershipAnalyticsService.ts:372,
+        // refund-ledger-reversal.ts:378, backfill-membership-streaks.ts:99,
+        // find-renewal-rate.ts) — matching them costs nothing and means a future
+        // writer cannot silently drop rows out of this net.
+        status: { $in: ["succeeded", "recovered"] },
         billingReason: "subscription_cycle",
       },
     },
@@ -143,6 +167,9 @@ export async function findUngrantedRenewals(since: Date, until: Date): Promise<U
         // Backfilled rows can lack amountPaidCents; amountDueCents is the honest
         // stand-in for a cycle Stripe marked paid.
         amountPaidCents: { $ifNull: ["$amountPaidCents", "$amountDueCents"] },
+        // `succeededAt` is always set by upsertRenewalCycleFromPaidInvoice
+        // (paidAtDateFromStripeInvoice never returns null); createdAt is a
+        // defensive fallback for hand-written / backfilled rows only.
         chargedAt: { $ifNull: ["$succeededAt", "$createdAt"] },
       },
     },

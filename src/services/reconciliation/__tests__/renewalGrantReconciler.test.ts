@@ -34,12 +34,14 @@ const INV_GRANTED = "in_recon_test_granted_001";
 const INV_FAILED_CYCLE = "in_recon_test_failedcycle_001";
 const INV_NOT_CYCLE = "in_recon_test_notcycle_001";
 const INV_OUTSIDE_WINDOW = "in_recon_test_outside_001";
+const INV_RECOVERED = "in_recon_test_recovered_001";
 const ALL_FIXTURE_INVOICES = [
   INV_UNGRANTED,
   INV_GRANTED,
   INV_FAILED_CYCLE,
   INV_NOT_CYCLE,
   INV_OUTSIDE_WINDOW,
+  INV_RECOVERED,
 ];
 
 const EVT_DEAD = "evt_recon_test_dead_001";
@@ -64,6 +66,9 @@ async function run() {
   const { default: StripeWebhookQueue } = await import("@/models/StripeWebhookQueue");
   const { findUngrantedRenewals, findDeadWebhookEvents, runRenewalGrantReconciliation } = await import(
     "@/services/reconciliation/renewalGrantReconciler"
+  );
+  const { upsertRenewalCycleFromFailedInvoice, upsertRenewalCycleFromPaidInvoice } = await import(
+    "@/services/admin/membershipAnalyticsPersistence"
   );
 
   await connectDB();
@@ -124,7 +129,7 @@ async function run() {
       cycle({ stripeInvoiceId: INV_FAILED_CYCLE, status: "failed", succeededAt: null, failedAt: INSIDE }),
       // A non-cycle invoice (upgrade proration etc.) is out of this reconciler's remit.
       cycle({ stripeInvoiceId: INV_NOT_CYCLE, billingReason: "subscription_update" }),
-      // Same shape as the gap, but outside the window.
+      // Same shape as the gap, but its last touch is outside the window.
       cycle({ stripeInvoiceId: INV_OUTSIDE_WINDOW, createdAt: BEFORE, succeededAt: BEFORE, updatedAt: BEFORE }),
     ] as never[]);
 
@@ -138,7 +143,7 @@ async function run() {
     expect("paid cycle WITH its BenefitsGranted is not reported", found.has(INV_GRANTED), false);
     expect("failed cycle is not reported", found.has(INV_FAILED_CYCLE), false);
     expect("non-subscription_cycle invoice is not reported", found.has(INV_NOT_CYCLE), false);
-    expect("cycle outside the window is not reported", found.has(INV_OUTSIDE_WINDOW), false);
+    expect("cycle whose updatedAt is outside the window is not reported", found.has(INV_OUTSIDE_WINDOW), false);
 
     const gap = rows.find((r) => r.stripeInvoiceId === INV_UNGRANTED);
     expect("gap carries the userId as a string", gap?.userId, userId.toString());
@@ -158,6 +163,119 @@ async function run() {
       afterHeal.some((r) => r.stripeInvoiceId === INV_UNGRANTED),
       false
     );
+
+    // -- Dunning recovery: the row's createdAt is its FAILURE date ----------
+    //
+    // THE REGRESSION THIS GUARDS. `MembershipRenewalCycle` rows are UPSERTED.
+    // `upsertRenewalCycleFromFailedInvoice` creates the row at FAILURE time; a
+    // later successful retry (Stripe dunning, or /api/cron/charge-past-due) flips
+    // it to "succeeded" via findOneAndUpdate, leaving `createdAt` pinned to the
+    // original failure date. Window on `createdAt` and a renewal that declined on
+    // the 24th, was recovered on the 29th and whose grant then failed sits five
+    // days outside every window this cron will ever run — permanently invisible,
+    // and exactly the past-due-recovery population the spec exists to protect.
+    //
+    // Driven through the REAL production upserts, not hand-seeded, so this pins
+    // Mongoose's actual timestamp behaviour rather than a belief about it.
+    const testStart = new Date();
+    const recoveredInvoice = {
+      id: INV_RECOVERED,
+      billing_reason: "subscription_cycle",
+      period_end: Math.floor(INSIDE.getTime() / 1000),
+      created: Math.floor(INSIDE.getTime() / 1000),
+      amount_due: 2000,
+      total: 2000,
+      amount_paid: 2000,
+      status_transitions: { paid_at: Math.floor(INSIDE.getTime() / 1000) },
+    } as unknown as Parameters<typeof upsertRenewalCycleFromPaidInvoice>[0]["invoice"];
+
+    // 1. The renewal declines — the row is born "failed".
+    await upsertRenewalCycleFromFailedInvoice({
+      invoice: recoveredInvoice,
+      userId,
+      stripeSubscriptionId: "sub_recon_test_001",
+    });
+    // 2. Backdate it so "created at failure time" is a date outside the window.
+    await MembershipRenewalCycle.collection.updateOne(
+      { stripeInvoiceId: INV_RECOVERED },
+      { $set: { createdAt: BEFORE, updatedAt: BEFORE } }
+    );
+    // 3. Recovery lands — the REAL production flip to "succeeded".
+    await upsertRenewalCycleFromPaidInvoice({
+      invoice: recoveredInvoice,
+      userId,
+      stripeSubscriptionId: "sub_recon_test_001",
+    });
+
+    const recoveredDoc = await MembershipRenewalCycle.collection.findOne<{
+      status: string;
+      createdAt: Date;
+      updatedAt: Date;
+      succeededAt: Date;
+    }>({ stripeInvoiceId: INV_RECOVERED });
+
+    expect("recovery flips the cycle to succeeded", recoveredDoc?.status, "succeeded");
+    expect(
+      "createdAt stays pinned to the FAILURE date (this is the false-clean mechanism)",
+      recoveredDoc?.createdAt?.getTime(),
+      BEFORE.getTime()
+    );
+    expect(
+      "updatedAt IS bumped by the flip — so it is the field the window must use",
+      (recoveredDoc?.updatedAt?.getTime() ?? 0) >= testStart.getTime(),
+      true
+    );
+
+    // 4. A live-clock window must find it, even though createdAt is years earlier.
+    const liveWindow = await findUngrantedRenewals(
+      new Date(testStart.getTime() - 60_000),
+      new Date(Date.now() + 60_000)
+    );
+    const liveHit = liveWindow.find((r) => r.stripeInvoiceId === INV_RECOVERED);
+    expect("dunning-recovered renewal is detected by an updatedAt window", Boolean(liveHit), true);
+    expect(
+      "and it reports the RECOVERY charge time, not the failure date",
+      liveHit?.chargedAt instanceof Date && liveHit.chargedAt.getTime(),
+      INSIDE.getTime()
+    );
+
+    // 5. Same shape, clock-independent: updatedAt inside the fixture window while
+    //    createdAt sits before it. This is the durable guard.
+    await MembershipRenewalCycle.collection.updateOne(
+      { stripeInvoiceId: INV_RECOVERED },
+      { $set: { updatedAt: INSIDE } }
+    );
+    const pinned = await findUngrantedRenewals(WINDOW_START, WINDOW_END);
+    expect(
+      "detected on updatedAt while createdAt (the old anchor) is outside the window",
+      pinned.some((r) => r.stripeInvoiceId === INV_RECOVERED),
+      true
+    );
+    expect("...and createdAt really is outside it", BEFORE < WINDOW_START, true);
+
+    // Granting it clears it, same as any other gap.
+    await PaymentEvent.collection.insertOne(grantEvent(INV_RECOVERED, "admin") as never);
+    const recoveredHealed = await findUngrantedRenewals(WINDOW_START, WINDOW_END);
+    expect(
+      "granting the recovered renewal clears it too",
+      recoveredHealed.some((r) => r.stripeInvoiceId === INV_RECOVERED),
+      false
+    );
+
+    // -- "recovered" status is accepted, not just "succeeded" ----------------
+    await PaymentEvent.deleteMany({ _id: `BenefitsGranted-invoice_${INV_RECOVERED}` });
+    await MembershipRenewalCycle.collection.updateOne(
+      { stripeInvoiceId: INV_RECOVERED },
+      { $set: { status: "recovered" } }
+    );
+    const asRecovered = await findUngrantedRenewals(WINDOW_START, WINDOW_END);
+    expect(
+      'status "recovered" is treated as money kept, same as "succeeded"',
+      asRecovered.some((r) => r.stripeInvoiceId === INV_RECOVERED),
+      true
+    );
+    // Restore so the orchestrator totals below stay predictable.
+    await MembershipRenewalCycle.deleteMany({ stripeInvoiceId: INV_RECOVERED });
 
     // -- Dead webhook rows --------------------------------------------------
     await StripeWebhookQueue.collection.insertMany([

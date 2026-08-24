@@ -70,7 +70,7 @@ Both one-time routes **reject mini-draw catalogue ids** (`mini-pack-1..8`, `addi
 ```jsonc
 {
   "success": true,
-  "since": "2026-08-21T19:40:00.000Z",   // now − 8h − 48h
+  "since": "2026-08-21T19:40:00.000Z",   // now − 8h − 48h  (window is on updatedAt)
   "until": "2026-08-23T19:40:00.000Z",   // now − 8h (settle margin)
   "ungranted": [
     { "stripeInvoiceId": "in_…", "userId": "…", "amountPaidCents": 2000, "chargedAt": "…" }

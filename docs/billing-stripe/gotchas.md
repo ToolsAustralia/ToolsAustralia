@@ -20,7 +20,11 @@
 
 **But "cannot double-grant" is NOT "will re-grant" — do not read the one as the other.** `processPaymentBenefits` writes the `PaymentEvent` ([payment-processing.ts:546](../../src/utils/payment/payment-processing.ts)) **before** calling `grantBenefits` (`:651`). So if `grantBenefits` throws: attempt 1 returns `{success:false}` → the ACK gate requeues → attempt 2 hits the duplicate-key branch and returns `{success:true, alreadyProcessed:true}` (`:593`) → the handler reports success → **the row ACKs with nothing granted**. The very same unique key that makes the retry safe is what makes it a no-op.
 
-The 24 Aug incident died *upstream* of `processPaymentBenefits`, so the ACK gate does fix that case — but this ordering hole is a separate, still-live way to reach the same "charged, no entries" outcome, and no queue-level gate can see it. The net for it is the **Stripe-anchored reconciler** (Task 3), which starts from paid Stripe invoices instead of `PaymentEvent` rows and therefore detects exactly this shape. Reordering the write is a deliberate non-goal of the ACK-gate change — treat it as its own task, with its own idempotency analysis.
+The 24 Aug incident died *upstream* of `processPaymentBenefits`, so the ACK gate does fix that case — but this ordering hole is a separate, still-live way to reach the same "charged, no entries" outcome, and no queue-level gate can see it.
+
+**Corrected 2026-08-24 — the net for this shape is NOT the renewal-grant reconciler.** An earlier version of this note said it was. It is not: `PaymentEvent.create` has already run ([payment-processing.ts:526](../../src/utils/payment/payment-processing.ts)) before `grantBenefits` (`:650`) throws, so the row **exists** and `renewalGrantReconciler`'s anti-join finds a match and stays quiet. What that row carries is `data.entries > 0` with an **empty `data.grants.drawGrants`** (`createEmptyGrants` at `:487`) — which is exactly the candidate predicate of [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts) (`:108-112`, `/api/cron/reconcile-major-draw-entries`, `30 16 * * *`). **That** is the net, and it self-heals rather than only alerting.
+
+The two reconcilers are complements, not substitutes: one starts from the paid invoice and catches a **missing** grant row, the other starts from the grant row and catches an **incomplete** one. Reordering the write is a deliberate non-goal of the ACK-gate change — treat it as its own task, with its own idempotency analysis.
 
 **Another non-obvious `{success:false}`: the major-draw gate.** `processPaymentBenefits` closes for any membership invoice that is not a renewal while no draw is accepting entries (`payment-processing.ts:342-352`) — so `subscription_create` and upgrades, never `subscription_cycle`. One landing in a draw gap keeps failing until the next draw opens, which can outlast the ~7.5h retry budget and dead-letter. A burst of dead rows at a draw boundary, all `subscription_create`/upgrade, is this — replay them once the draw is active.
 
@@ -28,9 +32,13 @@ The 24 Aug incident died *upstream* of `processPaymentBenefits`, so the ACK gate
 
 **Related still-open gap:** `payment_intent.succeeded` has the same shape — `handlePaymentSuccess` returns `false` for metadata defects, which un-acks the dedup row but still lets the queue row go `succeeded`. Deliberately left alone here: several of those `false` returns are defects no retry can fix, so gating them would dead-letter noisily. Needs its own decision.
 
-## The renewal-grant reconciler has exactly one blind spot (2026-08-24)
+## The renewal-grant reconciler: what it covers, and the two things it does not (2026-08-24)
 
-`/api/cron/reconcile-renewal-grants` is the net for "charged but never granted", and it is genuinely the only detector we have for that shape ([architecture.md](./architecture.md#renewal-grant-reconciliation--the-paid-but-not-granted-detector-2026-08-24)). But **it is anchored on `MembershipRenewalCycle`, which is written by the same handler that can fail.**
+`/api/cron/reconcile-renewal-grants` is the only detector we have for a renewal whose grant row was never written ([architecture.md](./architecture.md#renewal-grant-reconciliation--the-paid-but-not-granted-detector-2026-08-24)). It is **not** a general "charged but no entries" detector, and two shapes fall outside it.
+
+**Not covered #1 — the grant row exists but is empty.** If `grantBenefits` throws *after* `PaymentEvent.create`, the anti-join finds a match and stays quiet. That shape belongs to [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts) (empty `data.grants.drawGrants`), which also self-heals it. See the corrected note in the ACK-gate section above; do not confuse the two nets.
+
+**Not covered #2 — the anchor row itself is missing.** It is anchored on `MembershipRenewalCycle`, **which is written by the same handler that can fail.**
 
 `handleInvoicePaymentSucceeded` writes the cycle row at [index.ts:3685](../../src/services/stripe-webhook-handlers/index.ts) — **after** its first Stripe call at `:3507`. So:
 
@@ -44,9 +52,17 @@ The middle row is the hole. It is narrow (one Stripe call wide) and, since the A
 
 **Do not "fix" this by adding a per-row Stripe call to the cron.** That is RC-3 — the API fan-out that caused the incident (182 req/s against a 100 req/s account cap). For an ad-hoc audit that must be Stripe-complete, use `scripts/backfill-missing-renewal-grants.ts`'s optional Stripe-side pass, which walks Stripe's paid `subscription_cycle` invoices directly. The right permanent fix is to move the cycle write ahead of the first Stripe call — a separate change with its own idempotency analysis.
 
-**Also on the reconciler:** the `createdAt` range is **not** index-backed (`membershiprenewalcycles` indexes `stripeInvoiceId`, `userId`, `stripeSubscriptionId`, `status`, `dueAt`, `{dueAt,billingReason,status}`, `{userId,dueAt}` — none lead with `createdAt`). At current volume the daily scan is cheap; if the collection passes a few hundred thousand rows, add `{ status: 1, createdAt: -1 }` rather than widening the window.
+### The window MUST be on `updatedAt` — `createdAt` is false-clean for dunning recoveries
 
-**Do not switch the window to `dueAt` to get an index.** `dueAt` is the invoice's `period_end`, not when it was charged — a renewal's `dueAt` sits a month away from the money moving, so the window would select the wrong invoices entirely.
+`MembershipRenewalCycle` rows are **upserted, not inserted.** `upsertRenewalCycleFromFailedInvoice` creates the row with `status: "failed"` at **failure** time (from `invoice.payment_failed`, [index.ts:2989](../../src/services/stripe-webhook-handlers/index.ts)). A later successful retry — Stripe's dunning ladder, or `/api/cron/charge-past-due` — flips it to `"succeeded"` with `findOneAndUpdate`, which leaves `createdAt` **pinned to the original failure date**.
+
+So: a renewal declines on the 24th, is recovered on the 29th, and its grant then fails (e.g. the subscription is `canceled` by then → the non-manageable branch at `:3789`). Money kept, no entries — and under a `createdAt` window that row sits five days outside every window the cron will ever run. **Permanently invisible, for exactly the past-due-recovery population this spec exists to protect.** It shipped that way in `879b9b9d` and was corrected in the follow-up.
+
+Mongoose's `timestamps: true` bumps `updatedAt` on **both** the fresh insert and the failed→succeeded flip, so it is the single field covering both directions. `succeededAt` alone would miss the opposite case — a webhook Stripe delivers days late. Timestamps only ever move *forward*, so an `updatedAt` window has no false-clean direction: a row touched after `until` is picked up by a later run, never dropped. Pinned by `npm run test:renewal-grant-reconciler`, which drives the real upserts and asserts `createdAt` stays at the failure date while `updatedAt` moves.
+
+**Do not switch the window to `dueAt` to get an index.** `dueAt` is the invoice's `period_end`, not when the money moved — a renewal's `dueAt` sits a month away from its charge, so the window would select the wrong invoices entirely.
+
+**Neither `updatedAt` nor `createdAt` is index-backed** (`membershiprenewalcycles` indexes `stripeInvoiceId`, `userId`, `stripeSubscriptionId`, `status`, `dueAt`, `{dueAt,billingReason,status}`, `{userId,dueAt}`). At current volume the daily scan is cheap; past a few hundred thousand rows add `{ status: 1, updatedAt: -1 }` rather than widening the window. A bulk backfill that touches old rows will drag them into the window — that surfaces *old real gaps*, never a false clean, so it is noise at worst.
 
 ## Confirm-time card declines are THROWN by the SDK, not returned (2026-07-16)
 
