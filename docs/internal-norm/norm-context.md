@@ -1287,6 +1287,11 @@ When `totalFailed` is `0`, `topCodes` is an empty array. Percentages are rounded
       failed: number,
       skipped: {
         total: number,
+        attemptSpacing: number,     // held by the PROACTIVE per-invoice attempt cap (3 days between
+                                    // submissions of the same invoice). Expected to be the LARGEST
+                                    // bucket in a healthy automated run — ~2/3 of the past-due
+                                    // population sits out on any given day, by design. NOT a fault.
+        excessiveRetryCooldown: number, // card inside a Stripe Adaptive Acceptance block window (reactive)
         recentlyAttempted: number,
         noLongerPastDue: number,
         alreadyPaid: number,

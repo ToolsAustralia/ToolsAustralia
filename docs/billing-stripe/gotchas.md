@@ -672,6 +672,18 @@ fails against.
 **It decays.** 118 of 701 blocked cards (17%) produced a successful charge after their first
 block, some 3+ months later — so the cohort must be slowed down, **not dropped**.
 
+**Both halves are now implemented — and the reactive one alone was never enough.** The cooldown
+below only engages once a `BlockedTransaction` row already exists for the card, so by construction
+it cannot prevent a **first** block, and it fails open. The **proactive** half is
+`shouldSkipForBulkAttemptSpacing` (`BULK_ATTEMPT_SPACING_DAYS = 3`) in
+[past-due-charge-idempotency.ts](../../src/server/admin/past-due-charge-idempotency.ts): the
+automated run refuses to submit the same invoice more than once every 3 days, reading only that
+invoice's own `success`/`failed` history. Measured 2026-08-24, before it existed: individual
+invoices reached **24 submissions in 30 days** (100 at 17, 76 at 18) — every one invisible to the
+reactive cooldown. It also answers the second recommendation: a ~1,157-invoice day becomes ~386
+real submissions, cutting per-invoice velocity from 24 to **10** per 30 days. See
+[docs/admin/backend.md](../admin/backend.md#per-invoice-attempt-cap-proactive).
+
 Implementation: `isStripeExcessiveRetryReason` / `STRIPE_EXCESSIVE_RETRY_OUTCOME_REASON` in
 [stripe-excessive-retry.ts](../../src/utils/payment/stripe/stripe-excessive-retry.ts) is the single
 source of truth for the reason string (do **not** coin a parallel "adaptive acceptance" vocabulary);

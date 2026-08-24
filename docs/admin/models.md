@@ -93,6 +93,8 @@ The field is **optional with no schema default**: documents written before 2026-
   revenueCents: number;      // amount collected (succeeded rows)
   skipped: {
     total: number;
+    attemptSpacing: number;   // held by the PROACTIVE per-invoice attempt cap (BULK_ATTEMPT_SPACING_DAYS)
+    excessiveRetryCooldown: number; // card inside a Stripe Adaptive Acceptance block window (REACTIVE)
     recentlyAttempted: number;
     noLongerPastDue: number; // late re-check: status flipped mid-run
     alreadyPaid: number;
@@ -103,6 +105,10 @@ The field is **optional with no schema default**: documents written before 2026-
   };
 }
 ```
+
+`attemptSpacing` (2026-08-24) and `excessiveRetryCooldown` are declared **without** `required`, like every bucket added after the fact: runs finalized before the bucket existed have no key, and `normalizeRunTotals` back-fills it to 0 at the read boundary. That back-fill is not cosmetic — the Norm mirror validates its response against a Zod schema where every bucket is REQUIRED, so an un-normalized legacy run returns a **500 `response_schema_invalid`** that `tsc` cannot see.
+
+`attemptSpacing` is expected to be the **largest** bucket in a healthy automated run: the cap holds roughly two thirds of the past-due population back on any given day, by design.
 
 **Cross-reference:** every `InvoiceChargeLog` row produced by a bulk run carries `chargeRunId: ObjectId` pointing back to the `ChargeJobRun` document. Per-user manual retries write `chargeRunId: null`. See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md#charge-past-due--runbook) for the full audit trail.
 

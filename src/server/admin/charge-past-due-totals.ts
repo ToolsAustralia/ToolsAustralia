@@ -40,6 +40,7 @@ export function emptyTotals(eligibleCount: number = 0): ChargeJobRunTotals {
     failed: 0,
     skipped: {
       total: 0,
+      attemptSpacing: 0,
       recentlyAttempted: 0,
       noLongerPastDue: 0,
       alreadyPaid: 0,
@@ -156,4 +157,96 @@ export function isOrphanRun(
 ): boolean {
   if (run.status !== "running") return false;
   return now.getTime() - runLivenessAt(run).getTime() >= ORPHAN_RUN_THRESHOLD_MS;
+}
+
+
+/* ─── Run alerting ───────────────────────────────────────────────────────────
+ *
+ * A charge run is unattended: nobody watches the cron, and until now a run could
+ * abort at 48% of its worklist for five consecutive days without anything saying
+ * so. These are the two signals that would have caught it.
+ *
+ * `console.error`, not `console.log` — next.config.ts strips log/info/debug/warn
+ * from production builds, and this only matters in production.
+ */
+
+/**
+ * Success-rate floor below which a finished run is reported as anomalous.
+ *
+ * WHY 8%. The five runs immediately before this shipped scored 2.59%, 5.97%,
+ * 4.68%, 3.57% and 5.59% (11/425, 25/419, 20/427, 15/420, 21/376) — so any floor
+ * above 5.97% fires on all five, and 8% leaves ~34% headroom over the best of them
+ * rather than sitting on the boundary. It also catches the catastrophic shape this
+ * job has already produced once: the 2026-06-29 idempotency-replay incident logged
+ * 656/668 "failures" and collected $0 (0.0%).
+ *
+ * It is deliberately a FLOOR, not a target. 82% of this account's blocked charges
+ * are self-inflicted Adaptive Acceptance blocks (docs/billing-stripe/gotchas.md),
+ * and 17% of blocked cards eventually pay, so a run that is spacing its attempts
+ * correctly should sit well clear of 8%. If it does not, the alert firing daily IS
+ * the finding — not noise to tune away.
+ */
+export const LOW_SUCCESS_RATE_FLOOR = 0.08;
+
+/**
+ * Minimum attempts before the rate is judged at all.
+ *
+ * A run with a handful of attempts has no meaningful rate: 0/6 is 0% and means
+ * nothing. Steady-state automated volume is ~386 real attempts/day, so this floor
+ * only ever suppresses a genuinely tiny run — and a run that collapses to near-zero
+ * attempts is an abort/coverage problem, which the aborted alert reports instead.
+ */
+export const LOW_SUCCESS_RATE_MIN_ATTEMPTS = 50;
+
+export interface ChargeRunAlert {
+  kind: "aborted" | "low_success_rate";
+  message: string;
+}
+
+/**
+ * Decide which alert lines a run deserves as it reaches a terminal status.
+ *
+ * Pure — returns the strings; the caller emits them. Keeps the thresholds testable
+ * without a DB, and keeps the emit site (which sits inside the money path) trivial.
+ *
+ * Only terminal runs are judged: a `running` run has partial totals by definition
+ * and would otherwise trip the rate alert on its first chunk.
+ */
+export function buildChargeRunAlerts(run: {
+  runId: string;
+  status: "running" | "completed" | "failed" | "aborted";
+  trigger?: string | null;
+  error?: string | null;
+  totals: Partial<ChargeJobRunTotals> | null | undefined;
+}): ChargeRunAlert[] {
+  const alerts: ChargeRunAlert[] = [];
+  if (run.status === "running") return alerts;
+
+  const t = normalizeRunTotals(run.totals);
+  const summary =
+    `eligible=${t.eligibleCount} attempted=${t.attempted} succeeded=${t.succeeded} ` +
+    `failed=${t.failed} skipped=${t.skipped.total} revenue=$${(t.revenueCents / 100).toFixed(2)}`;
+
+  if (run.status === "aborted" || run.status === "failed") {
+    alerts.push({
+      kind: "aborted",
+      message:
+        `[chargePastDue][ALERT] run ${run.runId} finalized ${run.status.toUpperCase()} ` +
+        `(trigger=${run.trigger ?? "admin"}): ${run.error ?? "no reason recorded"} — ${summary}`,
+    });
+  }
+
+  if (t.attempted >= LOW_SUCCESS_RATE_MIN_ATTEMPTS) {
+    const rate = t.succeeded / t.attempted;
+    if (rate < LOW_SUCCESS_RATE_FLOOR) {
+      alerts.push({
+        kind: "low_success_rate",
+        message:
+          `[chargePastDue][ALERT] run ${run.runId} LOW SUCCESS RATE ${(rate * 100).toFixed(1)}% ` +
+          `(${t.succeeded}/${t.attempted}) below the ${(LOW_SUCCESS_RATE_FLOOR * 100).toFixed(0)}% floor — ${summary}`,
+      });
+    }
+  }
+
+  return alerts;
 }

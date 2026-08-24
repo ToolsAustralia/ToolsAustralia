@@ -4,6 +4,8 @@ export type ChargeJobRunStatus = "running" | "completed" | "failed" | "aborted";
 
 export interface ChargeJobRunSkippedBreakdown {
   total: number;
+  /** Held back by the proactive per-invoice attempt cap (card submitted to Stripe too recently). */
+  attemptSpacing: number;
   recentlyAttempted: number;
   noLongerPastDue: number;
   alreadyPaid: number;
@@ -56,6 +58,10 @@ export interface IChargeJobRun extends Document {
 const SkippedBreakdownSchema = new Schema<ChargeJobRunSkippedBreakdown>(
   {
     total: { type: Number, required: true, default: 0 },
+    // Not `required`, for the same reason excessiveRetryCooldown is not: runs
+    // finalized before this bucket existed have no key, and normalizeRunTotals
+    // back-fills it to 0 at the read boundary.
+    attemptSpacing: { type: Number, default: 0 },
     recentlyAttempted: { type: Number, required: true, default: 0 },
     noLongerPastDue: { type: Number, required: true, default: 0 },
     alreadyPaid: { type: Number, required: true, default: 0 },

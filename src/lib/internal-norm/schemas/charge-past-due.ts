@@ -6,6 +6,12 @@ const InvoiceChargeStatusSchema = z.enum(["success", "failed", "skipped"]);
 
 const SkippedBreakdownSchema = z.object({
   total: z.number().int().nonnegative(),
+  // Held back by the proactive per-invoice attempt cap — the card was submitted to
+  // Stripe less than BULK_ATTEMPT_SPACING_DAYS ago. Largest bucket in a healthy
+  // automated run, by design.
+  attemptSpacing: z.number().int().nonnegative(),
+  // Card is inside a Stripe Adaptive Acceptance block window (reactive cooldown).
+  excessiveRetryCooldown: z.number().int().nonnegative(),
   recentlyAttempted: z.number().int().nonnegative(),
   noLongerPastDue: z.number().int().nonnegative(),
   alreadyPaid: z.number().int().nonnegative(),

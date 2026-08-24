@@ -503,6 +503,62 @@ So `/ad/get/` is a **mandatory bridge**, not a fallback — it is the only endpo
 
 **Run it:** `npm run sync:tiktok-destinations:dry` (reports coverage, distinct landing paths, the packages-focus tally and the multi-URL count without writing), then `npm run sync:tiktok-destinations`. The run **fails below 50% coverage** — a silent drop to zero is exactly what a changed id bridge looks like, and it would otherwise present as "no TikTok URL data" rather than as an error. First live run: **31/31 ads, 100%, 3 distinct landing paths, 0 multi-URL ads.**
 
+## Per-invoice attempt cap (proactive)
+
+`chargeWorklistItem` refuses to submit the same invoice to Stripe more than once every
+**3 days** (`BULK_ATTEMPT_SPACING_DAYS`, [past-due-charge-idempotency.ts](../../src/server/admin/past-due-charge-idempotency.ts)).
+This is the **first** thing the item does — before `invoices.retrieve` — so a held item costs
+zero Stripe calls.
+
+**Why it exists when `EXCESSIVE_RETRY_COOLDOWN_DAYS` already sits below it.** That one is
+**reactive**: it needs a `BlockedTransaction` row to already exist for the card, so by
+construction it cannot prevent a **first** block, and it fails **open**. Measured 2026-08-24:
+individual invoices reached **24 submissions in 30 days** (100 invoices at 17, 76 at 18) while
+**835 of 1,024 blocked transactions (82%)** carried `previously_declined_do_not_retry`, whose
+cause Stripe support named as *"too many payment attempts were made in a short time window"* with
+the recommendation to **wait 2–3 days between retries of the same transaction**. Every one of
+those 24 was invisible to the reactive cooldown. At a 3-day gap the ceiling is **10 per 30 days**.
+
+**Only `success`/`failed` rows count.** A `skipped` row never reached the issuer. Counting one
+would be self-reinforcing — *this rule's own* skip rows would push the next eligible date forward
+on every run and the invoice would never be charged again. Same definition `aggregateRunTotals`
+uses for `attempted`.
+
+**Fails CLOSED** — the opposite of the cooldown below, deliberately. If a lookup error let the
+item through, a systematic failure (a bad query, a degraded replica) would silently disable the
+entire cap and put every card back on a daily cadence: the exact disease. Holding one member back
+for a day is recoverable; silently re-hammering the whole past-due base is not. The skip row is
+still written, so the item leaves `remaining` and the run still finishes.
+
+**BULK PATH ONLY — but that includes the admin button.** `chargeWorklistItem` is shared, so an
+admin bulk run started the day after the cron will hold most of its worklist back and report why
+per row. That is intended: an admin bulk run one day after an automated one is *exactly* the
+"too many payment attempts in a short time window" pattern Stripe blocks for, and the run drawer
+shows each held member's next eligible date. **Per-member** paths are untouched — the per-user
+"Charge past due" button, Force Charge and member self-serve remain on
+`RECENT_ATTEMPT_WINDOW_HOURS` (6h) plus their per-path budgets, because an admin investigating one
+account must not be told to come back in three days.
+
+**The cron's `CHARGE_CRON_DELAY_MS` pacing is now doing more work, not less.** It still sleeps
+between held items, which stretches the day's ~386 real submissions across the full ~39-minute run
+instead of compressing them into ~14 minutes. Removing the sleep for held items would shorten the
+run but re-concentrate the submissions — the opposite of Stripe's "spread batch processing over a
+longer window".
+
+**What the run looks like afterwards.** With ~1,157 eligible invoices, a 3-day gap means roughly
+**a third of the population is submitted on any given day** (~386/day averaged) and the other two
+thirds are held. `eligible = attempted + skipped` still balances — held items are `skipped`,
+never silently dropped. The first cycle after this ships is lumpy (the ~400 hammered yesterday sit
+out while the rest go) and decoheres within days as new past-due members arrive and successes
+leave the pool.
+
+**Surfacing.** A held item writes a `skipped` row bucketed as `attemptSpacing`, labelled
+**"Spaced out (3 days)"** in the run drawer's SKIP BREAKDOWN, carrying the last submission time and
+the date it becomes eligible again. This is the **largest bucket in a healthy run, by design** —
+`classifySkipReasonFromMessage` matches it **first**, ahead of every other branch, or it would
+fall through into `other` and make the whole breakdown unreadable. Regression-guarded by
+`npm run test:attempt-spacing`.
+
 ## Excessive-retry cooldown
 
 `chargeWorklistItem` sits a card out for **3 days** (`EXCESSIVE_RETRY_COOLDOWN_DAYS`) after Stripe
@@ -536,9 +592,13 @@ normal charge attempt — retrying once too often beats silently not collecting.
 `SkipBucketKey`, `ChargeJobRunSkippedBreakdown` and the drawer's client-side recompute — all three
 must stay in lockstep. Regression-guarded by `npm run test:excessive-retry-cooldown`.
 
-⚠️ **Still open:** the cooldown limits *per-invoice* velocity only. Stripe also flagged **batch**
-velocity ("spread them over a longer time window rather than submitting them all at once") — the
-run still fires its whole worklist in one burst. Cohorting / pacing is not implemented.
+**Per-invoice velocity is now capped up front** by the proactive rule above, which is what stops
+this cooldown having to fire at all. Stripe's second recommendation — **batch** velocity
+("spread them over a longer time window rather than submitting them all at once") — is met two
+ways: the cron's `concurrency: 1` + `CHARGE_CRON_DELAY_MS` pacing, and the attempt cap itself,
+which cuts a ~1,157-invoice day to ~386 real submissions. No explicit cohorting scheme is
+implemented, and none is needed: the cap partitions the population by *when each card was last
+touched*, which is the property cohorting would have been for.
 
 ## Automated charge run (cron)
 
@@ -578,6 +638,50 @@ the tick that was meant to *resume* the day's run instead aborted it at minute 3
 job. With the progress heartbeat, the sweep at the top of each tick sees a run that logged rows
 seconds ago, leaves it alone, and the tick resumes it as intended. See the `lastProgressAt` note
 under [Server-only code](#server-only-code).
+
+### Worklist ordering — verified, and deliberately unchanged
+
+The worklist is snapshotted from `previewChargePastDueInvoices()` → `stripe.invoices.list`, which
+returns **newest-first (`created` descending)**. Verified 2026-08-24 by probing the live API with
+the exact filter combination the service uses (`status: "open"`, `collection_method:
+"charge_automatically"`), not inferred — and `InvoiceListParams` exposes **no sort/order
+parameter**, so the order is not configurable server-side.
+
+It is left as is. Newest-first only mattered while runs aborted at ~48% of the worklist, which
+permanently favoured the front half and starved 229 members. Two things now make a re-sort
+redundant: every run drains the whole worklist (the `lastProgressAt` sweep fix), and the
+per-invoice attempt cap **already is a least-recently-attempted rule** — expressed as a filter
+rather than a sort, so the set eligible on any given day is exactly the set that has waited
+longest. Re-ordering would add a Mongo aggregation over the whole worklist and change nothing
+about who gets charged.
+
+### Run alerting
+
+A charge run is unattended. Until 2026-08-24 a run could finalize `aborted` at ~48% of its
+worklist for five consecutive days with nothing reporting it. `buildChargeRunAlerts`
+([charge-past-due-totals.ts](../../src/server/admin/charge-past-due-totals.ts)) is pure and returns
+the lines; `emitChargeRunAlerts` in the job module `console.error`s them — **`console.error`, not
+`console.log`**, which `next.config.ts` strips from production builds. Grep for
+`[chargePastDue][ALERT]`.
+
+| Alert | Fires when |
+|---|---|
+| `aborted` | a run finalizes `aborted` or `failed` — orphan sweep, or an admin stopping one. Carries the abort reason and `eligible/attempted/succeeded/failed/skipped/revenue`. |
+| `low_success_rate` | a terminal run's `succeeded / attempted` is below **8%** (`LOW_SUCCESS_RATE_FLOOR`) with at least **50** attempts (`LOW_SUCCESS_RATE_MIN_ATTEMPTS`). |
+
+**Why 8%.** The five runs before this shipped scored 2.59%, 5.97%, 4.68%, 3.57%, 5.59%
+(11/425, 25/419, 20/427, 15/420, 21/376), so any floor above 5.97% fires on all five; 8% leaves
+~34% headroom over the best rather than sitting on the boundary. It also catches the catastrophic
+shape this job has already produced once — the 2026-06-29 idempotency-replay incident logged
+656/668 "failures" and collected **$0**. It is a **floor, not a target**: if it fires daily, that
+IS the finding. The 50-attempt minimum exists because 0/6 is 0% and means nothing; steady-state
+automated volume is ~386 real attempts/day, so it only ever suppresses a genuinely tiny run.
+
+**Emitted from every finalize site**, not from the cron route: the route never observes a
+sweep-abort of an admin run, never observes an admin-driven run finalizing at all, and a run
+finalized by the same tick that hit its deadline would be missed. The completed-run alerts sit
+inside the same `status: "running"` guard as the finalize write, so a later poll on an
+already-completed run cannot re-alert every tick.
 
 **Tick model.** Vercel caps the function at 300s, so a run is never one long process. The invocation
 deadline is passed **into** the chunk and enforced per item — a chunk cost is dominated by Stripe

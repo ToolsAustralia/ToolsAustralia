@@ -1,5 +1,53 @@
 # Admin — Gotchas
 
+## The charge run manufactured the Stripe blocks it then failed against (2026-08-24)
+
+**The shape.** The daily past-due run submitted the *same* invoices to Stripe every day —
+24 submissions on one invoice in 30 days, 100 invoices at 17, 76 at 18 — while
+**835 of 1,024 blocked transactions (82%)** carried `previously_declined_do_not_retry`.
+That is Stripe **Adaptive Acceptance**, it is **not** overridable by the Radar allow list, and
+Stripe support named the cause as *"too many payment attempts were made in a short time window"*.
+The run was generating its own failure mode.
+
+**Trap 1 — a reactive cooldown cannot prevent a first block.**
+`shouldCooldownForExcessiveRetry` (`EXCESSIVE_RETRY_COOLDOWN_DAYS = 3`) looked like the fix and
+was not: it only engages once a `BlockedTransaction` row **already exists** for that card
+fingerprint, and it fails **open** on lookup error. Every one of those 24 submissions happened
+before there was anything for it to react to. The proactive cap
+(`shouldSkipForBulkAttemptSpacing`) is a **separate** rule reading only the invoice's own attempt
+history. Do not fold the two together — they answer different questions and fail in opposite
+directions on purpose.
+
+**Trap 2 — do not count `skipped` rows as attempts.** The cap holds an invoice back by writing a
+`skipped` `InvoiceChargeLog` row. If the "last attempt" lookup counted skip rows, *the cap's own
+output* would push the next eligible date forward on every run and the invoice would **never be
+charged again** — a silent, permanent revenue leak that looks like the rule working. Only
+`success`/`failed` count, matching `aggregateRunTotals`'s definition of `attempted`.
+
+**Trap 3 — the new skip bucket must be classified FIRST.** `classifySkipReasonFromMessage` is how
+persisted rows are re-bucketed for run totals. The `attempt_spacing` message names a prior attempt
+time; without its own branch at the top it falls through into `other` — and it is the *largest*
+bucket in a healthy run (~2/3 of the population), so the whole SKIP BREAKDOWN becomes unreadable.
+A later rewording containing "within" or "prior attempt" would be claimed by `recently_attempted`,
+which is the 6h **human**-retry window and means something else to an operator.
+
+**Trap 4 — this rule fails CLOSED, unlike its neighbour eight lines below.** The asymmetry is
+deliberate and worth preserving: a lookup error that let items through would, on a *systematic*
+failure, silently disable the entire cap and put every card back on a daily cadence. Holding one
+member back for a day is recoverable; re-hammering the whole past-due base is not.
+
+**Trap 5 — fixing the abort bug WITHOUT this cap would have been a net regression.** Runs used to
+die at ~34–52% of the worklist, so only ~400 invoices were ever reached. Making runs complete puts
+all ~1,157 on a daily cadence — strictly more of exactly what Stripe is blocking. The two changes
+must ship together.
+
+**Ordering was investigated and deliberately left alone.** `stripe.invoices.list` returns
+newest-first (verified against the live API; `InvoiceListParams` has no sort parameter). A
+least-recently-attempted *sort* is redundant once the cap exists: the cap **is** that rule,
+expressed as a filter, so the set eligible on any given day is exactly the set that has waited
+longest.
+
+
 ## The Advertising card's "Yesterday" understated TikTok — a cron ORDERING bug (2026-08-11)
 
 **Symptom:** the overview Advertising card showed TikTok ROAS·PLATFORM `0.10x` ($386.82 spend, $40.00 revenue) for AEST 2026-08-10, while TikTok Ads Manager showed `0.219` ($410.93 / $90.00). Days *before* that matched exactly.

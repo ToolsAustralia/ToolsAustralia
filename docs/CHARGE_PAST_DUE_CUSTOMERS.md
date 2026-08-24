@@ -439,5 +439,40 @@ Consequences worth internalising:
 - **Raising the threshold is not the fix** and was explicitly rejected: eligible members went
   813 → 1,103 in the five days the bug was measured, so any fixed elapsed-time budget breaks again.
 
+## Per-invoice attempt cap (proactive) — 2026-08-24
+
+The automated run submits any one invoice to Stripe **at most once every 3 days**
+(`BULK_ATTEMPT_SPACING_DAYS`), checked before `invoices.retrieve` so a held item costs no Stripe
+call. Stripe support's guidance is 2–3 days between retries of the same transaction; measured
+before this existed, individual invoices reached **24 submissions in 30 days**, and 82% of blocked
+transactions on this account carried `previously_declined_do_not_retry` — the block that guidance
+exists to avoid, and which the Radar allow list cannot override.
+
+- **Automated/bulk path only.** The per-user "Charge past due" button, Force Charge and member
+  self-serve are unchanged (6h `RECENT_ATTEMPT_WINDOW_HOURS` + per-path budgets).
+- **Counts `success`/`failed` rows only** — counting the cap's own `skipped` rows would push the
+  next eligible date forward forever.
+- **Fails closed** — a lookup error holds the card back and writes the skip row, so the item still
+  leaves `remaining` and the run still finishes.
+- **Effect:** ~1,157 eligible invoices become ~386 real submissions per day (averaged over the
+  3-day cycle); the per-invoice ceiling drops from 24 to **10** per 30 days.
+- Skips are bucketed `attemptSpacing`, shown as **"Spaced out (3 days)"** in the run drawer.
+
+This is the **proactive** half. The **reactive** `excessive_retry_cooldown` (below) still applies
+to cards Stripe has already blocked; it cannot prevent a first block and fails open.
+
+## Run alerting — 2026-08-24
+
+Every terminal run is judged by `buildChargeRunAlerts` and emitted with `console.error` (greppable
+prefix `[chargePastDue][ALERT]`; `console.log` is stripped from production builds):
+
+- **`aborted`** — any run finalizing `aborted`/`failed`, with the reason and coverage numbers.
+  This is what five consecutive silently-aborted runs would have surfaced.
+- **`low_success_rate`** — `succeeded / attempted` below **8%** with at least 50 attempts. The
+  five pre-fix runs scored 2.59–5.97%, so all five would have fired; the 2026-06-29
+  idempotency-replay incident (656/668 failures, $0 collected) would have fired too.
+
+Guarded by `npm run test:attempt-spacing`.
+
 Guarded by `npm run test:orphan-progress`. Full incident detail:
 [docs/admin/gotchas.md](./admin/gotchas.md#the-orphan-sweep-killed-every-healthy-charge-run-for-five-days-2026-08-24).
