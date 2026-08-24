@@ -44,12 +44,23 @@
 
 import { config } from "dotenv";
 import path from "path";
+// The SHARED liveness rule — imported, never re-implemented. Safe to import statically
+// above the dotenv call (unlike the models below): charge-past-due-totals.ts is
+// deliberately Mongoose-free and env-free, its ChargeJobRun import is `import type`
+// (erased at compile), and its only value import (chargeSkipReasons) has no imports of
+// its own. The dynamic-import dance further down exists solely to defer MODEL loading
+// past dotenv, which does not apply here.
+import {
+  ORPHAN_RUN_THRESHOLD_MS,
+  runLivenessAt,
+} from "@/server/admin/charge-past-due-totals";
 
 const ARGS = process.argv.slice(2);
 const DRY_RUN = ARGS.includes("--dry-run");
 const USE_PROD = ARGS.includes("--prod");
 const olderThanArg = ARGS.find((a) => a.startsWith("--older-than-min="));
-const OLDER_THAN_MIN = olderThanArg ? Number(olderThanArg.split("=")[1]) : 35;
+const DEFAULT_OLDER_THAN_MIN = ORPHAN_RUN_THRESHOLD_MS / 60_000;
+const OLDER_THAN_MIN = olderThanArg ? Number(olderThanArg.split("=")[1]) : DEFAULT_OLDER_THAN_MIN;
 
 config({ path: path.resolve(process.cwd(), USE_PROD ? ".env.production" : ".env.local") });
 
@@ -73,16 +84,21 @@ async function main(): Promise<void> {
   const InvoiceChargeLog = (await import("../src/models/InvoiceChargeLog")).default;
 
   const now = new Date();
-  const cutoff = new Date(now.getTime() - OLDER_THAN_MIN * 60 * 1000);
 
   // 1. Find STALLED runs — `running` with no progress for longer than the threshold.
   //    Filtered in memory rather than in the query: Mongo cannot express
   //    `lastProgressAt ?? startedAt` without an index-defeating `$expr`, and the
   //    `running` set is at most a handful of documents.
-  const livenessAt = (r: { startedAt: Date; lastProgressAt?: Date | null }): Date =>
-    r.lastProgressAt ?? r.startedAt;
+  //    The fallback itself is NOT re-implemented here — `runLivenessAt` is imported, so
+  //    this script and the automatic sweep cannot drift. The comparison is `>=` to match
+  //    `isOrphanRun` exactly; an exclusive `<` would make the two disagree at the boundary.
+  //    With the default threshold this predicate IS `isOrphanRun` (the query already
+  //    restricts to status "running"); the only difference is --older-than-min.
+  const thresholdMs = OLDER_THAN_MIN * 60 * 1000;
+  const isStalled = (r: { startedAt: Date; lastProgressAt?: Date | null }): boolean =>
+    now.getTime() - runLivenessAt(r).getTime() >= thresholdMs;
   const runningRuns = await ChargeJobRun.find({ status: "running" }).sort({ startedAt: 1 }).lean();
-  const orphans = runningRuns.filter((r) => livenessAt(r) < cutoff);
+  const orphans = runningRuns.filter(isStalled);
   const stillProgressing = runningRuns.length - orphans.length;
 
   console.log(
@@ -123,7 +139,7 @@ async function main(): Promise<void> {
       },
     };
 
-    const quietSince = livenessAt(run);
+    const quietSince = runLivenessAt(run);
     const note = `Finalized by fix-stuck-charge-jobs: 'running' with no progress since ${quietSince?.toISOString?.() ?? quietSince} (started ${run.startedAt?.toISOString?.() ?? run.startedAt}). Recomputed from logs: ${attempted} attempted of ${eligibleCount} eligible (${succeeded} succeeded, ${failed} failed, ${skippedTotal} skipped).`;
 
     console.log(

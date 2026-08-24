@@ -203,23 +203,38 @@ export async function sweepOrphanRuns(): Promise<void> {
     .select({ _id: 1, totals: 1, status: 1, startedAt: 1, lastProgressAt: 1 })
     .lean();
   for (const run of candidates) {
-    if (!isOrphanRun(run, now)) continue; // still making progress — leave it alone.
-    const totals = await recomputeTotalsFromLogs(
-      run._id as mongoose.Types.ObjectId,
-      run.totals?.eligibleCount ?? 0
-    );
-    const quietFor = Math.round((now.getTime() - runLivenessAt(run).getTime()) / 60000);
-    await ChargeJobRun.updateOne(
-      { _id: run._id, status: "running" },
-      {
-        $set: {
-          status: "aborted",
-          finishedAt: new Date(),
-          totals,
-          error: `Aborted by orphan sweep — no progress for ${quietFor} min (totals recomputed from logs)`,
-        },
-      }
-    );
+    // Per-candidate isolation. Evaluating the predicate in JS rather than in Mongo means
+    // a malformed document (no `startedAt`, so `runLivenessAt(run).getTime()` throws) would
+    // otherwise reject this whole function — and `sweepOrphanRuns` runs inside the charge
+    // cron's try/catch at the TOP of every tick, so a single bad row would turn the tick into
+    // an HTTP 500 and the day would collect nothing. The old Mongo predicate simply would not
+    // have matched such a row. `startedAt` is `required: true` with a default, so this is
+    // defence in depth, but the blast radius of being wrong is an entire day of recovery.
+    try {
+      if (!isOrphanRun(run, now)) continue; // still making progress — leave it alone.
+      const quietFor = Math.round((now.getTime() - runLivenessAt(run).getTime()) / 60000);
+      const totals = await recomputeTotalsFromLogs(
+        run._id as mongoose.Types.ObjectId,
+        run.totals?.eligibleCount ?? 0
+      );
+      await ChargeJobRun.updateOne(
+        { _id: run._id, status: "running" },
+        {
+          $set: {
+            status: "aborted",
+            finishedAt: new Date(),
+            totals,
+            error: `Aborted by orphan sweep — no progress for ${quietFor} min (totals recomputed from logs)`,
+          },
+        }
+      );
+    } catch (err) {
+      // console.error survives the production build; console.log does not.
+      console.error(
+        `[orphan-sweep] skipped run ${String(run._id)} — could not evaluate/finalize it:`,
+        err
+      );
+    }
   }
 }
 
@@ -853,6 +868,12 @@ export async function processChargePastDueChunk(params: {
     // every item throws before writing a row refresh its own liveness on each
     // chunk and never be swept — trading yesterday's "kill every healthy run" for
     // "never kill a wedged one". Progress, not activity, is the signal.
+    // INVARIANT: worklist `invoiceId`s are UNIQUE, so this item count
+    // (`processedBefore`) and this distinct-id count (`processed`) are comparable.
+    // That holds by construction — `previewChargePastDueInvoices` collapses to one
+    // invoice per customer. If a future worklist change ever admits a duplicate id,
+    // `processed` would undercount relative to `processedBefore`, the heartbeat would
+    // silently stop firing, and healthy runs would be swept again — this exact bug.
     const progressed = processed > processedBefore;
     await ChargeJobRun.updateOne(
       { _id: runObjId, status: "running" },

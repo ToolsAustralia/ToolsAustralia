@@ -136,9 +136,13 @@ correct liveness signal existed — the sweep just never consulted it. Now:
 
 - `ChargeJobRun.lastProgressAt` (optional `Date`, no schema default) is stamped by
   `processChargePastDueChunk` on its mid-run progress write.
-- `isOrphanRun` keys on `lastProgressAt ?? startedAt` and is the **only** place the rule lives.
-  `sweepOrphanRuns` prefilters `{ status: "running" }` and calls it; `scripts/fix-stuck-charge-jobs.ts`
-  applies the same `lastProgressAt ?? startedAt` rule.
+- `runLivenessAt` (`lastProgressAt ?? startedAt`) is the **only** place the fallback lives, and
+  `isOrphanRun` is the only place the threshold comparison lives. `sweepOrphanRuns` prefilters
+  `{ status: "running" }` and calls `isOrphanRun`; `scripts/fix-stuck-charge-jobs.ts` **imports**
+  `runLivenessAt` + `ORPHAN_RUN_THRESHOLD_MS` rather than re-deriving either. Its `@/` import is safe
+  above its dotenv call because `charge-past-due-totals.ts` is Mongoose-free and env-free (its
+  `ChargeJobRun` import is `import type`, erased at compile) — the dynamic `await import()` pattern
+  elsewhere in that script exists only to defer MODEL loading, which does not apply here.
 
 **Two traps to not fall into when touching this again:**
 
@@ -147,11 +151,21 @@ correct liveness signal existed — the sweep just never consulted it. Now:
    writing a row is *activity, not progress*; stamping unconditionally would let it refresh its own
    liveness forever and never be swept. That would trade "kill every healthy run" for "never kill a
    wedged one", which is worse.
-2. **Don't restate the threshold as a Mongo query.** The original bug survived because the rule
-   existed twice — `isOrphanRun` (exported, and not actually called by the sweep) and a hand-written
-   `startedAt: { $lt: cutoff }` predicate. Mongo cannot express `lastProgressAt ?? startedAt` without
-   an index-defeating `$expr`, so the sweep prefilters on `status` and filters in TypeScript. The
-   `running` set is at most a handful of documents; this is not a scan risk.
+2. **Don't restate the rule anywhere — Mongo query OR a local helper.** The original bug survived
+   because the rule existed twice: `isOrphanRun` (exported, and not actually called by the sweep) and
+   a hand-written `startedAt: { $lt: cutoff }` predicate. Mongo cannot express
+   `lastProgressAt ?? startedAt` without an index-defeating `$expr`, so the sweep prefilters on
+   `status` and filters in TypeScript. The `running` set is at most a handful of documents; this is
+   not a scan risk. **A hand-rolled `const livenessAt = (r) => r.lastProgressAt ?? r.startedAt` in a
+   script counts as a second copy too** — an early draft of this very fix shipped one, and it had
+   already drifted (inclusive `>=` in `isOrphanRun` vs exclusive `<` in the script, disagreeing at
+   the boundary). Import the helper.
+
+3. **Keep the sweep loop fault-isolated.** Evaluating the predicate in JS instead of in Mongo means a
+   malformed document (no `startedAt`) would throw where the old query would simply not have matched
+   — and `sweepOrphanRuns` runs inside the charge cron's `try` at the **top of every tick**, so one
+   bad row would return HTTP 500 and the day would collect nothing. Each candidate is wrapped in its
+   own `try/catch` that `console.error`s and moves on.
 
 Guarded by `npm run test:orphan-progress`
 ([`orphan-progress.test.ts`](../../src/server/admin/__tests__/orphan-progress.test.ts)), which
