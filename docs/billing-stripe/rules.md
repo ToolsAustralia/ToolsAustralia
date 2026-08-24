@@ -12,7 +12,7 @@ Klaviyo `Subscription Cancelled`, Meta CAPI cancellation, etc. fire **only** fro
 
 ### R3. Resume pause-collection BEFORE applying benefits — but only if it IS paused
 
-In `invoice.payment_succeeded`, call `resumeAfterSuccessfulRenewalPayment(subId)` before `processPaymentBenefits()`. A slow benefits path or proxy timeout must not leave `pause_collection` orphaned. See [subscription/rules.md R9](../subscription/rules.md#r9).
+In `invoice.payment_succeeded`, call `resumeAfterSuccessfulRenewalPayment(subId)` before `processPaymentBenefits()`. A slow benefits path or proxy timeout must not leave `pause_collection` orphaned. See [subscription/rules.md R9](../subscription/rules.md#r9-after-successful-renewal-payment-clear-pause_collection-before-applying-benefits).
 
 **Gate it on `subscription.pause_collection != null`** (`decideClearPause` does this since 2026-08-24). Clearing a pause that was never set is a Stripe no-op, and it was costing one `/v1/subscriptions` **write** on every renewal against a 25 req/sec per-endpoint cap. Ordering is unchanged for members who really are paused.
 

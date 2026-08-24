@@ -52,7 +52,7 @@ import {
   resumeAfterSuccessfulRenewalPayment,
   reanchorAfterPastDueRecovery,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
-import { decideClearPause, decidePauseTransition, shouldReanchorAfterRecovery, shouldReanchorRebillToAnchor24 } from "@/services/subscription/pauseCollectionPolicy";
+import { decideClearPause, decidePauseTransition, readPauseCollection, shouldReanchorAfterRecovery, shouldReanchorRebillToAnchor24 } from "@/services/subscription/pauseCollectionPolicy";
 import { isJoinDateAnchoredTo24 } from "@/utils/billing/anchor-billing";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { decideStreakOnSubscriptionCreate } from "@/utils/subscription/streak";
@@ -3793,6 +3793,20 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
     try {
       if (invoiceSubscription && invoiceSubscription.id === subscriptionId) {
         subscription = invoiceSubscription;
+        // One thing the expanded copy MUST be authoritative about is `pause_collection`, because the
+        // clear decision below is now gated on it. `null` is an answer ("not paused" — trust it, skip
+        // the write). An ABSENT field is not an answer, so re-read rather than guess: for a paused
+        // member who has just paid, this webhook is the only automatic un-pauser (pay-failed-invoice
+        // does not resume; prepareRecoveredCycleInvoice never resumes), and guessing wrong leaves them
+        // collection-paused with every later cycle held as a draft. Live invoices DO return the field
+        // (as `null`), so this costs nothing on the renewal path — see readPauseCollection.
+        if (readPauseCollection(subscription) === "unknown") {
+          webhookLog(
+            "error",
+            `Expanded subscription ${subscription.id} omitted pause_collection on invoice ${expandedInvoice.id} — re-reading before the clear decision`
+          );
+          subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        }
       } else {
         subscription = await stripe.subscriptions.retrieve(subscriptionId);
       }

@@ -4,6 +4,7 @@ import {
   shouldClearPauseCollectionAfterPaidInvoice,
   describePauseCollection,
   decideClearPause,
+  readPauseCollection,
 } from "../pauseCollectionPolicy";
 
 function testClearsOnPastDueRecovery() {
@@ -174,6 +175,32 @@ function testDecideClearPauseRetentionNeverCleared() {
   );
 }
 
+// --- readPauseCollection: null is an ANSWER, undefined is a MISSING answer ---
+// The webhook reads pause_collection off the subscription EXPANDED inside invoices.retrieve rather
+// than off a fresh subscriptions.retrieve. If an absent field were read as "not paused", a paused
+// member who has just PAID would stay collection-paused — and for that cohort this webhook is the
+// only automatic clearer (pay-failed-invoice does not resume; prepareRecoveredCycleInvoice never
+// resumes). So "absent" must route to a re-read, not to a guess.
+
+function testReadPauseCollectionPaused() {
+  const keepAsDraft: Stripe.Subscription.PauseCollection = {
+    behavior: "keep_as_draft",
+    resumes_at: null,
+  };
+  assert.equal(readPauseCollection({ pause_collection: keepAsDraft }), "paused");
+}
+
+function testReadPauseCollectionExplicitNullIsTrusted() {
+  // The common renewal shape, and the one the whole call-count saving rests on.
+  assert.equal(readPauseCollection({ pause_collection: null }), "not_paused");
+}
+
+function testReadPauseCollectionAbsentIsUnknown() {
+  // Field not on the wire object at all -> caller must re-read from Stripe.
+  assert.equal(readPauseCollection({}), "unknown");
+  assert.equal(readPauseCollection({ pause_collection: undefined }), "unknown");
+}
+
 function run() {
   testClearsOnPastDueRecovery();
   testClearsOnRenewalLikeBillingReasons();
@@ -186,6 +213,9 @@ function run() {
   testDecideClearPausePausedRenewalStillClears();
   testDecideClearPauseNothingApplies();
   testDecideClearPauseRetentionNeverCleared();
+  testReadPauseCollectionPaused();
+  testReadPauseCollectionExplicitNullIsTrusted();
+  testReadPauseCollectionAbsentIsUnknown();
   console.log("pauseCollectionPolicy tests passed");
 }
 

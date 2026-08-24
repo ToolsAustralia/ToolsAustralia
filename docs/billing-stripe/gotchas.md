@@ -121,6 +121,22 @@ returned are what killed 11 renewals mid-handler.
    requires `pause_collection != null`. Paused members are still resumed on the same code path,
    before benefits (rule R3).
 
+   **`null` is an answer; a missing field is not.** The predicate reads `pause_collection` off the
+   subscription **expanded inside `invoices.retrieve`**, so `readPauseCollection` splits three
+   states: an explicit `null` is trusted ("not paused", skip the write — the common case, and where
+   the saving comes from), a pause object clears, and an **absent** field triggers a
+   `subscriptions.retrieve` before deciding. Do not collapse those last two: for a genuinely paused
+   member who has just PAID, this webhook is the only automatic clearer — `pay-failed-invoice` does
+   not resume and `prepareRecoveredCycleInvoice` explicitly never resumes — so a wrong "not paused"
+   guess strands them with every later cycle held as a draft. Live invoices do return the field
+   (as `null`), and a scan of ~1,200 live subscriptions found **zero** currently paused, so the
+   cohort cannot be observed today; the fallback is what makes that unobservability safe rather than
+   load-bearing. It costs one retrieve on a paused member's renewal and nothing otherwise.
+
+   **Bonus, unclaimed at first:** dropping the write also drops one inbound
+   `customer.subscription.updated` webhook delivery per renewal — roughly **900 fewer queue rows**
+   in the 14:00 minute, on top of the outbound saving.
+
 **The general rule this leaves behind:** you were handed a payload — read it. A `retrieve` for an
 object the event already contains costs a full slot in a shared, low, per-endpoint bucket, and the
 cost only shows up on the one night of the month when 900 of them land in the same minute. When you

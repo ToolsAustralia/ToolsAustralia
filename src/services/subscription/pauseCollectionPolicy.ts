@@ -212,6 +212,43 @@ export function shouldReanchorRebillToAnchor24(i: RebillReanchorGateInput): bool
 }
 
 /**
+ * What a subscription object actually TELLS us about `pause_collection`.
+ *
+ * The three states are deliberately distinct, because `null` is an ANSWER and `undefined` is a
+ * MISSING answer:
+ *
+ * - `"paused"`     — the field came back with a pause object. Clear it.
+ * - `"not_paused"` — the field came back **explicitly `null`**. Stripe is telling us there is no
+ *                   pause; trust it and skip the write. This is the common renewal case, and it is
+ *                   where the saving in {@link decideClearPause}'s precondition comes from.
+ * - `"unknown"`    — the field is **absent** from the object. That is not "no pause", it is "we
+ *                   were not told". A caller holding a subscription it got by EXPANSION rather than
+ *                   by `subscriptions.retrieve` must re-read it before deciding: for a genuinely
+ *                   paused member who has just paid, the `invoice.payment_succeeded` webhook is the
+ *                   only automatic clearer we have (`pay-failed-invoice` does not resume, and
+ *                   `prepareRecoveredCycleInvoice` never resumes), so guessing "not paused" here
+ *                   would leave a paying member collection-paused indefinitely.
+ *
+ * Verified live (invoice `in_1U7b0KJ3N9Ka6RJMcLvhPOHe`, expanded through
+ * `parent.subscription_details.subscription`): the field IS returned, as `null`. So `"unknown"`
+ * should be unreachable in practice — it exists so that being wrong about that costs one extra
+ * retrieve instead of a stuck member. The cohort it protects cannot be observed today: a scan of
+ * ~1,200 live subscriptions found zero with `pause_collection` set.
+ */
+export type PauseCollectionReadout = "paused" | "not_paused" | "unknown";
+
+export function readPauseCollection(subscription: {
+  pause_collection?: Stripe.Subscription.PauseCollection | null;
+}): PauseCollectionReadout {
+  // Widened read: the SDK type says `PauseCollection | null`, but the entire point of this helper
+  // is the case where the key is not on the wire object at all.
+  const raw = (subscription as { pause_collection?: unknown }).pause_collection;
+  if (raw === undefined) return "unknown";
+  if (raw === null) return "not_paused";
+  return "paused";
+}
+
+/**
  * Human-readable label for `pause_collection` on a Stripe subscription (for logs/scripts).
  */
 export function describePauseCollection(subscription: {
