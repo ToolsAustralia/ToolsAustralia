@@ -238,7 +238,7 @@ Indexes:
 
 Collection name forced: `"membershipdailysnapshots"`.
 
-**Writers:** [src/app/api/cron/membership-daily-snapshot/route.ts](../../src/app/api/cron/membership-daily-snapshot/route.ts) (nightly, fires at 14:00 + 15:00 UTC for redundancy).
+**Writers:** [src/app/api/cron/membership-daily-snapshot/route.ts](../../src/app/api/cron/membership-daily-snapshot/route.ts) (nightly, fires at 17:30 + 20:30 UTC — moved off 14:00/15:00 UTC on 2026-08-24 to clear the renewal-webhook-burst hour, then off a briefly-shipped 18:00/19:00 after that collided with an ad-sync's DST-gated schedule; see `docs/infrastructure/gotchas.md`). Write-once upsert with a degenerate-row escape hatch: the fire closer to the Sydney day boundary wins for a given `{date, packageId}` (the census has no date filtering, so closer-to-boundary is the best available accuracy signal, not an absolute "clean" run); a later fire is a no-op fallback for a missed/failed run, or self-heals an all-zero degenerate row.
 
 **Readers:** `MembershipAnalyticsService.getMembershipByPackageSnapshot(asOfDate)`. As of 2026-06-03 this same snapshot read also supplies the **MRR trend baseline**: the membership-by-package route reads the snapshot as of the previous comparable period's end and the service's `MembershipByPackageSummaryDTO` now carries an optional `totalActiveRevenueTrend?: TrendData` (the MRR % change). When the baseline day has no snapshot row the read returns live data flagged `snapshotMissing`, and the caller omits the trend rather than comparing against a live baseline. See [docs/admin/api.md](../admin/api.md#membership-by-package-mrr-trend-2026-06-03).
 

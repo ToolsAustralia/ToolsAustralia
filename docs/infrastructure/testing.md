@@ -45,6 +45,14 @@ Should return 200 with simple JSON status.
 curl -H "x-cron-secret: $CRON_SECRET" http://localhost:3000/api/cron/major-draw-transition
 ```
 
+Most cron routes actually read `Authorization: Bearer $CRON_SECRET`, not `x-cron-secret` — check the handler before assuming. `reconcile-renewal-grants` is read-only, so it is safe to hit by hand:
+
+```bash
+curl -H "authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/reconcile-renewal-grants
+```
+
+It returns 401 when `CRON_SECRET` is unset (fails closed), so export it first.
+
 ## Migration dry-run
 
 ```bash
@@ -270,6 +278,17 @@ npm run test:past-due-history       # pure aggregation helpers (no env vars need
 npm run test:charge-past-due-post-pay   # post-`invoices.pay` decisions, incl. classifyPayFailureRoute:
                                     #   which thrown Stripe errors mean stand-down vs route-to-recovery
                                     #   vs real card decline (the payment_intent_unexpected_state cohort)
+npm run test:attempt-spacing        # the PROACTIVE per-invoice attempt cap + charge-run alerting:
+                                    #   3-day spacing predicate incl. the 2h grace that stops a
+                                    #   drifting daily run slipping to a 4-day cadence, the Mongo
+                                    #   cutoff staying WIDER than the predicate window, and two
+                                    #   30-day walks (fixed + drifting run times) both yielding 10
+                                    #   submissions vs the 24 measured before it; attempt_spacing
+                                    #   bucketing ahead of every sibling reason; the zero_coverage
+                                    #   alert for the cap's own collapse mode (run completes having
+                                    #   held everything - both other alerts structurally miss it);
+                                    #   and the 8% low-success-rate floor pinned against the five
+                                    #   real pre-fix runs (2.59-5.97%) plus the 2026-06-29 $0 incident
 npm run test:past-due-idempotency-keys  # Stripe idempotency-key builders: bulk key differs across runs (the 2026-06-29 replay guard); one-off key dedupes concurrent submits within a 30s bucket
 npm run test:merge-ad-channels      # pure ad-channel merge — preserves prior spend on a failed/expired-token fetch (no DB)
 npm run test:cancellation-upsell    # smoke-renders CancellationUpsellModal in 12 prop combos
@@ -298,6 +317,8 @@ npm run test:anchor-billing          # date math for both join-anchor and past-d
 npm run test:reanchor-gate           # trigger predicate for past-due reanchor: signal isolation (past_due DB status / pause_collection present / attempt_count>1), all exclusion arms (cancel_at_period_end, autoRenew=false, pauseReason=retention, already-reanchored).
 npm run test:trial-invoice           # isZeroAmountTrialUpdateInvoice guard: skips Stripe's $0 'Trial period' subscription_update invoice (stops double-granting entries); real cycle/create/upgrade(>0)/100%-off-cycle still grant.
 npm run test:zero-trial-guard        # webhook-LEVEL regression: handleInvoicePaymentSucceeded HONORS the guard. Mocks stripe.invoices.retrieve, spies on User.findOne (the guard returns before the user lookup). Asserts the $0 subscription_update invoice short-circuits (User.findOne NOT reached, no BenefitsGranted row) while a real subscription_cycle renewal AND a paid (>0) subscription_update upgrade both proceed. Catches a regression where the guard is removed/widened/bypassed — which the predicate unit test alone cannot. Needs MONGODB_URI (the handler connectDB()s before the user lookup).
+npm run test:ack-gate                # the webhook-queue ACK gate (incident 2026-08-23, 11 members charged $300.00 with no entries): a handler that returns normally is NOT automatically a success. 6 cases / 27 assertions. Asserts an ungranted invoice.payment_succeeded leaves the row retryable and writes NO ProcessedStripeEvent row (that unique row is what blocked replay-based healing); that ordinary non-payment events (shouldMarkAsProcessed:false) still mark succeeded (gating on that flag would dead-letter 25 of the dispatcher's 27 case labels); that a real Stripe 429 requeues with the true error text in lastError; that the $0 trial-bookkeeping invoice still ACKs AND writes its dedup row (else: infinite retry loop); and both halves of the unknown-customer split — a non-subscription invoice ACKs, a subscription invoice stays retryable for the signup/SCA-3DS race. Cases C-F run the REAL dispatcher + handler with only stripe.invoices.retrieve stubbed. Needs MONGODB_URI — seeds/cleans real stripewebhookqueue rows. See docs/billing-stripe/STRIPE_WEBHOOK_QUEUE.md "The ACK gate".
+npm run test:renewal-grant-reconciler # the paid-but-not-granted detector behind /api/cron/reconcile-renewal-grants (incident 2026-08-23). 25 assertions on a seeded 2019 window: a paid subscription_cycle with NO BenefitsGranted PaymentEvent is reported; one WITH its grant is not; failed cycles, non-subscription_cycle invoices and rows whose updatedAt is outside the window are not; the row carries userId/amountPaidCents/chargedAt; inserting the missing grant clears the gap. DUNNING RECOVERY (the load-bearing case): drives the REAL upsertRenewalCycleFromFailedInvoice -> upsertRenewalCycleFromPaidInvoice pair, asserts createdAt stays pinned to the FAILURE date while updatedAt is bumped, then that the recovered renewal IS detected while createdAt sits outside the window — a createdAt window would report clean here forever. Also pins status:"recovered" as money kept, dead-row reporting, and orchestrator totals. Needs MONGODB_URI. See docs/billing-stripe/architecture.md.
 npm run test:mer                     # pure computeDrawMerRow: blended New Revenue = Σ newRevenue across ALL platforms incl. direct; blended Ad Spend = Σ ad-channel spend; MER = revenue/spend (null when no spend); Meta→amount+MER, TikTok→awaiting+null MER (the spend gap), Klaviyo/Direct→owned; NaN/missing coerce to 0. No env needed. See docs/admin/mer-table.md.
 npm run test:platform-revenue-breakdown # covers the per-platform acquisition-revenue-by-category breakdown service (src/services/admin/__tests__/platformRevenueBreakdown.test.ts) backing /api/admin/dashboard/revenue-details/by-platform (the per-platform drill-down hover/expand).
 npm run test:landing-draw-day-urgency # pure unit test for the landing draw-day urgency resolver (src/utils/promo/__tests__/landing-draw-day-urgency.test.ts). No DB/env needed.

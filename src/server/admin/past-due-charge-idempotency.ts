@@ -204,3 +204,110 @@ export function shouldSkipForRecentAttempt(
   if (bypass) return false;
   return recentRows.length > 0;
 }
+
+/* ─── Proactive per-invoice attempt spacing (automated/bulk path) ─────────────
+ *
+ * Stripe's Adaptive Acceptance blocks a card with `previously_declined_do_not_retry`
+ * "based on prior network decline or advice codes", and Stripe support named the
+ * cause directly: *"too many payment attempts were made in a short time window"*.
+ * 835 of 1,024 blocked transactions (82%) on this account carry that reason, and it
+ * is NOT overridable by the Radar allow list. See docs/billing-stripe/gotchas.md
+ * § "Adaptive Acceptance blocks are NOT overridable by the Radar allow list".
+ *
+ * `shouldCooldownForExcessiveRetry` (chargeOrRecoverPolicy.ts) is the REACTIVE half:
+ * it only engages once a `BlockedTransaction` row already exists for the card, so by
+ * construction it cannot prevent a FIRST block. This is the PROACTIVE half — it reads
+ * only this invoice's own attempt history and never lets the daily run submit the same
+ * transaction more often than Stripe's own stated guidance allows.
+ *
+ * Deliberately NOT `RECENT_ATTEMPT_WINDOW_HOURS`: that window is 6h and governs
+ * HUMAN-driven same-day retries (Force Charge, the per-user button), which stay as
+ * they are. This one governs the AUTOMATED run only.
+ */
+
+/**
+ * Minimum days between two REAL charge submissions on the same invoice in the
+ * automated/bulk path.
+ *
+ * Stripe support's recommendation is "wait 2-3 days between retries of the same
+ * transaction"; we take the top of that range, matching `EXCESSIVE_RETRY_COOLDOWN_DAYS`
+ * which quotes the same guidance for the reactive cooldown. Measured before this
+ * existed: individual invoices reached 24 submissions in 30 days (100 invoices at 17,
+ * 76 at 18). At 3 days the ceiling is 10 per 30 days.
+ */
+export const BULK_ATTEMPT_SPACING_DAYS = 3;
+
+/**
+ * Slack on the "3 days have passed" test.
+ *
+ * A daily run does NOT touch a given invoice at the same clock time each cycle: the
+ * worklist is re-snapshotted every day, the population churns, and an item's position
+ * in it moves. So day-3's touch routinely lands a few minutes EARLIER than day-0's —
+ * and a strict `now >= last + 72h` then holds it for one more whole day. The rule
+ * silently becomes a 3-to-4 day cadence, which is both slower collection and a
+ * different rule from the one Stripe's guidance describes.
+ *
+ * 2h is chosen to absorb ordinary intra-run drift (a ~40-minute run, plus the 2-hour
+ * START_WINDOW_HOURS a delayed day may begin within) without ever letting two
+ * submissions land inside the same 24-hour period — the failure this cap exists to
+ * prevent. Effective floor: 70h between submissions on the same invoice.
+ */
+export const BULK_ATTEMPT_SPACING_GRACE_MS = 2 * 60 * 60 * 1000;
+
+/** Skip-reason value written to InvoiceChargeLog when the spacing rule holds an item back. */
+export const SKIP_REASON_ATTEMPT_SPACING = "attempt_spacing" as const;
+
+/**
+ * Earliest `attemptedAt` that still blocks a fresh automated submission.
+ *
+ * Deliberately NOT graced: it is the Mongo query bound, and it must be at least as
+ * WIDE as the predicate's window. Narrowing it by the grace would let a row the
+ * predicate would have blocked fall outside the query, so the rule would silently stop
+ * firing for exactly the rows nearest the boundary. Wider-than-needed is free (the
+ * predicate re-checks); narrower is a silent hole. Guarded by `npm run test:attempt-spacing`.
+ */
+export function cutoffForBulkAttemptSpacing(
+  now: Date = new Date(),
+  spacingDays: number = BULK_ATTEMPT_SPACING_DAYS
+): Date {
+  return new Date(now.getTime() - spacingDays * 24 * 60 * 60 * 1000);
+}
+
+export type AttemptSpacingDecision =
+  | { skip: false }
+  | { skip: true; lastAttemptAt: Date; retryAfter: Date; daysRemaining: number };
+
+/**
+ * Should the automated run hold this invoice back because its card was submitted to
+ * Stripe too recently?
+ *
+ * `lastRealAttemptAt` MUST be the newest `success`/`failed` row only. Feeding it a
+ * `skipped` row would be self-reinforcing: this rule's own skip rows would then push
+ * the next eligible date forward on every run and the invoice would never be charged
+ * again. A skip never reached the issuer, so it is not an attempt — the same rule
+ * `aggregateRunTotals` applies when it counts `attempted`.
+ *
+ * Pure: the caller does the query, so this is testable without Mongo.
+ */
+export function shouldSkipForBulkAttemptSpacing(params: {
+  /** Newest `success`/`failed` InvoiceChargeLog row for this invoice, or null. */
+  lastRealAttemptAt: Date | null | undefined;
+  now?: Date;
+  spacingDays?: number;
+}): AttemptSpacingDecision {
+  const { lastRealAttemptAt } = params;
+  if (!lastRealAttemptAt) return { skip: false };
+
+  const now = params.now ?? new Date();
+  const spacingDays = params.spacingDays ?? BULK_ATTEMPT_SPACING_DAYS;
+  const retryAfter = new Date(
+    lastRealAttemptAt.getTime() + spacingDays * 24 * 60 * 60 * 1000 - BULK_ATTEMPT_SPACING_GRACE_MS
+  );
+  if (now.getTime() >= retryAfter.getTime()) return { skip: false };
+
+  const daysRemaining = Math.max(
+    1,
+    Math.ceil((retryAfter.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+  );
+  return { skip: true, lastAttemptAt: lastRealAttemptAt, retryAfter, daysRemaining };
+}

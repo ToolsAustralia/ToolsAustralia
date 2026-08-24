@@ -78,6 +78,20 @@ export interface ChargePastDuePreview {
  * (`selectCurrentSubscriptionChargeable`).
  */
 export async function previewChargePastDueInvoices(): Promise<ChargePastDuePreview> {
+  // WORKLIST ORDER — verified 2026-08-24, not inferred. `stripe.invoices.list` returns
+  // NEWEST-FIRST (`created` descending), confirmed by probing the live API with this
+  // exact filter combination, and `InvoiceListParams` has NO sort/order parameter, so
+  // the order is not configurable server-side. The worklist therefore reaches the most
+  // recently past-due members first.
+  //
+  // That is deliberately LEFT AS IS. It only mattered while runs aborted at ~48% of the
+  // worklist (fixed 2026-08-24 — see `isOrphanRun`), which permanently favoured the front
+  // half and starved 229 members. Two things now make a re-sort redundant: every run
+  // drains the whole worklist, and the per-invoice attempt cap
+  // (`shouldSkipForBulkAttemptSpacing`) already IS a least-recently-attempted rule —
+  // expressed as a filter rather than a sort, so the set eligible on any given day is
+  // exactly the set that has waited longest. Re-ordering here would add a Mongo
+  // aggregation over the whole worklist and change nothing about who gets charged.
   const allInvoices: Stripe.Invoice[] = [];
   let hasMore = true;
   let startingAfter: string | undefined = undefined;

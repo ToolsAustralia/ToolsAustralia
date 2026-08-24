@@ -6,6 +6,14 @@
  * run-detail drawer, so all three agree on the SAME buckets + labels. No Stripe /
  * Mongoose imports — safe to import from the client.
  *
+ * `attemptSpacing` was added 2026-08-24 with the proactive per-invoice attempt cap:
+ *  - `attemptSpacing` — the automated run submitted this card to Stripe less than
+ *                      BULK_ATTEMPT_SPACING_DAYS ago, so it sits this run out. This is
+ *                      the PROACTIVE cap (see past-due-charge-idempotency.ts); it is a
+ *                      different rule from `excessiveRetryCooldown` (REACTIVE, engages
+ *                      only after Stripe has already blocked the card) and from
+ *                      `recentlyAttempted` (the 6h human-retry window).
+ *
  * Two new named buckets were added 2026-07-20 so the admin SKIP BREAKDOWN stops
  * dumping everything into "Other":
  *  - `noHeldDraft`   — a stranded past-due member with no re-billable held draft yet
@@ -17,6 +25,7 @@
  */
 
 export type SkipBucketKey =
+  | "attemptSpacing"
   | "excessiveRetryCooldown"
   | "noHeldDraft"
   | "awaitingRetry"
@@ -28,6 +37,14 @@ export type SkipBucketKey =
 
 /** Human labels for each bucket (admin UI). */
 export const SKIP_BUCKET_LABELS: Record<SkipBucketKey, string> = {
+  // No day count here ON PURPOSE. `chargeSkipReasons.ts` is the dependency-free,
+  // client-safe vocabulary module, so it cannot import the policy constant
+  // (`BULK_ATTEMPT_SPACING_DAYS` lives under src/server/) without inverting the
+  // repo's layering for a label string. Hardcoding the number instead would let the
+  // label lie the moment the constant changes. The concrete window IS interpolated
+  // from the constant — in the per-row message, which is where an admin reads the
+  // actual dates ("last submitted ... eligible again ...").
+  attemptSpacing: "Spaced out (attempt cap)",
   excessiveRetryCooldown: "Retry in 3 days",
   noHeldDraft: "No held draft (stranded)",
   awaitingRetry: "Awaiting Stripe retry",
@@ -40,6 +57,7 @@ export const SKIP_BUCKET_LABELS: Record<SkipBucketKey, string> = {
 
 /** Display order — most-common / most-actionable first. */
 export const SKIP_BUCKET_ORDER: SkipBucketKey[] = [
+  "attemptSpacing",
   "excessiveRetryCooldown",
   "noHeldDraft",
   "awaitingRetry",
@@ -52,6 +70,7 @@ export const SKIP_BUCKET_ORDER: SkipBucketKey[] = [
 
 /** Canonical `skipReason` discriminant strings that map to a named bucket. */
 export const KNOWN_SKIP_REASONS = new Set<string>([
+  "attempt_spacing",
   "excessive_retry_cooldown",
   "no_held_draft",
   "awaiting_retry",
@@ -64,6 +83,8 @@ export const KNOWN_SKIP_REASONS = new Set<string>([
 /** Map a canonical `skipReason` string → bucket key. Unknown / undefined → "other". */
 export function skipReasonToBucket(reason: string | undefined | null): SkipBucketKey {
   switch (reason) {
+    case "attempt_spacing":
+      return "attemptSpacing";
     case "excessive_retry_cooldown":
       return "excessiveRetryCooldown";
     case "no_held_draft":
@@ -92,6 +113,14 @@ export function skipReasonToBucket(reason: string | undefined | null): SkipBucke
 export function classifySkipReasonFromMessage(errorMessage?: string | null): string | undefined {
   if (!errorMessage) return undefined;
   const m = errorMessage.toLowerCase();
+  // FIRST, ahead of every other branch. Without it the attempt-spacing message falls
+  // through every test and lands in `other` — and it is the LARGEST bucket in every
+  // automated run, so that alone would make the SKIP BREAKDOWN unreadable. Ordering it
+  // first also makes it immune to rewording: the message names a prior attempt time, so
+  // a future edit containing "within" or "prior attempt" would otherwise be claimed by
+  // `recently_attempted` below — a different rule (the 6h HUMAN-retry window) that means
+  // something else entirely to an operator.
+  if (m.includes("attempt_spacing")) return "attempt_spacing";
   // Most specific first: this phrase also contains "retry", which the
   // awaiting_retry branch below would otherwise claim.
   if (m.includes("excessive_retry_cooldown") || m.includes("retry in 3 days")) {

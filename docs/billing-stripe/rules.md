@@ -10,9 +10,11 @@ Stripe retries webhook deliveries. Every handler must check `ProcessedStripeEven
 
 Klaviyo `Subscription Cancelled`, Meta CAPI cancellation, etc. fire **only** from `customer.subscription.deleted`. API paths write the local `MembershipStatusHistory` row but must not emit external tracking events. Otherwise dual-emission on every cancel.
 
-### R3. Resume pause-collection BEFORE applying benefits
+### R3. Resume pause-collection BEFORE applying benefits — but only if it IS paused
 
-In `invoice.payment_succeeded`, call `resumeAfterSuccessfulRenewalPayment(subId)` before `processPaymentBenefits()`. A slow benefits path or proxy timeout must not leave `pause_collection` orphaned. See [subscription/rules.md R9](../subscription/rules.md#r9).
+In `invoice.payment_succeeded`, call `resumeAfterSuccessfulRenewalPayment(subId)` before `processPaymentBenefits()`. A slow benefits path or proxy timeout must not leave `pause_collection` orphaned. See [subscription/rules.md R9](../subscription/rules.md#r9-after-successful-renewal-payment-clear-pause_collection-before-applying-benefits).
+
+**Gate it on `subscription.pause_collection != null`** (`decideClearPause` does this since 2026-08-24). Clearing a pause that was never set is a Stripe no-op, and it was costing one `/v1/subscriptions` **write** on every renewal against a 25 req/sec per-endpoint cap. Ordering is unchanged for members who really are paused.
 
 ### R4. Dispute-lost = full refund
 
@@ -84,6 +86,62 @@ stripe.invoices.pay(invoiceId, {
 ```
 
 Without it, certain flows fail to actually attempt the charge.
+
+### F4. Read the payload you were handed — don't re-retrieve it
+
+Before adding a `retrieve` to a webhook handler, check whether the event (or the expanded object you
+already fetched) carries what you need. Stripe's caps are **100 req/sec account-wide and 25 req/sec
+per endpoint**, so a needless call costs a slot in a shared bucket that only runs out on the busiest
+minute of the month. Two concrete traps, both of which shipped:
+
+- **The metadata snapshot is already on the invoice.** `parent.subscription_details.metadata` and each
+  line's `metadata` carry the subscription's metadata, on **draft** invoices included (verified over
+  190 production `invoice.created` payloads). No `subscriptions.retrieve` needed to read `packageName`.
+- **Basil moved the subscription pointer.** The top-level `invoice.subscription` is **gone** —
+  stripe@18.5.0's `Invoice` interface does not declare it. A `if (invoice.subscription)` shortcut
+  therefore never fires and silently falls through to the expensive branch, forever. Read
+  `parent.subscription_details.subscription` (via `resolveInvoiceSubscriptionId` /
+  `resolveExpandedInvoiceSubscription`), and never let a compiled-away optional field be the thing
+  standing between you and an API call.
+
+Also gate every *write*: `pause_collection: ""` on an unpaused subscription, or any update whose new
+value equals the current one, is a full request for nothing. See
+[gotchas.md → One renewal cost 10 Stripe API calls](./gotchas.md#one-renewal-cost-10-stripe-api-calls--three-were-pure-waste-2026-08-24).
+
+## The Stripe singleton
+
+### R13. Never wrap the `stripe` singleton in a `Proxy`
+
+`src/lib/stripe.ts` exports one client and ~83 server modules import it, so anything wrapping it
+must be perfectly transparent. A `Proxy` is not: an `async` `get` trap strips `ApiListPromise`'s
+async-iterator (breaking the three `for await` call sites that use the singleton) and turns the
+**synchronous** `stripe.webhooks.constructEvent` into a Promise, which silently disables the whole
+webhook dispatcher. If you need to intercept Stripe calls, do it via the `httpClient` config option —
+the SDK calls exactly `getClientName()` and `makeRequest()` on it and already awaits the latter.
+Evidence and the measured probe: [gotchas](./gotchas.md#dont-wrap-the-stripe-singleton-in-a-proxy--it-breaks-for-await-and-constructevent-2026-08-24).
+
+### R14. Don't rely on `maxNetworkRetries` for 429s
+
+`maxNetworkRetries: 2` (`src/lib/stripe.ts`) covers connection errors and a narrow set of status
+codes. `RequestSender._shouldRetry` (`node_modules/stripe/cjs/RequestSender.js:138`) has **no
+branch on status 429** — it retries connection errors, 409 and ≥500. It *does* honour a
+`stripe-should-retry: true` response header, which Stripe may send on a rate-limit response, but
+that is Stripe's choice rather than ours, so it is not something to design against. Staying under
+the cap is the client's job, which is what
+[`stripe-rate-limiter.ts`](../../src/lib/stripe-rate-limiter.ts) does — for calls that go through
+the singleton, on the paths it actually meters. Read
+[architecture](./architecture.md#what-it-meters--and-what-it-does-not) before citing it as
+account-level protection: it is **per lambda instance**, and it barely engages on the inbound
+webhook path.
+
+### R15. New Stripe calls go through the singleton — don't `new Stripe(...)` in app code
+
+`src/app/api/**` must import `{ stripe } from "@/lib/stripe"`. An ad-hoc client silently opts out
+of the rate limiter and of any future singleton-level config. `cancel-incomplete-subscription`
+was the last route doing this and was migrated on 2026-08-24. Ops scripts under `scripts/` that
+build their own client are tolerated (they run by hand via tsx, never in a lambda, so they cannot
+multiply across instances) but are listed in
+[architecture](./architecture.md#coverage-what-is-not-behind-the-limiter) so the gap stays visible.
 
 ## Logging
 

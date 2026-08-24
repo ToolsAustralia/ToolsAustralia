@@ -111,6 +111,17 @@ The "Complete your renewal payment" modal ([RenewalFailedModal](../../src/compon
 
 When a renewal fails we set `pause_collection: { behavior: "keep_as_draft" }`. If `resumeAfterSuccessfulRenewalPayment()` doesn't run on the matching success event, the subscription stays paused — and **subsequent cycle invoices stay draft, never finalize, never charge**. The user appears to be active in our DB but Stripe never bills them.
 
+**The clear is gated on a pause actually existing (2026-08-24).** `decideClearPause` in
+`pauseCollectionPolicy.ts` short-circuits to `false` when `subscription.pause_collection == null`, so
+the decision is now exactly `pauseCollectionPresent && pauseReason !== "retention"`. Before that, a
+plain `subscription_cycle` renewal satisfied the disjunction on its own and we issued
+`subscriptions.update(… pause_collection: "")` for **every** renewing member, almost none of whom were
+paused — one wasted `/v1/subscriptions` write per renewal, on the endpoint that hit Stripe's 25 req/sec
+cap during the 23 Aug burst. Behaviour for a member who *is* paused is unchanged: same code path, same
+ordering, still before benefits. This narrows the orphan risk rather than widening it — the write we
+removed could only ever have cleared a pause that was not there. `resumeAfterSuccessfulRenewalPayment`
+itself is unchanged and still safe to call unconditionally from the admin / retry paths.
+
 Causes seen in production:
 - Slow `processPaymentBenefits()` path — long DB writes for entry accumulation. **Fix**: resume runs *before* benefits.
 - Stripe CLI / proxy timing out the webhook HTTP response. **Fix**: same — resume early so even a timed-out response leaves Stripe in the right state.
