@@ -10,6 +10,99 @@ This domain is the **Stripe boundary layer**. It owns:
 
 Other domains (subscription, payment, rewards) consume this layer's helpers and read the ledger; they don't talk to Stripe directly.
 
+## Client-side rate limiter
+
+[`src/lib/stripe-rate-limiter.ts`](../../src/lib/stripe-rate-limiter.ts) puts a token bucket in
+front of **every** request the server singleton makes. Added 2026-08-24 after the renewal burst
+that charged 11 members without granting entries — see
+[gotchas: one renewal cost 10 Stripe API calls](./gotchas.md#one-renewal-cost-10-stripe-api-calls--three-were-pure-waste-2026-08-24).
+
+```
+stripe.subscriptions.retrieve(id)      ← ~83 importers, unchanged
+        │
+   StripeResource → RequestSender._request()
+        │
+   httpClient.makeRequest(host, port, path, …)   ← the shim
+        │  await limiter.acquire(endpointKeyFromPath(path))
+        ▼
+   NodeHttpClient.makeRequest(…)        ← the SDK's own default client
+```
+
+**Two buckets, both must yield a token before a request goes out:**
+
+| Bucket | Env var | Default | Stripe's cap |
+|---|---|---|---|
+| Global (all endpoints) | `STRIPE_RATE_LIMIT_GLOBAL_PER_SECOND` | 80 live / 20 sandbox | 100/sec live, 25/sec sandbox |
+| Per endpoint (`/v1/subscriptions`, …) | `STRIPE_RATE_LIMIT_ENDPOINT_PER_SECOND` | 20 | 25/sec |
+
+Defaults are **80% of the published caps**, so a single instance can never exhaust the account's
+budget on its own, with 20% left for traffic outside this singleton (Dashboard, Stripe CLI). Set
+either to `0` to disable that bucket. Capacity equals the rate, so a bucket holds at most one
+second of traffic — never a larger stored burst.
+
+Endpoint keys come from the real request path, so `/v1/subscriptions/sub_1` and
+`/v1/subscriptions?limit=100` share one bucket (the SDK appends the query string to the path,
+`StripeResource.js:162-167`, so it is stripped first).
+
+### ⚠️ Per-instance, not global
+
+State lives in module scope, so **each warm lambda has its own pair of buckets**. Vercel ran ~56
+concurrent invocations during the burst, so the aggregate ceiling is 80 × 56 ≈ **4,480/sec** — far
+above Stripe's 100/sec account cap. This is a **safety valve, not a global governor**. What it
+actually buys:
+
+1. **It meters a single invocation's fan-out.** The webhook queue drains `SWEEP_BATCH_SIZE = 20`
+   events *concurrently* ([process-stripe-webhook-queue/route.ts](../../src/app/api/cron/process-stripe-webhook-queue/route.ts)),
+   and a renewal costs ~7 calls, so one instance can fire ~140 requests at once. Those now go out
+   at 80/sec (20/sec per endpoint) instead of all at once.
+2. **No single instance can exhaust the account budget alone.**
+3. **It is an env-only knob** — turn it down without a code change if 429s reappear.
+
+A genuinely global limiter needs shared state (Redis / Mongo counter). Deliberately out of scope:
+it adds a network round-trip and a new failure mode to the hot path of every payment. That is the
+follow-up if per-instance metering proves insufficient.
+
+### What it meters — and what it does not
+
+**This limiter will essentially never engage on the path that caused the 24 Aug incident.** The
+inbound receiver ([`/api/stripe/webhook`](../../src/app/api/stripe/webhook/route.ts)) handles
+**one** event per invocation via `after()`, so ~900 events spread across ~56 instances is roughly
+**2 calls/sec per instance** — two orders of magnitude under an 80/sec bucket. What it genuinely
+meters is the queue-**drain** path (`process-stripe-webhook-queue`, 20 events concurrently via
+`Promise.allSettled`, ~140 requests at once from one instance).
+
+So the honest framing: **this reduces the depth of a 429 storm's retry backlog; it does not
+prevent the storm.** Account-level compliance rests on the call-count reduction (10 → 7 calls per
+renewal) in [gotchas](./gotchas.md#one-renewal-cost-10-stripe-api-calls--three-were-pure-waste-2026-08-24),
+not on this limiter. Cite them in that order.
+
+### Coverage: what is NOT behind the limiter
+
+Only calls made through the `stripe` singleton are metered. As of 2026-08-24 **no route or service
+under `src/` constructs its own client** — `cancel-incomplete-subscription` was the last one and now
+imports the singleton (rule [R15](./rules.md#r15-new-stripe-calls-go-through-the-singleton--dont-new-stripe-in-app-code)).
+
+These **ops scripts** still build their own `new Stripe(...)` and are unmetered:
+`audit-receipts-refund-accuracy`, `backfill-missing-refund-events`, `find-stranded-mini-draw-payments`,
+`backfill-rebill-payment-events`, `confirm-stuck-pi`, `find-duplicate-stripe-subscriptions`,
+`reconcile-stale-active-subscriptions`, `seed-active-member`, `seed-past-due-member`, and the
+`stripe-probe-*` set. They run by hand via `tsx`, one process at a time, never inside a lambda —
+so they cannot multiply across instances the way the serverless paths can. Left as-is deliberately;
+listed here so the gap stays visible rather than being assumed away.
+
+### Why the shim is at the HTTP layer
+
+`httpClient` is the only interception point that is transparent by construction — the SDK calls
+just `getClientName()` and `makeRequest()` on it, and `makeRequest` is already awaited internally.
+Wrapping the singleton in a `Proxy` instead **breaks `for await` auto-pagination and turns the
+synchronous `webhooks.constructEvent` into a Promise**; see
+[gotchas](./gotchas.md#dont-wrap-the-stripe-singleton-in-a-proxy--it-breaks-for-await-and-constructevent-2026-08-24).
+
+Fairness is strict FIFO across a single queue with a single pending timer: starvation-free,
+deadlock-free (buckets refill on a wall clock nothing here can stop), and no timer outlives the
+queue. The trade is head-of-line blocking — a throttled endpoint can briefly hold up a free one —
+which costs nothing during the burst this exists for, because every endpoint is saturated then.
+
 ## Webhook flow
 
 ```
@@ -189,3 +282,88 @@ Per-page cost is bounded — independent of the date-window size.
 **Why `console.error`, not `ErrorReport`.** `ErrorReport` is for user-submitted toast errors (a different abstraction). System-monitoring drift uses console.error, which Vercel's log drains pick up.
 
 **Unit-tested helper.** `computeDriftRatio` is exported and covered by `npm run test:reconcile-drift` ([src/app/api/cron/reconcile-blocked-transactions/__tests__/computeDriftRatio.test.ts](../../src/app/api/cron/reconcile-blocked-transactions/__tests__/computeDriftRatio.test.ts)) — both-zero, perfect-match, mongo-only, stripe-only, ±20% drift, and 100% drift cases.
+
+## Renewal-grant reconciliation — the paid-but-not-granted detector (2026-08-24)
+
+[src/services/reconciliation/renewalGrantReconciler.ts](../../src/services/reconciliation/renewalGrantReconciler.ts), surfaced by [src/app/api/cron/reconcile-renewal-grants/route.ts](../../src/app/api/cron/reconcile-renewal-grants/route.ts).
+
+### Why this one is not redundant with the others
+
+Every other check in the repo starts from a `BenefitsGranted` `PaymentEvent`:
+
+| Check | Anchor | Can it see a renewal with no `PaymentEvent`? |
+|---|---|---|
+| `reconcileActiveMajorDrawEntries` ([src/utils/draws/reconcile-major-draw-entries.ts](../../src/utils/draws/reconcile-major-draw-entries.ts)) | `PaymentEvent.find({eventType:"BenefitsGranted"})` with empty `data.grants.drawGrants` | **No** |
+| `scripts/fix-major-draw-renewal-entries.ts` | same | **No** |
+| `scripts/verify-major-draw-entries.ts` | same | **No** |
+| `reconcile-blocked-transactions` | `BlockedTransaction` vs Stripe blocked charges | **No** — different failure entirely |
+| **`renewalGrantReconciler`** | **`MembershipRenewalCycle` — the paid invoice** | **Yes** |
+
+They heal a grant row that exists but is incomplete. A renewal that died *before* writing one has no grant row, so it is not even a candidate. That is RC-2 of the [renewal-surge design](../superpowers/specs/2026-08-24-renewal-surge-hardening-design.md), and it is why 11 members charged $300.00 on 2026-08-23 were invisible to every automated check we had.
+
+### The join
+
+```
+MembershipRenewalCycle { updatedAt in [since, until),
+                         status in ["succeeded", "recovered"],
+                         billingReason: "subscription_cycle" }
+  LEFT JOIN PaymentEvent on _id == "BenefitsGranted-invoice_" + stripeInvoiceId
+  WHERE the PaymentEvent is absent
+```
+
+Run as one aggregation: `$addFields` computes the grant `_id`, `$lookup` point-reads `paymentevents._id`, `$match { grant: { $size: 0 } }` keeps the misses. The `_id` is deterministic — `benefitsGrantedEventId("invoice_" + invoiceId)` ([src/types/payment-ledger.ts](../../src/types/payment-ledger.ts)), matching what the handler writes at [index.ts:3536-3537](../../src/services/stripe-webhook-handlers/index.ts) and what `processPaymentBenefits` writes at [payment-processing.ts:327](../../src/utils/payment/payment-processing.ts). Reuse that helper rather than re-typing the prefix — a drift of one character silently returns "everything is a gap".
+
+`status` accepts `succeeded` **and** `recovered`, excluding `failed` (not money we kept) and `refunded` (money we gave back). No writer sets `recovered` today, but it is in the schema enum and in every other paid-cycle query in the repo (`MembershipAnalyticsService.ts:372`, `refund-ledger-reversal.ts:378`, `backfill-membership-streaks.ts:99`, `find-renewal-rate.ts`), so matching them means a future writer cannot silently drop rows out of this net.
+
+### The window is on `updatedAt`, and that is load-bearing
+
+These rows are **upserted, not inserted.** `upsertRenewalCycleFromFailedInvoice` creates the row at **failure** time with `status: "failed"`; a later successful retry flips it to `succeeded` with `findOneAndUpdate`, which leaves `createdAt` pinned to the failure date. A `createdAt` window therefore goes **false-clean** for every dunning-recovered renewal — declined on the 24th, paid on the 29th, grant then fails, and the row sits five days outside every window the cron will ever run. That is the past-due-recovery population this whole spec exists to protect, so it is the worst possible miss.
+
+Mongoose's `timestamps: true` bumps `updatedAt` on **both** the insert and the failed→succeeded flip, so it is the one field covering both directions (`succeededAt` alone would miss a webhook Stripe delivers days late). Timestamps only move forward, so an `updatedAt` window has no false-clean direction. Full reasoning and the regression test: [gotchas.md](./gotchas.md#the-window-must-be-on-updatedat--createdat-is-false-clean-for-dunning-recoveries).
+
+The projected `chargedAt` stays `succeededAt ?? createdAt` — when the money actually moved, which for a recovery is *not* the row's creation date.
+
+### Mongo-only — deliberate, with a stated limit
+
+**No Stripe call per row.** `MembershipRenewalCycle` is written straight from Stripe's invoice payload, so the paid set is already local; a per-row round-trip would reintroduce the API fan-out that *caused* the incident (RC-3: 182 req/s against a 100 req/s account cap). A controller-run reconciliation on 2026-08-23 measured the anchor as complete for that window: Stripe reported **688** paid `subscription_cycle` invoices, Mongo held **693** cycle rows, and **zero** Stripe-paid invoices lacked a cycle row.
+
+**The limit, stated plainly:** the cycle row is written by the *same handler that can fail* — [index.ts:3685](../../src/services/stripe-webhook-handlers/index.ts), **after** its first Stripe call at `:3507`. A failure between those two points leaves no cycle row, and this reconciler cannot see it. For ad-hoc audits, `scripts/backfill-missing-renewal-grants.ts` (Phase 0) carries an optional Stripe-side pass that closes that hole. The daily cron accepts the gap in exchange for staying off Stripe's limiter.
+
+**And it is not the net for a grant row that exists but is empty** — that shape belongs to `reconcileActiveMajorDrawEntries`. Both limits, and which reconciler owns which shape: [gotchas.md](./gotchas.md#the-renewal-grant-reconciler-what-it-covers-and-the-two-things-it-does-not-2026-08-24).
+
+### Settle margin — why a gap is not reported immediately
+
+`until` defaults to **now − 8 hours**, `since` to `until − 48 hours`, both measured against `updatedAt` — i.e. "this row has not been touched for 8 hours".
+
+The webhook queue's full retry ladder is `0 + 1m + 5m + 15m + 1h + 6h = 7h21m` from first attempt to last (`BACKOFF_SCHEDULE_MS`, [src/services/stripe-webhook-queue/backoff.ts](../../src/services/stripe-webhook-queue/backoff.ts)). A renewal younger than that may be legitimately mid-retry — reporting it would make the alert cry wolf, which is precisely how a real alert gets ignored. 8h clears the ladder with margin, and because it is measured from `updatedAt` it is self-adjusting: every retry that re-runs the cycle upsert restarts the clock. The 48h lookback means each burst is inspected by two consecutive runs, so one failed run does not create a hole.
+
+At the `40 3 * * *` schedule the window is roughly `[D−3 19:40, D−1 19:40)`, which contains both of the last two 14:00 UTC renewal bursts.
+
+### Dead webhook rows — reported, not windowed
+
+The same run reports every `stripewebhookqueue` row in `dead`. Before the 2026-08-24 ACK gate a silently-failing handler was ACKed as a success, so `dead` was barely reachable; the gate made it reachable for six previously-silent paths (missing `packageId`, unknown package, customer mismatch, non-manageable subscription status, user not found, no customer) and **four of those cannot self-heal**. Deliberately **not** windowed: ageing a dead row out of the alert after 48h would rebuild the same blind spot in a new place. The alert persists until the row is replayed/deleted or the 30-day TTL drops it.
+
+The listing is capped at 50 rows; `deadCount` is never capped.
+
+### Read-only by design
+
+The cron writes nothing to Mongo and calls Stripe not at all. Healing is a deliberate human step (`scripts/backfill-missing-renewal-grants.ts`) because a grant carries a **draw-routing timestamp** — `paymentMetadata.created` decides which major draw the entries land in ([payment-processing.ts](../../src/utils/payment/payment-processing.ts)) — and a blind auto-heal run at 03:40 would credit the wrong draw for anything charged before a freeze.
+
+### Auth fails CLOSED
+
+Most sibling crons do `if (!cronSecret) return true`, leaving the endpoint open whenever the env var is missing. This one refuses instead, matching [charge-past-due](../../src/app/api/cron/charge-past-due/route.ts):
+
+```ts
+const secret = process.env.CRON_SECRET;
+if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+```
+
+### Where it logs
+
+Findings go to **`console.error`** on two greppable prefixed lines —
+`[reconcile-renewal-grants] PAID BUT NOT GRANTED: <n> renewal(s), <cents> cents, window …` and
+`[reconcile-renewal-grants] DEAD WEBHOOK ROWS: <n> — …`. Production builds strip `console.log/info/debug/warn` (`next.config.ts` `compiler.removeConsole`), so anything logged below `error` would be invisible in Vercel.
+
+**The clean run logs at `error` too** — a one-line daily heartbeat, `[reconcile-renewal-grants] OK: 0 ungranted, 0 dead, window …`. Without it, "ran and found nothing" is indistinguishable from "never fired" in production logs, and a safety net that cannot prove it ran is not much of a net. One line a day is a cheap price for that.

@@ -38,25 +38,40 @@ export interface ClearPauseInput {
 }
 
 /**
- * Owns the WHOLE clear decision for the paid-invoice / failed-renewal-recovery path:
- *   shouldClearPauseCollectionAfterPaidInvoice(...) || recordMembershipRecurringAffiliate
- *     || subscription.pause_collection != null
- * plus the retention exclusion. Delegates the legacy sub-decision to the existing
- * `shouldClearPauseCollectionAfterPaidInvoice` (unchanged) rather than reimplementing it.
+ * Owns the WHOLE clear decision for the paid-invoice / failed-renewal-recovery path.
+ *
+ * The decision it encodes was:
+ *   !retention && ( shouldClearPauseCollectionAfterPaidInvoice(...)
+ *                   || recordMembershipRecurringAffiliate
+ *                   || subscription.pause_collection != null )
+ *
+ * which reduces to `pauseCollectionPresent && !retention` once you require something to
+ * actually be paused — see the precondition below. Every clause in the old disjunction was
+ * ORed with `pauseCollectionPresent`, so adding the precondition changes the outcome in exactly
+ * one situation: no pause is set and a legacy clause said "clear". Clearing a pause that does
+ * not exist is a Stripe no-op (`resumeAfterSuccessfulRenewalPayment` is documented idempotent),
+ * so nothing a member or an admin can observe changes.
  */
 export function decideClearPause(i: ClearPauseInput): boolean {
+  // PRECONDITION (2026-08-24 renewal surge, RC-3): only write to Stripe when there is a pause to
+  // clear. `billing_reason: "subscription_cycle"` matched the legacy clause, so EVERY renewal —
+  // including the overwhelming majority that were never paused — spent a `/v1/subscriptions`
+  // WRITE on `pause_collection: ""` that changed nothing. That endpoint ran at ~73 req/sec
+  // against Stripe's 25/sec per-endpoint cap on 23 Aug; this is one of the three calls removed.
+  //
+  // `pauseCollectionPresent` is read from the same subscription object the caller is about to
+  // act on, so it is as fresh as the retrieve that would have preceded the write.
+  if (!i.pauseCollectionPresent) return false;
+
   // A retention pause is never cleared by the recovery/paid-invoice path.
   if (i.pauseReason === "retention") return false;
-  if (
-    shouldClearPauseCollectionAfterPaidInvoice({
-      billingReason: i.billingReason,
-      previousSubscriptionDbStatus: i.previousSubscriptionDbStatus,
-    })
-  ) {
-    return true;
-  }
-  if (i.recordMembershipRecurringAffiliate) return true;
-  return i.pauseCollectionPresent;
+
+  // A non-retention pause IS present — which is itself the third disjunct of the legacy
+  // decision, so the other two clauses can no longer change the answer. They are retained on
+  // ClearPauseInput (and in `shouldClearPauseCollectionAfterPaidInvoice`, still exported and
+  // tested) because they document WHICH signal put a paid invoice on this path, and the admin /
+  // renew-subscription recovery paths call the resume helper on their own terms.
+  return true;
 }
 
 /** Inputs for the retention-`paused` membership-state transition decision. Pure — no Stripe/DB. */
@@ -194,6 +209,43 @@ export function shouldReanchorRebillToAnchor24(i: RebillReanchorGateInput): bool
   if (i.autoRenew === false) return false;
   if (i.alreadyReanchoredInvoiceId === i.invoiceId) return false;
   return true;
+}
+
+/**
+ * What a subscription object actually TELLS us about `pause_collection`.
+ *
+ * The three states are deliberately distinct, because `null` is an ANSWER and `undefined` is a
+ * MISSING answer:
+ *
+ * - `"paused"`     — the field came back with a pause object. Clear it.
+ * - `"not_paused"` — the field came back **explicitly `null`**. Stripe is telling us there is no
+ *                   pause; trust it and skip the write. This is the common renewal case, and it is
+ *                   where the saving in {@link decideClearPause}'s precondition comes from.
+ * - `"unknown"`    — the field is **absent** from the object. That is not "no pause", it is "we
+ *                   were not told". A caller holding a subscription it got by EXPANSION rather than
+ *                   by `subscriptions.retrieve` must re-read it before deciding: for a genuinely
+ *                   paused member who has just paid, the `invoice.payment_succeeded` webhook is the
+ *                   only automatic clearer we have (`pay-failed-invoice` does not resume, and
+ *                   `prepareRecoveredCycleInvoice` never resumes), so guessing "not paused" here
+ *                   would leave a paying member collection-paused indefinitely.
+ *
+ * Verified live (invoice `in_1U7b0KJ3N9Ka6RJMcLvhPOHe`, expanded through
+ * `parent.subscription_details.subscription`): the field IS returned, as `null`. So `"unknown"`
+ * should be unreachable in practice — it exists so that being wrong about that costs one extra
+ * retrieve instead of a stuck member. The cohort it protects cannot be observed today: a scan of
+ * ~1,200 live subscriptions found zero with `pause_collection` set.
+ */
+export type PauseCollectionReadout = "paused" | "not_paused" | "unknown";
+
+export function readPauseCollection(subscription: {
+  pause_collection?: Stripe.Subscription.PauseCollection | null;
+}): PauseCollectionReadout {
+  // Widened read: the SDK type says `PauseCollection | null`, but the entire point of this helper
+  // is the case where the key is not on the wire object at all.
+  const raw = (subscription as { pause_collection?: unknown }).pause_collection;
+  if (raw === undefined) return "unknown";
+  if (raw === null) return "not_paused";
+  return "paused";
 }
 
 /**

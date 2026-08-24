@@ -73,10 +73,18 @@ import {
   acquireRecoveryClaim,
   releaseRecoveryClaim,
 } from "@/utils/payment/recovery/recovery-claim";
-import { buildBulkChargeIdempotencyKey } from "@/server/admin/past-due-charge-idempotency";
 import {
-  ORPHAN_RUN_THRESHOLD_MS,
+  BULK_ATTEMPT_SPACING_DAYS,
+  SKIP_REASON_ATTEMPT_SPACING,
+  buildBulkChargeIdempotencyKey,
+  cutoffForBulkAttemptSpacing,
+  shouldSkipForBulkAttemptSpacing,
+} from "@/server/admin/past-due-charge-idempotency";
+import {
   aggregateRunTotals,
+  buildChargeRunAlerts,
+  isOrphanRun,
+  runLivenessAt,
   type ChargeLogRowForAggregation,
 } from "@/server/admin/charge-past-due-totals";
 import { classifySkipReasonFromMessage } from "@/utils/admin/chargeSkipReasons";
@@ -149,6 +157,140 @@ export interface ChargeChunkResult {
 const classifySkipReason = classifySkipReasonFromMessage;
 
 /**
+ * Emit the alert lines a run earns as it reaches a terminal status.
+ *
+ * Called from EVERY finalize site (orphan sweep, admin abort, both chunk-complete
+ * branches) rather than from the cron route: the cron route never observes a
+ * sweep-abort of an ADMIN run, never observes an admin-driven run finalizing at all,
+ * and a run finalized by the same tick that hit its deadline would be missed.
+ *
+ * Never throws. This sits inside the money path — a malformed totals document must
+ * not be able to break a chunk or leave the global lock held.
+ */
+export function emitChargeRunAlerts(run: {
+  runId: string;
+  status: "running" | "completed" | "failed" | "aborted";
+  trigger?: string | null;
+  error?: string | null;
+  totals: Partial<ChargeJobRunTotals> | null | undefined;
+}): void {
+  try {
+    for (const alert of buildChargeRunAlerts(run)) {
+      // console.error, not console.log — next.config.ts strips log/info/debug/warn
+      // from production builds, which is the only place these matter.
+      console.error(alert.message);
+    }
+  } catch (err) {
+    console.error(`[chargePastDue] alert emit failed for run ${run.runId}:`, err);
+  }
+}
+
+/**
+ * PROACTIVE per-invoice attempt cap. Returns true when this item was held back and a
+ * skip row was written (so the caller must not charge it).
+ *
+ * WHY THIS EXISTS, given `shouldCooldownForExcessiveRetry` already sits further down:
+ * that one is REACTIVE — it needs a `BlockedTransaction` row to already exist for the
+ * card, so by construction it cannot prevent a FIRST block, and it fails OPEN. This one
+ * reads only the invoice's own attempt history and is what stops the daily run
+ * manufacturing the blocks in the first place. 835 of 1,024 blocked transactions (82%)
+ * on this account carry `previously_declined_do_not_retry`, whose stated cause is "too
+ * many payment attempts were made in a short time window". See
+ * docs/billing-stripe/gotchas.md.
+ *
+ * Runs FIRST — before `invoices.retrieve` — so a held item costs zero Stripe calls.
+ *
+ * FAILS CLOSED, unlike the cooldown check below, and the asymmetry is deliberate. If a
+ * lookup error let the item through, a systematic failure (a bad query, a degraded
+ * replica) would silently disable the whole cap and put every card back on a daily
+ * cadence — the exact disease. Holding one member back for a day is recoverable;
+ * silently re-hammering the entire past-due base is not. The skip row is still written,
+ * so the item leaves `remaining` and the run can still finish.
+ */
+async function holdForAttemptSpacing(
+  item: { invoiceId: string; customerId: string; userId: mongoose.Types.ObjectId; amount: number },
+  adminId: string,
+  runId: mongoose.Types.ObjectId
+): Promise<boolean> {
+  let errorMessage: string;
+
+  try {
+    // WHAT COUNTS AS AN ATTEMPT — three exclusions, each load-bearing.
+    //
+    // 1. `skipped` rows. A skip never reached the issuer, and counting one would be
+    //    self-reinforcing: THIS rule's own skip rows would push the next eligible date
+    //    forward on every run and the invoice would never be charged again. Same
+    //    definition `aggregateRunTotals` uses for `attempted`.
+    //
+    // 2. Recovery STEP-AUDIT rows (`result.recovery.step`). Machinery — void / create /
+    //    finalize — written milliseconds apart, not card outcomes. The 6h guard in
+    //    `chargePastDueShared` excludes them for exactly this reason; this window is 12x
+    //    longer, so the cost of getting it wrong is 12x larger. (Recovery's `bulk`
+    //    SUMMARY row is NOT excluded — that one does represent a real submission.)
+    //
+    // 3. `invoice_unavailable` failures. `retrieveWorklistInvoice` writes `failed` when
+    //    Stripe could not be reached after retries — a 429 or 5xx, NO CARD TOUCHED. Left
+    //    in, a Stripe incident or rate-limit episode would sit a large slice of the
+    //    worklist out for three days for attempts that never happened, during precisely
+    //    the conditions where collection matters most.
+    //
+    // NOT excluded: the outer `Unexpected error during charge` catch. That wraps the pay
+    // call itself, so a throw there may well have submitted the card. Over-counting holds
+    // a member one extra cycle; under-counting re-hammers a card Stripe already saw — the
+    // asymmetry says count it.
+    const lastReal = await InvoiceChargeLog.findOne({
+      invoiceId: item.invoiceId,
+      status: { $in: ["success", "failed"] },
+      attemptedAt: { $gte: cutoffForBulkAttemptSpacing() },
+      "result.recovery.step": { $exists: false },
+      // `$ne` also matches documents with no `errorCode` at all — which is the common case.
+      errorCode: { $ne: RECOVERY_DECLINE_CODES.invoiceUnavailable },
+    })
+      .sort({ attemptedAt: -1 })
+      .select({ attemptedAt: 1 })
+      .lean();
+
+    const decision = shouldSkipForBulkAttemptSpacing({
+      lastRealAttemptAt: lastReal?.attemptedAt ?? null,
+    });
+    if (!decision.skip) return false;
+
+    const days = decision.daysRemaining;
+    // The `attempt_spacing` token is load-bearing: classifySkipReasonFromMessage buckets on it.
+    errorMessage =
+      `Skipped: ${SKIP_REASON_ATTEMPT_SPACING} — last submitted to Stripe at ` +
+      `${decision.lastAttemptAt.toISOString()}; this card sits out ${BULK_ATTEMPT_SPACING_DAYS} days ` +
+      `between attempts. Eligible again ${decision.retryAfter.toISOString()} (${days} day${days === 1 ? "" : "s"}).`;
+  } catch (err) {
+    // ALERT-prefixed, not a plain error line. A SYSTEMATIC lookup failure holds every
+    // item back and the run still finalizes `completed`; the run-level `zero_coverage`
+    // alert catches a TOTAL collapse, but a PARTIAL one (half the lookups failing) would
+    // otherwise be invisible in the totals. One line per held card is loud in failure and
+    // silent in health, which is the right way round.
+    console.error(
+      `[chargePastDue][ALERT] attempt-spacing lookup failed for ${item.invoiceId} — holding the card back rather than risk an extra submission:`,
+      err
+    );
+    errorMessage =
+      `Skipped: ${SKIP_REASON_ATTEMPT_SPACING} — could not read this invoice's attempt history, ` +
+      `so it was held back rather than risk an extra submission to Stripe.`;
+  }
+
+  await InvoiceChargeLog.create({
+    invoiceId: item.invoiceId,
+    customerId: item.customerId,
+    userId: item.userId,
+    adminId: new mongoose.Types.ObjectId(adminId),
+    status: "skipped",
+    amount: item.amount,
+    attemptedAt: new Date(),
+    errorMessage,
+    chargeRunId: runId,
+  });
+  return true;
+}
+
+/**
  * Recompute authoritative totals for a run from its persisted InvoiceChargeLog rows.
  *
  * Rows are restricted to WORKLIST invoice ids — exactly one outcome row per item.
@@ -180,31 +322,62 @@ async function recomputeTotalsFromLogs(
 }
 
 /**
- * Finalize any `running` ChargeJobRun aged past the orphan threshold: recompute
- * its real totals from logs and mark it `aborted`. Mirrors fix-stuck-charge-jobs.ts
- * but runs inline at the next kickoff so the history self-heals.
+ * Finalize any STALLED `running` ChargeJobRun: recompute its real totals from
+ * logs and mark it `aborted`. Mirrors fix-stuck-charge-jobs.ts but runs inline at
+ * the next kickoff so the history self-heals.
+ *
+ * "Stalled" means NO PROGRESS for `ORPHAN_RUN_THRESHOLD_MS` — not "started that
+ * long ago". This previously queried `startedAt: { $lt: cutoff }`, which killed
+ * every real run mid-flight (see `isOrphanRun` for the measured damage).
+ *
+ * The threshold rule is NOT restated as a Mongo query. Mongo cannot express
+ * `lastProgressAt ?? startedAt` without an index-defeating `$expr`, and a second
+ * copy of the rule is exactly how the two drifted apart in the first place. So we
+ * prefilter on `status: "running"` — at most a handful of documents ever, and an
+ * index prefix — and let the shared `isOrphanRun` predicate decide. It also runs
+ * BEFORE the per-run totals recompute, so healthy long runs cost two queries
+ * rather than four.
  */
 export async function sweepOrphanRuns(): Promise<void> {
-  const cutoff = new Date(Date.now() - ORPHAN_RUN_THRESHOLD_MS);
-  const orphans = await ChargeJobRun.find({ status: "running", startedAt: { $lt: cutoff } })
-    .select({ _id: 1, totals: 1 })
+  const now = new Date();
+  const candidates = await ChargeJobRun.find({ status: "running" })
+    .select({ _id: 1, totals: 1, status: 1, startedAt: 1, lastProgressAt: 1, trigger: 1 })
     .lean();
-  for (const run of orphans) {
-    const totals = await recomputeTotalsFromLogs(
-      run._id as mongoose.Types.ObjectId,
-      run.totals?.eligibleCount ?? 0
-    );
-    await ChargeJobRun.updateOne(
-      { _id: run._id, status: "running" },
-      {
-        $set: {
-          status: "aborted",
-          finishedAt: new Date(),
-          totals,
-          error: "Aborted by orphan sweep — exceeded lock window without finalize (totals recomputed from logs)",
-        },
-      }
-    );
+  for (const run of candidates) {
+    // Per-candidate isolation. Evaluating the predicate in JS rather than in Mongo means
+    // a malformed document (no `startedAt`, so `runLivenessAt(run).getTime()` throws) would
+    // otherwise reject this whole function — and `sweepOrphanRuns` runs inside the charge
+    // cron's try/catch at the TOP of every tick, so a single bad row would turn the tick into
+    // an HTTP 500 and the day would collect nothing. The old Mongo predicate simply would not
+    // have matched such a row. `startedAt` is `required: true` with a default, so this is
+    // defence in depth, but the blast radius of being wrong is an entire day of recovery.
+    try {
+      if (!isOrphanRun(run, now)) continue; // still making progress — leave it alone.
+      const quietFor = Math.round((now.getTime() - runLivenessAt(run).getTime()) / 60000);
+      const totals = await recomputeTotalsFromLogs(
+        run._id as mongoose.Types.ObjectId,
+        run.totals?.eligibleCount ?? 0
+      );
+      const error = `Aborted by orphan sweep — no progress for ${quietFor} min (totals recomputed from logs)`;
+      await ChargeJobRun.updateOne(
+        { _id: run._id, status: "running" },
+        { $set: { status: "aborted", finishedAt: new Date(), totals, error } }
+      );
+      // This is the abort that went unnoticed for five consecutive days.
+      emitChargeRunAlerts({
+        runId: String(run._id),
+        status: "aborted",
+        trigger: run.trigger,
+        error,
+        totals,
+      });
+    } catch (err) {
+      // console.error survives the production build; console.log does not.
+      console.error(
+        `[orphan-sweep] skipped run ${String(run._id)} — could not evaluate/finalize it:`,
+        err
+      );
+    }
   }
 }
 
@@ -304,6 +477,15 @@ export async function startChargePastDueJob(params: {
         { $set: { status: "completed", finishedAt: new Date() } }
       );
       await releaseLock();
+      // Wired for completeness so EVERY finalize site goes through one emitter. With
+      // `eligibleCount: 0` the alerts stay silent by design — a genuinely empty worklist
+      // is not a fault — but if this site ever finalizes a non-empty run, it is covered.
+      emitChargeRunAlerts({
+        runId: String(runId),
+        status: "completed",
+        trigger,
+        totals: { eligibleCount: 0 },
+      });
       return { runId: String(runId), total: 0, done: true };
     }
 
@@ -346,18 +528,13 @@ export async function abortChargePastDueJob(params: { runId: string; adminId: st
   const totals = await recomputeTotalsFromLogs(runObjId, eligibleCount);
 
   if (run?.status === "running") {
+    const error = "Stopped by admin before draining the worklist (totals recomputed from logs).";
     await ChargeJobRun.updateOne(
       { _id: runObjId, status: "running" },
-      {
-        $set: {
-          status: "aborted",
-          finishedAt: new Date(),
-          totals,
-          error: "Stopped by admin before draining the worklist (totals recomputed from logs).",
-        },
-      }
+      { $set: { status: "aborted", finishedAt: new Date(), totals, error } }
     );
     await releaseLock();
+    emitChargeRunAlerts({ runId: params.runId, status: "aborted", error, totals });
   }
 
   return {
@@ -580,6 +757,9 @@ async function chargeWorklistItem(
   adminId: string,
   runId: mongoose.Types.ObjectId
 ): Promise<void> {
+  // Attempt cap FIRST — before any Stripe call, so a held item costs nothing.
+  if (await holdForAttemptSpacing(item, adminId, runId)) return;
+
   const retrieved = await retrieveWorklistInvoice(item.invoiceId);
   if (!retrieved.ok) {
     // Either way a row is written, so the item leaves `remaining` and the run can
@@ -763,6 +943,10 @@ export async function processChargePastDueChunk(params: {
     (await InvoiceChargeLog.distinct("invoiceId", { chargeRunId: runObjId })) as string[]
   );
   const remaining = items.filter((it) => !loggedIds.has(it.invoiceId));
+  // Worklist items already logged BEFORE this chunk ran. Compared against the
+  // post-chunk count below to decide whether the run actually advanced — which
+  // is what the orphan sweep's liveness heartbeat means.
+  const processedBefore = items.length - remaining.length;
 
   // Already finished (or nothing left) → finalize once and release the lock.
   if (run.status !== "running" || remaining.length === 0) {
@@ -773,13 +957,16 @@ export async function processChargePastDueChunk(params: {
         { $set: { status: "completed", finishedAt: new Date(), totals } }
       );
       await releaseLock();
+      // Inside the same `running` guard as the write, so a later poll that finds an
+      // already-completed run cannot re-alert on every tick.
+      emitChargeRunAlerts({ runId, status: "completed", totals });
     }
     return {
       runId,
       total: items.length,
       // Count logged WORKLIST items only — `loggedIds` may also contain the recovery
       // pay rows' NEW invoice ids, which are not worklist items.
-      processed: items.length - remaining.length,
+      processed: processedBefore,
       processedThisChunk: 0,
       done: true,
       totals,
@@ -826,8 +1013,26 @@ export async function processChargePastDueChunk(params: {
       { $set: { status: "completed", finishedAt: new Date(), totals } }
     );
     await releaseLock();
+    emitChargeRunAlerts({ runId, status: "completed", totals });
   } else {
-    await ChargeJobRun.updateOne({ _id: runObjId, status: "running" }, { $set: { totals } });
+    // Mid-run progress write — the orphan sweep's LIVENESS HEARTBEAT.
+    //
+    // Stamped ONLY when the run genuinely advanced (at least one more worklist
+    // item now carries a log row). Stamping unconditionally would let a run whose
+    // every item throws before writing a row refresh its own liveness on each
+    // chunk and never be swept — trading yesterday's "kill every healthy run" for
+    // "never kill a wedged one". Progress, not activity, is the signal.
+    // INVARIANT: worklist `invoiceId`s are UNIQUE, so this item count
+    // (`processedBefore`) and this distinct-id count (`processed`) are comparable.
+    // That holds by construction — `previewChargePastDueInvoices` collapses to one
+    // invoice per customer. If a future worklist change ever admits a duplicate id,
+    // `processed` would undercount relative to `processedBefore`, the heartbeat would
+    // silently stop firing, and healthy runs would be swept again — this exact bug.
+    const progressed = processed > processedBefore;
+    await ChargeJobRun.updateOne(
+      { _id: runObjId, status: "running" },
+      { $set: progressed ? { totals, lastProgressAt: new Date() } : { totals } }
+    );
   }
 
   return {

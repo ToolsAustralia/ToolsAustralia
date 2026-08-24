@@ -440,7 +440,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   const resolvedOneTimeMultiplier = useResolvedMultiplier("one-time-packages", "display");
   const resolvedMembershipMultiplier = useResolvedMultiplier("membership-packages", "display");
-  const resolvedMiniMultiplier = useResolvedMultiplier("mini-packages", "display");
 
   const promoEnhancedPlan = React.useMemo(() => {
     if (!activePlan || activePlan.id === "placeholder") return activePlan;
@@ -546,12 +545,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       }
     }
 
-    if (activePlan.id.startsWith("mini-pack-") && resolvedMiniMultiplier !== null && resolvedMiniMultiplier > 1) {
-      return applyMultiplier(resolvedMiniMultiplier);
-    }
-
     return activePlan;
-  }, [activePlan, resolvedOneTimeMultiplier, resolvedMembershipMultiplier, resolvedMiniMultiplier, isMemberForPromo]);
+  }, [activePlan, resolvedOneTimeMultiplier, resolvedMembershipMultiplier, isMemberForPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
   const { gatesClosed, openGateClosedModal } = useMajorDrawPurchaseGate();
   const { trackInitiateCheckout } = usePixelTracking();
@@ -1967,13 +1962,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   }, [pendingAutoApplyCode, couponCode, couponApplied, isValidatingReferral, handleCouponApply]);
 
   const handlePackageChange = () => {
-    const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
-
-    if (isMiniDrawPackage) {
-      setIsPackageSelectionOpen(true);
-    } else {
-      setIsPackageSelectionOpen(true);
-    }
+    setIsPackageSelectionOpen(true);
   };
 
   const handlePackageSelect = (newPlan: LocalMembershipPlan) => {
@@ -2423,31 +2412,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     let contextToPass: OriginalPurchaseContext | null = null;
 
     if (paymentIntentId && processingPackageName && processingPackageType && processingPackageType !== "upsell") {
-      const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
-      const packageId = isMiniDrawPackage
-        ? activePlan.id
-        : lastChargedStaticPackageIdRef.current ??
-          getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
-          "";
+      const packageId =
+        lastChargedStaticPackageIdRef.current ??
+        getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+        "";
 
       const packageTypeForUpsell = processingPackageType;
 
-      let miniDrawId: string | undefined;
-      let miniDrawName: string | undefined;
-      if (processingPackageType === "mini-draw" && paymentIntentId) {
-        try {
-          const response = await fetch(`/api/payment-intent/${paymentIntentId}/metadata`);
-          if (response.ok) {
-            const metadata = await response.json();
-            if (metadata.miniDrawId) {
-              miniDrawId = metadata.miniDrawId;
-              miniDrawName = metadata.miniDrawName;
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
+      // Retained as undefined: the upsell context type still carries these fields, but nothing
+      // can populate them from this modal — mini packs are not sellable here.
+      const miniDrawId: string | undefined = undefined;
+      const miniDrawName: string | undefined = undefined;
 
       const baseEntries = getPackageBaseEntries({
         packageId: packageId || "",
@@ -2463,13 +2438,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             : undefined;
 
       let appliedPromoForContext: number | undefined;
-      if (isMiniDrawPackage || processingPackageType === "mini-draw") {
-        const applied =
-          multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
-            ? multiplierValue
-            : resolvedMiniMultiplier ?? 1;
-        appliedPromoForContext = applied > 1 ? applied : undefined;
-      } else if (packageTypeForUpsell === "membership") {
+      if (packageTypeForUpsell === "membership") {
         const applied =
           multiplierValue && multiplierValue > 0 && Number.isFinite(multiplierValue)
             ? multiplierValue
@@ -2509,12 +2478,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       const finalContextToPass = contextToPass;
 
       setTimeout(() => {
-        const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
-        const packageId = isMiniDrawPackage
-          ? activePlan.id
-          : lastChargedStaticPackageIdRef.current ??
-            getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
-            "";
+        const packageId =
+          lastChargedStaticPackageIdRef.current ??
+          getPackageId(activePlan, [...subscriptionPackages, ...oneTimePackages]) ??
+          "";
 
         const triggerType = activePlan.period === "one-time" ? "one-time-purchase" : "membership-purchase";
         const packageType = activePlan.period === "mo" ? "membership" : "one-time";
@@ -2606,11 +2573,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             contentType: "product",
             contentIds: trackingContentId ? [trackingContentId] : undefined,
             numItems: 1,
-            packageType: activePlan.id.startsWith("mini-pack-")
-              ? "mini-draw"
-              : activePlan.period === "mo"
-                ? "membership"
-                : "one-time",
+            packageType: activePlan.period === "mo" ? "membership" : "one-time",
           },
           eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
         }),
@@ -3075,11 +3038,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         }
       }
 
-      const isMiniDrawPackage = activePlan.id.startsWith("mini-pack-");
-
-      if (isMiniDrawPackage) {
-        packageId = activePlan.id;
-      } else {
+      {
         const allPackages = [...subscriptionPackages, ...oneTimePackages];
         packageId = getPackageId(activePlan, allPackages);
 
@@ -3551,102 +3510,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
       const oneTimeCheckoutIdempotencyKey = crypto.randomUUID();
 
-      if (isMiniDrawPackage) {
-        const miniDrawResult = await purchaseMembership.mutateAsync({
-          packageId: packageId,
-          userId: userData?._id || "",
-          paymentMethodId,
-          idempotencyKey: oneTimeCheckoutIdempotencyKey,
-          referralCode: appliedCouponPayload.referralCode,
-          affiliateCode: affiliateCode || undefined,
-          promoLinkCode: appliedCouponPayload.promoLinkCode,
-          campaignCode: appliedCouponPayload.campaignCode,
-        });
-
-        if (miniDrawResult) {
-          let paymentIntentId: string | null = null;
-
-          if (
-            "paymentIntent" in miniDrawResult &&
-            miniDrawResult.paymentIntent &&
-            typeof miniDrawResult.paymentIntent === "object" &&
-            "id" in miniDrawResult.paymentIntent
-          ) {
-            paymentIntentId = (miniDrawResult.paymentIntent as { id: string }).id || null;
-            // (removed a `data.paymentIntent` fallback here: the purchase routes return
-            // `paymentIntent` at the TOP level, so that branch could never match at runtime —
-            // the response type wrongly claimed otherwise, which is what hid the 3DS hole.)
-          } else if ("paymentIntentId" in miniDrawResult && miniDrawResult.paymentIntentId) {
-            paymentIntentId = miniDrawResult.paymentIntentId as string;
-          }
-
-          if (paymentIntentId) {
-            markPurchaseCompleted();
-            hideLoading();
-
-            setPaymentIntentId(paymentIntentId);
-            setProcessingPackageName(getReceiptLabelByPackageId(activePlan.id, { membership: getPackageById, mini: getMiniDrawPackageById }));
-            setProcessingPackageType("mini-draw");
-            setShowPaymentProcessing(true);
-          } else {
-            const triggerType = "one-time-purchase";
-
-            markPurchaseCompleted();
-            hideLoading();
-
-            const benefits = [];
-
-            benefits.push({
-              text: `${activePlan.name} activated`,
-              icon: "gift" as const,
-            });
-
-            const entriesCount = activePlan.metadata?.entriesCount || 0;
-            if (entriesCount > 0) {
-              benefits.push({
-                text: `${entriesCount} free entries added to your account`,
-                icon: "star" as const,
-              });
-            }
-
-            if (rewardsEnabled()) {
-              const rewardPoints = Math.floor(activePlan.price);
-              if (rewardPoints > 0) {
-                benefits.push({
-                  text: `${rewardPoints} reward points earned`,
-                  icon: "gift" as const,
-                });
-              }
-            }
-
-            appendCodeBenefits(benefits);
-            showSuccess("Successful!", purchaseSuccessSubtitle, benefits);
-
-            setTimeout(() => {
-              if (upsellTriggered) {
-                return;
-              }
-
-              setUpsellTriggered(true);
-
-              triggerUpsellModal(
-                triggerType,
-                activePlan.name,
-                activePlan.price,
-                packageId || undefined,
-                "one-time",
-                null
-              );
-            }, 2000);
-
-            onClose();
-          }
-        } else {
-          throw new Error("Failed to complete mini draw purchase. Please try again.");
-        }
-
-        return;
-      }
 
       if (isAuthenticated) {
         if (activePlan.period === "mo") {
@@ -4673,15 +4536,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         console.log("🔄 Invalidated payment methods cache before showing upsell modal");
       }
       if (packageId && packageType) {
-        const isMiniDrawPackage = packageId.startsWith("mini-pack-");
-
         const isAdditionalPackage = packageId.startsWith("additional-");
 
         if (isAdditionalPackage && !hasAdditionalPackageAccess(userData, userMajorDrawStats)) {
           return;
         }
 
-        const userType = isMiniDrawPackage ? "mini-draw-buyer" : isAuthenticated ? "returning-user" : "new-user";
+        const userType = isAuthenticated ? "returning-user" : "new-user";
 
         const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
 

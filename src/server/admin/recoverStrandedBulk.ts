@@ -6,6 +6,7 @@ import InvoiceChargeLog from "@/models/InvoiceChargeLog";
 import ChargeJobLock from "@/models/ChargeJobLock";
 import ChargeJobRun from "@/models/ChargeJobRun";
 import { aggregateRunTotals, type ChargeLogRowForAggregation } from "./charge-past-due-totals";
+import { emitChargeRunAlerts } from "./chargePastDueJob";
 import { getPackageById } from "@/data/membershipPackages";
 import { getSubscriptionPeriodEnd } from "@/utils/payment/stripe/subscription-period";
 import {
@@ -317,9 +318,14 @@ export async function runStrandedRecovery(
     const aggregationRows: ChargeLogRowForAggregation[] = rows.map((r) => ({ status: r.status, amount: r.amount ?? 0, skipReason: r.skipReason }));
     const finalTotals = aggregateRunTotals(aggregationRows, worklist.length);
     await ChargeJobRun.updateOne({ _id: runId }, { $set: { finishedAt: new Date(), status: "completed", totals: finalTotals } });
+    // Same emitter as the charge job — a recover run that collects nothing, or finishes
+    // having attempted nobody, is exactly as worth reporting.
+    emitChargeRunAlerts({ runId: String(runId), status: "completed", totals: finalTotals });
   } catch (err) {
     if (chargeRunId) {
-      await ChargeJobRun.updateOne({ _id: chargeRunId }, { $set: { finishedAt: new Date(), status: "failed", error: err instanceof Error ? err.message : String(err) } });
+      const error = err instanceof Error ? err.message : String(err);
+      await ChargeJobRun.updateOne({ _id: chargeRunId }, { $set: { finishedAt: new Date(), status: "failed", error } });
+      emitChargeRunAlerts({ runId: String(chargeRunId), status: "failed", error, totals: null });
     }
     throw err;
   } finally {

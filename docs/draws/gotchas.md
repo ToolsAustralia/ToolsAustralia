@@ -287,3 +287,33 @@ moves from "on a photo" to "on white":
 
 **Lesson: a fidelity spec written against placeholder imagery is a spec about the placeholder.**
 Check any `cover`/scrim instruction against the real asset class before shipping it.
+
+## A renewal can be charged and grant NOTHING — and no reconciler can see it (2026-08-23)
+
+Distinct from the `addToMajorDraw` swallow above, and **not** healed by the same tools.
+
+At 00:00 AEST on 24 Aug (14:00Z 23 Aug), ~914 anchor-24 memberships renewed inside one minute. Stripe rate-limited the fan-out, and **11 members were charged $300.00 in total and received no entries at all**.
+
+**Mechanism.** `handleInvoicePaymentSucceeded` ([`stripe-webhook-handlers/index.ts`](../../src/services/stripe-webhook-handlers/index.ts)) wraps its whole body in one `try`. The outer catch swallows the Stripe error and the handler **returns normally**, so the dispatcher still reaches `shouldMarkAsProcessed = true`, `processQueuedEvent` acks `ProcessedStripeEvent` and calls `markSucceeded`. The card was charged, `MembershipRenewalCycle` says `succeeded` — and `processPaymentBenefits` never ran.
+
+**Why every existing repair tool is blind to it.** They all start FROM a `PaymentEvent`:
+- `reconcileActiveMajorDrawEntries` queries `PaymentEvent{eventType:"BenefitsGranted"}` and heals rows whose `data.grants.drawGrants` is empty.
+- `scripts/fix-major-draw-renewal-entries.ts` and `scripts/verify-major-draw-entries.ts` share that anchor by design.
+
+This failure produces **no `PaymentEvent` at all**, so it is not a candidate and is not even counted. Replaying the Stripe webhook does not work either — `ProcessedStripeEvent.eventId` is unique and was already written. That ack *is* the bug.
+
+**The detection that does work** is a left-join from the money side, not the ledger side:
+
+```
+MembershipRenewalCycle { createdAt >= <window>, status: "succeeded", billingReason: "subscription_cycle" }
+  LEFT JOIN PaymentEvent on _id === `BenefitsGranted-invoice_${stripeInvoiceId}`
+  WHERE the PaymentEvent is absent
+```
+
+`scripts/backfill-missing-renewal-grants.ts` implements it (`npm run backfill:missing-renewal-grants:prod:dry`, dry-run by default). **Rule of thumb: when auditing for lost grants, anchor on the charge record, never on the ledger the bug prevented from existing.**
+
+**The backfill must pass the ORIGINAL charge timestamp.** `addToMajorDraw` routes renewals through `getTargetMajorDraw(paymentMetadata)` ([`payment-processing.ts`](../../src/utils/payment/payment-processing.ts)), which compares `paymentMetadata.created` against the current draw's `freezeEntriesAt` via `wasPaymentBeforeFreeze` — and reads it as **milliseconds**, not Stripe's seconds. Granting with `new Date()` would route a re-credited August renewal into the September draw and silently defeat the repair. The script passes `succeededAt ?? createdAt` in ms.
+
+**…but the charge-side anchor has its own blind spot, so the script reads Stripe too.** `MembershipRenewalCycle` is written by the *same* handler that failed (`index.ts:3614`), and only **after** its first Stripe call (`index.ts:3474`) — a 429 on that call leaves no cycle row either. `upsertRenewalCycleFromPaidInvoice` also returns early unless `billing_reason === "subscription_cycle"` (`membershipAnalyticsPersistence.ts:43`), so a lost grant on a `subscription_create`/`subscription_update` invoice in the same burst is equally invisible. A second pass therefore lists **paid Stripe invoices** in the window and checks each against `PaymentEvent` — the only anchor that cannot lie by omission. It is report-only: non-cycle invoices have different entry maths (promo multiplier, resubscribe) and are never auto-granted.
+
+**Generalised rule:** *the record written by the failing code path can never be your only evidence that the path ran.* Each anchor rules out a different failure — the ledger cannot see a handler that died before writing it, and Mongo cannot see a handler that died before writing anything. Agreement between the money side and the ledger side is what turns a count into a fact.

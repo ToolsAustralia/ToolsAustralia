@@ -76,6 +76,18 @@ export interface MembershipSnapshotHealth {
  * Daily-snapshot freshness check for the per-package membership snapshot.
  * Looks back the last 7 AEST days (excluding today) and confirms every
  * subscription package has a row on every checked day.
+ *
+ * ⚠️ EXPECT A DAILY "YESTERDAY MISSING" WINDOW — this is normal, not a fault (2026-08-24).
+ * "Yesterday" enters `checked` the instant Sydney rolls past midnight (14:00 UTC AEST / 13:00
+ * UTC AEDT), but `membership-daily-snapshot`'s first fire for that day doesn't happen until
+ * `30 17 * * *` UTC (see docs/infrastructure/gotchas.md for why it isn't earlier — the cron
+ * moved off the renewal-webhook-burst hour and then off a Sydney-ad-sync-slot collision). So
+ * for roughly 3.5–4.5 hours every morning, `ok` is correctly `false` for yesterday, and BOTH
+ * `/api/admin/health/membership-snapshot` and its Norm mirror report it — a caller checking
+ * during that window should not treat this as an incident. Existence-only note: this function
+ * only checks that a row EXISTS for each expected `(date, packageId)`; it does NOT validate the
+ * row's counts, so a degenerate all-zero row (see `upsertMembershipSnapshotRow`'s escape hatch
+ * in the cron route) reads as healthy. Nothing else repairs a bad row's counts.
  */
 export async function getMembershipSnapshotHealth(): Promise<MembershipSnapshotHealth> {
   const now = new Date();

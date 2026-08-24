@@ -37,7 +37,7 @@ async function run() {
     claimedAt: null, lastError: null, enqueuedAt: new Date(), processedAt: null,
   });
   const rA = await processQueuedEvent(idA, {
-    dispatch: async () => ({ shouldMarkAsProcessed: false }),
+    dispatch: async () => ({ shouldMarkAsProcessed: false, handlerFailed: false }),
   });
   assert.equal(rA.processed, true, "a: processed");
   const rowA = await StripeWebhookQueue.findOne({ eventId: idA }).lean<StripeWebhookQueueDoc | null>();
@@ -45,7 +45,7 @@ async function run() {
 
   // (b) not claimable (no queued row) -> skipped
   const rB = await processQueuedEvent(`${prefix}_missing`, {
-    dispatch: async () => ({ shouldMarkAsProcessed: false }),
+    dispatch: async () => ({ shouldMarkAsProcessed: false, handlerFailed: false }),
   });
   assert.equal(rB.processed, false, "b: not processed");
   assert.equal(rB.skipped, "not_claimable", "b: skipped reason");
@@ -76,7 +76,7 @@ async function run() {
   await ProcessedStripeEvent.create({ eventId: idD });
   let dispatched = false;
   const rD = await processQueuedEvent(idD, {
-    dispatch: async () => { dispatched = true; return { shouldMarkAsProcessed: false }; },
+    dispatch: async () => { dispatched = true; return { shouldMarkAsProcessed: false, handlerFailed: false }; },
   });
   assert.equal(dispatched, false, "d: handler NOT dispatched");
   assert.equal(rD.skipped, "already_processed", "d: skipped reason");

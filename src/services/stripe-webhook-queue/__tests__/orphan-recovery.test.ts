@@ -15,6 +15,16 @@ import { computeNextAttempt, MAX_ATTEMPTS } from "@/services/stripe-webhook-queu
  * (if retry budget remains) or to `dead` (if attempts are at capacity).
  * This test exercises the recovery logic by inlining the same query+update
  * the sweeper route runs, including the conditional branch on computeNextAttempt.
+ *
+ * ⚠ THE INLINED COPY MUST TRACK THE ROUTE. Because `recoverOrphans` below is a
+ * COPY of the logic in `/api/cron/process-stripe-webhook-queue/route.ts` rather
+ * than an import of it, this suite goes green against its own copy and can pass
+ * while the real sweeper is broken. It did exactly that on 2026-08-24: the route
+ * omitted `processedAt` on the dead transition, so `dead_processedAt_ttl` (a
+ * partial TTL index on `processedAt`, and MongoDB TTL skips non-date values)
+ * never reaped orphan-swept rows — they were immortal, and the un-windowed
+ * dead-row alert in `/api/cron/reconcile-renewal-grants` would have fired on them
+ * daily forever. When you change the sweeper, change this copy in the same edit.
  */
 
 const ORPHAN_THRESHOLD_MS = 5 * 60 * 1000;
@@ -37,6 +47,8 @@ async function recoverOrphans(now: Date) {
             attempts: nextAttempts,
             lastError: "orphan: worker did not complete within threshold",
             claimedAt: null,
+            // TTL anchor — see the header warning. Must match the route.
+            processedAt: new Date(),
           },
         }
       );
@@ -115,6 +127,12 @@ async function testOrphanAtCapTransitionsToDead() {
   assert.equal(recovered!.status, "dead", "should transition to dead");
   assert.equal(recovered!.attempts, MAX_ATTEMPTS, `should set attempts to MAX_ATTEMPTS (${MAX_ATTEMPTS})`);
   assert.equal(recovered!.claimedAt, null, "should clear claimedAt");
+  // Without this the row never expires: `dead_processedAt_ttl` is a partial index
+  // on processedAt and MongoDB TTL ignores null/missing values.
+  assert.ok(
+    recovered!.processedAt instanceof Date,
+    "should set processedAt so the 30-day dead-row TTL can reap it"
+  );
 
   console.log("✓ testOrphanAtCapTransitionsToDead passed");
 }

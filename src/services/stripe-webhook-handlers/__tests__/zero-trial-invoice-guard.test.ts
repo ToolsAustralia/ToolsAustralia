@@ -20,7 +20,7 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
  * its own distinct id), so a regression that removed or bypassed the guard would
  * silently reintroduce the bug with no second net. See docs/PAST_DUE_REANCHOR.md.
  *
- * Probe: the guard returns at index.ts:3276 — BEFORE `connectDB()` and the
+ * Probe: the guard returns at index.ts:3601 — BEFORE `connectDB()` and the
  * `User.findOne({ stripeCustomerId })` lookup. So "was User.findOne reached?" is a
  * clean, fixture-free signal for whether execution passed the guard. We mock
  * `stripe.invoices.retrieve` (the handler re-retrieves the invoice fresh) and spy
@@ -28,20 +28,33 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
  *
  * If this test fails, the handler is granting (or about to grant) for the $0
  * trial invoice — a P0 double-grant regression.
+ *
+ * Case D covers the trial-aware tier upgrade (`upgrade-subscription-payment`), which
+ * re-applies the anchor-24 `trial_end` AFTER charging. That one upgrade emits TWO
+ * `subscription_update` invoices with DIFFERENT ids — the real paid upgrade charge and
+ * Stripe's spawned $0 "Trial period" bookkeeping invoice. Cases A/C pin the two shapes
+ * in isolation on one shared id; Case D pins the pair as it actually arrives, which is
+ * what proves the classifier — not per-invoice-id idempotency — is what separates them.
+ * See docs/PAST_DUE_REANCHOR.md and docs/subscription/.
  */
 
 interface InvoiceShape {
   billing_reason: Stripe.Invoice["billing_reason"];
   total: number;
   amount_paid: number;
+  /** Defaults to TEST_INVOICE_ID. Case D needs two DISTINCT ids in one scenario. */
+  id?: string;
 }
 
 const TEST_INVOICE_ID = "in_zero_trial_guard_test_001";
 const TEST_CUSTOMER_ID = "cus_zero_trial_guard_test_001";
+/** The two invoices one trial-aware upgrade emits — distinct ids, same billing_reason. */
+const UPGRADE_PAID_INVOICE_ID = "in_zero_trial_guard_test_upgrade_paid";
+const UPGRADE_TRIAL_INVOICE_ID = "in_zero_trial_guard_test_upgrade_trial";
 
 function buildInvoice(shape: InvoiceShape): Stripe.Invoice {
   return {
-    id: TEST_INVOICE_ID,
+    id: shape.id ?? TEST_INVOICE_ID,
     object: "invoice",
     status: "paid",
     billing_reason: shape.billing_reason,
@@ -54,11 +67,11 @@ function buildInvoice(shape: InvoiceShape): Stripe.Invoice {
   } as unknown as Stripe.Invoice;
 }
 
-function buildEvent(): Stripe.Event {
+function buildEvent(invoice: Stripe.Invoice): Stripe.Event {
   return {
-    id: "evt_zero_trial_guard_test_001",
+    id: `evt_zero_trial_guard_test_${invoice.id}`,
     type: "invoice.payment_succeeded",
-    data: { object: buildInvoice({ billing_reason: "subscription_cycle", total: 5000, amount_paid: 5000 }) },
+    data: { object: invoice },
     created: 1715476800,
     livemode: false,
     pending_webhooks: 0,
@@ -103,7 +116,7 @@ async function run() {
     currentInvoice = buildInvoice(shape);
     findOneCalls = 0;
     try {
-      await dispatchStripeEvent(buildEvent());
+      await dispatchStripeEvent(buildEvent(currentInvoice));
     } catch {
       // The handler may throw downstream (we return null user); irrelevant — the
       // findOneCalls counter already captured whether the guard was passed.
@@ -144,6 +157,44 @@ async function run() {
     // ALL subscription_update invoices, which would silently drop upgrade grants.
     const cCalls = await dispatchWith({ billing_reason: "subscription_update", total: 2000, amount_paid: 2000 });
     expect("paid subscription_update upgrade is NOT skipped (User.findOne reached)", cCalls >= 1, true);
+
+    // ── Case D — the trial-aware tier upgrade (`upgrade-subscription-payment`).
+    // An anchor-24 member sits on a pending `trial_end`, so the pay-first upgrade must
+    // end the trial to charge, then RE-APPLY the anchor-24 `trial_end` for the next
+    // cycle. That re-apply makes Stripe spawn its $0 "Trial period" invoice — a SECOND
+    // `subscription_update` invoice, with its own id, moments after the real paid one.
+    //
+    // Both invoices carry billing_reason "subscription_update", so nothing about the id,
+    // the event, or the ordering tells them apart — only `isZeroAmountTrialUpdateInvoice`
+    // does. Dispatching them as a PAIR (distinct ids, real order: charge then trial) is
+    // the assertion A/C cannot make: it proves per-invoice-id idempotency is NOT what
+    // stops the double-grant, because the $0 invoice's id has never been seen before.
+
+    // D1 — the real paid upgrade charge MUST grant.
+    const dPaidCalls = await dispatchWith({
+      id: UPGRADE_PAID_INVOICE_ID,
+      billing_reason: "subscription_update",
+      total: 2000,
+      amount_paid: 2000,
+    });
+    expect("upgrade: paid charge invoice is NOT skipped (User.findOne reached)", dPaidCalls >= 1, true);
+
+    // D2 — the $0 trial invoice the re-apply spawns MUST be skipped, even though it is a
+    // brand-new invoice id arriving right after a real payment on the same subscription.
+    const dTrialCalls = await dispatchWith({
+      id: UPGRADE_TRIAL_INVOICE_ID,
+      billing_reason: "subscription_update",
+      total: 0,
+      amount_paid: 0,
+    });
+    expect("upgrade: spawned $0 trial invoice is skipped (User.findOne NOT reached)", dTrialCalls, 0);
+
+    // D3 — and it left no grant behind. This is the actual double-grant assertion: the
+    // member is charged once for the upgrade and gets exactly one batch of free entries.
+    const dTrialGrantRows = await PaymentEvent.countDocuments({
+      _id: `BenefitsGranted-invoice_${UPGRADE_TRIAL_INVOICE_ID}`,
+    });
+    expect("upgrade: spawned $0 trial invoice creates no BenefitsGranted row", dTrialGrantRows, 0);
   } finally {
     // Restore the singletons and clean up.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -151,7 +202,15 @@ async function run() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (User as any).findOne = originalFindOne;
     try {
-      await PaymentEvent.deleteMany({ _id: `BenefitsGranted-invoice_${TEST_INVOICE_ID}` });
+      await PaymentEvent.deleteMany({
+        _id: {
+          $in: [
+            `BenefitsGranted-invoice_${TEST_INVOICE_ID}`,
+            `BenefitsGranted-invoice_${UPGRADE_PAID_INVOICE_ID}`,
+            `BenefitsGranted-invoice_${UPGRADE_TRIAL_INVOICE_ID}`,
+          ],
+        },
+      });
     } catch {
       // best-effort cleanup
     }

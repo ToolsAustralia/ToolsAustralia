@@ -63,7 +63,7 @@ export async function resumeAfterSuccessfulRenewalPayment(subscriptionId: string
 Pause callers: `invoice.payment_failed` webhook handler.
 
 Resume callers (must run *before* benefit application):
-- `invoice.payment_succeeded` webhook (when `shouldClearPauseCollectionAfterPaidInvoice()` returns true)
+- `invoice.payment_succeeded` webhook (when `decideClearPause()` returns true — i.e. `pause_collection` is actually set and it is not a `"retention"` pause; see [rules.md R9](./rules.md#r9-after-successful-renewal-payment-clear-pause_collection-before-applying-benefits))
 - `src/server/admin/chargePastDueShared.ts` after successful `invoices.pay`
 - `/api/stripe/renew-subscription` after user retry success
 

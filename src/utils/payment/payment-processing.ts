@@ -2142,6 +2142,65 @@ async function handleMiniDrawPackage(
  * @param packageData - Package information
  * @param paymentMetadata - Optional payment metadata with created timestamp
  */
+/**
+ * Report a major-draw credit failure as a durable `ErrorReport`.
+ *
+ * ⚠️ THREE things here are load-bearing. Get any of them wrong and this writes nothing, or writes
+ * a row too thin to act on — which is worse than nothing, because the safety net LOOKS armed.
+ *
+ * 1. **The third argument.** `ErrorLoggingService.logError(err, ctx)` with two arguments takes the
+ *    CLIENT path (`autoLogError`), which `fetch`es the RELATIVE url `/api/error-reports`. In Node
+ *    that throws "Failed to parse URL" and the rejection is swallowed by that util's own
+ *    `.catch(console.warn)`, which `removeConsole` strips in production. Both call sites here did
+ *    exactly that, so the reporter added after the May 2026 entry-loss incident (60 members
+ *    under-credited 25,235 entries) has never written a single row.
+ *
+ * 2. **`logPaymentError`, not `logError`.** `logError` sniffs a category from strings; with
+ *    `endpoint: "addToMajorDraw"` — which contains neither "/stripe/" nor "/payment" — it resolves
+ *    to `api` and routes to `logAPIError`, which forwards ONLY userId and userEmail. Every money
+ *    field would be dropped. Naming the payment entry point directly removes the guesswork.
+ *
+ * 3. **`detail` goes in the MESSAGE.** `drawId`, `sourceType` and `entries` are not fields any
+ *    forwarder carries, and `ErrorReport` has no freeform bag — so they only survive inside the
+ *    error text. Do not "tidy" them back into the context object; they vanish silently there.
+ *
+ * Fire-and-forget and it never throws: `autoLogErrorServer` wraps its whole body, and this adds a
+ * catch of its own so a logging failure can never abort a grant mid-flight.
+ *
+ * Deduplicated by (message + errorName + userId + category + severity) inside a 30-minute payment
+ * window, so a renewal burst collapses to one row per affected user rather than one per attempt.
+ */
+async function reportDrawCreditFailure(
+  error: unknown,
+  ctx: {
+    userId?: string;
+    userEmail?: string;
+    paymentIntentId?: string;
+    packageId?: string;
+    /** Fields no forwarder carries — folded into the message so they survive. */
+    detail: string;
+  }
+): Promise<void> {
+  try {
+    const { ErrorLoggingService } = await import("@/services/error-reporting/ErrorLoggingService");
+    const base = error instanceof Error ? error.message : String(error);
+    await ErrorLoggingService.logPaymentError(
+      new Error(`Major-draw entry credit failed: ${base} [${ctx.detail}]`),
+      {
+        endpoint: "/payment/addToMajorDraw",
+        component: "payment-processing",
+        userId: ctx.userId,
+        userEmail: ctx.userEmail,
+        paymentIntentId: ctx.paymentIntentId,
+        packageId: ctx.packageId,
+      },
+      { isServerSide: true, request: { headers: new Headers() } }
+    );
+  } catch {
+    // Swallow logging errors only — never let reporting break payment processing.
+  }
+}
+
 async function addToMajorDraw(
   user: UserDocument,
   packageData: { entries: number; packageType: string; packageId?: string; packageName?: string },
@@ -2305,17 +2364,12 @@ async function addToMajorDraw(
         // VISIBLE (was silently swallowed). drawGrants stays empty so the
         // reconciliation cron / `fix:major-draw-renewal-entries` script detects
         // and heals this idempotently. Fire-and-forget; never throws.
-        const { ErrorLoggingService } = await import("@/services/error-reporting/ErrorLoggingService");
-        await ErrorLoggingService.logError(creditErr, {
-          endpoint: "addToMajorDraw",
+        await reportDrawCreditFailure(creditErr, {
           userId: user._id.toString(),
           userEmail: user.email,
           paymentIntentId: benefitsEventId,
           packageId: packageData.packageId,
-          drawId: String(majorDraw._id),
-          sourceType,
-          entries: entriesAmount,
-          majorDrawRoutingMode,
+          detail: `drawId=${String(majorDraw._id)} sourceType=${sourceType} entries=${entriesAmount} routing=${majorDrawRoutingMode}`,
         });
         return;
       }
@@ -2358,21 +2412,13 @@ async function addToMajorDraw(
     // subscription state must persist, and the draw is reconcilable from the
     // empty drawGrants), but the failure is now reported so it can be seen and
     // healed. Never let error logging itself break payment processing.
-    try {
-      const { ErrorLoggingService } = await import("@/services/error-reporting/ErrorLoggingService");
-      await ErrorLoggingService.logError(error, {
-        endpoint: "addToMajorDraw",
-        userId: user._id?.toString(),
-        userEmail: user.email,
-        paymentIntentId: benefitsEventId,
-        packageId: packageData.packageId,
-        packageType: packageData.packageType,
-        entries: packageData.entries,
-        majorDrawRoutingMode,
-      });
-    } catch {
-      // swallow logging errors only
-    }
+    await reportDrawCreditFailure(error, {
+      userId: user._id?.toString(),
+      userEmail: user.email,
+      paymentIntentId: benefitsEventId,
+      packageId: packageData.packageId,
+      detail: `packageType=${packageData.packageType} entries=${packageData.entries} routing=${majorDrawRoutingMode}`,
+    });
   }
 }
 

@@ -592,26 +592,42 @@ shouldClearPauseCollectionAfterPaidInvoice({ billingReason, previousSubscription
 webhook file, so its import was removed; the legacy sub-decision is still
 invoked, but now indirectly via `decideClearPause`.
 
-**Behavior:** recovery pauses are cleared exactly as before (no change);
-retention pauses (`pauseReason === "retention"`) are **never** cleared by a paid
-invoice, because `decideClearPause` short-circuits to `false` before any legacy
-condition runs.
+**Behavior:** a recovery pause that is actually set is cleared exactly as
+before; retention pauses (`pauseReason === "retention"`) are **never** cleared by
+a paid invoice, because `decideClearPause` short-circuits to `false` first.
 
 ### `decideClearPause` (the policy owner)
 
-`src/services/subscription/pauseCollectionPolicy.ts` now exports
-`decideClearPause(ClearPauseInput): boolean`, which owns the **whole** decision:
+`src/services/subscription/pauseCollectionPolicy.ts` exports
+`decideClearPause(ClearPauseInput): boolean`, which owns the **whole** decision.
+As of **2026-08-24** that decision is exactly:
 
-- The legacy renewal/past-due sub-decision is **delegated** to the unchanged
-  `shouldClearPauseCollectionAfterPaidInvoice` (not reimplemented).
-- The moved `subscription.pause_collection != null` clause becomes the
-  `pauseCollectionPresent: boolean` input.
-- `recordMembershipRecurringAffiliate` is an optional input that forces a clear.
-- **New retention exclusion:** if `pauseReason === "retention"` the function
-  returns `false` first, *before* any legacy condition is evaluated — a
-  retention pause is never cleared by the recovery/paid-invoice path, even when
-  every legacy condition (e.g. `past_due` recovery on a renewal cycle) would
-  otherwise clear it.
+```
+pauseCollectionPresent && pauseReason !== "retention"
+```
+
+- **Precondition — a pause must actually exist.** If `pauseCollectionPresent` is
+  false the function returns `false` and no Stripe write is issued. Previously a
+  plain `subscription_cycle` renewal satisfied the disjunction on its own, so we
+  wrote `pause_collection: ""` for **every** renewing member — a no-op write, but
+  one `/v1/subscriptions` request per renewal against Stripe's 25 req/sec
+  per-endpoint cap, the bucket that broke during the 2026-08-23 burst.
+- **Retention exclusion:** `pauseReason === "retention"` returns `false` — a
+  retention pause is never cleared by the recovery/paid-invoice path, even for a
+  `past_due` recovery on a renewal cycle.
+- The legacy disjunction —
+  `shouldClearPauseCollectionAfterPaidInvoice(...) || recordMembershipRecurringAffiliate || pause_collection != null`
+  — no longer runs. `billingReason`, `previousSubscriptionDbStatus` and
+  `recordMembershipRecurringAffiliate` remain on `ClearPauseInput` as a record of
+  which signal put a paid invoice on this path; **none of them can force a clear
+  any more**. `shouldClearPauseCollectionAfterPaidInvoice` is still exported and
+  unit-tested, but no production code calls it.
+- **`readPauseCollection` guards the input.** The webhook reads
+  `pause_collection` off the subscription **expanded inside `invoices.retrieve`**,
+  not off a fresh retrieve. An explicit `null` is an answer (not paused — skip the
+  write); an **absent** field is not, and the handler re-reads from Stripe before
+  deciding. That matters because for a paused member who has just paid, this
+  webhook is the only automatic clearer.
 
 `ClearPauseInput`:
 
@@ -633,9 +649,12 @@ interface ClearPauseInput {
   `{ billingReason: string | null | undefined; previousSubscriptionDbStatus: string | undefined }`.
   The webhook no longer imports it directly; it is now reached only via
   `decideClearPause`.
-- For non-retention inputs (`pauseReason` undefined or any value other than
-  `"retention"`), `decideClearPause` reproduces the legacy decision exactly:
-  recovery pauses behave precisely as before.
+- `decideClearPause` no longer reproduces the legacy decision for **unpaused**
+  subscriptions: where a legacy clause once forced a clear with nothing paused, it
+  now returns `false`. That removes only writes that were Stripe no-ops
+  (`resumeAfterSuccessfulRenewalPayment` is documented safe to call when not
+  paused). For a subscription that **is** non-retention paused, the outcome is
+  unchanged — it still clears, on the same path, before benefits.
 
 ### Domain
 

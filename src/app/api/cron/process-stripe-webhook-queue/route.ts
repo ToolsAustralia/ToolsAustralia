@@ -47,6 +47,13 @@ export async function GET(request: NextRequest) {
             attempts: nextAttempts,
             lastError: "orphan: worker did not complete within threshold",
             claimedAt: null,
+            // TTL anchor. `dead_processedAt_ttl` is a partial index on
+            // processedAt, and MongoDB TTL skips non-date values — so a dead row
+            // left with processedAt:null NEVER expires. markFailed's dead branch
+            // sets this; this branch used not to, which made orphan-swept rows
+            // immortal and (since /api/cron/reconcile-renewal-grants reports
+            // every dead row, un-windowed) a permanent daily alert.
+            processedAt: new Date(),
           },
         }
       );

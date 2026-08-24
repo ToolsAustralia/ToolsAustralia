@@ -12,7 +12,7 @@ In addition to clearing the pause, successful recovery also **reanchors future r
 
 Recovery paths covered in code:
 
-- `invoice.payment_succeeded` webhook (membership) — `resumeAfterSuccessfulRenewalPayment` runs **before** `processPaymentBenefits` when the invoice is already paid, so a slow or partially failing benefits path (or Stripe CLI / proxy **timeouts** while waiting for the HTTP response) does not leave `pause_collection` uncleared. Policy uses `shouldClearPauseCollectionAfterPaidInvoice`, recurring-affiliate eligibility, and **any subscription** that still has `pause_collection` set.
+- `invoice.payment_succeeded` webhook (membership) — `resumeAfterSuccessfulRenewalPayment` runs **before** `processPaymentBenefits` when the invoice is already paid, so a slow or partially failing benefits path (or Stripe CLI / proxy **timeouts** while waiting for the HTTP response) does not leave `pause_collection` uncleared. Policy is `decideClearPause` in [`pauseCollectionPolicy.ts`](../src/services/subscription/pauseCollectionPolicy.ts): clear **any subscription that still has `pause_collection` set**, unless it is a `"retention"` pause. Since 2026-08-24 the presence of a pause is a *precondition* rather than one disjunct among several — a renewal on an unpaused subscription no longer spends a Stripe write clearing nothing (that call ran on every renewal and contributed to the 23 Aug per-endpoint rate-limit breach).
 - Admin past-due charge — [`src/server/admin/chargePastDueShared.ts`](../src/server/admin/chargePastDueShared.ts) after a successful `invoices.pay`.
 - User retry — [`src/app/api/stripe/renew-subscription/route.ts`](../src/app/api/stripe/renew-subscription/route.ts) after a successful `invoices.pay`.
 
