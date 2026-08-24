@@ -64,6 +64,73 @@ Mongoose's `timestamps: true` bumps `updatedAt` on **both** the fresh insert and
 
 **Neither `updatedAt` nor `createdAt` is index-backed** (`membershiprenewalcycles` indexes `stripeInvoiceId`, `userId`, `stripeSubscriptionId`, `status`, `dueAt`, `{dueAt,billingReason,status}`, `{userId,dueAt}`). At current volume the daily scan is cheap; past a few hundred thousand rows add `{ status: 1, updatedAt: -1 }` rather than widening the window. A bulk backfill that touches old rows will drag them into the window — that surfaces *old real gaps*, never a false clean, so it is noise at worst.
 
+## One renewal cost 10 Stripe API calls — three were pure waste (2026-08-24)
+
+Every successful membership renewal fans out across three webhook events. Stripe's published caps
+([rate-limits](https://docs.stripe.com/rate-limits)) are **100 req/sec globally per account** (reads
+and writes share the bucket) and **25 req/sec for any single endpoint**. At the 18 renewals/sec
+measured during the 23 Aug burst, `/v1/subscriptions` alone ran at ~73/sec — **2.9× over its own
+cap**, versus 1.8× over the global one. *That* is the bucket that broke first, and the 429s it
+returned are what killed 11 renewals mid-handler.
+
+**Calls per successful renewal, by endpoint:**
+
+| Event | Call | Endpoint | Before | After |
+|---|---|---|---|---|
+| `invoice.created` | `subscriptions.retrieve` — read `metadata.packageName` | `/v1/subscriptions` | 1 | **0** |
+| `invoice.created` | `invoices.update` — stamp "<Package> Renewal" | `/v1/invoices` | 1 | 1 |
+| `invoice.payment_succeeded` | `invoices.retrieve` (expanded) | `/v1/invoices` | 1 | 1 |
+| `invoice.payment_succeeded` | `subscriptions.retrieve` — the sub the invoice already carries | `/v1/subscriptions` | 1 | **0** |
+| `invoice.payment_succeeded` | `paymentIntents.retrieve` | `/v1/payment_intents` | 1 | 1 |
+| `invoice.payment_succeeded` | `paymentIntents.update` — relabel | `/v1/payment_intents` | 1 | 1 |
+| `invoice.payment_succeeded` | `charges.update` — relabel | `/v1/charges` | 1 | 1 |
+| `invoice.payment_succeeded` | `subscriptions.update` — `pause_collection: ""` | `/v1/subscriptions` | 1 | **0** |
+| `invoice.payment_succeeded` | `subscriptions.retrieve` — `endDate` sync | `/v1/subscriptions` | 1 | 1 |
+| `payment_intent.succeeded` | `paymentIntents.retrieve` — result discarded | `/v1/payment_intents` | 1 | 1 |
+| **Total** | | | **10** | **7** |
+| **of which `/v1/subscriptions`** | | | **4** | **1** |
+
+**At 18 renewals/sec:**
+
+| Bucket | Before | After | Stripe cap | Verdict |
+|---|---|---|---|---|
+| All Stripe calls | ~182/sec | ~127/sec | 100/sec | **still over — needs the limiter** |
+| `/v1/subscriptions` | ~73/sec | ~18/sec | 25/sec | under |
+
+**Why each of the three was free to delete:**
+
+1. **`handleInvoiceCreated`'s retrieve bought one metadata field.** Stripe snapshots the
+   subscription's metadata onto the invoice at creation — `parent.subscription_details.metadata`
+   **and** every line item's `metadata`. Checked against 190 production `subscription_cycle`
+   `invoice.created` payloads (`stripewebhookqueue.payload`, the verbatim event): 190/190 are
+   `status: "draft"` and 190/190 carry `packageName` on **both** paths. `packageNameFromInvoicePayload`
+   reads it with no call. (Stripe's SDK types say the snapshot is taken at *finalization* and
+   `invoice.created` fires before that — the production data says otherwise, which is why this was
+   settled by measurement, not by reading the types.)
+2. **The "fewer round trips" shortcut never fired.** It tested the **pre-Basil top-level
+   `invoice.subscription`**, which stripe@18.5.0 does not declare and Basil invoices do not return —
+   so the `else` branch ran on *every* renewal, retrieving a subscription the handler had already
+   expanded. `resolveExpandedInvoiceSubscription` now reads
+   `parent.subscription_details.subscription` (the handler already passes that `expand`; verified on
+   live invoice `in_1U7b0KJ3N9Ka6RJMcLvhPOHe` — it comes back as the full object, `status`,
+   `metadata`, `pause_collection` and all). The retrieve stays as the fallback for the paths where
+   the id came from the user's pending/canonical subscription instead of from this invoice.
+3. **`pause_collection: ""` was written for members who were never paused.** `billing_reason:
+   "subscription_cycle"` satisfied the old `decideClearPause` disjunction on its own, so every
+   renewal spent a `/v1/subscriptions` **write** clearing a pause that did not exist. It now
+   requires `pause_collection != null`. Paused members are still resumed on the same code path,
+   before benefits (rule R3).
+
+**The general rule this leaves behind:** you were handed a payload — read it. A `retrieve` for an
+object the event already contains costs a full slot in a shared, low, per-endpoint bucket, and the
+cost only shows up on the one night of the month when 900 of them land in the same minute. When you
+add a Stripe call to a webhook handler, count what that handler already costs per event first.
+
+**Still open after this change:** the global bucket. 7 calls/renewal is ~127/sec at burst — over
+100/sec with no headroom — so the shared client-side token bucket in `src/lib/stripe.ts` is still
+required, and `maxNetworkRetries: 2` does **not** cover you (the SDK's retry logic has no 429
+branch: `node_modules/stripe/cjs/RequestSender.js`).
+
 ## Confirm-time card declines are THROWN by the SDK, not returned (2026-07-16)
 
 With `confirm: true`, `stripe.paymentIntents.create` — and likewise `stripe.invoices.pay` and `stripe.subscriptions.update(payment_behavior: "error_if_incomplete")` — **reject with a `StripeCardError`** on an issuer decline instead of resolving with a failed intent. A branch that inspects `paymentIntent.last_payment_error` after `create()` resolves (both one-time-purchase routes have one) **never sees these declines** — they land in the catch block. Previously the generic catch-alls turned them into HTTP 500 with a generic message; production bug: `decline_code: invalid_account` → 500 "Failed to create one-time purchase".
@@ -242,11 +309,22 @@ longer imported here directly — it is still invoked, but only via
 
 Behavioral impact:
 
-- **Recovery / regular renewal pauses: unchanged.** For any `pauseReason` that is
-  not `"retention"` (including undefined), `decideClearPause` reproduces the old
+- **A pause must actually exist (added 2026-08-24).** `decideClearPause` now
+  short-circuits to `false` when `pauseCollectionPresent` is false, so the decision
+  is exactly `pauseCollectionPresent && pauseReason !== "retention"`. Every disjunct
+  of the old
   `shouldClearPauseCollectionAfterPaidInvoice(...) || recordMembershipRecurringAffiliate || subscription.pause_collection != null`
-  result exactly. Past-due/unpaid recovery and `subscription_cycle`/
-  `_threshold`/`_update` renewals still clear the pause and resume collection.
+  chain was ORed with that same non-null clause, so the only outcome that changed is
+  the one where nothing was paused — and `pause_collection: ""` on an unpaused
+  subscription is a Stripe no-op. What it is **not** is free: it was one
+  `/v1/subscriptions` write per renewal on the endpoint that broke on 23 Aug. See
+  "One renewal cost 10 Stripe API calls" above.
+- **Recovery pauses: unchanged.** A past-due/unpaid recovery or a
+  `subscription_cycle`/`_threshold`/`_update` renewal on a subscription that **is**
+  paused still clears the pause and resumes collection, on the same code path, before
+  benefits. Recovery channels that lift the pause themselves before the webhook lands
+  (`chargePastDueShared`, `renew-subscription`) simply no longer trigger a second,
+  redundant clear.
 - **Retention pauses: never cleared by a paid invoice.** If
   `subscription.metadata.pauseReason === "retention"`, `decideClearPause`
   short-circuits to `false` before any legacy condition runs, so a retention

@@ -150,6 +150,81 @@ function resolveInvoiceSubscriptionId(invoice: Stripe.Invoice): string | undefin
 }
 
 /**
+ * The EXPANDED subscription object already carried by the invoice, when there is one.
+ *
+ * Walks the same `parent.subscription_details.subscription` slot as
+ * {@link resolveInvoiceSubscriptionId}, but returns the object instead of the id — so a caller
+ * that retrieved the invoice with `expand: ["parent.subscription_details.subscription"]` does
+ * NOT have to spend a second `/v1/subscriptions` call on the sub it was just handed.
+ *
+ * Returns `undefined` when the slot holds a bare id string (unexpanded), so the caller falls
+ * back to a real retrieve. Verified on live invoice `in_1U7b0KJ3N9Ka6RJMcLvhPOHe`: with that
+ * expand, the slot holds the full Subscription (status, metadata, pause_collection).
+ *
+ * The pre-Basil top-level `invoice.subscription` is checked second purely for older-API safety;
+ * stripe@18.5.0's `Invoice` interface does not declare it and Basil invoices do not return it.
+ */
+function resolveExpandedInvoiceSubscription(invoice: Stripe.Invoice): Stripe.Subscription | undefined {
+  const invoiceWithHints = invoice as Stripe.Invoice & {
+    subscription?: string | Stripe.Subscription | null;
+    parent?: unknown;
+  };
+
+  const parentSubscriptionDetails = objectValue(invoiceWithHints.parent, "subscription_details");
+  const candidates: unknown[] = [
+    objectValue(parentSubscriptionDetails, "subscription"),
+    invoiceWithHints.subscription,
+  ];
+
+  for (const candidate of candidates) {
+    // `status` separates a genuinely expanded Subscription from a `{id}`-shaped stub.
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      typeof (candidate as { id?: unknown }).id === "string" &&
+      (candidate as { id: string }).id.startsWith("sub_") &&
+      typeof (candidate as { status?: unknown }).status === "string"
+    ) {
+      return candidate as Stripe.Subscription;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * `packageName` for a renewal invoice, read from the invoice payload — no Stripe call.
+ *
+ * Stripe snapshots the subscription's metadata onto BOTH `parent.subscription_details.metadata`
+ * and each line item's `metadata` when it creates the cycle invoice. Verified against 190
+ * production `subscription_cycle` `invoice.created` payloads (`stripewebhookqueue.payload`,
+ * the verbatim Stripe event): 190/190 `status: "draft"`, and 190/190 carry `packageName` on
+ * both paths. So the DRAFT invoice already knows its package and the `subscriptions.retrieve`
+ * this replaces was buying nothing — at one `/v1/subscriptions` call per renewal, against
+ * Stripe's 25/sec per-endpoint cap (incident 2026-08-23).
+ */
+function packageNameFromInvoicePayload(invoice: Stripe.Invoice): string {
+  const parentSubscriptionDetails = objectValue(
+    (invoice as Stripe.Invoice & { parent?: unknown }).parent,
+    "subscription_details"
+  );
+  const fromSubscriptionDetails = objectValue(
+    objectValue(parentSubscriptionDetails, "metadata"),
+    "packageName"
+  );
+  if (typeof fromSubscriptionDetails === "string" && fromSubscriptionDetails.length > 0) {
+    return fromSubscriptionDetails;
+  }
+
+  for (const line of invoice.lines?.data ?? []) {
+    const fromLine = line.metadata?.packageName;
+    if (typeof fromLine === "string" && fromLine.length > 0) return fromLine;
+  }
+
+  return "Subscription";
+}
+
+/**
  * On `invoice.created` for a subscription RENEWAL (`billing_reason === "subscription_cycle"`),
  * stamp the draft invoice's description as "<Package> Renewal" BEFORE Stripe finalizes and
  * attempts payment. The auto-spawned PaymentIntent + Charge inherit it, so BOTH successful AND
@@ -166,13 +241,9 @@ async function handleInvoiceCreated(invoice: Stripe.Invoice): Promise<void> {
   if (invoice.billing_reason !== "subscription_cycle" || !invoice.id) return;
 
   try {
-    const subscriptionId = resolveInvoiceSubscriptionId(invoice);
-    let packageName = "Subscription";
-    if (subscriptionId) {
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      packageName = subscription.metadata?.packageName || "Subscription";
-    }
-    const renewalDescription = `${packageName} Renewal`;
+    // Read the package off the invoice Stripe just handed us — see packageNameFromInvoicePayload.
+    // This used to be a `subscriptions.retrieve` for this one metadata field.
+    const renewalDescription = `${packageNameFromInvoicePayload(invoice)} Renewal`;
 
     // Idempotent across webhook redeliveries — only write when it differs.
     if (invoice.description !== renewalDescription) {
@@ -3645,11 +3716,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
       lineItems: expandedInvoice.lines?.data?.length || 0,
     });
 
-    // Resolve subscription from invoice (expanded). For invoice.payment_succeeded, Stripe's invoice.subscription
-    // is the source of truth for which subscription was billed — not Mongo stripeSubscriptionId (can be stale
-    // after duplicate incomplete subs / checkout races).
-    const invoiceSubscription = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription })
-      .subscription;
+    // Resolve subscription from invoice (expanded). For invoice.payment_succeeded, the invoice's own
+    // subscription is the source of truth for which subscription was billed — not Mongo
+    // stripeSubscriptionId (can be stale after duplicate incomplete subs / checkout races).
+    // `expandedInvoice` was retrieved with `expand: ["parent.subscription_details.subscription"]`,
+    // so on the renewal path this IS the full object.
+    const invoiceSubscription = resolveExpandedInvoiceSubscription(expandedInvoice);
     const invoiceSubscriptionId = resolveInvoiceSubscriptionId(expandedInvoice);
     const pendingSubscriptionId = user.subscription?.pendingStripeSubscriptionId;
 
@@ -3711,16 +3783,16 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
       webhookLog("info", `Invoice subscription ${invoiceSubscriptionId} (canonical) vs DB stripeSubscriptionId ${user.stripeSubscriptionId ?? "(none)"} — processing payment for invoice subscription`);
     }
 
-    // Use expanded subscription from invoice when it matches subscriptionId (metadata + fewer round trips)
+    // Use the expanded subscription from the invoice when it matches subscriptionId (metadata +
+    // fewer round trips). This shortcut USED to test the pre-Basil top-level `invoice.subscription`,
+    // which stripe@18.5.0 does not return — so it never fired and the retrieve below ran on EVERY
+    // renewal (incident 2026-08-23: one of four `/v1/subscriptions` calls per renewal against a
+    // 25/sec per-endpoint cap). The retrieve stays as the fallback for the paths where the id came
+    // from the user's pending/canonical subscription rather than from this invoice.
     let subscription: Stripe.Subscription;
     try {
-      if (
-        typeof invoiceSubscription === "object" &&
-        invoiceSubscription !== null &&
-        "id" in invoiceSubscription &&
-        (invoiceSubscription as Stripe.Subscription).id === subscriptionId
-      ) {
-        subscription = invoiceSubscription as Stripe.Subscription;
+      if (invoiceSubscription && invoiceSubscription.id === subscriptionId) {
+        subscription = invoiceSubscription;
       } else {
         subscription = await stripe.subscriptions.retrieve(subscriptionId);
       }
@@ -3822,6 +3894,11 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
     // Clear pause_collection BEFORE processPaymentBenefits. Benefits processing can be slow; Stripe CLI / proxies
     // may time out while waiting for the HTTP response, and processPaymentBenefits can still return success: false
     // — in those cases a late resume never ran, leaving the subscription in "Collection paused" despite a paid invoice.
+    //
+    // `decideClearPause` now requires a pause to ACTUALLY be present (see its precondition): the vast
+    // majority of renewals were never paused, and `pause_collection: ""` on an unpaused subscription is
+    // a Stripe no-op — one wasted `/v1/subscriptions` write per renewal. Members who ARE paused still
+    // get resumed here, on the same code path, before benefits.
     const invoiceAmountPaid = expandedInvoice.amount_paid ?? 0;
     const invoiceIsPaid = expandedInvoice.status === "paid" && invoiceAmountPaid > 0;
     // Snapshot pause_collection BEFORE resumeAfterSuccessfulRenewalPayment clears it in Stripe,

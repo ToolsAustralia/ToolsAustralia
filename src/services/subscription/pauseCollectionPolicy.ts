@@ -38,25 +38,40 @@ export interface ClearPauseInput {
 }
 
 /**
- * Owns the WHOLE clear decision for the paid-invoice / failed-renewal-recovery path:
- *   shouldClearPauseCollectionAfterPaidInvoice(...) || recordMembershipRecurringAffiliate
- *     || subscription.pause_collection != null
- * plus the retention exclusion. Delegates the legacy sub-decision to the existing
- * `shouldClearPauseCollectionAfterPaidInvoice` (unchanged) rather than reimplementing it.
+ * Owns the WHOLE clear decision for the paid-invoice / failed-renewal-recovery path.
+ *
+ * The decision it encodes was:
+ *   !retention && ( shouldClearPauseCollectionAfterPaidInvoice(...)
+ *                   || recordMembershipRecurringAffiliate
+ *                   || subscription.pause_collection != null )
+ *
+ * which reduces to `pauseCollectionPresent && !retention` once you require something to
+ * actually be paused — see the precondition below. Every clause in the old disjunction was
+ * ORed with `pauseCollectionPresent`, so adding the precondition changes the outcome in exactly
+ * one situation: no pause is set and a legacy clause said "clear". Clearing a pause that does
+ * not exist is a Stripe no-op (`resumeAfterSuccessfulRenewalPayment` is documented idempotent),
+ * so nothing a member or an admin can observe changes.
  */
 export function decideClearPause(i: ClearPauseInput): boolean {
+  // PRECONDITION (2026-08-24 renewal surge, RC-3): only write to Stripe when there is a pause to
+  // clear. `billing_reason: "subscription_cycle"` matched the legacy clause, so EVERY renewal —
+  // including the overwhelming majority that were never paused — spent a `/v1/subscriptions`
+  // WRITE on `pause_collection: ""` that changed nothing. That endpoint ran at ~73 req/sec
+  // against Stripe's 25/sec per-endpoint cap on 23 Aug; this is one of the three calls removed.
+  //
+  // `pauseCollectionPresent` is read from the same subscription object the caller is about to
+  // act on, so it is as fresh as the retrieve that would have preceded the write.
+  if (!i.pauseCollectionPresent) return false;
+
   // A retention pause is never cleared by the recovery/paid-invoice path.
   if (i.pauseReason === "retention") return false;
-  if (
-    shouldClearPauseCollectionAfterPaidInvoice({
-      billingReason: i.billingReason,
-      previousSubscriptionDbStatus: i.previousSubscriptionDbStatus,
-    })
-  ) {
-    return true;
-  }
-  if (i.recordMembershipRecurringAffiliate) return true;
-  return i.pauseCollectionPresent;
+
+  // A non-retention pause IS present — which is itself the third disjunct of the legacy
+  // decision, so the other two clauses can no longer change the answer. They are retained on
+  // ClearPauseInput (and in `shouldClearPauseCollectionAfterPaidInvoice`, still exported and
+  // tested) because they document WHICH signal put a paid invoice on this path, and the admin /
+  // renew-subscription recovery paths call the resume helper on their own terms.
+  return true;
 }
 
 /** Inputs for the retention-`paused` membership-state transition decision. Pure — no Stripe/DB. */
