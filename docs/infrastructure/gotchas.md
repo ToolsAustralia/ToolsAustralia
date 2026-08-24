@@ -27,6 +27,20 @@ AEDT (UTC+11): Sydney slot hours map to UTC 01, 04, 07, 10, 16, 19, 22
 
 **Expected side effect — a daily "missing snapshot" window, not a fault.** `getMembershipSnapshotHealth` treats "yesterday" as expected from the moment Sydney rolls past midnight (14:00 UTC AEST / 13:00 UTC AEDT). Before this reschedule that gap was near-zero (the cron fired essentially at the boundary); now there is a real ~3.5–4.5 hour window each day, EVERY day (not just renewal nights), between the Sydney day boundary and the first snapshot fire (17:30 UTC), during which `/api/admin/health/membership-snapshot` and its Norm mirror correctly report `ok:false` for yesterday, `getMembershipByPackageSnapshot` falls back to live data with `snapshotMissing:true`, and the admin MRR trend card omits its trend rather than compare against a live baseline. This is expected and does not indicate a broken cron — see `docs/subscription/architecture.md`'s Health section and the `getMembershipSnapshotHealth` JSDoc.
 
+## The same reschedule made `dashboard-stats-daily-snapshot` serve a HALF-FINISHED day for 3.5h every night (2026-08-25)
+
+**Symptom:** at 00:34 AEST on 25 Aug the Overview's "24 Aug – 24 Aug" view showed revenue **$25,079.95** against an actual closed-day total of **$30,782.43** — 18.5% short — while New signups (431) and Renewals (868) on the *same screen* were correct. Tiles disagreeing with each other is the tell: some read the snapshot, some are live.
+
+**Root cause — a latent bug the reschedule exposed, not the reschedule itself.** `writeSlidingWindow` enumerated `todayAESTDateKey` **inclusively**, so every run also wrote a row for the day still in progress. The `20 3 * * *` fire runs at 13:20 AEST, so it froze ~13 of 24 hours under the `2026-08-24` key (verified: revenue up to that instant was $24,979.95 and `users.newSignups` was 216 against the day's true 431).
+
+That partial had always been written — it just never *mattered*, because `DashboardStatsSnapshotReader` bypasses the snapshot for the current day only (`if (snap && !isToday)`) and the old `0 14`/`0 15 UTC` fires landed at **00:00/01:00 AEST — the instant the day closed**. The complete-day rewrite therefore arrived at almost exactly the moment the reader flipped from live→snapshot. Moving the fires to `30 17`/`30 20 UTC` (03:30/06:30 AEST) opened a **3.5-hour hole**: the day closes at 14:00 UTC, the reader starts trusting the snapshot immediately, and the correcting write does not land until 17:30 UTC.
+
+**Fix:** the window is now the last `windowDays` **COMPLETE** AEST days, ending at yesterday (`resolveSlidingWindowKeys`), and `writeSnapshotForDate` **refuses** any day that has not closed. Note `getDashboardStatsSnapshotHealth` had *always* excluded today from its expected keys — the writer was the half that disagreed. Regression test: `npm run test:dashboard-stats-window`.
+
+**Consequence to expect:** between 14:00 UTC and the 17:30 UTC fire the just-closed day has **no** snapshot and the reader computes it live — correct, just slower — exactly like the membership-snapshot window documented above. Do not "fix" that gap by widening the window back to include today.
+
+**The general rule:** a daily snapshot row is a claim about a WHOLE day. Never write one for a day that has not closed — if a reader anywhere treats "has a row" as "is authoritative", a mid-day write becomes a lie the moment the clock rolls over. Historical days were unaffected (the 90-day sliding window re-derives them); only the freshest day was ever wrong — the same shape as the TikTok-settling bug in [admin/gotchas.md](../admin/gotchas.md).
+
 ## env vars: `.env.example` is the registry — `npm run check:env` detects drift (2026-07-09)
 
 `.env.example` is the tracked source of truth for **which** env vars exist (rescued from the `.env*` ignore by the `!.env.example` negation in `.gitignore`). `.env.local` holds per-folder **values** (gitignored, never merges — see CLAUDE.md §9); Vercel holds prod. There is **no runtime env validation** — `src/lib/environment.ts` only detects `NODE_ENV` (despite `.env.example`'s old header implying it validates).

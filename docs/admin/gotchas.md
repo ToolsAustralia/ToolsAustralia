@@ -120,6 +120,14 @@ The affiliate detail modal ([`AffiliateDetailModal.tsx`](../../src/components/ad
 
 `SubscriptionHistoryStatusBadge` ([`AdminBadge.tsx`](../../src/components/admin/ui/AdminBadge.tsx)) renders a membership-history row's `status` raw, so a `trialing` row would literally show "trialing". We never sell a real free trial — `trialing` only ever means a paid, **active** member whose billing date was anchored/reanchored via Stripe `trial_end` (join-25-27→24 and the past-due reanchor). The badge maps `trialing → "active"`; the current-state badge (`renderSubscriptionStateBadge`) already shows "Active" via `isActive`. Do not render the raw `trialing` string anywhere admin-facing. See `docs/PAST_DUE_REANCHOR.md`.
 
+## A snapshot row must describe a CLOSED day — the writer used to write today (2026-08-25)
+
+Same shape as the TikTok bug above, different cause. `writeSlidingWindow` enumerated today inclusively, so the `20 3 * * *` fire (13:20 AEST) froze a half-finished day under that date key. It was harmless while the other fires landed at 00:00 AEST — the complete-day rewrite arrived as the reader flipped live→snapshot — and became visible the moment those fires moved to 03:30 AEST: for 3.5h every night the Overview served a 13-hour day as a whole one. AEST 24 Aug read **$25,079.95** instead of **$30,782.43**.
+
+**The diagnostic that names it fast:** when revenue looks wrong, check whether the tiles agree *with each other*. Revenue / Ad spend / ROAS come from the snapshot; New signups, Cancellations, Renewals and MRR are live. Signups correct + revenue short = a stale or partial snapshot, not a revenue bug. Then compare the snapshot row's `updatedAt` against the AEST day it claims to describe — if `updatedAt` falls *inside* that day, it is a partial.
+
+The writer now refuses any day that has not closed, and the window ends at yesterday. Full write-up, including why the reschedule was still the right call: [infrastructure/gotchas.md](../infrastructure/gotchas.md). Regression test: `npm run test:dashboard-stats-window`.
+
 ## Ad-spend snapshots: a failed Facebook fetch PRESERVES the prior value (never wipes)
 
 The dashboard ad-spend / ROAS / CAC numbers come from `DashboardStatsDailySnapshot` rows written by [`DashboardStatsSnapshotWriter`](../../src/services/admin/dashboard-stats/DashboardStatsSnapshotWriter.ts) (daily cron + backfill). Each day's Facebook spend is fetched live via [`facebookAdChannelProvider`](../../src/services/admin/dashboard-stats/adChannelProviders.ts).

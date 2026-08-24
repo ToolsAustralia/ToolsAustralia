@@ -19,6 +19,9 @@ function stats(over: {
   newInRange?: number;
   adSpend?: number;
   adRoas?: number;
+  renewalsSucceeded?: number;
+  becamePastDue?: number;
+  activeMembershipsAtEnd?: number;
 }): AdminDashboardStats {
   const item = (v: { revenue: number; purchaseCount: number } | number | undefined) =>
     v ?? { revenue: 0, purchaseCount: 0, userCount: 0 };
@@ -31,6 +34,20 @@ function stats(over: {
       cancelledMemberships: 0,
       totalScheduledCancellation: 0,
       dropOffRate: 0,
+      ...(over.activeMembershipsAtEnd != null && {
+        activeMembershipsAtEnd: over.activeMembershipsAtEnd,
+      }),
+      ...(over.renewalsSucceeded != null || over.becamePastDue != null
+        ? {
+            membershipRenewals: {
+              expectedInRange: 0,
+              succeededInRange: over.renewalsSucceeded ?? 0,
+              succeededDistinctMembers: 0,
+              failedInvoicesInRange: 0,
+              becamePastDueInRange: over.becamePastDue ?? 0,
+            },
+          }
+        : {}),
     },
     revenue: {
       total: over.total ?? 0,
@@ -313,12 +330,82 @@ function testRisingCancellationsReadAsBadNews() {
   // the same number rendered RED.
   const m = buildPeriodComparison(stats({}), stats({}));
   const inverted = m.filter((x) => x.invert).map((x) => x.key);
-  assert.deepEqual(inverted, ["cancelledMemberships"], "only cancellations invert today");
+  // "Became past due" joined cancellations: a member entering past due is a renewal that did not
+  // collect, so a RISE is bad news and must not paint green.
+  assert.deepEqual(
+    inverted,
+    ["cancelledMemberships", "becamePastDue"],
+    "cancellations and past-due entries are the bad-news-on-a-rise metrics",
+  );
+  const badOnRise = new Set(["cancelledMemberships", "becamePastDue"]);
   for (const x of m) {
-    if (x.key !== "cancelledMemberships") {
+    if (!badOnRise.has(x.key)) {
       assert.equal(x.invert, false, `${x.key}: a rise should read as good`);
     }
   }
+}
+
+function testRenewalAndPastDueCountsComeFromMembershipRenewals() {
+  // Both read the range-scoped analytics bundle, not a second aggregation — Renewals must equal
+  // the "N renewed" the KPI tile shows for the same window.
+  const m = buildPeriodComparison(
+    stats({ renewalsSucceeded: 868, becamePastDue: 263 }),
+    stats({ renewalsSucceeded: 700, becamePastDue: 100 }),
+  );
+  const renewals = m.find((x) => x.key === "membershipRenewals");
+  assert.equal(renewals?.current, 868, "renewals read succeededInRange");
+  assert.equal(renewals?.previous, 700);
+  assert.equal(renewals?.group, "Customers");
+
+  const pastDue = m.find((x) => x.key === "becamePastDue");
+  assert.equal(pastDue?.current, 263, "past due reads becamePastDueInRange");
+  assert.equal(pastDue?.delta, 163);
+
+  // A payload with no membershipRenewals block (older cache entry) must degrade to 0, not throw.
+  const bare = buildPeriodComparison(stats({}), stats({}));
+  assert.equal(bare.find((x) => x.key === "membershipRenewals")?.current, 0);
+  assert.equal(bare.find((x) => x.key === "becamePastDue")?.current, 0);
+}
+
+function testTotalMembershipsOnlyAppearsWhenBothWindowsMeasuredIt() {
+  // A stock with no snapshot for its end date must DISAPPEAR, never read as 0 — a 0 would print
+  // a −100% collapse of the entire member base that never happened.
+  const neither = buildPeriodComparison(stats({}), stats({}));
+  assert.equal(
+    neither.find((x) => x.key === "activeMembershipsAtEnd"),
+    undefined,
+    "no row when neither window measured the stock",
+  );
+
+  const onlyCurrent = buildPeriodComparison(stats({ activeMembershipsAtEnd: 4504 }), stats({}));
+  assert.equal(
+    onlyCurrent.find((x) => x.key === "activeMembershipsAtEnd"),
+    undefined,
+    "no row when only one window measured the stock",
+  );
+
+  const both = buildPeriodComparison(
+    stats({ activeMembershipsAtEnd: 4504 }),
+    stats({ activeMembershipsAtEnd: 4675 }),
+  );
+  const row = both.find((x) => x.key === "activeMembershipsAtEnd");
+  assert.equal(row?.current, 4504);
+  assert.equal(row?.previous, 4675);
+  assert.equal(row?.delta, -171);
+}
+
+function testTotalMembershipsIsAStockAndNeverNormalises() {
+  // 4,504 members ÷ 30 days = "150.1/day" is meaningless — a level is not an accumulation.
+  const m = buildPeriodComparison(
+    stats({ activeMembershipsAtEnd: 4504 }),
+    stats({ activeMembershipsAtEnd: 4000 }),
+    { currentDays: 1, previousDays: 30 },
+  );
+  const row = m.find((x) => x.key === "activeMembershipsAtEnd");
+  assert.equal(row?.currentPerDay, null, "a stock has no per-day rate");
+  assert.equal(row?.previousPerDay, null);
+  assert.equal(row?.normalised, false, "a stock compares raw even across unequal windows");
+  assert.equal(Math.round(row?.deltaPct ?? 0), 13, "raw 4504 vs 4000 is +12.6%");
 }
 
 function run() {
@@ -338,6 +425,9 @@ function run() {
   testPerDayNormalisation();
   testEveryRowIsDateScoped();
   testRisingCancellationsReadAsBadNews();
+  testRenewalAndPastDueCountsComeFromMembershipRenewals();
+  testTotalMembershipsOnlyAppearsWhenBothWindowsMeasuredIt();
+  testTotalMembershipsIsAStockAndNeverNormalises();
   testDeltaNormalisesAcrossUnequalWindows();
   testEqualWindowsCompareRaw();
   testRatiosNeverNormalise();
