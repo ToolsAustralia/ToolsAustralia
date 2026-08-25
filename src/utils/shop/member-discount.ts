@@ -94,6 +94,28 @@ function findBestShopDiscountTier(): { percent: number; tierName: string; packag
 }
 
 /**
+ * The tier and percentage to advertise to THIS viewer, with no product in hand.
+ *
+ * `resolveMemberShopPrice` answers the same question but needs a price, so a
+ * surface that only wants to say "Foreman · 10% off" had to invent one. Both read
+ * the same catalogue through the same `resolveShopDiscountPercent`, so the pill in
+ * a page header and the figure on a card can never name different tiers.
+ *
+ * Null when no active tier discounts the shop at all — never a 0% claim.
+ */
+export function resolveShopDiscountBadge(
+  user: ShopDiscountUserInput | null | undefined
+): { percent: number; tierName: string; isMember: boolean } | null {
+  const ownPercent = user ? resolveShopDiscountPercent(user) : 0;
+  if (ownPercent > 0) {
+    const pkg = getPackageById(user?.subscription?.packageId ?? "");
+    if (pkg) return { percent: ownPercent, tierName: pkg.name, isMember: true };
+  }
+  const best = findBestShopDiscountTier();
+  return best ? { percent: best.percent, tierName: best.tierName, isMember: false } : null;
+}
+
+/**
  * What a member pays for this product — the shopper's own price when they hold a
  * tier, the best tier's price when they do not.
  *

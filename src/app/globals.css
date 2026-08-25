@@ -3844,3 +3844,31 @@ html[data-promo-dock] .promo-dock-stacks-above {
     transparent 62%
   );
 }
+
+/* ---------------------------------------------------------------------------
+   Cart badge pop.
+
+   Fires when the item count GOES UP, so an add that lands has a visible landing
+   place. Without it the only feedback for adding from the grid was the toast, and
+   a toast in the opposite corner from the cart does not tell you the cart changed
+   — the number just quietly differs the next time you look at it.
+
+   Scale only, and short: the badge sits in the header on every page, so anything
+   longer or louder reads as an alert rather than an acknowledgement.
+   --------------------------------------------------------------------------- */
+@keyframes ta-cart-pop {
+  0%   { transform: scale(1); }
+  38%  { transform: scale(1.32); }
+  100% { transform: scale(1); }
+}
+
+.ta-cart-pop {
+  animation: ta-cart-pop 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* The count still updates; it just stops jumping. */
+@media (prefers-reduced-motion: reduce) {
+  .ta-cart-pop {
+    animation: none;
+  }
+}

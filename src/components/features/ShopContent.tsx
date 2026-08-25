@@ -3,10 +3,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
 import ShopProductCard from "@/components/shop/ShopProductCard";
+import { resolveShopDiscountBadge } from "@/utils/shop/member-discount";
+import { FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
+import { useUserContext } from "@/contexts/UserContext";
 import ProductFilters from "@/components/features/ProductFilters";
 import { useShopFacets } from "@/hooks/queries/useProductQueries";
 import MetallicButton from "@/components/ui/MetallicButton";
-import { Filter, X, Search, Clock, ArrowUpDown } from "lucide-react";
+import { Filter, X, Search, Clock, ArrowUpDown, Tag, Truck } from "lucide-react";
 import { Product as ProductType } from "@/types/product";
 import { useProducts, type Product as ReactQueryProduct } from "@/hooks/queries";
 import { SectionContainer } from "@/components/ui";
@@ -73,6 +76,7 @@ export default function ShopContent({
   defaultBrand,
 }: ShopContentProps) {
   // State management for shop page
+  const { userData } = useUserContext();
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filters, setFilters] = useState<FilterState>({
@@ -247,6 +251,21 @@ export default function ShopContent({
   const hasControlsApplied =
     activeFilterCount > 0 || debouncedSearch.trim().length > 0 || sortBy !== DEFAULT_SORT;
 
+  /** The tier to advertise — the viewer's own, or the best one on offer. */
+  const discountBadge = useMemo(() => resolveShopDiscountBadge(userData), [userData]);
+
+  /**
+   * Does anything on this page actually include free entries?
+   *
+   * Gates the hero's entries line. Merch ships at includedEntries: 0, so promising
+   * entries would state something the business is not offering — the handoff calls
+   * every entries surface conditional for exactly this reason.
+   */
+  const anyProductGrantsEntries = useMemo(
+    () => transformedProducts.some((p) => ((p as { includedEntries?: number }).includedEntries ?? 0) > 0),
+    [transformedProducts]
+  );
+
   /**
    * Every applied filter as a removable chip.
    *
@@ -338,12 +357,47 @@ export default function ShopContent({
         {/* Main Content */}
         <div className="flex-1">
           <div className="mb-6 rounded-2xl border border-gray-200 dark:border-neutral-800 bg-gradient-to-br from-white via-white to-gray-50 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-950 p-4 shadow-sm sm:p-5">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-bold text-gray-900 dark:text-white sm:text-lg">Browse Products</h2>
-                <p className="text-xs text-gray-500 dark:text-neutral-400 sm:text-sm">
-                  Fine-tune results with filters, sorting, and view mode.
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="font-poppins text-[22px] font-extrabold leading-tight tracking-[-.02em] text-gray-900 dark:text-white sm:text-[26px]">
+                  <span className="text-red-600">Shop</span> the kit
+                </h2>
+                {/*
+                  The entries clause is CONDITIONAL, and today it is off.
+
+                  The design's line reads "Every order adds free entries to this
+                  month's draw", which is a promise the business is not currently
+                  making — merch ships at includedEntries: 0. Printing it anyway
+                  would be a rule-11 problem, not a copy preference, so it appears
+                  only once something in the catalogue actually includes entries.
+                */}
+                <p className="mt-1 max-w-[46ch] text-[12.5px] leading-relaxed text-gray-500 dark:text-neutral-400 sm:text-[13.5px]">
+                  Official gear and tools.{" "}
+                  {anyProductGrantsEntries
+                    ? "Every order adds free entries to this month's draw."
+                    : "Printed to order right here in Australia."}
                 </p>
+                {/*
+                  Two trust pills. The delivery one states the REAL rule from
+                  SHOP_CONFIG — the design says "Free over $150", which was true of
+                  a threshold that no longer exists. A pill is a promise, and this
+                  is the page where someone decides whether to believe it.
+                */}
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  {discountBadge && (
+                    <span
+                      className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-extrabold uppercase tracking-[.03em]"
+                      style={{ background: "#F5C542", color: "#3A2C00" }}
+                    >
+                      <Tag className="h-3 w-3" aria-hidden />
+                      {discountBadge.tierName} · {discountBadge.percent}% off
+                    </span>
+                  )}
+                  <span className="inline-flex h-7 items-center gap-1.5 rounded-full border border-gray-300 px-2.5 text-[11px] font-semibold text-gray-700 dark:border-neutral-700 dark:text-neutral-200">
+                    <Truck className="h-3 w-3" aria-hidden />
+                    {FLAT_SHIPPING_RATE_LABEL} flat delivery
+                  </span>
+                </div>
               </div>
               {hasControlsApplied && (
                 <button

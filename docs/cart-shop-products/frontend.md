@@ -802,3 +802,47 @@ there covered the support bubble. Newest sits closest to the bottom edge
 most recent message should be the first it reaches. The entrance rises rather than sliding
 in from the right, which from this corner would read as the toast crossing the page to get
 there.
+
+## Toast position is route-scoped (2026-08-25)
+
+**Top right everywhere, bottom left on `/shop*`.** The shop is the one surface whose
+toast carries an action worth pressing — the add-to-cart `View cart` — so it belongs near
+the goods rather than up by the header. Bottom *left* rather than right because the bottom
+right is Cobber's corner, and a toast there lands on the support bubble.
+
+Everywhere else keeps its original top-right position: those toasts are mostly errors and
+confirmations that get read and dismissed, and moving all of them to serve one page would
+be a site-wide change to fix a single surface.
+
+Scoped by `usePathname` inside `ToastContainer` rather than a prop — the provider mounts
+once at the app root, so a prop would have to be threaded from a layout that knows nothing
+about which page is rendering. The entrance direction follows the corner: bottom-anchored
+toasts rise, top-right ones still slide in from the right.
+
+**The action is a button now, on the right.** It was a blue text link stacked under the
+message, where it read as part of the copy rather than the thing to press.
+
+## The cart badge pops on an add (2026-08-25)
+
+Adding from the grid announced itself with a toast in the opposite corner, which says
+*something* happened but not that the **cart** changed — the number just quietly differed
+next time you looked. `.ta-cart-pop` fires only when the count **goes up**: a removal
+should not celebrate, and firing on every change would pop while someone steps a quantity
+down. Reduced-motion gated; the count still updates, it just stops jumping.
+
+## Product page structure (2026-08-25)
+
+The price uses the same `PriceBlock` as the cards, so the PDP and a listing card cannot
+describe one discount two different ways. It renders through `ViewerPriceBlock`, a thin
+client wrapper — **the product page is a server component and cannot read the session, and
+`user={null}` is not a neutral default**: it renders the guest treatment, so a Foreman
+would be shown the full price and invited to join and save a discount they already hold.
+
+**The description moved below the pickers** and is titled "The detail". Someone on a
+product page is choosing a size, not reading — the copy pushed the colour row and the buy
+button down a screen on mobile for text most buyers skim after they have already decided.
+
+Picker labels are uppercase eyebrows with the prompt on the **right** (`COLOUR` … `Pick
+one`). Folding both into one sentence — "Colour: choose one" — made the instruction read
+as a value, as though the colour were named "choose one", and left nothing to change once
+a colour was picked.

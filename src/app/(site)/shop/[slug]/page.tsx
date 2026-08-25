@@ -22,7 +22,7 @@ import { shouldShowReviews, displayableReviews, displayAverage } from "@/utils/s
 // who is signed in, and the member price has to be the signed-in member's own.
 // It ships in the ProductCard module, which this route already loads for the
 // related-products row below.
-import { MemberPriceLine } from "@/components/ui/ProductCard";
+import { ViewerPriceBlock } from "@/components/shop/ViewerPriceBlock";
 import { loadShopEntryMultipliers } from "@/services/shop/resolveShopEntryMultiplier";
 import { resolveEntryMultiplierFor } from "@/utils/shop/entry-multiplier";
 
@@ -405,16 +405,26 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
               price as the headline with the shelf price struck; everyone else sees
               the real price as the headline and the membership as an offer.
             */}
-            <MemberPriceLine price={product.price} variant="detail" />
-
-            {/* Description */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-neutral-100 mb-2">Description</h3>
-              <p className="text-gray-600 dark:text-neutral-400 leading-relaxed">{product.description}</p>
-            </div>
+            {/* Client boundary: this page is a server component and cannot read the
+                session, and user={null} is not neutral — it renders the GUEST price to
+                a member who already holds the discount. */}
+            <ViewerPriceBlock priceDollars={product.price} variant="pdp" />
 
             {/* Interactive Components */}
             <ProductInteractions product={serializedProduct} entryMultiplier={entryMultiplier} />
+
+            {/*
+              THE DESCRIPTION SITS BELOW THE PICKERS, not above them.
+
+              Someone on a product page is deciding between sizes, not reading — the
+              copy pushed the colour row and the buy button down a screen on mobile
+              for text most buyers skim after they have already chosen. Moving it
+              under the pickers puts the decision first and the detail second.
+            */}
+            <div>
+              <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-neutral-100">The detail</h3>
+              <p className="leading-relaxed text-gray-600 dark:text-neutral-400">{product.description}</p>
+            </div>
 
             {/* Tabs live INSIDE the right column, not below the grid.
                 This is what gives the sticky image something to stick against: the

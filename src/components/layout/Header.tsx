@@ -168,7 +168,32 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const [isClosingCart, setIsClosingCart] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { items: cartItems, summary, updateCartItem, removeFromCart } = useCart();
+
   const cartItemCount = summary?.totalItems || 0;
+
+  /**
+   * Pop the cart badge when the count GOES UP.
+   *
+   * Adding from the grid announced itself with a toast in the opposite corner,
+   * which says something happened but not that the CART changed — the number just
+   * quietly differed the next time you looked at it. This gives the add somewhere
+   * to land.
+   *
+   * Only on an increase: a removal should not celebrate, and the same effect on
+   * every change would fire while someone steps a quantity down.
+   */
+  const [cartPop, setCartPop] = useState(false);
+  const prevCartCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = prevCartCountRef.current;
+    prevCartCountRef.current = cartItemCount;
+    // The first render is not an add — without this guard a page load with a
+    // non-empty cart pops the badge for no reason.
+    if (prev === null || cartItemCount <= prev) return;
+    setCartPop(true);
+    const t = setTimeout(() => setCartPop(false), 400);
+    return () => clearTimeout(t);
+  }, [cartItemCount]);
   const { userData, isAuthenticated, loading } = useUserContext();
   const { isStaff } = usePermissions();
 
@@ -1309,7 +1334,12 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   more urgent number once something is in there.
                 */}
                 {cartItemCount > 0 ? (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white shadow-md">
+                  <span
+                    className={cn(
+                      "absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white shadow-md",
+                      cartPop && "ta-cart-pop"
+                    )}
+                  >
                     {cartItemCount > 99 ? "99+" : cartItemCount}
                   </span>
                 ) : cartTier ? (

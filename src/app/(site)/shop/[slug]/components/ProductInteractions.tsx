@@ -385,12 +385,23 @@ export default function ProductInteractions({
       {hasVariants && hasColourways && (
         <div className="space-y-5">
           <div className="space-y-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">
-              Colour:{" "}
-              <span className="font-normal text-gray-500 dark:text-neutral-400">
-                {selectedColour ?? "choose one"}
+            {/*
+              The label states the axis; the RIGHT-hand hint states what to do about
+              it. Folding both into one sentence ("Colour: choose one") made the
+              instruction read as a value — it looked like the colour was called
+              "choose one" — and it left nothing to change once a colour was picked.
+            */}
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-[11px] font-extrabold uppercase tracking-[.08em] text-gray-500 dark:text-neutral-400">
+                Colour
               </span>
-            </span>
+              <span
+                className="text-[12px] font-bold"
+                style={{ color: selectedColour ? undefined : "#F5C542" }}
+              >
+                {selectedColour ?? "Pick one"}
+              </span>
+            </div>
             <div className="flex flex-wrap gap-2">
               {colours.map((colourway) => {
                 const isSelected = colourway.name === selectedColour;
