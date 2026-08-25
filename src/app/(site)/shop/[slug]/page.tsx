@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 
 import Link from "next/link";
 import { Star, Award, ChevronRight } from "lucide-react";
-import ProductCategories from "@/components/features/ProductCategories";
 import MembershipSection from "@/components/sections/MembershipSection";
 import ShopProductCard from "@/components/shop/ShopProductCard";
 import ProductInteractions from "./components/ProductInteractions";
@@ -197,6 +196,22 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
     notFound();
   }
 
+  /**
+   * Specification lookup, case- and space-insensitive.
+   *
+   * `specifications` is a free-text map an admin types into, so the same fact
+   * arrives as "Fabric", "fabric" or "Fabric " depending on who entered it.
+   * Matching loosely here means a spec card renders when the data is there rather
+   * than only when it was typed the way this file expects.
+   */
+  const specLookup = (product.specifications ?? {}) as Record<string, string>;
+  const findSpec = (key: string) => {
+    const want = key.toLowerCase();
+    const hit = Object.keys(specLookup).find((k) => k.trim().toLowerCase() === want);
+    return hit ? specLookup[hit] : undefined;
+  };
+  const specs = { fabric: findSpec("fabric"), print: findSpec("print") };
+
   // Fetch related products in parallel (no need to wait for product to complete)
   const relatedProducts = await getRelatedProducts(product._id.toString(), product.brand, product.category || "");
 
@@ -279,7 +294,17 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         nonce={nonce}
       />
       {/* Product Detail */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-36">
+      {/*
+        Top padding is DERIVED from the header, not a fixed pt-36.
+
+        pt-36 is 144px against a header that measures 60px on a phone, so the page
+        opened with 84px of dead space above the product — the first thing anyone
+        saw was empty page. The header's own height already lives in
+        --app-header-h / --app-header-h-lg (the same variables the checkout page
+        pads with), so clearing it is exact at every breakpoint instead of a
+        guess that happened to suit one.
+      */}
+      <div className="mx-auto max-w-7xl px-4 pb-8 pt-[calc(var(--app-header-h)+0.75rem)] sm:px-6 lg:px-8 lg:pt-[calc(var(--app-header-h-lg)+1.5rem)]">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Product Image. The outer wrapper is REQUIRED: `sticky` applied directly to a
               grid item collapses it to content height and never engages, so the image would
@@ -433,6 +458,42 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
             <div>
               <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-neutral-100">The detail</h3>
               <p className="leading-relaxed text-gray-600 dark:text-neutral-400">{product.description}</p>
+
+              {/*
+                The four facts worth surfacing, 2-up.
+
+                FABRIC and PRINT come from the product's own specifications, so a
+                tool that has neither simply shows fewer cells rather than an empty
+                label. MADE and SHIPS are DERIVED — "to order" is trackInventory
+                being false, and the delivery line reads FLAT_SHIPPING_RATE_LABEL.
+
+                The design's SHIPS cell says "$10 · free over $150". That threshold
+                was removed on 2026-08-25, so printing it would promise a discount
+                that no cart can produce. It states the real flat rate instead.
+              */}
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
+                {[
+                  { label: "Fabric", value: specs.fabric },
+                  { label: "Print", value: specs.print },
+                  {
+                    label: "Made",
+                    value: serializedProduct.trackInventory === false ? "To order · 3–5 days" : "In stock",
+                  },
+                  { label: "Ships", value: `${FLAT_SHIPPING_RATE_LABEL} flat, Australia-wide` },
+                ]
+                  .filter((cell) => Boolean(cell.value))
+                  .map((cell) => (
+                    <div
+                      key={cell.label}
+                      className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 dark:border-neutral-800 dark:bg-neutral-900"
+                    >
+                      <div className="text-[10px] font-extrabold uppercase tracking-[.1em] text-gray-400 dark:text-neutral-500">
+                        {cell.label}
+                      </div>
+                      <div className="mt-0.5 text-[13px] font-bold text-gray-900 dark:text-white">{cell.value}</div>
+                    </div>
+                  ))}
+              </div>
             </div>
 
             {/* Tabs live INSIDE the right column, not below the grid.
@@ -477,7 +538,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
           */}
           <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide md:mx-0 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:px-0">
             {serializedRelatedProducts.slice(0, 4).map((p) => (
-              <div key={String(p._id)} className="w-[58vw] shrink-0 snap-start sm:w-[40vw] md:w-auto">
+              <div key={String(p._id)} className="w-[44vw] shrink-0 snap-start sm:w-[32vw] md:w-auto">
                 <ShopProductCard variant="related" product={p as never} />
               </div>
             ))}
@@ -485,8 +546,7 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         </section>
       )}
 
-      {/* Product Categories Section */}
-      <ProductCategories />
+
 
       {/* Membership Section */}
       <MembershipSection title="UNLOCK EXCLUSIVE MEMBER BENEFITS" padding="py-16 mb-8" />

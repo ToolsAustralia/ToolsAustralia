@@ -93,15 +93,22 @@ export function PriceBlock({ priceDollars, user, variant = "card", className }: 
             </span>
           ) : null}
         </span>
-        <span
-          className={cn(
-            "font-bold text-shop-save-text dark:text-shop-save-text-dark",
-            isPdp ? "mt-1.5 text-[13px]" : "mt-0.5 text-[10.5px]"
-          )}
-        >
-          {isPdp ? `You save ${member.savingLabel}` : `Save ${member.savingLabel}`}
+        <span className={cn("flex flex-wrap items-baseline gap-x-2", isPdp ? "mt-1.5" : "mt-0.5")}>
+          <span
+            className={cn(
+              "font-bold text-shop-save-text dark:text-shop-save-text-dark",
+              isPdp ? "text-[13px]" : "text-[10.5px]"
+            )}
+          >
+            {isPdp ? `You save ${member.savingLabel}` : `Save ${member.savingLabel}`}
+          </span>
+          {isPdp ? (
+            <>
+              <span className="text-[11px] text-muted-token" aria-hidden>·</span>
+              <span className="text-[11px] text-muted-token">GST included</span>
+            </>
+          ) : null}
         </span>
-        {isPdp ? <span className="mt-1 text-[11px] text-muted-token">GST included</span> : null}
       </div>
     );
   }
@@ -119,15 +126,19 @@ export function PriceBlock({ priceDollars, user, variant = "card", className }: 
       >
         {member.fullPriceLabel}
       </span>
-      <span
-        className={cn("font-bold", isPdp ? "mt-2 text-[12.5px]" : "mt-0.5 text-[10px]")}
-        style={{ color: "#F5C542" }}
-      >
-        {isPdp
-          ? `${member.tierName} members pay ${member.priceLabel} — join and save`
-          : `${member.tierName} ${member.priceLabel}`}
+      <span className={cn("flex flex-wrap items-baseline gap-x-2", isPdp ? "mt-2" : "mt-0.5")}>
+        <span className={cn("font-bold", isPdp ? "text-[12.5px]" : "text-[10px]")} style={{ color: "#F5C542" }}>
+          {isPdp
+            ? `${member.tierName} members pay ${member.priceLabel} — join and save`
+            : `${member.tierName} ${member.priceLabel}`}
+        </span>
+        {isPdp ? (
+          <>
+            <span className="text-[11px] text-muted-token" aria-hidden>·</span>
+            <span className="text-[11px] text-muted-token">GST included</span>
+          </>
+        ) : null}
       </span>
-      {isPdp ? <span className="mt-1 text-[11px] text-muted-token">GST included</span> : null}
     </div>
   );
 }

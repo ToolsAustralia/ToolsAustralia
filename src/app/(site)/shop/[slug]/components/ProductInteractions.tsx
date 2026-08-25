@@ -606,7 +606,7 @@ export default function ProductInteractions({
           control the page exists for.
         */
         data-floating-widget
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-token bg-surface/95 px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 backdrop-blur sm:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-token bg-surface px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 shadow-[0_-8px_24px_-12px_rgba(0,0,0,.45)] sm:hidden"
         role="region"
         aria-label="Buy this product"
       >

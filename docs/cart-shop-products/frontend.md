@@ -920,3 +920,30 @@ Featured · Price low→high · Price high→low · Most free entries · Newest.
 and a rating sort on a catalogue where most items have no reviews orders by a number that
 is mostly absent. "Most free entries" sorts on `includedEntries`, which the products route
 now accepts.
+
+## Product page polish (2026-08-25)
+
+**Top padding is derived, not fixed.** `pt-36` is 144px against a header that measures
+60px on a phone, so the page opened with **84px of dead space** — the first thing anyone
+saw was empty page. It now clears `--app-header-h` / `--app-header-h-lg`, the same
+variables the checkout pads with, so it is exact at every breakpoint. Gap: 84px → 38px.
+
+**The sticky buy bar is opaque.** It was `bg-surface/95` with a blur, so the product photo
+and the description showed through the price and the CTA — the two most important strings
+on the page competing with whatever happened to be scrolling behind them.
+
+**The spec grid** under "The detail" is 2-up. `Fabric` and `Print` come from the product's
+own `specifications` via a case- and space-insensitive lookup (it is a free-text map an
+admin types into, so the same fact arrives as "Fabric", "fabric" or "Fabric "), and a cell
+with no value simply does not render. `Made` and `Ships` are derived from `trackInventory`
+and `SHOP_CONFIG`.
+
+> The design's Ships cell reads **"$10 · free over $150"**. That threshold was removed on
+> 2026-08-25, so it states the real flat rate instead — printing the design's copy would
+> promise a discount no cart can produce.
+
+**The related rail shows two whole cards on a phone** (`44vw`, was `58vw` which fitted one
+and a half and read as a layout bug), plus a sliver of the third so it is visibly
+scrollable.
+
+**"Browse by brand" is removed** from the product page at the owner's request.
