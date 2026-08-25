@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
-import ProductCard from "@/components/ui/ProductCard";
+import ShopProductCard from "@/components/shop/ShopProductCard";
 import ProductFilters from "@/components/features/ProductFilters";
 import { useShopFacets } from "@/hooks/queries/useProductQueries";
 import MetallicButton from "@/components/ui/MetallicButton";
@@ -73,7 +72,6 @@ export default function ShopContent({
   totalProducts: initialTotalProducts,
   defaultBrand,
 }: ShopContentProps) {
-  const router = useRouter();
   // State management for shop page
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -158,15 +156,6 @@ export default function ShopContent({
       return { ...prev, brands: [defaultBrand] };
     });
   }, [defaultBrand]);
-
-  // Grid cards go to the product page rather than adding directly. Apparel is
-  // sold by variant — size and colour — and the card has nowhere to choose one,
-  // so adding from here would either guess or add an unbuyable line.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleAddToCart = (product: any) => {
-    const id = product?.id ?? product?._id;
-    if (id) router.push(`/shop/${id}`);
-  };
 
   // Handle search input change
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -571,21 +560,21 @@ export default function ShopContent({
               ))}
             </div>
           ) : transformedProducts.length > 0 ? (
+            /*
+              2-up on mobile, 3-up from lg. The 11px gap is the design's figure and
+              is tighter than the old gap-2/4/6 ramp on purpose: the redesigned card
+              carries its own shadow, so extra gutter read as drift rather than
+              separation.
+            */
             <div
-              className={`grid gap-2 sm:gap-4 lg:gap-6 mb-12 ${
+              className={`mb-12 grid gap-[11px] sm:gap-4 lg:gap-5 ${
                 viewMode === "grid"
                   ? "grid-cols-2 sm:grid-cols-2 lg:grid-cols-3"
                   : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-1"
               }`}
             >
               {transformedProducts.map((product) => (
-                <ProductCard
-                  key={product._id}
-                  product={product}
-                  onAddToCart={handleAddToCart}
-                  width="w-full"
-                  viewMode={viewMode}
-                />
+                <ShopProductCard key={product._id} product={product} />
               ))}
             </div>
           ) : hasControlsApplied ? (

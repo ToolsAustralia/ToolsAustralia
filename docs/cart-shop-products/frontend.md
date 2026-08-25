@@ -578,3 +578,67 @@ dismissable to everyone.
 
 Both are now buttons routing through the existing `handleCloseMobileMenu` /
 `handleCloseCart`, so the slide-out animation still plays rather than the panel vanishing.
+
+## The badge system (2026-08-25 redesign)
+
+Badges used to accumulate until they collided — a discount chip, an entries chip and a
+stock chip competing in one corner of a card 189px wide. The redesign is **two axes, two
+corners, a hard cap**, and it lives in
+[`src/components/shop/ProductBadges.tsx`](src/components/shop/ProductBadges.tsx).
+
+**Commerce claims** — scarcity, price, hype, merchandising — sit **top left**, ranked in
+that fixed order, and never exceed **two**; a third collapses into a `+N` chip.
+**Entries** sit **top right**, on their own axis.
+
+That separation is a rule-11 safeguard, not a layout preference. An entries badge ranked
+beside a discount badge invites reading one against the other as a rate, and entries are
+a free inclusion that is never priced. Keep the corners separate in anything that
+consumes this.
+
+**Fulfilment is not a badge.** `In stock` / `Only N left` / `Made to order` / `Sold out`
+render as a coloured dot plus text in the card body — a fact about the item, not a
+merchandising claim. As a chip it competed with the discount for the same attention.
+
+**Three badges have no data source.** `HOT`, `SET` and `BACK IN STOCK` are in the rank
+table because the *order* is the design decision worth recording, but `Product` carries
+no field for any of them (verified against the model). No caller passes them, so nothing
+speculative renders; when a field lands it is one argument at the call site.
+
+The cap, the rank and the overflow count are asserted in
+`npm run test:shop-badges` — all three fail silently rather than throwing.
+
+## `ShopProductCard` vs `ui/ProductCard`
+
+`ui/ProductCard` renders **both** shop products and mini-draw packs from one 1000-line
+body, and the two have divergent rules: entry packs have no variants, no stock, no member
+discount and a different CTA. The redesigned badge system, the variant-aware CTA and the
+member price block apply only to the shop half, so the shop path forked into
+[`ShopProductCard`](src/components/shop/ShopProductCard.tsx) rather than branching that
+component further. Mini-draws still use the original, untouched.
+
+Two behaviours worth knowing:
+
+- **A variant product is not addable from a grid.** The purchasable unit is a variant
+  (size × colour), so its card routes to the detail page. Adding "a hoodie" would have to
+  guess a size, and the server rejects an unknown sku with a 400 anyway.
+- **Adding is not a dead end.** Once an item is in, the button becomes the route to the
+  cart and the toast carries a `View cart` action. Previously the button said "Added" and
+  offered nothing to do next.
+
+The card gates on `isAddingToCart(productId)` plus a local `justPressed` flag — never on
+`useCart().isLoading`, which is the global sync flag and would freeze every button on the
+page. The local flag covers the window before the optimistic op is queued; without it a
+second tap starts a second add, and `POST /api/cart` is additive.
+
+## Price emphasis follows the reader
+
+[`PriceBlock`](src/components/shop/PriceBlock.tsx) moves the emphasis rather than showing
+one layout to everyone. A **member** sees their price as the headline with the RRP struck
+through beside it — the big number is the one that leaves their account. A **guest** sees
+the RRP as the headline, because that *is* their price, with the member figure as a gold
+invitation. Striking through the price a guest actually pays reads as a discount they
+already have.
+
+The discount **badge** is gated on the viewer actually being a member, unlike the
+prototype which showed it on every card. To a guest, `10% OFF` claims a price they cannot
+get.

@@ -596,6 +596,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "docs": "docs/cart-shop-products/",
       "paths": [
         "src/app/(site)/shop/**",
+        "src/components/shop/**",
         "src/app/(site)/checkout/**",
         "src/app/(site)/purchase-success/**",
         "src/app/api/cart/**",
