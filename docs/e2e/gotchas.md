@@ -592,3 +592,10 @@ on. If a future Next version starts honouring it, the app would move to 3043 whi
 baked API base still said 3000 — the same CORS failure as above, from the other
 direction. Set the port with `PORT=3043 npm run dev` on the command line if you want a
 different one, and change `NEXT_PUBLIC_API_URL` to match in the same breath.
+
+## Shop checkout comment (2026-08-25)
+
+The checkout spec deliberately does not hardcode a total, since the seeded member holds
+a tier. Its explanatory comment named the old Tradie 5% figure and now names 10%. The
+assertions were untouched — they check relationships, which is why the ladder change did
+not break them.

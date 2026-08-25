@@ -13,7 +13,7 @@ Tools Australia is a **membership-driven giveaway and rewards platform** for Aus
 3. **Taking an upsell** after any purchase (50–60% off, with a category-specific entries multiplier — membership 10×, one-time/additional 2×, mini 1×; see §5).
 4. **Referring a friend**, **using an affiliate link**, or **participating in promos**.
 
-On top of the giveaway loop, members unlock **tiered partner discounts** — **two separate programmes**: our own 7 direct partner brands, plus the **1,833-offer iGoDirect/MyRewards catalogue** reached through the partner portal (SSO **live in production as of 2026-07-31**). Once the shop launches, members also get **shop discounts** (5–20%).
+On top of the giveaway loop, members unlock **tiered partner discounts** — **two separate programmes**: our own 7 direct partner brands, plus the **1,833-offer iGoDirect/MyRewards catalogue** reached through the partner portal (SSO **live in production as of 2026-07-31**). Once the shop launches, members also get **shop discounts** (10–25%).
 
 The platform is a Next.js 15 + MongoDB + Stripe + NextAuth stack on Vercel. The hard architectural rules live in [CLAUDE.md](CLAUDE.md).
 
@@ -29,11 +29,17 @@ There are **three families** of packages:
 
 | Tier    | Price   | Entries / month | Partner-discount access | Shop discount* |
 | ------- | ------- | --------------- | ----------------------- | -------------- |
-| Tradie  | $20/mo  | 15              | 50% of catalog          | 5%             |
-| Foreman | $40/mo  | 40              | 75% of catalog          | 10%            |
-| Boss    | $80/mo  | 100             | 100% of catalog         | 20%            |
+| Tradie  | $20/mo  | 15              | 50% of catalog          | 10%            |
+| Foreman | $40/mo  | 40              | 75% of catalog          | 15%            |
+| Boss    | $80/mo  | 100             | 100% of catalog         | 25%            |
 
 \* Shop discount is **live** — applied at checkout by `resolveShopDiscountPercent` and shown in each tier's benefit list. It was hidden while the shop was pre-launch.
+
+**Raised from 5 / 10 / 20 to 10 / 15 / 25 on 2026-08-25.** Every comparable Australian
+rewards club — Alluxe, GLTCHD and LMCT+ — runs 10 / 15 / 25, so the old ladder was below
+market at every tier on the exact benefit the shop launches with. The deeper discount is
+funded by the ticket, not absorbed: see the Merch Pricing Proposal for the per-garment
+costing, and §2a note below for the prices that hold each tier's profit flat.
 
 ### 2a-i. Merchandise (shop)
 
@@ -45,7 +51,7 @@ per entry (rule 11).
 | ---- | ----- |
 | Shipping | Free on orders of **$100 or more**, otherwise **$10** flat (`SHOP_CONFIG`, integer cents) |
 | GST | **Inside** the total, never added — `total / 11` is the GST component |
-| Member discount | The tier's shop % (Tradie 5 / Foreman 10 / Boss 20), applied before shipping is assessed |
+| Member discount | The tier's shop % (Tradie 10 / Foreman 15 / Boss 25), applied before shipping is assessed |
 | Checkout | **Account required** — `Order.user` is mandatory, so there is no guest checkout |
 | Entry pool | **Major Draw only.** Merchandise never grants Mini Draw entries |
 | Entry multiplier | Merchandise carries its **own** multiplier, set in admin — per product, per category, or shop-wide (most specific wins), defaulting to 1×. It does **not** inherit the one-time pack multiplier, so a pack promo does not change what a garment grants. Nothing structurally prevents a merch rate that beats the packs on value per entry; that is now a pricing decision, not a code guarantee |

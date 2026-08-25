@@ -249,8 +249,8 @@ entries. Support needs that distinction.
 | `referral` | subdoc (opt) | This user's code: `code` (unique sparse index), `successfulConversions` (def 0), `totalEntriesAwarded` (def 0) ([User.ts:224-228](src/models/User.ts#L224)) | — |
 | `affiliateReferral` | subdoc (opt) | Link to the Affiliate who referred this user: `affiliateId (ref Affiliate), affiliateCode, referredAt, firstPurchaseCompleted (def false), membershipTied (def false)` ([User.ts:232-238](src/models/User.ts#L232)) | — |
 
-**Shop discount (live 2026-08-17).** A member's tier carries a shop discount — Tradie 5%, Foreman
-10%, Boss 20% — resolved by `resolveShopDiscountPercent` and applied at checkout before shipping
+**Shop discount (live 2026-08-17; ladder raised 2026-08-25).** A member's tier carries a shop
+discount — Tradie 10%, Foreman 15%, Boss 25% — resolved by `resolveShopDiscountPercent` and applied at checkout before shipping
 is assessed. It is not stored on `User`; it is derived from the active subscription tier at
 purchase time, so it follows upgrades, downgrades and lapses automatically. It was hidden from the
 tier benefit lists while the shop was pre-launch and is now shown.

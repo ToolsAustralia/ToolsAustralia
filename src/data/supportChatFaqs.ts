@@ -138,7 +138,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "15",
       question: "Is the online shop available?",
       answer:
-        "Yes — you can browse and buy from the shop at [/shop](/shop). Members get a discount based on tier: Tradie 5%, Foreman 10%, Boss 20%, applied automatically at checkout. Shipping is free on orders of $100 or more, otherwise a $10 flat rate. You'll need an account to check out, so your order and delivery details stay attached to you.",
+        "Yes — you can browse and buy from the shop at [/shop](/shop). Members get a discount based on tier: Tradie 10%, Foreman 15%, Boss 25%, applied automatically at checkout. Shipping is free on orders of $100 or more, otherwise a $10 flat rate. You'll need an account to check out, so your order and delivery details stay attached to you.",
       category: "REWARDS",
     },
     {
@@ -723,7 +723,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "89",
       question: "Does my membership discount apply in the shop, and does a one-time pack count?",
       answer:
-        "Yes — while your membership is active your shop discount comes off automatically at checkout (Tradie 5%, Foreman 10%, Boss 20%), across the whole shop, with no code to enter. It's a membership benefit only: one-time packs and Mini Packs carry no shop discount, and a membership that's paused, past due or cancelled doesn't discount either — settling a past-due payment switches it straight back on. Because free delivery is worked out after the discount, a larger discount can drop an order back under the $100 threshold. Your tier is on [My Account → Membership](/my-account/membership).",
+        "Yes — while your membership is active your shop discount comes off automatically at checkout (Tradie 10%, Foreman 15%, Boss 25%), across the whole shop, with no code to enter. It's a membership benefit only: one-time packs and Mini Packs carry no shop discount, and a membership that's paused, past due or cancelled doesn't discount either — settling a past-due payment switches it straight back on. Because free delivery is worked out after the discount, a larger discount can drop an order back under the $100 threshold. Your tier is on [My Account → Membership](/my-account/membership).",
       category: "REWARDS",
     },
   ];

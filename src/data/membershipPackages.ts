@@ -75,11 +75,11 @@ export const membershipPackages: StaticMembershipPackage[] = [
     description: "Perfect for tradies getting started",
     features: [
       "50% Access to Partner Discounts",
-      "5% Off Shop purchases",
+      "10% Off Shop purchases",
       "15 Free Accumulated Entries Major Giveaway",
     ],
     entriesPerMonth: 15,
-    shopDiscountPercent: 5,
+    shopDiscountPercent: 10,
     // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
     partnerDiscountDays: 0,
     isAdditional: false,
@@ -97,11 +97,11 @@ export const membershipPackages: StaticMembershipPackage[] = [
     description: "The most popular choice for serious tool enthusiasts",
     features: [
       "75% Access to Partner Discounts",
-      "10% Off Shop purchases",
+      "15% Off Shop purchases",
       "40 Free Accumulated Entries Major Giveaway",
     ],
     entriesPerMonth: 40,
-    shopDiscountPercent: 10,
+    shopDiscountPercent: 15,
     // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
     partnerDiscountDays: 0,
     isAdditional: false,
@@ -119,11 +119,11 @@ export const membershipPackages: StaticMembershipPackage[] = [
     description: "Premium membership for the ultimate tool professionals",
     features: [
       "100% Access to Partner Discounts",
-      "20% Off Shop purchases",
+      "25% Off Shop purchases",
       "100 Free Accumulated Entries Major Giveaway",
     ],
     entriesPerMonth: 100,
-    shopDiscountPercent: 20,
+    shopDiscountPercent: 25,
     // Subscriptions: partner access is lifecycle-gated (active while subscribed), not a fixed window — see partner-discount-queue.ts
     partnerDiscountDays: 0,
     isAdditional: false,

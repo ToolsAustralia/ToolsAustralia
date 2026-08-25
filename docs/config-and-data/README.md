@@ -172,7 +172,8 @@ pack is regenerated into `src/generated/chatKnowledgePack.ts` and its size ceili
 `src/data/membershipPackages.ts` carried `// "5% Off Shop purchases", // Temporarily disabled -
 Shop coming soon` on all three subscription tiers (and one in `useMajorDrawEntryCta.ts`). The
 discount is real — `resolveShopDiscountPercent` applies it at checkout — so hiding the line
-understated what a member gets. Now shown: Tradie 5%, Foreman 10%, Boss 20%.
+understated what a member gets. Now shown: Tradie 10%, Foreman 15%, Boss 25%
+(raised from 5 / 10 / 20 on 2026-08-25 to match the category standard).
 
 Keep these in lockstep with `shopDiscountPercent` on the same object. The percentage is authored
 twice per tier: once as data (`shopDiscountPercent`, which drives the actual discount) and once as

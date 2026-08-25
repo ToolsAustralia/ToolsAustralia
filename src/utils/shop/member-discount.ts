@@ -2,7 +2,7 @@ import { getPackageById, membershipPackages } from "@/data/membershipPackages";
 import { centsToDollars, dollarsToCents, priceCart } from "@/utils/shop/pricing";
 
 /**
- * The member shop discount: Tradie 5%, Foreman 10%, Boss 20%.
+ * The member shop discount: Tradie 10%, Foreman 15%, Boss 25%.
  *
  * Subscription-only by design — every one-time and mini pack carries
  * `shopDiscountPercent: 0`, so holding a pack must not discount the shop.

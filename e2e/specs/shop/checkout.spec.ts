@@ -131,7 +131,7 @@ test.describe("shop checkout @purchase", () => {
     await page.getByRole("button", { name: /continue to payment/i }).click();
 
     // Do NOT hardcode the total: the seeded member holds a tier, so a shop
-    // discount applies (Tradie 5% => $104.50, not $110). Read what the page
+    // discount applies (Tradie 10% => $99.00, not $110). Read what the page
     // actually quotes and assert the RELATIONSHIPS — those hold whatever the
     // tier is, and they are the things that could silently break.
     const payButton = page.getByRole("button", { name: /^Pay \$[\d,]+\.\d{2}$/ }).first();

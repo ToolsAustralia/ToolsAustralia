@@ -547,3 +547,41 @@ So the multiplier is exactly that: a multiplier, never a source of entries. **A 
 with `includedEntries: 0` grants nothing no matter what any tier of the hierarchy is set
 to.** An admin who sets a shop-wide 3× and sees no entries appear is looking at a
 catalogue that advertises none, not a broken multiplier.
+
+## The member ladder is 10 / 15 / 25 (2026-08-25)
+
+Raised from 5 / 10 / 20. Every comparable Australian rewards club — Alluxe, GLTCHD and
+LMCT+ — runs exactly 10 / 15 / 25, so the old ladder sat below market at every tier on
+the one benefit the shop launches with.
+
+`resolveShopDiscountPercent` reads `shopDiscountPercent` off the **subscription**
+package in `src/data/membershipPackages.ts` and nowhere else. Note that
+`src/data/upsellPackages.ts` also carries `shopDiscountPercent` values (5 and 10) —
+those are **dead for this purpose**: the resolver looks the id up with `getPackageById`
+against the membership catalogue, so an upsell id resolves to nothing and returns 0.
+They were left alone rather than "fixed" into the new ladder, because changing them
+would imply a discount that no code path grants.
+
+Landed while production held **zero products and zero orders** (verified), so the
+deeper discount cost nothing on the day it shipped.
+
+### The free-shipping threshold contradicts the approved pricing
+
+`SHOP_CONFIG.freeShippingThresholdCents` is `100_00`, and `priceCart` tests it against
+the **discounted** total. The signed-off Merch Pricing Proposal says the opposite:
+*"Delivery is charged automatically at $10 on every order — no threshold, nothing to
+calculate."*
+
+This is not cosmetic. On a $109.95 jacket the customer pays no delivery and the courier
+still bills $9.50–$15, so that sale earns **$10.00 less** than the proposal claims. The
+proposal is also out by **$0.91 on every order that does pay the $10**, because it took
+GST on the garment alone while `priceCart` takes it on the total including delivery
+(correct — GSTD 2002/3 makes delivery a taxable supply).
+
+The threshold also creates a cliff that fights any price rise: at $117.95 a Foreman
+lands at $100.26, crosses into free shipping, and that tier goes **backwards** despite
+the higher ticket. Holding every tier flat with the threshold in place needs $128.95,
+which is outside the competitive band the proposal identified ($110, $115–120).
+
+**Unresolved — needs an owner decision.** Removing the threshold is a customer takeaway
+and Cobber currently promises free delivery over $100, so it was not changed here.

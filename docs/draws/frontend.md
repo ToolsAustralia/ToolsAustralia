@@ -314,3 +314,10 @@ starts on the gradient still reaches the stage. While zoomed the header/footer d
 
 `z-[9600]`: above the sticky buy bar (60), the header (40) and `SheetShell` (9500), still below
 `Z_INDEX.MODAL_BASE`. `useReducedMotion()` keeps the transforms and drops the transitions.
+
+## Foreman CTA states the shop discount (2026-08-25)
+
+`useMajorDrawEntryCta` restates the Foreman benefit list inline, including the shop
+percentage. It moved 10% -> 15% with the ladder. A hardcoded benefit string in a CTA
+is a second copy of the catalogue — if a tier changes, grep for the percentage as well
+as the field.

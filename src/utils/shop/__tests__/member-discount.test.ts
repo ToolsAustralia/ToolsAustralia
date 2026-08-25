@@ -60,9 +60,9 @@ test("a nonsense catalog value can never inflate or invert the total", () => {
 test("real catalog: the three subscription tiers are 5 / 10 / 20", () => {
   const forId = (id: string) =>
     resolveShopDiscountPercent({ subscription: { isActive: true, packageId: id } }, getPackageById);
-  assert.equal(forId("tradie-subscription"), 5, "Tradie");
-  assert.equal(forId("foreman-subscription"), 10, "Foreman");
-  assert.equal(forId("boss-subscription"), 20, "Boss");
+  assert.equal(forId("tradie-subscription"), 10, "Tradie");
+  assert.equal(forId("foreman-subscription"), 15, "Foreman");
+  assert.equal(forId("boss-subscription"), 25, "Boss");
 });
 
 test("real catalog: EVERY one-time pack gives no shop discount", () => {
