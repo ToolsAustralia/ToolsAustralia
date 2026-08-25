@@ -704,3 +704,49 @@ whether it was ever made.
 **A sticky bottom bar** carries the price and the CTA on mobile. The add button sits below
 the description, the spec grid and the related rail, so a shopper who scrolled to read
 about the product had to scroll back up to buy it.
+
+## Cart drawer (2026-08-25)
+
+**The sku is part of the React key.** Cart line identity is `(productId, sku)`, so two
+sizes of one hoodie are two lines — and they shared a key without it. React reconciles
+them as one, so a quantity typed into Black L could paint onto Navy XL.
+
+**The variant is named on the line.** Two sizes of the same product are two rows with the
+same name; without the `colour · size` line the cart shows what looks like a duplicate and
+the only way to tell them apart is to remove one and see what vanishes.
+
+**Stepping below one removes the line.** A minus button that stops responding at 1 reads
+as broken, and it left the bin icon as the only way out of a line already decided against.
+
+Thumbnails are `object-contain` — product shots sit on white and `cover` cropped the
+garment.
+
+> **The design's free-delivery progress bar is not implementable and was not built.**
+> It reads `$N to free delivery` / `Free delivery unlocked`, which requires a threshold.
+> Delivery is a flat $10 on every order as of 2026-08-25 (see `backend.md`), so there is
+> no threshold to progress toward. The cart states the flat charge in the totals instead.
+
+## `/my-account/orders` — search, filters, Buy again (2026-08-25)
+
+**Search matches the order number *and* the item names.** People hunt for "hoodie", not
+`SHOP-20260821-KU8AIR` — the number is what they have when support asks for it, not what
+they remember.
+
+**Status chips** are All / Being made / On its way / Delivered / Cancelled. `pending` and
+`cancelled` stay absent from the *progress strip* — one is webhook latency, the other an
+exit from the journey — but both are filterable, because "where is my refund" is a real
+reason to come here.
+
+**A live count** reads `3 of 4 orders` when narrowed and `4 orders` when not, and the
+controls only appear above more than one order — a search box over a single order is noise.
+
+**The filtered-empty state is distinct from having no orders.** This customer *has*
+orders; telling them they have none is both wrong and alarming. It names the constraint —
+`Nothing matches "…"` or `No delivered orders`.
+
+**Buy again** appears only on **delivered** and **cancelled** orders: one is where wanting
+another is ordinary, the other is where they wanted it and did not get it. On an order
+still being made it would invite buying a second copy of something already paid for and in
+transit. It routes to the shop rather than re-adding lines — sizes sell out and prices
+move, and silently filling a cart from a months-old order is a decision made on the
+customer's behalf.

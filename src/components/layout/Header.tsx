@@ -2058,19 +2058,6 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       cartItem.miniDraw?.prize?.images?.[0] ||
                       "/images/placeholder.jpg";
 
-                    const handleQuantityChange = (newQuantity: number) => {
-                      if (newQuantity < 1) return;
-                      updateCartItem({
-                        productId: cartItem.type === "product" ? cartItem.productId : undefined,
-                        miniDrawId: cartItem.type === "ticket" ? cartItem.miniDrawId : undefined,
-                        // Without this the server matched on productId alone and edited
-                        // whichever variant sat first — a customer changing Navy XL
-                        // silently changed their Black L.
-                        sku: cartItem.type === "product" ? cartItem.sku : undefined,
-                        quantity: newQuantity,
-                      });
-                    };
-
                     const handleRemove = () => {
                       const itemId = cartItem.productId || cartItem.miniDrawId || "";
                       // DELETE /api/cart matches a line on (productId, sku) and treats a
@@ -2083,9 +2070,35 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       );
                     };
 
+                    const handleQuantityChange = (newQuantity: number) => {
+                      // Stepping below one REMOVES the line rather than doing nothing.
+                      // A minus button that stops responding at 1 reads as broken, and
+                      // it left the bin icon as the only way out of a line someone had
+                      // already decided against.
+                      if (newQuantity < 1) {
+                        handleRemove();
+                        return;
+                      }
+                      updateCartItem({
+                        productId: cartItem.type === "product" ? cartItem.productId : undefined,
+                        miniDrawId: cartItem.type === "ticket" ? cartItem.miniDrawId : undefined,
+                        // Without this the server matched on productId alone and edited
+                        // whichever variant sat first — a customer changing Navy XL
+                        // silently changed their Black L.
+                        sku: cartItem.type === "product" ? cartItem.sku : undefined,
+                        quantity: newQuantity,
+                      });
+                    };
+
                     return (
                       <div
-                        key={`${cartItem.type}-${cartItem.productId}`}
+                        /*
+                          The sku is part of the KEY, not decoration. Cart line identity
+                          is (productId, sku), so two sizes of one hoodie are two lines
+                          that shared a key without it — React then reconciles them as
+                          one and a quantity typed into Black L can paint onto Navy XL.
+                        */
+                        key={`${cartItem.type}-${cartItem.productId ?? cartItem.miniDrawId}-${cartItem.sku ?? ""}`}
                         className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-neutral-800/80 rounded-lg"
                       >
                         <div className="w-16 h-16 bg-white dark:bg-neutral-900 rounded-lg overflow-hidden flex-shrink-0">
@@ -2094,12 +2107,24 @@ export default function Header({ isFixed = true }: HeaderProps) {
                             alt={itemName}
                             width={64}
                             height={64}
-                            className="w-full h-full object-cover"
+                            // Product shots sit on white — cover crops the garment.
+                            className="w-full h-full object-contain"
                             sizes="64px"
                           />
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className="font-medium text-gray-900 dark:text-white text-sm truncate">{itemName}</h3>
+                          {/*
+                            WHICH ONE. Two sizes of the same product are two lines with
+                            the same name, so without this the cart shows what looks like
+                            a duplicate and the only way to tell them apart is to remove
+                            one and see what disappears.
+                          */}
+                          {(cartItem.colour || cartItem.size) && (
+                            <p className="truncate text-[11px] font-medium text-gray-500 dark:text-neutral-400">
+                              {[cartItem.colour, cartItem.size].filter(Boolean).join(" · ")}
+                            </p>
+                          )}
                           <p className="text-red-600 font-semibold">
                             ${itemPrice.toFixed(2)}
                             {cartItem.type === "ticket" && (

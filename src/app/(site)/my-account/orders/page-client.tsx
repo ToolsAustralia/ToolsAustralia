@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Loader2, Package, ShoppingBag, Ticket, Truck } from "lucide-react";
+import { Loader2, Package, Search, ShoppingBag, Ticket, Truck, X } from "lucide-react";
 import { useOrders, type OrderListRow } from "@/hooks/queries/useOrderQueries";
 
 /**
@@ -110,6 +110,22 @@ const statusClass = (status: string) =>
     cancelled: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300",
   })[status] ?? "bg-gray-100 text-gray-700";
 
+/**
+ * The status chips.
+ *
+ * `pending` and `cancelled` are deliberately absent from the JOURNEY strip above —
+ * one is a few seconds of webhook latency and the other is an exit from the
+ * journey, so drawing either as a step misleads. They ARE filterable, because
+ * "where is my refund" is a real thing to come here looking for.
+ */
+const STATUS_FILTERS: { key: string; label: string; match: (s: string) => boolean }[] = [
+  { key: "all", label: "All", match: () => true },
+  { key: "processing", label: "Being made", match: (s) => s === "processing" || s === "pending" },
+  { key: "shipped", label: "On its way", match: (s) => s === "shipped" },
+  { key: "delivered", label: "Delivered", match: (s) => s === "delivered" || s === "completed" },
+  { key: "cancelled", label: "Cancelled", match: (s) => s === "cancelled" },
+];
+
 export default function OrdersPage() {
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
@@ -118,6 +134,30 @@ export default function OrdersPage() {
   const { data, isLoading, isError } = useOrders(session?.user?.id, { limit: 50 });
   const orders: OrderListRow[] | null = data?.orders ?? null;
   const error = isError ? "We couldn't load your orders just now." : null;
+
+  const [query, setQuery] = useState("");
+  const [statusKey, setStatusKey] = useState("all");
+
+  /**
+   * Search matches the order number AND the item names.
+   *
+   * People hunt for "hoodie", not SHOP-20260821-KU8AIR — the number is the thing
+   * they have when support asks for it, not the thing they remember. Matching only
+   * the number would make the box useless for the search anyone actually runs.
+   */
+  const visibleOrders = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const status = STATUS_FILTERS.find((f) => f.key === statusKey) ?? STATUS_FILTERS[0];
+    return (orders ?? []).filter((o) => {
+      if (!status.match(o.status)) return false;
+      if (!q) return true;
+      if (o.orderNumber.toLowerCase().includes(q)) return true;
+      return o.items.some((i) => i.name.toLowerCase().includes(q));
+    });
+  }, [orders, query, statusKey]);
+
+  const isFiltered = query.trim().length > 0 || statusKey !== "all";
+  const activeStatusLabel = STATUS_FILTERS.find((f) => f.key === statusKey)?.label ?? "";
 
   useEffect(() => {
     // `unauthenticated` only — `loading` returns null data and would bounce a
@@ -165,6 +205,52 @@ export default function OrdersPage() {
         </div>
       )}
 
+      {/*
+        Controls appear only once there is something to narrow. Four orders already
+        exceed one screen and the list only grows, but showing a search box above a
+        single order is noise.
+      */}
+      {orders && orders.length > 1 && (
+        <div className="mt-6 flex flex-col gap-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search orders or items…"
+              aria-label="Search your orders"
+              className="h-11 w-full rounded-xl border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none transition-colors focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+            />
+          </div>
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide">
+            {STATUS_FILTERS.map((f) => {
+              const on = f.key === statusKey;
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setStatusKey(f.key)}
+                  aria-pressed={on}
+                  className={`h-8 shrink-0 whitespace-nowrap rounded-full px-3 text-[12.5px] font-semibold transition-colors ${
+                    on
+                      ? "bg-red-600 text-white"
+                      : "border border-gray-300 bg-white text-gray-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[12.5px] font-medium text-gray-500 dark:text-neutral-400">
+            {isFiltered
+              ? `${visibleOrders.length} of ${orders.length} orders`
+              : `${orders.length} ${orders.length === 1 ? "order" : "orders"}`}
+          </p>
+        </div>
+      )}
+
       {orders && orders.length === 0 && (
         <div className="mt-8 flex flex-col items-center gap-3 rounded-2xl border border-gray-200 py-14 text-center dark:border-neutral-800">
           <Package className="h-9 w-9 text-gray-300" />
@@ -181,8 +267,33 @@ export default function OrdersPage() {
         </div>
       )}
 
+      {/*
+        Filtered to nothing. Distinct from "no orders yet" above: this customer HAS
+        orders, and telling them they have none is both wrong and alarming. Naming
+        the constraint is what makes it obvious the remedy is to widen the filter.
+      */}
+      {orders && orders.length > 0 && visibleOrders.length === 0 && (
+        <div className="mt-6 flex flex-col items-center gap-3 rounded-2xl border border-gray-200 py-12 text-center dark:border-neutral-800">
+          <Search className="h-8 w-8 text-gray-300" />
+          <p className="font-semibold text-gray-900 dark:text-white">
+            {query.trim() ? `Nothing matches "${query.trim()}"` : `No ${activeStatusLabel.toLowerCase()} orders`}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setStatusKey("all");
+            }}
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-gray-300 px-4 text-[12.5px] font-semibold text-gray-700 dark:border-neutral-700 dark:text-neutral-200"
+          >
+            <X className="h-3.5 w-3.5" />
+            Clear filters
+          </button>
+        </div>
+      )}
+
       <div className="mt-6 space-y-4">
-        {(orders ?? []).map((order) => {
+        {visibleOrders.map((order) => {
           const step = journeyIndex(order.status);
           const isCancelled = order.status === "cancelled";
           const hasEntries = (order.entriesGranted ?? 0) > 0;
@@ -305,6 +416,31 @@ export default function OrdersPage() {
                     </span>
                   )}
                 </div>
+                )}
+                {/*
+                  BUY AGAIN — the highest-intent action on this page, and it was not
+                  here at all.
+
+                  Only on orders that have FINISHED: something delivered is the case
+                  where wanting another is ordinary, and something cancelled is the
+                  case where the customer wanted it and did not get it. On an order
+                  still being made or on its way it would invite buying a second copy
+                  of a thing already paid for and in transit.
+
+                  It routes to the shop rather than re-adding the lines: sizes sell
+                  out, prices move, and silently filling a cart from a months-old
+                  order is a decision made on the customer's behalf.
+                */}
+                {(order.status === "delivered" ||
+                  order.status === "completed" ||
+                  order.status === "cancelled") && (
+                  <Link
+                    href="/shop"
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-gray-300 px-3.5 text-[12.5px] font-semibold text-gray-800 transition-colors hover:border-red-600 hover:text-red-600 dark:border-neutral-700 dark:text-neutral-100"
+                  >
+                    <ShoppingBag className="h-3.5 w-3.5" />
+                    Buy again
+                  </Link>
                 )}
                 {/* ml-auto, not a spacer: with the badge strip gone the total still
                     has to hold the right edge. */}
