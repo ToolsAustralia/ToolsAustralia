@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import { useSelectedColour } from "@/stores/useProductColourStore";
 import type { ColourwayLike } from "@/utils/shop/variants";
+import { ProductBadges } from "@/components/shop/ProductBadges";
+import { useUserContext } from "@/contexts/UserContext";
+import { resolveMemberShopPrice } from "@/utils/shop/member-discount";
 
 /**
  * The product image, following the colour the customer picked.
@@ -22,6 +25,18 @@ interface ProductGalleryProps {
   name: string;
   images: string[];
   colourways?: ColourwayLike[];
+  /**
+   * Everything the badge corners need. Optional so the gallery still renders bare
+   * for any caller that has no product context to give it.
+   */
+  badges?: {
+    price?: number;
+    stock?: number;
+    trackInventory?: boolean;
+    isFeatured?: boolean;
+    includedEntries?: number;
+    entryMultiplier?: number | null;
+  };
 }
 
 export default function ProductGallery({
@@ -29,9 +44,20 @@ export default function ProductGallery({
   name,
   images,
   colourways = [],
+  badges,
 }: ProductGalleryProps) {
   const selectedColour = useSelectedColour(productId);
   const [activeIndex, setActiveIndex] = useState(0);
+  const { userData } = useUserContext();
+
+  // Resolved here rather than passed in: the page is a server component and cannot
+  // read the session, and a discount badge shown to someone who does not hold the
+  // tier claims a price they cannot get.
+  const memberPercent = useMemo(() => {
+    if (!badges?.price) return undefined;
+    const p = resolveMemberShopPrice(badges.price, userData);
+    return p?.isMember ? p.percent : undefined;
+  }, [badges?.price, userData]);
 
   const colourway = selectedColour
     ? colourways.find((c) => c.name === selectedColour)
@@ -55,7 +81,16 @@ export default function ProductGallery({
 
   return (
     <div className="space-y-4">
-      <div className="aspect-square overflow-hidden rounded-2xl bg-gray-100 dark:bg-neutral-900">
+      {/*
+        FULL BLEED ON A PHONE.
+
+        The page wraps everything in px-4, so the image sat inset with rounded
+        corners and a visible gutter on both sides — a card floating on the page
+        rather than the product itself. Cancelling the gutter with a negative margin
+        lets it reach both edges, and the radius comes back from sm up where the
+        two-column layout gives it a container to sit inside.
+      */}
+      <div className="relative -mx-4 aspect-square overflow-hidden bg-gray-100 dark:bg-neutral-900 sm:mx-0 sm:rounded-2xl">
         <Image
           // Re-keying on the source forces a fresh element per colour, so the
           // browser cannot briefly paint the previous colour's decoded frame.
@@ -68,10 +103,23 @@ export default function ProductGallery({
           sizes="(max-width: 1024px) 100vw, 50vw"
           priority
         />
+        {badges && (
+          <ProductBadges
+            size="lg"
+            input={{
+              stock: badges.stock,
+              trackInventory: badges.trackInventory,
+              discountPercent: memberPercent,
+              isFeatured: badges.isFeatured,
+              includedEntries: badges.includedEntries,
+              entryMultiplier: badges.entryMultiplier,
+            }}
+          />
+        )}
       </div>
 
       {gallery.length > 1 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 px-4 sm:px-0">
           {gallery.map((url, i) => (
             <button
               key={url}

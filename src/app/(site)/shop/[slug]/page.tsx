@@ -301,6 +301,14 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                 name={product.name}
                 images={serializedProduct.images ?? []}
                 colourways={serializedProduct.colourways ?? []}
+                badges={{
+                  price: product.price,
+                  stock: product.stock,
+                  trackInventory: serializedProduct.trackInventory,
+                  isFeatured: serializedProduct.isFeatured,
+                  includedEntries: serializedProduct.includedEntries,
+                  entryMultiplier,
+                }}
               />
             </div>
           </div>

@@ -203,7 +203,16 @@ export function ProductBadges({
 
   return (
     <div className={cn("pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2", className)}>
-      <div className="flex flex-wrap items-start gap-1">
+      {/*
+        EACH CORNER IS A COLUMN.
+
+        The left stack used to wrap, which on a 189px card meant a second commerce
+        badge dropped onto a new line UNDER the entries badge in the other corner —
+        the two axes visually merged into one ragged block, which is the pile-up the
+        two-corner split exists to prevent. Stacking keeps each axis in its own
+        vertical run no matter how long a label is.
+      */}
+      <div className="flex flex-col items-start gap-1">
         {left.map((b) => (
           <Badge key={b.kind + b.label} spec={b} size={size} />
         ))}

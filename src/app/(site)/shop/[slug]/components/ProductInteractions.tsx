@@ -596,6 +596,16 @@ export default function ProductInteractions({
         view with a sticky image beside it.
       */}
       <div
+        /*
+          data-floating-widget is what makes Cobber move.
+
+          useDodgeFloatingObstacles scans for exactly this attribute and lifts the
+          launcher above anything bottom-anchored it finds, which is how the draw
+          countdown and the promo dock already coexist with it. Without it the robot
+          sat on top of this bar and ate the tap on "Pick colour & size" — the one
+          control the page exists for.
+        */
+        data-floating-widget
         className="fixed inset-x-0 bottom-0 z-40 border-t border-token bg-surface/95 px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 backdrop-blur sm:hidden"
         role="region"
         aria-label="Buy this product"
