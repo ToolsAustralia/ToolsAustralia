@@ -168,6 +168,8 @@ export default function CheckoutClient() {
     setPrefilled(true);
   }, [prefilled, sessionStatus, userData]);
 
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
   // Keep the draft in step with the form, so a refresh at the card step restores it.
   // Only after the prefill has run — writing before it would persist the empty form
   // over a real draft and defeat the whole point.
@@ -183,6 +185,22 @@ export default function CheckoutClient() {
 
   const startCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    /*
+      Validate the GROUP before doing anything else.
+
+      The browser would block submission on its own via the `required` attributes,
+      but it stops at the first field and shows a native bubble that vanishes on
+      the next click. Marking every required field touched paints all the messages
+      at once, under the fields they belong to, where they stay while the customer
+      fixes them.
+    */
+    touchAllRequired();
+    if (!addressComplete) {
+      setError("Check the highlighted fields and try again.");
+      return;
+    }
+
     setError(null);
     setItemErrors([]);
     setIsStarting(true);
@@ -310,6 +328,57 @@ export default function CheckoutClient() {
     return centsToDollars(priced.discountCents);
   }, [productItems, userData]);
 
+  /**
+   * Per-field validation, reported ON BLUR rather than on submit.
+   *
+   * Pressing Continue and being told the form is wrong makes someone hunt for which
+   * field it was; a message under the field they just left names it while they are
+   * still looking at it. Nothing is marked until it has been blurred at least once,
+   * so a form that has not been touched is never covered in red.
+   */
+  const REQUIRED_FIELDS: { key: keyof typeof address; label: string }[] = [
+    { key: "firstName", label: "First name" },
+    { key: "lastName", label: "Last name" },
+    { key: "addressLine1", label: "Address" },
+    { key: "city", label: "Suburb" },
+    { key: "state", label: "State" },
+    { key: "postalCode", label: "Postcode" },
+  ];
+
+  /**
+   * Pressing Continue marks every required field touched at once.
+   *
+   * Without it someone who never entered a field never blurred it, so the form
+   * would refuse to proceed while showing no message anywhere — the worst version
+   * of a validation failure.
+   */
+  const touchAllRequired = () =>
+    setTouched((t) => ({ ...t, ...Object.fromEntries(REQUIRED_FIELDS.map((r) => [r.key as string, true])) }));
+
+  const validateField = (key: keyof typeof address, value: string): string => {
+    const trimmed = (value ?? "").trim();
+    const required = REQUIRED_FIELDS.find((r) => r.key === key);
+    if (required && !trimmed) return `${required.label} is required`;
+    // Australian postcodes are exactly four digits. The example is worth more than
+    // the rule — "Four digits" alone still leaves someone wondering about leading
+    // zeros, which Victoria and the NT both use.
+    if (key === "postalCode" && trimmed && !/^\d{4}$/.test(trimmed)) return "Four digits, e.g. 3220";
+    return "";
+  };
+
+  const fieldError = (key: keyof typeof address): string | undefined => {
+    if (!touched[key as string]) return undefined;
+    return validateField(key, (address[key] as string) ?? "") || undefined;
+  };
+
+  const markTouched = (key: keyof typeof address) => () =>
+    setTouched((t) => (t[key as string] ? t : { ...t, [key as string]: true }));
+
+  /** Every required field valid — what gates the payment section. */
+  const addressComplete = REQUIRED_FIELDS.every(
+    (r) => !validateField(r.key, (address[r.key] as string) ?? "")
+  );
+
   if (isCartLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -355,39 +424,61 @@ export default function CheckoutClient() {
           <section className="rounded-xl border border-gray-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900">
             <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">Delivery address</h2>
 
-            <form onSubmit={startCheckout} className="space-y-3 sm:space-y-4">
+            {/*
+              noValidate: OUR validation owns this form.
+
+              Without it the browser runs its own constraint check first, refuses to
+              fire submit at all, and shows a native bubble on the first invalid
+              field — so startCheckout never runs, no field is marked, and the
+              per-field messages below never appear. The `required` attributes stay for
+              assistive tech; they just no longer block the handler.
+            */}
+            <form onSubmit={startCheckout} noValidate className="space-y-3 sm:space-y-4">
               {/* Paired at EVERY width, not just sm+. Nine full-width rows stacked on a
                   phone turned a short form into a scroll, and a first/last name pair is
                   legible in half a 390px viewport. */}
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                <Field label="First name" value={address.firstName} onChange={set("firstName")} required disabled={!!clientSecret} />
-                <Field label="Last name" value={address.lastName} onChange={set("lastName")} required disabled={!!clientSecret} />
+                <Field label="First name" value={address.firstName} onChange={set("firstName")} onBlur={markTouched("firstName")} error={fieldError("firstName")} required disabled={!!clientSecret} />
+                <Field label="Last name" value={address.lastName} onChange={set("lastName")} onBlur={markTouched("lastName")} error={fieldError("lastName")} required disabled={!!clientSecret} />
               </div>
-              <Field label="Address" value={address.addressLine1} onChange={set("addressLine1")} required disabled={!!clientSecret} />
+              <Field label="Address" value={address.addressLine1} onChange={set("addressLine1")} onBlur={markTouched("addressLine1")} error={fieldError("addressLine1")} required disabled={!!clientSecret} />
               <Field label="Apartment, unit, etc. (optional)" value={address.addressLine2} onChange={set("addressLine2")} disabled={!!clientSecret} />
               {/* Suburb takes the full row on a phone (names run long), with State and
                   Postcode paired beneath it; all three sit on one row from sm up. */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-                <Field wrapperClassName="col-span-2 sm:col-span-1" label="Suburb" value={address.city} onChange={set("city")} required disabled={!!clientSecret} />
+                <Field wrapperClassName="col-span-2 sm:col-span-1" label="Suburb" value={address.city} onChange={set("city")} onBlur={markTouched("city")} error={fieldError("city")} required disabled={!!clientSecret} />
                 <label className="block">
                   <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-neutral-200">State</span>
                   <select
                     value={address.state}
                     onChange={set("state")}
+                    onBlur={markTouched("state")}
+                    aria-invalid={fieldError("state") ? true : undefined}
                     required
                     disabled={!!clientSecret}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                    className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50 dark:bg-neutral-800 dark:text-neutral-100 ${
+                      fieldError("state")
+                        ? "border-red-500 dark:border-red-500"
+                        : "border-gray-300 dark:border-neutral-700"
+                    }`}
                   >
                     <option value="">Select…</option>
                     {AU_STATES.map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
+                  {fieldError("state") && (
+                    <span className="mt-1 block text-[12px] font-medium text-red-600 dark:text-red-400">
+                      {fieldError("state")}
+                    </span>
+                  )}
                 </label>
                 <Field
                   label="Postcode"
                   value={address.postalCode}
                   onChange={set("postalCode")}
+                  onBlur={markTouched("postalCode")}
+                  error={fieldError("postalCode")}
                   required
                   disabled={!!clientSecret}
                   inputMode="numeric"
@@ -661,9 +752,16 @@ function Row({ label, value, accent }: { label: string; value: string; accent?: 
 function Field({
   label,
   wrapperClassName,
+  error,
   ...props
 }: {
   label: string;
+  /**
+   * Shown under the field and reddens its border. Present only once the field has
+   * been BLURRED — see `touched` in the parent. Validating while someone is still
+   * typing marks a half-entered postcode as wrong before they have finished it.
+   */
+  error?: string;
   /**
    * Class for the LABEL wrapper, not the input. The input's own className is fixed
    * by this component so every field looks identical; a caller only needs to control
@@ -676,9 +774,17 @@ function Field({
       <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-neutral-200">{label}</span>
       <input
         type="text"
+        aria-invalid={error ? true : undefined}
         {...props}
-        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:disabled:bg-neutral-900"
+        className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-500 dark:bg-neutral-800 dark:text-neutral-100 dark:disabled:bg-neutral-900 ${
+          error
+            ? "border-red-500 dark:border-red-500"
+            : "border-gray-300 dark:border-neutral-700"
+        }`}
       />
+      {error && (
+        <span className="mt-1 block text-[12px] font-medium text-red-600 dark:text-red-400">{error}</span>
+      )}
     </label>
   );
 }

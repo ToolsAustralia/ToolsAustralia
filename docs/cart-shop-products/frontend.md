@@ -750,3 +750,26 @@ still being made it would invite buying a second copy of something already paid 
 transit. It routes to the shop rather than re-adding lines — sizes sell out and prices
 move, and silently filling a cart from a months-old order is a decision made on the
 customer's behalf.
+
+## Checkout address validation (2026-08-25)
+
+Validation is **per field, on blur** — not on submit. Pressing Continue and being told
+"the form is wrong" makes someone hunt for which field; a message under the field they
+just left names it while they are still looking at it. Nothing is marked until it has been
+blurred at least once, so an untouched form is never covered in red.
+
+`Continue to payment` marks **every** required field touched at once, because someone who
+never entered a field never blurred it — without that the form would refuse to proceed
+while showing no message anywhere, which is the worst version of a validation failure.
+
+> **The form carries `noValidate`, and it is load-bearing.** Without it the browser runs
+> its own constraint check first, **refuses to fire `submit` at all**, and shows a native
+> bubble on the first invalid field — so `startCheckout` never runs, nothing is marked, and
+> none of the messages below ever appear. This cost a debugging round: the per-field
+> messages worked (they fire on blur) while the submit path silently did nothing, which
+> looks like a state bug rather than a form-attribute one. The `required` attributes stay
+> for assistive tech; they just no longer block the handler.
+
+Postcode enforces four digits with the message `Four digits, e.g. 3220`. The example earns
+its place — "four digits" alone leaves someone wondering about leading zeros, which
+Victoria and the NT both use.
