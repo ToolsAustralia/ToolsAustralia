@@ -881,3 +881,42 @@ to 3, keeping the tracked ones and dropping the print-to-order ones.
 > field, so the switch would filter on nothing — and a control that changes no results is
 > worse than an absent one. It needs a model field plus an admin toggle before the row can
 > mean anything.
+
+## The sticky control row, and why it needed moving (2026-08-25)
+
+Search and the category rail scrolled away with the page, so narrowing a list meant
+scrolling back to the top to reach the control that narrows it — on the one breakpoint
+where the list is longest.
+
+**`position: sticky` travels only within its parent.** While the band lived inside the
+controls card it stuck for that card's height and then left with it — measured at -967px
+after a 1400px scroll, which looks exactly like sticky "not working". Moving it to be a
+**sibling of the grid** gives it the whole results column to travel. Verified pinned at
+86px from scroll 400 through 1200, releasing only when its parent ends, which is correct.
+
+> **A measurement trap worth remembering.** `getBoundingClientRect()` on a `display: none`
+> element returns **all zeros**, and the desktop control row is `hidden md:grid`. Reading
+> "the search input" without filtering for visibility picked up the hidden desktop copy and
+> reported `top: 0` — indistinguishable from "pinned to the top of the viewport". It made a
+> broken sticky look fixed. Always filter on `offsetParent !== null` before trusting a rect.
+
+The offset is `top-[var(--app-header-h)]`, the same variable the checkout page uses for its
+top padding, so the two cannot drift apart.
+
+## "Goes with it" (2026-08-25)
+
+The related rail is `ShopProductCard variant="related"` — same vocabulary as the grid,
+reduced, ending in **View** rather than an add control. Related cards deliberately do not
+add to cart: for a variant product that would be a lie, and mixing the two behaviours
+across cards that look identical is worse than one consistent behaviour.
+
+A snap rail below `md` and a 4-up grid above it. The rail bleeds to the screen edges
+(`-mx-4`) so a card is visibly cut off, which is what tells someone it scrolls.
+
+## Sort options match the design's five
+
+Featured · Price low→high · Price high→low · Most free entries · Newest. "Oldest",
+"Top Rated" and "Name (A-Z)" are gone — nobody sorts a seven-product shop alphabetically,
+and a rating sort on a catalogue where most items have no reviews orders by a number that
+is mostly absent. "Most free entries" sorts on `includedEntries`, which the products route
+now accepts.

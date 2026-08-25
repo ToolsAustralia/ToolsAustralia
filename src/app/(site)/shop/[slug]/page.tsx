@@ -1,10 +1,11 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { Star, Award } from "lucide-react";
+import Link from "next/link";
+import { Star, Award, ChevronRight } from "lucide-react";
 import ProductCategories from "@/components/features/ProductCategories";
 import MembershipSection from "@/components/sections/MembershipSection";
-import ProductSection from "@/components/features/ProductSection";
+import ShopProductCard from "@/components/shop/ShopProductCard";
 import ProductInteractions from "./components/ProductInteractions";
 import ProductGallery from "./components/ProductGallery";
 import ProductTabs from "./components/ProductTabs";
@@ -447,12 +448,42 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
       </div>
 
       {/* Related Products Section */}
-      <ProductSection
-        title="Related Products"
-        products={serializedRelatedProducts}
-        showViewAll={true}
-        viewAllLink="/shop"
-      />
+      {/*
+        "Goes with it" — a rail on a phone, a 4-up grid from md.
+
+        Same card vocabulary as the shop grid, reduced: these end in VIEW rather
+        than an add control. A related card must not add to cart — for a variant
+        product that would be a lie, and mixing the two behaviours across cards
+        that look identical is worse than one consistent behaviour.
+      */}
+      {serializedRelatedProducts.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+          <div className="mb-4 flex items-baseline justify-between gap-3">
+            <h2 className="font-poppins text-[20px] font-extrabold tracking-[-.02em] text-gray-900 dark:text-white sm:text-[26px]">
+              Goes with it
+            </h2>
+            <Link
+              href="/shop"
+              className="inline-flex shrink-0 items-center gap-1 text-[13px] font-bold text-red-600 hover:text-red-700"
+            >
+              All gear
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </div>
+          {/*
+            A rail below md so four cards do not squeeze to nothing on a phone;
+            a grid above it. `-mx-4` lets the rail bleed to the screen edges so a
+            card is visibly cut off, which is what tells someone it scrolls.
+          */}
+          <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide md:mx-0 md:grid md:grid-cols-4 md:gap-4 md:overflow-visible md:px-0">
+            {serializedRelatedProducts.slice(0, 4).map((p) => (
+              <div key={String(p._id)} className="w-[58vw] shrink-0 snap-start sm:w-[40vw] md:w-auto">
+                <ShopProductCard variant="related" product={p as never} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Product Categories Section */}
       <ProductCategories />

@@ -41,14 +41,20 @@ import { PRICE_NO_MAX } from "@/components/features/ProductFilters";
  * effect at all — the client never omitted the parameter for the default to apply.
  * A server-side default cannot fix a client that always overrides it.
  */
+/*
+  The five the design names, in its order.
+
+  "Oldest", "Top Rated" and "Name (A-Z)" are gone: nobody sorts a 7-product shop
+  alphabetically, and a rating sort on a catalogue where most items have no
+  reviews orders by a number that is mostly absent. "Most free entries" is new and
+  sorts on includedEntries, which the products route now accepts.
+*/
 const sortOptions = [
   { value: "displayOrder-asc", label: "Featured" },
-  { value: "createdAt-desc", label: "Newest Arrivals" },
-  { value: "createdAt-asc", label: "Oldest" },
   { value: "price-asc", label: "Price: Low to High" },
   { value: "price-desc", label: "Price: High to Low" },
-  { value: "rating-desc", label: "Top Rated" },
-  { value: "name-asc", label: "Name (A-Z)" },
+  { value: "includedEntries-desc", label: "Most free entries" },
+  { value: "createdAt-desc", label: "Newest" },
 ];
 
 /**
@@ -432,7 +438,73 @@ export default function ShopContent({
               )}
             </div>
 
-            <div className="space-y-3 md:hidden">
+            {/*
+              STICKY ON A PHONE.
+
+              The search box and the category rail scrolled away with the page, so
+              narrowing a list meant scrolling back to the top to reach the control
+              that narrows it — on the one breakpoint where the list is longest.
+              Pinning them keeps the controls with the results they control.
+
+              Offset by the app header, which is itself fixed: --app-header-h is the
+              same variable the checkout page uses for its top padding, so the two
+              cannot drift apart. The negative margin plus matching padding lets the
+              sticky band's background reach the card's edges instead of leaving a
+              transparent gutter the grid shows through as it passes underneath.
+            */}
+
+            <div className="hidden gap-3 md:grid md:grid-cols-[minmax(240px,1fr)_auto_auto_auto]">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
+                />
+              </div>
+
+              <div className="lg:hidden">
+                <button
+                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  className="inline-flex h-[42px] items-center gap-1.5 rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 px-3 text-sm font-medium text-gray-700 dark:text-neutral-200 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800"
+                >
+                  <Filter className="h-4 w-4" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="rounded-full bg-red-600/10 px-1.5 py-0.5 text-xs font-semibold text-red-600">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="relative min-w-[190px]">
+                <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500 dark:text-neutral-400">
+                  <ArrowUpDown className="h-4 w-4" />
+                </div>
+                <Dropdown
+                  options={sortOptions}
+                  value={sortBy}
+                  onChange={handleSortChange}
+                  placeholder="Sort by"
+                  className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:focus:ring-red-600/10"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/*
+            MOVED OUT OF THE CONTROLS CARD ON PURPOSE.
+
+            `position: sticky` travels only within its PARENT, so while this band
+            lived inside that card it stuck for the card's own height and then
+            scrolled away with it — measured at -967px after a 1400px scroll. As a
+            sibling of the grid its containing block is the whole results column,
+            which is the distance it actually needs to cover.
+          */}
+            <div className="sticky top-[var(--app-header-h)] z-20 -mx-4 space-y-3 border-b border-gray-200 bg-white/95 px-4 pb-3 pt-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/95 sm:-mx-5 sm:px-5 md:hidden">
               <div className="flex items-center gap-2">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
@@ -519,48 +591,6 @@ export default function ShopContent({
                 </div>
               </div>
             </div>
-
-            <div className="hidden gap-3 md:grid md:grid-cols-[minmax(240px,1fr)_auto_auto_auto]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
-                <input
-                  type="text"
-                  placeholder="Search products..."
-                  value={searchQuery}
-                  onChange={handleSearchChange}
-                  className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
-                />
-              </div>
-
-              <div className="lg:hidden">
-                <button
-                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                  className="inline-flex h-[42px] items-center gap-1.5 rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 px-3 text-sm font-medium text-gray-700 dark:text-neutral-200 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800"
-                >
-                  <Filter className="h-4 w-4" />
-                  Filters
-                  {activeFilterCount > 0 && (
-                    <span className="rounded-full bg-red-600/10 px-1.5 py-0.5 text-xs font-semibold text-red-600">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              <div className="relative min-w-[190px]">
-                <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500 dark:text-neutral-400">
-                  <ArrowUpDown className="h-4 w-4" />
-                </div>
-                <Dropdown
-                  options={sortOptions}
-                  value={sortBy}
-                  onChange={handleSortChange}
-                  placeholder="Sort by"
-                  className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:focus:ring-red-600/10"
-                />
-              </div>
-            </div>
-          </div>
 
           {/* Results Header - Enhanced styling */}
           <div className="flex flex-col gap-4 mb-8">

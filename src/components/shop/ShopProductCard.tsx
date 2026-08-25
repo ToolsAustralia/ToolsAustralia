@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, Check, SlidersHorizontal } from "lucide-react";
+import { Plus, Loader2, Check, SlidersHorizontal, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useCart } from "@/contexts/CartContext";
 import { useUserContext } from "@/contexts/UserContext";
@@ -74,9 +74,19 @@ function isNewArrival(createdAt?: string | Date): boolean {
 export default function ShopProductCard({
   product,
   className,
+  variant = "grid",
 }: {
   product: ShopProductCardProduct;
   className?: string;
+  /**
+   * `related` is the reduced card used on the product page's rail.
+   *
+   * It carries the same vocabulary — badges, brand, name, price — but ends in a
+   * VIEW link instead of an add control. Related cards deliberately do not add to
+   * cart: for a variant product that would be a lie, and mixing the two behaviours
+   * across cards that look identical is worse than one consistent behaviour.
+   */
+  variant?: "grid" | "related";
 }) {
   const router = useRouter();
   const { items, addToCart, isAddingToCart } = useCart();
@@ -273,6 +283,7 @@ export default function ShopProductCard({
         It is a sibling of the Link, not a child — a button inside an anchor is
         invalid markup and the tap would navigate instead of adding.
       */}
+      {variant === "grid" && (
       <div className="relative z-10 h-0 sm:hidden">
         <button
           type="button"
@@ -297,6 +308,7 @@ export default function ShopProductCard({
           )}
         </button>
       </div>
+      )}
 
       <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-3.5">
         <div className="flex items-center justify-between gap-2">
@@ -322,6 +334,16 @@ export default function ShopProductCard({
 
         <PriceBlock priceDollars={product.price} user={userData} variant="card" className="mt-auto pt-1" />
 
+        {variant === "related" ? (
+          <Link
+            href={href}
+            className="mt-2 inline-flex h-[42px] w-full items-center justify-center gap-1 rounded-xl border border-token bg-surface text-[13px] font-bold text-primary-token transition-colors hover:border-red-600 hover:text-red-600"
+          >
+            View
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        ) : (
+        <>
         {/* DESKTOP: the full-width button. Hidden on mobile, where the FAB serves. */}
         <button
           type="button"
@@ -340,6 +362,8 @@ export default function ShopProductCard({
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           {ctaLabel}
         </button>
+        </>
+        )}
       </div>
 
       {showSignIn && (
