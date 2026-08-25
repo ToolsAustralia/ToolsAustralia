@@ -773,3 +773,32 @@ while showing no message anywhere, which is the worst version of a validation fa
 Postcode enforces four digits with the message `Four digits, e.g. 3220`. The example earns
 its place — "four digits" alone leaves someone wondering about leading zeros, which
 Victoria and the NT both use.
+
+## Two bugs the grid shipped with (fixed 2026-08-25)
+
+**A signed-out add hung the button forever.** The cart lives on the server, and
+`CartContext`'s drain effect starts with a `userId` guard — so adding while signed out
+queued an operation that could never drain. The optimistic line appeared, the button
+flipped to "In cart · add another", and its spinner ran against a sync that would never
+happen. The product page already guarded this with `SignInToBuyModal`; the card did not.
+It does now.
+
+**Every garment was treated as a simple item.** `LIST_FIELDS` deliberately excludes
+`variants` — hundreds of rows per tee for a card that renders none — so the grid saw
+`variants: undefined`, decided nothing had variants, and added garments with **no sku**.
+`POST /api/cart` correctly rejects that, which is the request the spinner was waiting on.
+
+The projection now carries `variants.isActive` and the route derives a `hasVariants`
+boolean, dropping the array before the response is built: the browser gets one boolean,
+not the rows. Verified — `'variants' in product` is `false` on the wire while
+`hasVariants` is correct per product, and a variant card navigates to the PDP instead of
+adding.
+
+## The toast moved to the bottom left (2026-08-25)
+
+Bottom **left** specifically: the bottom right is Cobber's corner, and a toast landing
+there covered the support bubble. Newest sits closest to the bottom edge
+(`flex-col-reverse`) — with a bottom-anchored stack the eye starts at the edge, so the
+most recent message should be the first it reaches. The entrance rises rather than sliding
+in from the right, which from this corner would read as the toast crossing the page to get
+there.

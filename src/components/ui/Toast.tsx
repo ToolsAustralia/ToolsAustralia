@@ -251,8 +251,14 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
 
   return (
     <div
-      className={`max-w-[calc(100vw-1rem)] sm:max-w-sm w-full transform transition-all ease-in-out ${
-        visible ? "translate-x-0 opacity-100 scale-100" : "translate-x-full opacity-0 scale-95"
+      /*
+        Rises into place instead of sliding in from the right. A right-hand slide
+        was correct while the stack lived in that corner; from the bottom left the
+        same animation reads as the toast arriving from the wrong side of the
+        screen and travelling across the page to get there.
+      */
+      className={`w-full max-w-[calc(100vw-1rem)] transform transition-all ease-out sm:max-w-sm ${
+        visible ? "translate-y-0 opacity-100 scale-100" : "translate-y-3 opacity-0 scale-95"
       }`}
       style={{
         transitionDuration: `${TOAST_TRANSITION_MS}ms`,
@@ -280,19 +286,6 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
               <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-gray-600 dark:text-neutral-300 leading-snug sm:leading-relaxed">
                 {message}
               </p>
-            )}
-
-            {/* Optional Action Button */}
-            {action && (
-              <button
-                onClick={() => {
-                  action.onClick();
-                  handleClose();
-                }}
-                className="mt-1 sm:mt-2 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
-              >
-                {action.label}
-              </button>
             )}
 
             {/* Report Problem Button (only for error toasts with reportable=true) */}
@@ -326,7 +319,16 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
 
 /**
  * Toast Container Component
- * Renders all active toasts in a stacked layout at the top-right corner
+ * Renders all active toasts stacked at the BOTTOM LEFT.
+ *
+ * Bottom left, specifically, because the bottom RIGHT is Cobber's corner — the
+ * support bubble is fixed there, and a toast landing on top of it covered the one
+ * control the toast was competing with. It also puts the toast nearest the cart
+ * drawer's own controls rather than over the page's primary content.
+ *
+ * Newest sits closest to the bottom edge (`flex-col-reverse`): with a
+ * bottom-anchored stack the eye starts at the edge, so the most recent message
+ * should be the one it reaches first.
  *
  * Note: onRemove is a client-side callback (not a Server Action) since this
  * is a "use client" component. The linter warning can be safely ignored.
@@ -341,8 +343,11 @@ export const ToastContainer: React.FC<{
   const visibleToasts = toasts.slice(0, MAX_VISIBLE_TOASTS);
 
   return (
-    <div className="fixed top-1 right-1 sm:top-4 sm:right-4 pointer-events-none max-w-[calc(100vw-0.5rem)] sm:max-w-md" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
-      <div className="flex flex-col gap-1 sm:gap-2 pointer-events-auto">
+    <div
+      className="pointer-events-none fixed inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-6 sm:left-6 sm:max-w-md"
+      style={{ zIndex: Z_INDEX.TOAST_LOADING }}
+    >
+      <div className="pointer-events-auto flex flex-col-reverse gap-1 sm:gap-2">
         {visibleToasts.map((toast, index) => (
           <Toast
             key={toast.id}

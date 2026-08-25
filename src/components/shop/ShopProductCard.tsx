@@ -15,6 +15,7 @@ import { ProductBadges, FulfilmentLine } from "@/components/shop/ProductBadges";
 import { PriceBlock } from "@/components/shop/PriceBlock";
 import { resolveMemberShopPrice } from "@/utils/shop/member-discount";
 import { useSidebar } from "@/contexts/SidebarContext";
+import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
 
 /**
  * The shop's product card.
@@ -48,6 +49,15 @@ export interface ShopProductCardProduct {
   isFeatured?: boolean;
   includedEntries?: number;
   entryMultiplier?: number | null;
+  /**
+   * Whether this product is chosen rather than added.
+   *
+   * Derived server-side by /api/products, because the listing projection does not
+   * ship `variants` — hundreds of rows per garment for a card that renders none.
+   * The full array is present only where a caller already has it (the product
+   * page's related-products list), so both are accepted and the boolean wins.
+   */
+  hasVariants?: boolean;
   variants?: { sku: string; isActive?: boolean }[];
   createdAt?: string | Date;
 }
@@ -70,7 +80,7 @@ export default function ShopProductCard({
 }) {
   const router = useRouter();
   const { items, addToCart, isAddingToCart } = useCart();
-  const { userData } = useUserContext();
+  const { userData, isAuthenticated } = useUserContext();
   const { showToast } = useToast();
   const { setIsCartOpen } = useSidebar();
   const { trackAddToCart } = usePixelTracking();
@@ -83,12 +93,16 @@ export default function ShopProductCard({
    * so that silently doubles the stored quantity.
    */
   const [justPressed, setJustPressed] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
 
-  const activeVariants = useMemo(
-    () => (product.variants ?? []).filter((v) => v.isActive !== false),
-    [product.variants]
-  );
-  const hasVariants = activeVariants.length > 0;
+  /*
+    Prefer the server's boolean, fall back to counting a full array when a caller
+    has one. Getting this wrong is not cosmetic: treating a garment as a simple
+    item adds it with no sku, the cart route rejects that with a 400, and the
+    button spins forever on a request that cannot succeed.
+  */
+  const hasVariants =
+    product.hasVariants ?? (product.variants ?? []).some((v) => v.isActive !== false);
 
   // The same resolver the PriceBlock and the till use, so the badge and the price
   // can never disagree about the percentage.
@@ -123,6 +137,23 @@ export default function ShopProductCard({
       router.push(href);
       return;
     }
+
+    /*
+      SIGNED OUT IS A HARD STOP, not an optimistic add.
+
+      The cart lives on the server (user.cart in Mongo) and CartContext drains its
+      queue through an effect that begins with a userId guard. So adding while
+      signed out queues an operation that can NEVER drain: the optimistic line
+      appears, the button flips to "In cart", and the spinner runs forever against
+      a sync that will not happen. The product page already guards this with the
+      same modal; the card did not, which is how a shop grid ended up with a
+      permanently spinning button for every signed-out visitor.
+    */
+    if (!isAuthenticated) {
+      setShowSignIn(true);
+      return;
+    }
+
     setJustPressed(true);
     try {
       await addToCart({
@@ -170,8 +201,8 @@ export default function ShopProductCard({
       setJustPressed(false);
     }
   }, [
-    busy, soldOut, hasVariants, router, href, addToCart, product, trackAddToCart,
-    trackKlaviyoAddToCart, showToast, setIsCartOpen,
+    busy, soldOut, hasVariants, isAuthenticated, router, href, addToCart, product,
+    trackAddToCart, trackKlaviyoAddToCart, showToast, setIsCartOpen,
   ]);
 
   const ctaLabel = soldOut
@@ -310,6 +341,15 @@ export default function ShopProductCard({
           {ctaLabel}
         </button>
       </div>
+
+      {showSignIn && (
+        <SignInToBuyModal
+          isOpen={showSignIn}
+          onClose={() => setShowSignIn(false)}
+          onSignedIn={() => setShowSignIn(false)}
+          intent="add this to your cart"
+        />
+      )}
     </article>
   );
 }

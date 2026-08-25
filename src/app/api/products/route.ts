@@ -79,10 +79,19 @@ const equalsAnyOf = (values: string[]) => ({ $in: values.map((v) => new RegExp(`
  * not: every row is a full review subdocument, and no card on the listing renders
  * one. `printArtwork` and `printProvider` stay off for a different reason — they
  * are supplier-facing, and the product page projects them out too.
+ *
+ * `variants.isActive` — ONE subfield, and the array is replaced by a derived
+ * `hasVariants` boolean before the response is built, so the browser never sees a
+ * variant row. A card has to know whether a product is CHOSEN or ADDED: a garment
+ * is bought as a size, so its card must route to the product page instead of
+ * guessing one. Without this the grid saw `variants: undefined` on every product,
+ * treated every garment as a simple item, and added it with no sku — which the
+ * cart route correctly rejects with a 400, leaving the button spinning on a
+ * request that could never succeed.
  */
 const LIST_FIELDS =
   "_id name price images brand category stock trackInventory includedEntries entryMultiplier displayOrder " +
-  "rating reviewCount displayRating displayReviewCount isFeatured createdAt updatedAt";
+  "rating reviewCount displayRating displayReviewCount isFeatured createdAt updatedAt variants.isActive";
 
 export async function GET(request: NextRequest) {
   try {
@@ -203,16 +212,25 @@ export async function GET(request: NextRequest) {
     // category and shop-wide settings are admin config the browser has no
     // business holding, and resolving here is what stops a listing card and the
     // product page printing different entry counts for the same product.
-    const products = rawProducts.map((p) => ({
-      ...p,
-      entryMultiplier: resolveEntryMultiplierFor(
-        {
-          category: p.category as string | undefined,
-          entryMultiplier: p.entryMultiplier as number | null | undefined,
-        },
-        entryCaps
-      ),
-    }));
+    const products = rawProducts.map((p) => {
+      // Derive, then DROP. The array is projected to one boolean per row purely so
+      // this question can be answered; shipping it would put hundreds of rows per
+      // garment on the wire for a card that renders none of them.
+      const { variants, ...rest } = p as Record<string, unknown> & {
+        variants?: { isActive?: boolean }[];
+      };
+      return {
+        ...rest,
+        hasVariants: Array.isArray(variants) && variants.some((v) => v?.isActive !== false),
+        entryMultiplier: resolveEntryMultiplierFor(
+          {
+            category: p.category as string | undefined,
+            entryMultiplier: p.entryMultiplier as number | null | undefined,
+          },
+          entryCaps
+        ),
+      };
+    });
 
     // Calculate pagination info
     const totalPages = Math.ceil(totalCount / limit);
