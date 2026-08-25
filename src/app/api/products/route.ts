@@ -31,7 +31,26 @@ const querySchema = z.object({
   colour: multiValueParam,
   minPrice: z.string().optional(),
   maxPrice: z.string().optional(),
-  sortBy: z.enum(["name", "price", "rating", "createdAt", "displayOrder"]).optional().default("displayOrder"),
+  /**
+   * "Show only" toggles from the shop's filter rail.
+   *
+   * Both read fields the catalogue ALREADY carries — this exposes them as query
+   * params, it does not add a concept. `hasEntries` is includedEntries > 0;
+   * `readyToShip` is a product that can be dispatched now rather than made.
+   *
+   * Accepted as the string "true" because that is what a URLSearchParams round
+   * trip produces; anything else is simply absent.
+   */
+  hasEntries: z.string().optional(),
+  readyToShip: z.string().optional(),
+  /**
+   * `includedEntries` sorts the "Most free entries" option. The others were
+   * already here; this is the one the redesigned sort menu added.
+   */
+  sortBy: z
+    .enum(["name", "price", "rating", "createdAt", "displayOrder", "includedEntries"])
+    .optional()
+    .default("displayOrder"),
   sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
   featured: z.string().optional(),
   search: z.string().optional(),
@@ -143,6 +162,27 @@ export async function GET(request: NextRequest) {
           ...(validatedQuery.colour ? { colour: equalsAnyOf(validatedQuery.colour) } : {}),
         },
       };
+    }
+
+    // Has free entries. Strictly above zero, which is also the rule every entries
+    // surface renders on — merch ships at 0, so this filter is currently the
+    // difference between "the tool catalogue" and "nothing".
+    if (validatedQuery.hasEntries === "true") {
+      filter.includedEntries = { $gt: 0 };
+    }
+
+    /*
+      Ready to ship — in stock NOW, as opposed to made on demand.
+
+      Deliberately not "stock > 0": a print-to-order garment sits at stock 0
+      forever and is always available, so that test would exclude exactly the
+      items that are never out of stock. The question this filter answers is "can
+      it be dispatched today", and only a stock-TRACKED product with units on hand
+      can be.
+    */
+    if (validatedQuery.readyToShip === "true") {
+      filter.trackInventory = true;
+      filter.stock = { $gt: 0 };
     }
 
     if (validatedQuery.minPrice || validatedQuery.maxPrice) {

@@ -55,6 +55,9 @@ export interface ProductFilters extends Record<string, unknown> {
   colour?: string[];
   priceRange?: [number, number];
   search?: string;
+  /** "true" when set — see the products route for why both read existing fields. */
+  hasEntries?: string;
+  readyToShip?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   page?: number;

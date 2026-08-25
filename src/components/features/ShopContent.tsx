@@ -22,14 +22,13 @@ import Dropdown from "@/components/modals/ui/Dropdown";
 const SIDEBAR_ANIM_MS = 300;
 
 // Filter state interface
-interface FilterState {
-  category: string[];
-  priceRange: [number, number];
-  brands: string[];
-  /** Apparel sizes and colours, from variants[]. Replaced the old "styles" (Tool Style) facet. */
-  sizes: string[];
-  colours: string[];
-}
+/*
+  Re-exported from the panel rather than declared twice. Two copies of this shape
+  is how a filter gets added to the UI and silently never reaches the query — the
+  page compiles fine because both types are structurally valid on their own.
+*/
+import type { FilterState } from "@/components/features/ProductFilters";
+import { PRICE_NO_MAX } from "@/components/features/ProductFilters";
 
 // Remove ApiResponse interface as it's now handled by React Query
 
@@ -81,11 +80,13 @@ export default function ShopContent({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filters, setFilters] = useState<FilterState>({
     category: [],
-    priceRange: [0, 500],
+    priceRange: [0, PRICE_NO_MAX],
     // If a default brand is provided we pre-populate the filters array.
     brands: defaultBrand ? [defaultBrand] : [],
     sizes: [],
     colours: [],
+    hasEntries: false,
+    readyToShip: false,
   });
   const [sortBy, setSortBy] = useState(DEFAULT_SORT);
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,7 +118,10 @@ export default function ShopContent({
     size: filters.sizes.length > 0 ? filters.sizes : undefined,
     colour: filters.colours.length > 0 ? filters.colours : undefined,
     minPrice: filters.priceRange[0] > 0 ? filters.priceRange[0] : undefined,
-    maxPrice: filters.priceRange[1] < 500 ? filters.priceRange[1] : undefined,
+    // Omitted entirely at Any, so the query carries no ceiling at all.
+    maxPrice: filters.priceRange[1] < PRICE_NO_MAX ? filters.priceRange[1] : undefined,
+    hasEntries: filters.hasEntries ? "true" : undefined,
+    readyToShip: filters.readyToShip ? "true" : undefined,
     sortBy: sortField,
     sortOrder: sortOrder as "asc" | "desc",
   });
@@ -227,10 +231,12 @@ export default function ShopContent({
     setDebouncedSearch("");
     setFilters({
       category: [],
-      priceRange: [0, 500],
+      priceRange: [0, PRICE_NO_MAX],
       brands: defaultBrand ? [defaultBrand] : [],
       sizes: [],
       colours: [],
+      hasEntries: false,
+      readyToShip: false,
     });
     setSortBy(DEFAULT_SORT);
     setCurrentPage(1);
@@ -247,7 +253,9 @@ export default function ShopContent({
     filters.brands.length +
     filters.sizes.length +
     filters.colours.length +
-    (filters.priceRange[0] > 0 || filters.priceRange[1] < 500 ? 1 : 0);
+    (filters.hasEntries ? 1 : 0) +
+    (filters.readyToShip ? 1 : 0) +
+    (filters.priceRange[0] > 0 || filters.priceRange[1] < PRICE_NO_MAX ? 1 : 0);
   const hasControlsApplied =
     activeFilterCount > 0 || debouncedSearch.trim().length > 0 || sortBy !== DEFAULT_SORT;
 
@@ -283,11 +291,25 @@ export default function ShopContent({
     for (const b of filters.brands) pills.push({ key: `brand:${b}`, label: b, onRemove: drop("brands", b) });
     for (const z of filters.sizes) pills.push({ key: `size:${z}`, label: `Size ${z}`, onRemove: drop("sizes", z) });
     for (const c of filters.colours) pills.push({ key: `col:${c}`, label: c, onRemove: drop("colours", c) });
-    if (filters.priceRange[0] > 0 || filters.priceRange[1] < 500) {
+    if (filters.hasEntries) {
+      pills.push({
+        key: "hasEntries",
+        label: "Has free entries",
+        onRemove: () => handleFilterChange({ hasEntries: false }),
+      });
+    }
+    if (filters.readyToShip) {
+      pills.push({
+        key: "readyToShip",
+        label: "Ready to ship",
+        onRemove: () => handleFilterChange({ readyToShip: false }),
+      });
+    }
+    if (filters.priceRange[0] > 0 || filters.priceRange[1] < PRICE_NO_MAX) {
       pills.push({
         key: "price",
         label: `${filters.priceRange[0]} – ${filters.priceRange[1]}`,
-        onRemove: () => handleFilterChange({ priceRange: [0, 500] }),
+        onRemove: () => handleFilterChange({ priceRange: [0, PRICE_NO_MAX] }),
       });
     }
     return pills;

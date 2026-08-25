@@ -846,3 +846,38 @@ Picker labels are uppercase eyebrows with the prompt on the **right** (`COLOUR` 
 one`). Folding both into one sentence — "Colour: choose one" — made the instruction read
 as a value, as though the colour were named "choose one", and left nothing to change once
 a colour was picked.
+
+## The Refine panel (2026-08-25)
+
+Rebuilt to the handoff: a header naming what is in view, category **cards carrying their
+own product count**, a single max-price slider with an **Any** ceiling, brand chips, and
+"Show only" toggles.
+
+Every facet is derived from `useShopFacets` → `/api/products/categories`, which already
+aggregated counts and a real `priceRange` — none of it needed new backend work.
+
+**A real bug fell out of this.** The slider's ceiling was a hard-coded `500`, compared
+against a literal in five separate places. When an $899 tool chest was added, every one of
+them treated "Any" as "under $500" and the chest became unreachable from a slider that
+looked fully open. The ceiling is now the catalogue's own dearest product, and "no
+maximum" is a single exported `PRICE_NO_MAX` sentinel instead of five copies of a number.
+
+`FilterState` is now declared once, in the panel, and imported by `ShopContent`. Two
+copies of that shape is how a filter gets added to the UI and silently never reaches the
+query — both types stay structurally valid on their own, so nothing fails to compile.
+
+### Two toggles, not three
+
+`Has free entries` and `Ready to ship` read fields the catalogue already carries, so
+`/api/products` gained the two query params and nothing else.
+
+`Ready to ship` is deliberately **not** `stock > 0`: a print-to-order garment sits at
+stock 0 forever and is always available, so that test would exclude exactly the items that
+are never out of stock. The question is "can this be dispatched today", and only a
+stock-**tracked** product with units on hand can be. Verified: the filter takes 6 products
+to 3, keeping the tracked ones and dropping the print-to-order ones.
+
+> **`Member exclusives` is in the design and is NOT built.** `Product` has no member-only
+> field, so the switch would filter on nothing — and a control that changes no results is
+> worse than an absent one. It needs a model field plus an admin toggle before the row can
+> mean anything.
