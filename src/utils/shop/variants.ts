@@ -112,11 +112,27 @@ export function findVariantByOptions<T extends ProductVariantLike>(
   size: string | null
 ): T | null {
   if (!colour && !size) return null;
-  return (
-    variants.find(
-      (v) => (!colour || v.colour === colour) && (!size || v.size === size)
-    ) ?? null
+
+  const candidates = variants.filter(
+    (v) => (!colour || v.colour === colour) && (!size || v.size === size)
   );
+
+  /*
+    EXACTLY ONE, or nothing.
+
+    This used to `find` the first match, which resolves a variant from a PARTIAL
+    selection: with colour "Black" and no size chosen, the predicate collapses to
+    `v.colour === "Black"` and returns Black/S. The product page then enabled its
+    add button — and would have added a size the customer never picked — while the
+    sticky bar was still asking them to pick one.
+
+    Counting instead of taking the first is what makes that impossible, and it
+    needs no special case for how many axes a product uses: a colour-only product
+    with one variant per colour still resolves on colour alone, because that
+    selection genuinely narrows to one. A four-size colourway stays ambiguous
+    until the size is chosen, because it genuinely has not been.
+  */
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 /** Australian apparel run, smallest first. Anything unlisted sorts to the end. */

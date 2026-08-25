@@ -103,6 +103,29 @@ export default function ProductInteractions({
     [fields.isActive, trackInventory, product.stock, options]
   );
 
+  /**
+   * The host used to LIST sizes — every variant, not just the sellable ones.
+   *
+   * `variantHost` carries only active variants, because that is the right set for
+   * RESOLVING a selection. Listing from it hides a withdrawn size completely, so a
+   * shopper looking for XL cannot tell whether it exists and is gone or never
+   * existed, and goes looking for it elsewhere.
+   *
+   * `sizesForColour` already computes an `available` flag per size, so feeding it
+   * the full list renders the withdrawn one struck through and disabled — present,
+   * clearly not buyable. Resolution still runs against `variantHost`, and
+   * `isVariantPurchasable` rejects an inactive variant regardless, so nothing here
+   * widens what can actually be added.
+   *
+   * NOTE: `isActive` is the ONLY per-variant availability signal that exists —
+   * `Product.variants` stores sku/size/colour/gtin/isActive and no stock, so stock
+   * is a product-level fact. A single size cannot be out of stock on its own.
+   */
+  const sizeHost = useMemo(
+    () => ({ ...variantHost, variants: (rawVariants ?? []) as ProductVariantLike[] }),
+    [variantHost, rawVariants]
+  );
+
   // Colour-then-size, but only when the product actually ships colourways.
   const colours = useMemo(
     () => purchasableColours(variantHost, rawColourways ?? []),
@@ -115,8 +138,8 @@ export default function ProductInteractions({
   const selectColourInStore = useProductColourStore((s) => s.select);
 
   const sizeOptions = useMemo(
-    () => (selectedColour ? sizesForColour(variantHost, selectedColour, SIZE_ORDER) : []),
-    [variantHost, selectedColour]
+    () => (selectedColour ? sizesForColour(sizeHost, selectedColour, SIZE_ORDER) : []),
+    [sizeHost, selectedColour]
   );
 
   const handleColourChange = (colour: string) => {
@@ -140,6 +163,46 @@ export default function ProductInteractions({
   const canAddSelected = hasVariants
     ? Boolean(selectedVariant) && isVariantPurchasable(variantHost, selectedVariant!)
     : !trackInventory || (product.stock ?? 0) > 0;
+
+  /**
+   * What the shopper still has to choose, in their words.
+   *
+   * "Choose an option" is true but unhelpful — it does not say WHICH option, and
+   * on a page showing both a colour row and a size row that is the only question
+   * being asked. Naming the missing half turns a dead button into an instruction.
+   *
+   * GATED ON `hasColourways`, which is the whole subtlety. There are TWO variant
+   * pickers on this page: colour-then-size for apparel, and a flat list of whole
+   * variants for the tool catalogue that ships no colourways. On the flat path
+   * there is no colour row and no size row to point at, so naming them would send
+   * someone hunting for controls that are not on the page — worse than the vaguer
+   * wording it replaced.
+   *
+   * Null once nothing is missing, so a caller can treat it as "ready".
+   */
+  const missingChoice: string | null = !hasVariants
+    ? null
+    : hasColourways
+      ? !selectedColour && !selectedSize
+        ? "Pick colour & size"
+        : !selectedColour
+          ? "Pick a colour"
+          : !selectedSize
+            ? "Pick a size"
+            : null
+      : selectedVariant
+        ? null
+        : "Choose an option";
+
+  /**
+   * The chosen variant in human terms, for the sticky bar's sub-line.
+   *
+   * Read off the resolved VARIANT rather than the two selection states, so it is
+   * correct on both pickers — the flat path never sets selectedColour/selectedSize.
+   */
+  const chosenLabel = selectedVariant
+    ? [selectedVariant.colour, selectedVariant.size].filter(Boolean).join(" · ")
+    : "";
 
   // Finish the interrupted add once the session is actually live.
   //
@@ -470,7 +533,7 @@ export default function ProductInteractions({
             ? "Out of Stock"
             : /* Say why the button is dead rather than leaving it silently inert. */
             hasVariants && !selectedSku
-            ? "Choose an option"
+            ? (missingChoice ?? "Choose an option")
             : /* Signed-in state is still resolving — say so instead of letting the
                  click fall through to a "Please log in" alert. */
             isSessionLoading
@@ -506,6 +569,64 @@ export default function ProductInteractions({
         fixed string — a badge is a promise, and this page is where a customer
         decides to trust it.
       */}
+      {/*
+        STICKY BOTTOM BAR — mobile only.
+
+        The add button sits below the description, the spec grid and the related
+        rail, so on a phone a shopper who has scrolled to read about the product
+        has to scroll back up to buy it. The bar keeps the price and the CTA in
+        reach the whole way down.
+
+        Its sub-line is the same `missingChoice` the button uses, so the two can
+        never disagree about what is still needed, and it names the chosen variant
+        once nothing is.
+
+        `sm:hidden` because the desktop layout already keeps the buy column in
+        view with a sticky image beside it.
+      */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-token bg-surface/95 px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 backdrop-blur sm:hidden"
+        role="region"
+        aria-label="Buy this product"
+      >
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[17px] font-extrabold leading-none tracking-[-.02em] text-primary-token">
+              ${(product.price * quantity).toFixed(2)}
+            </div>
+            <div className="mt-1 truncate text-[11px] text-muted-token">
+              {isOutOfStock
+                ? "Out of stock"
+                : missingChoice
+                  ? missingChoice
+                  : chosenLabel || "Ready to add"}
+            </div>
+          </div>
+          <button
+            onClick={handleAddToCart}
+            disabled={!canAddSelected || isSessionLoading || isAddingToCart || isPendingForThisProduct}
+            className={`inline-flex h-[50px] min-w-[9.5rem] items-center justify-center gap-2 rounded-xl px-5 text-[14px] font-bold transition-colors ${
+              !canAddSelected || isSessionLoading || isAddingToCart || isPendingForThisProduct
+                ? "cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-neutral-800 dark:text-neutral-400"
+                : addedToCart
+                  ? "bg-green-600 text-white"
+                  : "bg-red-600 text-white"
+            }`}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            {isOutOfStock
+              ? "Out of stock"
+              : missingChoice
+                ? missingChoice
+                : isAddingToCart || isPendingForThisProduct
+                  ? "Adding…"
+                  : addedToCart
+                    ? "Added"
+                    : "Add to cart"}
+          </button>
+        </div>
+      </div>
+
       {showSignIn && (
         <SignInToBuyModal
           isOpen={showSignIn}

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  findVariantByOptions,
   findVariantBySku,
   variantLabel,
   isVariantPurchasable,
@@ -87,6 +88,59 @@ test("inactive variant is never purchasable", () => {
 
 test("inactive product makes every variant unpurchasable", () => {
   assert.equal(isVariantPurchasable(host({ isActive: false }), v()), false);
+});
+
+
+/*
+  A PARTIAL selection must not resolve a variant.
+
+  findVariantByOptions used to `find` the first match, so colour-without-size
+  returned Black/S and the product page enabled its add button while still asking
+  the customer to pick a size — it would have added a size they never chose. The
+  fix counts candidates instead of taking the first, which also keeps a
+  colour-only product working without a special case.
+*/
+const RUN = [
+  v({ sku: "BLK-S", size: "S", colour: "Black" }),
+  v({ sku: "BLK-M", size: "M", colour: "Black" }),
+  v({ sku: "NVY-S", size: "S", colour: "Navy" }),
+  v({ sku: "NVY-M", size: "M", colour: "Navy" }),
+];
+
+test("a colour alone does not resolve a variant when sizes remain", () => {
+  assert.equal(
+    findVariantByOptions(RUN, "Black", null),
+    null,
+    "two Black sizes still match, so nothing is chosen yet"
+  );
+});
+
+test("a size alone does not resolve a variant when colours remain", () => {
+  assert.equal(findVariantByOptions(RUN, null, "M"), null);
+});
+
+test("colour and size together resolve exactly one", () => {
+  assert.equal(findVariantByOptions(RUN, "Black", "M")?.sku, "BLK-M");
+  assert.equal(findVariantByOptions(RUN, "Navy", "S")?.sku, "NVY-S");
+});
+
+test("a colour-only product still resolves on colour alone", () => {
+  // One variant per colour — the selection genuinely narrows to one, so requiring
+  // a size here would make the product permanently unaddable.
+  const oneSize = [
+    v({ sku: "OS-BLK", size: undefined, colour: "Black" }),
+    v({ sku: "OS-NVY", size: undefined, colour: "Navy" }),
+  ];
+  assert.equal(findVariantByOptions(oneSize, "Black", null)?.sku, "OS-BLK");
+});
+
+test("neither chosen resolves nothing", () => {
+  assert.equal(findVariantByOptions(RUN, null, null), null);
+});
+
+test("an unknown combination resolves nothing", () => {
+  assert.equal(findVariantByOptions(RUN, "Black", "XXL"), null);
+  assert.equal(findVariantByOptions(RUN, "Crimson", "M"), null);
 });
 
 if (failures > 0) {

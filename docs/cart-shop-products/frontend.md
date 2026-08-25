@@ -666,3 +666,41 @@ bug read before.
 **The view toggle is gone.** Grid/list was removed on both breakpoints — the redesign's
 control row is search, filter and sort, and a list view of an image-led card is a second
 layout to maintain for a mode the design does not have.
+
+## Variant gating on the product page (2026-08-25)
+
+The purchasable unit is a variant, so the page must not let anyone buy before one is
+resolved. Three things changed.
+
+**A partial selection no longer resolves a variant.** `findVariantByOptions` used to
+`find` the first match, so colour-without-size collapsed the predicate to
+`v.colour === "Black"` and returned Black/S. The add button went live — and would have
+added a size the customer never picked — while the page was still asking them to pick one.
+It now returns a variant only when the selection narrows to **exactly one candidate**,
+which needs no special case for how many axes a product uses: a colour-only product with
+one variant per colour still resolves on colour alone, because that genuinely narrows to
+one. Six assertions in `npm run test:shop-variants` cover it.
+
+**The CTA names what is missing** — `Pick colour & size` → `Pick a size` → the chosen
+variant — and the sticky bar's sub-line reads from the same value, so the two cannot
+disagree. This is **gated on `hasColourways`**, which is the subtlety: there are *two*
+variant pickers, colour-then-size for apparel and a flat list of whole variants for the
+tool catalogue. On the flat path there is no colour row to point at, so it keeps
+`Choose an option` — naming controls that are not on the page is worse than being vague.
+
+**Withdrawn sizes render struck through rather than vanishing.** Sizes are listed from
+*all* variants (`sizeHost`) while selection still resolves against the active ones. A
+shopper looking for XL can now see it exists and is unavailable, instead of wondering
+whether it was ever made.
+
+> **`isActive` is the only per-variant availability signal.** `Product.variants` stores
+> `sku / size / colour / gtin / isActive` and **no stock** — stock is a product-level
+> fact, so a single size cannot be out of stock on its own. `isVariantPurchasable`
+> checking `host.stock` is correct for this model, not a bug. (Worth stating because
+> seeding a `stock` onto a variant through the *native driver* does persist it, while
+> Mongoose never reads it back — which makes it look like a bug for exactly as long as it
+> takes to check the schema.)
+
+**A sticky bottom bar** carries the price and the CTA on mobile. The add button sits below
+the description, the spec grid and the related rail, so a shopper who scrolled to read
+about the product had to scroll back up to buy it.
