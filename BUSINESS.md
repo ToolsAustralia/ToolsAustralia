@@ -49,7 +49,7 @@ per entry (rule 11).
 
 | Fact | Value |
 | ---- | ----- |
-| Shipping | Free on orders of **$100 or more**, otherwise **$10** flat (`SHOP_CONFIG`, integer cents) |
+| Shipping | **$10 flat on every order** — no threshold, no minimum (`SHOP_CONFIG`, integer cents). The $100 free-delivery threshold was removed 2026-08-25 |
 | GST | **Inside** the total, never added — `total / 11` is the GST component |
 | Member discount | The tier's shop % (Tradie 10 / Foreman 15 / Boss 25), applied before shipping is assessed |
 | Checkout | **Account required** — `Order.user` is mandatory, so there is no guest checkout |
@@ -64,7 +64,7 @@ Three separate money flows, easy to conflate:
 
 | Flow | Who pays whom | Status |
 | --- | --- | --- |
-| **Customer → us** | Full order total **at checkout**, via Stripe — goods + GST + shipping ($10, or free at $100+). | Live. **There is no COD anywhere**; the order is not created as paid until Stripe confirms. |
+| **Customer → us** | Full order total **at checkout**, via Stripe — goods + GST + shipping ($10, always). | Live. **There is no COD anywhere**; the order is not created as paid until Stripe confirms. |
 | **Us → print provider** | They print, buy the shipping label and send the parcel **direct to the customer**, then bill us for print + freight. | Model confirmed by their upload form; **their rate card and billing terms are still unanswered** (open dependency). |
 | **Provider ↔ customer** | **Nothing.** The customer never transacts with them and is never asked for freight. | By design. |
 

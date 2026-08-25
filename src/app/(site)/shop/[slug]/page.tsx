@@ -16,7 +16,7 @@ import { Product as ProductType } from "@/types/product";
 import { ProductJsonLd, BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { createCachedQuery } from "@/utils/database/queries/server-queries";
 import { getNonce } from "@/utils/security/getNonce";
-import { FREE_SHIPPING_THRESHOLD_LABEL } from "@/config/shop";
+import { FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
 import { shouldShowReviews, displayableReviews, displayAverage } from "@/utils/shop/reviews";
 // Client component, deliberately: this page is server-rendered and cannot read
 // who is signed in, and the member price has to be the signed-in member's own.
@@ -108,7 +108,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
     title: `${product.name} - ${product.brand} | Tools Australia`,
     description:
       product.description ||
-      `${product.brand} ${product.name} - Professional grade tools with ${product.rating}/5 rating. Starting at $${product.price}. Free shipping on orders of ${FREE_SHIPPING_THRESHOLD_LABEL} or more.`,
+      `${product.brand} ${product.name} - Professional grade tools with ${product.rating}/5 rating. Starting at ${product.price}. ${FLAT_SHIPPING_RATE_LABEL} flat delivery on every order.`,
     keywords: [
       product.name,
       product.brand,

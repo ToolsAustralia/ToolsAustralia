@@ -28,7 +28,6 @@ export interface CartLine {
 export interface PriceCartOptions {
   /** Member tier shop discount: Tradie 5, Foreman 10, Boss 20. Guests and packs 0. */
   shopDiscountPercent?: number;
-  freeShippingThresholdCents?: number;
   flatShippingRateCents?: number;
 }
 
@@ -48,7 +47,6 @@ export const centsToDollars = (cents: number): number => cents / 100;
 export function priceCart(lines: readonly CartLine[], opts: PriceCartOptions = {}): CartTotals {
   const {
     shopDiscountPercent = 0,
-    freeShippingThresholdCents = SHOP_CONFIG.freeShippingThresholdCents,
     flatShippingRateCents = SHOP_CONFIG.flatShippingRateCents,
   } = opts;
 
@@ -71,10 +69,10 @@ export function priceCart(lines: readonly CartLine[], opts: PriceCartOptions = {
   const discountCents = Math.round(subtotalCents * (shopDiscountPercent / 100));
   const discountedCents = subtotalCents - discountCents;
 
-  // The threshold is tested against the DISCOUNTED value — what the customer
-  // actually pays. Testing the pre-discount subtotal would ship a $90 order free
-  // against a $100 threshold and quietly lose the fee on every discounted cart.
-  const shippingCents = discountedCents >= freeShippingThresholdCents ? 0 : flatShippingRateCents;
+  // Every order pays delivery. There is no threshold to test, which is the whole
+  // point: the courier bills us on every parcel, so a waived fee is a real cost
+  // carried by a sale that has already been discounted. See SHOP_CONFIG.
+  const shippingCents = flatShippingRateCents;
 
   const totalCents = discountedCents + shippingCents;
 

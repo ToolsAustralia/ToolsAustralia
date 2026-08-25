@@ -583,5 +583,20 @@ lands at $100.26, crosses into free shipping, and that tier goes **backwards** d
 the higher ticket. Holding every tier flat with the threshold in place needs $128.95,
 which is outside the competitive band the proposal identified ($110, $115–120).
 
-**Unresolved — needs an owner decision.** Removing the threshold is a customer takeaway
-and Cobber currently promises free delivery over $100, so it was not changed here.
+**Resolved 2026-08-25 — the threshold is gone.** `SHOP_CONFIG` now carries only
+`flatShippingRateCents`, and `priceCart` charges it unconditionally. The concept was
+removed rather than disabled: a threshold set to "never" is a knob that still has to be
+restated on five customer surfaces, and it had already drifted twice. A rule with no
+parameter cannot drift.
+
+Delivery is now independent of the discount, which was the sharp edge. Under the
+threshold the test ran against what the customer **paid**, so a deeper member discount
+pulled an order back under the line and silently changed the shipping outcome — a
+Foreman crossing $100 turned a price rise into a margin cut. That interaction no longer
+exists, so a ticket rise does exactly what the costing says it does.
+
+Copy updated in the same change: two shop SEO descriptions, the product page's shipping
+tab, the product SEO description, and three Cobber answers. `faqs.test.ts` gained a
+sweep asserting that **no** FAQ promises free delivery — the old guard *required* the
+delivery answer to name a $100 threshold, which is how stale copy survives a rule
+change.

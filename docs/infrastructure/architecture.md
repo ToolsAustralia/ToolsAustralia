@@ -248,3 +248,10 @@ the feature renders **no link at all** rather than a broken one — see
 
 Gitignored alongside `.next/`. The e2e harness compiles there instead of sharing the
 dev build cache — see `docs/e2e/gotchas.md`.
+
+## `.next-e2e/` is lint-ignored too (2026-08-25)
+
+Splitting the e2e build into its own `distDir` gitignored the directory but not the
+eslint ignore list, so one e2e run put ~22,000 problems from compiled output into
+`npm run lint`. Baseline is 77 warnings, 0 errors — if a lint run reports thousands,
+suspect a build directory before suspecting the code.

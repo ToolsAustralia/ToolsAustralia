@@ -4,7 +4,7 @@ import Image from "next/image";
 import ShopContent from "@/components/features/ShopContent";
 import MembershipSection from "@/components/sections/MembershipSection";
 import MetallicDivider from "@/components/ui/MetallicDivider";
-import { FREE_SHIPPING_THRESHOLD_LABEL } from "@/config/shop";
+import { FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
 
 // nonce-CSP route class — must render per-request; never cache HTML with a baked nonce
 // (see docs/security-csp/architecture.md "Route classes").
@@ -25,12 +25,12 @@ export const metadata: Metadata = {
   title: SHOP_TITLE,
   // The shipping threshold comes from SHOP_CONFIG rather than being typed here —
   // copy that restates a config value drifts from it, and this one is a promise.
-  description: `${SHOP_TAGLINE} Free delivery on orders of ${FREE_SHIPPING_THRESHOLD_LABEL} or more, and members get their tier's discount applied at checkout.`,
+  description: `${SHOP_TAGLINE} ${FLAT_SHIPPING_RATE_LABEL} flat delivery on every order, and members get their tier's discount applied at checkout.`,
   keywords:
     "Tools Australia merch, Tools Australia apparel, tradie apparel, tradie merch, print to order clothing, Australia",
   openGraph: {
     title: SHOP_TITLE,
-    description: `${SHOP_TAGLINE} Free delivery on orders of ${FREE_SHIPPING_THRESHOLD_LABEL} or more.`,
+    description: `${SHOP_TAGLINE} ${FLAT_SHIPPING_RATE_LABEL} flat delivery on every order.`,
     type: "website",
     url: "/shop",
   },

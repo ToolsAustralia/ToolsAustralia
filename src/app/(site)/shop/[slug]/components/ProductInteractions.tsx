@@ -488,8 +488,10 @@ export default function ProductInteractions({
         Warranty, 30-Day Returns — were removed on 2026-08-17 because all three
         were untrue:
 
-          - Free Shipping was UNCONDITIONAL, while priceCart only waives it at
-            $100+. A $45.95 tee was shown "Free Shipping" and charged $10.
+          - Free Shipping was UNCONDITIONAL, while priceCart waived it only at
+            $100+. A $45.95 tee was shown "Free Shipping" and charged $10. Since
+            2026-08-25 delivery is a flat $10 on every order, so the badge would
+            now be wrong on every product rather than just the cheap ones.
           - 3 Year Warranty is not a warranty this business offers, on apparel or
             anything else.
           - 30-Day Returns states a returns window no policy backs.

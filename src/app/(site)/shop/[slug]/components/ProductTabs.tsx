@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Star, Check, Truck, Shield, RotateCcw, Award, Clock, Info, Mail } from "lucide-react";
+import { Star, Check, Truck, Shield, RotateCcw, Award, Info, Mail } from "lucide-react";
 import { ProductData } from "@/data";
 import { getContactEmail } from "@/lib/email/sender-identities";
-import { FREE_SHIPPING_THRESHOLD_LABEL, FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
+import { FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
 import { shouldShowReviews, displayableReviews, displayAverage } from "@/utils/shop/reviews";
 import { useProductReviews } from "@/hooks/queries/useProductQueries";
 import ProductReviewForm from "./ProductReviewForm";
@@ -332,26 +332,21 @@ export default function ProductTabs({ product }: ProductTabsProps) {
             <div className="space-y-6">
               <InfoCard icon={<Truck className="h-5 w-5 shrink-0 text-red-600" />} title="Shipping">
                 {/*
-                  These two lines are the ONLY shipping outcomes checkout can produce:
-                  priceCart charges flatShippingRateCents below the threshold and
-                  nothing at or above it. The figures are imported rather than typed —
-                  this block previously promised free shipping "over $99" while the
-                  code charged below $100 (so a $99.50 order was billed $10 at
-                  checkout), plus Express at $15 and Same Day at $25 in three cities,
-                  none of which exists anywhere in the pricing path.
+                  ONE line, because checkout can now produce exactly one shipping
+                  outcome: priceCart charges flatShippingRateCents on every order.
+                  The figure is imported rather than typed — this block previously
+                  promised free shipping "over $99" while the code charged below
+                  $100 (so a $99.50 order was billed $10 at checkout), plus Express
+                  at $15 and Same Day at $25 in three cities, none of which existed
+                  anywhere in the pricing path.
                 */}
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4">
                   <InfoItem
                     icon={<Check className="mt-0.5 h-5 w-5 shrink-0 text-green-500" />}
-                    title="Free standard shipping"
+                    title="Flat-rate delivery"
                   >
-                    On orders of {FREE_SHIPPING_THRESHOLD_LABEL} or more.
-                  </InfoItem>
-                  <InfoItem
-                    icon={<Clock className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />}
-                    title="Standard shipping"
-                  >
-                    {FLAT_SHIPPING_RATE_LABEL} flat rate under {FREE_SHIPPING_THRESHOLD_LABEL}.
+                    {FLAT_SHIPPING_RATE_LABEL} on every order, anywhere in Australia. No
+                    minimum, and nothing to work out at checkout.
                   </InfoItem>
                 </div>
               </InfoCard>

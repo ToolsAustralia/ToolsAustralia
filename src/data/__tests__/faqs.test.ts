@@ -173,15 +173,22 @@ function main() {
     orderTracking!.answer.includes("/my-account/orders"),
     "Order-tracking FAQ (id 85) must route to /my-account/orders, not the dashboard"
   );
-  // Delivery is flat-rate-or-free and nothing else (priceCart), and the free threshold
-  // is measured AFTER the member discount — copy that omits that promises free delivery
-  // on a $100 cart the discount drops below the threshold.
+  // Delivery is a flat $10 on every order (priceCart, SHOP_CONFIG) — there is no
+  // threshold as of 2026-08-25. This guard used to REQUIRE the answer to name a $100
+  // free-delivery threshold, which is how stale copy survives a rule change: the
+  // assertion held the old promise in place. It now pins the opposite.
   const deliveryFee = entries.find((e) => e.id === "87");
   assert.ok(deliveryFee !== undefined, "FAQ entry id=87 (delivery cost) must exist");
   assert.ok(
-    deliveryFee!.answer.includes("$10") && deliveryFee!.answer.includes("$100"),
-    "Delivery FAQ (id 87) must state the $10 flat rate and the $100 free-delivery threshold"
+    deliveryFee!.answer.includes("$10"),
+    "Delivery FAQ (id 87) must state the $10 flat rate"
   );
+  for (const e of entries) {
+    assert.ok(
+      !/free (delivery|shipping)|free on orders/i.test(e.answer),
+      `FAQ id=${e.id} promises free delivery, which no cart can produce`
+    );
+  }
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).

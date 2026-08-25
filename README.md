@@ -26,7 +26,7 @@ Membership-driven giveaway and rewards platform for Australian tradies. Members 
 - **Admin dashboard** — user management, payments, draws, promos, error reports, partner applications, Stripe webhook queue, daily stats snapshots, an analytics suite (All-Platforms / Facebook / TikTok / Snapchat / Klaviyo, true-ROAS), and **Facebook Ads Health** — a per-adset SCALE/HOLD/INVESTIGATE/CUT verdict engine.
 - **Staff roles & permissions (RBAC)** — granular staff access: a 47-permission / 17-area catalog bundled into named roles, `requirePermission()`-gated routes, email-based staff invites (`/staff-setup`), and a `StaffActivity` audit log (180-day TTL). See [docs/auth/roles.md](docs/auth/roles.md).
 - **Internal Norm API** — secure HTTP namespace at `/api/internal/norm/v1/*` exposing read-only business analytics to an external AI assistant (Norm) running on the Mac mini server. See [docs/internal-norm/](docs/internal-norm/).
-- **Shop** — merchandise catalogue, cart, checkout and Stripe payment at `/shop`. Member tier discount (Tradie 10% / Foreman 15% / Boss 25%) applied at checkout; shipping free on orders of $100 or more, $10 flat below that; GST is inside the total, never added. An account is required to check out. See [docs/cart-shop-products/](docs/cart-shop-products/).
+- **Shop** — merchandise catalogue, cart, checkout and Stripe payment at `/shop`. Member tier discount (Tradie 10% / Foreman 15% / Boss 25%) applied at checkout; delivery is a flat $10 on every order with no threshold; GST is inside the total, never added. An account is required to check out. See [docs/cart-shop-products/](docs/cart-shop-products/).
 
 ### Coming soon
 
