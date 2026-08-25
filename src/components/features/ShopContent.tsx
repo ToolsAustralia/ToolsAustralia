@@ -6,7 +6,7 @@ import ShopProductCard from "@/components/shop/ShopProductCard";
 import ProductFilters from "@/components/features/ProductFilters";
 import { useShopFacets } from "@/hooks/queries/useProductQueries";
 import MetallicButton from "@/components/ui/MetallicButton";
-import { Grid, List, Filter, X, Search, Clock, ArrowUpDown } from "lucide-react";
+import { Filter, X, Search, Clock, ArrowUpDown } from "lucide-react";
 import { Product as ProductType } from "@/types/product";
 import { useProducts, type Product as ReactQueryProduct } from "@/hooks/queries";
 import { SectionContainer } from "@/components/ui";
@@ -84,7 +84,6 @@ export default function ShopContent({
     colours: [],
   });
   const [sortBy, setSortBy] = useState(DEFAULT_SORT);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   /**
@@ -248,6 +247,33 @@ export default function ShopContent({
   const hasControlsApplied =
     activeFilterCount > 0 || debouncedSearch.trim().length > 0 || sortBy !== DEFAULT_SORT;
 
+  /**
+   * Every applied filter as a removable chip.
+   *
+   * The filter count in the button says HOW MANY are on; it never says WHICH, so
+   * narrowing to an empty result gave no way to see what was excluding things
+   * short of opening the sheet. Each chip removes exactly its own constraint —
+   * a single "clear all" is the wrong granularity when four facets are stacked.
+   */
+  const activeFilterPills = useMemo(() => {
+    const pills: { key: string; label: string; onRemove: () => void }[] = [];
+    const drop = <K extends keyof FilterState>(k: K, v: string) => () =>
+      handleFilterChange({ [k]: (filters[k] as string[]).filter((x) => x !== v) } as Partial<FilterState>);
+
+    for (const c of filters.category) pills.push({ key: `cat:${c}`, label: c, onRemove: drop("category", c) });
+    for (const b of filters.brands) pills.push({ key: `brand:${b}`, label: b, onRemove: drop("brands", b) });
+    for (const z of filters.sizes) pills.push({ key: `size:${z}`, label: `Size ${z}`, onRemove: drop("sizes", z) });
+    for (const c of filters.colours) pills.push({ key: `col:${c}`, label: c, onRemove: drop("colours", c) });
+    if (filters.priceRange[0] > 0 || filters.priceRange[1] < 500) {
+      pills.push({
+        key: "price",
+        label: `${filters.priceRange[0]} – ${filters.priceRange[1]}`,
+        onRemove: () => handleFilterChange({ priceRange: [0, 500] }),
+      });
+    }
+    return pills;
+  }, [filters]);
+
   return (
     <SectionContainer className="py-8">
       <div className="flex flex-col lg:flex-row gap-8">
@@ -403,31 +429,6 @@ export default function ShopContent({
               )}
 
               <div className="flex items-center gap-2">
-                <div className="inline-flex shrink-0 items-center rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-1">
-                  <button
-                    onClick={() => setViewMode("grid")}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                      viewMode === "grid"
-                        ? "bg-black text-white dark:bg-white dark:text-black"
-                        : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
-                    }`}
-                    aria-label="Grid view"
-                  >
-                    <Grid className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode("list")}
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                      viewMode === "list"
-                        ? "bg-black text-white dark:bg-white dark:text-black"
-                        : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
-                    }`}
-                    aria-label="List view"
-                  >
-                    <List className="h-4 w-4" />
-                  </button>
-                </div>
-
                 <div className="relative min-w-0 flex-1">
                   <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500 dark:text-neutral-400">
                     <ArrowUpDown className="h-4 w-4" />
@@ -470,31 +471,6 @@ export default function ShopContent({
                 </button>
               </div>
 
-              <div className="inline-flex items-center rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 p-1">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                    viewMode === "grid"
-                      ? "bg-black text-white dark:bg-white dark:text-black"
-                      : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
-                  }`}
-                  aria-label="Grid view"
-                >
-                  <Grid className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                    viewMode === "list"
-                      ? "bg-black text-white dark:bg-white dark:text-black"
-                      : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-800"
-                  }`}
-                  aria-label="List view"
-                >
-                  <List className="h-4 w-4" />
-                </button>
-              </div>
-
               <div className="relative min-w-[190px]">
                 <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500 dark:text-neutral-400">
                   <ArrowUpDown className="h-4 w-4" />
@@ -512,6 +488,36 @@ export default function ShopContent({
 
           {/* Results Header - Enhanced styling */}
           <div className="flex flex-col gap-4 mb-8">
+            {/*
+              WHICH filters are on, not just how many. The count in the button
+              never said what was excluding things, so narrowing to zero results
+              left the only remedy as opening the sheet and reading it back. Each
+              chip drops exactly its own constraint — "clear all" is the wrong
+              granularity once four facets are stacked.
+            */}
+            {activeFilterPills.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                {activeFilterPills.map((pill) => (
+                  <button
+                    key={pill.key}
+                    type="button"
+                    onClick={pill.onRemove}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-token bg-surface px-3 text-[12px] font-semibold text-primary-token transition-colors hover:border-red-600 hover:text-red-600"
+                  >
+                    {pill.label}
+                    <X className="h-3 w-3" aria-hidden />
+                    <span className="sr-only">Remove filter</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="h-8 rounded-full px-2 text-[12px] font-semibold text-muted-token underline underline-offset-2 hover:text-red-600"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
             {/* Results count and loading */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -544,7 +550,7 @@ export default function ShopContent({
 
           {/* Products Grid/List */}
           {isLoading ? (
-            <div className="grid grid-cols-3 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 lg:gap-6 mb-12">
+            <div className="mb-12 grid grid-cols-2 gap-[11px] sm:gap-4 lg:grid-cols-3 lg:gap-5">
               {[...Array(8)].map((_, i) => (
                 <div
                   key={i}
@@ -566,13 +572,7 @@ export default function ShopContent({
               carries its own shadow, so extra gutter read as drift rather than
               separation.
             */
-            <div
-              className={`mb-12 grid gap-[11px] sm:gap-4 lg:gap-5 ${
-                viewMode === "grid"
-                  ? "grid-cols-2 sm:grid-cols-2 lg:grid-cols-3"
-                  : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-1"
-              }`}
-            >
+            <div className="mb-12 grid grid-cols-2 gap-[11px] sm:gap-4 lg:grid-cols-3 lg:gap-5">
               {transformedProducts.map((product) => (
                 <ShopProductCard key={product._id} product={product} />
               ))}
@@ -589,11 +589,22 @@ export default function ShopContent({
               <span className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#F3F4F6] text-[#9CA3AF] dark:bg-neutral-800">
                 <Search className="h-6 w-6" />
               </span>
+              {/*
+                A failed SEARCH and a failed FILTER are different situations and a
+                generic message helps neither. Someone who typed "hoodie" wants to
+                know the word found nothing; someone who narrowed to a size wants to
+                know the narrowing did. Naming the actual constraint is the
+                difference between "try again" and knowing what to change.
+              */}
               <h3 className="text-[15px] font-bold text-[#111827] dark:text-white">
-                {searchQuery ? `No products found for "${searchQuery}"` : "No products found"}
+                {debouncedSearch.trim()
+                  ? `Nothing matches "${debouncedSearch.trim()}"`
+                  : "Nothing in this filter"}
               </h3>
               <p className="text-[13px] leading-[1.5] text-[#6B7280] dark:text-neutral-400">
-                Try a different filter or clear your filters.
+                {debouncedSearch.trim()
+                  ? "Check the spelling, or try a broader word."
+                  : "Nothing in the shop matches every filter you have on."}
               </p>
               <button
                 type="button"

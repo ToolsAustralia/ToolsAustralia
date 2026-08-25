@@ -642,3 +642,27 @@ already have.
 The discount **badge** is gated on the viewer actually being a member, unlike the
 prototype which showed it on every card. To a guest, `10% OFF` claims a price they cannot
 get.
+
+## Shop controls (2026-08-25)
+
+**Active-filter pills.** The filter button's count says *how many* constraints are on; it
+never said *which*. Narrowing to zero results left no way to see what was excluding things
+short of opening the sheet and reading it back. Each pill now drops exactly its own
+constraint — "clear all" is the wrong granularity once four facets are stacked.
+
+**The empty state names the constraint.** A failed *search* and a failed *filter* are
+different situations and one message helps neither:
+
+| Situation | Heading | Body |
+| --- | --- | --- |
+| Search found nothing | `Nothing matches "hoodie"` | Check the spelling, or try a broader word. |
+| Filters exclude everything | `Nothing in this filter` | Nothing in the shop matches every filter you have on. |
+| Catalogue genuinely empty | `Coming Soon` | (unchanged — the only case that may say this) |
+
+The third branch already existed and is the one that must never be shown for the first
+two: telling someone who searched "hoodie" that the shop does not exist yet is how that
+bug read before.
+
+**The view toggle is gone.** Grid/list was removed on both breakpoints — the redesign's
+control row is search, filter and sort, and a list view of an image-led card is a second
+layout to maintain for a mode the design does not have.
