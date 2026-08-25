@@ -304,7 +304,19 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         pads with), so clearing it is exact at every breakpoint instead of a
         guess that happened to suit one.
       */}
-      <div className="mx-auto max-w-7xl px-4 pb-8 pt-[calc(var(--app-header-h)+0.75rem)] sm:px-6 lg:px-8 lg:pt-[calc(var(--app-header-h-lg)+1.5rem)]">
+      {/*
+        FLUSH TO THE HEADER on a phone.
+
+        --app-header-h is a flat 86px constant (globals.css) that exists to replace
+        ~34 pt-[86px] literals. The site header actually renders 60px at this
+        breakpoint, so padding by the variable left a 26px band of page showing
+        between the header and the product image — and the image is meant to be
+        edge to edge.
+
+        60px is therefore the measured height of the header this page renders under,
+        not a guess. Desktop keeps the variable, where it matches.
+      */}
+      <div className="mx-auto max-w-7xl px-4 pb-8 pt-[60px] sm:px-6 lg:px-8 lg:pt-[calc(var(--app-header-h-lg)+1.5rem)]">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Product Image. The outer wrapper is REQUIRED: `sticky` applied directly to a
               grid item collapses it to content height and never engages, so the image would

@@ -947,3 +947,34 @@ and a half and read as a layout bug), plus a sliver of the third so it is visibl
 scrollable.
 
 **"Browse by brand" is removed** from the product page at the owner's request.
+
+## One CTA per screen (2026-08-25)
+
+The inline "Add to Cart" is **desktop only**. On a phone the sticky bottom bar carries the
+identical action, so rendering both put two primary buttons on one screen — and the lower
+one was the one in reach. The quantity stepper stays visible on both, because the sticky
+bar has no stepper of its own and reads the value that one sets.
+
+## The product image is flush (2026-08-25)
+
+> **`--app-header-h` is a flat `86px` constant** (globals.css) that exists to replace ~34
+> `pt-[86px]` literals. The site header actually renders **60px** on a phone, so padding by
+> the variable left a 26px band of page between the header and a product image that is
+> meant to be edge to edge. The product page pads by the measured 60px on mobile and keeps
+> the variable on desktop, where it matches.
+>
+> **This affects more than the shop.** Any mobile page padding by `--app-header-h` carries
+> the same 26px of dead space. Fixing it globally means either correcting the constant or
+> having the header publish its own measured height — a site-wide visual change, so it is
+> flagged rather than done here.
+
+The thumbnail strip lost its inherited `margin-top: 16px` (from a `space-y-4` on the
+gallery) and the `px-4` that re-added the page gutter the image had just cancelled.
+
+## The cart badge pulses a ring (2026-08-25)
+
+`.ta-cart-pop` scales the badge; its `::after` sends a brand-red ring out from behind it.
+Two elements so the ring can scale past the badge without scaling the digits with it. The
+ring is `#ee0000` rather than `currentColor` — the badge sets `text-white`, so
+`currentColor` sent out a white ring that read as a flash rather than the cart reacting.
+Both are reduced-motion gated.

@@ -3872,3 +3872,37 @@ html[data-promo-dock] .promo-dock-stacks-above {
     animation: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Cart badge ring pulse.
+
+   The pop alone moved the number; this sends a ring out from behind it, which is
+   what reads as "something arrived" from the corner of the eye while you are
+   still looking at the product you just added.
+
+   A separate element (::after on the badge) so the ring can scale past the badge
+   without scaling the digits with it.
+   --------------------------------------------------------------------------- */
+@keyframes ta-cart-ring {
+  0%   { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+.ta-cart-pop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  /* The brand red, not currentColor — the badge sets text-white, so currentColor
+     sent out a white ring that read as a flash rather than the cart reacting. */
+  background: #ee0000;
+  animation: ta-cart-ring 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ta-cart-pop::after {
+    animation: none;
+    content: none;
+  }
+}

@@ -526,8 +526,14 @@ export default function ProductInteractions({
         </div>
       )}
 
-      {/* Action Buttons */}
-      <div className="flex gap-2 sm:gap-4">
+      {/*
+        DESKTOP ONLY. On a phone the sticky bottom bar carries this exact action,
+        so rendering it inline as well put two identical primary buttons on one
+        screen — and the lower one was the one in reach. The quantity stepper above
+        stays visible on both, because the sticky bar has no stepper of its own and
+        reads the value this one sets.
+      */}
+      <div className="hidden gap-2 sm:flex sm:gap-4">
         <button
           onClick={handleAddToCart}
           disabled={!canAddSelected || isSessionLoading || isAddingToCart || isPendingForThisProduct}

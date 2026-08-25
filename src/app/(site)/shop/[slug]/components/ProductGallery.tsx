@@ -80,7 +80,7 @@ export default function ProductGallery({
   const alt = colourway ? `${name} — ${colourway.name}` : name;
 
   return (
-    <div className="space-y-4">
+    <div>
       {/*
         FULL BLEED ON A PHONE.
 
@@ -119,7 +119,7 @@ export default function ProductGallery({
       </div>
 
       {gallery.length > 1 && (
-        <div className="flex flex-wrap gap-2 px-4 sm:px-0">
+        <div className="flex flex-wrap gap-2 px-2 pt-2 sm:px-0 sm:pt-3">
           {gallery.map((url, i) => (
             <button
               key={url}
