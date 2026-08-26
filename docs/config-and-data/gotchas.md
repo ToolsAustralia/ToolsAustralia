@@ -1,5 +1,34 @@
 # Config & Data — Gotchas
 
+## The bonus-code FAQs asserted an 11:59pm deadline — and the TEST required it (2026-08-26)
+
+Cobber ids **86** and **87** were rewritten in place for the bonus-code webhook rework. Corpus size
+is unchanged at **90** (no ids added or removed), so the `faqs.test.ts` count assertion did not move.
+
+- **id 86** said the deadline "always runs to 11:59pm Sydney time on that day." True only under the
+  deleted calendar-day model. A bonus code now expires an exact **72 hours** after the instant it was
+  issued, so it runs out at whatever time of day that lands on. The answer now says so and points at
+  the date **and time** printed in the email that carries the code.
+- **id 87** promised an expired unused code "can be re-issued to you later with a fresh deadline."
+  Still true, but only outside the 30-day re-arm cooldown (`REARM_COOLDOWN_DAYS`) — inside it,
+  qualifying again produces no code and no email at all. The answer now names the waiting period.
+
+**The trap worth remembering: the guard was pinning the wrong fact.** `faqs.test.ts` did not merely
+fail to catch the staleness — it contained
+`assert.ok(bonusExpiry!.answer.includes("11:59pm Sydney time"), …)`, so correcting the copy made the
+suite go **red**, and the lazy fix would have been to revert the copy. A content assertion that names
+a specific business value has an expiry date of its own; when the value changes, the assertion is
+part of the change, not an obstacle to it. It is now inverted — id 86 must contain `"72 hours"` and
+must **not** contain `"11:59"` — so the old sentence cannot come back quietly.
+
+Cobber answers only from grounded knowledge, so a stale entry here is not a gap, it is a confidently
+wrong answer on a legally constrained topic — and a customer told "11:59pm" who redeems at 6pm on the
+expiry day is refused by `campaignCodeExpiredMessage` naming a different time. Also note what these
+entries deliberately do **not** say: "check your rewards wallet". No customer-reachable surface shows
+a bonus code or its deadline today — see
+[rewards-redeemables/frontend.md](../rewards-redeemables/frontend.md). Re-ran
+`npm run build:chat-knowledge-pack` then `npm run test:chat-faqs`.
+
 ## Two upgrade FAQs asserted "your billing cycle resets to today" (2026-08-24)
 
 Cobber ids **22** and **51** both stated flatly that upgrading resets the billing cycle to the

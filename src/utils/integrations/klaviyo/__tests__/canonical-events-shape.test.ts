@@ -44,6 +44,13 @@ export const CANONICAL_KEYS: ReadonlySet<string> = new Set([
   "payment_intent_id",
   // Boolean flags
   "is_authenticated",
+  // Whether the customer held an ACTIVE membership at the instant of the event.
+  // Point-in-time, past tense — the SAME `subscription.isActive` predicate as the
+  // live `has_active_subscription` profile property, frozen at that instant. It
+  // fixes STALENESS (the profile describes the customer whenever the flow reads
+  // it, days later), NOT semantics: paused/past-due read false here too, and a
+  // scheduled cancellation reads true. Carried by `One-Time Package Purchased`.
+  "had_active_subscription",
   // Promo / giveaway context
   "promo_slug",
   "promo_id",
@@ -56,6 +63,10 @@ export const CANONICAL_KEYS: ReadonlySet<string> = new Set([
   "resume_url",
   // Step / phase discriminators
   "step",
+  // Bonus Code Issued (per-customer coupon expiry)
+  "code",
+  "expires_at_label",
+  "trigger",
   // Klaviyo standard revenue triple (only on Placed Order / Refunded Order — included for completeness)
   "Currency",
   "Order ID",
@@ -171,7 +182,13 @@ function testAcceptsArbitraryAtSuffix() {
 // Snapshot tests for the canonical event builders
 // ============================================================
 
-import { createViewedGiveawayEvent, createStartedCheckoutEvent } from "../klaviyo-events";
+import {
+  createViewedGiveawayEvent,
+  createStartedCheckoutEvent,
+  createBonusCodeIssuedEvent,
+  createSubscriptionCancellationRequestedEvent,
+  createOneTimePackagePurchasedEvent,
+} from "../klaviyo-events";
 import type { IUser } from "@/models/User";
 
 function testViewedGiveawayShape() {
@@ -325,6 +342,196 @@ function testStartedCheckoutShape_GuestRecheckoutAfterPersistedGuestUserData() {
   assert.equal(sample.properties.package_type, "one-time");
 }
 
+function testBonusCodeIssuedShape() {
+  const issuedAt = new Date("2026-08-25T03:00:00.000Z");
+  // Exactly +72h from `issuedAt`, which is the only shape a personal window can
+  // have since 2026-08-26. The previous fixture was an end-of-Sydney-day instant
+  // (`2026-09-08T13:59:59.999Z`) — no issuance can carry that any more, and a
+  // fixture that cannot occur teaches the next reader the wrong model.
+  const expiresAt = new Date("2026-08-28T03:00:00.000Z");
+
+  const sample = createBonusCodeIssuedEvent(fakeUser(), {
+    code: "BONUS-ABC123",
+    entriesAmount: 15,
+    issuedAt,
+    expiresAt,
+    trigger: "cancel-click",
+  });
+
+  assert.equal(sample.event, "Bonus Code Issued");
+  assertCanonicalShape("Bonus Code Issued", sample.properties);
+
+  assert.equal(sample.properties.user_id, "user_123");
+  assert.equal(sample.properties.code, "BONUS-ABC123");
+  assert.equal(sample.properties.entries_granted, 15);
+  assert.equal(sample.properties.issued_at, issuedAt.toISOString());
+  assert.equal(sample.properties.expires_at, expiresAt.toISOString());
+  assert.equal(sample.properties.trigger, "cancel-click");
+  // HARDCODED, not derived. `expires_at_label` is the date the customer's email
+  // actually prints, and it must name the instant redemption enforces. A
+  // typeof/regex pair cannot catch the label being repointed at `issuedAt`, or
+  // at `new Date()`, or at a different timezone — the label is minute-precision,
+  // so two calls a tick apart agree either way. This string is the only
+  // assertion that fails if the label stops tracking `expiresAt`.
+  // 2026-08-28T03:00:00.000Z is 2026-08-28 13:00 in Sydney (UTC+10, AEST — before
+  // the 2026-10-04 DST switch to AEDT). Note the deadline now lands at a real
+  // time of day, not at 11:59PM: that is the exact-hours window, not a bug.
+  assert.equal(sample.properties.expires_at_label, "Friday 28 August 2026, 1:00PM AEST");
+}
+
+// The single highest-stakes assertion in this file: `expiresAt` is a PARAMETER,
+// never recomputed from `new Date()` inside the builder. Calling the builder
+// twice with the SAME `expiresAt`, a tick apart, must yield byte-identical
+// `expires_at` / `expires_at_label` — proving the builder emits the value it
+// was handed rather than deriving a fresh instant each call.
+function testBonusCodeIssuedEmitsThePassedExpiresAt() {
+  // Exact-hours fixture, same reason as above.
+  const expiresAt = new Date("2026-08-28T03:00:00.000Z");
+
+  const first = createBonusCodeIssuedEvent(fakeUser(), {
+    code: "BONUS-ABC123",
+    entriesAmount: 15,
+    issuedAt: new Date(),
+    expiresAt,
+    trigger: "checkout-start",
+  });
+
+  // A tick apart — if the builder ever called `new Date()` for expiresAt
+  // instead of using the parameter, this would drift.
+  const second = createBonusCodeIssuedEvent(fakeUser(), {
+    code: "BONUS-ABC123",
+    entriesAmount: 15,
+    issuedAt: new Date(),
+    expiresAt,
+    trigger: "checkout-start",
+  });
+
+  assert.equal(first.properties.expires_at, expiresAt.toISOString());
+  assert.equal(second.properties.expires_at, expiresAt.toISOString());
+  assert.equal(first.properties.expires_at, second.properties.expires_at);
+  assert.equal(first.properties.expires_at_label, second.properties.expires_at_label);
+}
+
+// ============================================================
+// Subscription Cancellation Requested (2026-08-26) — the win-back flow's trigger
+// ============================================================
+
+function testSubscriptionCancellationRequestedShape() {
+  const cancelledAt = new Date("2026-08-26T04:30:00.000Z");
+  const accessEndsAt = new Date("2026-09-24T13:59:59.000Z");
+
+  const sample = createSubscriptionCancellationRequestedEvent(fakeUser(), {
+    packageData: { packageId: "tradie-subscription", packageName: "Tradie", tier: "tradie", price: 20 },
+    cancelledAt,
+    accessEndsAt,
+  });
+
+  assert.equal(sample.event, "Subscription Cancellation Requested");
+  // Distinct from the webhook-only event — the whole point of the carve-out in
+  // docs/subscription/rules.md R4. If these ever collide, the duplicate-emission
+  // bug that rule prevents is back.
+  assert.notEqual(sample.event, "Subscription Cancelled");
+  assertCanonicalShape("Subscription Cancellation Requested", sample.properties);
+
+  assert.equal(sample.properties.user_id, "user_123");
+  // The whole reason this event exists rather than reusing the legacy one: a REAL
+  // package name and a REAL tier. The legacy "Subscription Cancelled" ships
+  // package_name "Subscription" and the raw package id as `tier`.
+  assert.equal(sample.properties.package_name, "Tradie");
+  assert.notEqual(sample.properties.package_name, "Subscription");
+  assert.equal(sample.properties.tier, "tradie");
+  assert.notEqual(sample.properties.tier, "tradie-subscription");
+  assert.equal(sample.properties.package_id, "tradie-subscription");
+  assert.equal(sample.properties.package_type, "membership");
+  // Canonical: price is a NUMBER, not the legacy "20.00" string.
+  assert.equal(typeof sample.properties.price, "number");
+  assert.equal(sample.properties.price, 20);
+
+  // Hardcoded, not derived from the fixture Dates — an expression borrowed from
+  // the implementation would pass even if the builder swapped the two fields.
+  assert.equal(sample.properties.cancelled_at, "2026-08-26T04:30:00.000Z");
+  assert.equal(sample.properties.access_ends_at, "2026-09-24T13:59:59.000Z");
+}
+
+function testSubscriptionCancellationRequestedOmitsUnresolvedPackage() {
+  // A member whose stored `subscription.packageId` no longer resolves must still
+  // trigger the win-back flow — the event fires, minus the package block. No
+  // "Subscription" / "unknown" sentinel (canonical no-sentinel rule).
+  const sample = createSubscriptionCancellationRequestedEvent(fakeUser(), {
+    packageData: null,
+    cancelledAt: new Date("2026-08-26T04:30:00.000Z"),
+    accessEndsAt: null,
+  });
+
+  assert.equal(sample.event, "Subscription Cancellation Requested");
+  assertCanonicalShape("Subscription Cancellation Requested (no package)", sample.properties);
+  assert.equal("package_id" in sample.properties, false, "package_id must be OMITTED when the package did not resolve");
+  assert.equal("package_name" in sample.properties, false, "package_name must be OMITTED — never a 'Subscription' sentinel");
+  assert.equal("tier" in sample.properties, false, "tier must be OMITTED — never the raw package id");
+  assert.equal("price" in sample.properties, false, "price must be OMITTED when the package did not resolve");
+  assert.equal("access_ends_at" in sample.properties, false, "access_ends_at must be OMITTED when unknown");
+  assert.equal(sample.properties.cancelled_at, "2026-08-26T04:30:00.000Z");
+}
+
+// ============================================================
+// One-Time Package Purchased — the had_active_subscription carrier (2026-08-26)
+// ============================================================
+
+// DELIBERATELY NO `assertCanonicalShape` CALL HERE, and do not add one. This is a
+// LEGACY-shaped event: it emits `purchase_date`, `timestamp` and `points_earned`,
+// none of which are canonical, so fencing its whole shape would fail on keys that
+// have nothing to do with this property — and re-shaping a live event is banned by
+// the no-refactor policy in docs/tracking/KLAVIYO_INTEGRATION.md. The note exists so
+// nobody adds the call, watches it go red, and deletes this whole test instead.
+//
+// What this DOES pin is the one property on it that cannot be reconstructed later.
+// `had_active_subscription` is a point-in-time fact captured PRE-GRANT in
+// `payment-processing.ts`; the `CANONICAL_KEYS` entry above only PERMITS the key, so
+// before this test the emit line could be deleted with `tsc` and every suite still
+// green, and every one-time purchase in the gap would lose the value permanently.
+function testOneTimePackagePurchasedCarriesHadActiveSubscription() {
+  const base = {
+    packageId: "tradie-pack",
+    packageName: "Tradie Pack",
+    price: 25,
+    entriesGranted: 3,
+    pointsEarned: 0,
+    paymentIntentId: "pi_test_onetime",
+  };
+
+  const member = createOneTimePackagePurchasedEvent(fakeUser(), {
+    ...base,
+    hadActiveSubscription: true,
+  });
+  assert.equal(member.event, "One-Time Package Purchased");
+  assert.equal(
+    member.properties.had_active_subscription,
+    true,
+    "an active member topping up must emit had_active_subscription: true"
+  );
+
+  const nonMember = createOneTimePackagePurchasedEvent(fakeUser(), {
+    ...base,
+    hadActiveSubscription: false,
+  });
+  assert.equal(
+    nonMember.properties.had_active_subscription,
+    false,
+    "a buyer with no active membership must emit had_active_subscription: false"
+  );
+
+  // Presence, stated rather than implied. The two assertions above already fail if
+  // the key is dropped (strict equal: `undefined` is neither `true` nor `false`),
+  // but the contract is that the property is ALWAYS on the payload — never omitted
+  // for the `false` case the way the canonical no-sentinel rule omits absent
+  // optionals. A Klaviyo `is set` filter cannot tell an omitted key from a false one.
+  assert.equal(
+    "had_active_subscription" in nonMember.properties,
+    true,
+    "had_active_subscription must be PRESENT on the payload, never omitted"
+  );
+}
+
 function run() {
   testCanonicalKeyAccepted();
   testNonCanonicalKeyRejected();
@@ -336,7 +543,14 @@ function run() {
   testStartedCheckoutShape_GuestRegistrationPath();
   testStartedCheckoutShape_AuthedPaymentPath();
   testStartedCheckoutShape_GuestRecheckoutAfterPersistedGuestUserData();
-  console.error("✓ canonical-events-shape: all self-tests + Viewed Giveaway + Started Checkout snapshots passed");
+  testBonusCodeIssuedShape();
+  testBonusCodeIssuedEmitsThePassedExpiresAt();
+  testSubscriptionCancellationRequestedShape();
+  testSubscriptionCancellationRequestedOmitsUnresolvedPackage();
+  testOneTimePackagePurchasedCarriesHadActiveSubscription();
+  console.error(
+    "✓ canonical-events-shape: all self-tests + Viewed Giveaway + Started Checkout + Bonus Code Issued + Subscription Cancellation Requested + One-Time Package Purchased snapshots passed"
+  );
 }
 
 run();

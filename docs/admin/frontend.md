@@ -8,6 +8,28 @@
 > deliberately keeps a static `@/config/prizes` import (admin-chunk only, never in the landing
 > graph). See [config-and-data architecture](../config-and-data/architecture.md) "Prize catalog split".
 
+## Monthly Redeemables Campaign panel — `validForHours` (2026-08-25; renamed from `validForDays` 2026-08-26)
+
+`MonthlyRedeemablesCampaignPanel` (Admin > Redeemable Coupons, `src/components/admin/MonthlyRedeemablesCampaignPanel.tsx`)
+lists `MonthlyEntryCampaign` rows from `GET /api/admin/monthly-coupon/campaign`, which now also
+returns `validForHours` (per-customer window, in HOURS from the issuing instant) and `issuanceCount` (total
+`RedeemableIssuance` rows for the campaign, any status).
+
+- A shared `renderExpiryLabel()` helper renders at all three expiry display sites (the mobile
+  card, the desktop table's Window column, and the desktop name-column subtext) so an operator
+  can tell a fixed-end campaign from a rolling one at a glance:
+  `{n}-hour window per customer (backstop {formatted endsAt})` when `validForHours` is set
+  (checked via the imported `personalWindowGoverns` predicate from
+  `src/utils/redeemables/bonus-code-policy.ts` — never re-derived inline), else the existing
+  `neverExpires` / `formatDateTime(endsAt)` behavior, byte-identical to before this change.
+- Delete is now always a soft delete (`isActive: false`) server-side — the confirm copy was
+  updated to say so plainly rather than the old "if issuances exist" hedge.
+
+The create/edit form itself is `AdminMonthlyRedeemablesModal` — see
+[shared-ui/frontend.md](../shared-ui/frontend.md#adminmonthlyredeemablesmodal--validforhours-2026-08-25-renamed-from-validfordays-2026-08-26)
+(it lives under `src/components/modals/**`, which the Domain Manifest routes to `shared-ui`, not
+`admin`, despite being admin-only).
+
 ## Repeat Purchases tab (2026-07-09)
 
 `repeat-purchases` — a new **Analytics** group tab (`RepeatPurchaseAnalytics`, `src/components/admin/RepeatPurchaseAnalytics.tsx`), gated by `pageAnalytics.view`. Measures one-time-package buyers who came back and bought again (the one-time equivalent of renewal analytics). Structure mirrors `AllPlatformsManagement`: a right-aligned `AdminDateRangeToolbar` (default `all-time`; cohort filter = first-purchase date) → a 6-tile `MetricCard` KPI grid (one-time buyers / repeat buyers / repeat rate / median days to return / repeat revenue / became members) → a `BarList` of first→second-purchase gap buckets + a "return rate by window" table (matured denominators) → a Users `Card` with a `Segmented` (All / Returned / Not yet returned) + bucket chips + `DataTable` whose User cell is a `ClickableUserDisplay` opening the shared User Detail modal. Loading = `MetricCard` skeletons + pulse bars; empty/error = inline messages. All styling is paired light/`dark:` Tailwind from the `@/components/admin/ui` kit (no chart library). Registered in `adminTabs.ts` (Analytics group), rendered + subtitled in `AdminPage.tsx`, and added to `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` so the date dropdown portals into the mobile header. Data via `useRepeatPurchaseSummary` / `useRepeatPurchaseUsers` (see [client-state](../client-state/patterns.md)).

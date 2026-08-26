@@ -1,5 +1,32 @@
 # Shared UI — Frontend
 
+## `AdminMonthlyRedeemablesModal` — `validForHours` (2026-08-25; renamed from `validForDays` 2026-08-26)
+
+`src/components/modals/AdminMonthlyRedeemablesModal.tsx` (admin-only, but lives under the generic
+`src/components/modals/**` glob, which the Domain Manifest routes to `shared-ui` rather than
+`admin` or `rewards-redeemables` — see [admin/frontend.md](../admin/frontend.md#monthly-redeemables-campaign-panel--validforhours-2026-08-25-renamed-from-validfordays-2026-08-26))
+now threads `validForHours` (per-customer window, in HOURS counted from the issuing instant) through the create/edit form:
+
+- New numeric input "Per-customer window (hours)" in the **Coupon Window** section, min 1,
+  **disabled whenever "Never expires" is checked** — the two are mutually exclusive
+  (`neverExpires` and `validForHours` are rejected together by both create/update zod schemas).
+  Checking "Never expires" also clears any entered `validForHours` client-side so a disabled,
+  stale value can't silently ride along in the submit payload.
+- The **End** date label relabels to "Backstop — no new customers qualify after this date"
+  whenever `validForHours` is set (and `neverExpires` is not) — `endsAt` still gates NEW
+  issuance minting for a rolling-window campaign, it just stops being the redemption deadline.
+- On submit, editing a campaign that already has `issuanceCount > 0` and changing
+  `validForHours` to a new value triggers a `window.confirm` warning: existing
+  `RedeemableIssuance` rows are stamped with their expiry at mint time and are **never
+  re-stamped**, so they keep their original deadline while only newly-minted issuances pick up
+  the change.
+- Clearing sentinel: on edit, an emptied input sends `validForHours: null` (not `undefined`) when
+  the campaign previously had a value set, so the PUT route's `.nullable().optional()` zod field
+  can actually `$unset` it — omitting the field entirely would leave the old value untouched
+  (two independent undefined-strip layers between the route and `CampaignService` otherwise
+  swallow a bare omission). On create, only `undefined` is ever sent (the create schema is
+  `.optional()`, not `.nullable()`).
+
 ## Promotions account menu — radial scrim removed (2026-08-11)
 
 `PromotionsAccountButton` (the bottom-left FAB column on `/promotions/*`) used to fade in a
@@ -231,6 +258,17 @@ Do **not** try to solve that by reading computed opacity inside the hook: framer
 > row now carries a small `ArrowUpRight` icon-link to **`/promotions`** (→ the default promotions landing, the
 > prize showcase; NOT `/major-draw`, which hard-redirects to `/promotional/giveaway`) — a guest holds no
 > entries yet, so they get a way to *see* the draw before committing to either CTA.
+
+> **Redeemable wallet expiry label, not a locale-dependent date (2026-08-25):**
+> `RedeemablesWallet.tsx` and `RewardsFloatingWidget.tsx` both rendered
+> `` `Expires ${new Date(item.expiresAt).toLocaleDateString()}` `` — formatted in
+> the **viewer's** browser locale/timezone, so the same instant read `04/10/2026`
+> to an en-AU browser and `10/4/2026` (read as 10 April, six months wrong) to an
+> en-US one. Both now render the server-computed `item.expiresAtLabel` instead —
+> the exact string the Klaviyo email renders (`formatExpiryLabelAEST`, see
+> [rewards-redeemables/frontend.md](../rewards-redeemables/frontend.md)). Never
+> reintroduce a client-side `toLocaleDateString()`/`toLocaleString()` on
+> `expiresAt` in either component.
 
 > **Redeemable unlock flow + MembershipModal coupon auto-apply (2026-07-06):** `RewardsClaimables` gained an
 > `onUnlock` prop — locked purchase-required coupons render an actionable amber "Join to unlock" / "Purchase to

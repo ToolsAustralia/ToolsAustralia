@@ -516,8 +516,8 @@ export default function RewardsFloatingWidget({
                               <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                               {item.neverExpires
                                 ? "No expiry"
-                                : item.expiresAt
-                                ? `Expires ${new Date(item.expiresAt).toLocaleDateString()}`
+                                : item.expiresAtLabel
+                                ? `Expires ${item.expiresAtLabel}`
                                 : "No expiry"}
                             </span>
                           </div>

@@ -1,5 +1,146 @@
 # Rewards-Redeemables — Gotchas
 
+## Per-customer anchored expiry — six traps (2026-08-25)
+
+1. **`status: "expired"` is a DEAD ENUM. No predicate may key off it.** The value exists on
+   `RedeemableIssuance.status`, but **no code path in this repo ever writes it** — there is no expiry sweep
+   and no revoke machinery. A query like `{ status: "expired" }` therefore matches **zero documents,
+   forever, silently**. Liveness is decided by the **date**: `expiresAt > now`. (`RedemptionService.redeem`
+   still carries a belt-and-braces `|| issuance.status === "expired"` read-side check; that is harmless
+   because it is OR'd with the date test — do not copy the pattern into a *filter*.)
+
+2. **`issuedAt` and `expiresAt` must derive from ONE captured `Date`.** Never two `new Date()` calls. This
+   was severe under the old calendar-day model — the helper it used snapped to a Sydney calendar day,
+   so two instants milliseconds apart across local midnight produced expiry dates a **full calendar day**
+   apart. **Since 2026-08-26** `resolveIssuanceExpiry` calls `expiryAfterHours` instead, an
+   exact epoch-millisecond offset with no midnight cliff — a few milliseconds' drift in `issuedAt` now
+   produces the same few milliseconds' drift in `expiresAt`, nothing more. The rule itself still stands
+   (never derive the two from separate `new Date()` calls) and the batch hoisting in `issueCampaignToUsers`
+   is unchanged and still correct — it has just stopped being load-bearing for this specific failure mode.
+
+3. **The trigger gate is the leak defence — do not "simplify" it away.**
+   `ensureActiveCampaignIssuancesForUser` runs on **every rewards-wallet read**, and the
+   `"all-active-subscribers"` targeting branch returns a bare `hasActiveSubscription`. Without
+   `if (personalWindowGoverns(campaign) && !options?.trigger) return false;` at the top of
+   `isUserEligibleForCampaign`, every active member who opens `/my-account` self-enrols into a trigger
+   campaign and burns their one-per-lifetime grant **without ever seeing an email**. The sweep must never
+   pass a `trigger`; only `ensureCampaignIssuanceForUser` does.
+
+4. **`already_active` returns the STORED `expiresAt`, never a recomputed one.** Note it does **not**
+   email — `already_active` is a silent no-op, so there is no "re-send" anywhere in this system. The
+   stored date is returned so that a later **re-arm** email cannot print a recomputed one, and so a
+   caller inspecting the outcome sees the deadline the customer was actually told. This is also why
+   the mint returns a `StampedIssuance` instead
+   of a boolean — if the caller had to recompute the date, a 150ms gap across Sydney midnight would print a
+   deadline one calendar day off what redemption actually enforces.
+
+5. **E11000 is discriminated by `keyPattern`, and neither case is an error.** Two unique indexes live on
+   `RedeemableIssuance`: `{campaignId, userId}` and `{campaignId, code}`. A `userId` collision means a
+   concurrent trigger won the race ⇒ return `already_active` (re-read for the stamp), **never** rethrow —
+   the old non-atomic `findOne` + `create` threw out of the caller after Stripe had already cancelled, so a
+   double-clicked Cancel showed "cancel failed" on a cancelled subscription. A `code` collision is the
+   pre-existing regenerate-and-retry loop and must be preserved.
+
+6b. **`issueCampaignToUsers` is a SECOND mass-mint path and the trigger gate is not on it.**
+   The leak defence (trap 3) lives inside `isUserEligibleForCampaign`, which `issueCampaignToUsers` never
+   calls. `getActiveCampaigns()` matches any active campaign whose `endsAt` is still ahead — and a
+   `validForHours` campaign always has one, because `endsAt` is its *minting backstop*. So a single POST to
+   `/api/cron/monthly-redeemables-issuance` while a trigger campaign is live would mint for the entire
+   active-subscriber base: expiry stamped, no trigger, no email, every one-per-lifetime grant burned. The
+   guard at the top of `issueCampaignToUsers` refuses when `issuedBy === "cron"` and
+   `personalWindowGoverns(campaign)`, returning `{ issuedCount: 0, skippedCount: userIds.length }` and a
+   `console.error`. If a deliberate admin bulk-issue path is ever added for personal-window campaigns, it
+   must pass its own `issuedBy` — do not relax this guard to cover it.
+
+6. **`redeemedEverAt` is written with `$min` and NEVER unset.** The refund path restores `status: "active"`
+   and `$unset`s `redeemedAt`, which makes a refunded row byte-identical to a never-redeemed one — so
+   `redeemedEverAt` is the only thing stopping buy → redeem → refund → re-trigger from re-granting a
+   one-per-lifetime code. `$min` writes it when absent and preserves the first value when present. Do **not**
+   widen the redemption claim's filter to mention it: the filter is already race-safe. And the schema field
+   must **never** be given `default: null` — `$min` compares against a BSON null and keeps it (null sorts
+   below any date), `decideRearm`'s truthiness check stays falsy, and the buy → redeem → refund → re-trigger
+   farm silently reopens on every row.
+
+## FIXED — the `requiresEmailVerified` default never flipped for trigger campaigns (found + fixed 2026-08-25)
+
+**Status: fixed.** Kept in full because the *class* of mistake is the valuable part — see the
+generalised rule at the end of this section.
+
+`CampaignService.isUserEligibleForCampaign` used to resolve the flag as:
+
+```ts
+const requiresEmailVerified = config?.requiresEmailVerified ?? !triggerIsTargeting;   // DEAD CODE
+```
+
+The intent (per the comment beside it) is that a **trigger** campaign defaults to *not* requiring
+verification, because `checkout-start` fires seconds after registration — before any verification
+email could possibly be actioned — so defaulting it on would exclude that trigger's entire
+population.
+
+The fallback is **unreachable**. `MonthlyEntryCampaign` declares
+`segmentConfig.requiresEmailVerified` with `default: true`, and Mongoose persists that nested
+default even when the admin supplies no `segmentConfig` at all. So `config?.requiresEmailVerified`
+is always `true`, the `??` never fires, and the flag reads as if the admin had explicitly demanded
+verification.
+
+**Blast radius is narrow but real.** `all-active-subscribers`, `manual-users` and `csv-users` all
+return before this line, so today's likely configurations are unaffected. Only
+**`dynamic-segment`** reaches it — and a `dynamic-segment` trigger campaign silently refuses every
+unverified customer, which for `checkout-start` is close to the whole audience. The failure is
+invisible: the outcome is `not_applicable`, the same value the feature returns when it is simply
+inert.
+
+### The fix
+
+The requirement is now **waived outright** for a trigger campaign rather than defaulted away, so a
+persisted value cannot resurrect it:
+
+```ts
+if (!triggerIsTargeting) {
+  const requiresEmailVerified = config?.requiresEmailVerified ?? true;
+  if (requiresEmailVerified && !user.isEmailVerified) return false;
+}
+```
+
+Written as a guarded block, not a ternary, so the no-trigger path is visibly the ORIGINAL two lines
+— the wallet sweep and every pre-existing campaign are byte-identical. Rationale for waiving even an
+*explicitly* set `true`: verification is a proxy for "is this a real, engaged customer?", and the
+trigger answers that question directly and better. Pinned from both sides by
+`npm run test:trigger-eligibility` (pure) and `npm run test:campaign-enrolment` § 2 (against persisted data).
+
+**Re-pointed 2026-08-25 (round 2).** `npm run test:campaign-enrolment` section 2 (then named `test:bonus-code-trigger`) previously
+characterised the pre-fix behaviour and now asserts the rule itself, from both sides: a trigger
+waives the requirement whether it was stored by the schema default (2a) or set deliberately by an
+admin (2b); a legacy campaign still gates even WITH a trigger (2c); and the wallet sweep still
+gates with no trigger at all (2d).
+
+**A pure test cannot cover this alone — do not let one stand in for the other.**
+`test:trigger-eligibility` builds campaign objects by hand, so `segmentConfig` is genuinely
+`undefined` there and the old `??` fallback *did* fire: the buggy code PASSED that suite for the
+schema-default case, and reverting the fix today still fails only its one explicit-`true`
+assertion. What exposes the defect is the value Mongoose actually persists, which is why
+`test:campaign-enrolment` § 2a reads the campaign back from Mongo and asserts the row really
+carries `requiresEmailVerified: true` BEFORE asserting the waiver. Any future change here needs
+coverage on both sides of that line.
+
+### The generalised rule this belongs to
+
+> **A `??` fallback on a field that carries a schema `default` is dead code.** Mongoose persists the
+> default, so the left side is never nullish and the fallback never runs.
+
+It is a nasty class because it fails *silently and in source-plausible fashion*: the relaxation is
+right there in the file, reviewed and approved, and never executes. Worse, it defeats itself
+precisely when the default and the fallback DISAGREE — which is the only situation anyone writes one
+for. Contrast the harmless siblings in the same function: `config?.includeUserIds || []`,
+`excludeUserIds`, `states` and `membershipTiers` are all equally unreachable (Mongoose defaults an
+array path to `[]`), but the fallback value *equals* the default, so the outcome is identical either
+way. Audited 2026-08-25: `requiresEmailVerified` was the only live instance in this function;
+`minInactiveDays`, `maxInactiveDays` and `topEntriesPercent` carry no schema default and are guarded
+by `typeof === "number"`, which is correct.
+
+When you need "did the admin actually choose this?", a schema default destroys the information. Either
+drop the default, or — as here — decide the behaviour from something other than the field's presence.
+
 ## Membership Streak auto-grant path (P2, 2026-07-07)
 
 - **Auto-grant is two-step, crash-safe by sweep, and COMPENSATES on delivery failure (2026-07-15)**: `checkAndIssueMilestones` creates the issuance `active`, then `RedemptionService.autoRedeemMilestoneIssuance` flips it `redeemed` atomically (the concurrency gate) and grants via `DrawGrantService(…, "streak", { skipMilestoneCheck: true })`. `grantMonthlyCouponEntries` now returns a boolean — `false` = no target draw (freeze window); persistence errors (VersionError on the hot draw doc) throw. On EITHER failure autoRedeem reverts the wallet `$inc` + history row, re-opens the issuance (`redeemed → active`), and the next check (payment webhook or nightly cron) retries delivery. The issuance is re-opened ONLY if the wallet revert succeeded (otherwise a retry would double-count); on that double-fault it stays `redeemed` with a loud `console.error`. Never delete the sweep branch or the compensation ordering.
@@ -11,6 +152,93 @@
 - **The claim wallet excludes `backfilled`** (`RedeemablesWalletService` filters `status ≠ backfilled`) — markers belong on the milestone ladder, not the claim list.
 - **Streak reversal targets the `streak` bucket**: `unredeemMilestoneRedemption` picks the draw source by `milestoneType` — do not hardcode `bonus-entry-promo` back in.
 - **Launch order is load-bearing (updated 2026-07-15)**: 1) `npx tsx scripts/backfill-membership-streaks.ts --live --roundup-incomplete` (P1 counters; round-up flag is LAUNCH-ONLY) → 2) `seed:streak-rewards` (generation stamp + index swap + rungs `isActive:false` + markers) → 3) `seed --live --activate` → 4) flip `DASHBOARD_FEATURES.loyaltyStreak`/`milestoneProgress` to true and deploy (the UI ships DARK so it never promises grants that aren't active). Activating before markers exist mass-grants historical rungs; showing the UI before activating stiffs members whose rung lands in the dark window (markers stamp it as pre-launch).
+
+## Per-customer bonus codes: launch order is load-bearing too — and it INVERTED on 2026-08-26
+
+There is no feature flag here — **creating the campaign row IS the switch-on**, and it happens in the
+admin UI with no further review step.
+
+**The order below is the reverse of what this page said until 2026-08-26.** It used to say "build the
+Klaviyo flow FIRST". Under the webhook model that ships a live flow emailing a hardcoded code into a
+void: with no active campaign carrying the code, `ensureCampaignIssuanceForUser` returns
+`not_applicable`, the endpoint answers `200`, and every customer in the cohort receives a code that
+fails at checkout with "Invalid campaign code". The flow is now the LAST thing published.
+
+1. **Deploy the endpoint to production** with `BONUS_CODE_WEBHOOK_SECRET` set — scoped to Vercel's
+   **Production** environment only, so a preview deploy cannot mint into the production database
+   even if someone points one at it.
+2. **Create the campaign(s)** in Admin → Monthly Coupons: `code` (must match
+   [`BONUS_CODE_BY_TRIGGER`](../../src/config/bonusCodes.ts)), `validForHours: 72`, `entriesAmount`,
+   `purchaseRequirement`, targeting. Cancel-click must be `purchaseRequirement: "none"` — there is no
+   purchase to qualify on.
+3. **Smoke-test the endpoint in production**, against a real production account, using a disposable
+   campaign. The production gate sits ahead of the MINT, deliberately (see P7 rule 3b), so this path
+   **cannot** be rehearsed on a preview deploy or locally — this smoke test is the first genuine
+   execution the code ever gets. Confirm the issuance row, the Klaviyo event and the delivered email
+   all name the same deadline.
+4. **Only then does marketing publish the flows.** Each flow calls
+   `POST /api/bonus-codes/v1/issue` one step above its discount email, and the email renders
+   `expires_at_label` verbatim. Never re-format `expires_at` in the template: the label is the stored
+   instant formatted in Sydney time, and any other formatting can print a time that contradicts what
+   redemption enforces.
+
+**A 72-hour window is a duration, not a wall-clock time — and it shifts across a DST transition.**
+`expiryAfterHours` is exact epoch-millisecond arithmetic, so a code issued Friday 2:00pm AEST expires
+Monday **3:00pm AEDT**, not 2:00pm. The elapsed time is always exactly 72 hours; the *displayed* hour
+moves. That is deliberate — do not "fix" it, and do not write customer copy that promises a
+particular time of day.
+
+Also: **a global daily cap now bounds webhook issuance** (`BONUS_CODE_DAILY_MINT_CAP`, default 500) —
+see the fail-closed section below. There is still **no per-campaign budget and no max-issuances field**,
+and the cap does not bound `entriesAmount` × the population reached within a single day. Watch the
+issuance count after switch-on.
+
+## The bonus-code webhook guards fail CLOSED — all three of them (2026-08-26)
+
+These are the three facts a future engineer is most likely to get wrong, because in each case the
+"obvious" behaviour is the opposite one. All three live in
+[src/lib/bonus-code-webhook/](../../src/lib/bonus-code-webhook/); the signatures are in
+[backend.md](./backend.md).
+
+**1. An unset secret refuses every call. It does not let them through.**
+`BONUS_CODE_WEBHOOK_SECRET` unset (or with no comma-entry of at least 16 characters) →
+`{ ok: false, status: 500, reason: "misconfigured" }`, every time, plus a `console.error`.
+The tempting nearest neighbour is `src/app/api/cron/monthly-redeemables-issuance/route.ts:9-14` —
+`if (!cronSecret) return true`, which **fails open** and compares with `===`. On a cron that is
+sloppy; on a **mint** endpoint it is the entire product given away by a var nobody set. Copy
+`verifyNormRequest` (`src/lib/internal-norm/auth.ts:87-95`) instead. Middleware will not save you —
+its matcher excludes `/api`, so this route owns 100% of its own authorization.
+Corollary: **rotate by comma list, never by swap.** Add the new secret alongside the old, let
+marketing update the three flows, then remove the old one. Replacing the value in one step means
+every in-flight flow call is refused until the flows are re-saved.
+
+**2. A database outage BLOCKS minting. It does not wave calls through.**
+`assertBonusCodeMintBudget` wraps everything and its catch returns
+`{ ok: false, status: 500, reason: "error" }`. If you ever "fix" that catch to return `ok: true` so
+that "an outage doesn't break the flows", you have built a cap that uncaps itself at exactly the
+moment things are going wrong — and this is the **only** control that survives a leaked secret,
+because there is deliberately no rate limiter on the route. The trade is real and accepted: during a
+Mongo outage the Klaviyo flow still sends its discount email (we cannot stop it from our side) and
+the customer's code will not be on their account. `500` is chosen precisely so Klaviyo retries and
+the grant is recovered.
+
+**3. A failed audit write must NOT fail the request.**
+`writeBonusCodeWebhookCall` catches everything and resolves anyway. The asymmetry is deliberate:
+guards fail closed (refuse), the audit fails open (proceed without the row). Losing a customer's
+grant because a log write hiccuped would be strictly worse than losing the log line — the discount
+email has already gone. The cost is stated in `budget.ts`: **an unwritten row is an uncounted mint**,
+which loosens the daily cap slightly. It never tightens it wrongly, and it is the correct direction
+for this trade.
+
+Two smaller traps in the same area:
+
+- **Refusals do not consume budget.** Only `minted` and `rearmed` count. If you add a "count every
+  call" shortcut, an enumeration sweep against a leaked secret would starve the legitimate flows —
+  a denial of service handed to the attacker for free.
+- **The budget's day is a UTC day**, resetting at 10/11am Sydney, matching the repo's existing
+  `utcDayKey`. It is an abuse backstop, not a business metric; it only needs a well-defined
+  boundary. Do not "fix" it to a Sydney day without also moving `dayKey` on every existing
+  `BonusCodeWebhookCall` row, or the cap will read a window that no longer matches what was written.
 
 ## Purchase gate: every leg is an EVENT check, never a state check (2026-07-07)
 

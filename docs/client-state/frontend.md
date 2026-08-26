@@ -42,6 +42,19 @@ The `transition-colors duration-200 ease-out` utility was removed from `<body>` 
 
 The file's dead re-export block (Skeleton/Progress/Spinner loaders, ErrorRecovery variants, `useErrorRecovery` — zero importers ever used the `@/app/providers` path for them) was deleted in perf Tier-2 (2026-07-20); import those from their own modules (`@/components/loading/*`, `@/components/error/ErrorRecovery`, `@/hooks/useErrorRecovery`).
 
+## `useRedeemablesQueries.ts` — expiry label + code visibility types (2026-08-25)
+
+`RedeemableWalletItem` gained `expiresAtLabel?: string` — the server-formatted
+(`formatExpiryLabelAEST`) customer-facing expiry string; components must render
+this, never derive a date string from `expiresAt` client-side (viewer-locale
+dependent). `RedeemablesStatusResponse.activeCampaign.code` and
+`activeCampaigns[].code` both changed from required `string` to optional
+`code?: string` — `GET /api/redeemables/status` now returns a campaign's code
+only to a caller who holds an issuance for it (see
+[rewards-redeemables/backend.md](../rewards-redeemables/backend.md#customer-facing-code-visibility-and-expiry-label-task-10-2026-08-25)).
+Neither field was consumed by any component before this change (confirmed by
+grep), so no other client code needed updating.
+
 ## Listener helpers in floating widgets
 
 `RewardsFloatingWidget` uses [`addThrottledResize`](../../src/utils/dom/listenerHelpers.ts) instead of a raw `window.addEventListener("resize", …)` so positional recompute on viewport resize is RAF-throttled. The button is tagged with `data-floating-widget="true"` for the print stylesheet.

@@ -648,6 +648,15 @@ async function processPaymentBenefitsInternal(
         packageType: packageData.packageType,
       };
       const benefitsEventId = benefitsGrantedEventId(paymentIntentId);
+
+      // Read BEFORE `grantBenefits` so the "One-Time Package Purchased" event's
+      // `had_active_subscription` is genuinely the PRE-GRANT membership state.
+      // Today the one-time branch never touches `user.subscription`, so reading
+      // it after would give the same answer — but that is an invisible invariant
+      // one edit inside `handleOneTimePackage` would break silently, and this is
+      // a point-in-time fact no downstream consumer can reconstruct.
+      const hadActiveSubscription = user.subscription?.isActive === true;
+
       await grantBenefits(
         user as UserDocument,
         packageData,
@@ -674,7 +683,7 @@ async function processPaymentBenefitsInternal(
       // /api/invoice/finalize call ran. billingReason lets trackKlaviyoEvent skip renewals
       // (owned by the "Subscription Renewed" → "Membership Renewal" flow) and upgrades
       // (owned by the invoice.payment_succeeded webhook).
-      trackKlaviyoEvent(user as UserDocument, packageData, paymentIntentId, billingReason);
+      trackKlaviyoEvent(user as UserDocument, packageData, paymentIntentId, billingReason, hadActiveSubscription);
 
       // ✅ CRITICAL: Update Klaviyo profile with latest user data after benefits are granted
       try {
@@ -1063,7 +1072,12 @@ async function checkAndRedeemCampaign(
       };
     }
 
-    console.warn(`⚠️ [CAMPAIGN] Campaign redemption did not grant entries:`, {
+    // console.error, NOT console.warn: `compiler.removeConsole` strips warn in
+    // production builds, and this branch IS the "customer paid and received
+    // nothing" case — checkAndRedeemCampaign is non-blocking, so nothing else
+    // surfaces it to the customer or to us. It becomes materially more likely
+    // once codes are mass-distributed by email.
+    console.error(`⚠️ [CAMPAIGN] Campaign redemption did not grant entries:`, {
       userId: user._id.toString(),
       code,
       success: result.success,
@@ -1442,6 +1456,14 @@ async function grantBenefits(
     });
   }
 
+  // No bonus code is minted here any more. The one-time-purchase win-back code
+  // is now minted by `POST /api/bonus-codes/v1/issue`, which Klaviyo calls from
+  // inside the nurture flow one step ahead of the discount email, so the
+  // customer's 72-hour window starts when that email is about to send instead of
+  // at purchase — the email lands days later and the old window had already
+  // expired by then. Nothing on the payment path needs to change: the flow is
+  // entered off the purchase events this file already emits.
+
   // Summary log: Total bonus entries from all sources
   const totalRegularEntries = packageData.entries;
   const totalBonusEntries = (user.accumulatedEntries || 0) - (packageData.entries || 0);
@@ -1700,7 +1722,14 @@ function trackKlaviyoEvent(
     price: number;
   },
   paymentIntentId: string,
-  billingReason?: string // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason, and gates Invoice Generated
+  billingReason: string | undefined, // Stripe billing_reason; threaded to Placed Order as is_renewal + billing_reason, and gates Invoice Generated
+  /**
+   * The caller's PRE-GRANT `user.subscription?.isActive`. Required (not
+   * defaulted) so a future caller cannot silently ship `false` for a member:
+   * it is the point-in-time member/non-member discriminator on
+   * "One-Time Package Purchased" and nothing downstream can rebuild it.
+   */
+  hadActiveSubscription: boolean
 ): void {
   try {
     // console.log(`📊 trackKlaviyoEvent called for user: ${user.email}`);
@@ -1730,6 +1759,7 @@ function trackKlaviyoEvent(
           createOneTimePackagePurchasedEvent(user as never, {
             ...commonData,
             pointsEarned: packageData.points,
+            hadActiveSubscription,
           })
         );
         break;

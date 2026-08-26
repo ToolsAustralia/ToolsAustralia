@@ -120,6 +120,7 @@
     "test:one-time-drawer-packages": "tsx src/utils/membership/__tests__/select-one-time-drawer-packages.test.ts",
     "test:find-recoverable-subscription": "tsx src/services/subscription/__tests__/find-recoverable-subscription.test.ts",
     "test:cancel-incomplete-subscription": "tsx src/services/subscription/__tests__/cancel-incomplete-subscription.test.ts",
+    "test:cancel-churn-emit": "tsx src/services/subscription/__tests__/cancel-subscription-churn-emit.test.ts",
     "test:http-rejection-severity": "tsx src/utils/error-reporting/__tests__/http-rejection-severity.test.ts",
     "test:payment-decline-severity": "tsx src/utils/error-reporting/__tests__/payment-decline-severity.test.ts",
     "test:webhook-queue-backoff": "tsx src/services/stripe-webhook-queue/__tests__/backoff.test.ts",
@@ -201,7 +202,6 @@
     "test:rebill-classification": "tsx src/utils/billing/__tests__/rebill-classification.test.ts",
     "stripe:probe-reanchor:dry": "tsx scripts/stripe-probe-reanchor.ts --dry-run",
     "stripe:probe-upgrade-anchor:dry": "tsx scripts/stripe-probe-upgrade-anchor.ts --dry-run",
-
     "find:stranded-mini-draw-payments": "tsx scripts/find-stranded-mini-draw-payments.ts",
     "find:direct-attribution": "tsx scripts/find-direct-attribution.ts",
     "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",
@@ -477,7 +477,16 @@
     "migrate:promo-analytics-cleanup:prod:dry": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production",
     "migrate:promo-analytics-cleanup:prod": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production --apply",
     "harvest:partner-instore-artwork": "tsx scripts/harvest-partner-instore-artwork.ts",
-    "test:excessive-retry-cooldown": "tsx src/server/admin/__tests__/excessiveRetryCooldown.test.ts"
+    "test:excessive-retry-cooldown": "tsx src/server/admin/__tests__/excessiveRetryCooldown.test.ts",
+    "test:bonus-code-expiry": "tsx src/utils/redeemables/__tests__/expiry-hours.test.ts",
+    "test:bonus-code-policy": "tsx src/utils/redeemables/__tests__/bonus-code-policy.test.ts",
+    "test:issuance-expiry": "tsx src/services/redeemables/__tests__/issuance-expiry.test.ts",
+    "test:campaign-window": "tsx src/services/redeemables/__tests__/campaign-window.test.ts",
+    "test:trigger-eligibility": "tsx src/services/redeemables/__tests__/trigger-eligibility.test.ts",
+    "test:bonus-code-mint": "tsx src/services/redeemables/__tests__/bonus-code-mint.test.ts",
+    "test:campaign-enrolment": "tsx src/services/redeemables/__tests__/campaign-enrolment.test.ts",
+    "test:bonus-code-webhook": "tsx src/services/redeemables/__tests__/bonus-code-webhook.test.ts",
+    "test:code-visibility": "tsx src/app/api/redeemables/status/__tests__/code-visibility.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",

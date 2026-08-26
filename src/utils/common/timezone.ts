@@ -285,6 +285,32 @@ export function createAESTDateAsUTC(
   return aestDate;
 }
 
+/** AEST vs AEDT abbreviation for an instant. Same Intl technique as :85-88. */
+export function getAESTAbbreviation(utcDate: Date): string {
+  return (
+    new Intl.DateTimeFormat("en-AU", { timeZone: AEST_TIMEZONE, timeZoneName: "short" })
+      .formatToParts(utcDate)
+      .find((p) => p.type === "timeZoneName")?.value ?? "AEST"
+  );
+}
+
+/**
+ * The ONE customer-facing expiry string. The Klaviyo email, the rewards wallet
+ * and the rewards widget all render this exact value.
+ *
+ * Never hardcode " AEST": a 72-hour window from 2 Oct 2026 ends in AEDT.
+ * Never hardcode a TIME of day either — expiry windows are an exact offset from
+ * the mint instant, so the label lands wherever that offset falls, and a DST
+ * crossing shifts the wall clock by an hour (test:bonus-code-expiry pins both).
+ * Never use formatDateForKlaviyo (klaviyo-helpers.ts:759) — it is
+ * toLocaleDateString("en-US") with no timeZone option.
+ *
+ * Example: "Monday 5 October 2026, 3:00PM AEDT"
+ */
+export function formatExpiryLabelAEST(utcDate: Date): string {
+  return `${formatInTimeZone(utcDate, AEST_TIMEZONE, "EEEE d MMMM yyyy, h:mma")} ${getAESTAbbreviation(utcDate)}`;
+}
+
 /**
  * Get window "today through 27th" in AEST: start = midnight today, end = 27th 20:00 (8pm AEST/AEDT).
  * Used for "renewing today through 27th" in admin upcoming renewals and projected income.

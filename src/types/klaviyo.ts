@@ -167,6 +167,14 @@ export interface KlaviyoEvent {
   };
   properties: KlaviyoEventProperties;
   time?: number;
+  /**
+   * Optional idempotency key for the Klaviyo Events API. `"timeout"` is
+   * explicitly retryable (MAX_RETRIES = 5 in src/lib/klaviyo.ts), so an
+   * accepted-but-slow POST can otherwise be delivered multiple times. Omitted
+   * entirely from the outbound payload when unset — never sent as
+   * undefined/null — to keep every existing event byte-identical.
+   */
+  unique_id?: string;
 }
 
 export interface KlaviyoApiResponse {

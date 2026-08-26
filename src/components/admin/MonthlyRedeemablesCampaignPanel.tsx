@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Eye, Gift, Loader2, Pencil, Plus, Power, Trash2, X } from "lucide-react";
 import AdminMonthlyRedeemablesModal from "@/components/modals/AdminMonthlyRedeemablesModal";
 import type { MonthlyRedeemableSegmentConfig } from "@/components/modals/AdminMonthlyRedeemablesModal";
+import { personalWindowGoverns } from "@/utils/redeemables/bonus-code-policy";
 
 interface MonthlyCampaignListItem {
   id: string;
@@ -17,10 +18,14 @@ interface MonthlyCampaignListItem {
   startsAt: string;
   endsAt?: string;
   neverExpires?: boolean;
+  /** Per-customer window in HOURS, counted from the issuing instant; mutually exclusive with neverExpires. */
+  validForHours?: number;
   isActive: boolean;
   requiresPurchase?: boolean;
   purchaseRequirement?: "none" | "membership" | "one-time" | "any";
   redeemedCount: number;
+  /** Total issuances (any status) — drives the "already has issuances" edit warning. */
+  issuanceCount?: number;
   segmentConfig?: MonthlyRedeemableSegmentConfig | null;
 }
 
@@ -44,6 +49,20 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * Shared "how does this campaign expire" label, reused at every expiry display site so an
+ * operator can tell a fixed-end campaign from a rolling per-customer window at a glance.
+ * `endsAt` still shows for a validForHours campaign — it's the minting backstop, not the
+ * redemption deadline (see personalWindowGoverns / resolveIssuanceExpiry).
+ */
+function renderExpiryLabel(campaign: Pick<MonthlyCampaignListItem, "neverExpires" | "validForHours" | "endsAt">) {
+  if (campaign.neverExpires) return "Never Expires";
+  if (personalWindowGoverns({ validForHours: campaign.validForHours })) {
+    return `${campaign.validForHours}-hour window per customer (backstop ${formatDateTime(campaign.endsAt || "")})`;
+  }
+  return formatDateTime(campaign.endsAt || "");
 }
 
 export default function MonthlyRedeemablesCampaignPanel() {
@@ -111,7 +130,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
   };
 
   const handleDelete = async (campaignId: string) => {
-    if (!window.confirm("Delete this coupon? If issuances exist, it will be deactivated instead.")) return;
+    if (!window.confirm("Delete this coupon? It will be deactivated, not permanently removed.")) return;
     setBusyCampaignId(campaignId);
     setFeedback(null);
     try {
@@ -263,7 +282,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                     <div className="mt-2 text-xs text-gray-600 dark:text-neutral-400">
                       <p className="truncate">{campaign.targetingMode}</p>
                       <p className="mt-1">Start: {formatDateTime(campaign.startsAt)}</p>
-                      <p>End: {campaign.neverExpires ? "Never Expires" : formatDateTime(campaign.endsAt || "")}</p>
+                      <p>End: {renderExpiryLabel(campaign)}</p>
                       {campaign.neverExpires && (
                         <p className="mt-1 font-medium text-indigo-700 dark:text-indigo-300">No expiration</p>
                       )}
@@ -376,7 +395,11 @@ export default function MonthlyRedeemablesCampaignPanel() {
                               if (req === "any") return " · Purchase Required";
                               return "";
                             })()}
-                            {campaign.neverExpires ? " · Never Expires" : ""}
+                            {campaign.neverExpires
+                              ? " · Never Expires"
+                              : personalWindowGoverns({ validForHours: campaign.validForHours })
+                                ? ` · ${campaign.validForHours}-hour window`
+                                : ""}
                           </div>
                         </td>
                         <td className="px-3 py-3 text-xs text-gray-700 dark:text-neutral-200">
@@ -389,7 +412,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                         <td className="px-3 py-3 text-sm font-semibold text-gray-800 dark:text-neutral-100">{campaign.redeemedCount}</td>
                         <td className="px-3 py-3 text-xs text-gray-600 dark:text-neutral-400">
                           <div>{formatDateTime(campaign.startsAt)}</div>
-                          <div>{campaign.neverExpires ? "Never Expires" : formatDateTime(campaign.endsAt || "")}</div>
+                          <div>{renderExpiryLabel(campaign)}</div>
                         </td>
                         <td className="px-3 py-3">
                           <span
