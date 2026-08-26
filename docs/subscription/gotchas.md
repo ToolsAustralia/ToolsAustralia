@@ -1,5 +1,25 @@
 # Subscription — Gotchas
 
+## The competition-terms prize schedule: derived, and why it also carries model numbers (2026-08-26)
+
+`/competition-term-majordraw` publishes Part B, the prize schedule, under NT permit `NTP/17808`.
+It used to hand-list **six** options while the site offered **twenty** — Kincrome, GearWrench,
+Ryobi and HiKOKI combinations were winnable but simply absent from the legal terms. It is now
+derived from `PRIZE_SUMMARIES`, so the schedule cannot drift from the catalogue again.
+
+Deriving it created a second, quieter problem worth knowing about: the hand-written list carried
+**manufacturer model numbers** (`SCMT11402`, `M18FPP13B4564B`) and `PRIZE_SUMMARIES.label` does
+not — it is marketing shorthand. Trading itemised legal identification for completeness would
+have been a poor swap, so each option now also renders `prize.summary`, which does carry the
+model numbers ("the Sidchrome SCMT11402 356-piece storage cabinet").
+
+**Still not ideal, and deliberately not papered over:** the catalogue has no dedicated
+`modelNumber` field, so precision depends on whoever wrote each `summary`. If the schedule ever
+needs guaranteed per-item identification, add that field to `PrizeSummary` and render it — do
+**not** hand-write model numbers back into the page, which is what drifted the first time.
+
+---
+
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
 ## Anchor-24 members could not upgrade at all (2026-08-24)
@@ -352,6 +372,42 @@ See `docs/PAST_DUE_REANCHOR.md` for the full trigger-gate logic and channel anal
 ## /terms and /competition-term-majordraw are marketing-class static pages (2026-07-19)
 
 Both legal pages render static/ISR under the no-nonce CSP variant (see docs/security-csp/architecture.md "Route classes") — their `getNonce()` calls were removed (JSON-LD is non-executable data and needs no nonce). Do not add `headers()`/`cookies()`/session reads to them; that silently flips them dynamic.
+
+## Part B of /competition-term-majordraw is the legal prize statement — and it drifts silently (2026-08-24)
+
+**The two pages are not interchangeable.** `/terms` carries no prize list and no prize value at
+all; **only `/competition-term-majordraw` states what is actually being given away**, in its
+`part-b` section. Anyone checking "does the site advertise prize X" must look at that page — a
+grep of `/terms` returns nothing and reads like a false negative.
+
+Part B renders `prizeOptions`, a **hardcoded array** in the page body, via an ungated
+`{prizeOptions.map(...)}` — no `majorDraw &&` guard, no DB override. That matters because the
+draw *dates* on the same page **do** come from the live record (`getCurrentMajorDrawServer()`
+under `revalidate = 60`), so it is easy to assume the prize list is equally live. It is not.
+
+**It had drifted, and the drift was invisible.** The array listed **6** tool combinations
+(Sidchrome/Milwaukee boxes x Milwaukee/DeWalt/Makita kits) while the live registry in
+[prize-selection/constants.ts](../../src/components/sections/promo/prize-selection/constants.ts)
+offered **4 toolboxes x 5 toolsets = 20**. Kincrome, GearWrench, Ryobi and HiKOKI were winnable
+on the site but absent from the legal terms. Nothing failed; no test covers the array.
+
+**Draw 10 changes (2026-08-24):**
+- The `$5,000 cash (tax free)` line was removed from every option — the combo cash bonus is gone,
+  tools only. The **`$10,000` cash-only option stays** (they are different things; do not
+  conflate them when grepping).
+- `Total Prize Pool: AUD $13,000.` was **removed** from the Part B intro line, which now reads
+  only `Number of Winners: One (1).`
+- The substitution clause further down promised to preserve "the advertised prize pool value" —
+  a dangling reference once the figure went. It now says "the value of the advertised prize".
+- `prizeOptions` is being moved to **derive from the prize catalog** so the legal page can never
+  again advertise a prize set the site does not offer.
+
+> **Permit note:** Australian trade-promotion permits generally expect the total prize value to
+> be disclosed in the published terms, and NSW/NT conditions often require the terms to match the
+> permit application. Removing the pool figure was an explicit owner decision (the per-option
+> contents remain itemised, so the value stays derivable). **Confirm with whoever files the
+> permits before a draw goes live** — and if it must return, it is a one-line revert at the Part B
+> intro, not a rebuild.
 
 ## The upgrade flow's confirm + payment steps were unreadable in dark mode (2026-08-06)
 

@@ -168,7 +168,7 @@ test("cash mode dims both reels and drops the contents strip", () => {
   assert.ok(html.includes('data-dimmed="true"'), "reels must be dimmed");
   assert.equal((html.match(/data-dimmed="true"/g) ?? []).length, 2, "both reels dim");
   assert.ok(!html.includes("in this prize"), "the contents strip has no meaning in cash mode");
-  assert.ok(!html.includes("CASH INCLUDED"), "the bundled $5,000 flag must not show in cash mode");
+  assert.ok(!html.includes("CASH INCLUDED"), "no bundled-cash flag exists since draw 10");
   assert.ok(html.includes("$10,000 tax-free cash"), "the cash headline must show");
 });
 
@@ -179,11 +179,16 @@ test("cash mode repaints the card green and clears every focus ring", () => {
   assert.equal(focused.length, 0, "no card is focused while the winner has taken the cash");
 });
 
-test("bundle mode advertises the $5,000 bonus in the hero and the chips", () => {
+// Draw 10 removed the $5,000 cash bonus from every tool combination. This test used to assert
+// the OPPOSITE — that the hero and chips advertised it — which is why it is inverted rather
+// than deleted: the inverted form is a standing guard that the claim never comes back by
+// accident. The $10,000 cash-only option is a separate selection and is untouched.
+test("bundle mode makes NO cash claim — the $5,000 bonus is gone", () => {
   const html = render();
-  assert.ok(html.includes("+ $5,000 CASH INCLUDED"));
-  assert.ok(html.includes("$5,000 cash"));
-  assert.ok(html.includes("THIS IS WHAT YOU WIN"));
+  assert.ok(!html.includes("CASH INCLUDED"), "the hero must not flag a bundled cash bonus");
+  assert.ok(!html.includes("$5,000"), "no $5,000 claim may appear anywhere in the card");
+  assert.ok(!/\$5[,.]?000|\$5K/i.test(html), "no $5K claim in any spelling");
+  assert.ok(html.includes("THIS IS WHAT YOU WIN"), "the combination hero still renders");
 });
 
 /* -------------------------------------------------------------------------- */
@@ -243,13 +248,29 @@ test("every image has an alt attribute", () => {
 });
 
 test("off-stage cards are both hidden and untabbable", () => {
-  // Nine synthetic toolsets would be needed to push cards off stage; with the live
-  // registries nothing is off stage, so assert the invariant holds for what IS rendered.
+  // `REEL_VISIBLE_RADIUS` is 3 and `isHidden` is `|offset| >= 3`, so a reel shows FIVE cards
+  // (offsets -2..+2). A lane with more than five entries therefore always has at least one
+  // card parked off stage — it rotates into view as the reel steps. That is the reel working
+  // as designed, not a defect.
+  //
+  // This assertion used to be "nothing is off stage with today's registries", which held only
+  // while the longest lane had five entries. STIHL made the toolset lane six (draw 10) and it
+  // went red. Assert the INVARIANT the test is named for instead: whatever is off stage must
+  // be inert. That survives the next brand.
   const html = render();
-  const offstage = attrValues(html, /data-offstage="(\w+)"/g);
-  assert.equal(offstage.length, TOOLBOXES.length + TOOLSETS.length);
-  for (const [index, value] of offstage.entries()) {
-    assert.equal(value, "false", `card ${index} unexpectedly off stage with today's registries`);
+  const cards = html.match(/<button\b[^>]*data-offstage="[^"]*"[^>]*>/g) ?? [];
+  assert.equal(cards.length, TOOLBOXES.length + TOOLSETS.length, "one card per registry entry");
+
+  const longestLane = Math.max(TOOLBOXES.length, TOOLSETS.length);
+  const offstageCount = cards.filter((c) => /data-offstage="true"/.test(c)).length;
+  if (longestLane <= 5) {
+    assert.equal(offstageCount, 0, "no lane exceeds the five-card window, so nothing should be off stage");
+  }
+
+  for (const card of cards) {
+    if (!/data-offstage="true"/.test(card)) continue;
+    assert.ok(/aria-hidden="true"/.test(card), `off-stage card must be aria-hidden: ${card.slice(0, 120)}`);
+    assert.ok(/tabindex="-1"/i.test(card), `off-stage card must be untabbable: ${card.slice(0, 120)}`);
   }
 });
 

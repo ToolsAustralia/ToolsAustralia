@@ -7,9 +7,13 @@ import { cn } from "@/utils/cn";
 interface SpecCardProps {
   item: PrizeSpecItem;
   /**
-   * True only for the injected "$5,000 Cash" section. Without it, the green `$5K` tile
-   * leaked onto every photo-less item — storage boxes, chargers, battery kits — which read
-   * as "this box is worth $5,000". Everything else gets a neutral no-photo placeholder.
+   * True only for the CASH-ONLY prize's own `cash-prize` section. Without it, the green
+   * cash tile leaked onto every photo-less item — storage boxes, chargers, battery kits —
+   * which read as "this box is worth cash". Everything else gets a neutral placeholder.
+   *
+   * Draw 10 note: this used to also cover a synthetic "$5,000 Cash" tab appended to every
+   * tool prize. That tab is gone with the combo bonus, so the ONLY section that can set
+   * this now is the $10,000 cash-only prize — hence the plate reads $10K, not $5K.
    */
   isCash?: boolean;
   /** Open the fullscreen viewer on this item's photo. Only ever called when it has one. */
@@ -35,7 +39,7 @@ export default function SpecCard({ item, isCash = false, onOpenImage }: SpecCard
   return (
     <article className="rounded-[14px] border border-[var(--pbc-border)] bg-[var(--pbc-tile-bg)] p-3.5 shadow-[0_1px_2px_rgba(0,0,0,.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,.04)]">
       <div className="flex items-start gap-[13px]">
-        {/* Three tile states: the product photo, the cash section's green "$5K" plate, and
+        {/* Three tile states: the product photo, the cash section's green "$10K" plate, and
             a neutral dashed placeholder for catalogue items that simply have no photo yet
             (plenty of storage boxes, chargers and battery kits don't). */}
         <Tile
@@ -68,7 +72,7 @@ export default function SpecCard({ item, isCash = false, onOpenImage }: SpecCard
               />
             </span>
           ) : isCash ? (
-            <span className="font-poppins text-[26px] font-black text-[#18a94d]">$5K</span>
+            <span className="font-poppins text-[26px] font-black text-[#18a94d]">$10K</span>
           ) : (
             <NoPhotoPlaceholder />
           )}

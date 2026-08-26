@@ -56,8 +56,9 @@ export interface PrizeBuilderCardProps {
  * "Build your prize" — the major-draw prize configurator.
  *
  * Two independent coverflow lanes (toolbox, power toolset) assemble a live
- * combination hero; $5,000 cash always rides along, or the winner can take
- * $10,000 tax-free cash instead. Scales to any number of brands because both
+ * combination hero. Draw 10 removed the $5,000 cash bonus that used to ride along with every
+ * combination — a tool prize is now tools only, and the winner can instead take $10,000
+ * tax-free cash as its own selection. Scales to any number of brands because both
  * lanes render straight off the registries in `constants.ts`.
  *
  * The card is CONTROLLED: selection state, catalog lookups, URL syncing and the
@@ -161,10 +162,9 @@ export function PrizeBuilderCard({
           </h2>
           {/* Two lines on a phone, not three — the handoff's longer lead cost ~18px of the
               height the two reels and the hero need to share one viewport. Same three facts:
-              free choice, the bundled cash, the cash-instead option. */}
+              free choice of both lanes, and the cash-instead option. */}
           <p className="m-0 max-w-[440px] text-xs leading-[1.5] text-[var(--pbc-sub)]">
-            Any toolbox. Any power toolset. Plus{" "}
-            <strong className="text-[var(--pbc-cash-ink)]">$5,000</strong> cash — or skip the gear and take{" "}
+            Any toolbox. Any power toolset. Or skip the gear and take{" "}
             <strong className="text-[var(--pbc-text)]">$10,000, tax free</strong>.
           </p>
         </div>

@@ -356,7 +356,7 @@ export function createWinnerEmailTemplate(firstName: string, prizeName: string, 
     button({ href: winnersUrl, label: "See the Winners' Hall of Fame", variant: 'gold', width: 340 }) +
     spacer(20) +
     note(
-      'Our team will be in touch to verify your win and arrange delivery — your power-tool + storage combo with $5,000 cash, or $10,000 tax-free cash. Your call.'
+      'Our team will be in touch to verify your win and arrange delivery — your power-tool + storage combo, or $10,000 tax-free cash. Your call.'
     );
   return renderBrandEmail({
     title: 'You won!',

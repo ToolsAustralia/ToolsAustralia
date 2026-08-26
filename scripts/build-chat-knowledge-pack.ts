@@ -200,10 +200,10 @@ function buildPrizesSection(): string {
 
 Each month's Grand Winner can customise their prize. They choose **one** of: [from BUSINESS.md]
 
-**Option A — a power-tool + workshop-storage combination, each bundled with a $5,000 cash bonus.** The available combinations are:
+**Option A — a power-tool + workshop-storage combination.** ${toolPrizes.length} combinations are available:
 ${toolList}
 
-**Option B — cash instead of tools: ${cashLabel}** — no tools, no hassle, just cash straight to your bank account.
+**Option B — cash instead of tools: ${cashLabel}** — no tools, no hassle, just cash straight to your bank account. This is the ONLY cash in the prize: a tool combination does **not** come with a cash bonus on top. If a member mentions a $5,000 bonus they are recalling a previous draw — it was removed for the draw that opened 2026-08-28.
 
 The winner is contacted after the live draw and works with our team to finalise their prize choice. Tools Australia handles all operational logistics outside the platform. [from BUSINESS.md]`;
 }
@@ -238,6 +238,7 @@ function buildKeyPagesSection(): string {
     { label: "Contact / support",                 path: "/contact" },
     { label: "Partner discounts",                 path: "/partner" },
     { label: "Terms and conditions",              path: "/terms" },
+    { label: "Major Giveaway competition terms (entry, draw, prize claim, refunds)", path: "/competition-term-majordraw" },
     { label: "Major Draw",                        path: "/major-draw" },
     { label: "Mini Draws",                        path: "/mini-draws" },
   ];
@@ -251,6 +252,46 @@ Use these paths when directing members to a page. Only use paths from this list 
 ${list}
 
 **Usage:** when referencing a page in a response, link it with markdown: e.g. \`[My Account](/my-account)\`, \`[Membership](/my-account/membership)\`, \`[contact us](/contact)\`.`;
+}
+
+/**
+ * Summary of the Major Giveaway competition terms at `/competition-term-majordraw`.
+ *
+ * PROSE, not derived — the terms page is JSX, not a data file, so there is nothing to
+ * import. Keep this in lockstep with `src/app/(site)/competition-term-majordraw/page.tsx`
+ * BY HAND whenever a clause changes.
+ *
+ * Why it exists: the page was in neither [key-pages] nor the pack, so a member who cited
+ * its 48-hour refund clause got "I do not have access to the content of external links"
+ * — from a page on our own site. The refund rules in particular are consumer-facing and
+ * were being answered one-sidedly from the membership FAQ alone.
+ *
+ * Deliberately a SUMMARY: the page runs ~30 clauses and the whole pack is re-sent
+ * uncached on every turn (see the ceiling in knowledge-pack.test.ts). Only the clauses a
+ * member actually asks about are carried; everything else is a link away.
+ */
+function buildCompetitionTermsSection(): string {
+  return `## [competition-terms] Major Giveaway Competition Terms
+
+Full terms: \`/competition-term-majordraw\`. This is a summary — link the page for the complete rules.
+This page is OURS, on this site. Never describe it as an external link you cannot read.
+
+**Refunds — both directions.** These are the rules members ask about most:
+- Once free entries are allocated, a purchase is normally final. Not winning is NEVER grounds for a refund.
+- **Exception 1 — genuine purchase error:** refundable if reported **within 48 hours** of purchase, by email to support with the receipt or transaction ID.
+- **Exception 2 — genuine technical errors or system failures** occurring **before** the draw.
+- **Exception 3 —** anything required by Australian Consumer Law. ACL rights are always preserved.
+- **Not accepted:** requests lodged after the draw has been conducted; change-of-mind once entries are allocated; duplicate or incorrect package claims lacking verifiable technical evidence.
+- Membership fees specifically are non-refundable once charged; cancelling mid-cycle refunds nothing, but entries for that cycle stay valid and benefits run to the end of the cycle.
+- Never promise a refund outcome — explain the rule, then escalate to a human.
+
+**Entry package conditions.** One-time pack entries credit as soon as payment settles (or reward points redeem). Membership free entries accumulate monthly per tier. Entries are valid only for the specified Major Giveaway unless stated otherwise. Holding multiple packages runs their benefits concurrently — days do not pause or stack.
+
+**Eligibility.** Australian residents 18+. Residents of SA and ACT are excluded.
+
+**Draw and claim.** The winner is drawn by a government-certified independent random-draw service (randomdraws.com.au), not by Tools Australia. No adjustments, refunds or bonus entries are given for claims lodged after the draw.
+
+**If the promotion is cancelled** before the draw (subject to the relevant approvals), refunds are issued.`;
 }
 
 function buildFaqSection(): string {
@@ -282,6 +323,7 @@ async function main() {
     { id: "major-draw",        title: "Major Draw",                 content: buildDrawMechanicsSection()    },
     { id: "partner-discounts", title: "Partner Discounts",          content: buildPartnerDiscountsSection() },
     { id: "prizes",            title: "Prize Options",              content: buildPrizesSection()           },
+    { id: "competition-terms", title: "Competition Terms",          content: buildCompetitionTermsSection() },
     { id: "key-pages",         title: "Key Pages",                  content: buildKeyPagesSection()         },
     { id: "faq",               title: "Frequently Asked Questions", content: buildFaqSection()              },
   ];

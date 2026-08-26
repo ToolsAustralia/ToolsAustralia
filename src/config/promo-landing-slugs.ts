@@ -32,6 +32,7 @@ export const TOOLSET_LANDING_SLUGS = [
   "dewalt",
   "makita",
   "hikoki",
+  "stihl",
 ] as const;
 
 export type ToolsetLandingSlug = (typeof TOOLSET_LANDING_SLUGS)[number];
@@ -43,6 +44,7 @@ const TOOLSET_TO_PRIZE_SLUGS: Record<ToolsetLandingSlug, [PrizeSlug, PrizeSlug, 
   dewalt: ["dewalt-sidchrome", "dewalt-kincrome", "dewalt-milwaukee", "dewalt-gearwrench"],
   makita: ["makita-sidchrome", "makita-kincrome", "makita-milwaukee", "makita-gearwrench"],
   hikoki: ["hikoki-sidchrome", "hikoki-kincrome", "hikoki-milwaukee", "hikoki-gearwrench"],
+  stihl: ["stihl-sidchrome", "stihl-kincrome", "stihl-milwaukee", "stihl-gearwrench"],
 };
 
 /**
@@ -82,6 +84,22 @@ const LANDING_HERO_MAP: Partial<Record<PrizeSlug, ExtendedPromoImagePaths>> = {
   "makita-gearwrench": resolveLandingHeroImages("makita", "gwTB"),
   "hikoki-gearwrench": resolveLandingHeroImages("hikoki", "gwTB"),
   "ryobi-gearwrench": resolveLandingHeroImages("ryobi", "gwTB"),
+
+  // Kincrome — the toolbox that never had a hero of its own. Every brand fell through to the
+  // resolver's evergreen fallback, so a visitor who configured a Kincrome combination saw the
+  // generic collage instead of the prize they had just built. Its art shipped with the draw-10
+  // drop (2026-08-26).
+  "milwaukee-kincrome": resolveLandingHeroImages("milwaukee", "kinTB"),
+  "dewalt-kincrome": resolveLandingHeroImages("dewalt", "kinTB"),
+  "makita-kincrome": resolveLandingHeroImages("makita", "kinTB"),
+  "hikoki-kincrome": resolveLandingHeroImages("hikoki", "kinTB"),
+  "ryobi-kincrome": resolveLandingHeroImages("ryobi", "kinTB"),
+
+  // STIHL — the sixth toolset (draw 10). Complete on arrival: all four toolboxes.
+  "stihl-sidchrome": resolveLandingHeroImages("stihl", "sidTB"),
+  "stihl-milwaukee": resolveLandingHeroImages("stihl", "milTB"),
+  "stihl-kincrome": resolveLandingHeroImages("stihl", "kinTB"),
+  "stihl-gearwrench": resolveLandingHeroImages("stihl", "gwTB"),
 };
 
 export function isToolsetLandingSlug(slug: string): slug is ToolsetLandingSlug {
@@ -162,6 +180,7 @@ export const TOOLSET_LANE_DISPLAY: Record<ToolsetLandingSlug, BrandLaneDisplay> 
   dewalt: { label: "Dewalt", logoPath: wordmark("dewalt") },
   makita: { label: "Makita", logoPath: wordmark("makita") },
   hikoki: { label: "HiKOKI", logoPath: wordmark("hikoki") },
+  stihl: { label: "STIHL", logoPath: wordmark("stihl") },
 };
 
 /**
@@ -190,7 +209,7 @@ export const TOOLBOX_LANE_DISPLAY: Record<ToolboxLaneId, BrandLaneDisplay> = {
     logoPath: wordmark("milwaukee"),
     // EXACTLY the fill of milwaukeeText.svg, so the toolbox row and the toolset row of the same
     // brand are the same red on the same screen.
-    markColor: { light: "#c92a28", dark: "#c92a28" },
+    markColor: { light: "#F72D2C", dark: "#F72D2C" },
   },
   gearwrench: {
     label: "GearWrench",

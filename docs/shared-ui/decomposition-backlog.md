@@ -28,8 +28,7 @@ _(none)_
 - [src/components/layout/Header.tsx](../../src/components/layout/Header.tsx) — **score 4.5** — 1731 LOC
   - signals: loc>800 (1731 LOC); ternary-explosion (41 JSX ternaries); multiple-concerns (4 concern buckets: hooks, services, components, integrations); many-arbitraries (49 arbitrary-value classNames); long-className (longest className=382 chars); many-useState (14 useState slices)
 
-- [src/components/sections/MajorDrawSection.tsx](../../src/components/sections/MajorDrawSection.tsx) — **score 4.5** — 1550 LOC
-  - signals: loc>800 (1550 LOC); ternary-explosion (41 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components); many-arbitraries (43 arbitrary-value classNames); long-className (longest className=702 chars); many-useState (11 useState slices)
+- ~~src/components/sections/MajorDrawSection.tsx~~ — **RESOLVED 2026-08-26** (was score 4.5 / 1550 LOC). Not decomposed — **deleted**: the component had no importer anywhere in `src/`, so the cheapest decomposition was removal.
 
 - ~~src/components/sections/promo/PrizeShowcase.tsx~~ — **RESOLVED 2026-07-21** (was score 4.5 / 1429 LOC).
   Rewritten to the prize-builder design handoff: it is now a **399-LOC** owner that holds

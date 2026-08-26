@@ -156,35 +156,38 @@ function main() {
   // reads zero for everyone) and its editable profile copy (edits there never reach us).
   // Both were live to members with no grounded answer, so Cobber's nearest matches were the
   // TA rewards-points and TA profile entries — i.e. a confidently wrong answer.
-  // Bumped 84 → 89 (2026-08-19): the merchandise shop batch. The shop shipped
-  // with only "does it exist" (15) and "does an item include entries" (86), so the
-  // question a shop is asked most — where is my order — had no grounded answer and
-  // Cobber may not invent one. The batch covers the orders page and its statuses,
-  // print-to-order turnaround (no held stock, and deliberately no quoted ETA), the
-  // delivery fee and free threshold, faulty/wrong items, and the member discount.
-  // Merged with origin/main on 2026-08-26: main had independently taken ids 82-85
-  // (gender ×2, blocked-card ×2), so the six merchandise entries were renumbered
-  // 84-89 -> 86-91 to clear the collision. 83 base + 4 (main) + 6 (shop) = 93.
-  assert.strictEqual(entries.length, 93, `Expected 93 FAQ entries, got ${entries.length}`);
+  // Bumped 83 → 85 (2026-08-17): two entries for the optional profile gender field.
+  // Bumped 85 → 87 (2026-08-18): blocked-card guidance (temporary card block + whether to wait).
+  // Bumped 87 → 89 (2026-08-24): ids 86 + 87 — the competition-terms refund rules. A member
+  // cited the 48-hour genuine-purchase-error clause on /competition-term-majordraw and Cobber
+  // called our own page an "external link" it could not read, because the page was in neither
+  // [key-pages] nor the knowledge pack. id 12 was CORRECTED (not added) in the same change, so
+  // it does not move the count.
+  // Bumped 89 -> 95 on staging (2026-08-26): the six merchandise-shop entries. They were
+  // authored as ids 84-89, renumbered 86-91 when feature/merchandise took origin/main (which
+  // had independently claimed 84 + 85), and renumbered again to 88-93 here because
+  // feature/august-28-draw-10-updates had independently claimed 86 + 87 for the refund rules.
+  // Draw 10 ships first, so ITS numbering is the one that stayed put. 89 + 6 = 95.
+  assert.strictEqual(entries.length, 95, `Expected 95 FAQ entries, got ${entries.length}`);
 
-  // 8d. Merchandise-shop batch (ids 87-91). The order-tracking entry is the reason the
+  // 8d. Merchandise-shop batch (ids 89-93). The order-tracking entry is the reason the
   // batch exists, so it must route to the page that actually answers it — /my-account
   // alone lands the customer on a dashboard with no orders on it.
-  const orderTracking = entries.find((e) => e.id === "87");
-  assert.ok(orderTracking !== undefined, "FAQ entry id=87 (where's my order) must exist");
+  const orderTracking = entries.find((e) => e.id === "89");
+  assert.ok(orderTracking !== undefined, "FAQ entry id=89 (where's my order) must exist");
   assert.ok(
     orderTracking!.answer.includes("/my-account/orders"),
-    "Order-tracking FAQ (id 87) must route to /my-account/orders, not the dashboard"
+    "Order-tracking FAQ (id 89) must route to /my-account/orders, not the dashboard"
   );
   // Delivery is a flat $10 on every order (priceCart, SHOP_CONFIG) — there is no
   // threshold as of 2026-08-25. This guard used to REQUIRE the answer to name a $100
   // free-delivery threshold, which is how stale copy survives a rule change: the
   // assertion held the old promise in place. It now pins the opposite.
-  const deliveryFee = entries.find((e) => e.id === "89");
-  assert.ok(deliveryFee !== undefined, "FAQ entry id=89 (delivery cost) must exist");
+  const deliveryFee = entries.find((e) => e.id === "91");
+  assert.ok(deliveryFee !== undefined, "FAQ entry id=91 (delivery cost) must exist");
   assert.ok(
     deliveryFee!.answer.includes("$10"),
-    "Delivery FAQ (id 89) must state the $10 flat rate"
+    "Delivery FAQ (id 91) must state the $10 flat rate"
   );
   for (const e of entries) {
     assert.ok(

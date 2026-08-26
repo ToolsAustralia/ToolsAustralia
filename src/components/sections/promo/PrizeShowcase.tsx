@@ -497,8 +497,7 @@ function PrizeShowcase({
           comboImage={detailsImage}
           feature={{
             title: isCash ? CASH_OPTION.title : `${activeToolset.name} + ${activeToolbox.name}`,
-            stats: getContentsChips(activeToolbox, activeToolset),
-            showCashBonus: !isCash,
+            stats: getContentsChips(activeToolbox, activeToolset),
           }}
           drawLabel={drawLabel}
         />

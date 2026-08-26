@@ -136,7 +136,13 @@ alphas as an opacity so ONE gradient declaration serves both themes with any bra
   implementation, one `.pbc-brand-mark` rule: the toolbox marks are WHITE-on-transparent silhouettes,
   and masking is what lets one asset serve both themes at the brand's own colour. It sizes itself as
   a **percentage of its plate**, so the registry's `markScale` levels the marks to a common LETTER
-  height — give it a fixed-height plate, don't override its width/height.
+  height — give it a fixed-height plate, don't override its width/height. Since draw 10 that scale
+  is **derived, not eyeballed** (`scale = targetCap / (min(plateH, plateW / aspect) x capFrac)`), and
+  every `public/images/brands/name/*.svg` `viewBox` is cropped to its real glyph bounds — five were
+  previously exported onto a 700x200 sheet carrying 58-72% dead padding, which made `contain` shrink
+  each brand differently. **Re-export a mark and you must crop it to its ink and re-derive**, or the
+  whole lane goes uneven again. Full derivation + the per-brand `capFrac` table live in
+  [docs/promo/frontend.md](../promo/frontend.md).
 - **`accentInk(hex, darkInk?)`** in [`prize-brand-colors.ts`](../../src/utils/prize-brand-colors.ts)
   picks legible ink for text on a filled brand accent using **real WCAG 2.1 relative luminance**
   (gamma-corrected), returning whichever of white / near-black actually has the better contrast.
@@ -685,7 +691,9 @@ existing key of the same polarity — light-text-on-bright (ryobi) vs white-text
 > brand's own `accent` off the `TOOLBOXES` / `TOOLSETS` record — so a new brand no longer needs a
 > case added to a chrome table.
 
-## MajorDrawSection — brand watermark now SVG (2026-06-22)
+## MajorDrawSection — brand watermark now SVG (2026-06-22, component deleted 2026-08-26)
+
+> MajorDrawSection was deleted on 2026-08-26 (confirmed unreachable — no import anywhere in `src/`), so this is history, not a live surface.
 
 The Ryobi case of `getBrandLogoPath` now returns `/images/brands/name/ryobiText.svg` (the
 brand-name wordmark webps were deleted in the SVG takeover — see `docs/promo/frontend.md`);
@@ -1136,7 +1144,7 @@ button. This replaced the old 3-cell `TrustBar`.
 - **`Banner.tsx`** — amber encouragement banner ("Someone's name gets called next draw")
 - **`ActionRow.tsx`** — primary CTAs ("Keep me in the draw" / "Resolve payment" / "No thanks, cancel anyway")
 - **`DowngradeCard.tsx`** — tier-coloured "Switch to X" card (Tradie/Foreman/Boss)
-- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/17494 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
+- **`TrustBar.tsx`** — footer trust cells (SSL secure / NTP/17808 — sourced from `NTP_NUMBER` in `src/constants/legal.ts` / Cancel anytime)
 
 ### `BrandMark` — mask mode vs duo mode (2026-07-27)
 
@@ -1787,3 +1795,41 @@ reset row, an optional leading `icon`, and an optional per-option `hint` rendere
 (Receipts uses it for per-package row counts). Closing on outside click / scroll is inherited
 from `Popover`. Used three times on the Receipts tab (category, status, package) —
 [docs/admin/receipts.md § Filters](../admin/receipts.md#filters).
+
+### Brand wordmark doctor — `npm run check:brand-wordmarks` (2026-08-24, draw 10)
+
+[`scripts/check-brand-wordmarks.mjs`](../../scripts/check-brand-wordmarks.mjs) is the tool that
+makes the "crop to ink and re-derive" rule above actually followable. It rasterises every
+`public/images/brands/name/*.svg`, reports each mark's aspect, `capFrac` and dead-canvas
+percentage, and prints the `markScale` / `wordmarkScale` values both prize-lane reels should be
+using. Report-only by default; `-- --fix` crops each `viewBox` (and any declared `width`/`height`)
+to the ink bounds plus a 0.4% bleed. **It never touches path geometry — the art stays bit-identical.**
+
+Run it whenever a brand mark is added or re-exported, then paste the derived scales into
+[`prize-selection/constants.ts`](../../src/components/sections/promo/prize-selection/constants.ts).
+Exit 1 means a mark carries more than 6% dead canvas.
+
+`capFrac` is the share of a mark's height its main letter band occupies, found as the tallest run
+of rows carrying >=45% of peak ink width. That deliberately excludes the furniture — Milwaukee's
+lightning bolt, Sidchrome's spanner outline, a raised registered mark — which is exactly the
+difference between equalising the BOX (what looked wrong) and equalising the CAP (what the eye reads).
+
+> The script's `LANE_OF` map says which reel each mark feeds, and `LANES` carries the reel geometry
+> from `--pbc-reel-card-*` in globals.css. **If the card geometry changes, update `LANES` or the
+> derived scales will be solved against the wrong plate.** `stihlText.svg` is listed as a toolset
+> mark and is cropped and colour-correct, but is **not yet referenced by any code** — it lands with
+> the STIHL prize wiring when its photography arrives.
+
+### PrizeSpecificationsModal no longer appends a cash tab (2026-08-28, draw 10)
+
+The sheet used to **synthesise** a "$5,000 Cash" section and append it to every non-cash prize.
+With the combo bonus gone, `sections` is now just `prize.specSections` — no injection, no
+`isCashPrize` branch. `showCashBonus` is removed from `FeaturePanel`, from the `feature` prop
+type, and from `PrizeShowcase`'s call site, along with the "+ $5,000 CASH" badge and the
+"Cash bonus" stat row.
+
+> **One trap this created.** `SpecCard`'s green cash plate keys off
+> `activeSection?.id === CASH_SECTION_ID`. Once the synthetic tab was gone, the **only** section
+> that can set it is the **$10,000 cash-only** prize's own `cash-prize` section — so the plate
+> read `$5K` on a `$10,000` prize. It now reads **`$10K`**. Deleting a conditional's *other*
+> branch can silently repoint the branch that remains; check what still reaches it.

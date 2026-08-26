@@ -91,7 +91,7 @@ error** (`Record<ConvertingPlatform, …>`) and is also asserted by `npm run tes
 | [src/data/brandLogos.ts](../../src/data/brandLogos.ts) | Brand logo asset paths |
 | [src/data/dev/](../../src/data/dev/) | Dev fixtures. **`modal-reachability.json` is generated, not hand-edited** — run `npm run analyze:modals` after moving, adding or deleting a modal. Hand-patching it makes the report disagree with the tree; it had gone stale from 2026-03-31 until the draws-modal regroup regenerated it on 2026-07-30. |
 | [src/data/faqs.ts](../../src/data/faqs.ts) | `/faq` **page** FAQ content (generic, owner-controlled) + the shared `FaqEntry` type |
-| [src/data/supportChatFaqs.ts](../../src/data/supportChatFaqs.ts) | **Cobber chatbot** FAQ corpus (`getSupportChatFaqEntries`) — deflection + knowledge pack only, NOT the /faq page |
+| [src/data/supportChatFaqs.ts](../../src/data/supportChatFaqs.ts) | **Cobber chatbot** FAQ corpus (`getSupportChatFaqEntries`) — deflection + knowledge pack only, NOT the /faq page. **89 entries** as of 2026-08-24 (ids 86-87 added, id 12 corrected, for the competition-terms refund rules); the count is pinned by `npm run test:chat-faqs` — bump it deliberately, and re-run `build:chat-knowledge-pack` + `calibrate:chat-deflection` after any edit |
 | [src/data/index.ts](../../src/data/index.ts) | Re-exports |
 | [src/data/membershipPackages.ts](../../src/data/membershipPackages.ts) | **Static** package definitions (subscription packages keyed by string id) |
 | [src/data/miniDrawPackages.ts](../../src/data/miniDrawPackages.ts) | **Static** mini-draw package definitions. Exports `getMiniDrawPackagesForViewer(hasAccess)` for tier-aware catalog (guests → Mini Pack 1–3; access holders → additional-*-pack-mini). Untiered `getMiniDrawPackages()` kept for admin/lookup callers. |
@@ -107,3 +107,53 @@ error** (`Record<ConvertingPlatform, …>`) and is also asserted by `npm run tes
 | [src/data/upsellPackages.ts](../../src/data/upsellPackages.ts) | **Static** upsell package definitions. Each record's `stripeDescription` is the literal label that flows into the Stripe PaymentIntent (transactions tab); membership upsells use the ` — Membership Upsell` suffix — see [billing-stripe backend.md](../billing-stripe/backend.md#upsell-stripe-descriptions) |
 
 The "static package" data files are the source of truth for package configuration that the rest of the app references via string ids. See [subscription models.md](../subscription/models.md#membershippackage) for the dual-source caveat.
+
+### STIHL prize product data (2026-08-25)
+
+[stihl-prize-products.md](./stihl-prize-products.md) holds verified descriptions + specifications
+for the 12 STIHL products in the draw-10 prize, scraped from stihl.com.au and independently
+re-checked figure by figure. It is the source for the STIHL `specSections` when the toolset is
+wired — nothing imports it today.
+
+Two things in it change what the catalogue can claim:
+
+- **Four of the six cordless tools are SKIN ONLY** — RCA 20, KOA 20, ASA 20 and the RMA 353 V mower
+  all ship without a battery or charger. Only the GTA 26 is a kit. The prize's 2× AP 300 S + AL 301
+  cover the **mower** (AP system); the AS-system tools need an AS 2 + AL 1, which is a different
+  battery family. Do not write "batteries included" across the STIHL line-up.
+- **The KOA 20 is an AIR INFLATOR**, filed by STIHL under Compressors — not a pressure washer. The
+  AS-system pressure washer is the separate RCA 20. Both are in this prize and they look similar in
+  the product photography, so they are easy to transpose.
+
+### STIHL wired as the sixth toolset (2026-08-28, draw 10)
+
+Adding a toolset is advertised as "one registry entry", and for the **prize builder** that held —
+`TOOLSETS` in `prize-selection/constants.ts` plus catalogue entries. But three of the surfaces it
+touches are **separate unions that `tsc` does not connect**, so nothing failed to compile while they
+were still missing. Check all of these when the next brand lands:
+
+| Surface | Why the compiler stays silent |
+|---|---|
+| `TOOLSET_LANDING_SLUGS` (promo-landing-slugs.ts) | Its own `as const` list. A missing brand means **no `/promotions/<brand>` route** and no ROAS lane — no error. |
+| `BrandKey` + `slugToBrandKey` (brand-theme.ts) | **The dangerous one.** `slugToBrandKey` is an `includes()` chain, so before STIHL was added `"stihl-milwaukee"` resolved to **`"milwaukee"`** — a *wrong* theme, not a null. `"stihl-sidchrome"` returned null. Add the `startsWith` branch **above** the `includes` fallback. |
+| `TOOLSETS` in `src/app/login/page-client.tsx` | The login rotator keeps its **own** hardcoded list plus five exhaustive `Record<ToolsetKey, …>` maps. Adding a registry record does not put a brand on the rotator. |
+
+Adding `BrandKey` **does** cascade usefully: `getAllBrandKeys()` feeds Klaviyo `brandInterest`
+attribution (`utils/integrations/klaviyo/brand-extraction.ts`), so that one is automatic. It also
+forces `COLOR_KEYS` in `package-colors/packageColorScheme.ts` — four exhaustive maps there, two of
+which *do* error, which is how the missing `stihl-orange` rows surfaced.
+
+**A five-card reel with six brands.** `REEL_VISIBLE_RADIUS` is 3 and `isHidden` is
+`|offset| >= 3`, so a lane shows **five** cards. STIHL made the toolset lane six, so one card is
+always parked off stage and rotates in as the reel steps — by design. `PrizeBuilderCard.test.ts`
+asserted "nothing is off stage with today's registries", which only held at five; it now asserts the
+invariant it is named for (off-stage cards are `aria-hidden` and untabbable) and survives brand seven.
+
+**Landing art shipped too — the gap is closed.** STIHL's combo renders, reel card and all 11 tool
+shots shipped, and so did its landing heroes (2026-08-26): 16 stills + 16 mp4 + 16 webm covering all
+four toolbox pairings in light and dark, desktop and mobile. `/promotions/stihl` now serves STIHL's
+own art rather than the evergreen fallback. `LANDING_HERO_MAP` gained nine entries in the same pass —
+four STIHL plus five Kincrome that had never been mapped for **any** brand — so all 24 combinations
+have a dedicated hero and `KNOWN_GAPS` in
+[check-landing-hero-assets.mjs](../../scripts/check-landing-hero-assets.mjs) is **empty** for the
+first time. The one asset set still outstanding is the `drawn-tomorrow` / `drawn-tonight` tier.

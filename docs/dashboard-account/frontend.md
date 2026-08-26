@@ -31,7 +31,7 @@
 > the unlock-coupon membership branch, home `onBecomeMember` + the plan-less `openMembershipModal` event
 > branch, and the membership page's guest CTAs (whose modal render was also missing the config pass-through).
 > `getHeavyDutyPack()` is NOT a substitute default — it returns a one-time pack for entry-holders, mislabeling
-> a "Become a member" tap. Landing note: `MajorDrawSection` self-defends at render
+> a "Become a member" tap. Landing note: `MajorDrawSection` self-defended at render (component deleted 2026-08-26)
 > (`selectedPlan || getHeavyDutyPack()`); `MembershipSection`'s plan-less listener branch still bare-opens
 > (pre-existing, A/B-configured surface — flagged, not touched).
 

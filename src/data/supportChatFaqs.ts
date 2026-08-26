@@ -51,7 +51,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "3",
       question: "What can I win?",
       answer:
-        "Each month's Grand Winner builds their own prize. They match any toolbox (Monster Milwaukee, 470-piece Kincrome CONTOUR®, 356-piece Sidchrome, or the new 288-piece GEARWRENCH tool set & mobile workstation) with any power toolset (Milwaukee, DeWalt, Makita, Ryobi, or HiKOKI — each kit ships with its own brand storage system), and we add a $5,000 cash bonus on top. Or they skip the gear entirely and take a single $10,000 AUD tax-free cash prize straight to their bank account. You can build and preview any combination on the prize showcase on our [home page](/).",
+        "Each month's Grand Winner builds their own prize. They match any toolbox (Monster Milwaukee, 470-piece Kincrome CONTOUR®, 356-piece Sidchrome, or the 288-piece GEARWRENCH tool set & mobile workstation) with any power toolset (Milwaukee, DeWalt, Makita, Ryobi, HiKOKI, or the new STIHL outdoor power kit — the first five each ship with their own brand storage system, and the STIHL kit comes with two AP 300 S batteries and an AL 301 charger). Or they skip the gear entirely and take a single $10,000 AUD tax-free cash prize straight to their bank account. That cash option is the only cash in the prize — a tool combination does not come with a cash bonus on top. You can build and preview any combination on the prize showcase on our [home page](/).",
       category: "SHOPPING",
     },
     {
@@ -116,7 +116,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "12",
       question: "Are membership fees refundable?",
       answer:
-        "Membership fees are non-refundable once purchased. If you cancel mid-cycle, you will not receive a refund for the unused portion of your membership period — however, your entries for that cycle remain valid and you keep access to your member benefits until the cycle ends. Your rights under Australian Consumer Law are always preserved.",
+        "Membership fees are non-refundable once purchased. If you cancel mid-cycle, you will not receive a refund for the unused portion of your membership period — however, your entries for that cycle remain valid and you keep access to your member benefits until the cycle ends. There are two exceptions: anything required by Australian Consumer Law, and a **genuine purchase error** reported within 48 hours of the payment (see the [Major Giveaway terms](/competition-term-majordraw), Part A, section 5). Your rights under Australian Consumer Law are always preserved.",
       category: "PAYMENTS",
     },
     {
@@ -142,7 +142,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       category: "REWARDS",
     },
     {
-      id: "86",
+      id: "88",
       question: "Do I get free entries when I buy merchandise?",
       // Deliberately conditional ("where an item includes"). Entries on merchandise
       // are gated on a trade-promotion permit variation and ship switched off, so
@@ -708,10 +708,30 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "That depends on timing. Waiting is fine if there's still a while before the next Major Draw on the 27th — the block clears on its own in about three days and costs you nothing. But if the draw is close, adding a different card on your [Membership](/my-account/membership) page is the better move, because it applies immediately. To be clear about what's actually at stake: free entries you've already earned stay in that draw regardless — being past-due never removes them — but the free entries included with your renewal are only credited once the payment goes through. So the sooner the renewal succeeds, the sooner those land.",
       category: "PAYMENTS",
     },
+    // ── COMPETITION TERMS — the /competition-term-majordraw refund rules ──────
+    // Added 2026-08-24 (draw 10). A member asked about the refund policy, was given the
+    // membership-only "non-refundable" line, and pushed back citing the 48-hour clause on
+    // our OWN terms page — which Cobber then called an "external link" it could not read.
+    // The page was in neither [key-pages] nor the knowledge pack, so there was nothing to
+    // ground on. These two entries plus the [competition-terms] pack section close that.
+    {
+      id: "86",
+      question: "I bought a pack or membership by mistake — can I get a refund?",
+      answer:
+        "Possibly, if you tell us quickly. Once free entries have been allocated a purchase is normally final, but the [Major Giveaway terms](/competition-term-majordraw) make an exception for a **genuine purchase error reported within 48 hours** of payment — on top of anything Australian Consumer Law requires. Email our support team within that window with your receipt or transaction ID and a short note on what went wrong, and they will review it. [Contact us](/contact) and I can pass this to a human who can look at your specific payment — I can't decide a refund myself.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "87",
+      question: "What kinds of refund requests are not accepted?",
+      answer:
+        "The [Major Giveaway terms](/competition-term-majordraw) rule out three situations: requests lodged after the draw has already been conducted, change-of-mind once your free entries have been allocated, and duplicate or incorrect package claims with no verifiable technical evidence. Not winning is never grounds for a refund on its own — but genuine technical errors or system failures before the draw are, as is anything Australian Consumer Law requires. If you think one of those applies to you, [contact us](/contact) and a human will review it.",
+      category: "PAYMENTS",
+    },
 
     // ── MERCHANDISE SHOP (2026-08-19) ────────────────────────────────────────
     // The shop went live with only two grounded entries (15 = it exists + the
-    // money, 86 = entries on an item), so "where is my order" — the question a
+    // money, 88 = entries on an item), so "where is my order" — the question a
     // shop gets more than any other — had no answer at all, and Cobber is
     // forbidden from inventing one. Every figure below is imported-in-spirit from
     // the code that produces it: the status words are `STATUS_LABEL` in
@@ -721,35 +741,35 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
     // No delivery ETA is quoted anywhere: print turnaround is supplier-dependent
     // and unconfirmed, so a number here would be a guess told to a paying customer.
     {
-      id: "87",
+      id: "89",
       question: "Where's my order — how do I track it?",
       answer:
         "Every order you've placed is in [My Account → Orders](/my-account/orders) when you're signed in, newest first, with what you ordered and the size and colour you picked. Each one carries a status: **Awaiting payment**, **Being made**, **On its way**, **Delivered**, **Complete** or **Cancelled** — and once it's with the courier, the tracking number shows on that order. You'll also get a confirmation email as soon as your payment clears. I can't see your account from here, so I can't look an order up for you — if something looks wrong there, [contact us](/contact) with your order number.",
       category: "REWARDS",
     },
     {
-      id: "88",
+      id: "90",
       question: "How long will my shop order take, and why does it say \"Made to order\"?",
       answer:
         "Each garment is printed after you order it, in the colour and size you chose — nothing sits in a warehouse waiting, so \"Made to order\" is normal and never means sold out. That printing step is why it takes longer to reach you than something picked off a shelf, and we'd rather not quote a delivery date we can't stand behind. Your order reads **Being made** while it's in production and **On its way** once it's shipped, with the tracking number on it — both on [My Account → Orders](/my-account/orders).",
       category: "REWARDS",
     },
     {
-      id: "89",
+      id: "91",
       question: "How much is delivery, and do you ship outside Australia?",
       answer:
         "Delivery is a flat $10 on every order — there's no minimum spend to reach and no threshold to work out, so the delivery line is the same whatever's in your cart and whatever your member discount is. Checkout shows it before you pay. We deliver within Australia only: the checkout address form takes the eight Australian states and territories, so we can't send an order overseas at this stage.",
       category: "REWARDS",
     },
     {
-      id: "90",
+      id: "92",
       question: "My order arrived faulty, damaged or wrong — what do I do?",
       answer:
         "[Contact us](/contact) with your order number and a photo, and we'll replace it or refund it — return postage is on us. If the print itself cracks or peels in ordinary wear and washing, tell us and we'll sort that out too. The one thing we can't do is a change-of-mind return: each garment is printed to order in your chosen colour and size, so there's no way to resell it — worth double-checking your size before you order. None of this limits your rights under Australian Consumer Law.",
       category: "REWARDS",
     },
     {
-      id: "91",
+      id: "93",
       question: "Does my membership discount apply in the shop, and does a one-time pack count?",
       answer:
         "Yes — while your membership is active your shop discount comes off automatically at checkout (Tradie 10%, Foreman 15%, Boss 25%), across the whole shop, with no code to enter. It's a membership benefit only: one-time packs and Mini Packs carry no shop discount, and a membership that's paused, past due or cancelled doesn't discount either — settling a past-due payment switches it straight back on. Your tier is on [My Account → Membership](/my-account/membership).",

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { NTP_NUMBER } from "@/constants/legal";
 import { test, expect } from "../../fixtures/test";
 import { connectE2eDb } from "../../helpers/db";
 
@@ -347,6 +348,17 @@ async function showPrizeDetails(
 }
 
 test.describe("draw 9 assets @demo", () => {
+  // ─── SKIPPED 2026-08-26 (draw 10) ──────────────────────────────────────────────────
+  // Superseded by draw10-assets.spec.ts. Two things broke this spec at once: its four
+  // drawn-tier walks assert the art draw 10 deleted, and its grid narration says twenty
+  // combinations (4 x 5) where the registries now hold twenty-four (4 x 6, STIHL added).
+  // The base-tier walks would still pass, but the video it produces documents draw 9 — a
+  // draw that is over — so recording it is not worth the 3,600s timeout it reserves.
+  //
+  // Kept rather than deleted because it is the reference for the full grid x tier x mode
+  // walk; when the drawn-tier art ships, lift its shape into a draw-10 tier spec.
+  test.skip(true, "superseded by draw10-assets.spec.ts; asserts drawn-tier art removed in draw 10");
+
   let originalDrawDate: unknown = null;
 
   test.beforeAll(async () => {
@@ -390,11 +402,14 @@ test.describe("draw 9 assets @demo", () => {
     await setDrawDate(aestInstant(20, "20:30"));
     await page.goto("/promotions", { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT });
 
-    await demo.step(`${where}, draw 9 starts with a new NT permit number — NTP/17494`, async () => {
-      const permit = page.getByText(/NTP\/17494/).first();
+    // Reads the constant rather than a literal: the NT permit is reissued every draw
+    // (NTP/17494 for draw 9, NTP/17808 for draw 10), and a hardcoded number turns this
+    // demo red on every rollover for a reason unrelated to the assets under test.
+    await demo.step(`${where}, the draw carries its own NT permit number — ${NTP_NUMBER}`, async () => {
+      const permit = page.getByText(NTP_NUMBER).first();
       await expect(permit).toBeAttached({ timeout: 30_000 });
       await demo.smoothScrollTo(permit);
-      await demo.highlight(permit, "Permit NTP/17494");
+      await demo.highlight(permit, `Permit ${NTP_NUMBER}`);
     });
 
     // ── GearWrench, the fourth toolbox ─────────────────────────────────────────────────
