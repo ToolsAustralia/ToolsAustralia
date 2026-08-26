@@ -691,7 +691,9 @@ existing key of the same polarity — light-text-on-bright (ryobi) vs white-text
 > brand's own `accent` off the `TOOLBOXES` / `TOOLSETS` record — so a new brand no longer needs a
 > case added to a chrome table.
 
-## MajorDrawSection — brand watermark now SVG (2026-06-22)
+## MajorDrawSection — brand watermark now SVG (2026-06-22, component deleted 2026-08-26)
+
+> MajorDrawSection was deleted on 2026-08-26 (confirmed unreachable — no import anywhere in `src/`), so this is history, not a live surface.
 
 The Ryobi case of `getBrandLogoPath` now returns `/images/brands/name/ryobiText.svg` (the
 brand-name wordmark webps were deleted in the SVG takeover — see `docs/promo/frontend.md`);
