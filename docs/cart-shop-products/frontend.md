@@ -978,3 +978,35 @@ Two elements so the ring can scale past the badge without scaling the digits wit
 ring is `#ee0000` rather than `currentColor` — the badge sets `text-white`, so
 `currentColor` sent out a white ring that read as a flash rather than the cart reacting.
 Both are reduced-motion gated.
+
+## Count and sort share a row (2026-08-26)
+
+"Showing 1-7 of 7 Products" sat on its own line beneath a full-width sort dropdown — two
+stacked rows spending real vertical space to say very little, and on a small catalogue the
+range restates itself (`1-7 of 7` is a sentence nobody needs). It is now `7 items` on the
+left with a compact sort pill on the right, because they are the same decision.
+
+The sort control is a **native `<select>`** on purpose. The handoff asks for a popover
+rather than a modal specifically so sorting cannot lock the page scroll; a native select
+satisfies that, renders as the platform's own picker on a phone, and is keyboard
+accessible without the focus management a custom menu would need.
+
+## Quantity (2026-08-26)
+
+**Desktop:** the stepper and the CTA share one row. They were stacked, so a full-width red
+button sat under a stepper using an eighth of the line above it. The `Quantity:` label went
+with the change — a minus, a number and a plus need no caption.
+
+**Mobile:** the stepper lives in the sticky buy bar, because that bar is where the buying
+happens on a phone; the one up the page is out of reach by the time anyone has read far
+enough to want two. It is **editable as well as stepped** — ordering six through a plus
+button is five taps — and the field takes the same clamp the buttons do, so a typed number
+can never exceed what is in stock.
+
+## The buy bar yields to the cart drawer
+
+Both the drawer and the mobile menu are full-height overlays that put their own primary
+control at the bottom of the screen — "Proceed to Checkout" lands exactly where the buy bar
+sits, so the bar showed through beneath the drawer and competed for the same tap.
+Suppressed rather than pushed under by z-index: it stays readable behind a translucent
+overlay, and a visible control that cannot be pressed is worse than one that is not there.

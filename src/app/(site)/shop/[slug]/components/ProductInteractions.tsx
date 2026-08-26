@@ -22,6 +22,7 @@ import {
 import { useProductColourStore } from "@/stores/useProductColourStore";
 import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
 import { useToast } from "@/components/ui/Toast";
+import { useSidebar } from "@/contexts/SidebarContext";
 // The PURE module, never the service: the service imports a Mongoose model,
 // and mongoose is a serverExternalPackage — reaching it from a client bundle
 // makes `mongoose.models` undefined and the model file throws on load.
@@ -53,6 +54,22 @@ export default function ProductInteractions({
   entryMultiplier: resolvedMultiplier = null,
 }: ProductInteractionsProps) {
   const [quantity, setQuantity] = useState(1);
+
+  /**
+   * The buy bar yields to the cart drawer and the mobile menu.
+   *
+   * Both are full-height overlays that put their own primary control at the bottom
+   * of the screen — "Proceed to Checkout" lands exactly where this bar sits, so
+   * the bar showed through beneath the drawer and competed for the same tap. Same
+   * reasoning as Cobber's suppression: when another surface owns the screen, this
+   * is not the affordance in front of the customer.
+   *
+   * Suppressed rather than z-index'd under: the bar is still readable behind a
+   * translucent overlay, and a visible control that cannot be pressed is worse
+   * than one that is not there.
+   */
+  const { isCartOpen, isMobileMenuOpen } = useSidebar();
+  const overlayOwnsScreen = isCartOpen || isMobileMenuOpen;
   const [showSignIn, setShowSignIn] = useState(false);
   // Set when the sign-in sheet interrupted an add, so the session landing can
   // finish what the customer already asked for instead of making them click twice.
@@ -218,8 +235,25 @@ export default function ProductInteractions({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addAfterSignIn, session?.user?.id]);
 
+  const maxQuantity = product.stock || 999;
+
   const handleQuantityChange = (change: number) => {
-    setQuantity(Math.max(1, Math.min(product.stock || 999, quantity + change)));
+    setQuantity(Math.max(1, Math.min(maxQuantity, quantity + change)));
+  };
+
+  /**
+   * A typed quantity, clamped the same way the buttons clamp.
+   *
+   * Without the shared ceiling someone can type 900 against three units in stock
+   * and the add fails server-side — the field has to obey the same rule as the
+   * control beside it. An empty field is left alone mid-edit rather than snapped
+   * back to 1, which would fight anyone clearing it to type a new number.
+   */
+  const handleQuantityInput = (raw: string) => {
+    if (raw.trim() === "") return;
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return;
+    setQuantity(Math.max(1, Math.min(maxQuantity, parsed)));
   };
 
   const handleAddToCart = async () => {
@@ -502,23 +536,34 @@ export default function ProductInteractions({
         </div>
       )}
 
-      {/* Quantity Selector */}
+      {/*
+        QUANTITY AND THE CTA SHARE A ROW on desktop.
+
+        They were stacked, so a full-width red button sat under a stepper that used
+        an eighth of the line above it — the row was mostly empty and the two
+        controls that belong to one decision read as two separate steps. The
+        "Quantity:" label went with the change: a minus, a number and a plus need
+        no caption, and on a phone this whole block is hidden anyway because the
+        sticky bar carries both.
+      */}
+      <div className="hidden items-stretch gap-3 sm:flex">
       {!isOutOfStock && (
-        <div className="flex items-center gap-4">
-          <span className="text-sm font-medium text-gray-700 dark:text-neutral-200">Quantity:</span>
-          <div className="flex items-center border border-gray-300 dark:border-neutral-700 rounded-lg">
+        <div className="flex items-center">
+          <div className="flex items-center rounded-lg border border-gray-300 dark:border-neutral-700">
             <button
               onClick={() => handleQuantityChange(-1)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+              className="p-2 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800"
               disabled={quantity <= 1}
+              aria-label="Decrease quantity"
             >
               <Minus className="w-4 h-4" />
             </button>
             <span className="px-4 py-2 font-medium">{quantity}</span>
             <button
               onClick={() => handleQuantityChange(1)}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
-              disabled={quantity >= (product.stock || 999)}
+              className="p-2 transition-colors hover:bg-gray-100 dark:hover:bg-neutral-800"
+              disabled={quantity >= maxQuantity}
+              aria-label="Increase quantity"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -526,14 +571,7 @@ export default function ProductInteractions({
         </div>
       )}
 
-      {/*
-        DESKTOP ONLY. On a phone the sticky bottom bar carries this exact action,
-        so rendering it inline as well put two identical primary buttons on one
-        screen — and the lower one was the one in reach. The quantity stepper above
-        stays visible on both, because the sticky bar has no stepper of its own and
-        reads the value this one sets.
-      */}
-      <div className="hidden gap-2 sm:flex sm:gap-4">
+      <div className="flex min-w-0 flex-1 gap-2 sm:gap-4">
         <button
           onClick={handleAddToCart}
           disabled={!canAddSelected || isSessionLoading || isAddingToCart || isPendingForThisProduct}
@@ -559,8 +597,9 @@ export default function ProductInteractions({
             ? "Adding..."
             : addedToCart
             ? "Added to Cart!"
-            : `Add to Cart - $${(product.price * quantity).toFixed(2)}`}
+            : `Add to Cart - ${(product.price * quantity).toFixed(2)}`}
         </button>
+      </div>
       </div>
 
       {/*
@@ -601,6 +640,7 @@ export default function ProductInteractions({
         `sm:hidden` because the desktop layout already keeps the buy column in
         view with a sticky image beside it.
       */}
+      {!overlayOwnsScreen && (
       <div
         /*
           data-floating-widget is what makes Cobber move.
@@ -616,7 +656,7 @@ export default function ProductInteractions({
         role="region"
         aria-label="Buy this product"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <div className="min-w-0 flex-1">
             <div className="text-[17px] font-extrabold leading-none tracking-[-.02em] text-primary-token">
               ${(product.price * quantity).toFixed(2)}
@@ -629,10 +669,50 @@ export default function ProductInteractions({
                   : chosenLabel || "Ready to add"}
             </div>
           </div>
+
+          {/*
+            The stepper lives down here too, because this bar is where the buying
+            happens on a phone — the one up the page is out of reach by the time
+            anyone has read far enough to decide on two.
+
+            Editable as well as stepped: ordering six of something through a plus
+            button is five taps, and the field takes the same clamp the buttons do
+            so a typed number can never exceed what is actually in stock.
+          */}
+          {!isOutOfStock && (
+            <div className="flex shrink-0 items-center rounded-xl border border-token">
+              <button
+                type="button"
+                onClick={() => handleQuantityChange(-1)}
+                disabled={quantity <= 1}
+                aria-label="Decrease quantity"
+                className="grid h-[42px] w-9 place-items-center rounded-l-xl text-primary-token transition-colors disabled:opacity-40"
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={quantity}
+                onChange={(e) => handleQuantityInput(e.target.value)}
+                aria-label="Quantity"
+                className="h-[42px] w-8 border-0 bg-transparent p-0 text-center text-[13px] font-bold text-primary-token outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => handleQuantityChange(1)}
+                disabled={quantity >= maxQuantity}
+                aria-label="Increase quantity"
+                className="grid h-[42px] w-9 place-items-center rounded-r-xl text-primary-token transition-colors disabled:opacity-40"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
           <button
             onClick={handleAddToCart}
             disabled={!canAddSelected || isSessionLoading || isAddingToCart || isPendingForThisProduct}
-            className={`inline-flex h-[50px] min-w-[9.5rem] items-center justify-center gap-2 rounded-xl px-5 text-[14px] font-bold transition-colors ${
+            className={`inline-flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-xl px-4 text-[13.5px] font-bold transition-colors ${
               !canAddSelected || isSessionLoading || isAddingToCart || isPendingForThisProduct
                 ? "cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-neutral-800 dark:text-neutral-400"
                 : addedToCart
@@ -653,6 +733,7 @@ export default function ProductInteractions({
           </button>
         </div>
       </div>
+      )}
 
       {showSignIn && (
         <SignInToBuyModal

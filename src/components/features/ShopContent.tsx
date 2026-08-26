@@ -9,7 +9,7 @@ import { useUserContext } from "@/contexts/UserContext";
 import ProductFilters from "@/components/features/ProductFilters";
 import { useShopFacets } from "@/hooks/queries/useProductQueries";
 import MetallicButton from "@/components/ui/MetallicButton";
-import { Filter, X, Search, Clock, ArrowUpDown, Tag, Truck } from "lucide-react";
+import { Filter, X, Search, Clock, ArrowUpDown, Tag, Truck, ChevronDown } from "lucide-react";
 import { Product as ProductType } from "@/types/product";
 import { useProducts, type Product as ReactQueryProduct } from "@/hooks/queries";
 import { SectionContainer } from "@/components/ui";
@@ -624,22 +624,49 @@ export default function ShopContent({
                 </button>
               </div>
             )}
-            {/* Results count and loading */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <p className="text-gray-600 dark:text-neutral-400 text-sm sm:text-base">
-                  {totalProducts > 0 ? (
-                    <>
-                      Showing {(currentPage - 1) * 12 + 1}-{Math.min(currentPage * 12, totalProducts)} of{" "}
-                      {totalProducts} Products
-                    </>
-                  ) : (
-                    "No products found"
-                  )}
+            {/*
+              THE COUNT AND THE SORT SHARE A ROW.
+
+              "Showing 1-7 of 7 Products" sat on its own line under a full-width
+              sort dropdown — two stacked rows spending real vertical space above
+              the grid to say very little. On a 7-product shop the range is also
+              noise: the numbers restate each other, and 1-7 of 7 is a sentence
+              nobody needs. "7 items" is the fact; the sort belongs beside it
+              because they are the same decision, not two.
+
+              The select is native on purpose. The handoff asks for a popover
+              rather than a modal specifically so sorting cannot lock the page
+              scroll — a native select satisfies that, renders as the platform's
+              own picker on a phone, and is keyboard-accessible without any of the
+              focus management a custom menu would need.
+            */}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <p className="text-[13px] font-semibold text-gray-600 dark:text-neutral-400">
+                  {totalProducts > 0
+                    ? `${totalProducts} ${totalProducts === 1 ? "item" : "items"}`
+                    : "No products found"}
                 </p>
                 {isLoading && (
-                  <div className="w-4 h-4 border-2 border-gray-300 dark:border-neutral-600 border-t-black dark:border-t-white rounded-full animate-spin" />
+                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-black dark:border-neutral-600 dark:border-t-white" />
                 )}
+              </div>
+
+              <div className="relative shrink-0">
+                <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                  aria-label="Sort products"
+                  className="h-9 cursor-pointer appearance-none rounded-full border border-gray-300 bg-white pl-8 pr-8 text-[12.5px] font-bold text-gray-800 outline-none transition-colors hover:border-gray-400 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                >
+                  {sortOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
               </div>
             </div>
 

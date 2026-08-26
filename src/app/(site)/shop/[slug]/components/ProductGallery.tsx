@@ -119,7 +119,9 @@ export default function ProductGallery({
       </div>
 
       {gallery.length > 1 && (
-        <div className="flex flex-wrap gap-2 px-2 pt-2 sm:px-0 sm:pt-3">
+        /* No horizontal padding: the thumbnails line up with the image edge the
+           strip sits under, which is the whole point of the image being flush. */
+        <div className="flex flex-wrap gap-2 pt-2 sm:pt-3">
           {gallery.map((url, i) => (
             <button
               key={url}
