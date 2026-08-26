@@ -213,7 +213,10 @@ exactly backwards, and following it is the single easiest way to ship a broken l
 
 1. Endpoint deployed to production, `BONUS_CODE_WEBHOOK_SECRET` scoped to the **Production**
    environment only.
-2. The three campaigns created in the admin panel with `validForHours: 72`.
+2. The three campaigns created in the admin panel with `validForHours: 72`. If you set
+   `validForHours` to anything other than 72, update Cobber FAQ id 86 in the same change — it states
+   "a fixed 72 hours" in customer-facing copy, and `test:chat-faqs` guards the wording, not the
+   campaign row, so a mismatch stays green.
 3. Smoke-test against a real production account with a disposable campaign.
 4. **Then** marketing publishes the flows.
 

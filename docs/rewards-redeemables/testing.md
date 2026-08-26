@@ -38,8 +38,11 @@ actually consults it and that the write lands.
    stored fields left untouched (the match call deliberately carries a *different* `issuedAt`, so a
    future swap to `$set` would be visible).
 2. **The mint.** One row; `metadata.issuedBy` records the trigger; `firstIssuedAt === issuedAt`;
-   the deadline handed back to the caller **is** the persisted one (a recomputed value could print
-   a date a calendar day off what redemption enforces).
+   the deadline handed back to the caller **is** the persisted one. (The old rationale — "a
+   recomputed value could print a date a calendar day off" — was the calendar-day model's midnight
+   cliff and no longer applies under `expiryAfterHours`. The assertion stays because the persisted
+   instant is the one the email prints and the redemption gate compares against, and a re-arm moves
+   it: recomputing on an `already_active` outcome would hand back a *different* deadline.)
 3. **Re-send vs re-arm.** A second trigger inside the live window returns the stored deadline and
    writes nothing. A lapsed grant re-arms in place: `firstIssuedAt` survives, `issuedAt` moves,
    `notifiedAt`/`notifyError` are cleared so the new deadline can be emailed.

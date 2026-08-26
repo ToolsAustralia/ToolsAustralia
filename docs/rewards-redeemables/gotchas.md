@@ -30,9 +30,15 @@
    email — `already_active` is a silent no-op, so there is no "re-send" anywhere in this system. The
    stored date is returned so that a later **re-arm** email cannot print a recomputed one, and so a
    caller inspecting the outcome sees the deadline the customer was actually told. This is also why
-   the mint returns a `StampedIssuance` instead
-   of a boolean — if the caller had to recompute the date, a 150ms gap across Sydney midnight would print a
-   deadline one calendar day off what redemption actually enforces.
+   the mint returns a `StampedIssuance` instead of a boolean.
+   **The reason changed on 2026-08-26 but the rule did not.** Under the calendar-day model the danger
+   was a 150ms gap across Sydney midnight printing a deadline a full **calendar day** off what
+   redemption enforces. `expiryAfterHours` has no midnight cliff, so the same gap now costs 150ms —
+   which is why nobody should downgrade this to "recompute, it's close enough". The stored value is
+   still the only one that is *the same instant* the customer was emailed and the redemption gate
+   compares against (`expiresAt: { $gt: now }`, strictly exclusive), and a re-arm legitimately moves
+   it, so a recomputed value on an `already_active` outcome would be a different deadline entirely,
+   not a rounding difference.
 
 5. **E11000 is discriminated by `keyPattern`, and neither case is an error.** Two unique indexes live on
    `RedeemableIssuance`: `{campaignId, userId}` and `{campaignId, code}`. A `userId` collision means a
@@ -170,7 +176,10 @@ fails at checkout with "Invalid campaign code". The flow is now the LAST thing p
 2. **Create the campaign(s)** in Admin → Monthly Coupons: `code` (must match
    [`BONUS_CODE_BY_TRIGGER`](../../src/config/bonusCodes.ts)), `validForHours: 72`, `entriesAmount`,
    `purchaseRequirement`, targeting. Cancel-click must be `purchaseRequirement: "none"` — there is no
-   purchase to qualify on.
+   purchase to qualify on. **If you set `validForHours` to anything other than 72, update Cobber FAQ
+   id 86 in the same change** — it tells customers "a fixed 72 hours", and `test:chat-faqs` asserts
+   that wording against the copy, not against any campaign row, so a mismatch ships green and Cobber
+   states a deadline the server does not enforce.
 3. **Smoke-test the endpoint in production**, against a real production account, using a disposable
    campaign. The production gate sits ahead of the MINT, deliberately (see P7 rule 3b), so this path
    **cannot** be rehearsed on a preview deploy or locally — this smoke test is the first genuine

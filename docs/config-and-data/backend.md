@@ -30,3 +30,8 @@ panel. **One consumer since 2026-08-26**: `mintBonusCodeForTrigger`, behind the 
 (`POST /api/bonus-codes/v1/issue`). The three former consumers — the cancel service, `grantBenefits` and the
 guest-registration helper — no longer mint and no longer read this map. See
 [rewards-redeemables P7](../rewards-redeemables/patterns.md).
+
+The file's own JSDoc header was still describing the deleted three-call-site model until fix round 1
+of the webhook rework (2026-08-26) — it now names `mintBonusCodeForTrigger` as the sole reader, so
+the comment an engineer reads first and this row agree. If a fourth trigger is ever added, the only
+wiring to change is the webhook path; there is no in-app mint site to update.

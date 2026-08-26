@@ -8,7 +8,14 @@ is unchanged at **90** (no ids added or removed), so the `faqs.test.ts` count as
 - **id 86** said the deadline "always runs to 11:59pm Sydney time on that day." True only under the
   deleted calendar-day model. A bonus code now expires an exact **72 hours** after the instant it was
   issued, so it runs out at whatever time of day that lands on. The answer now says so and points at
-  the date **and time** printed in the email that carries the code.
+  the date **and time** printed in the email that carries the code. **Its closing sentence is scoped
+  to signed-in customers on purpose** (fix round 1): the dated refusal
+  (`campaignCodeExpiredMessage`) is produced inside the `if (callerId)` branch of
+  `CampaignCodeValidationService.validate()`, so a **guest** — which is exactly what the
+  `checkout-start` / LOCKIN100 cohort is, since step-1 registration does not authenticate — falls
+  through to `{ valid: true }` and never sees it. The copy must not promise an experience that
+  cohort does not get; the underlying guest gap is pre-existing and tracked separately in
+  [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md).
 - **id 87** promised an expired unused code "can be re-issued to you later with a fresh deadline."
   Still true, but only outside the 30-day re-arm cooldown (`REARM_COOLDOWN_DAYS`) — inside it,
   qualifying again produces no code and no email at all. The answer now names the waiting period.
