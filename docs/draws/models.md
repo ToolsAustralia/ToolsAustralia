@@ -13,6 +13,8 @@ Key dates:
 - `freezeEntriesAt` — when `active → frozen` (no new entries, draw approaching)
 - `drawDate` — when `frozen → completed` (winner declared)
 
+`entries[].entriesBySource` is a **fixed enum** (Mongoose strict mode silently drops writes to unlisted keys): `membership`, `one-time-package`, `upsell`, `mini-draw`, `referral`, `bonus-entry-promo`, `cancellation-upsell`, `promo-link`, `streak`, `shop`. `shop` (merchandise) is declared but **nothing writes it yet** — see [gotchas](./gotchas.md#entriesbysource-must-include-every-source-key-the-schema-lists) for the add-a-source-key checklist.
+
 > _TODO: pull full schema (fields, indexes) from the source file._
 
 ## `MiniDraw`

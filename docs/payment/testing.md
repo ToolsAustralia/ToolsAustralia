@@ -14,6 +14,7 @@ Tests live under [src/utils/payment/__tests__/](../../src/utils/payment/__tests_
 | `npm run test:invoice-generated-gate` | Fences `shouldEmitInvoiceGenerated(billing_reason)` — the server-side "Invoice Generated" receipt gate ([backend.md](./backend.md), [gotchas.md](./gotchas.md)). Test lives at `src/utils/integrations/klaviyo/__tests__/invoice-generated-gate.test.ts` (klaviyo/tracking area, not `utils/payment/__tests__/`). |
 | `npm run test:purchase-event-time` | Fences the CAPI Purchase `event_time` pipeline used by `grantBenefits` — `normalizeEpochToUnixSeconds` (ms vs seconds) + `resolveEventTime` (out-of-window → "now") ([backend.md](./backend.md)). Test lives at `src/lib/tracking/__tests__/purchase-event-time.test.ts` (tracking area, not `utils/payment/__tests__/`). |
 | `npm run test:decline-guidance` | Fences the confirm-time card-decline pipeline ([gotchas.md](./gotchas.md#confirm-time-card-declines-throw--routes-must-return-the-400-payment-failed-shape-fixed-2026-07)): `isStripeCardError` duck-typing, `extractPaymentErrorCodes` across all error shapes (incl. ApiError `.data`), the `DECLINE_CODE_GUIDANCE` map (sensitive-code non-leak + message-length caps), and `formatPaymentError` end-to-end for the production bug shape (`decline_code: invalid_account` carried on `ApiError.data`). Test lives at `src/utils/payment/stripe/__tests__/payment-error-decline-guidance.test.ts`. |
+| `npm run test:shop-entries` | Fences the **merchandise entry grant** — the one benefit path that starts in the shop rather than a package. It lives here because the grant runs through `processPaymentBenefits` like every other one ([cart-shop-products/testing.md](../cart-shop-products/testing.md) holds the full assertion list). Runs against `E2E_MONGODB_URI`, never the dev database, because several assertions can only be made by reading a document back out of Mongo. |
 
 ## Test conventions
 
@@ -38,6 +39,23 @@ Tests live under [src/utils/payment/__tests__/](../../src/utils/payment/__tests_
 ```
 
 Stripe Dashboard > Developers > Test cards has the full reference.
+
+## Grant assertions must read back from Mongo (2026-08-20)
+
+Anything that credits a benefit is asserted at the **database** level, not by inspecting the
+value a function returned. Mongoose strict mode drops keys absent from the schema **silently,
+on save rather than on assignment** — so a grant can compute the right number, appear to store
+it, and persist nothing, with `tsc` green and the function's own return value correct.
+
+`test:shop-entries` carries a **control** for exactly this: it writes an undeclared key
+alongside a declared one and asserts the undeclared key is gone on re-read. Without that
+control the positive assertion proves nothing — if strict mode were off, it would pass either
+way. This failure mode has shipped twice on `MajorDraw.entriesBySource`.
+
+The same suite also demonstrates why a passing test is not evidence on its own: its multiplier
+ladder assertion was **dead for weeks** — it divided both sides of the comparison by the same
+variable, so every iteration was algebraically identical and it could not have failed. When
+adding a guard here, mutate the code it guards and confirm the test goes red before trusting it.
 
 ## What's NOT well tested
 

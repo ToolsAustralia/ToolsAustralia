@@ -18,7 +18,10 @@ const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     // claudeDesign/ = design-handoff reference material (concept HTML/JS), never shipped or imported.
-    ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "src/generated/**", "claudeDesign/**"],
+    // ".next-e2e/**" is the e2e harness build dir (next.config.ts distDir). It was
+    // added to .gitignore when the builds were split but not here, so a single
+    // e2e run put ~22,000 lint problems from compiled output into the report.
+    ignores: ["node_modules/**", ".next/**", ".next-e2e/**", "out/**", "build/**", "next-env.d.ts", "src/generated/**", "claudeDesign/**", "e2e-artifacts/**", "playwright-report/**", "test-results/**"],
   },
   {
     plugins: {
@@ -45,6 +48,14 @@ const eslintConfig = [
     // ESLint custom rule plugin is a CommonJS .js file loaded via createRequire.
     // Disable the no-require-imports rule for this directory since the file MUST use require().
     files: ["eslint/rules/**/*.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    // Operational scripts run through tsx/node, not the bundler, so CommonJS is
+    // a legitimate choice there rather than a lapse.
+    files: ["scripts/**/*.js", "scripts/**/*.cjs"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },

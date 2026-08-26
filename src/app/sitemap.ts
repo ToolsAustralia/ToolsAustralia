@@ -6,21 +6,6 @@ import MiniDraw from "@/models/MiniDraw";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
   const now = new Date();
-  const brandSlugs = [
-    "milwaukee",
-    "dewalt",
-    "makita",
-    "kincrome",
-    "sidchrome",
-    "chicago-pneumatic",
-    "gearwrench",
-    "ingersoll-rand",
-    "knipex",
-    "koken",
-    "mitutoyo",
-    "stahlwille",
-    "warren-brown",
-  ];
 
   // Core static routes
   const staticPaths: MetadataRoute.Sitemap = [
@@ -34,12 +19,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
     { url: `${baseUrl}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
   ];
-  const brandPaths: MetadataRoute.Sitemap = brandSlugs.map((slug) => ({
-    url: `${baseUrl}/shop/brand/${slug}`,
-    lastModified: now,
-    changeFrequency: "weekly" as const,
-    priority: 0.6,
-  }));
 
   let dynamicPaths: MetadataRoute.Sitemap = [];
 
@@ -71,5 +50,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     dynamicPaths = [];
   }
 
-  return [...staticPaths, ...brandPaths, ...dynamicPaths];
+  return [...staticPaths, ...dynamicPaths];
 }

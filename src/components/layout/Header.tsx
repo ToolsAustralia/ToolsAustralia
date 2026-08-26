@@ -19,6 +19,10 @@ import { useCart } from "@/contexts/CartContext";
 import { useAffiliateAuth } from "@/hooks/useAffiliateAuth";
 import { hasPreservedBenefits, getDaysUntilBenefitsExpire } from "@/utils/membership/benefit-resolution";
 import { getActivePackage, type ActivePackageUserInput } from "@/utils/membership/get-active-package";
+import { priceCart, centsToDollars, dollarsToCents } from "@/utils/shop/pricing";
+import { resolveShopDiscountPercent, type ShopDiscountUserInput } from "@/utils/shop/member-discount";
+import { getRemappedPackageScheme } from "@/utils/package-colors/packageCardSurface";
+import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
 import { formatDisplayName, formatNamePart } from "@/utils/display-name";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -164,9 +168,57 @@ export default function Header({ isFixed = true }: HeaderProps) {
   const [isClosingCart, setIsClosingCart] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { items: cartItems, summary, updateCartItem, removeFromCart } = useCart();
+
   const cartItemCount = summary?.totalItems || 0;
+
+  /**
+   * Pop the cart badge when the count GOES UP.
+   *
+   * Adding from the grid announced itself with a toast in the opposite corner,
+   * which says something happened but not that the CART changed — the number just
+   * quietly differed the next time you looked at it. This gives the add somewhere
+   * to land.
+   *
+   * Only on an increase: a removal should not celebrate, and the same effect on
+   * every change would fire while someone steps a quantity down.
+   */
+  const [cartPop, setCartPop] = useState(false);
+  const prevCartCountRef = useRef<number | null>(null);
+  useEffect(() => {
+    const prev = prevCartCountRef.current;
+    prevCartCountRef.current = cartItemCount;
+    // The first render is not an add — without this guard a page load with a
+    // non-empty cart pops the badge for no reason.
+    if (prev === null || cartItemCount <= prev) return;
+    setCartPop(true);
+    const t = setTimeout(() => setCartPop(false), 400);
+    return () => clearTimeout(t);
+  }, [cartItemCount]);
   const { userData, isAuthenticated, loading } = useUserContext();
   const { isStaff } = usePermissions();
+
+  /**
+   * The member's tier, as a colour and a discount — what themes the cart drawer.
+   *
+   * The colour comes from `getRemappedPackageScheme`, the same resolver the package
+   * cards and the header badge use, so the drawer can never paint a tier in a colour
+   * it is not painted in elsewhere. Null for a signed-out visitor and for anyone whose
+   * package carries no shop discount — they get the plain drawer, and nothing in the
+   * CSS applies without `--ta-tier`.
+   */
+  const cartTier = useMemo(() => {
+    if (!userData) return null;
+    const discountPercent = resolveShopDiscountPercent(userData as ShopDiscountUserInput);
+    if (discountPercent <= 0) return null;
+
+    const active = getActivePackage(userData as unknown as ActivePackageUserInput);
+    const pkg = active?.packageData;
+    if (!pkg) return null;
+
+    const planId = derivePlanIdFromPackage(pkg, active.source === "subscription" ? "subscription" : "one-time");
+    const scheme = getRemappedPackageScheme(planId, active.source === "subscription");
+    return { accentHex: scheme.accentHex, discountPercent, name: pkg.name };
+  }, [userData]);
 
   const resolvedActivePackage = useMemo(
     () => (userData ? getActivePackage(userData as unknown as ActivePackageUserInput) : null),
@@ -895,6 +947,26 @@ export default function Header({ isFixed = true }: HeaderProps) {
               aria-current={isActiveLink("/shop") ? "page" : undefined}
             >
               Shop
+              {/*
+                The member's shop discount, on the link that takes them there.
+                Same tag vocabulary as the cart badge — tier colour, dark text,
+                rounded rectangle — so the two read as one fact stated twice
+                rather than as two unrelated markers.
+
+                Only rendered when a discount exists (cartTier is null at 0%), so
+                a signed-out visitor sees the plain word and nothing else.
+              */}
+              {cartTier && (
+                <span
+                  className="ml-1.5 inline-flex items-center gap-[0.5px] rounded-[4px] px-[3px] py-[1px] align-middle"
+                  style={{ background: cartTier.accentHex, color: "#0b0e13" }}
+                >
+                  <span className="text-[9px] font-extrabold leading-none tracking-tight">
+                    {cartTier.discountPercent}
+                  </span>
+                  <span className="text-[7px] font-bold leading-none opacity-70">%</span>
+                </span>
+              )}
             </Link>
             {/* Explore Dropdown — Become a Partner + FAQ + Contact */}
             <div
@@ -1231,11 +1303,70 @@ export default function Header({ isFixed = true }: HeaderProps) {
               </div>
             )}
 
-            {/* Theme (replaces cart until shop is live) */}
+            {/* Theme, then cart — the shop is live again. */}
             <div className="relative z-10 flex items-center justify-center">
               <ThemeToggleButton
                 className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-110 hover:shadow-lg active:scale-95 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11 [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5"
               />
+            </div>
+
+            {/* Cart. Mirrors the theme button's shape so the right cluster reads as one
+                row. The badge is the only thing that moves, so a count change is the
+                only thing that draws the eye. */}
+            <div className="relative z-10 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={() => setIsCartOpen(true)}
+                aria-label={
+                  cartItemCount > 0
+                    ? `Open cart, ${cartItemCount} ${cartItemCount === 1 ? "item" : "items"}`
+                    : "Open cart"
+                }
+                className="group relative flex h-9 w-9 shrink-0 touch-manipulation items-center justify-center rounded-full border border-gray-200 bg-white/90 shadow-md backdrop-blur-[var(--ta-blur)] transition-[colors,transform,opacity] duration-[var(--ta-transition-dur)] hover:scale-110 hover:shadow-lg active:scale-95 focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-gray-700 dark:bg-black/90 sm:h-10 sm:w-10 lg:h-11 lg:w-11"
+              >
+                <ShoppingCart className="h-4 w-4 text-gray-700 dark:text-neutral-200 sm:h-5 sm:w-5" />
+                {/*
+                  The count when there IS one; otherwise the member's shop discount.
+
+                  An empty badge is dead space, and a member who has forgotten they get
+                  20% off has no reminder anywhere in the header. The discount shows only
+                  while the cart is empty, so it can never compete with the count — the
+                  more urgent number once something is in there.
+                */}
+                {cartItemCount > 0 ? (
+                  <span
+                    className={cn(
+                      "absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white shadow-md",
+                      cartPop && "ta-cart-pop"
+                    )}
+                  >
+                    {cartItemCount > 99 ? "99+" : cartItemCount}
+                  </span>
+                ) : cartTier ? (
+                  /*
+                    SHAPED AS A TAG, NOT A BUBBLE. This started life as a copy of the
+                    count badge above — same 20px circle, same 10px text — and at that
+                    size it read louder than the cart icon it belongs to, on a button
+                    only 36px across. A count earns that weight because it is the
+                    urgent number; a standing discount does not.
+                    
+                    The rounded rectangle is the actual signal: circular badges read as
+                    counts, tags read as offers, so the shape says "discount" before
+                    the digits are legible at all. The % is set smaller and lighter
+                    than the number for the same reason a price tag does it — the
+                    figure is what you read, the unit is what confirms it.
+                  */
+                  <span
+                    className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-[13px] items-center justify-center gap-[0.5px] rounded-[4px] px-[2.5px] shadow-sm ring-1 ring-white dark:ring-black"
+                    style={{ background: cartTier.accentHex, color: "#0b0e13" }}
+                  >
+                    <span className="text-[8.5px] font-extrabold leading-none tracking-tight">
+                      {cartTier.discountPercent}
+                    </span>
+                    <span className="text-[6.5px] font-bold leading-none opacity-70">%</span>
+                  </span>
+                ) : null}
+              </button>
             </div>
             {/* Login Button for Mobile - Show when not authenticated (user or affiliate) */}
             {!affiliateLoading && !isAffiliateAuthenticated && !isAuthenticated && (
@@ -1420,7 +1551,19 @@ export default function Header({ isFixed = true }: HeaderProps) {
       {isMobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-[110]">
           {/* Backdrop Overlay with Blur */}
-          <div className="absolute inset-0 bg-black/50 sidebar-overlay animate-fade-in" />
+          {/*
+            Clicking the scrim closes the panel.
+
+            It had no handler at all, so the only way out was the X — and a full-screen
+            dark overlay reads as dismissable to everyone. It routes through the same
+            close handler as the button, so the slide-out animation still plays.
+          */}
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={handleCloseMobileMenu}
+            className="absolute inset-0 h-full w-full cursor-default bg-black/50 sidebar-overlay animate-fade-in"
+          />
 
           {/* Sidebar */}
           <div
@@ -1721,6 +1864,17 @@ export default function Header({ isFixed = true }: HeaderProps) {
                 >
                   <Store className="w-5 h-5" />
                   Shop
+                  {cartTier && (
+                    <span
+                      className="ml-auto inline-flex items-center gap-[1px] rounded-[5px] px-1.5 py-[3px]"
+                      style={{ background: cartTier.accentHex, color: "#0b0e13" }}
+                    >
+                      <span className="text-[11px] font-extrabold leading-none tracking-tight">
+                        {cartTier.discountPercent}%
+                      </span>
+                      <span className="text-[9px] font-bold leading-none opacity-70">off</span>
+                    </span>
+                  )}
                 </Link>
 
                 {/* Explore Collapsible — Become a Partner + FAQ + Contact */}
@@ -1849,23 +2003,66 @@ export default function Header({ isFixed = true }: HeaderProps) {
       {isCartOpen && (
         <div className="fixed inset-0 z-[110]">
           {/* Backdrop Overlay with Blur */}
-          <div className="absolute inset-0 bg-black/50 sidebar-overlay animate-fade-in" />
+          {/*
+            Clicking the scrim closes the panel.
 
-          {/* Cart Sidebar */}
+            It had no handler at all, so the only way out was the X — and a full-screen
+            dark overlay reads as dismissable to everyone. It routes through the same
+            close handler as the button, so the slide-out animation still plays.
+          */}
+          <button
+            type="button"
+            aria-label="Close cart"
+            onClick={handleCloseCart}
+            className="absolute inset-0 h-full w-full cursor-default bg-black/50 sidebar-overlay animate-fade-in"
+          />
+
+          {/* Cart Sidebar — themed by the member's tier (see .ta-tier-* in globals.css) */}
           <div
             className={`cart-sidebar-container absolute top-0 right-0 h-full w-96 max-w-[90vw] bg-white dark:bg-neutral-900 z-10 shadow-2xl ${
               isClosingCart ? "sidebar-slide-out-right" : "sidebar-slide-in-right"
             } flex flex-col`}
+            style={cartTier ? ({ "--ta-tier": cartTier.accentHex } as React.CSSProperties) : undefined}
           >
+            {/* The flowing tier edge. Sits on the drawer's leading edge so it frames the
+                whole panel rather than decorating one corner. */}
+            {cartTier && (
+              <span aria-hidden className="ta-tier-flow pointer-events-none absolute left-0 top-0 h-full w-[3px]" />
+            )}
             {/* Cart Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-neutral-800 dark:to-neutral-900 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="h-6 w-6 text-gray-700 dark:text-neutral-200" />
+            <div className="relative flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-700 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-neutral-800 dark:to-neutral-900 flex-shrink-0">
+              {/* Tier wash — the member's colour bleeding into the header, low-alpha so it
+                  reads as a tint rather than a coloured panel. */}
+              {cartTier && (
+                <span aria-hidden className="ta-tier-wash pointer-events-none absolute inset-0" />
+              )}
+              <div className="relative flex items-center gap-3">
+                <ShoppingCart
+                  className="h-6 w-6 text-gray-700 dark:text-neutral-200"
+                  style={cartTier ? { color: cartTier.accentHex } : undefined}
+                />
                 <div>
                   <h2 className="text-gray-900 dark:text-white font-bold text-lg">Shopping Cart</h2>
-                  <p className="text-gray-600 dark:text-neutral-400 text-sm">
-                    {cartItemCount} {cartItemCount === 1 ? "item" : "items"}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="text-gray-600 dark:text-neutral-400 text-sm">
+                      {cartItemCount} {cartItemCount === 1 ? "item" : "items"}
+                    </p>
+                    {/* The member's discount, stated up front. It is applied to every line
+                        below and in the totals — saying so here is what makes the drawer
+                        feel like THEIR cart rather than a generic one. */}
+                    {cartTier && (
+                      <span
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide"
+                        style={{
+                          color: cartTier.accentHex,
+                          background: `color-mix(in srgb, ${cartTier.accentHex} 14%, transparent)`,
+                          boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${cartTier.accentHex} 45%, transparent)`,
+                        }}
+                      >
+                        {cartTier.name} · {cartTier.discountPercent}% off
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
@@ -1891,23 +2088,47 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       cartItem.miniDraw?.prize?.images?.[0] ||
                       "/images/placeholder.jpg";
 
+                    const handleRemove = () => {
+                      const itemId = cartItem.productId || cartItem.miniDrawId || "";
+                      // DELETE /api/cart matches a line on (productId, sku) and treats a
+                      // missing sku as "the line that has none", so omitting it made
+                      // Remove a silent no-op for every apparel line.
+                      removeFromCart(
+                        itemId,
+                        cartItem.type,
+                        cartItem.type === "product" ? cartItem.sku : undefined
+                      );
+                    };
+
                     const handleQuantityChange = (newQuantity: number) => {
-                      if (newQuantity < 1) return;
+                      // Stepping below one REMOVES the line rather than doing nothing.
+                      // A minus button that stops responding at 1 reads as broken, and
+                      // it left the bin icon as the only way out of a line someone had
+                      // already decided against.
+                      if (newQuantity < 1) {
+                        handleRemove();
+                        return;
+                      }
                       updateCartItem({
                         productId: cartItem.type === "product" ? cartItem.productId : undefined,
                         miniDrawId: cartItem.type === "ticket" ? cartItem.miniDrawId : undefined,
+                        // Without this the server matched on productId alone and edited
+                        // whichever variant sat first — a customer changing Navy XL
+                        // silently changed their Black L.
+                        sku: cartItem.type === "product" ? cartItem.sku : undefined,
                         quantity: newQuantity,
                       });
                     };
 
-                    const handleRemove = () => {
-                      const itemId = cartItem.productId || cartItem.miniDrawId || "";
-                      removeFromCart(itemId, cartItem.type);
-                    };
-
                     return (
                       <div
-                        key={`${cartItem.type}-${cartItem.productId}`}
+                        /*
+                          The sku is part of the KEY, not decoration. Cart line identity
+                          is (productId, sku), so two sizes of one hoodie are two lines
+                          that shared a key without it — React then reconciles them as
+                          one and a quantity typed into Black L can paint onto Navy XL.
+                        */
+                        key={`${cartItem.type}-${cartItem.productId ?? cartItem.miniDrawId}-${cartItem.sku ?? ""}`}
                         className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-neutral-800/80 rounded-lg"
                       >
                         <div className="w-16 h-16 bg-white dark:bg-neutral-900 rounded-lg overflow-hidden flex-shrink-0">
@@ -1916,12 +2137,24 @@ export default function Header({ isFixed = true }: HeaderProps) {
                             alt={itemName}
                             width={64}
                             height={64}
-                            className="w-full h-full object-cover"
+                            // Product shots sit on white — cover crops the garment.
+                            className="w-full h-full object-contain"
                             sizes="64px"
                           />
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className="font-medium text-gray-900 dark:text-white text-sm truncate">{itemName}</h3>
+                          {/*
+                            WHICH ONE. Two sizes of the same product are two lines with
+                            the same name, so without this the cart shows what looks like
+                            a duplicate and the only way to tell them apart is to remove
+                            one and see what disappears.
+                          */}
+                          {(cartItem.colour || cartItem.size) && (
+                            <p className="truncate text-[11px] font-medium text-gray-500 dark:text-neutral-400">
+                              {[cartItem.colour, cartItem.size].filter(Boolean).join(" · ")}
+                            </p>
+                          )}
                           <p className="text-red-600 font-semibold">
                             ${itemPrice.toFixed(2)}
                             {cartItem.type === "ticket" && (
@@ -1955,25 +2188,30 @@ export default function Header({ isFixed = true }: HeaderProps) {
                   })}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full px-4 py-8 text-center">
-                  <div className="text-gray-400 mb-6">
-                    <Clock className="w-20 h-20 mx-auto text-gray-300" />
+                /* Empty cart. This used to render a "Coming Soon" panel pointing at
+                   the mini-draws, which was correct while the shop was dark and
+                   became a bug the moment it went live: every customer with an empty
+                   cart was told the shop did not exist yet. */
+                <div className="flex h-full flex-col items-center justify-center px-4 py-8 text-center">
+                  <div className="mb-6 text-gray-400">
+                    <ShoppingCart className="mx-auto h-20 w-20 text-gray-300 dark:text-neutral-600" />
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 font-poppins">
-                    Coming Soon
+                  <h3 className="mb-3 font-poppins text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">
+                    Your cart is empty
                   </h3>
-                  <p className="text-sm sm:text-base text-gray-600 dark:text-neutral-300 mb-6 max-w-sm mx-auto font-['Inter']">
-                    Our shop is currently being set up. In the meantime, check out our exciting mini-draws where you can
-                    win amazing tools!
+                  <p className="mx-auto mb-6 max-w-sm font-['Inter'] text-sm text-gray-600 dark:text-neutral-300 sm:text-base">
+                    Nothing in here yet. Have a look at the gear — every order is printed
+                    to order right here in Australia.
                   </p>
                   <MetallicButton
-                    href="/mini-draws"
+                    href="/shop"
                     variant="primary"
                     size="md"
                     borderRadius="lg"
                     className="w-full max-w-xs"
+                    onClick={handleCloseCart}
                   >
-                    Visit Mini Draws
+                    Browse the shop
                   </MetallicButton>
                 </div>
               )}
@@ -1983,29 +2221,89 @@ export default function Header({ isFixed = true }: HeaderProps) {
             <div className="border-t border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex-shrink-0">
               {cartItems.length > 0 ? (
                 <div className="p-4">
-                  {/* Subtotal */}
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-lg font-semibold text-gray-900 dark:text-white">Subtotal:</span>
-                    <span className="text-xl font-bold text-red-600">
-                      $
-                      {cartItems
-                        .reduce((total: number, item) => {
-                          const cartItem = item;
-                          const itemPrice =
-                            cartItem.type === "product" && cartItem.product
-                              ? cartItem.product.price
-                              : cartItem.type === "ticket" && cartItem.miniDraw
-                              ? cartItem.miniDraw.ticketPrice
-                              : 0;
-                          return total + itemPrice * cartItem.quantity;
-                        }, 0)
-                        .toFixed(2)}
-                    </span>
-                  </div>
+                  {/*
+                    THE SAME BREAKDOWN THE CHECKOUT PAGE SHOWS.
 
-                  {/* Checkout Button */}
+                    This was a bare Subtotal that ignored the member discount and never
+                    mentioned delivery — so a Foreman saw $89.95 here and $90.95 at
+                    checkout, with the difference unexplained until the page after.
+
+                    Computed with `priceCart` and `resolveShopDiscountPercent`, the exact
+                    functions the checkout route prices with, so the two cannot disagree.
+                    Estimate only: the server re-prices from the database at Continue, and
+                    ITS figures are authoritative — same contract as the checkout page.
+                  */}
+                  {(() => {
+                    const productLines = cartItems.filter((i) => i.type === "product" && i.product);
+                    const ticketTotal = cartItems
+                      .filter((i) => i.type === "ticket" && i.miniDraw)
+                      .reduce((t, i) => t + (i.miniDraw?.ticketPrice ?? 0) * i.quantity, 0);
+
+                    const shopTotals = priceCart(
+                      productLines.map((i) => ({
+                        priceCents: dollarsToCents(i.product?.price ?? 0),
+                        quantity: i.quantity,
+                      })),
+                      { shopDiscountPercent: resolveShopDiscountPercent(userData ?? {}) }
+                    );
+
+                    const discount = centsToDollars(shopTotals.discountCents);
+                    const delivery = centsToDollars(shopTotals.shippingCents);
+                    const subtotal = centsToDollars(shopTotals.subtotalCents) + ticketTotal;
+                    const total = centsToDollars(shopTotals.totalCents) + ticketTotal;
+                    const gst = centsToDollars(shopTotals.gstCents);
+                    const line = "flex items-center justify-between text-sm";
+
+                    return (
+                      <dl className="mb-4 space-y-1.5">
+                        <div className={line}>
+                          <dt className="text-gray-600 dark:text-neutral-400">Subtotal</dt>
+                          <dd className="tabular-nums text-gray-900 dark:text-neutral-100">
+                            ${subtotal.toFixed(2)}
+                          </dd>
+                        </div>
+
+                        {/* Only when it applies — a $0.00 discount row advertises nothing. */}
+                        {discount > 0 && (
+                          <div className={line}>
+                            <dt className="text-emerald-700 dark:text-emerald-400">Member discount</dt>
+                            <dd className="tabular-nums text-emerald-700 dark:text-emerald-400">
+                              −${discount.toFixed(2)}
+                            </dd>
+                          </div>
+                        )}
+
+                        {productLines.length > 0 && (
+                          <div className={line}>
+                            <dt className="text-gray-600 dark:text-neutral-400">Delivery</dt>
+                            <dd className="tabular-nums text-gray-900 dark:text-neutral-100">
+                              {delivery > 0 ? `$${delivery.toFixed(2)}` : "Free"}
+                            </dd>
+                          </div>
+                        )}
+
+                        <div className="flex items-baseline justify-between border-t border-gray-200 pt-2 dark:border-neutral-700">
+                          <dt className="text-lg font-semibold text-gray-900 dark:text-white">Total</dt>
+                          <dd className="text-xl font-bold tabular-nums text-red-600">
+                            ${total.toFixed(2)}
+                          </dd>
+                        </div>
+
+                        {/* GST is INSIDE the total, never added — stated as a note so the
+                            arithmetic above still sums. */}
+                        {gst > 0 && (
+                          <p className="text-right text-xs text-gray-500 dark:text-neutral-500">
+                            includes ${gst.toFixed(2)} GST
+                          </p>
+                        )}
+                      </dl>
+                    );
+                  })()}
+
+                  {/* Checkout Button — pointed at /shop until 2026-08-17, which
+                      made this a dead end: the button existed but checkout did not. */}
                   <Link
-                    href="/shop"
+                    href="/checkout"
                     className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors duration-200 flex items-center justify-center gap-2 mb-2"
                     onClick={handleCloseCart}
                   >

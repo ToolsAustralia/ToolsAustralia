@@ -45,6 +45,17 @@ export function convertToLocalPlan(apiPlan: APIMembershipPlan): LocalMembershipP
     isAdditional: apiPlan.isAdditional,
     metadata: {
       entriesCount: apiPlan.totalEntries || apiPlan.entriesPerMonth || 0,
+      /**
+       * The CATALOG id (`tradie-subscription`), carried alongside the display id.
+       *
+       * `id` above is derived from the package NAME (`"Tradie"` → `"tradie"`), so it
+       * is not a key anything can look a package up by: `getPackageById("tradie")`
+       * is undefined, and the id-substring tier rules in
+       * `getPartnerCatalogAccessPercentForPlanId` read a bare `"tradie"` as the
+       * ONE-TIME Tradie pack (40%) rather than the subscription (50%). Any surface
+       * that needs real package data must resolve through this field.
+       */
+      packageId: apiPlan._id,
     },
   };
 }

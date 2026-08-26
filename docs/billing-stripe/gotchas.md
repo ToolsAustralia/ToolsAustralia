@@ -702,6 +702,23 @@ The package flag `isMemberOnly` was renamed to **`isAdditional`** across the cod
 
 `src/lib/stripe-client.ts` imports `loadStripe` from the `/pure` entry — the DEFAULT `@stripe/stripe-js` entry injects https://js.stripe.com on mere import, which shipped Stripe to 100 % of guests when the modal chunk evaluated. Import `loadStripe` nowhere else (lint: `internal-norm/no-eager-stripe`); call `getStripePromise()` lazily inside components/handlers. Note: with `/pure`, Stripe's fraud-signal collection starts at first `getStripePromise()` call (payment-surface mount) instead of page load — intended.
 
+## A shop payment now reaches `processPaymentBenefits` (2026-08-17)
+
+`stripe-webhook-handlers/index.ts` previously documented the opposite — *"Shop orders grant NO
+entries and deliberately do not touch processPaymentBenefits"*. That is no longer true: the shop
+branch resolves the one-time promo multiplier and passes it to `finalizeShopOrder`, which grants
+the order's free entries after fulfilment.
+
+The consequence worth knowing when reading this file: **once a shop grant succeeds it writes a
+`BenefitsGranted-{pi}` PaymentEvent, so every later redelivery of that `payment_intent.succeeded`
+short-circuits at `isPaymentProcessed()` before reaching the shop branch at all.** That is why
+the grant is sequenced last inside `finalizeShopOrder` and why its `already_processed` path
+retries the grant instead of returning early — see
+[cart-shop-products/backend.md](../cart-shop-products/backend.md).
+
+Shop PaymentIntent metadata now also carries `userEmail`. It was the only payment type without
+it, and the webhook's user-resolution fallback needs it; without it an unmatched
+`stripeCustomerId` lost the order silently.
 ## Adaptive Acceptance blocks are NOT overridable by the Radar allow list
 
 **Confirmed by Stripe support, 2026-08-17.** `outcome.type === "blocked"` covers several

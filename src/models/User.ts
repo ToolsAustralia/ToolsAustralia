@@ -10,6 +10,31 @@ export interface IUser extends Document {
   mobile?: string;
   state?: string; // Australian state/territory code (e.g., "NSW", "VIC", "ACT")
   profession?: string; // User's profession (e.g., "Builder", "Electrician", "Other", or custom value)
+  /**
+   * The delivery address from this customer's last COMPLETED shop order, kept so the
+   * next checkout can prefill instead of asking them to retype it.
+   *
+   * Field names mirror `Order.shippingAddress` exactly — same concept, same vocabulary,
+   * so the two can be copied between without a mapping layer that could drift.
+   *
+   * DISTINCT from the top-level `state` field above, which exists for draw eligibility
+   * (SA/ACT exclusion) and is not a postal address. Do not conflate them.
+   *
+   * Written only on a PAID order (finalizeShopOrder), never at checkout-start: an
+   * abandoned attempt should not overwrite the address that actually received goods.
+   */
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    deliveryInstructions?: string;
+  };
   gender?: "male" | "female"; // Optional. Unset = unknown (covers "declined" AND "never asked")
   birthdate?: Date; // User's date of birth (required for setup; used for age-based eligibility)
   profileSetupCompleted?: boolean; // Flag to track if user has completed profile setup
@@ -158,6 +183,23 @@ export interface IUser extends Document {
     type: "product" | "ticket";
     productId?: mongoose.Types.ObjectId; // For product items
     miniDrawId?: mongoose.Types.ObjectId; // For ticket entries
+    /**
+     * Chosen product variant (size / colour). Part of the cart line's identity:
+     * two sizes of the same product are two lines, not one. Absent on ticket
+     * items and on product lines added before variants existed.
+     */
+    sku?: string;
+    /**
+     * The chosen variant in HUMAN terms, snapshotted at add-to-cart.
+     *
+     * The sku is an internal string ("ajrAx-2XL-Bot8043-BAC-2_11") and checkout was
+     * showing it to the customer for want of anything better. Snapshotted rather than
+     * joined on read for the same reason the ORDER line snapshots it: the cart's
+     * product projection carries no variants, and a 383-variant garment is not
+     * something to ship to a browser to resolve one label.
+     */
+    colour?: string;
+    size?: string;
     quantity: number;
     price?: number; // Store price at time of adding to cart
   }>;
@@ -416,6 +458,27 @@ const UserSchema = new Schema<IUser>(
       type: String,
       trim: true,
       maxlength: [100, "Profession cannot be more than 100 characters"],
+    },
+    // Last-used delivery address, for prefilling the next checkout. Mirrors
+    // Order.shippingAddress field-for-field. See the IUser docblock.
+    shippingAddress: {
+      firstName: { type: String, trim: true },
+      lastName: { type: String, trim: true },
+      phone: { type: String, trim: true },
+      addressLine1: { type: String, trim: true },
+      addressLine2: { type: String, trim: true },
+      /** Labelled "Suburb" in the UI. */
+      city: { type: String, trim: true },
+      // Enum, same as the order: a courier cannot deliver to "Vic."
+      state: {
+        type: String,
+        trim: true,
+        uppercase: true,
+        enum: ["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"],
+      },
+      postalCode: { type: String, trim: true },
+      country: { type: String, trim: true, default: "Australia" },
+      deliveryInstructions: { type: String, trim: true, maxlength: 280 },
     },
     gender: {
       type: String,
@@ -857,6 +920,17 @@ const UserSchema = new Schema<IUser>(
             return this.type === "ticket";
           },
         },
+        // Part of the line's identity — see the interface note above. Must exist
+        // on the schema or Mongoose strict mode drops it silently on save.
+        sku: {
+          type: String,
+          trim: true,
+        },
+        // Snapshotted variant labels. MUST exist on the schema or Mongoose strict
+        // mode drops them silently on save — the same footgun the sku note above
+        // was written for.
+        colour: { type: String, trim: true },
+        size: { type: String, trim: true },
         quantity: {
           type: Number,
           required: true,

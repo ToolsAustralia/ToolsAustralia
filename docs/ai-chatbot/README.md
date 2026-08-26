@@ -193,6 +193,12 @@ is honest-but-unavailable rather than silently fake.
 **Tests:** `npm run test:chat-service` covers member-email-from-session, unresolvable email,
 throwing lookup, and the anonymous path (no lookup, still asks).
 
+## Shop discount percentages (2026-08-25)
+
+Two FAQ answers quote the ladder verbatim. Raised to Tradie 10%, Foreman 15%, Boss 25%
+and the knowledge pack rebuilt (`npm run build:chat-knowledge-pack`); `test:chat-faqs`
+passes at 89 entries. Both answers still state free delivery over $100 — correct today,
+but see `docs/cart-shop-products/backend.md` on the unresolved threshold question.
 ## Gender field coverage (2026-08-17)
 
 Two FAQ entries (ids `82`, `83`) cover the optional profile gender field: whether it can be left blank or removed, and what it is used for. Corpus count assertion in `src/data/__tests__/faqs.test.ts` bumped **83 → 85**.

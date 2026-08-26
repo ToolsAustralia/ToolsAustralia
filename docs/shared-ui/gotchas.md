@@ -1161,6 +1161,27 @@ both keep toggling in each direction. Moving the pointer away still closes it vi
 either.** A click must mean "open" or "keep", never "undo what hover just did" — decide from what
 opened it, not from the boolean alone.
 
+## Three tiers paint a DIFFERENT tier's colour — remap in one place (2026-08-21)
+
+Membership Tradie renders the one-time Foreman scheme (electric cyan), one-time Boss
+renders the membership Foreman scheme (DeWalt yellow), and membership Boss renders the
+one-time Power scheme (electric red). Deliberate art direction, so no two adjacent cards
+in either tab repeat a colour.
+
+`getRemappedPackageScheme(planId, isMembershipTab)` in `packageCardSurface.ts` is the one
+place that knows this. **Import it rather than calling a scheme getter directly.**
+
+Anything that skipped the remap drifted. The header's `MembershipBadge` called
+`getMembershipSectionColorScheme` and rendered membership Tradie as `#5ca9ec` while its own
+card rendered `#00E5FF` — and because that function returns the **same** value for
+`tradie-subscription` and `tradie-pack`, the badge read as the one-time pack's colour to
+anyone comparing them.
+
+> It returns a whole **scheme**, not just an accent, and that distinction is load-bearing:
+> the badge paints `badgeStyle.background` and falls back to the accent only when that is
+> absent. A first fix remapped only `accentHex` and left the badge **filled from one tier
+> and outlined from another** — visibly unchanged, because the fill is what you see.
+> Verified by reading the computed background back, not by reasoning about the code.
 ---
 
 ## MembershipModal: the mini-pack branches were dead and are now removed (2026-08-20)

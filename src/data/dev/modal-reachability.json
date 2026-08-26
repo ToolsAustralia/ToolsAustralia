@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-07-30T03:21:27.824Z",
+  "generatedAt": "2026-08-17T07:28:28.949Z",
   "method": "Transitive imports from Next.js app entry files (page, layout, route, loading, error, template, default, not-found, global-error, middleware, instrumentation). Does not evaluate dynamic non-literal imports or runtime-only usage.",
-  "entrySeedCount": 495,
-  "reachableSrcFileCount": 1871,
-  "modalInventoryCount": 53,
-  "reachableModalCount": 51,
+  "entrySeedCount": 507,
+  "reachableSrcFileCount": 1949,
+  "modalInventoryCount": 54,
+  "reachableModalCount": 52,
   "unreachableModalCount": 2,
   "modals": [
     {
@@ -129,6 +129,10 @@
     },
     {
       "path": "src/components/modals/draws/AdminMiniDrawModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/draws/DrawLockedModal.tsx",
       "reachable": true
     },
     {

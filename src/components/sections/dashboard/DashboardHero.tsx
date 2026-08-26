@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import Image from "next/image";
-import { Settings, Crown, ShieldAlert, ArrowRight, Ticket, Gift, ChevronRight, AlertCircle } from "lucide-react";
+import { Settings, Package, Crown, ShieldAlert, ArrowRight, Ticket, Gift, ChevronRight, AlertCircle } from "lucide-react";
 import AccessRing from "@/components/ui/AccessRing";
 import { Monogram } from "@/components/ui/Monogram";
 import { getPackageIcon } from "@/utils/images/package-icons";
@@ -22,6 +22,13 @@ interface DashboardHeroProps {
   /** False → show a "complete your profile" nudge in the hero. */
   profileComplete?: boolean;
   onOpenSettings: () => void;
+  /**
+   * Mobile's route to order history. The bottom bar is a fixed five-item layout, so
+   * Orders lives in the desktop sidebar and reaches mobile through here — the same
+   * shape Settings already uses. Without it a phone-only customer has no way back to
+   * an order except the confirmation email.
+   */
+  onOpenOrders: () => void;
   onPartnerPortal?: () => void;
   onBecomeMember?: () => void;
   onUpdatePayment?: () => void;
@@ -46,6 +53,7 @@ export default function DashboardHero({
   partnerAccessExpiryLabel,
   profileComplete,
   onOpenSettings,
+  onOpenOrders,
   onPartnerPortal,
   onBecomeMember,
   onUpdatePayment,
@@ -193,6 +201,12 @@ export default function DashboardHero({
               {profileWarnEl}
             </div>
           </div>
+          {/* Guests have no orders, so the control would lead to an empty page. */}
+          {!isGuest && (
+            <button type="button" onClick={onOpenOrders} aria-label="Your orders" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px]" style={{ color: ink, background: glassBg, border: `1px solid ${glassBd}` }}>
+              <Package className="h-[18px] w-[18px]" />
+            </button>
+          )}
           <button type="button" onClick={onOpenSettings} aria-label="Settings" className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[11px]" style={{ color: ink, background: glassBg, border: `1px solid ${glassBd}` }}>
             <Settings className="h-[18px] w-[18px]" />
           </button>

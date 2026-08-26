@@ -415,3 +415,23 @@ there is no second spelling for this. It cleans the URL after opening.
 rewards-return banner, the header package-detail modal, and the payment-failure toast in
 MembershipModal. If you add a fifth, point it at `/my-account/membership`, not the dashboard.
 Full before/after table: [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+
+## `convertToLocalPlan` carries the catalog id (2026-08-21)
+
+[`membership-adapters.ts`](../../src/utils/membership/membership-adapters.ts) now writes
+`metadata.packageId = apiPlan._id` alongside `metadata.entriesCount`.
+
+`LocalMembershipPlan.id` is **not a lookup key** — it is derived from the package *name*
+(`"Tradie"` → `"tradie"`, `"Additional Tradie Pack"` → `"additional-tradie-pack-member"`). Two
+consequences bit at once:
+
+- `getPackageById("tradie")` is `undefined` — it matches on `_id` exactly.
+- `getPartnerCatalogAccessPercentForPlanId("tradie")` returns **40** (the one-time Tradie pack), not
+  50 (the Tradie subscription), because its tier rules are id-substring matches and a bare
+  `"tradie"` misses the `l.includes("subscription")` branch.
+
+So a surface that resolves package data from `plan.id` silently shows one tier's numbers under
+another tier's name. Anything needing real catalog data must go through `metadata.packageId`; fall
+back to `plan.id` only for plans built outside this adapter (upsells), where the id *is* the record
+id. First consumer: the package-inclusions comparison table —
+[shared-ui/frontend.md](../shared-ui/frontend.md).

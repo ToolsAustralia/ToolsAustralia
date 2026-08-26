@@ -51,6 +51,7 @@ import Image from "next/image";
 import type { UIMessage } from "ai";
 import { Z_INDEX } from "@/constants/z-index";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
+import { useSidebar } from "@/contexts/SidebarContext";
 import { useSupportChat } from "./useSupportChat";
 import {
   hasAcknowledgedDisclosure,
@@ -235,6 +236,17 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
   // this mainly guards the panel against a later-opened sheet.)
   const dashboardSheetOpen = useDashboardSheetStore((s) => s.sheet !== null);
 
+  /**
+   * The cart drawer and the mobile menu are the same class of overlay as a dashboard
+   * sheet, and Cobber was floating over BOTH — the robot sat on top of the cart's
+   * "Continue Shopping" button and swallowed the tap.
+   *
+   * Read from SidebarContext, which is where the drawer's open state already lives, so
+   * there is no second source to keep in step.
+   */
+  const { isCartOpen, isMobileMenuOpen } = useSidebar();
+  const sideDrawerOpen = isCartOpen || isMobileMenuOpen;
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -314,7 +326,7 @@ export default function SupportChatWidget({ side = "right", open, onClose }: Sup
       {/* Panel — hidden while a dashboard overlay sheet is open so Cobber never floats
           over it (see dashboardSheetOpen). The eager launcher lives in the mount
           (ChatBubbleButton); this lazy component renders the panel only. */}
-      {open && !dashboardSheetOpen && (
+      {open && !dashboardSheetOpen && !sideDrawerOpen && (
         <div
           // Dark in BOTH site themes (design handoff, 2026-08-13). Cobber sits over prize
           // photography and dark page chrome far more often than not, and the old

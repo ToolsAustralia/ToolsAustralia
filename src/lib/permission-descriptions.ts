@@ -37,6 +37,10 @@ export const AREA_META: Record<Area, AreaMeta> = {
     label: "Users",
     description: "Customer accounts — profile, billing actions, and lifecycle controls.",
   },
+  shop: {
+    label: "Shop",
+    description: "Product catalog and orders — merchandise, stock, and fulfilment.",
+  },
   promos: {
     label: "Promos",
     description: "Promotions, links, banner text, scheduled campaigns, and bonus-entry rules.",
@@ -320,6 +324,21 @@ export const PERMISSION_META: Record<Permission, PermissionMeta> = {
   "rewards.delete": {
     label: "Delete",
     description: "Delete a milestone reward or monthly coupon campaign. Campaigns with issuances are soft-deactivated instead of hard-deleted; rewards are removed when no issuances exist.",
+    danger: true,
+  },
+
+  // Shop
+  "shop.view": {
+    label: "View",
+    description: "Read the product catalog's admin surfaces — stock levels, sales analytics, and CSV export.",
+  },
+  "shop.edit": {
+    label: "Edit",
+    description: "Create, import, duplicate and update products; adjust stock; archive and restore catalog items.",
+  },
+  "shop.delete": {
+    label: "Delete",
+    description: "Permanently delete products, including the bulk routes that remove the entire catalog or every product matching a brand, category, tag, price range or rating.",
     danger: true,
   },
 

@@ -153,3 +153,66 @@ export async function trackRefundedOrder(
     console.error(`❌ Failed to track "Refunded Order" event for user ${user.email}:`, error);
   }
 }
+
+
+/**
+ * `Placed Order` for a merchandise order.
+ *
+ * Separate from `trackPlacedOrder` on purpose. That one is package-shaped and
+ * sends package_type / package_id / package_name, which for a garment would
+ * write "Unknown Package" into Klaviyo on every merch sale — the exact
+ * pollution the shop exclusion in payment-processing was added to prevent.
+ *
+ * The revenue keys are the frozen ones every existing Klaviyo report and flow
+ * already reads: $value, Currency, Order ID, items[]. `order_type: "shop"` is
+ * the discriminator segments need to include or exclude merch.
+ *
+ * NOTE for whoever wires the dashboard: a flow or segment currently filtering
+ * `Placed Order` on package_type will NOT match these. That is a Klaviyo-side
+ * decision, not a code one.
+ */
+export function trackShopPlacedOrder(params: {
+  email?: string;
+  userId?: string;
+  orderNumber: string;
+  totalAmount: number;
+  items: {
+    productId: string;
+    sku?: string;
+    name: string;
+    quantity: number;
+    price: number;
+    imageUrl?: string;
+    size?: string;
+    colour?: string;
+  }[];
+}): void {
+  if (!params.email) return; // Klaviyo cannot attach an event to nobody
+
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://toolsaustralia.com.au").replace(/\/$/, "");
+
+  klaviyo.trackEventBackground({
+    event: "Placed Order",
+    customer_properties: { email: params.email },
+    properties: {
+      $value: params.totalAmount,
+      Currency: "AUD",
+      "Order ID": params.orderNumber,
+      order_type: "shop",
+      order_number: params.orderNumber,
+      ...(params.userId ? { user_id: params.userId } : {}),
+      items: params.items.map((line) => ({
+        ProductID: line.sku ?? line.productId,
+        SKU: line.sku ?? line.productId,
+        ProductName: line.name,
+        Quantity: line.quantity,
+        ItemPrice: line.price,
+        RowTotal: line.price * line.quantity,
+        ...(line.imageUrl ? { ImageURL: line.imageUrl } : {}),
+        URL: `${appUrl}/shop/${line.productId}`,
+        ...(line.size ? { size: line.size } : {}),
+        ...(line.colour ? { colour: line.colour } : {}),
+      })),
+    },
+  });
+}

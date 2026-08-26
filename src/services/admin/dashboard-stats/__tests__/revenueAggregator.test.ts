@@ -25,6 +25,7 @@ const TEST_PI_IDS = [
   "pi_TIKTOK",
   "pi_NULL_PLAT",
   "pi_META_RENEWAL",
+  "pi_SHOP",
 ];
 
 // Synthetic ObjectIds for test users — 24-char hex strings
@@ -42,6 +43,7 @@ const u11 = new mongoose.Types.ObjectId("555555555555555555555555");
 const u12 = new mongoose.Types.ObjectId("666666666666666666666666");
 const u13 = new mongoose.Types.ObjectId("777777777777777777777777");
 const u14 = new mongoose.Types.ObjectId("888888888888888888888888");
+const u15 = new mongoose.Types.ObjectId("999999999999999999999999");
 
 async function seed() {
   // Day under test: March 5 2099 in AEST (far-future date to avoid collisions with real dev-DB data).
@@ -73,6 +75,11 @@ async function seed() {
     // renewal: exclusion must work off packageType + data.billingReason="subscription_cycle"
     // (matching the hourly-breakdown predicate), NOT the new isRenewal flag.
     { _id: "BenefitsGranted-pi_META_RENEWAL", eventType: "BenefitsGranted", paymentIntentId: "pi_META_RENEWAL", packageType: "membership", packageId: "apprentice", data: { price: 40, billingReason: "subscription_cycle" }, convertingPlatform: "meta", attributionConfidence: "click", timestamp: createAESTDateAsUTC(2099, 3, 5, 20, 0), userId: u14, processedBy: "webhook" },
+    // MERCHANDISE. Carries a converting platform deliberately: merch must land in the
+    // `shop` bucket and in `total`, and must NOT touch byPlatform — a merch total
+    // includes shipping and is not comparable to a package price, so it would inflate
+    // newRevenue, conversions and TRUE ROAS if it leaked in.
+    { _id: "BenefitsGranted-pi_SHOP", eventType: "BenefitsGranted", paymentIntentId: "pi_SHOP", packageType: "shop", packageId: "SHOP-20990305-TEST1", data: { price: 89.95 }, convertingPlatform: "meta", attributionConfidence: "click", timestamp: createAESTDateAsUTC(2099, 3, 5, 21, 0), userId: u15, processedBy: "webhook" },
   ]);
 
   return { dayStart, dayEnd };
@@ -100,13 +107,14 @@ async function run() {
   }
 
   // Existing bucket assertions — total now includes 4 platform rows (+10+5+20+7=42) + renewal row (+40)
-  expect("total revenue excludes refunded + boundary rows", result.total, 49 + 49 + 25 + 15 + 5 + 10 + 10 + 5 + 20 + 7 + 40);
+  expect("total revenue excludes refunded + boundary rows", result.total, 49 + 49 + 25 + 15 + 5 + 10 + 10 + 5 + 20 + 7 + 40 + 89.95);
   expect("membershipPurchase bucket", result.buckets.membershipPurchase, { revenue: 49 + 10 + 5 + 20 + 7, purchaseCount: 5 });
   expect("membershipRenewal bucket", result.buckets.membershipRenewal, { revenue: 49 + 40, purchaseCount: 2 });
   expect("oneTimePurchase bucket", result.buckets.oneTimePurchase, { revenue: 25, purchaseCount: 1 });
   expect("additionalOneTimePurchase bucket", result.buckets.additionalOneTimePurchase, { revenue: 15, purchaseCount: 1 });
   expect("miniDraw bucket", result.buckets.miniDraw, { revenue: 5, purchaseCount: 1 });
   expect("upsell bucket", result.buckets.upsell, { revenue: 10, purchaseCount: 1 });
+  expect("shop bucket", result.buckets.shop, { revenue: 89.95, purchaseCount: 1 });
 
   // Platform attribution assertions (newRevenue excludes renewals)
   expect("byPlatform.meta.newRevenue", result.byPlatform.meta.newRevenue, 15);
@@ -126,7 +134,16 @@ async function run() {
     (s: number, p) => s + (p as { newRevenue: number; renewalRevenue: number }).newRevenue + (p as { newRevenue: number; renewalRevenue: number }).renewalRevenue,
     0
   );
-  expect("sum of byPlatform (newRevenue+renewalRevenue) equals total", sumByPlatform, result.total);
+  // MERCH IS THE ONE EXCEPTION to byPlatform summing to total: it is headline revenue
+  // but is deliberately kept out of the per-platform/ROAS numerator, so the identity is
+  // now `byPlatform + shop === total`. Asserted this way rather than deleted, so it
+  // still catches a leak in either direction.
+  expect("merch does NOT leak into byPlatform.meta.newRevenue", result.byPlatform.meta.newRevenue, 15);
+  expect(
+    "sum of byPlatform + shop bucket equals total",
+    Math.round((sumByPlatform + result.buckets.shop.revenue) * 100) / 100,
+    result.total
+  );
 
   // Cleanup
   await PaymentEvent.deleteMany({ paymentIntentId: { $in: TEST_PI_IDS } });

@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Star, ShoppingCart, Ticket, Check, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Star, ShoppingCart, Ticket, Check, Loader2, AlertCircle, RefreshCw, Tag, Zap } from "lucide-react";
+import { getElectricPackageColorScheme } from "@/utils/package-colors/electricPackageScheme";
 import { useCart } from "@/contexts/CartContext";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
@@ -13,6 +15,9 @@ import BrandLogoCard from "@/components/ui/BrandLogoCard";
 import { useUserContext } from "@/contexts/UserContext";
 import { useMiniDraw } from "@/hooks/queries/useMiniDrawQueries";
 import { cn } from "@/utils/cn";
+import SignInToBuyModal from "@/components/modals/SignInToBuyModal";
+import { resolveMemberShopPrice } from "@/utils/shop/member-discount";
+import { shouldShowReviews } from "@/utils/shop/reviews";
 
 // Types
 interface ProductItem {
@@ -22,7 +27,18 @@ interface ProductItem {
   images: string[];
   brand: string;
   stock: number;
-  reviews?: number;
+  /**
+   * Print-to-order items sit at stock 0 permanently — the printer makes each one on
+   * demand. Without this the card reads stock 0 as "Sold Out" and disables its own
+   * Add button, which is what made every merchandise item unbuyable from the shop
+   * listing while the product page (which does check it) said "Made to order".
+   * Absent = true, so tracked stock keeps its existing behaviour exactly.
+   */
+  trackInventory?: boolean;
+  /** Reviews as stored — an array, matching the model. The count is reviewCount. */
+  reviews?: { rating: number }[];
+  /** ALL reviews, including ones below the display threshold. */
+  reviewCount?: number;
   rating?: number;
 }
 
@@ -60,6 +76,8 @@ interface NormalizedProductData {
     gradientOverride?: string | null;
   } | null;
   stock: number | null;
+  /** False for print-to-order: stock 0 must not read as sold out. */
+  trackInventory: boolean;
   rating: number;
   isPrize: boolean;
   endDate: Date | null;
@@ -80,6 +98,138 @@ type ProductCardProps = {
   viewMode?: "grid" | "list";
 };
 
+/**
+ * The member price, stated next to the shelf price.
+ *
+ * Shared by this card and the product detail page. It lives in this module
+ * rather than a file of its own because the detail page already mounts
+ * ProductCard for its related-products row, so both surfaces carry this chunk
+ * either way — and that page is a server component, which cannot read who is
+ * signed in.
+ *
+ * The figure comes from resolveMemberShopPrice, which resolves the percentage
+ * and the money through the same functions the checkout route runs. Working a
+ * percentage out here instead is how a shop ends up showing one price and
+ * charging another.
+ */
+export function MemberPriceLine({
+  price,
+  variant = "card",
+}: {
+  price: number;
+  variant?: "card" | "detail";
+}) {
+  const { userData } = useUserContext();
+  const memberPrice = resolveMemberShopPrice(price, userData);
+
+  // Nothing to say when no tier discounts this item — never a 0% claim.
+  if (!memberPrice) return null;
+
+  if (variant === "card") {
+    const scheme = getElectricPackageColorScheme(memberPrice.packageId);
+
+    // A STRIKETHROUGH IS A CLAIM, and it is only true for a member.
+    //
+    // For someone holding the tier, the full price genuinely is not what they
+    // pay, so striking it is accurate and the discounted figure is the headline.
+    //
+    // For everyone else the full price IS what they pay. Striking it through
+    // presents a reduction they do not have — a misleading price representation
+    // under Australian Consumer Law, and the exact misrepresentation the older
+    // detail block was rewritten to remove. Non-members get the real price as the
+    // headline and the member price as a clearly-labelled offer beside it.
+    if (memberPrice.isMember) {
+      return (
+        <div className="mt-1 space-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-[17px] sm:text-[19px] lg:text-[21px] font-extrabold leading-none text-gray-900 dark:text-white">
+              {memberPrice.priceLabel}
+            </span>
+            <span className="text-[12px] sm:text-[13px] font-medium leading-none text-gray-400 line-through dark:text-neutral-500">
+              {memberPrice.fullPriceLabel}
+            </span>
+          </div>
+          <p className="text-[11px] font-medium text-gray-500 dark:text-neutral-400">
+            {memberPrice.tierName} price — saves {memberPrice.savingLabel}
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-1 space-y-1">
+        <div className="text-[17px] sm:text-[19px] lg:text-[21px] font-extrabold leading-none text-gray-900 dark:text-white">
+          {memberPrice.fullPriceLabel}
+        </div>
+        <p className="text-[11px] font-semibold" style={{ color: scheme.accentHex }}>
+          {memberPrice.tierName} members pay {memberPrice.priceLabel} — save{" "}
+          {memberPrice.savingLabel}
+        </p>
+      </div>
+    );
+  }
+
+  const scheme = getElectricPackageColorScheme(memberPrice.packageId);
+
+  // A member: their price is the headline, the shelf price is struck.
+  if (memberPrice.isMember) {
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="font-poppins text-4xl font-bold text-red-600">
+            {memberPrice.priceLabel}
+          </span>
+          <span className="text-lg font-medium text-gray-400 line-through dark:text-neutral-500">
+            {memberPrice.fullPriceLabel}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black uppercase leading-none tracking-wide text-black"
+            style={{ backgroundImage: scheme.bgGradient }}
+          >
+            {memberPrice.percent}% off
+          </span>
+        </div>
+        <p className="text-sm font-medium text-gray-600 dark:text-neutral-400">
+          Your {memberPrice.tierName} membership saves you {memberPrice.savingLabel} on this
+          item, applied at checkout.
+        </p>
+      </div>
+    );
+  }
+
+  // Everyone else: the price they actually pay is the headline, and the
+  // membership is presented as an offer rather than as a discount they hold.
+  return (
+    <div className="space-y-3">
+      <span className="font-poppins text-4xl font-bold text-red-600">
+        {memberPrice.fullPriceLabel}
+      </span>
+      <div
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border px-4 py-3"
+        style={{ borderColor: scheme.accentHex }}
+      >
+        <span
+          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black uppercase leading-none tracking-wide text-black"
+          style={{ backgroundImage: scheme.bgGradient }}
+        >
+          {memberPrice.percent}% off
+        </span>
+        <p className="text-sm font-semibold text-gray-900 dark:text-neutral-100">
+          {memberPrice.tierName} members pay {memberPrice.priceLabel} — save{" "}
+          {memberPrice.savingLabel}
+        </p>
+        <Link
+          href="/membership"
+          className="text-xs font-semibold underline underline-offset-2"
+          style={{ color: scheme.accentHex }}
+        >
+          See membership options
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function ProductCard({
   product,
   onAddToCart,
@@ -99,6 +249,8 @@ export default function ProductCard({
   const { trackAddToCart } = usePixelTracking();
   const { trackAddToCart: trackKlaviyoAddToCart } = useKlaviyoTracking();
   const { userData, isAuthenticated } = useUserContext();
+  const [showSignIn, setShowSignIn] = useState(false);
+  const router = useRouter();
 
   // Helper functions
   const getValidRating = (rating: unknown): number => {
@@ -233,6 +385,9 @@ export default function ProductCard({
           gradientOverride,
         },
         stock: remainingEntries,
+        // A mini draw has real, finite capacity — remainingEntries 0 means closed,
+        // so unlike print-to-order merchandise it is genuinely stock-tracked.
+        trackInventory: true,
         rating: 4.5,
         isPrize: true,
         endDate: null,
@@ -254,6 +409,7 @@ export default function ProductCard({
         brand: product.brand,
         brandAccent: null,
         stock: product.stock,
+        trackInventory: product.trackInventory ?? true,
         rating: getValidRating(product.rating),
         isPrize: false,
         endDate: null,
@@ -270,6 +426,52 @@ export default function ProductCard({
   };
 
   const productData = getProductData();
+
+  // Free entries and the item's multiplier, read defensively: `product` is a
+  // union of the static ProductData fixtures and the DB shape, and only the
+  // latter carries either field. Widening the type would make the fixtures lie.
+  //
+  // `entryMultiplier` arrives ALREADY RESOLVED from /api/products — the server
+  // collapses product -> category -> shop-wide, because the last two are admin
+  // config the browser has no business holding. Resolving here from a partial
+  // view is how a card and the product page end up printing different numbers.
+  const rawEntries = (product as { includedEntries?: unknown }).includedEntries;
+  const entryCount = typeof rawEntries === "number" && rawEntries > 0 ? rawEntries : 0;
+  const rawMultiplier = (product as { entryMultiplier?: unknown }).entryMultiplier;
+  const entryMultiplier =
+    typeof rawMultiplier === "number" && rawMultiplier > 0 ? rawMultiplier : 1;
+
+  // The multiplier mark borrows the BOSS palette deliberately — it is the tier
+  // whose colour already reads as "the biggest entry number" across the
+  // membership cards, so a shopper meets one visual language for entries.
+  const multiplierScheme = getElectricPackageColorScheme("boss-subscription");
+
+  // Whether MemberPriceLine will render anything. Computed here so the plain
+  // price and the discounted block are mutually exclusive rather than both
+  // trying to be the headline figure.
+  const memberPrice = resolveMemberShopPrice(productData.price, userData);
+  const memberPriceApplies = Boolean(memberPrice);
+
+  // The percentage moves onto the image; the price block below keeps the figures.
+  // Shown for members and non-members alike because it describes the OFFER, not a
+  // reduction the viewer already holds — the price block is what distinguishes
+  // those two cases, and it does so without striking a price anyone would pay.
+  const discountBadge = memberPrice
+    ? {
+        percent: memberPrice.percent,
+        gradient: getElectricPackageColorScheme(memberPrice.packageId).bgGradient,
+      }
+    : null;
+  // NOTHING is cropped. `object-cover` was used for tools on the theory that they
+  // are shot to fill the frame — but supplier photography is not that consistent,
+  // and cropping a drill through the chuck or a tool case through its handle looks
+  // like a broken image rather than a tight one.
+  //
+  // The mini-draw grid already shows every prize whole on a light ground and reads
+  // cleanly; this matches it. The ground is painted below rather than left
+  // transparent, because a contained photo does not fill its box and a bare card
+  // background behind a product cut-out looks like a rendering fault.
+  const imageFit = "object-contain";
   const brandAccent = productData.brandAccent;
 
   // The cart's own item list is the single source of truth for "added": addToCart writes it
@@ -286,32 +488,60 @@ export default function ProductCard({
 
   // Optimistic add to cart handler
   const handleAddToCart = useCallback(async () => {
-    // Optimistic cart update (UI updates immediately, API call happens in background)
+    // A supplied onAddToCart REPLACES the add rather than following it.
+    //
+    // ShopContent passes one to route the shopper to the product page, because
+    // apparel needs a size and colour this card cannot collect. Adding here wrote
+    // a sku-less line the cart API rejects with a 400, while still emitting
+    // AddToCart to Meta, TikTok and Klaviyo for a line that never persisted — and
+    // then the product page emitted a second one for the same intent. Every
+    // other render site leaves this undefined, so their behaviour is unchanged.
+    // Signed out, the optimistic add was queued and could never drain — both
+    // drain paths are gated on userId — so the card sat on "Adding…" forever
+    // and nothing was ever saved. Ask first.
+    if (!isAuthenticated) {
+      setShowSignIn(true);
+      return;
+    }
+
+    if (onAddToCart) {
+      onAddToCart(product);
+      return;
+    }
+
+    // A PRODUCT goes to its own page; only a mini-draw ticket is added from here.
+    //
+    // A card cannot collect a size or a colour, and the cart API rejects a
+    // variant-bearing line with no sku (400). Every render site without an
+    // onAddToCart handler — the homepage rows and the Related Products strip —
+    // was therefore firing a request the server refused, while still reporting
+    // AddToCart to Meta, TikTok and Klaviyo for a line that never existed. The
+    // card then offered Retry, which re-sent the identical rejected request.
+    //
+    // The list query deliberately does not carry `variants`, so a card cannot
+    // know whether a choice is required; the product page is the one surface
+    // that can. This is the same conclusion ShopContent already reached for the
+    // shop grid, applied everywhere rather than in one caller.
+    if (!isMiniDrawProduct(product)) {
+      router.push(`/shop/${productData.id}`);
+      return;
+    }
+
+    // Only a mini-draw ticket reaches here — the branch above sends every product
+    // to its own page. A ticket has no size or colour to choose, so a card CAN
+    // add one, and the compiler now proves the product branch is unreachable.
     await addToCart({
-      productId: isMiniDrawProduct(product) ? undefined : productData.id,
-      miniDrawId: isMiniDrawProduct(product) ? productData.id : undefined,
+      miniDrawId: productData.id,
       quantity: 1,
       price: productData.price,
-      product: isMiniDrawProduct(product)
-        ? undefined
-        : {
-            _id: product._id,
-            name: product.name,
-            price: product.price,
-            images: product.images,
-            brand: product.brand,
-            stock: product.stock,
-          },
-      miniDraw: isMiniDrawProduct(product)
-        ? {
-            _id: product._id,
-            name: product.name,
-            ticketPrice: productData.price, // Use prize value as price for cart compatibility
-            totalTickets: product.minimumEntries || 0, // Use minimumEntries for cart compatibility
-            soldTickets: product.totalEntries || 0, // Use totalEntries for cart compatibility
-            prize: product.prize,
-          }
-        : undefined,
+      miniDraw: {
+        _id: product._id,
+        name: product.name,
+        ticketPrice: productData.price, // Prize value doubles as price for the cart
+        totalTickets: product.minimumEntries || 0,
+        soldTickets: product.totalEntries || 0,
+        prize: product.prize,
+      },
     });
 
     try {
@@ -339,11 +569,7 @@ export default function ProductCard({
       // Don't throw - tracking should not break cart functionality
     }
 
-    // Call legacy callback if provided
-    if (onAddToCart) {
-      onAddToCart(product);
-    }
-  }, [productData, addToCart, onAddToCart, product, trackAddToCart, trackKlaviyoAddToCart]);
+  }, [productData, addToCart, onAddToCart, product, isAuthenticated, router, trackAddToCart, trackKlaviyoAddToCart]);
 
   // Retry the operation that actually failed, so it leaves failedOperations and the card
   // returns to its normal state. Re-running handleAddToCart would queue a second operation
@@ -378,7 +604,10 @@ export default function ProductCard({
     ));
   };
 
-  const isOutOfStock = productData.stock === 0;
+  // Only a stock-TRACKED item can be out of stock. A print-to-order garment is
+  // never out of stock — matches ProductInteractions on the product page, which
+  // has always had this check while the card did not.
+  const isOutOfStock = productData.trackInventory && productData.stock === 0;
   const miniDrawStatus = productData.isPrize ? (productData.status as MiniDrawType["status"] | null) : null;
   const entriesRemaining = productData.isPrize ? productData.entriesRemaining ?? 0 : null;
   const isPrizeCancelled = productData.isPrize && miniDrawStatus === "cancelled";
@@ -396,16 +625,57 @@ export default function ProductCard({
         <div className="relative">
           {/* Product Image */}
           <Link href={productData.isPrize ? `/mini-draws/${productData.id}` : `/shop/${productData.id}`}>
-            <div className="relative w-full h-[200px] sm:h-[220px] lg:h-[240px] overflow-hidden">
+            <div className="relative w-full h-[200px] sm:h-[220px] lg:h-[240px] overflow-hidden bg-white dark:bg-neutral-100">
               <Image
                 src={productData.images[0] || "/images/placeholder.jpg"}
                 alt={productData.name}
                 fill
-                className="object-cover transition-transform duration-300 group-hover:scale-105"
+                className={`${imageFit} transition-transform duration-300 group-hover:scale-105`}
                 sizes="(max-width: 640px) 200px, (max-width: 1024px) 220px, 240px"
               />
             </div>
           </Link>
+
+          {/*
+            Entry marks and the member discount sit ON the image, top-left, not in
+            the text block below.
+
+            They are the reasons to look twice at this card, and in a grid the eye
+            reaches the image before the copy. Putting them under the title also
+            pushed the price down far enough that a 3-up row could not align its
+            buttons without every card growing to match the tallest.
+
+            pointer-events-none so the overlay never intercepts the click that
+            opens the product — the whole image is a link.
+          */}
+          {(entryCount > 0 || discountBadge) && (
+            <div className="pointer-events-none absolute left-2 top-2 z-10 flex max-w-[calc(100%-1rem)] flex-wrap gap-1.5">
+              {discountBadge && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-wide text-black shadow-sm"
+                  style={{ backgroundImage: discountBadge.gradient }}
+                >
+                  <Tag className="h-3 w-3" aria-hidden="true" />
+                  {discountBadge.percent}% off
+                </span>
+              )}
+              {entryCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-[3px] text-[10px] font-bold uppercase leading-none tracking-wide text-white shadow-sm">
+                  <Ticket className="h-3 w-3" aria-hidden="true" />
+                  {entryCount} free {entryCount === 1 ? "entry" : "entries"}
+                </span>
+              )}
+              {entryCount > 0 && entryMultiplier > 1 && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[10px] font-black uppercase leading-none tracking-wide text-black shadow-sm"
+                  style={{ backgroundImage: multiplierScheme.bgGradient }}
+                >
+                  <Zap className="h-3 w-3" aria-hidden="true" />
+                  {entryMultiplier}× entries
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Brand Overlay */}
           {productData.isPrize && brandAccent && (
@@ -468,12 +738,27 @@ export default function ProductCard({
               </p>
             )}
 
-            {/* Rating - Only show for products, not mini draws */}
-            {!productData.isPrize && (
+            {/* Rating. Same gate as the product page and the JSON-LD -- at least one
+                review AND a 4-star average. Ungated, a brand-new print-to-order
+                garment showed five grey stars and (0.0), which reads as a bad
+                product rather than a new one, and contradicted its own detail page. */}
+            {!productData.isPrize &&
+              shouldShowReviews({
+                // displayReviewCount, NOT reviewCount: the latter counts reviews a
+                // customer never sees, so the card would show stars for a product
+                // whose visible list is empty.
+                displayableCount:
+                  (product as { displayReviewCount?: number }).displayReviewCount ?? 0,
+              }) && (
               <div className="flex items-center gap-1">
-                <div className="flex items-center">{renderStars(productData.rating)}</div>
+                {/* The DISPLAYED average, matching the product page. productData.rating
+                    averages every review including the hidden ones, so the same
+                    product read 3.2 here and 4.8 on its own page. */}
+                <div className="flex items-center">
+                  {renderStars((product as { displayRating?: number }).displayRating ?? 0)}
+                </div>
                 <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400 ml-1">
-                  ({getValidRating(productData.rating).toFixed(1)})
+                  ({((product as { displayRating?: number }).displayRating ?? 0).toFixed(1)})
                 </span>
               </div>
             )}
@@ -483,7 +768,7 @@ export default function ProductCard({
               <div className="flex items-center gap-2">
                 <div className={cn("w-2 h-2 rounded-full", isOutOfStock ? "bg-red-500" : "bg-green-500")} />
                 <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
-                  {isOutOfStock ? "Out of Stock" : "In Stock"}
+                  {isOutOfStock ? "Out of Stock" : !productData.trackInventory ? "Made to order" : "In Stock"}
                 </span>
               </div>
             )}
@@ -515,8 +800,21 @@ export default function ProductCard({
           <div className="mt-4 space-y-3">
             {/* Price */}
             {!productData.isPrize && (
-              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
-                <span>${productData.price.toFixed(2)}</span>
+              <div>
+                {/* Mini draws are excluded above: their figure is a prize VALUE,
+                    not a price anyone pays, so no discount applies to it.
+
+                    MemberPriceLine renders the FULL price block when a discount
+                    applies — discounted figure, struck original, tier badge. The
+                    plain figure below is the no-discount fallback, so the two can
+                    never both render and disagree about which number is the price. */}
+                {memberPriceApplies ? (
+                  <MemberPriceLine price={productData.price} />
+                ) : (
+                  <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
+                    <span>${productData.price.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -599,6 +897,17 @@ export default function ProductCard({
             </div>
           </div>
         </div>
+      {/* Mounted ONLY while open. A closed modal still mounts its whole subtree,
+          and this renders once per card - a grid of twelve products would mount
+          twelve LoginModals, each with its own hooks and its own dialog node,
+          which is the repo perf rule about never rendering a modal closed. */}
+      {showSignIn && (
+        <SignInToBuyModal
+          isOpen
+          onClose={() => setShowSignIn(false)}
+          intent="add this to your cart"
+        />
+      )}
       </div>
     );
   }
@@ -667,7 +976,7 @@ export default function ProductCard({
               <div className="flex items-center gap-2">
                 <div className={cn("w-2 h-2 rounded-full", isOutOfStock ? "bg-red-500" : "bg-green-500")} />
                 <span className="text-[12px] sm:text-[14px] text-gray-600 dark:text-neutral-400">
-                  {isOutOfStock ? "Out of Stock" : "In Stock"}
+                  {isOutOfStock ? "Out of Stock" : !productData.trackInventory ? "Made to order" : "In Stock"}
                 </span>
               </div>
             )}
@@ -691,8 +1000,11 @@ export default function ProductCard({
           <div className="flex items-center justify-between mt-4">
             {/* Price */}
             {!productData.isPrize && (
-              <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
-                <span>${productData.price.toFixed(2)}</span>
+              <div>
+                <div className="text-[16px] sm:text-[18px] lg:text-[20px] font-bold text-gray-900 dark:text-white">
+                  <span>${productData.price.toFixed(2)}</span>
+                </div>
+                <MemberPriceLine price={productData.price} />
               </div>
             )}
 
@@ -763,6 +1075,17 @@ export default function ProductCard({
           </div>
         </div>
       </div>
+      {/* Mounted ONLY while open. A closed modal still mounts its whole subtree,
+          and this renders once per card - a grid of twelve products would mount
+          twelve LoginModals, each with its own hooks and its own dialog node,
+          which is the repo perf rule about never rendering a modal closed. */}
+      {showSignIn && (
+        <SignInToBuyModal
+          isOpen
+          onClose={() => setShowSignIn(false)}
+          intent="add this to your cart"
+        />
+      )}
     </div>
   );
 }

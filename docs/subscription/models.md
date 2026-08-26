@@ -366,6 +366,18 @@ The `upsellPurchases` array on `User` (upsell-domain data, but it lives on this 
 
 New optional embedded record on [User.ts](../../src/models/User.ts): `{ scopeVersion, acceptedAt, fields[] }` — the customer's agreement to share their details with the MyRewards partner portal. **No default**: absent means "never consented", the fail-closed state the SSO gate relies on. Owned by the **partner** domain — schema rationale and the re-consent/scope-version mechanism are in [docs/partner/models.md](../partner/models.md); the rules that keep it honest are [docs/partner/rules.md R4–R6](../partner/rules.md). No subscription behaviour changed.
 
+## `User.cart[].sku` (2026-08-17)
+
+The cart subdocument gained an optional `sku` — the chosen product variant. It is part of a
+product line's identity: `(productId, sku)`, not `productId` alone, so two sizes of the same
+garment are two lines and removing one does not remove the other.
+
+Absent on ticket items and on product lines added before variants existed; both keep their
+previous behaviour exactly. It **must** stay declared on the schema — Mongoose `strict: true`
+silently drops unknown keys on save, which would lose the customer's size with no error.
+
+Cart mechanics live in [docs/cart-shop-products/api.md](../cart-shop-products/api.md); this
+note exists because the field is on `User`, which this domain owns.
 ### `User.gender` (added 2026-08-17)
 
 `gender?: "male" | "female"` — **optional**, validated by a validator rather than a Mongoose `enum` so an empty string passes (same treatment as `state` and `mobile`, where `""` means "not provided" rather than invalid). Stored lowercase via `lowercase: true`.

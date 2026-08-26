@@ -50,6 +50,13 @@ export function resolveE2eEnv(opts: { webhookSecret?: string } = {}): E2eEnv {
     NEXTAUTH_URL: baseUrl,
     // Client-side apiGet base (src/lib/queries.ts) — .env.local points it at the dev port, must follow the e2e port.
     NEXT_PUBLIC_API_URL: baseUrl,
+    // Compile into a SEPARATE build directory (see next.config.ts distDir).
+    // NEXT_PUBLIC_* is inlined into client chunks, so the two NEXT_PUBLIC_ lines
+    // above would otherwise bake this port into the cache `npm run dev` serves
+    // from — the dev server on :3000 would hand the browser chunks that fetch
+    // :3799 and every request would fail CORS preflight. Nothing in .env.local
+    // would look wrong, which is what makes it expensive to diagnose.
+    NEXT_DIST_DIR: ".next-e2e",
     // Server-side base for REDIRECT return URLs (src/utils/url/get-base-url.ts ->
     // getReturnUrlForPaymentType). Baked into the PaymentIntent at creation, so a stale value
     // is not visible until a payment actually redirects: a 3-D Secure purchase on the e2e

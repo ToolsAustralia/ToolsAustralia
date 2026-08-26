@@ -16,6 +16,7 @@ const QuerySchema = z.object({
     "additional-one-time",
     "mini-draw",
     "upsell",
+    "shop",
   ]),
   dateRange: z
     .enum(["today", "yesterday", "all-time", "custom", "current-draw", "last-draw"])

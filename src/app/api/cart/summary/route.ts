@@ -3,6 +3,8 @@ import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import MiniDraw from "@/models/MiniDraw";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
+import { priceCart, dollarsToCents, toDollarSummary } from "@/utils/shop/pricing";
+import { resolveShopDiscountPercent } from "@/utils/shop/member-discount";
 
 export async function GET() {
   try {
@@ -33,23 +35,31 @@ export async function GET() {
       }
     }
 
-    // Calculate tax (assuming 10% GST for Australia)
-    const tax = subtotal * 0.1;
+    // Prices are GST-INCLUSIVE. This endpoint used to add 10% on top of an
+    // already-inclusive price, overcharging every cart by exactly that much, and
+    // carried its own copy of the shipping rule. Both now come from one module.
+    //
+    // One synthetic line carrying the already-resolved server-side subtotal:
+    // priceCart only needs the money, and this preserves the total exactly.
+    // An empty cart must pass NO lines — a synthetic `quantity: 1` line would
+    // miss priceCart's empty-cart guard and charge flat shipping on nothing.
+    // The SAME resolver the checkout route uses. This used to hardcode a zero
+    // discount, so a member saw full price in the cart and a discounted total only
+    // at the final step — and now that the shop shows a member price on the product
+    // page too, the cart was the one surface disagreeing with both. A shop that
+    // quotes one number and charges another is the bug to avoid above all others.
+    const shopDiscountPercent = resolveShopDiscountPercent(user);
 
-    // Calculate shipping (free shipping over $100, otherwise $10)
-    const shipping = subtotal >= 100 ? 0 : 10;
-
-    // Calculate total amount
-    const totalAmount = subtotal + tax + shipping;
+    const totals = priceCart(
+      totalItems === 0 ? [] : [{ priceCents: dollarsToCents(subtotal), quantity: 1 }],
+      { shopDiscountPercent }
+    );
 
     const summary = {
+      ...toDollarSummary(totals),
+      // The synthetic single line above collapses quantities, so report the real count.
       totalItems,
-      totalAmount,
-      subtotal,
-      tax,
-      shipping,
-      discount: 0,
-      membershipDiscount: 0,
+      membershipDiscount: totals.discountCents / 100,
       partnerDiscount: 0,
     };
 

@@ -5,12 +5,21 @@ import { useSession } from "next-auth/react";
 import { CartSummary } from "@/hooks/queries/useCartQueries";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
+import { priceCart, dollarsToCents, toDollarSummary } from "@/utils/shop/pricing";
 
 // Define CartItem type locally to match our needs
 interface CartItem {
   type: "product" | "ticket";
   productId?: string;
   miniDrawId?: string;
+  /**
+   * Chosen variant. Part of a product line's identity: two sizes of the same
+   * product are two lines. Undefined on tickets and on legacy lines.
+   */
+  sku?: string;
+  /** The chosen variant in human terms, snapshotted at add-to-cart. */
+  colour?: string;
+  size?: string;
   quantity: number;
   price: number;
   product?: {
@@ -67,13 +76,25 @@ export interface CartContextType extends OptimisticCartState {
   addToCart: (item: {
     productId?: string;
     miniDrawId?: string;
+    sku?: string;
+  /** The chosen variant in human terms, snapshotted at add-to-cart. */
+  colour?: string;
+  size?: string;
     quantity: number;
     price: number;
     product?: CartItem["product"];
     miniDraw?: CartItem["miniDraw"];
   }) => Promise<void>;
-  updateCartItem: (item: { productId?: string; miniDrawId?: string; quantity: number }) => Promise<void>;
-  removeFromCart: (itemId: string, itemType?: "product" | "ticket") => Promise<void>;
+  updateCartItem: (item: {
+    productId?: string;
+    miniDrawId?: string;
+    sku?: string;
+  /** The chosen variant in human terms, snapshotted at add-to-cart. */
+  colour?: string;
+  size?: string;
+    quantity: number;
+  }) => Promise<void>;
+  removeFromCart: (itemId: string, itemType?: "product" | "ticket", sku?: string) => Promise<void>;
   clearCart: () => Promise<void>;
 
   // Retry failed operations
@@ -94,20 +115,26 @@ export interface CartContextType extends OptimisticCartState {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 // Helper functions for cart calculations
+/**
+ * Optimistic client-side totals.
+ *
+ * Delegates to `priceCart` so the drawer can never quote a different figure from
+ * /api/cart/summary or the PaymentIntent — the flat-shipping rule used to live
+ * here AND in two other files, and the GST here was additive on an already
+ * GST-inclusive price.
+ *
+ * `tax` keeps its name for the existing consumers but now carries the GST
+ * *component already inside* `totalAmount`. It must never be added to anything.
+ * The member tier discount is resolved server-side, so this optimistic figure
+ * shows the undiscounted price until the server responds.
+ */
 const calculateSummary = (items: CartItem[]): CartSummary => {
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const tax = subtotal * 0.1;
-  const shipping = subtotal >= 100 ? 0 : 10;
-  const totalAmount = subtotal + tax + shipping;
+  const totals = priceCart(
+    items.map((i) => ({ priceCents: dollarsToCents(i.price), quantity: i.quantity }))
+  );
 
   return {
-    totalItems,
-    totalAmount,
-    subtotal,
-    tax,
-    shipping,
-    discount: 0,
+    ...toDollarSummary(totals),
     membershipDiscount: 0,
     partnerDiscount: 0,
   };
@@ -157,6 +184,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // instead of letting both fire.
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isSyncingRef = useRef(false);
+  // Operations this client actually PUT ON THE WIRE. Distinct from "was queued
+  // when the load started": a guest's adds sit in the queue unsent, because the
+  // drain is gated on userId. See loadCartFromServer.
+  const sentOperationIdsRef = useRef<Set<string>>(new Set());
 
   const fetchServerCartItems = useCallback(async (): Promise<CartItem[]> => {
     const response = await fetch("/api/cart");
@@ -173,17 +204,37 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       setError(null);
 
+      // Only operations we actually SENT can be reflected in the server's
+      // response, so only those may be dropped from the queue.
+      //
+      // This used to snapshot everything queued at load start, which is right
+      // for the mid-load race it was written for but wrong for the commoner
+      // one: a signed-out shopper adds an item, the drain never runs because
+      // it is gated on userId, they sign in, this load fires on the userId
+      // transition - and their never-sent add was treated as accounted for and
+      // thrown away. The item vanished at the exact moment the customer proved
+      // they wanted to buy it.
+      const accountedFor = sentOperationIdsRef.current;
+
       const items = await fetchServerCartItems();
 
-      setCartState((prev) => ({
-        ...prev,
-        items,
-        summary: calculateSummary(items),
-        isDirty: false,
-        lastSyncTime: Date.now(),
-        pendingOperations: [], // Clear pending operations on successful load
-        failedOperations: [], // Clear failed operations on successful load
-      }));
+      setCartState((prev) => {
+        const survivors = prev.pendingOperations.filter((op) => !accountedFor.has(op.id));
+        // Operations queued mid-load are not reflected in `items`, so the cart
+        // stays dirty and the drain is rescheduled for them.
+        return {
+          ...prev,
+          items,
+          summary: calculateSummary(items),
+          isDirty: survivors.length > 0,
+          lastSyncTime: Date.now(),
+          pendingOperations: survivors,
+          failedOperations: [], // Clear failed operations on successful load
+        };
+      });
+
+      // Outside the updater: it must stay pure, and React may run it twice.
+      accountedFor.clear();
     } catch (error) {
       console.error("Failed to load cart:", error);
       setError(error instanceof Error ? error.message : "Failed to load cart");
@@ -263,6 +314,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
           }
 
           successfulOperations.push(operation.id);
+          // Accounted for only once the server has acknowledged it. Marking
+          // before the request would let a failed send be dropped by the next
+          // load, losing the item entirely.
+          sentOperationIdsRef.current.add(operation.id);
         } catch (error) {
           failedOperations.push({
             id: operation.id,
@@ -350,6 +405,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
     async (item: {
       productId?: string;
       miniDrawId?: string;
+      sku?: string;
+  /** The chosen variant in human terms, snapshotted at add-to-cart. */
+  colour?: string;
+  size?: string;
       quantity: number;
       price: number;
       product?: CartItem["product"];
@@ -371,6 +430,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         : {
             type: "product" as const,
             productId: item.productId,
+            sku: item.sku,
             quantity: item.quantity,
           };
 
@@ -379,8 +439,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // would otherwise both build on the same stale list, and the later one would erase the
       // earlier one's item.
       setCartState((prev) => {
+        // Product lines are keyed on (productId, sku) so two sizes stay separate.
+        // Mirrors findCartItem in /api/cart — keep the two in step.
         const existingItemIndex = prev.items.findIndex((cartItem) =>
-          isTicket ? cartItem.miniDrawId === item.miniDrawId : cartItem.productId === item.productId
+          isTicket
+            ? cartItem.miniDrawId === item.miniDrawId
+            : cartItem.productId === item.productId &&
+              (cartItem.sku ?? undefined) === (item.sku ?? undefined)
         );
 
         const optimisticItems: CartItem[] =
@@ -404,6 +469,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
                   type: isTicket ? ("ticket" as const) : ("product" as const),
                   productId: isTicket ? undefined : item.productId,
                   miniDrawId: isTicket ? item.miniDrawId : undefined,
+                  sku: isTicket ? undefined : item.sku,
                   quantity: item.quantity,
                   price: item.price,
                   product: isTicket
@@ -454,7 +520,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const updateCartItem = useCallback(
-    async (item: { productId?: string; miniDrawId?: string; quantity: number }) => {
+    async (item: { productId?: string; miniDrawId?: string; sku?: string; quantity: number }) => {
       const operationId = generateOperationId();
       const timestamp = Date.now();
 
@@ -471,6 +537,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         : {
             type: "product" as const,
             productId: item.productId,
+            sku: item.sku,
             quantity: item.quantity,
           };
 
@@ -479,7 +546,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setCartState((prev) => {
         const optimisticItems = prev.items
           .map((cartItem) => {
-            const matches = isTicket ? cartItem.miniDrawId === item.miniDrawId : cartItem.productId === item.productId;
+            const matches = isTicket
+              ? cartItem.miniDrawId === item.miniDrawId
+              : cartItem.productId === item.productId &&
+                (cartItem.sku ?? undefined) === (item.sku ?? undefined);
 
             return matches ? { ...cartItem, quantity: item.quantity } : cartItem;
           })
@@ -506,21 +576,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   const removeFromCart = useCallback(
-    async (itemId: string, itemType?: "product" | "ticket") => {
+    async (itemId: string, itemType?: "product" | "ticket", sku?: string) => {
       const operationId = generateOperationId();
       const timestamp = Date.now();
 
       // Determine item type if not provided
       const type = itemType || (cartState.items.find((item) => item.productId === itemId) ? "product" : "ticket");
 
+      // A product line is (productId, sku), so removing the Large must not also
+      // remove the Medium. Matching is exact on both sides.
+      const matchesLine = (cartItem: CartItem) =>
+        type === "product"
+          ? cartItem.productId === itemId && (cartItem.sku ?? undefined) === (sku ?? undefined)
+          : cartItem.miniDrawId === itemId;
+
       // Find the item being removed for tracking
-      const itemToRemove = cartState.items.find((cartItem) => {
-        if (type === "product") {
-          return cartItem.productId === itemId;
-        } else {
-          return cartItem.miniDrawId === itemId;
-        }
-      });
+      const itemToRemove = cartState.items.find(matchesLine);
 
       // Track RemoveFromCart event
       if (itemToRemove) {
@@ -549,19 +620,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // Prepare data for API call
       const apiData =
         type === "product"
-          ? { type: "product" as const, productId: itemId }
+          ? { type: "product" as const, productId: itemId, sku }
           : { type: "ticket" as const, miniDrawId: itemId };
 
       // Update UI immediately (optimistic update), filtering `prev` so a removal cannot
       // reinstate items that another action removed in the same debounce window.
       setCartState((prev) => {
-        const optimisticItems = prev.items.filter((cartItem) => {
-          if (type === "product") {
-            return cartItem.productId !== itemId;
-          } else {
-            return cartItem.miniDrawId !== itemId;
-          }
-        });
+        const optimisticItems = prev.items.filter((cartItem) => !matchesLine(cartItem));
 
         return {
           ...prev,

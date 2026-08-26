@@ -48,7 +48,7 @@ export default async function PrivacyPolicyPage() {
           >
             <h2 className="text-2xl font-semibold text-white">1. ABOUT THIS POLICY</h2>
             <p className="text-gray-300">
-              Tools Australia Pty Ltd (ABN 54690397061, ACN 690397061donr) (&quot;Tools Australia&quot;, &quot;we&quot;,
+              Tools Australia Pty Ltd (ABN 54 690 397 061, ACN 690 397 061) (&quot;Tools Australia&quot;, &quot;we&quot;,
               &quot;us&quot;, &quot;our&quot;) is committed to protecting your privacy in accordance with the Privacy
               Act 1988 (Cth) and the <em>Australian Privacy Principles (APPs)</em>.
             </p>

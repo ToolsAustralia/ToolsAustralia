@@ -1587,6 +1587,191 @@ Three conventions, all load-bearing:
 label and catalogue %, so the whole `<span>` is masked rather than the name alone. Isolating it
 would mean restructuring the join. If you touch that line, prefer splitting the nodes.
 
+## Print artwork in the admin product modal (2026-08-19)
+
+`AdminProductModal` can now author `Product.printArtwork`. Until this existed
+**no code path anywhere wrote that field**, so every fulfilment CSV line exported
+with blank artwork columns and no garment could actually be produced — the API's
+Zod schema had accepted `printArtwork` all along; only the form never sent it.
+
+Each row is an image (through the same Cloudinary upload the modal already used),
+a placement, and a type of `printing` or `mockup`. Two constraints come from the
+consumer rather than the form:
+
+- **`fulfilmentExport` filters to `type === "printing"`.** A mockup is for the
+  product page, never for the printer.
+- **Placements are the provider's own ids**, and the export's `PLACEMENTS` map
+  silently `continue`s past any id it does not recognise. `ARTWORK_PLACEMENTS`
+  therefore offers only ids the export can actually send, labelled in the
+  admin's language — "Left chest", not `"3"`.
+
+## Admin product modal sizing (2026-08-20)
+
+`AdminProductModal` runs at `size="4xl"` with `mobileFullBleed`, not the default `lg`.
+
+It sat at `lg` (512px) while its own field grids are written as `sm:grid-cols-2` and
+`sm:grid-cols-4`. Those are **viewport** media queries, not container queries — so on any desktop
+they fired *inside* the 512px shell and the four variant columns got roughly 120px each. The grids
+were always written for a wide modal; the shell was the thing that was wrong.
+
+`4xl` is not a new size: `ExperimentDetailModal` and `AffiliateDetailModal` already use it for
+large admin surfaces.
+
+`mobileFullBleed` (a `ModalContainer` opt-in) renders near-fullscreen below `lg` and reverts to the
+centred dialog above it — worth having on any long form, where a centred card wastes the screen
+once the keyboard is up. `OrderDetailModal` takes the same flag but stays `2xl`: it is a
+read-mostly detail view, so extra width would only stretch its label/value rows.
+
+### The zero state on "Free entries included" (2026-08-20)
+
+The shared `Input` renders a numeric **0 as an empty box**
+(`value={type === "number" && value === 0 ? "" : value}` — [Input.tsx:96](../../src/components/modals/ui/Input.tsx)).
+That is right for price-like fields, where an empty box and a zero mean the same thing to an
+author. It is wrong for an entry count: merchandise currently sits at `includedEntries: 0` across
+the board while entries are off pending the permit, so **every product read as "not configured"**
+and the field looked like it had never been wired up.
+
+Fixed at the call site with an explicit placeholder (`"0 — no free entries with this item"`)
+rather than by changing `Input`, which would have altered every numeric field in every modal to
+fix one field's copy.
+
+Worth remembering as a class of bug: a component that collapses "zero" and "empty" is fine until a
+field comes along where the difference is the whole point.
+
+## Product card: price, discount and entry marks (2026-08-20)
+
+`MemberPriceLine` (card variant) now renders the **whole price block**, not a footnote under it.
+It was a 12px green line beneath a 20px black one, which put the visual weight on the number a
+member does not pay:
+
+```
+$85.45   $89.95   [5% OFF]        ← discounted figure is the headline
+Tradie price — saves $4.50           struck original, tier-coloured badge
+```
+
+The percentage badge takes its palette from the shopper's own tier via
+`getElectricPackageColorScheme(packageId)`, so the saving is legibly attached to a membership
+level rather than a generic green that ties it to nothing. Non-members see the same treatment for
+the best available tier — it is an offer and should look like one. `resolveMemberShopPrice` gained
+`packageId`, `fullPriceLabel` and `savingLabel` to support this.
+
+The plain price and the discounted block are **mutually exclusive** (`memberPriceApplies`), so the
+two can never both render and disagree about which number is the price.
+
+**Entry marks sit above the price** — they are the reason to choose the item, not a detail of its
+cost. `entryMultiplier` arrives already resolved from `/api/products`: the server collapses
+product → category → shop-wide because the last two are admin config the browser has no business
+holding, and resolving from a partial view is how a card and the product page print different
+numbers. Rule 11 applies — entries are a free inclusion, never priced per unit.
+
+### A trap that cost real time here
+
+`String.replace` treats **`$$` in the replacement string as an escaped `$`**. A codemod inserting
+`` `$${value}` `` therefore writes `` `${value}` `` — silently stripping the dollar sign from every
+price label, including one that was already correct. `tsc` cannot see it and the page renders
+"85.45" perfectly happily.
+
+Use a replacer **function** (`replace(re, () => text)`) when the replacement contains `$`, or edit
+the file directly. And read the rendered strings back, not just a screenshot — that is what caught
+it here.
+
+## The package-inclusions panel is a comparison table (2026-08-21)
+
+[`PackageInclusionsSlideUp.tsx`](../../src/components/modals/PackageInclusionsSlideUp.tsx) — the
+panel behind "see full package inclusion" in `MembershipSection` — renders a **table**, not a row of
+cards. The question a shopper opens it with is a comparison one, and a comparison spread across
+three separate bullet lists is one the reader has to perform themselves.
+
+**Every figure is resolved from the catalog, never parsed from marketing copy.** The old panel
+rendered `plan.features` — free text like `"50% Access to Partner Discounts"`. The rows now come
+from `getPackageById` plus the same helpers the rest of the app gates on
+(`getPartnerCatalogAccessPercentForMembershipPackageId`, `getPartnerCatalogUnlockedCount`), so the
+panel cannot advertise a number the platform does not honour.
+
+**The lookup key is `metadata.packageId`, not `plan.id`.** `LocalMembershipPlan.id` is derived from
+the package NAME (`"Tradie"` → `"tradie"`), so `getPackageById("tradie")` is undefined *and* the
+id-substring tier rules read a bare `"tradie"` as the one-time Tradie pack (40% → 734 offers) rather
+than the Tradie subscription (50% → 917). The adapter now carries the catalog `_id` for exactly this
+— see [subscription/frontend.md](../subscription/frontend.md).
+
+Row sets differ by tab: the membership tab compares monthly free entries, roll-over, partner offers,
+shop discount and cancel-anytime; the one-time tab compares included entries, partner offers, days of
+access, and states plainly that **pack entries do not roll over** (BUSINESS.md §5.3). Leaving that
+row out is what makes a pack look like a cheaper membership.
+
+Two layout rules learned the hard way:
+
+- **The scroll container is unconditional.** The rounded shell is `overflow-hidden`, so a table one
+  pixel too wide loses its last column *silently*. Three columns overflowed at 390px and the Boss
+  column simply vanished. `overflow-x-auto` is always on; the `min-w` only applies above three
+  columns, so three still fit a phone without scrolling. Assert `table.scrollWidth <=
+  container.clientWidth` rather than trusting a screenshot.
+- **Tier colour lives in the bar and the icon on a light ground.** The accents are tuned for the dark
+  package cards these figures used to sit on — Boss yellow and VIP gold are barely readable on white
+  and the gradient headings wash out entirely. Names and ticks fall back to near-black in light mode;
+  the colour bar above each column still identifies the tier.
+
+## The cart drawer wears the member's tier (2026-08-21)
+
+The drawer takes the colour of whatever package the member holds — a flowing edge, a
+low-alpha wash behind the header, a tinted cart icon, and a `TIER · N% OFF` chip — so the
+cart reads as *theirs* rather than as generic chrome.
+
+Every colour comes from a single CSS variable the component sets from
+`getRemappedPackageScheme`, the same resolver the package cards and the header badge use.
+A tier therefore cannot be painted here in a colour it is not painted in elsewhere. The
+styles live in `globals.css` as `.ta-tier-flow` / `.ta-tier-wash` / `.ta-tier-rail`, and
+**none of them apply without `--ta-tier`** — a signed-out visitor, or a member on a package
+with no shop discount, gets the plain drawer with no extra branches in the JSX.
+
+The flow is a slow gradient drift rather than a bright sweep: it sits under a header the
+member reads, and a repeating flash there is a distraction, not a delight. It carries a
+`prefers-reduced-motion` gate (CLAUDE.md performance footgun #6) — the rail keeps its
+colour, it just stops moving.
+
+The **cart icon badge** shows the item count when there is one and the member's discount
+when the cart is empty. An empty badge is dead space, and a member who has forgotten they
+get 20% off has no reminder anywhere in the header — but the discount never competes with
+the count, which is the more urgent number once something is in there.
+
+## Cobber yields to the side drawers (2026-08-21)
+
+The floating bubble sits bottom-right above page content, which is exactly where the cart
+drawer puts **Continue Shopping** — so the robot covered the control and ate the tap.
+
+Both the bubble (`SupportChatWidgetMount`) and the panel (`SupportChatWidget`) now hide
+while `isCartOpen || isMobileMenuOpen`, read from `SidebarContext` where that state already
+lives. Same reasoning as the existing `/my-account` and dashboard-sheet suppressions: when
+another surface owns the screen, Cobber is not the affordance in front of the customer.
+
+## The shop discount is a tag, not a count (2026-08-21)
+
+The cart's discount badge began as a copy of the item-count badge — same 20px circle,
+same 10px text — and at that size it read louder than the cart glyph it belongs to, on
+a button only 36–44px across. A count earns that weight because it is the urgent
+number; a standing member discount does not.
+
+It is now **13px** (30% of the button height, down from 45%) and, more importantly, a
+**rounded rectangle rather than a circle**. The shape is the actual signal: circular
+badges read as counts, tags read as offers, so a member knows which kind of number it
+is before the digits are legible at all. The `%` is set smaller and lighter than the
+figure for the same reason a price tag does it — the number is what you read, the unit
+only confirms it.
+
+The same tag appears on **both** `/shop` nav links, so the discount sits on the thing
+that takes a member to the shop as well as on the thing that holds what they picked:
+
+| Surface | Content | Why |
+| --- | --- | --- |
+| Cart button | `5%` | Corner of a 44px button — every pixel is contested. |
+| Desktop nav | `5%` | Inline in a horizontal row; a longer chip widens the nav. |
+| Mobile sidebar | `5% off` · `ml-auto` | A list row has width to spare, and hard-right is where a list scans. |
+
+All three read `cartTier`, which is `null` below a 1% discount — so a signed-out
+visitor or a member on a package with no shop benefit gets the plain control with no
+extra branches in the JSX. Colour comes from `getRemappedPackageScheme`, the same
+resolver behind the account pill and the cart drawer, so the tier can never be one
+colour here and another there.
 ## FilterDropdown (admin UI kit, 2026-08-17)
 
 `src/components/admin/ui/FilterDropdown.tsx` — a styled single-select for admin filter bars,

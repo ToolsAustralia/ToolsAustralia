@@ -135,3 +135,17 @@ three filter unions from the service (`@/services/admin/chatTranscripts`) so the
 imports its types from the hook, not from a service module that also imports Mongoose models.
 Type-only re-exports are erased at build time, so this does not drag `mongoose` into the client
 bundle — the same pattern `useChatbotCostAnalytics` uses for `ChatbotCostData`.
+
+## `useOrderQueries` order types now mirror the schema (2026-08-21)
+
+`OrderItem` gained `size` / `colour` / `includedEntries` and `Order` gained `entriesGranted` — all
+four already existed on `src/models/Order.ts` and are already returned by `/api/orders/[id]` (which
+projects only `-notes`), so the client type was under-declaring what it receives. `OrderListRow`
+gained `shippingCost`.
+
+The header comment on `Order` is the standing rule and still applies: this interface was once pure
+fiction, declaring `items`, `paymentStatus`, `billingAddress` and a `"refunded"` status that the
+model has never had. **Add the field to the model first**, then here.
+
+Render `entriesGranted` (what was actually granted, written once by the webhook) rather than
+`includedEntries × quantity × multiplier`, or a later multiplier change would restate history.

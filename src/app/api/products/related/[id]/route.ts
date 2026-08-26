@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { z } from "zod";
+import { PUBLIC_PRODUCT_EXCLUDE } from "@/utils/shop/public-product-fields";
 
 const paramsSchema = z.object({
   id: z.string().min(1),
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const limit = parseInt(searchParams.get("limit") || "4");
 
     // First, get the current product to find related products
-    const currentProduct = await Product.findById(id).lean();
+    const currentProduct = await Product.findById(id).select(PUBLIC_PRODUCT_EXCLUDE).lean();
     if (!currentProduct) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
