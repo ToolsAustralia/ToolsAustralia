@@ -107,10 +107,10 @@ function SquareCheckbox({
   );
 }
 
-// Rotating Toolset Card — cycles Milwaukee → DeWalt → Makita → Ryobi every 3.5s.
+// Rotating Toolset Card — cycles Milwaukee → DeWalt → Makita → Ryobi → HiKOKI → STIHL every 3.5s.
 // Card surface tints to the active brand so Ryobi's lime brand never sits on white.
 
-const TOOLSETS = ["milwaukee", "dewalt", "makita", "ryobi", "hikoki"] as const;
+const TOOLSETS = ["milwaukee", "dewalt", "makita", "ryobi", "hikoki", "stihl"] as const;
 type ToolsetKey = (typeof TOOLSETS)[number];
 
 const KIT_PIECE_COUNT_LABEL: Record<ToolsetKey, string> = {
@@ -119,6 +119,7 @@ const KIT_PIECE_COUNT_LABEL: Record<ToolsetKey, string> = {
   makita: "15 PIECE KIT",
   ryobi: "19 PIECE KIT",
   hikoki: "15 PIECE KIT",
+  stihl: "10 PIECE KIT",
 };
 
 const TOOLSET_DISPLAY_NAME: Record<ToolsetKey, string> = {
@@ -127,6 +128,7 @@ const TOOLSET_DISPLAY_NAME: Record<ToolsetKey, string> = {
   makita: "Makita",
   ryobi: "Ryobi",
   hikoki: "HiKOKI",
+  stihl: "STIHL",
 };
 
 // Same brand color-key mapping the prize builder uses (prize-selection/constants.ts).
@@ -135,6 +137,7 @@ function getToolsetColorKey(toolset: ToolsetKey): string {
   if (toolset === "dewalt") return "dewalt-yellow";
   if (toolset === "makita") return "makita-teal";
   if (toolset === "hikoki") return "hikoki-green";
+  if (toolset === "stihl") return "stihl-orange";
   return "ryobi-green";
 }
 
@@ -145,6 +148,7 @@ const TINT_ALPHA_LIGHT: Record<ToolsetKey, number> = {
   makita: 0.1,
   ryobi: 0.12,
   hikoki: 0.1,
+  stihl: 0.1,
 };
 const TINT_ALPHA_DARK: Record<ToolsetKey, number> = {
   milwaukee: 0.18,
@@ -152,6 +156,7 @@ const TINT_ALPHA_DARK: Record<ToolsetKey, number> = {
   makita: 0.16,
   ryobi: 0.18,
   hikoki: 0.16,
+  stihl: 0.16,
 };
 
 // Animated badge content paired 1:1 with each brand — chip swaps in sync with the toolset.
@@ -162,6 +167,7 @@ const BADGE_CONFIG: Record<ToolsetKey, { icon: LucideIcon; title: string; subtit
   makita: { icon: Gift, title: "Membership", subtitle: "Exclusive Offers" },
   ryobi: { icon: Zap, title: "Major Draw", subtitle: "Live Every 27th" },
   hikoki: { icon: Ticket, title: "Free Entries", subtitle: "Into Every Draw" },
+  stihl: { icon: Gift, title: "New This Draw", subtitle: "STIHL Outdoor Power" },
 };
 
 const ROTATION_INTERVAL_MS = 3500;

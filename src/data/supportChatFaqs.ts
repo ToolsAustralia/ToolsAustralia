@@ -51,7 +51,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "3",
       question: "What can I win?",
       answer:
-        "Each month's Grand Winner builds their own prize. They match any toolbox (Monster Milwaukee, 470-piece Kincrome CONTOUR®, 356-piece Sidchrome, or the new 288-piece GEARWRENCH tool set & mobile workstation) with any power toolset (Milwaukee, DeWalt, Makita, Ryobi, or HiKOKI — each kit ships with its own brand storage system), and we add a $5,000 cash bonus on top. Or they skip the gear entirely and take a single $10,000 AUD tax-free cash prize straight to their bank account. You can build and preview any combination on the prize showcase on our [home page](/).",
+        "Each month's Grand Winner builds their own prize. They match any toolbox (Monster Milwaukee, 470-piece Kincrome CONTOUR®, 356-piece Sidchrome, or the 288-piece GEARWRENCH tool set & mobile workstation) with any power toolset (Milwaukee, DeWalt, Makita, Ryobi, HiKOKI, or the new STIHL outdoor power kit — each ships with its own brand storage system, and the STIHL kit comes with two AP 300 S batteries and an AL 301 charger). Or they skip the gear entirely and take a single $10,000 AUD tax-free cash prize straight to their bank account. That cash option is the only cash in the prize — a tool combination does not come with a cash bonus on top. You can build and preview any combination on the prize showcase on our [home page](/).",
       category: "SHOPPING",
     },
     {
@@ -116,7 +116,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "12",
       question: "Are membership fees refundable?",
       answer:
-        "Membership fees are non-refundable once purchased. If you cancel mid-cycle, you will not receive a refund for the unused portion of your membership period — however, your entries for that cycle remain valid and you keep access to your member benefits until the cycle ends. Your rights under Australian Consumer Law are always preserved.",
+        "Membership fees are non-refundable once purchased. If you cancel mid-cycle, you will not receive a refund for the unused portion of your membership period — however, your entries for that cycle remain valid and you keep access to your member benefits until the cycle ends. There are two exceptions: anything required by Australian Consumer Law, and a **genuine purchase error** reported within 48 hours of the payment (see the [Major Giveaway terms](/competition-term-majordraw), Part A, section 5). Your rights under Australian Consumer Law are always preserved.",
       category: "PAYMENTS",
     },
     {
@@ -694,6 +694,26 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       question: "Should I just wait for my card to start working again?",
       answer:
         "That depends on timing. Waiting is fine if there's still a while before the next Major Draw on the 27th — the block clears on its own in about three days and costs you nothing. But if the draw is close, adding a different card on your [Membership](/my-account/membership) page is the better move, because it applies immediately. To be clear about what's actually at stake: free entries you've already earned stay in that draw regardless — being past-due never removes them — but the free entries included with your renewal are only credited once the payment goes through. So the sooner the renewal succeeds, the sooner those land.",
+      category: "PAYMENTS",
+    },
+    // ── COMPETITION TERMS — the /competition-term-majordraw refund rules ──────
+    // Added 2026-08-24 (draw 10). A member asked about the refund policy, was given the
+    // membership-only "non-refundable" line, and pushed back citing the 48-hour clause on
+    // our OWN terms page — which Cobber then called an "external link" it could not read.
+    // The page was in neither [key-pages] nor the knowledge pack, so there was nothing to
+    // ground on. These two entries plus the [competition-terms] pack section close that.
+    {
+      id: "86",
+      question: "I bought a pack or membership by mistake — can I get a refund?",
+      answer:
+        "Possibly, if you tell us quickly. Once free entries have been allocated a purchase is normally final, but the [Major Giveaway terms](/competition-term-majordraw) make an exception for a **genuine purchase error reported within 48 hours** of payment — on top of anything Australian Consumer Law requires. Email our support team within that window with your receipt or transaction ID and a short note on what went wrong, and they will review it. [Contact us](/contact) and I can pass this to a human who can look at your specific payment — I can't decide a refund myself.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "87",
+      question: "What kinds of refund requests are not accepted?",
+      answer:
+        "The [Major Giveaway terms](/competition-term-majordraw) rule out three situations: requests lodged after the draw has already been conducted, change-of-mind once your free entries have been allocated, and duplicate or incorrect package claims with no verifiable technical evidence. Not winning is never grounds for a refund on its own — but genuine technical errors or system failures before the draw are, as is anything Australian Consumer Law requires. If you think one of those applies to you, [contact us](/contact) and a human will review it.",
       category: "PAYMENTS",
     },
   ];

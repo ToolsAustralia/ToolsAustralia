@@ -17,7 +17,7 @@ const ITEMS: Record<PrizePick, string[]> = {
   setup: [
     "Your pick of brand — Milwaukee, DeWalt, Makita & more",
     "Toolbox + power-tool kit + storage system",
-    "$5,000 cash on top",
+    "One winner every month, drawn live",
   ],
   cash: ["$10,000 cash, tax-free", "Paid straight to your bank", "Spend it however you like"],
 };

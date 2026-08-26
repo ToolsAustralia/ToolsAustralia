@@ -7,7 +7,7 @@
  * @module brand-theme
  */
 
-export type BrandKey = "dewalt" | "makita" | "milwaukee" | "ryobi" | "hikoki";
+export type BrandKey = "dewalt" | "makita" | "milwaukee" | "ryobi" | "hikoki" | "stihl";
 
 /**
  * Brand theme with primary colors and light/dark mode variants
@@ -130,6 +130,17 @@ export const BRAND_THEMES: Record<BrandKey, BrandTheme> = {
     gradient: "linear-gradient(135deg, #007749 0%, #009a63 50%, #007749 100%)",
     textColor: "white",
   },
+  stihl: {
+    /** STIHL orange, sampled from the draw-10 wordmark art (brands/name/stihlText.svg) so the
+     *  theme and the mark can never read as two different oranges. White text on the orange. */
+    primary: "#f46717",
+    secondary: "#ff7f33",
+    accent: "#ffa066",
+    light: { primary: "#d4530b", secondary: "#f46717", accent: "#ff8f4d" },
+    dark: { primary: "#f46717", secondary: "#ff8438", accent: "#ffb184" },
+    gradient: "linear-gradient(135deg, #f46717 0%, #ff7f33 50%, #f46717 100%)",
+    textColor: "white",
+  },
 };
 
 /**
@@ -167,6 +178,7 @@ export function slugToBrandKey(slug: string): BrandKey | null {
   if (lower.startsWith("milwaukee")) return "milwaukee";
   if (lower.startsWith("ryobi")) return "ryobi";
   if (lower.startsWith("hikoki")) return "hikoki";
+  if (lower.startsWith("stihl")) return "stihl";
 
   // Fallback to checking if brand appears anywhere in slug
   if (lower.includes("dewalt")) return "dewalt";
@@ -174,6 +186,7 @@ export function slugToBrandKey(slug: string): BrandKey | null {
   if (lower.includes("milwaukee")) return "milwaukee";
   if (lower.includes("ryobi")) return "ryobi";
   if (lower.includes("hikoki")) return "hikoki";
+  if (lower.includes("stihl")) return "stihl";
 
   return null;
 }
@@ -192,7 +205,7 @@ export function isValidBrandSlug(slug: string): boolean {
  * @returns Array of brand keys
  */
 export function getAllBrandKeys(): BrandKey[] {
-  return ["dewalt", "makita", "milwaukee", "ryobi", "hikoki"];
+  return ["dewalt", "makita", "milwaukee", "ryobi", "hikoki", "stihl"];
 }
 
 function hexToRgbTuple(hex: string): [number, number, number] {

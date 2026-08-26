@@ -3,6 +3,9 @@ import { BreadcrumbJsonLd } from "@/components/seo/StructuredData";
 import { getCurrentMajorDrawServer } from "@/utils/database/queries/major-draw-server-queries";
 import { getContactEmail } from "@/lib/email/sender-identities";
 import { NTP_NUMBER, NSW_LICENSE } from "@/constants/legal";
+// The LIGHT catalog (`prize-summaries`), never `@/config/prizes` — that module is ~170 KB
+// and runs top-level side effects. This page only needs each prize's headline label.
+import { PRIZE_SUMMARIES } from "@/config/prize-summaries";
 
 export const metadata: Metadata = {
   title: "Major Giveaway Competition Terms | Tools Australia",
@@ -64,60 +67,30 @@ export default async function MajorGiveawayTermsPage() {
     "Maintain an active Tradie, Foreman, or Boss membership package.",
     "Redeem accumulated reward points for entry packages when available.",
   ];
-  const prizeOptions = [
-    {
-      title: "Option 1",
-      items: [
-        "Sidchrome 356 Piece Metric A/F Tool Kit Roll Cabinet, Top Chest & Side Cab (SCMT11402)",
-        "Milwaukee M18 FUEL™ 13 Piece Power Pack 13B4 (M18FPP13B4564B)",
-        "$5,000 cash (tax free)",
-      ],
-    },
-    {
-      title: "Option 2",
-      items: [
-        "Sidchrome 356 Piece Metric A/F Tool Kit Roll Cabinet, Top Chest & Side Cab (SCMT11402)",
-        "DeWalt 18V XR 14 Piece Kit - 2X 5Ah & 2X FLEXVOLT® 9Ah (DCZ1401P2X2-XE)",
-        "$5,000 cash (tax free)",
-      ],
-    },
-    {
-      title: "Option 3",
-      items: [
-        "Sidchrome 356 Piece Metric A/F Tool Kit Roll Cabinet, Top Chest & Side Cab (SCMT11402)",
-        "Makita 18V Brushless 15 Piece Combo Kit (DLX1514TX1)",
-        "$5,000 cash (tax free)",
-      ],
-    },
-    {
-      title: "Option 4",
-      items: [
-        "Milwaukee 56\" High Capacity Combination Tool Storage (48228559)",
-        "Milwaukee M18 FUEL™ 13 Piece Power Pack 13B4 (M18FPP13B4564B)",
-        "$5,000 cash (tax free)",
-      ],
-    },
-    {
-      title: "Option 5",
-      items: [
-        "Milwaukee 56\" High Capacity Combination Tool Storage (48228559)",
-        "DeWalt 18V XR 14 Piece Kit - 2X 5Ah & 2X FLEXVOLT® 9Ah (DCZ1401P2X2-XE)",
-        "$5,000 cash (tax free)",
-      ],
-    },
-    {
-      title: "Option 6",
-      items: [
-        "Milwaukee 56\" High Capacity Combination Tool Storage (48228559)",
-        "Makita 18V Brushless 15 Piece Combo Kit (DLX1514TX1)",
-        "$5,000 cash (tax free)",
-      ],
-    },
-    {
-      title: "Option 7",
-      items: ["$10,000 AUD cash"],
-    },
-  ];
+  /**
+   * DERIVED from the prize catalog — never hand-listed.
+   *
+   * This is the legal statement of what is being given away, so it must match what the
+   * site actually offers. It previously drifted badly: the hardcoded array listed 6
+   * combinations while the live registry offered 20, so Kincrome, GearWrench, Ryobi and
+   * HiKOKI were winnable but absent from the terms. Nothing failed, because no test
+   * covers prose. Deriving removes that whole class of drift — add a brand to the
+   * prize-selection registry + the catalog and this page follows automatically.
+   *
+   * Each combo label reads "<Toolbox>, <Toolset> + <Storage>"; splitting on the FIRST
+   * comma restores the itemised bullets this section is laid out for. The cash prize is
+   * exempt — "$10,000 Tax Free Cash" contains a comma of its own.
+   */
+  const prizeOptions = PRIZE_SUMMARIES.map((prize, index) => {
+    const splitAt = prize.slug === "cash-prize" ? -1 : prize.label.indexOf(", ");
+    return {
+      title: `Option ${index + 1}`,
+      items:
+        splitAt < 0
+          ? [prize.label]
+          : [prize.label.slice(0, splitAt), prize.label.slice(splitAt + 2)],
+    };
+  });
 
   const majorDraw = await getCurrentMajorDrawServer().catch(() => null);
   const giveawayTitle = getGiveawayTitle(majorDraw?.name, majorDraw?.drawDate ?? majorDraw?.activationDate ?? null);
@@ -252,7 +225,7 @@ export default async function MajorGiveawayTermsPage() {
 
           <section className="space-y-6 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10" id="part-b">
             <h2 className="text-2xl font-semibold text-white">Part B – Prize Details</h2>
-            <p className="text-gray-300">Number of Winners: One (1). Total Prize Pool: AUD $13,000.</p>
+            <p className="text-gray-300">Number of Winners: One (1).</p>
             <div className="space-y-4">
               {prizeOptions.map((option) => (
                 <div key={option.title} className="rounded-lg border border-slate-800 bg-slate-900/70 p-4">
@@ -296,7 +269,7 @@ export default async function MajorGiveawayTermsPage() {
               </ol>
               <p>
                 Any substitution will be communicated as soon as practicable and every effort will be made to preserve
-                the advertised prize pool value. Nothing in these terms limits the winner’s rights under the Australian
+                the value of the advertised prize. Nothing in these terms limits the winner’s rights under the Australian
                 Consumer Law.
               </p>
             </div>

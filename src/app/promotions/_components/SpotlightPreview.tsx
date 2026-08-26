@@ -94,9 +94,13 @@ export default function SpotlightPreview({ view, isDefaultView }: SpotlightPrevi
           />
         </div>
 
-        <span className="absolute bottom-3.5 right-3.5 z-[2] rounded-full bg-[#18a94d] px-3 py-[7px] font-poppins text-[10px] font-extrabold uppercase tracking-[0.06em] text-white shadow-[0_8px_20px_-8px_#18a94d]">
-          {view.cashFlag}
-        </span>
+        {/* Cash option only. A tool combination has carried no cash since draw 10, and an
+            empty green pill reads as a broken value rather than a deliberate absence. */}
+        {view.cashFlag && (
+          <span className="absolute bottom-3.5 right-3.5 z-[2] rounded-full bg-[#18a94d] px-3 py-[7px] font-poppins text-[10px] font-extrabold uppercase tracking-[0.06em] text-white shadow-[0_8px_20px_-8px_#18a94d]">
+            {view.cashFlag}
+          </span>
+        )}
       </div>
 
       <div className="mx-0.5 mt-4 flex flex-wrap items-start justify-between gap-3.5">

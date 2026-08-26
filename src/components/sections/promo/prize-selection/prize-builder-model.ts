@@ -220,10 +220,8 @@ export interface ComboPresentation {
   eyebrow: string;
   /** "Makita + 470 Piece Kincrome Toolbox" or the cash headline. */
   title: string;
-  /** Kit · storage · cash bonus line. */
+  /** Kit · storage line. */
   sub: string;
-  /** The "+ $5,000 CASH INCLUDED" flag is hidden when the winner took the cash. */
-  showCashFlag: boolean;
 }
 
 /**
@@ -269,7 +267,6 @@ export function getComboPresentation(
       eyebrow: "CASH OPTION",
       title: CASH_OPTION.title,
       sub: CASH_OPTION.sub,
-      showCashFlag: false,
     };
   }
 
@@ -284,8 +281,7 @@ export function getComboPresentation(
       : `${toolset.name} power toolset with the ${toolbox.name}`,
     eyebrow: "YOUR COMBINATION",
     title: `${toolset.name} + ${toolbox.name}`,
-    sub: `${toolset.kitLabel} · ${toolset.storageLabel} storage · plus $5,000 cash`,
-    showCashFlag: true,
+    sub: `${toolset.kitLabel} · ${toolset.storageLabel} storage`,
   };
 }
 

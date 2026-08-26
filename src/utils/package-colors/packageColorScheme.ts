@@ -19,6 +19,7 @@ const COLOR_KEY_TO_BRAND_GRADIENT: Partial<Record<COLOR_KEYS, keyof typeof BRAND
   "milwaukee-red": "milwaukee",
   "ryobi-green": "ryobi",
   "hikoki-green": "hikoki",
+  "stihl-orange": "stihl",
 };
 
 function brandCanvasGradientFromSlug(slug: string): string | null {
@@ -45,7 +46,8 @@ export type COLOR_KEYS =
   | "black"
   | "mint-green"
   | "cash-green"
-  | "hikoki-green";
+  | "hikoki-green"
+  | "stihl-orange";
 
 /** @deprecated Use COLOR_KEYS - kept for backward compatibility */
 export type PROMO_TIER_KEYS = COLOR_KEYS;
@@ -145,6 +147,7 @@ const PLAN_ID_TO_COLOR_KEY: Record<string, COLOR_KEYS> = {
   "dewalt-yellow": "dewalt-yellow",
   "milwaukee-red": "milwaukee-red",
   "hikoki-green": "hikoki-green",
+  "stihl-orange": "stihl-orange",
   black: "black",
   "mint-green": "mint-green",
   "cash-green": "cash-green",
@@ -208,6 +211,7 @@ const BRAND_GRADIENTS: Record<COLOR_KEYS, { bg: string; primary: string; primary
     accent: "#000000",
   },
   "hikoki-green": getBrandPackageGradientRow("hikoki"),
+  "stihl-orange": getBrandPackageGradientRow("stihl"),
 };
 
 // MembershipSection-only: darker edges, thin light center
@@ -262,6 +266,7 @@ const MEMBERSHIP_SECTION_GRADIENTS: Record<COLOR_KEYS, { bgGradient: string; gra
     },
   },
   "hikoki-green": getBrandMembershipSectionRow("hikoki"),
+  "stihl-orange": getBrandMembershipSectionRow("stihl"),
 };
 
 /**
@@ -317,6 +322,7 @@ const LANDING_PAGE_BRAND: Record<COLOR_KEYS, { primary: string; primaryLight: st
   "mint-green": { primary: "#66DD99", primaryLight: "#88E8B3", primaryDark: "#22AA55" },
   "cash-green": { primary: "#22c55e", primaryLight: "#4ade80", primaryDark: "#16a34a" },
   "hikoki-green": getBrandLandingPrimaryTriple("hikoki"),
+  "stihl-orange": getBrandLandingPrimaryTriple("stihl"),
 };
 
 // Tools Australia brand red (matches site nav, login, AdminSidebar: #ee0000)
@@ -1123,6 +1129,49 @@ const SCHEMES: Record<COLOR_KEYS, PackageColorScheme> = {
     barColorVertical: "bg-gradient-to-t from-[#009a63] via-[#007749] to-[#009a63]",
     barColorLightVertical: "bg-gradient-to-t from-[#007749] via-[#009a63] to-[#007749]",
     barGradientCss: "linear-gradient(to top, #009a63 0%, #007749 45%, #00543a 100%)",
+  },
+  "stihl-orange": {
+    bgGradient: BRAND_GRADIENTS["stihl-orange"].bg,
+    gradient: "from-[#ff7f33] via-[#f46717] to-[#ff7f33]",
+    text: "text-white",
+    textMuted: "text-white",
+    textOnLight: "text-[#8a3708]",
+    featureOnLight: "text-gray-700",
+    priceText: "text-white",
+    priceBadgeBg: "bg-white/15 backdrop-blur-sm",
+    buttonBg: "bg-[#f46717] hover:bg-[#ff7f33] active:scale-[0.98] border border-white/20",
+    buttonShadow: "shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+    buttonHoverShadow: "hover:shadow-[0_4px_12px_rgba(0,119,73,0.45)]",
+    buttonText: "text-white",
+    glow: "drop-shadow-[0_0_18px_rgba(0,119,73,0.65)]",
+    border: "border-[#ff7f33]/50",
+    shadow: "shadow-[#ff7f33]/35",
+    hoverShadow: "hover:shadow-[#ff7f33]/55",
+    borderGlow: "animate-border-glow-hikoki",
+    badgeStyle: {
+      background: "#f46717",
+      boxShadow:
+        "0 0 40px rgba(0, 119, 73, 0.65), 0 0 55px rgba(0, 154, 99, 0.35), 0 4px 20px rgba(0, 84, 58, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45)",
+      border: "1px solid rgba(255, 255, 255, 0.5)",
+    },
+    enterNowButtonStyle: createPanelStyle({ r: 0, g: 119, b: 73 }),
+    ctaGradientButtonBorder: "border border-white/30",
+    accentHex: BRAND_GRADIENTS["stihl-orange"].primary,
+    entriesText: "text-white",
+    cardBorderOpacity: "CC",
+    packageInclusionTextStyle: {
+      backgroundImage:
+        "linear-gradient(135deg, #ff7f33 0%, #1fb377 22%, #f46717 48%, #ffa066 72%, #a8f0cf 100%)",
+      WebkitBackgroundClip: "text",
+      backgroundClip: "text",
+      WebkitTextFillColor: "transparent",
+      color: "transparent",
+    },
+    barColor: "bg-gradient-to-r from-[#ff7f33] via-[#f46717] to-[#ff7f33]",
+    barColorLight: "bg-gradient-to-r from-[#f46717] via-[#ff7f33] to-[#f46717]",
+    barColorVertical: "bg-gradient-to-t from-[#ff7f33] via-[#f46717] to-[#ff7f33]",
+    barColorLightVertical: "bg-gradient-to-t from-[#f46717] via-[#ff7f33] to-[#f46717]",
+    barGradientCss: "linear-gradient(to top, #ff7f33 0%, #f46717 45%, #d4530b 100%)",
   },
 };
 

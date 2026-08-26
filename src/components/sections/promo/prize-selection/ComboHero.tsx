@@ -125,14 +125,9 @@ export function ComboHero({
           </span>
         )}
 
-        {/* Pill bg is --pbc-cash-dark, not --pbc-cash: white 8.5px text on #18a94d is
-            3.08:1 (axe violation); on the dark cash green it's 5.4:1. The shadow keeps
-            the vivid brand green — it's decorative. */}
-        {combo.showCashFlag && !previewTile && (
-          <span className="absolute bottom-[11px] right-[11px] z-[2] inline-block rounded-full bg-[var(--pbc-cash-dark)] px-[11px] py-1.5 font-poppins text-[8.5px] font-extrabold leading-none tracking-[0.1em] text-white shadow-[0_8px_20px_-8px_#18a94d]">
-            + $5,000 CASH INCLUDED
-          </span>
-        )}
+        {/* A "+ $5,000 CASH INCLUDED" pill sat here until draw 10 removed the combo cash
+            bonus. Nothing replaces it: a tool combination now carries no cash component, and
+            the cash-only option is its own selection rather than a flag on the gear. */}
       </div>
 
       <div className="px-0.5 pt-3">

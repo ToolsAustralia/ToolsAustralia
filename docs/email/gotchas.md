@@ -23,3 +23,28 @@ If a user unsubscribes via Klaviyo, the SendGrid suppression list might not auto
 ## Migrated from `docs/EMAIL_MODULE.md`
 
 > _TODO: read root file and merge full content._
+
+## Preview SAMPLE DATA is customer copy too — it drifts, and nothing catches it (2026-08-24)
+
+`WinnerEmailPreview` passed the literal `"Milwaukee M18 Combo + $5,000 Cash"` as its sample prize
+into `createWinnerEmailTemplate()`. Draw 10 removed the $5,000 combo cash bonus, which made that
+string assert a prize Tools Australia no longer gives. It is now
+`"Milwaukee M18 Combo + PACKOUT Storage"`.
+
+**Why this is worth a gotcha rather than a one-line diff:**
+
+- **Nothing guards it.** `/email-preview` is dev-only (404 in prod), so this was never customer-
+  visible — but it is also invisible to every test, to `tsc`, and to the doc-sync hook. It survived
+  a repo-wide prize change purely because a grep for `$5,000` happened to reach it.
+- **It is the reference staff look at.** The preview is what someone opens to check what a winner
+  email says. Stale sample data there quietly teaches the wrong prize to whoever is drafting the
+  real one.
+- **The same trap sits in every preview.** Any `*Preview.tsx` under
+  [src/components/email-preview/](../../src/components/email-preview/) hardcodes plausible-looking
+  arguments — prize names, tiers, amounts, dates. Those are **claims**, and they age exactly like
+  the templates in this doc's §11 section.
+
+**Rule:** when a prize, price, tier or policy changes, grep
+`src/components/email-preview/` alongside `src/lib/email/` and `email-templates/`. Prefer sample
+values that describe *structure* (a kit + its storage) over ones that quote *amounts*, so the
+preview survives the next repricing without an edit.

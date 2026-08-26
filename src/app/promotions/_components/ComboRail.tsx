@@ -18,7 +18,6 @@ import {
 import {
   CASH_ONLY_AMOUNT,
   COMBINATION_COUNT,
-  COMBO_CASH_BONUS,
   isComboSelected,
   needsMarkOutline,
   toolsetKitLine,
@@ -127,8 +126,10 @@ export default function ComboRail({ selection, onSelectCombo, onSelectCash }: Co
             {COMBINATION_COUNT} combos
           </span>
         </div>
+        {/* No cash claim here since draw 10 — the $5,000 that used to ride on every
+            combination is gone, and the cash-only option is its own tile in the rail. */}
         <span className="font-poppins text-[10.5px] font-semibold text-[var(--pgs-sub)]">
-          Tap to preview · {COMBO_CASH_BONUS} in each
+          Tap to preview any combination
         </span>
       </div>
 
@@ -149,21 +150,28 @@ export default function ComboRail({ selection, onSelectCombo, onSelectCash }: Co
                 className="absolute inset-y-px left-0 w-[3px] rounded-sm"
                 style={{ background: toolset.accent }}
               />
-              {/* The five wordmarks share a 700×200 canvas but carry different amounts
-                  of internal padding, so `wordmarkScale` levels them to a common LETTER
-                  height: the mark is sized by HEIGHT (a % of the plate), its width
-                  follows, and it is pinned left-centre — `object-contain` + `transform`
-                  would instead scale a width-fitted mark about its centre and let the
-                  larger brands creep out both sides of the plate. */}
+              {/* `wordmarkScale` levels the marks to a common LETTER height: each is sized
+                  by HEIGHT (a % of the plate), its width follows, and it is pinned
+                  left-centre — a centred fit would let the wider brands creep out both
+                  sides of the plate.
+
+                  The width/height props declare a 10:1 box, which is DELIBERATELY WIDER than
+                  the widest wordmark (HiKOKI, 6.58:1). They no longer describe the files:
+                  draw 10 cropped every `brands/name/*.svg` viewBox to its real glyph bounds,
+                  so the old 700×200 (3.5:1) would now letterbox or offset most marks. Because
+                  the declared box is wider than any mark, `object-contain` is always
+                  HEIGHT-bound, so every mark lands at exactly `wordmarkScale × plate` tall and
+                  `object-left` keeps it pinned. Keep this ratio above the widest aspect that
+                  `npm run check:brand-wordmarks` reports. */}
               <span className="relative block h-9 w-[156px] shrink-0 overflow-hidden">
                 <Image
                   src={toolset.wordmark}
                   alt={toolset.name}
-                  width={700}
+                  width={2000}
                   height={200}
                   unoptimized
                   className={cn(
-                    "absolute left-0 top-1/2 w-auto max-w-none -translate-y-1/2",
+                    "absolute left-0 top-1/2 w-auto max-w-none -translate-y-1/2 object-contain object-left",
                     // Low-contrast brand colours all but vanish on the near-white light
                     // stage. A hairline keeps them legible without putting a plate around
                     // some brands and not others — derived from the accent, so a future

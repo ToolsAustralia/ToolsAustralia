@@ -238,8 +238,10 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
       return { combo: "CASH OPTION — NO GEAR", cash: "$10,000" };
     }
     return {
+      // Draw 10 removed the $5,000 bonus, so a tool combination has no cash chip. `cash`
+      // stays optional rather than empty-string: the bar renders the chip only when set,
+      // and "" would paint an empty pill.
       combo: `${toolset.name.toUpperCase()} × ${toolbox.shortName.toUpperCase()}`,
-      cash: "+ $5,000",
     };
   }, [selection]);
 
@@ -458,9 +460,14 @@ export default function PromoBottomDock({ prizeSlug = null }: PromoBottomDockPro
                     <span className="min-w-0 truncate font-mono text-3xs font-medium text-gray-500 dark:text-gray-400 lg:text-[10px]">
                       {build.combo}
                     </span>
-                    <span className="flex-none whitespace-nowrap rounded-full bg-green-500/15 px-1.5 py-[3px] font-sans text-3xs font-bold text-green-700 dark:bg-green-500/20 dark:text-green-400">
-                      {build.cash}
-                    </span>
+                    {/* Chip only when there IS a cash component — the cash-only option. Since
+                        draw 10 a tool combination has none, and an unguarded render would paint
+                        an empty green pill rather than nothing. */}
+                    {build.cash && (
+                      <span className="flex-none whitespace-nowrap rounded-full bg-green-500/15 px-1.5 py-[3px] font-sans text-3xs font-bold text-green-700 dark:bg-green-500/20 dark:text-green-400">
+                        {build.cash}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-[3px] truncate font-sans text-[12.5px] font-bold text-gray-900 dark:text-white lg:mt-[5px] lg:text-[15px]">
                     {defaultPack ? `${defaultPack.name} — ${defaultPack.price}` : "Choose your pack"}

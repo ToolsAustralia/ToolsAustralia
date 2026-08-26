@@ -23,6 +23,7 @@
     "convert:draw9-landing-webp": "tsx scripts/convert-draw9-landing-to-webp.ts",
     "convert:draw9-landing-videos": "tsx scripts/convert-draw9-landing-videos.ts",
     "check:promo-landing-assets": "node scripts/check-landing-hero-assets.mjs",
+    "check:brand-wordmarks": "node scripts/check-brand-wordmarks.mjs",
     "check:env": "node scripts/check-env.mjs",
     "check:env:all": "node scripts/check-env.mjs --all",
     "prebuild": "npm run build:upsell-manifest && npm run build:landing-manifest && npm run build:landing-video-manifest && npm run build:norm-manifest && npm run build:chat-knowledge-pack && npm run build:partner-catalog",

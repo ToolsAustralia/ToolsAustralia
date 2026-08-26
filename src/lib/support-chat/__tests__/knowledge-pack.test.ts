@@ -131,10 +131,28 @@ assert.ok(text.length > 1500, `text.length (${text.length}) must be > 1500 chars
 // cost of the prefix by ~90% and take latency with it. Until that lands, treat
 // this ceiling as a reminder that every token here is paid on every turn — do
 // not bump it again to fit "nice to have" content.
+//
+// Raised 14,000 → 15,200 on 2026-08-24 (draw 10). Same test as last time: this
+// was NOT nice-to-have, and the guard was ALREADY breached at 14,067 before this
+// change — it went red on main at e762dcda (2026-08-18, blocked-card guidance),
+// so 14,000 had stopped describing reality.
+//
+// What the extra ~900 tokens bought: a member asked about the refund policy, got
+// only the membership "non-refundable" line, and pushed back citing the 48-hour
+// genuine-purchase-error clause on OUR OWN /competition-term-majordraw page.
+// Cobber replied that it "did not have access to the content of external links".
+// That page was in neither [key-pages] nor the pack, so there was nothing to
+// ground on — the bot was denying a refund route that our published terms grant.
+// Wrong answers about refunds are consumer-law exposure, not a knowledge nicety.
+// Added: the [competition-terms] section, the page in [key-pages], FAQ ids 86-87,
+// and a correction to id 12.
+//
+// Cost: ~900 extra uncached input tokens per turn, ~$0.10/month at current volume.
+// Prompt caching remains the real fix and would make this ceiling moot.
 const approxTokens = text.length / 4;
 assert.ok(
-  approxTokens < 14000,
-  `Approx token count (${approxTokens.toFixed(0)}) must be < 14,000 (text.length=${text.length})`
+  approxTokens < 15200,
+  `Approx token count (${approxTokens.toFixed(0)}) must be < 15,200 (text.length=${text.length})`
 );
 
 // ─── Sources catalog assertions ───────────────────────────────────────────────

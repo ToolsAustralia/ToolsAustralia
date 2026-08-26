@@ -56,6 +56,10 @@ export type PrizeSlug =
   | "makita-gearwrench"
   | "ryobi-gearwrench"
   | "hikoki-gearwrench"
+  | "stihl-sidchrome"
+  | "stihl-kincrome"
+  | "stihl-milwaukee"
+  | "stihl-gearwrench"
   | "cash-prize";
 
 /** The client-needed subset of a prize entry — everything except the deep spec sheets. */
@@ -200,13 +204,35 @@ const HIKOKI_GALLERY_SHOTS: PrizeMedia[] = [
   { src: "/images/majordraws/hikoki-set/hikoki-gallery-17.webp", alt: "HiKOKI 15pc toolset" },
 ];
 
+
+/**
+ * STIHL gallery tail — shared by all four STIHL combinations.
+ *
+ * Same factoring as the other brands: within a toolset only the first hero shot differs
+ * (it is the composite with that toolbox), so the individual tool photos live here once.
+ * Product names and models were read off the tools in the shoot and confirmed against
+ * stihl.com.au — see docs/config-and-data/stihl-prize-products.md.
+ */
+const STIHL_GALLERY_SHOTS: PrizeMedia[] = [
+  { src: "/images/majordraws/stihl-set/stihl-ms-391-farm-boss-chainsaw.webp", alt: "STIHL MS 391 FarmBoss petrol chainsaw" },
+  { src: "/images/majordraws/stihl-set/stihl-fs-91-r-z-brushcutter.webp", alt: "STIHL FS 91 R petrol brushcutter with loop handle" },
+  { src: "/images/majordraws/stihl-set/stihl-bg-86-handheld-blower.webp", alt: "STIHL BG 86 petrol handheld blower" },
+  { src: "/images/majordraws/stihl-set/stihl-hs-45-hedge-trimmer.webp", alt: "STIHL HS 45 petrol hedge trimmer, 600mm blade" },
+  { src: "/images/majordraws/stihl-set/stihl-rma-353-v-cordless-lawn-mower.webp", alt: "STIHL RMA 353 V battery lawn mower" },
+  { src: "/images/majordraws/stihl-set/stihl-gta-26-garden-pruner.webp", alt: "STIHL GTA 26 battery pruner kit" },
+  { src: "/images/majordraws/stihl-set/stihl-rca-20-battery-pressure-washer.webp", alt: "STIHL RCA 20 battery pressure washer" },
+  { src: "/images/majordraws/stihl-set/stihl-koa-20-air-inflator.webp", alt: "STIHL KOA 20 battery air inflator" },
+  { src: "/images/majordraws/stihl-set/stihl-sea-20-cordless-handheld-vacuum.webp", alt: "STIHL SEA 20 battery handheld vacuum" },
+  { src: "/images/majordraws/stihl-set/stihl-asa-20-cordless-pruning-shears.webp", alt: "STIHL ASA 20 battery secateurs" },
+  { src: "/images/majordraws/stihl-set/stihl-al-301-charger-and-ap-300-s-battery.webp", alt: "STIHL AL 301 charger with AP 300 S batteries" },
+];
 export const PRIZE_SUMMARIES: PrizeSummary[] = [
   {
     slug: "milwaukee-sidchrome",
-    label: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
-    summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+    label: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroHeading: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Sidchrome SCMT11402 356-piece workshop tower.",
+    summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet.",
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukee-sidchrome.webp",
     gallery: [
@@ -222,10 +248,10 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
   },
   {
     slug: "dewalt-sidchrome",
-    label: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Sidchrome SCMT11402 356-piece toolkit plus $5000 cash.",
-    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, and a 356-piece Sidchrome toolkit plus $5000 cash.",
+    label: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroHeading: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Sidchrome SCMT11402 356-piece toolkit.",
+    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, and a 356-piece Sidchrome toolkit.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/dewalt-set/dewalt-sidchrome.webp",
     gallery: [
@@ -241,10 +267,10 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
   },
   {
     slug: "makita-sidchrome",
-    label: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
-    summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+    label: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroHeading: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Sidchrome SCMT11402 356-piece workshop tower.",
+    summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Sidchrome SCMT11402 356-piece storage cabinet.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/makita-set/makita-sidchrome.webp",
     gallery: [
@@ -260,10 +286,10 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
   },
   {
     slug: "milwaukee-milwaukee",
-    label: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
-    summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+    label: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroHeading: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Milwaukee 56\" High Capacity Combination tool storage.",
+    summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage.",
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukee-milwaukee.webp",
     gallery: [
@@ -274,15 +300,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
       { icon: "Package", title: "PACKOUT™ + 56\" Toolbox", description: "8-piece modular storage plus high capacity combination tool storage." },
       { icon: "Battery", title: "REDLITHIUM™ Power System", description: "High-output 5.0Ah packs keep every skin running." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "dewalt-milwaukee",
-    label: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
-    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, premium Milwaukee tool storage, and comprehensive power tool collection plus $5000 cash.",
+    label: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroHeading: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Milwaukee 56\" High Capacity Combination tool storage.",
+    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, premium Milwaukee tool storage, and comprehensive power tool collection.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/dewalt-set/dewalt-milwaukee.webp",
     gallery: [
@@ -293,15 +318,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "FlexVolt Muscle", description: "54V tools for circular, rotary, and reciprocating power." },
       { icon: "Package", title: "TOUGHSYSTEM® 2.0 + Toolbox", description: "7-piece mobile storage plus Milwaukee 56\" combination tool storage." },
       { icon: "Battery", title: "High-Capacity Power", description: "FlexVolt + XR batteries with twin-port fast charging." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "makita-milwaukee",
-    label: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
-    summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+    label: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroHeading: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Milwaukee 56\" High Capacity Combination tool storage.",
+    summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Milwaukee 56\" High Capacity Combination tool storage.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/makita-set/makita-milwaukee.webp",
     gallery: [
@@ -312,15 +336,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
       { icon: "Package", title: "MAKTRAK™ + Toolbox", description: "7-piece mobile storage plus Milwaukee 56\" combination tool storage." },
       { icon: "Battery", title: "LXT Power System", description: "High-capacity 5.0Ah packs with rapid dual-port charging." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "ryobi-sidchrome",
-    label: "Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
-    heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
-    summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+    label: "Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
+    heroHeading: "Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
+    heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Sidchrome SCMT11402 356-piece workshop tower.",
+    summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet.",
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobi-sidchrome.webp",
     gallery: [
@@ -336,10 +359,10 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
   },
   {
     slug: "ryobi-milwaukee",
-    label: "Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
-    heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
-    summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+    label: "Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
+    heroHeading: "Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
+    heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Milwaukee 56\" High Capacity Combination tool storage.",
+    summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage.",
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobi-milwaukee.webp",
     gallery: [
@@ -350,15 +373,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "19 Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
       { icon: "Package", title: "LINK™ + Toolbox", description: "Modular storage system plus Milwaukee 56\" combination tool storage." },
       { icon: "Battery", title: "ONE+ Power System", description: "18V ONE+ batteries power 200+ tools across the range." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "milwaukee-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroHeading: "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage and KINCROME CONTOUR® 470pc 17-drawer workshop kit plus $5000 cash.",
-    summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage, and the KINCROME CONTOUR® workshop chest & trolley plus $5000 cash.",
+    label: "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroHeading: "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage and KINCROME CONTOUR® 470pc 17-drawer workshop kit.",
+    summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage, and the KINCROME CONTOUR® workshop chest & trolley.",
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukee-kincrome.webp",
     gallery: [
@@ -369,15 +391,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
       { icon: "Package", title: "PACKOUT™ + CONTOUR® Kit", description: "8-piece modular storage plus Kincrome 470pc workshop chest & trolley." },
       { icon: "Battery", title: "REDLITHIUM™ Power System", description: "High-output 5.0Ah packs keep every skin running." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "dewalt-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroHeading: "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and KINCROME CONTOUR® 470pc workshop kit plus $5000 cash.",
-    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, KINCROME CONTOUR® workshop storage, and comprehensive power tool collection plus $5000 cash.",
+    label: "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroHeading: "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and KINCROME CONTOUR® 470pc workshop kit.",
+    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, KINCROME CONTOUR® workshop storage, and comprehensive power tool collection.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/dewalt-set/dewalt-kincrome.webp",
     gallery: [
@@ -388,15 +409,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "FlexVolt Muscle", description: "54V tools for circular, rotary, and reciprocating power." },
       { icon: "Package", title: "TOUGHSYSTEM® 2.0 + CONTOUR®", description: "7-piece mobile storage plus Kincrome 470pc workshop kit." },
       { icon: "Battery", title: "High-Capacity Power", description: "FlexVolt + XR batteries with twin-port fast charging." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "makita-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroHeading: "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and KINCROME CONTOUR® 470pc workshop kit plus $5000 cash.",
-    summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the KINCROME CONTOUR® workshop kit plus $5000 cash.",
+    label: "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroHeading: "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and KINCROME CONTOUR® 470pc workshop kit.",
+    summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the KINCROME CONTOUR® workshop kit.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/makita-set/makita-kincrome.webp",
     gallery: [
@@ -407,15 +427,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
       { icon: "Package", title: "MAKTRAK™ + CONTOUR®", description: "7-piece mobile storage plus Kincrome 470pc workshop kit." },
       { icon: "Battery", title: "LXT Power System", description: "High-capacity 5.0Ah packs with rapid dual-port charging." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "ryobi-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
-    heroHeading: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
-    heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and KINCROME CONTOUR® 470pc workshop kit plus $5000 cash.",
-    summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the KINCROME CONTOUR® workshop kit plus $5000 cash.",
+    label: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
+    heroHeading: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
+    heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and KINCROME CONTOUR® 470pc workshop kit.",
+    summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the KINCROME CONTOUR® workshop kit.",
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobi-kincrome.webp",
     gallery: [
@@ -426,15 +445,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "19 Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
       { icon: "Package", title: "LINK™ + CONTOUR®", description: "Modular LINK™ storage plus Kincrome 470pc workshop kit." },
       { icon: "Battery", title: "ONE+ Power System", description: "18V ONE+ batteries power 200+ tools across the range." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "hikoki-sidchrome",
-    label: "Sidchrome Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
-    summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the Sidchrome SCMT11402 356-piece cabinet plus $5000 cash.",
+    label: "Sidchrome Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroHeading: "Sidchrome Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the Sidchrome SCMT11402 356-piece workshop tower.",
+    summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the Sidchrome SCMT11402 356-piece cabinet.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/hikoki-set/hikoki-sidchrome.webp",
     gallery: [
@@ -450,10 +468,10 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
   },
   {
     slug: "hikoki-milwaukee",
-    label: "Milwaukee Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the Milwaukee 56\" high-capacity tool storage chest plus $5000 cash.",
-    summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the Milwaukee 56\" high-capacity combination storage plus $5000 cash.",
+    label: "Milwaukee Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroHeading: "Milwaukee Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the Milwaukee 56\" high-capacity tool storage chest.",
+    summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the Milwaukee 56\" high-capacity combination storage.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/hikoki-set/hikoki-milwaukee.webp",
     gallery: [
@@ -469,10 +487,10 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
   },
   {
     slug: "hikoki-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroHeading: "Kincrome CONTOUR® Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the KINCROME CONTOUR® 470pc 17-drawer workshop kit plus $5000 cash.",
-    summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the KINCROME CONTOUR® workshop chest & trolley plus $5000 cash.",
+    label: "Kincrome CONTOUR® Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroHeading: "Kincrome CONTOUR® Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the KINCROME CONTOUR® 470pc 17-drawer workshop kit.",
+    summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the KINCROME CONTOUR® workshop chest & trolley.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/hikoki-set/hikoki-kincrome.webp",
     gallery: [
@@ -497,10 +515,10 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
    */
   {
     slug: "milwaukee-gearwrench",
-    label: "GearWrench 288pc Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroHeading: "GearWrench 288pc Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage and the GearWrench 288-piece mobile workstation plus $5000 cash.",
-    summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    label: "GearWrench 288pc Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroHeading: "GearWrench 288pc Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroSubheading: "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage and the GearWrench 288-piece mobile workstation.",
+    summary: "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage, and the GearWrench 288-piece tool set & mobile workstation.",
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukee-gearwrench.webp",
     gallery: [
@@ -512,15 +530,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "13 Power Tools", description: "Complete Milwaukee 18V FUEL™ collection." },
       { icon: "Package", title: "PACKOUT™ + GearWrench", description: "8-piece modular storage plus the GearWrench 288pc mobile workstation." },
       { icon: "Battery", title: "REDLITHIUM™ Power System", description: "High-output 5.0Ah packs keep every skin running." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "dewalt-gearwrench",
-    label: "GearWrench 288pc Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroHeading: "GearWrench 288pc Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and the GearWrench 288-piece mobile workstation plus $5000 cash.",
-    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    label: "GearWrench 288pc Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroHeading: "GearWrench 288pc Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroSubheading: "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and the GearWrench 288-piece mobile workstation.",
+    summary: "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, and the GearWrench 288-piece tool set & mobile workstation.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/dewalt-set/dewalt-gearwrench.webp",
     gallery: [
@@ -532,15 +549,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "FlexVolt Muscle", description: "54V tools for circular, rotary, and reciprocating power." },
       { icon: "Package", title: "TOUGHSYSTEM® 2.0 + GearWrench", description: "Mobile storage plus the GearWrench 288pc mobile workstation." },
       { icon: "Battery", title: "High-Capacity Power", description: "FlexVolt + XR batteries with twin-port fast charging." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "makita-gearwrench",
-    label: "GearWrench 288pc Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroHeading: "GearWrench 288pc Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and the GearWrench 288-piece mobile workstation plus $5000 cash.",
-    summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    label: "GearWrench 288pc Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroHeading: "GearWrench 288pc Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroSubheading: "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and the GearWrench 288-piece mobile workstation.",
+    summary: "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the GearWrench 288-piece tool set & mobile workstation.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/makita-set/makita-gearwrench.webp",
     gallery: [
@@ -552,15 +568,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "15 Power Tools", description: "Complete Makita 18V LXT brushless collection." },
       { icon: "Package", title: "MAKTRAK™ + GearWrench", description: "7-piece mobile storage plus the GearWrench 288pc mobile workstation." },
       { icon: "Battery", title: "LXT Power System", description: "High-capacity 5.0Ah packs with rapid dual-port charging." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "ryobi-gearwrench",
-    label: "GearWrench 288pc Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
-    heroHeading: "GearWrench 288pc Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
-    heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and the GearWrench 288-piece mobile workstation plus $5000 cash.",
-    summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    label: "GearWrench 288pc Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
+    heroHeading: "GearWrench 288pc Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
+    heroSubheading: "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and the GearWrench 288-piece mobile workstation.",
+    summary: "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the GearWrench 288-piece tool set & mobile workstation.",
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobi-gearwrench.webp",
     gallery: [
@@ -572,15 +587,14 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "19 Power & Garden Tools", description: "18V ONE+ 12-piece kit plus lawn mower and garden tools." },
       { icon: "Package", title: "LINK™ + GearWrench", description: "Modular LINK™ storage plus the GearWrench 288pc mobile workstation." },
       { icon: "Battery", title: "ONE+ Power System", description: "18V ONE+ batteries power 200+ tools across the range." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
     ],
   },
   {
     slug: "hikoki-gearwrench",
-    label: "GearWrench 288pc Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroHeading: "GearWrench 288pc Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the GearWrench 288-piece mobile workstation plus $5000 cash.",
-    summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the GearWrench 288-piece tool set & mobile workstation plus $5000 cash.",
+    label: "GearWrench 288pc Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroHeading: "GearWrench 288pc Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroSubheading: "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the GearWrench 288-piece mobile workstation.",
+    summary: "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the GearWrench 288-piece tool set & mobile workstation.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/hikoki-set/hikoki-gearwrench.webp",
     gallery: [
@@ -592,7 +606,82 @@ export const PRIZE_SUMMARIES: PrizeSummary[] = [
       { icon: "Zap", title: "15 MultiVolt Tools", description: "13pc Mega Combo plus framing & finishing nailers." },
       { icon: "Package", title: "Multi Cruiser + GearWrench", description: "IP65 rolling tool boxes plus the GearWrench 288pc mobile workstation." },
       { icon: "Battery", title: "MultiVolt Power System", description: "5x BSL36A18X 18V/36V batteries + 2 rapid chargers." },
-      { icon: "DollarSign", title: "$5000 Cash Bonus", description: "Cold hard cash included with your prize." },
+    ],
+  },
+  {
+    slug: "stihl-sidchrome",
+    label: "Sidchrome Toolbox, STIHL 10pc Outdoor Power Kit + AP Battery Kit",
+    heroHeading: "Sidchrome Toolbox, STIHL 10pc Outdoor Power Kit + AP Battery Kit",
+    heroSubheading: "Four STIHL petrol tools — MS 391 FarmBoss chainsaw, FS 91 R brushcutter, BG 86 blower and HS 45 hedge trimmer — plus the RMA 353 V battery mower and five AS-system cordless tools, paired with the Sidchrome SCMT11402 356-piece workshop tower.",
+    summary: "STIHL petrol and cordless outdoor power equipment with two AP 300 S batteries and an AL 301 charger, plus the Sidchrome SCMT11402 356-piece workshop tower.",
+    prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/stihl-set/stihl-sidchrome.webp",
+    gallery: [
+      { src: "/images/majordraws/stihl-set/stihl-sidchrome.webp", alt: "STIHL set with Sidchrome toolbox" },
+      ...STIHL_GALLERY_SHOTS,
+    ],
+    highlights: [
+      { icon: "Zap", title: "4 Petrol Tools", description: "MS 391 chainsaw, FS 91 R brushcutter, BG 86 blower, HS 45 hedge trimmer." },
+      { icon: "Package", title: "6 Cordless Tools", description: "RMA 353 V mower, GTA 26 pruner, RCA 20 washer, KOA 20 inflator, SEA 20 vacuum, ASA 20 secateurs." },
+      { icon: "Battery", title: "AP Battery Kit", description: "Two AP 300 S batteries and an AL 301 quick charger." },
+      { icon: "Wrench", title: "Sidchrome 356pc Kit", description: "Complete hand-tool cabinet for workshop builds." },
+    ],
+  },
+  {
+    slug: "stihl-kincrome",
+    label: "Kincrome CONTOUR® Toolbox, STIHL 10pc Outdoor Power Kit + AP Battery Kit",
+    heroHeading: "Kincrome CONTOUR® Toolbox, STIHL 10pc Outdoor Power Kit + AP Battery Kit",
+    heroSubheading: "Four STIHL petrol tools — MS 391 FarmBoss chainsaw, FS 91 R brushcutter, BG 86 blower and HS 45 hedge trimmer — plus the RMA 353 V battery mower and five AS-system cordless tools, paired with the KINCROME CONTOUR® 470pc 17-drawer workshop kit.",
+    summary: "STIHL petrol and cordless outdoor power equipment with two AP 300 S batteries and an AL 301 charger, plus the KINCROME CONTOUR® 470pc 17-drawer workshop kit.",
+    prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/stihl-set/stihl-kincrome.webp",
+    gallery: [
+      { src: "/images/majordraws/stihl-set/stihl-kincrome.webp", alt: "STIHL set with Kincrome toolbox" },
+      ...STIHL_GALLERY_SHOTS,
+    ],
+    highlights: [
+      { icon: "Zap", title: "4 Petrol Tools", description: "MS 391 chainsaw, FS 91 R brushcutter, BG 86 blower, HS 45 hedge trimmer." },
+      { icon: "Package", title: "6 Cordless Tools", description: "RMA 353 V mower, GTA 26 pruner, RCA 20 washer, KOA 20 inflator, SEA 20 vacuum, ASA 20 secateurs." },
+      { icon: "Battery", title: "AP Battery Kit", description: "Two AP 300 S batteries and an AL 301 quick charger." },
+      { icon: "Wrench", title: "Kincrome 470pc Kit", description: "17-drawer CONTOUR® workshop storage." },
+    ],
+  },
+  {
+    slug: "stihl-milwaukee",
+    label: "Milwaukee Toolbox, STIHL 10pc Outdoor Power Kit + AP Battery Kit",
+    heroHeading: "Milwaukee Toolbox, STIHL 10pc Outdoor Power Kit + AP Battery Kit",
+    heroSubheading: "Four STIHL petrol tools — MS 391 FarmBoss chainsaw, FS 91 R brushcutter, BG 86 blower and HS 45 hedge trimmer — plus the RMA 353 V battery mower and five AS-system cordless tools, paired with the Milwaukee 56\" high-capacity tool storage chest.",
+    summary: "STIHL petrol and cordless outdoor power equipment with two AP 300 S batteries and an AL 301 charger, plus the Milwaukee 56\" high-capacity tool storage chest.",
+    prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/stihl-set/stihl-milwaukee.webp",
+    gallery: [
+      { src: "/images/majordraws/stihl-set/stihl-milwaukee.webp", alt: "STIHL set with Milwaukee toolbox" },
+      ...STIHL_GALLERY_SHOTS,
+    ],
+    highlights: [
+      { icon: "Zap", title: "4 Petrol Tools", description: "MS 391 chainsaw, FS 91 R brushcutter, BG 86 blower, HS 45 hedge trimmer." },
+      { icon: "Package", title: "6 Cordless Tools", description: "RMA 353 V mower, GTA 26 pruner, RCA 20 washer, KOA 20 inflator, SEA 20 vacuum, ASA 20 secateurs." },
+      { icon: "Battery", title: "AP Battery Kit", description: "Two AP 300 S batteries and an AL 301 quick charger." },
+      { icon: "Wrench", title: "Milwaukee 56\" Chest", description: "High-capacity combination tool storage." },
+    ],
+  },
+  {
+    slug: "stihl-gearwrench",
+    label: "GearWrench 288pc Toolbox, STIHL 10pc Outdoor Power Kit + AP Battery Kit",
+    heroHeading: "GearWrench 288pc Toolbox, STIHL 10pc Outdoor Power Kit + AP Battery Kit",
+    heroSubheading: "Four STIHL petrol tools — MS 391 FarmBoss chainsaw, FS 91 R brushcutter, BG 86 blower and HS 45 hedge trimmer — plus the RMA 353 V battery mower and five AS-system cordless tools, paired with the GEARWRENCH 288-piece mobile workstation.",
+    summary: "STIHL petrol and cordless outdoor power equipment with two AP 300 S batteries and an AL 301 charger, plus the GEARWRENCH 288-piece mobile workstation.",
+    prizeValueLabel: "$30,000+ Value",
+    cardBackgroundImage: "/images/majordraws/stihl-set/stihl-gearwrench.webp",
+    gallery: [
+      { src: "/images/majordraws/stihl-set/stihl-gearwrench.webp", alt: "STIHL set with GearWrench toolbox" },
+      ...STIHL_GALLERY_SHOTS,
+    ],
+    highlights: [
+      { icon: "Zap", title: "4 Petrol Tools", description: "MS 391 chainsaw, FS 91 R brushcutter, BG 86 blower, HS 45 hedge trimmer." },
+      { icon: "Package", title: "6 Cordless Tools", description: "RMA 353 V mower, GTA 26 pruner, RCA 20 washer, KOA 20 inflator, SEA 20 vacuum, ASA 20 secateurs." },
+      { icon: "Battery", title: "AP Battery Kit", description: "Two AP 300 S batteries and an AL 301 quick charger." },
+      { icon: "Wrench", title: "GEARWRENCH 288pc Set", description: "288-piece set in its mobile workstation." },
     ],
   },
   {
@@ -626,26 +715,30 @@ export function listPrizeSummaries(): PrizeSummary[] {
 
 /** Short display-friendly labels for winner cards / admin tables (see getPrizeLabel). */
 const SHORT_PRIZE_LABELS: Record<PrizeSlug, string> = {
-  "milwaukee-sidchrome": "Sidchrome + Milwaukee 13pc + PACKOUT + $5,000 Cash",
-  "dewalt-sidchrome": "Sidchrome + DeWalt 14pc + ToughSystem + $5,000 Cash",
-  "makita-sidchrome": "Sidchrome + Makita 15pc + MAKTRAK + $5,000 Cash",
-  "milwaukee-milwaukee": "Milwaukee Toolbox + Milwaukee 13pc + PACKOUT + $5,000 Cash",
-  "dewalt-milwaukee": "Milwaukee Toolbox + DeWalt 14pc + ToughSystem + $5,000 Cash",
-  "makita-milwaukee": "Milwaukee Toolbox + Makita 15pc + MAKTRAK + $5,000 Cash",
-  "ryobi-sidchrome": "Sidchrome + Ryobi 19pc + LINK + $5,000 Cash",
-  "ryobi-milwaukee": "Milwaukee Toolbox + Ryobi 19pc + LINK + $5,000 Cash",
-  "milwaukee-kincrome": "Kincrome CONTOUR® + Milwaukee 13pc + PACKOUT + $5,000 Cash",
-  "dewalt-kincrome": "Kincrome CONTOUR® + DeWalt 14pc + ToughSystem + $5,000 Cash",
-  "makita-kincrome": "Kincrome CONTOUR® + Makita 15pc + MAKTRAK + $5,000 Cash",
-  "ryobi-kincrome": "Kincrome CONTOUR® + Ryobi 19pc + LINK + $5,000 Cash",
-  "hikoki-sidchrome": "Sidchrome + HiKOKI 15pc + Multi Cruiser + $5,000 Cash",
-  "hikoki-milwaukee": "Milwaukee Toolbox + HiKOKI 15pc + Multi Cruiser + $5,000 Cash",
-  "hikoki-kincrome": "Kincrome CONTOUR® + HiKOKI 15pc + Multi Cruiser + $5,000 Cash",
-  "milwaukee-gearwrench": "GearWrench 288pc + Milwaukee 13pc + PACKOUT + $5,000 Cash",
-  "dewalt-gearwrench": "GearWrench 288pc + DeWalt 14pc + ToughSystem + $5,000 Cash",
-  "makita-gearwrench": "GearWrench 288pc + Makita 15pc + MAKTRAK + $5,000 Cash",
-  "ryobi-gearwrench": "GearWrench 288pc + Ryobi 19pc + LINK + $5,000 Cash",
-  "hikoki-gearwrench": "GearWrench 288pc + HiKOKI 15pc + Multi Cruiser + $5,000 Cash",
+  "milwaukee-sidchrome": "Sidchrome + Milwaukee 13pc + PACKOUT",
+  "dewalt-sidchrome": "Sidchrome + DeWalt 14pc + ToughSystem",
+  "makita-sidchrome": "Sidchrome + Makita 15pc + MAKTRAK",
+  "milwaukee-milwaukee": "Milwaukee Toolbox + Milwaukee 13pc + PACKOUT",
+  "dewalt-milwaukee": "Milwaukee Toolbox + DeWalt 14pc + ToughSystem",
+  "makita-milwaukee": "Milwaukee Toolbox + Makita 15pc + MAKTRAK",
+  "ryobi-sidchrome": "Sidchrome + Ryobi 19pc + LINK",
+  "ryobi-milwaukee": "Milwaukee Toolbox + Ryobi 19pc + LINK",
+  "milwaukee-kincrome": "Kincrome CONTOUR® + Milwaukee 13pc + PACKOUT",
+  "dewalt-kincrome": "Kincrome CONTOUR® + DeWalt 14pc + ToughSystem",
+  "makita-kincrome": "Kincrome CONTOUR® + Makita 15pc + MAKTRAK",
+  "ryobi-kincrome": "Kincrome CONTOUR® + Ryobi 19pc + LINK",
+  "hikoki-sidchrome": "Sidchrome + HiKOKI 15pc + Multi Cruiser",
+  "hikoki-milwaukee": "Milwaukee Toolbox + HiKOKI 15pc + Multi Cruiser",
+  "hikoki-kincrome": "Kincrome CONTOUR® + HiKOKI 15pc + Multi Cruiser",
+  "milwaukee-gearwrench": "GearWrench 288pc + Milwaukee 13pc + PACKOUT",
+  "dewalt-gearwrench": "GearWrench 288pc + DeWalt 14pc + ToughSystem",
+  "makita-gearwrench": "GearWrench 288pc + Makita 15pc + MAKTRAK",
+  "ryobi-gearwrench": "GearWrench 288pc + Ryobi 19pc + LINK",
+  "hikoki-gearwrench": "GearWrench 288pc + HiKOKI 15pc + Multi Cruiser",
+  "stihl-sidchrome": "Sidchrome + STIHL 10pc Outdoor + AP Battery Kit",
+  "stihl-kincrome": "Kincrome CONTOUR® + STIHL 10pc Outdoor + AP Battery Kit",
+  "stihl-milwaukee": "Milwaukee + STIHL 10pc Outdoor + AP Battery Kit",
+  "stihl-gearwrench": "GearWrench 288pc + STIHL 10pc Outdoor + AP Battery Kit",
   "cash-prize": "$10,000 Cash",
 };
 

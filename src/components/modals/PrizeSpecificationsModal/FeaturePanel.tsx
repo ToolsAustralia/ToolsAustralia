@@ -10,8 +10,6 @@ interface FeaturePanelProps {
   comboTitle: string;
   /** "15 power tools" / "MAKTRAK™ 7pc + Kincrome box". */
   stats: { tools: string; storage: string };
-  /** Hidden in cash mode — there is no bundled $5,000 when the winner took the $10,000. */
-  showCashBonus: boolean;
   /** Open the fullscreen viewer on the combination. Omitted → the image is not interactive. */
   onOpenViewer?: () => void;
   className?: string;
@@ -28,7 +26,6 @@ export default function FeaturePanel({
   comboImage,
   comboTitle,
   stats,
-  showCashBonus,
   onOpenViewer,
   className,
 }: FeaturePanelProps) {
@@ -60,11 +57,6 @@ export default function FeaturePanel({
             <ZoomIcon />
           </span>
         )}
-        {showCashBonus && (
-          <span className="absolute bottom-[9px] right-[9px] rounded-full bg-[#18a94d] px-[9px] py-[5px] font-poppins text-[8px] font-extrabold leading-none tracking-[0.1em] text-white shadow-[0_6px_16px_-6px_#18a94d]">
-            + $5,000 CASH
-          </span>
-        )}
       </Frame>
 
       <p className="mt-3 font-poppins text-[8.5px] font-bold leading-none tracking-[0.18em] text-[#18a94d] lg:mt-3.5">
@@ -77,9 +69,6 @@ export default function FeaturePanel({
       <dl className="mt-3.5 flex flex-col gap-0.5">
         <StatRow label="Power tools" value={stats.tools} dotColor="var(--pbc-accent)" />
         <StatRow label="Storage" value={stats.storage} dotColor="var(--pbc-accent)" />
-        {showCashBonus && (
-          <StatRow label="Cash bonus" value="$5,000" dotColor="#18a94d" emphasise />
-        )}
       </dl>
     </div>
   );

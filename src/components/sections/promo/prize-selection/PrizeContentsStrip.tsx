@@ -140,16 +140,13 @@ export function PrizeContentsStrip({
       {renderGrid(previewMobile, PREVIEW_COLUMNS_MOBILE, "sm:hidden")}
       {renderGrid(preview, PREVIEW_COLUMNS, "hidden sm:grid")}
 
-      {/* ONE row, scrolled rather than wrapped. The three chips land within ~6px of a 402px
+      {/* ONE row, scrolled rather than wrapped. The chips land within ~6px of a 402px
           viewport's inner width, so they wrapped to a second row that was 90% empty — and a
           longer storage name (GearWrench, Sidchrome) makes it worse, not better. Nothing is
           truncated; the row just scrolls on the narrowest screens. */}
       <div className="mt-2.5 flex flex-nowrap gap-1.5 overflow-x-auto scrollbar-hide">
         <Chip>{chips.tools}</Chip>
         <Chip>{chips.storage}</Chip>
-        <span className="shrink-0 whitespace-nowrap rounded-full border border-[#18a94d]/35 bg-[#18a94d]/[0.12] px-[9px] py-[5px] font-poppins text-[9.5px] font-bold leading-none text-[var(--pbc-cash-ink)]">
-          $5,000 cash
-        </span>
       </div>
     </section>
   );

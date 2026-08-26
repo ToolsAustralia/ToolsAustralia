@@ -311,7 +311,7 @@ every accent**, which is what caught it. `contrastRatio()` is exported alongside
   plate; a plate would box some brands and not others.
 - **Dark product stage** — see `.ta-product-stage` in [shared-ui/frontend.md](../shared-ui/frontend.md).
   The handoff's white case is light-mode only.
-- **Permit** is `NTP_NUMBER` from `@/constants/legal` (NTP/17494 for draw 9), not the prototype's placeholder.
+- **Permit** is `NTP_NUMBER` from `@/constants/legal` (NTP/17808 for draw 10), not the prototype's placeholder.
   The handoff's "Open to Australian residents; not available in ACT or SA." sentence was dropped
   (owner); the fine print is now "Government-certified draws · randomdraws.com.au · Permit NTP/…".
 
@@ -484,15 +484,36 @@ inline from the record's `markColor` pair; `.pbc-brand-mark` / `.dark .pbc-brand
 globals.css pick the right one. One asset, both themes, each at the brand's own colour — and the
 theme swap is pure CSS, so no hydration flash here either.
 
-**`markScale` equalises LETTER size, not box size.** Milwaukee is a 2.23:1 stacked lockup
-(script over a lightning bolt); Kincrome is 5.76:1 and Sidchrome 4.38:1 single-line wordmarks.
-Fit to a common box height their ink heights match (23.1 / 22.7 / 23.2px measured) but
-Milwaukee's *letters* render about half the size, because most of its box is bolt — that is
-what "Milwaukee looks unfairly small" was. Milwaukee therefore takes the full plate (`1.0`)
-and the wide wordmarks are scaled back to meet it (Kincrome `0.62`, Sidchrome `0.72`).
-Levelling DOWN is deliberate: bringing Milwaukee up needs ~1.4x, which overflows the plate
-into the piece-count eyebrow above it. Re-tune by rendering the three marks at the plate
-geometry and comparing — box maths alone will mislead you here.
+**`markScale` equalises LETTER size, not box size — and since draw 10 it is DERIVED.**
+Milwaukee is a 2.23:1 stacked lockup (script over a lightning bolt); Kincrome 5.74:1 and
+Sidchrome 4.39:1 are single-line wordmarks, and Sidchrome's sits inside a spanner outline
+that eats 58% of its height. Fit to a common box, their *letters* differ by up to 1.97x —
+that is what "Milwaukee looks unfairly small" was.
+
+Both `markScale` (toolbox) and `wordmarkScale` (toolset) now come out of one formula rather
+than being eyeballed. With `mask-size: contain` / `object-fit: contain` the painted height is
+`scale x min(plateH, plateW / aspect)`, and the letters are `capFrac` of that — `capFrac`
+being the share of the mark's height its main letter band occupies. So:
+
+```
+scale = targetCap / (min(plateH, plateW / aspect) x capFrac)
+```
+
+Measured `capFrac`: Sidchrome 0.42, Milwaukee 0.523, Makita 0.607, DeWalt 0.757, STIHL 0.938,
+Ryobi 0.945, GearWrench 0.952, HiKOKI 0.957, Kincrome 0.98. Draw 10 solved both lanes against
+a 13px target on the 156x30 desktop plate and a 12px target on the 156x20 toolset band; every
+mark now lands within 0.1px of its lane-mates, down from spreads of 1.97x (toolbox) and 1.75x
+(toolset).
+
+**This replaced the old "level everything DOWN to Milwaukee" rule**, which only held while the
+SVGs carried 58-72% dead canvas padding — five of them were exported onto a 700x200 sheet, so
+`contain` shrank each brand by a different amount and the scale values were silently cancelling
+that out. Every `brands/name/*.svg` `viewBox` is now cropped to its real glyph bounds, so scale
+means the same thing for every brand. **If you re-export a mark, crop it to its ink and
+re-derive** — a padded canvas re-breaks the whole lane, and box maths alone will mislead you.
+
+> Caveat: the formula assumes the mark is height-bound. HiKOKI is the widest lockup (6.58:1) and
+> goes width-bound on the 124px mobile card, where it reads ~18% under target. Nothing else does.
 
 **Mark colours are the brands' real colours, not the handoff's tints.** The handoff paired
 each mark with a lightened dark-mode variant (`#ff5a5a` Milwaukee, `#ff6058` Sidchrome) which
@@ -500,9 +521,27 @@ rendered salmon/pink next to the genuine brand art. Today:
 
 | Brand | light | dark | source |
 |---|---|---|---|
-| Milwaukee | `#c92a28` | `#c92a28` | the exact fill of `brands/name/milwaukeeText.svg` — the Milwaukee **toolset** card sits right below the toolbox card, so the two must be the same red |
+| Milwaukee | `#F72D2C` | `#F72D2C` | the exact fill of `brands/name/milwaukeeText.svg` — the Milwaukee **toolset** card sits right below the toolbox card, so the two must be the same red. Moved from `#c92a28` for draw 10 with the refreshed art |
 | Kincrome | `#0047BB` | `#4A7ED4` | the site's canonical `kincrome-blue` ramp (`LANDING_PAGE_BRAND` in [packageColorScheme.ts](../../src/utils/package-colors/packageColorScheme.ts)) |
 | Sidchrome | `#d21f2a` | `#d21f2a` | its own registry `accent` — a true red, where the handoff's `#c41230` carries a magenta cast |
+
+**Draw-10 wordmark refresh (2026-08-24).** The supplied art moved six fills; `brands/name/`
+now carries `milwaukeeText` `#F72D2C`, `dewaltText` `#FFCD00`, `makitaText` `#258FA7`,
+`ryobiText` `#F1F306` (was the lime `#BFD730`), `gearwrenchText{,-light}` `#F28B1F`, and
+`hikokiText` `#007749` (already matched, unchanged). **Kincrome and Sidchrome are mask-mode
+silhouettes** — their SVGs carry no fill, so "matching the new art" for them means moving
+`markColor`, which is bound to the card `accent` and (for Kincrome) to a documented dark-mode
+legibility pair. Both were left alone deliberately; moving them means moving `accent`, which
+repaints rings, glows and CTAs across every landing page.
+
+> **Known trade-off — yellow marks on the light card.** Toolset wordmarks render as one
+> finished `<Image>` on both themes, so a brand's own colour has to survive the near-white
+> `#f6f5f2` card. Ryobi's refreshed `#F1F306` measures **1.10:1** there (the old lime was
+> 1.48:1) and DeWalt's `#FFCD00` measures **1.38:1** — both weak, both fine on the dark card
+> (14.4:1 / 11.5:1). This is not a WCAG failure (logotypes are exempt, and the accessible name
+> rides on `alt`), but it is a legibility cost. The fix, if it is ever wanted, is to give the
+> toolset lane the duo path GearWrench already uses on the toolbox lane — an optional
+> `wordmarkLight` plus a darker light-theme file — not to compromise the brand colour.
 
 Only **Kincrome** keeps a per-theme pair: blue is perceptually much darker than the two reds,
 so the deep official blue disappears against the `#191b21` card. `npm run test:prize-builder`
@@ -1024,3 +1063,126 @@ instead of a browser fallback — an intended visual change. Details + rules:
 docs/shared-ui/tailwind-conventions.md §10.
 
 Also: `FloatingCountdownBanner` (a landing-path component) migrated framer-motion `motion.*` → LazyMotion `m.*`. See docs/shared-ui/patterns.md P7.
+
+### Spotlight and ComboRail after the cash-bonus removal (2026-08-28, draw 10)
+
+`COMBO_CASH_BONUS` is **gone** from `gallery-spotlight-model.ts`; `CASH_ONLY_AMOUNT` ($10,000) stays.
+
+- **`cashFlag` is now `string | null`** — null for every tool combination. `SpotlightPreview`
+  renders the green pill only when it is non-null, because an empty pill reads as a broken value
+  rather than a deliberate absence. If you add a caller, guard it.
+- **The cash stat tile is spread in conditionally**, so a tool combination returns **two** tiles,
+  not three with a blank. The test asserts `stats.length === 2` and that no tile carries `isCash`.
+- **`ComboRail`'s sub-heading** said "Tap to preview · $5,000 in each". Now "Tap to preview any
+  combination". The stale import was caught by `tsc`, not by a test — the string itself had no
+  coverage.
+
+> **`ComboRail` declares a 10:1 wordmark box on purpose.** It renders `toolset.wordmark` with
+> `width={2000} height={200}` — which does **not** describe the files. Draw 10 cropped every
+> `brands/name/*.svg` viewBox to its real glyph bounds, so the previous `700×200` (3.5:1) would
+> letterbox or offset most marks. A declared box wider than the widest wordmark (HiKOKI, 6.58:1)
+> keeps `object-contain` **height-bound** for every brand, so each lands at exactly
+> `wordmarkScale × plate` tall with `object-left` pinning it. **Keep that ratio above the widest
+> aspect `npm run check:brand-wordmarks` reports.**
+
+### Draw-10 combo renders — the cash is out of the photography (2026-08-25)
+
+All 20 `{toolset}-{toolbox}.webp` combo renders under
+[public/images/majordraws/](../../public/images/majordraws/) were replaced from the
+"COMBO PRIZES CUTOUT" shoot. The previous set showed the model **holding a fan of cash** — the
+$5,000 bonus draw 10 removed — so the copy fix alone would have left the claim standing in the art.
+
+**The shoot is 48 frames: 24 combinations × 2 variants** (with and without the model). We take the
+**with-model** frame; neither variant contains cash. Frame numbers are not a reliable index — the
+pairs are mostly odd = without / even = with, but **Sidchrome × STIHL is reversed** (13 has the
+model, 14 does not). Identify by eye, not by parity.
+
+**Conversion** (source 6121×4083 PNG with alpha → 1600×1200 WebP with alpha, matching what was
+already on disk): `trim()` to content **first**, then fit, then re-pad to the uniform frame.
+Skipping the trim leaves each subject at whatever size it happened to occupy on a very empty
+6121px canvas, so the set would render at visibly different scales combo to combo.
+
+Files land ~150–250 KB against the old set's ~100–170 KB. That is the photography, not the encode —
+the new frames carry more product. Quality below 76 buys almost nothing (271 → 209 KB from q82 to
+q68 on the worst case), so 76 / effort 6 is the settled point.
+
+> **The shoot also covers STIHL.** 24 combinations = **6** toolsets × 4 toolboxes, i.e. the five
+> live ones plus STIHL. Its four combo renders are staged at
+> `public/images/majordraws/stihl-set/stihl-{milwaukee,sidchrome,kincrome,gearwrench}.webp` and are
+> **not referenced by any code yet** — they land with the STIHL toolset wiring. Nothing stats them,
+> so they are inert until then. **Still missing for STIHL: the reel-card kit photo**
+> (`stihl-set/STIHL.webp`) — this shoot is combinations only.
+
+### STIHL individual tool art — 106 frames curated to 11 (2026-08-25)
+
+The "INDIVIDUAL TOOLS CUT-OUT" shoot delivered **106 frames for ~11 subjects**: each tool was
+exported 4–8 times (near-identical takes) plus a variant whose cutout **keeps the wooden display
+block**. Everything landed in `public/images/majordraws/stihl-set/`.
+
+**How the pick was made** (`scratchpad/cluster.js` — the method matters more than the script):
+
+1. **Cluster, don't eyeball.** A 64-bit dHash of each *trimmed* subject, single-link clustered at
+   hamming ≤ 14, collapsed 106 frames into 31 groups. Trimming first is essential — these are
+   cutouts on a mostly-empty 6123×4082 canvas, so hashing the raw frame just hashes the emptiness.
+2. **Score within a group.** Variance of a Laplacian over opaque pixels only (edge crispness), plus
+   subject coverage and content aspect. Near-identical takes differ by 2–5× in sharpness, so this
+   is a real discriminator, not a tiebreak.
+3. **Then look.** Two frames the metrics would have passed had to be rejected by eye:
+   **#36** still has the roller-shutter studio background (never cut out), and **#78/#84/#86** clip
+   the mower's front wheel at the canvas edge. Sharpness cannot see either.
+
+**Chosen convention:** the **tool-only** cutout, not the with-block variant. At the 84 px `SpecCard`
+tile the block halves the tool's size and adds nothing.
+
+> The prop heuristic (opaque coverage of the bottom 18% of frame) **misfires on the KOA 20**, whose
+> own black base fills the bottom edge — all four of its frames are clean cutouts despite being
+> flagged `block`. Treat that flag as a hint, not a verdict.
+
+**Output, matching what was already on disk:**
+
+| | format | why |
+|---|---|---|
+| `STIHL.webp` (toolset reel card) | 1000×840 WebP, **alpha kept** | matches `HIKOKI.webp`; sits on the reel card |
+| 10 individual tools | 1920×1280 WebP, **flattened white** | matches the makita/hikoki tool shots. `PrizeImageViewer`'s backdrop is `rgba(6,7,10,α)`, so a transparent cutout of a white-bodied tool (KOA 20, ASA 20, GTA 26) would lose its edges there |
+
+11 files, ~719 KB total — in line with the existing sets (tools 29–90 KB, card 108 KB vs HiKOKI's 97 KB).
+
+**Model numbers were read off the decals**, not assumed: `MS 391 FARM BOSS`, `BG 86`, `HS 45`,
+`FS 91 R` (on the shaft), `GTA 26`, `ASA 20`, `KOA 20`, `AL 301` + `AP 300 S`. The **mower carries no
+legible model** — only "BRUSHLESS" and the "4-IN-1" badge — so it is
+`stihl-brushless-4-in-1-lawn-mower.webp` rather than an invented code. **Confirm the mower's model
+and the spray lance's before these reach `specSections` copy.**
+
+> None of these files is referenced by code yet — the STIHL toolset is still unwired. They are inert
+> until `TOOLSETS` gains its record.
+
+### The $5,000 combo bonus had FIVE surfaces, not one (2026-08-26)
+
+Draw 10 removed the $5,000 cash that used to ride on every tool combination. The catalogue copy
+was the obvious half; the prize builder carried its own, independent set that a repo-wide grep
+**missed**, and it stayed live until the page was opened in a browser:
+
+| Surface | What it said |
+|---|---|
+| `ComboHero.tsx` | a green `+ $5,000 CASH INCLUDED` pill on the combination hero |
+| `prize-builder-model.ts` | `showCashFlag: boolean` on `ComboPresentation`, and `sub` ending `· plus $5,000 cash` |
+| `PrizeContentsStrip.tsx` | a `$5,000 cash` chip beside the tools/storage chips |
+| `PrizeBuilderCard.tsx` | lead copy: "Any toolbox. Any power toolset. Plus **$5,000** cash…" |
+| `PrizeBuilderCard.test.ts` | a test **asserting** the hero and chips advertised it |
+
+**Two lessons worth keeping.**
+
+**1. The grep that found "nothing left" was filtered wrong.** The sweep excluded lines matching
+explanatory phrases so the new "draw 10 removed…" comments would not show up as hits — and that
+exclusion swallowed real matches. A negative grep result is only as trustworthy as its filter.
+What actually caught this was rendering the page and reading it.
+
+**2. A test can encode the old rule.** `"bundle mode advertises the $5,000 bonus in the hero and
+the chips"` passed the whole time, because it asserted exactly the behaviour being removed. It was
+**inverted rather than deleted** — it now asserts no `$5,000` / `$5K` claim appears anywhere in the
+card, in any spelling, so the claim cannot come back by accident. When you remove a customer-facing
+claim, search the tests for it too: a green suite is not evidence the claim is gone.
+
+`showCashFlag` is deleted rather than left permanently false — a flag nothing can set is a
+question the next reader has to answer. The **$10,000 cash-only option is untouched**: it is a
+separate selection, not a flag on the gear.

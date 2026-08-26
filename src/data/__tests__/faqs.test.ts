@@ -158,7 +158,12 @@ function main() {
   // TA rewards-points and TA profile entries — i.e. a confidently wrong answer.
   // Bumped 83 → 85 (2026-08-17): two entries for the optional profile gender field.
   // Bumped 85 → 87 (2026-08-18): blocked-card guidance (temporary card block + whether to wait).
-  assert.strictEqual(entries.length, 87, `Expected 87 FAQ entries, got ${entries.length}`);
+  // Bumped 87 → 89 (2026-08-24): ids 86 + 87 — the competition-terms refund rules. A member
+  // cited the 48-hour genuine-purchase-error clause on /competition-term-majordraw and Cobber
+  // called our own page an "external link" it could not read, because the page was in neither
+  // [key-pages] nor the knowledge pack. id 12 was CORRECTED (not added) in the same change, so
+  // it does not move the count.
+  assert.strictEqual(entries.length, 89, `Expected 89 FAQ entries, got ${entries.length}`);
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).

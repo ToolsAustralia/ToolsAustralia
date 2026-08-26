@@ -558,3 +558,71 @@ exactly wrong for a blocked card (retrying is what caused the block). Corpus cou
 Backend counterpart: `EXCESSIVE_RETRY_COOLDOWN_DAYS` in
 [chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts). If that window changes,
 FAQ 84/85 and the member Pay-Now copy must change with it.
+
+## Cobber called our own terms page an "external link" (2026-08-24, draw 10)
+
+A member asked about the refund policy. Cobber answered with the membership line only
+("non-refundable once purchased"), so the member pushed back, correctly citing the **48-hour
+genuine-purchase-error** clause on `/competition-term-majordraw`. Cobber replied that it did
+"not have access to the content of external links" and offered to escalate — about a page on
+our own site, stating a refund route our published terms actually grant.
+
+**Root cause was structural, not a prompt slip — three layers all missed the page:**
+
+1. `/competition-term-majordraw` was **not in `[key-pages]`** (`buildKeyPagesSection()` in
+   [build-chat-knowledge-pack.ts](../../scripts/build-chat-knowledge-pack.ts)), and answering
+   rule 8 says *"Use only the canonical paths listed in `[key-pages]`. Do not invent paths."*
+   Cobber had no way to link the page even if it had known the content.
+2. The page's **content was nowhere in the pack**. Every clause on it — refunds, entry-package
+   conditions, eligibility, prize claim — was ungrounded, and rule 1 is *"Answer ONLY from the
+   knowledge provided below."* With nothing to cite, "I can't read that link" is the honest
+   output of a correctly-grounded bot.
+3. The **FAQ corpus was one-sided.** id 12 / id 19 asserted "non-refundable" with no mention of
+   the genuine-error exception, so even the deflection path gave an incomplete answer.
+
+**The fix (all four, or it regresses):**
+
+- New **`[competition-terms]`** pack section (`buildCompetitionTermsSection()`) summarising the
+  refund rules in both directions, entry-package conditions, eligibility and claim handling.
+  It is **PROSE, not derived** — the terms page is JSX, with nothing importable. **Keep it in
+  lockstep with [`competition-term-majordraw/page.tsx`]( ../../src/app/\(site\)/competition-term-majordraw/page.tsx)
+  by hand whenever a clause moves.**
+- `/competition-term-majordraw` added to `[key-pages]`.
+- FAQ **ids 86 + 87** (the 48-hour path; what is *not* refundable), and **id 12 corrected** to
+  name the two exceptions. Count assertion bumped 87 → 89.
+- **Answering rule 9** added to [systemPrompt.ts](../../src/services/support-chat/systemPrompt.ts):
+  our own pages are never "external links", and when a member says one of our pages contradicts
+  the bot, treat them as probably right, re-check the knowledge and correct the omission.
+
+**Cost.** The pack ceiling in
+[knowledge-pack.test.ts](../../src/lib/support-chat/__tests__/knowledge-pack.test.ts) went
+14,000 → 15,200 (~900 extra uncached input tokens/turn, ~$0.10/month). Note the guard was
+**already breached at 14,067** before this change — it went red on main at `e762dcda`
+(2026-08-18). Prompt caching remains the real fix and would make the ceiling moot.
+
+**Generalise this.** Any customer-facing page whose *rules* a member can quote back at us
+(`/terms`, `/privacy`, `/competition-term-majordraw`) needs both a `[key-pages]` entry **and**
+grounded content. A page in neither is a page Cobber will deny knowing.
+
+## Cobber's prize knowledge is derived, and states the cash removal explicitly (2026-08-28, draw 10)
+
+`buildPrizesSection()` in [build-chat-knowledge-pack.ts](../../scripts/build-chat-knowledge-pack.ts)
+already derived the *combination list* from `PRIZE_CATALOG`, but the surrounding prose hardcoded
+"each bundled with a $5,000 cash bonus" — so the bot asserted a prize the catalog no longer
+contained. The sentence is gone and the combination count is now interpolated
+(`${toolPrizes.length} combinations`) rather than written out.
+
+**The section now says the absence out loud**, not just omits it:
+
+> This is the ONLY cash in the prize: a tool combination does **not** come with a cash bonus on
+> top. If a member mentions a $5,000 bonus they are recalling a previous draw — it was removed for
+> the draw that opened 2026-08-28.
+
+That is deliberate. Members who saw the old landing pages **will** ask about the $5,000, and a
+pack that merely omits it leaves Cobber to guess — which is how it ends up either confirming a
+prize we no longer give or flatly denying something the member genuinely remembers. FAQ id 3 was
+corrected the same way.
+
+**Lesson for the next prize change:** deriving the *list* is not enough if the *prose around it*
+still describes the old prize. Grep the builder for hardcoded amounts whenever the catalog changes,
+and prefer stating what changed over silently dropping it.

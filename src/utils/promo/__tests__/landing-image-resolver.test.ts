@@ -119,19 +119,23 @@ function testGwTbResolvesWhereArtExistsAndDegradesForRyobi() {
 }
 
 /**
- * Kincrome now ships -drawn-tomorrow / -drawn-tonight art (resolves with the suffix), but no
- * -final-hours tier (collapses to the base kinTB hero).
+ * Draw 10 (2026-08-26): the -drawn-tomorrow / -drawn-tonight art was WITHDRAWN for every
+ * brand — all 160 files baked `& $5K CASH` into the headline and draw 10 removed that bonus.
+ * So all three countdown tiers now behave the way -final-hours always has: the resolver drops
+ * the tier and serves the base hero.
+ *
+ * The assertion is deliberately the STRONGER one — not merely 'resolves to something real',
+ * but 'carries no countdown suffix at all'. If replacement art is dropped in without this
+ * test being updated, it goes red and tells you to restore URGENCIES in
+ * scripts/check-landing-hero-assets.mjs rather than silently half-shipping.
  */
 function testKinTbDrawnTiersResolveAndFinalHoursCollapses() {
   for (const brand of LANDING_BRANDS) {
-    for (const urgency of ["drawn-tomorrow", "drawn-tonight"] as const) {
+    for (const urgency of ["drawn-tomorrow", "drawn-tonight", "final-hours"] as const) {
       const url = resolveLandingHeroImage(brand, "light", "desktop", "kinTB", urgency);
-      assert.ok(url.includes(urgency), `${brand} kinTB ${urgency} should resolve to real art, got ${url}`);
+      assert.ok(!url.includes(urgency), `${brand} kinTB ${urgency} should collapse to base, got ${url}`);
       assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
     }
-    const fh = resolveLandingHeroImage(brand, "light", "desktop", "kinTB", "final-hours");
-    assert.ok(!fh.includes("final-hours"), `${brand} kinTB final-hours should collapse, got ${fh}`);
-    assert.ok(LANDING_IMAGE_MANIFEST.has(fh), `${fh} must exist in manifest`);
   }
 }
 
@@ -166,16 +170,20 @@ function testAllVariantsExistInManifest() {
  * suffix SURVIVES is what actually catches a missing/misnamed drawn asset.
  */
 function testDrawnTiersResolveToRealArtEverywhere() {
+  // Renamed in spirit for draw 10: the drawn tiers no longer HAVE art (see the kinTB block
+  // above), so what must hold everywhere is that dropping the tier still lands on a real,
+  // manifest-backed base hero for every brand x toolbox x viewport — never a broken URL and
+  // never the evergreen collage, which would show the wrong prize.
   for (const brand of LANDING_BRANDS) {
-    for (const suffix of ["milTB", "sidTB", "kinTB"] as const) {
+    for (const suffix of ["milTB", "sidTB", "kinTB", "gwTB"] as const) {
       for (const viewport of ["desktop", "mobile"] as const) {
         for (const urgency of ["drawn-tomorrow", "drawn-tonight"] as const) {
           const url = resolveLandingHeroImage(brand, "light", viewport, suffix, urgency);
-          assert.ok(
-            url.includes(urgency),
-            `${brand}/${suffix}/${viewport} ${urgency} collapsed to base — drawn art missing, got ${url}`
-          );
           assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
+          assert.ok(
+            url.includes(`/${brand}/`),
+            `${brand}/${suffix}/${viewport} ${urgency} fell through to another brand, got ${url}`
+          );
         }
       }
     }

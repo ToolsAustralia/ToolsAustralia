@@ -84,6 +84,60 @@ which is the real lesson: the first dev-mode attempt died mid-walk right after N
 optimizer logged a 400 for a genuinely missing asset. **Fix the 404s before blaming the
 server.** The QA watchdog reporting a `400 Bad Request` is a real product bug, not test noise.
 
+**Never hardcode a draw-scoped legal value — import the constant.** The permit step originally
+asserted the literal `NTP/17494` in both its locator and its narration. The NT permit is
+**reissued every draw** (17494 for draw 9, `NTP/17808` for draw 10), so that literal turned this
+demo red on the draw-10 rollover for a reason that has nothing to do with the assets under test —
+and the failure reads like an asset regression, which is the expensive kind of false alarm.
+
+The step now imports `NTP_NUMBER` from [`@/constants/legal`](../../src/constants/legal.ts) and
+interpolates it into both the locator and the step title, so it tracks the source of truth
+forever. `@/` path aliases resolve fine from `e2e/` (`promo-theme-split.spec.ts` does the same
+with `PROMO_THEME_SLUG`) — prefer that over duplicating a value the app already owns.
+
+Generalise it: **any value a spec asserts that rolls on a schedule** — permit numbers, draw
+dates, prize pool totals, the active brand line-up — should come from the constant or the DB, not
+a literal. The narration string counts too; a stale step title makes a passing run misleading.
+
+### Rules learned recording `draw10-assets.spec.ts` (2026-08-26)
+
+This spec proves a **removal** (the $5,000 combo cash bonus) alongside an addition (STIHL as the
+sixth toolset). Proving a removal is a different job from proving a feature, and it taught three
+things worth reusing.
+
+**A negative-content guard must exclude the demo's own overlay.** The `$5,000` guard scans the
+rendered page for any cash claim. It fired on `/promotions/stihl-gearwrench` — and the match was
+**the caption `demo.step` had just painted**, whose title contains the very string being banned.
+`demo.step`/`demo.highlight` inject `#__e2eCaption`, `#__e2eHighlight` and `#__e2eTitleCard` into
+the page under test, so any assertion that reads `body.innerText` sees the narration too. Clone
+the body and strip those three ids before scanning:
+
+```ts
+const text = await page.evaluate(() => {
+  const clone = document.body.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll("#__e2eCaption, #__e2eHighlight, #__e2eTitleCard").forEach((n) => n.remove());
+  return clone.innerText;
+});
+```
+
+The tell was the failure message: it reported only the matched substring, which looked identical
+whether it came from the product or the narration. **Make a content guard print its surrounding
+context**, not just the match — that one change turned an hour of hunting into an instant read.
+
+**The proof run found what grep could not.** A repo-wide sweep for `$5,000` had already come back
+clean, yet the recording caught two live surfaces still making the claim: `PromoBottomDock.tsx`
+(`cash: "+ $5,000"`) and `MembershipPrizeChooser.tsx`. Both were invisible to a literal grep
+because the string is **composed** — a bare `"+ $5,000"` in a data object, rendered elsewhere.
+A guard that reads the **rendered** page is the only thing that catches that class of miss, which
+is the argument for asserting removals in proof mode rather than trusting a text search.
+
+**Wait on what the page actually has, not on the helper you already wrote.** `visibleHero()`
+waits for `img[alt^="Promo Hero"]` — correct on a brand page, and an outright failure on
+`/promotions`, which is the **evergreen root** and renders no hero image at all. Settling that
+page before its first caption needed a different anchor (the permit line). Before reusing a
+settle helper on a new route, confirm the element it waits for exists there; a settle helper that
+cannot settle fails the run in a way that reads like a missing asset.
+
 ### Rules learned recording `streak-journey.spec.ts` (2026-07-28)
 
 The seed helpers this spec drives (`e2e/seed/streak.ts`) are documented in architecture.md — this
