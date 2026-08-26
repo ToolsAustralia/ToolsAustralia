@@ -95,6 +95,8 @@ test("Step2Demographics — clean", () => {
       selectedBirthdate: "1990-01-01",
       stateOptions: [{ value: "NSW", label: "New South Wales" }],
       professionOptions: [{ value: "Builder", label: "Builder" }],
+      selectedGender: "male",
+      genderOptions: [{ value: "male", label: "Male" }, { value: "female", label: "Female" }],
       inlineErrors: {},
       error: null,
       isStep2OverlayOpen: false,
@@ -104,8 +106,10 @@ test("Step2Demographics — clean", () => {
       onProfessionChange: noop,
       onCustomProfessionChange: noop,
       onBirthdateChange: noop,
+      onGenderChange: noop,
       onStateDropdownChange: noop,
       onProfessionDropdownChange: noop,
+      onGenderDropdownChange: noop,
       onBirthdateOpenChange: noop,
     })
   );
@@ -122,6 +126,8 @@ test("Step2Demographics — SA ineligibility notice", () => {
       selectedBirthdate: "1990-01-01",
       stateOptions: [{ value: "SA", label: "South Australia" }],
       professionOptions: [{ value: "Other", label: "Other" }],
+      selectedGender: "",
+      genderOptions: [{ value: "male", label: "Male" }, { value: "female", label: "Female" }],
       inlineErrors: {},
       error: null,
       isStep2OverlayOpen: true,
@@ -131,8 +137,10 @@ test("Step2Demographics — SA ineligibility notice", () => {
       onProfessionChange: noop,
       onCustomProfessionChange: noop,
       onBirthdateChange: noop,
+      onGenderChange: noop,
       onStateDropdownChange: noop,
       onProfessionDropdownChange: noop,
+      onGenderDropdownChange: noop,
       onBirthdateOpenChange: noop,
     })
   );

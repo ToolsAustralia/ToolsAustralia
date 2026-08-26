@@ -34,29 +34,53 @@ export async function getMerByDraw(): Promise<MerDrawRow[]> {
     .select("name activationDate drawDate status")
     .lean();
 
-  const rows: MerDrawRow[] = [];
-  for (const d of draws) {
-    const activation = d.activationDate ? new Date(d.activationDate) : null;
-    const drawDate = d.drawDate ? new Date(d.drawDate) : null;
-    if (!activation || !drawDate) continue;
+  const usable = draws.filter((d) => d.activationDate && d.drawDate);
 
-    const inProgress = d.status === "active" || d.status === "frozen";
+  /**
+   * Bounded concurrency, not a sequential loop.
+   *
+   * This used to be `for…of` with an `await` inside, so N draws cost N round-trip groups in
+   * series — and N grows by one every month, which is how a route slides into a timeout with no
+   * code change. Same chunked pattern the snapshot reader already uses for live days.
+   *
+   * POOL_SIZE 4, not 8: mongoose is configured with `maxPoolSize: 5`, so a wider pool just
+   * queues on the connection pool while holding more memory.
+   */
+  const POOL_SIZE = 4;
+  const rows: MerDrawRow[] = new Array(usable.length);
 
-    // readStatsForRange enumerates whole AEST days and stops at "today", so passing a
-    // future drawDate (the in-progress draw) is safe — it computes up to today live.
-    const stats = await readStatsForRange({ rangeStartUTC: activation, rangeEndUTC: drawDate });
+  for (let i = 0; i < usable.length; i += POOL_SIZE) {
+    const chunk = usable.slice(i, i + POOL_SIZE);
+    await Promise.all(
+      chunk.map(async (d, j) => {
+        const activation = new Date(d.activationDate as string | Date);
+        const drawDate = new Date(d.drawDate as string | Date);
+        const inProgress = d.status === "active" || d.status === "frozen";
 
-    rows.push(
-      computeDrawMerRow({
-        draw: {
-          drawId: String(d._id),
-          drawName: d.name,
-          periodStart: activation.toISOString(),
-          periodEnd: drawDate.toISOString(),
-          inProgress,
-        },
-        adChannels: stats.adChannels,
-        attributedRevenue: stats.attributedRevenue,
+        // readStatsForRange enumerates whole AEST days and stops at "today", so passing a
+        // future drawDate (the in-progress draw) is safe — it computes up to today live.
+        //
+        // `includeDistinctUserCounts: false`: that aggregation fills `revenue.buckets[].userCount`,
+        // which nothing below reads. It was N discarded $lookup self-joins per request.
+        const stats = await readStatsForRange({
+          rangeStartUTC: activation,
+          rangeEndUTC: drawDate,
+          includeDistinctUserCounts: false,
+        });
+
+        // Write BY INDEX — the caller's most-recent-first order comes from the .sort() above and
+        // must survive; pushing from a pool would interleave by completion time.
+        rows[i + j] = computeDrawMerRow({
+          draw: {
+            drawId: String(d._id),
+            drawName: d.name,
+            periodStart: activation.toISOString(),
+            periodEnd: drawDate.toISOString(),
+            inProgress,
+          },
+          adChannels: stats.adChannels,
+          attributedRevenue: stats.attributedRevenue,
+        });
       })
     );
   }

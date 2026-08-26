@@ -16,6 +16,8 @@ const QuerySchema = z.object({
   dateFrom: z.string().max(50).optional(),
   dateTo: z.string().max(50).optional(),
   inActiveMajorDraw: z.enum(["yes", "no"]).optional(),
+  miniDrawPackage: z.enum(["yes", "no"]).optional(),
+  inActiveMiniDraw: z.enum(["yes", "no"]).optional(),
   segment: z.enum(["top20MajorDraw"]).optional(),
 });
 
@@ -42,6 +44,8 @@ export const GET = withNorm(
       dateTo: parsed.data.dateTo,
       states,
       inActiveMajorDraw: parsed.data.inActiveMajorDraw,
+      miniDrawPackage: parsed.data.miniDrawPackage,
+      inActiveMiniDraw: parsed.data.inActiveMiniDraw,
       segment: parsed.data.segment,
     });
 

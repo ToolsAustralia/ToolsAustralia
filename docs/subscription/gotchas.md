@@ -2,6 +2,38 @@
 
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
+## Anchor-24 members could not upgrade at all (2026-08-24)
+
+**Symptom:** every tier upgrade by a member whose renewal is anchored failed with a Stripe 400.
+Not flaky — deterministic, for the whole cohort, since anchoring shipped.
+
+**Cause:** the upgrade is pay-first by design (`billing_cycle_anchor: "now"`), and anchored members
+are held on a pending `trial_end` by design (25th–27th joiners → the 24th; past-due recoveries →
+their clamped catch-up day). Stripe refuses an anchor that lands before an unfinished trial.
+
+**Why not just clear the trial:** ending it and walking away silently discards anchor-24 for that
+member — their renewal drifts off the 24th and loses the ≥3-day buffer before the major draw that
+the whole rule exists to guarantee. The fix is **end trial → charge now → re-apply the anchor for
+the next cycle**, so pay-first semantics and the anchor both survive.
+
+**What this means for the member journey:** an upgrading anchored member is charged the new tier's
+full price today (unchanged) but **keeps their renewal day** instead of resetting it to today. Their
+Stripe subscription is left `trialing`; `getSubscriptionStatusText` maps that to **"Active"** and no
+member surface says "Trial". `subscription.endDate` is re-synced by the `customer.subscription.updated`
+webhook, which already handles `trialing` subs, so `/my-account` shows the right next renewal date
+without the route writing it.
+
+**And they are never charged twice in a fortnight.** The re-applied anchor is a *billing* date, so
+an upgrade a few days before it would take the full new-tier price twice within days, uncredited.
+When the anchor is under **14 days** out the renewal moves to the following month — the member's
+renewal *day* is unchanged, only which occurrence is next. This is why the upgrade FAQ no longer
+advises members to "upgrade close to your renewal date".
+
+Mechanism, ordering traps, the 14-day floor, and the $0-invoice guard:
+[billing-stripe/gotchas.md](../billing-stripe/gotchas.md) and
+[PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md). Live-Stripe gate:
+`npm run stripe:probe-upgrade-anchor`.
+
 ## `useMembershipModalDeepLink` must not use `useSearchParams()` (2026-07-27)
 
 The Klaviyo abandoned-checkout deep-link hook
@@ -110,6 +142,17 @@ The "Complete your renewal payment" modal ([RenewalFailedModal](../../src/compon
 ### Pause-collection orphans
 
 When a renewal fails we set `pause_collection: { behavior: "keep_as_draft" }`. If `resumeAfterSuccessfulRenewalPayment()` doesn't run on the matching success event, the subscription stays paused — and **subsequent cycle invoices stay draft, never finalize, never charge**. The user appears to be active in our DB but Stripe never bills them.
+
+**The clear is gated on a pause actually existing (2026-08-24).** `decideClearPause` in
+`pauseCollectionPolicy.ts` short-circuits to `false` when `subscription.pause_collection == null`, so
+the decision is now exactly `pauseCollectionPresent && pauseReason !== "retention"`. Before that, a
+plain `subscription_cycle` renewal satisfied the disjunction on its own and we issued
+`subscriptions.update(… pause_collection: "")` for **every** renewing member, almost none of whom were
+paused — one wasted `/v1/subscriptions` write per renewal, on the endpoint that hit Stripe's 25 req/sec
+cap during the 23 Aug burst. Behaviour for a member who *is* paused is unchanged: same code path, same
+ordering, still before benefits. This narrows the orphan risk rather than widening it — the write we
+removed could only ever have cleared a pause that was not there. `resumeAfterSuccessfulRenewalPayment`
+itself is unchanged and still safe to call unconditionally from the admin / retry paths.
 
 Causes seen in production:
 - Slow `processPaymentBenefits()` path — long DB writes for entry accumulation. **Fix**: resume runs *before* benefits.

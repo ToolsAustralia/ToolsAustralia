@@ -15,11 +15,9 @@ export default function SnapchatAdsManagement() {
   const df = useAdminDateFilter("today");
   return (
     <div className="space-y-6">
-      {/* empty:hidden — the dropdown portals to the mobile header slot, leaving this
-          wrapper childless on mobile; the variant collapses it so there's no phantom gap. */}
-      <div className="flex justify-end empty:hidden">
-        <AdminDateRangeToolbar filter={df} />
-      </div>
+      {/* Direct child, NOT wrapped: the toolbar is sticky on desktop and a wrapper sized to
+          the control would be the only box it could travel within — pinning it to nothing. */}
+      <AdminDateRangeToolbar filter={df} />
       <PlatformHourlyRevenueSection
         platform="snapchat"
         platformLabel="Snapchat"

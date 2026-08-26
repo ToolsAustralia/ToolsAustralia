@@ -81,6 +81,13 @@ export interface AdminDashboardStats {
     total: number;
     totalTrend?: TrendData;
     activeSubscriptions: number;
+    /**
+     * Active memberships as of the END of the selected window — the date-scoped counterpart to
+     * the standing `activeSubscriptions`. Absent when a past window has no membership snapshot
+     * for its end date (normal for ~3.5h after AEST midnight); consumers must drop the figure
+     * rather than substitute the live count. See DashboardStatsService for the source rules.
+     */
+    activeMembershipsAtEnd?: number;
     newInRange: number;
     newInRangeTrend?: TrendData;
     profileCompletion: number;
@@ -341,7 +348,20 @@ export function useAdminDashboardStats(
   dateRange: "today" | "yesterday" | "all-time" | "custom" | "current-draw" | "last-draw" = "today",
   startDate?: string,
   endDate?: string,
-  options?: { enabled?: boolean }
+  options?: {
+    enabled?: boolean;
+    /**
+     * Freshness overrides for callers querying a CLOSED window.
+     *
+     * The defaults below (2-minute staleTime, 5-minute poll) suit the live dashboard, whose
+     * window includes today. A caller asking for a finished period — e.g. the period-comparison
+     * card's previous calendar month — would otherwise poll this fairly heavy route forever for
+     * data that can only change if a refund lands. Pass a long `staleTime` and
+     * `refetchInterval: false` for those.
+     */
+    staleTime?: number;
+    refetchInterval?: number | false;
+  }
 ) {
   return useQuery<AdminDashboardStats>({
     // Caller-gated: draw/custom ranges must wait for resolved dates, else the route
@@ -370,9 +390,9 @@ export function useAdminDashboardStats(
 
       return result.data;
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes - admin stats can be slightly stale
+    staleTime: options?.staleTime ?? 2 * 60 * 1000, // 2 minutes - admin stats can be slightly stale
     gcTime: 5 * 60 * 1000, // 5 minutes
-    refetchInterval: 5 * 60 * 1000, // Auto-refresh every 5 minutes
+    refetchInterval: options?.refetchInterval ?? 5 * 60 * 1000, // Auto-refresh every 5 minutes
     retry: 2,
   });
 }

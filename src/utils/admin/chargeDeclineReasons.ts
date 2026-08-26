@@ -56,12 +56,19 @@ export const RECOVERY_DECLINE_CODES = {
   rebillNotSettled: "rebill_not_settled",
   /** An unexpected (non-Stripe) throw inside the recovery flow — machinery fault. */
   recoveryError: "recovery_error",
+  /**
+   * Stripe could not be reached for this invoice (429 / 5xx / network) even after
+   * retries. NOT a card outcome and NOT a missing invoice — the member simply was
+   * not reached this run and should be retried next run.
+   */
+  invoiceUnavailable: "invoice_unavailable",
 } as const;
 
 /** Admin-facing labels for the synthetic codes. Stripe codes are labelled elsewhere. */
 export const RECOVERY_DECLINE_LABELS: Record<string, string> = {
   [RECOVERY_DECLINE_CODES.rebillNotSettled]: "Re-billed cycle didn't settle",
   [RECOVERY_DECLINE_CODES.recoveryError]: "Recovery error",
+  [RECOVERY_DECLINE_CODES.invoiceUnavailable]: "Stripe unavailable (retry next run)",
 };
 
 /**

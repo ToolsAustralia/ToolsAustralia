@@ -4,6 +4,32 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
+## The knowledge pack is already over its own token ceiling (2026-08-24)
+
+`npm run test:chat-knowledge` asserts the generated pack stays under **14,000** approx tokens
+(`text.length / 4`). It is currently **~14,118** and was **~14,067** before the trial-aware-upgrade
+copy fix below — i.e. **this test was already red on `feature/renewal-surge` (and on `main`) and is
+not caused by that change.** The ceiling's own comment says not to bump it: every token here is paid on **every
+turn**, and the real fix is prompt caching on the system block, not a bigger number.
+
+Treat this as a standing debt with a clear owner-decision attached: either land prompt caching, or
+trim ~350 characters of lower-value corpus content. Do **not** raise the assertion to make a build
+green, and do not add "nice to have" entries until it is back under budget.
+
+**Copy fix that landed alongside it.** Cobber ids **22** and **51** asserted flatly that an upgrade
+"resets your billing cycle to today". That is now wrong for anchored members — the trial-aware
+upgrade charges them today but **preserves their renewal day** (see
+[subscription/gotchas.md](../subscription/gotchas.md), [BUSINESS.md §9b/§10c](../../BUSINESS.md)).
+Both answers were rewritten to qualify the reset **and tightened**. id51's closing advice — *"it's
+usually best to upgrade close to your renewal date"* — was also **reversed**, because after the
+14-day double-charge floor that advice pointed members at the exact window the floor exists to guard.
+Net cost of both corrections: **+51 tokens** (14,067 → 14,118), most of it the safety clause. Corpus
+size is unchanged (87), so the `faqs.test.ts` count assertion did not move.
+`build:chat-knowledge-pack` was re-run — an un-rebuilt pack leaves Cobber reciting the old copy no
+matter what the corpus file says.
+
+---
+
 ## Knowledge-gap batch: corpus 39 → 68, and a specific rule MUST beat a broad one (2026-07-15)
 
 Added ids **40-68** to close answerable-but-dodged questions (referrals/affiliate, account+auth, promo/after-checkout offer, upgrade/downgrade/anchor billing, past-due lifecycle, advanced partner discounts, mini-draws/prizes); extended **id24** (reactivation timing). All answers were code-verified and compliance-checked (free-entry framing, no odds/chance/lottery).
@@ -527,3 +553,28 @@ that here. Write plain prose (`/shop`, not `` `/shop` ``) and avoid `${`.
 
 Verify with `npm run build:chat-knowledge-pack` (it runs in `prebuild`/`predev`, so a break stops
 the app from starting) and then `npm run test:chat-faqs`.
+## Blocked-card advice: never lead with "just wait"
+
+Cobber's system prompt is **byte-stable** (for prompt caching) and injects **no date** — it has no way
+to know how close the next Major Draw is, and rule 105 forbids inventing draw dates. So when a
+member's card is temporarily blocked after repeated failed attempts, Cobber **cannot** work out
+whether waiting the ~3 days is safe.
+
+The HARD RULE added 2026-08-18 makes the copy structurally safe instead of computed:
+
+- **Lead with the action that works now** — add a different card on `/my-account/membership`.
+- **Waiting is the slower alternative**, only sensible if the draw is still a way off. Let the
+  member judge the timing; never assert how many days remain.
+- **Be accurate about what's at stake.** Verified against [BUSINESS.md §175](../../BUSINESS.md):
+  free entries a member has **already earned stay in the draw while past-due and are never
+  removed** — a `past_due` member's entries are still in the weighted winner pool. Only the **next**
+  grant pauses. Never imply they lose entries they already hold; that would be false.
+
+FAQ entries **84** and **85** carry the same framing, and the pre-existing renewal-failure entry was
+corrected — it previously said "the fastest fix is the in-app retry on your existing card", which is
+exactly wrong for a blocked card (retrying is what caused the block). Corpus count assertion bumped
+85 → 87.
+
+Backend counterpart: `EXCESSIVE_RETRY_COOLDOWN_DAYS` in
+[chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts). If that window changes,
+FAQ 84/85 and the member Pay-Now copy must change with it.

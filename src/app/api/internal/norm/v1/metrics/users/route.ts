@@ -54,6 +54,7 @@ export const GET = withNorm(
       profession: metrics.profession,
       state: metrics.state,
       ageGroup: metrics.ageGroup,
+      gender: metrics.gender,
       membershipStatus: metrics.membershipStatus,
       membershipByPackage: metrics.membershipByPackage,
       purchaseHistory: metrics.purchaseHistory,

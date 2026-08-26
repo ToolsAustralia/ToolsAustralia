@@ -259,3 +259,41 @@ decisions rather than oversights:
   anyone with `length > 0`, and the first-purchase referral reward fires only at `count === 1`.
   Appending a t-shirt would permanently bar that customer from ever redeeming a referral code, and
   rob their referrer of the reward on the membership they buy later.
+## Excessive-retry block: customer copy
+
+When Stripe blocks a card with `outcome.reason === "previously_declined_do_not_retry"`, the member
+Pay-Now route (`/api/stripe/pay-failed-invoice`) detects it via
+`analyzePaymentIntentForExcessiveRetry` and returns `requiresDifferentPaymentMethod: true`.
+
+The copy is deliberately short and gives a concrete date horizon rather than a vague "try later" —
+the block genuinely clears on its own, so telling the member *when* is more useful than telling them
+to keep trying:
+
+> This card is temporarily blocked after too many attempts. Use a different card, or try again in 3 days.
+
+Keep the "3 days" aligned with `EXCESSIVE_RETRY_COOLDOWN_DAYS` in
+[chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts) — if the cooldown window
+changes, this string must change with it.
+
+`STRIPE_EXCESSIVE_RETRY_OUTCOME_REASON` in
+[stripe-excessive-retry.ts](../../src/utils/payment/stripe/stripe-excessive-retry.ts) is the single
+name for this concept across both the customer path and the admin cooldown. Do not introduce a
+second vocabulary for it.
+
+---
+
+## The major-draw credit-failure reporter had never written a single row (2026-08-20)
+
+**The safety net was armed but disconnected.** `addToMajorDraw`'s credit-failure reporter was added after the May 2026 incident where 60 members were under-credited by 25,235 entries — the whole point being that the failure had been *silently swallowed*. Both of its `ErrorLoggingService` calls passed **two** arguments, which on the server is itself a silent no-op. It has therefore never produced an `ErrorReport`.
+
+Three separate traps, all of which had to be fixed together — see `reportDrawCreditFailure` in [`payment-processing.ts`](../../src/utils/payment/payment-processing.ts):
+
+**1. The third argument is load-bearing.** `logError(err, ctx)` with no options takes the CLIENT path, `autoLogError`, which `fetch`es the **relative** url `/api/error-reports`. Node throws `Failed to parse URL`; that util swallows the rejection in its own `.catch(console.warn)`; `removeConsole` strips the warn in production. No report, no error, no warning. Pass `{ isServerSide: true, request }` — `LoggingOptions.request` is only the structural type `{ headers: Headers; url?: string }`, so a job with no request can pass `{ headers: new Headers() }`.
+
+**2. `logPaymentError`, not `logError`.** `logError` *sniffs* a category from strings ([`error-category-detector.ts`](../../src/utils/error-reporting/error-category-detector.ts)): it looks for `/stripe/` or `/payment` in `endpoint`, or `payment` in `component`. `endpoint: "addToMajorDraw"` matches none of them → category `api` → `logAPIError`, which forwards **only** `userId` and `userEmail`. Every money field would have been dropped even after fixing trap 1. Name the payment entry point directly instead of relying on keyword matching.
+
+**3. `drawId` / `sourceType` / `entries` only survive in the MESSAGE.** No forwarder carries them and `ErrorReport` has no freeform bag, so passing them in the context object drops them silently. They are folded into the error text as a `detail` string. Do not "tidy" them back into the context.
+
+**Volume:** deduplicated on (message + errorName + userId + category + severity) within a **30-minute** payment window, so a renewal burst collapses to one row per affected user, not one per attempt. `ErrorReport` has a 90-day TTL. `autoLogErrorServer` wraps its whole body in try/catch and `reportDrawCreditFailure` adds its own, so reporting can never abort a grant mid-flight.
+
+⚠️ **When adding any server-side error report, check the argument count first.** A two-argument call compiles, type-checks, lints, and does nothing.

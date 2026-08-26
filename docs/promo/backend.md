@@ -397,3 +397,13 @@ endpoints. Full field docs: [docs/internal-norm/norm-context.md](../internal-nor
 ## Repositories
 
 [src/repositories/PromoAnalyticsRepository.ts](../../src/repositories/PromoAnalyticsRepository.ts) — abstracts promo-analytics queries.
+
+## `getAggregatedByToolbox` shares its lane mapping (2026-08-19)
+
+`PromoAnalyticsRepository.getAggregatedByToolbox` no longer builds its own `$switch` over `PRIZE_LANE_SLUGS`. It imports `brandLaneSwitchExpr(field, "toolbox")` and `BRAND_LANE_PRIZE_SLUGS` from `src/utils/metrics/brand-lane.ts` — the same mapping the Overview's Brand Performance card uses.
+
+**Output shape is unchanged**, so the Norm mirror (`/api/internal/norm/v1/promo-analytics`) and its Zod schema need no update.
+
+**Why.** The Page Analytics tab and the dashboard's Brand Performance section are *not* redundant surfaces — a page and a section answer different questions, and both stay. But they read overlapping data, and they must never *contradict* each other. Two hand-maintained copies of the lane mapping is exactly how that contradiction gets introduced: a brand added to one and not the other, and two screens disagree with nothing to flag it. One import removes the failure mode.
+
+The remaining shared rules — `excludeRefundedBenefitsGrantedStages()` and the `billingReason === "subscription_cycle"` renewal exclusion — were already common to both and stay that way. See §9 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-analytics-brand-performance-design.md) for why a DB-level reconciliation test was considered and deliberately not built.

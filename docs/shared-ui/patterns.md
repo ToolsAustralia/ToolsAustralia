@@ -570,3 +570,38 @@ kills every cue at once.
 
 Reduced motion kills the `::after` entirely (`content: none`) — the OS signal is the only guard,
 per the same policy as its siblings. Full write-up: `docs/dashboard-account/frontend.md`.
+
+## `ParticipantsModal` is draw-type-agnostic (2026-08-13)
+
+[`src/components/modals/draws/ParticipantsModal.tsx`](../../src/components/modals/draws/ParticipantsModal.tsx)
+serves BOTH the major-draw and mini-draw entry pools. It takes `drawId` / `drawName` /
+`drawType: "major" | "mini"` (was `majorDrawId` / `majorDrawName`) and switches the endpoint:
+
+| `drawType` | Endpoint | Id passed as |
+|---|---|---|
+| `"major"` (default) | `/api/admin/major-draw/participants` | `?majorDrawId=` query param |
+| `"mini"` | `/api/admin/mini-draw/[id]/participants` | path segment |
+
+**The two APIs were written to one response envelope precisely so this component did not fork.**
+A second `MiniDrawParticipantsModal` would have drifted the first time either side gained a
+column, and the search / pagination / drill-through-to-user behaviour is identical either way.
+The only shape difference is `entriesBySource`, now optional — mini-draw entry is package-only, so
+there is no source split to report.
+
+`403` is surfaced as its own message ("You don't have permission to view participants for this
+draw") rather than the generic failure, because the mini-draw route is gated on
+`miniDraws.viewParticipants` and a role can legitimately lack it while still seeing the draw list.
+
+**When adding a third draw type, extend the union — do not copy the file.**
+
+## UserSetupModal — an optional field among required ones (2026-08-17)
+
+Step 2 (`Step2Demographics`) now collects **gender** alongside state / profession / date of birth, but it is the only optional field there. Three things keep it that way, and all three must hold together:
+
+1. It is **not** in `stepsNeeded` — step 2 fires on missing state/profession/birthdate only, so gender alone never summons the modal.
+2. It is **not** in the step-2 validation or the `Next disabled` condition — "Continue" stays enabled with gender empty.
+3. Its `Dropdown` gets no `required` and no error slot, and is rendered **last** so the three fields that do gate progress read as the ask.
+
+`isGenderDropdownOpen` joins `isStep2OverlayOpen`; without it the last field on the step gets clipped when its menu opens.
+
+The `/my-account/settings` **ProfileTab** mirrors this: gender is the one field there with **no amber "Required" chip** and is excluded from the `missing` completeness list — badging an optional field as required would be a lie. It always POSTs the key (as `""` when unset) so clearing works.

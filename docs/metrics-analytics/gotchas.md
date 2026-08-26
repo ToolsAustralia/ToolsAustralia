@@ -117,8 +117,14 @@ reason — the 90-day window would have healed those days on its own that night.
 Days before the platform had any spend keep no `tiktok` key permanently, which is correct:
 there was nothing to record.
 
-Ordering note: `sync-tiktok-ads` runs `45 2 * * *` UTC and the snapshot cron `0 14/15 * * *`
-UTC, so on any given day the insights land before the snapshots that read them.
+Ordering note: `sync-tiktok-ads` runs 3-hourly (`0 * * * *` gated in-handler to Sydney-local
+slots {3,6,9,12,15,18,21}:00 + `59 12,13 * * *`, since 2026-08-11 — see
+`docs/infrastructure/api.md`) and the snapshot cron's first two fires run at `30 17/20 * * *` UTC
+(moved off `0 14/15 * * *` on 2026-08-24 to clear the renewal-webhook-burst hour — a same-day
+`0 18/19 * * *` attempt was reverted after review found `19:00` UTC collides with the sync's
+Sydney-06:00 slot during AEDT; `:30` structurally avoids that gate in both DST regimes; see
+`docs/infrastructure/gotchas.md`), so on any given day the insights land before the snapshots
+that read them.
 
 ## Spend-by-URL caveats
 

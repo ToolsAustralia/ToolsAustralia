@@ -161,3 +161,19 @@ reads zero for every member) and its editable profile copy (edits there never re
 Both were live to members with no grounded answer, so Cobber's nearest matches were the TA
 rewards-points and TA profile entries — a confidently wrong answer rather than a gap.
 After editing, re-run `npm run build:chat-knowledge-pack` **and** `npm run test:chat-faqs`.
+
+## Brand-lane display registry (2026-08-19)
+
+`src/config/promo-landing-slugs.ts` now owns the label + wordmark for **every** brand lane, both axes:
+
+- `TOOLSET_LANE_DISPLAY: Record<ToolsetLandingSlug, BrandLaneDisplay>`
+- `TOOLBOX_LANE_DISPLAY: Record<ToolboxLaneId, BrandLaneDisplay>`
+- `getBrandLaneDisplay(laneId, lane)` — lookup with a titlecased fallback
+
+This replaces a `BRAND_DISPLAY_NAME` map that lived **inside** the admin Prize Performance card and covered only the 5 toolset brands. That fork had already gone stale once (HiKOKI was missing from the ROAS table for its entire first run).
+
+**The `Record<>` types are the guard, not decoration.** Adding a brand to `TOOLSET_LANDING_SLUGS` or `TOOLBOX_LANE_ORDER` fails compilation here until its label and wordmark are supplied — a new brand cannot silently render as an unlabelled row. `npm run test:brand-lane` additionally asserts every lane resolves to a non-empty label *and* wordmark at runtime.
+
+⚠️ **Milwaukee appears in both maps** with identical label and artwork — it is genuinely both a power-toolset brand and a toolbox brand. Any UI rendering these must make the active lane unmistakable, because the wordmark alone cannot tell a Milwaukee-the-toolset row from a Milwaukee-the-toolbox one.
+
+**Adding a promotion brand** — the checklist in this doc now also requires a `TOOLSET_LANE_DISPLAY` (or `TOOLBOX_LANE_DISPLAY`) entry and a `/images/brands/name/<slug>Text.svg` wordmark; without them the build fails rather than the admin table quietly under-reporting.

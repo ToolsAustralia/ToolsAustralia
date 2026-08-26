@@ -115,6 +115,8 @@ export async function GET(request: NextRequest) {
         dateTo: searchParams.get("dateTo") || "",
         states: stateList,
         inActiveMajorDraw: searchParams.get("inActiveMajorDraw") || "",
+        miniDrawPackage: searchParams.get("miniDrawPackage") || "",
+        inActiveMiniDraw: searchParams.get("inActiveMiniDraw") || "",
         streak: searchParams.get("streak") || "",
       };
       const filter = await buildUserFilter(filters);
@@ -149,6 +151,10 @@ export async function GET(request: NextRequest) {
       if (role) filterSummary.push(role);
       if (stList.length) filterSummary.push(stList.map((s) => s.toLowerCase()).join("-"));
       if (inDraw) filterSummary.push(inDraw === "yes" ? "in-draw" : "not-in-draw");
+      const miniPack = searchParams.get("miniDrawPackage") || "";
+      const inMini = searchParams.get("inActiveMiniDraw") || "";
+      if (miniPack) filterSummary.push(miniPack === "yes" ? "mini-pack-buyers" : "no-mini-pack");
+      if (inMini) filterSummary.push(inMini === "yes" ? "in-mini-draw" : "not-in-mini-draw");
     }
     const filterSuffix = filterSummary.length > 0 ? `-${filterSummary.join("-")}` : "";
     const baseFilename = `users-export-${dateStr}-${timeStr}${filterSuffix}`;

@@ -13,8 +13,11 @@ interface Step2DemographicsProps {
   selectedProfession: string;
   customProfession: string;
   selectedBirthdate: string;
+  /** Optional field — never gates step 2. See `onGenderChange`. */
+  selectedGender: string;
   stateOptions: DropdownOption[];
   professionOptions: DropdownOption[];
+  genderOptions: DropdownOption[];
   inlineErrors: {
     profession?: string;
     customProfession?: string;
@@ -28,8 +31,14 @@ interface Step2DemographicsProps {
   onProfessionChange: (value: string) => void;
   onCustomProfessionChange: (value: string) => void;
   onBirthdateChange: (value: string) => void;
+  /**
+   * Optional. Leaving gender unset must NEVER block "Continue" — the field exists here purely
+   * for coverage, and the step-2 validation in index.tsx deliberately does not check it.
+   */
+  onGenderChange: (value: string) => void;
   onStateDropdownChange: (open: boolean) => void;
   onProfessionDropdownChange: (open: boolean) => void;
+  onGenderDropdownChange: (open: boolean) => void;
   onBirthdateOpenChange: (open: boolean) => void;
 }
 
@@ -38,8 +47,10 @@ const Step2Demographics: React.FC<Step2DemographicsProps> = ({
   selectedProfession,
   customProfession,
   selectedBirthdate,
+  selectedGender,
   stateOptions,
   professionOptions,
+  genderOptions,
   inlineErrors,
   error,
   isStep2OverlayOpen,
@@ -49,8 +60,10 @@ const Step2Demographics: React.FC<Step2DemographicsProps> = ({
   onProfessionChange,
   onCustomProfessionChange,
   onBirthdateChange,
+  onGenderChange,
   onStateDropdownChange,
   onProfessionDropdownChange,
+  onGenderDropdownChange,
   onBirthdateOpenChange,
 }) => {
   const ineligibilityReasons = getGiveawayIneligibilityReasons(
@@ -129,6 +142,17 @@ const Step2Demographics: React.FC<Step2DemographicsProps> = ({
           </p>
         )}
       </div>
+      {/* Optional — no `required`, no error slot, and step-2 validation ignores it entirely.
+          Placed last so the three fields that DO gate progress read as the ask, and this one
+          as a bonus. Empty stays empty: the member can continue without touching it. */}
+      <Dropdown
+        options={genderOptions}
+        value={selectedGender}
+        onChange={onGenderChange}
+        placeholder="Prefer not to say"
+        label="Gender (optional)"
+        onOpenChange={onGenderDropdownChange}
+      />
       <GiveawayEligibilityNotice
         show={isGiveawayIneligible(selectedState, selectedBirthdate || undefined)}
       />

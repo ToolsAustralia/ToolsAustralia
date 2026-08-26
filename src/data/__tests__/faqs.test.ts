@@ -156,32 +156,35 @@ function main() {
   // reads zero for everyone) and its editable profile copy (edits there never reach us).
   // Both were live to members with no grounded answer, so Cobber's nearest matches were the
   // TA rewards-points and TA profile entries — i.e. a confidently wrong answer.
-  // Bumped 84 → 89 (2026-08-19): ids 85-89 — the merchandise shop. The shop shipped
-  // with only "does it exist" (15) and "does an item include entries" (84), so the
+  // Bumped 84 → 89 (2026-08-19): the merchandise shop batch. The shop shipped
+  // with only "does it exist" (15) and "does an item include entries" (86), so the
   // question a shop is asked most — where is my order — had no grounded answer and
   // Cobber may not invent one. The batch covers the orders page and its statuses,
   // print-to-order turnaround (no held stock, and deliberately no quoted ETA), the
   // delivery fee and free threshold, faulty/wrong items, and the member discount.
-  assert.strictEqual(entries.length, 89, `Expected 89 FAQ entries, got ${entries.length}`);
+  // Merged with origin/main on 2026-08-26: main had independently taken ids 82-85
+  // (gender ×2, blocked-card ×2), so the six merchandise entries were renumbered
+  // 84-89 -> 86-91 to clear the collision. 83 base + 4 (main) + 6 (shop) = 93.
+  assert.strictEqual(entries.length, 93, `Expected 93 FAQ entries, got ${entries.length}`);
 
-  // 8d. Merchandise-shop batch (ids 85-89). The order-tracking entry is the reason the
+  // 8d. Merchandise-shop batch (ids 87-91). The order-tracking entry is the reason the
   // batch exists, so it must route to the page that actually answers it — /my-account
   // alone lands the customer on a dashboard with no orders on it.
-  const orderTracking = entries.find((e) => e.id === "85");
-  assert.ok(orderTracking !== undefined, "FAQ entry id=85 (where's my order) must exist");
+  const orderTracking = entries.find((e) => e.id === "87");
+  assert.ok(orderTracking !== undefined, "FAQ entry id=87 (where's my order) must exist");
   assert.ok(
     orderTracking!.answer.includes("/my-account/orders"),
-    "Order-tracking FAQ (id 85) must route to /my-account/orders, not the dashboard"
+    "Order-tracking FAQ (id 87) must route to /my-account/orders, not the dashboard"
   );
   // Delivery is a flat $10 on every order (priceCart, SHOP_CONFIG) — there is no
   // threshold as of 2026-08-25. This guard used to REQUIRE the answer to name a $100
   // free-delivery threshold, which is how stale copy survives a rule change: the
   // assertion held the old promise in place. It now pins the opposite.
-  const deliveryFee = entries.find((e) => e.id === "87");
-  assert.ok(deliveryFee !== undefined, "FAQ entry id=87 (delivery cost) must exist");
+  const deliveryFee = entries.find((e) => e.id === "89");
+  assert.ok(deliveryFee !== undefined, "FAQ entry id=89 (delivery cost) must exist");
   assert.ok(
     deliveryFee!.answer.includes("$10"),
-    "Delivery FAQ (id 87) must state the $10 flat rate"
+    "Delivery FAQ (id 89) must state the $10 flat rate"
   );
   for (const e of entries) {
     assert.ok(

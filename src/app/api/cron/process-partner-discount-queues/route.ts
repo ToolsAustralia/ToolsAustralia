@@ -1,7 +1,9 @@
 /**
  * Partner Discount Queue Processing Cron Job
  *
- * Runs daily (0 15 * * *) to sweep every user's partner-discount queue:
+ * Runs daily (`45 18 * * *` UTC — moved off `0 15 * * *` on 2026-08-24 to clear the
+ * ~900-membership renewal-webhook-burst hour's trailing payment wave; see
+ * docs/infrastructure/gotchas.md) to sweep every user's partner-discount queue:
  *  1. expire finished periods, 2. activate the next queued item,
  *  3. reconcile membership vs one-time tiers, 4. prune old expired rows.
  *

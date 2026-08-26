@@ -25,7 +25,15 @@ export const AREA_ACTIONS = {
   facebookAds: ["view", "edit"],
   pageAnalytics: ["view"],
   submissions: ["view", "edit", "delete"],
-  miniDraws: ["view", "edit", "selectWinner", "delete"],
+  // `viewParticipants` splits the ENTRANT PII away from the draw list, the same way
+  // `users.viewDetail` splits it away from the customer roster. `view` grants the draw cards
+  // (name, prize, capacity, status); `viewParticipants` grants entrant names, emails, mobiles
+  // and states — both the in-app list AND the CSV/Excel export, which dump identical data and
+  // must therefore be gated identically. As with `users.viewDetail`, this is NOT auto-granted
+  // to existing custom roles, so a migration backfills it onto every role that already had
+  // `view` (scripts/migrations/2026-08-13-backfill-mini-draws-view-participants.ts) — without
+  // that, the deploy silently revokes export access that roles already had.
+  miniDraws: ["view", "viewParticipants", "edit", "selectWinner", "delete"],
   majorDraw: ["view", "edit", "selectWinner"],
   drawResults: ["view"],
   upcomingDraws: ["view"],
@@ -37,6 +45,18 @@ export const AREA_ACTIONS = {
   // bulk-destruction routes (delete-all, delete-by-*) that wipe the catalog in one
   // call — an operator who can edit a product should not implicitly hold those.
   shop: ["view", "edit", "delete"],
+  // The Receipts ledger — every payment received, joined to the customer who paid and to
+  // Stripe. Its own area rather than a reuse of `settings.view` (which gates the other
+  // Billing tabs) because this one surface is the complete revenue picture attached to
+  // customer identity; the repo already carves those out (`users.viewDetail`,
+  // `miniDraws.viewParticipants`). `export` is split from `view` for the same reason
+  // `users.export` is: a CSV of revenue + names + emails leaving the building is a
+  // different risk from reading the table. As with those splits, adding these actions does
+  // NOT auto-grant them to existing custom roles, so a migration backfills `receipts.view`
+  // onto every role that already had `settings.view`
+  // (scripts/migrations/2026-08-17-backfill-receipts-view.ts) — without it the deploy reads
+  // to staff as a silent access removal.
+  receipts: ["view", "export"],
   settings: ["view", "edit", "delete"],
   audit: ["view"],
 } as const satisfies Record<string, readonly string[]>;

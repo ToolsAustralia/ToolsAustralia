@@ -46,6 +46,10 @@ export interface ListUsersArgs {
   dateTo?: string;
   states?: string[];
   inActiveMajorDraw?: string;
+  /** "yes" = has ever bought a mini-draw package (any tier); "no" = never has. */
+  miniDrawPackage?: string;
+  /** "yes" = holds entries in a mini draw active right now; "no" = does not. */
+  inActiveMiniDraw?: string;
   /** Membership Streak: "none" = streak 0/absent; a number string = at least N consecutive paid renewals */
   streak?: string;
   /**
@@ -138,6 +142,8 @@ export async function listAdminUsers(args: ListUsersArgs): Promise<ListUsersResu
     dateTo: args.dateTo ?? "",
     states: args.states ?? [],
     inActiveMajorDraw: args.inActiveMajorDraw ?? "",
+    miniDrawPackage: args.miniDrawPackage ?? "",
+    inActiveMiniDraw: args.inActiveMiniDraw ?? "",
     streak: args.streak ?? "",
     segment: args.segment ?? "",
   });
@@ -573,6 +579,8 @@ export interface ExportAggregateArgs {
   dateTo?: string;
   states?: string[];
   inActiveMajorDraw?: string;
+  miniDrawPackage?: string;
+  inActiveMiniDraw?: string;
   segment?: string;
 }
 
@@ -623,6 +631,8 @@ export async function aggregateUserExport(
       dateTo: args.dateTo ?? "",
       states: args.states ?? [],
       inActiveMajorDraw: args.inActiveMajorDraw ?? "",
+      miniDrawPackage: args.miniDrawPackage ?? "",
+      inActiveMiniDraw: args.inActiveMiniDraw ?? "",
     });
     docs = (await User.find(filter)
       .select("_id state subscription.packageId subscription.status subscription.isActive")

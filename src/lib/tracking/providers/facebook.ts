@@ -8,6 +8,7 @@
 import type { CanonicalEvent, ConversionProvider, RequestContext } from "../types";
 import { hashPII } from "../canonical-event";
 import { metaPhoneDigits } from "../advanced-matching";
+import { genderToMetaGe } from "@/data/genders";
 import { getAllowedHostnames } from "../hostname-gate";
 // `FacebookEvent` is a type (erased at build). `sendFacebookEvent` is the SERVER CAPI sender and
 // transitively imports undici (node:net), so it must NOT be a *static* import here: this module is
@@ -189,6 +190,10 @@ async function capiSend(event: CanonicalEvent, ctx: RequestContext): Promise<boo
     ...((u.birthdate && toYYYYMMDD(u.birthdate)) && {
       db: hashPII(toYYYYMMDD(u.birthdate)!),
     }),
+    // MUST mirror buildAdvancedMatching's `ge` exactly (same normalizer, same omit-when-unknown
+    // rule) so the browser pixel and CAPI produce identical hashes for the same person. A
+    // mismatch here is worse than sending nothing — Meta would see two different users.
+    ...(genderToMetaGe(u.gender) && { ge: hashPII(genderToMetaGe(u.gender)!) }),
     // userData-then-ctx, same precedence as client_ip_address / client_user_agent below.
     // Callers that build their context from `extractRequestContext(request)` already carry
     // fbc/fbp on `ctx`; reading them only from userData quietly dropped those.

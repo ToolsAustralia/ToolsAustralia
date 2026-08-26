@@ -117,3 +117,11 @@ Registration awaits a Stripe customer create + a Facebook CAPI call + several Mo
 All protected handlers must call `getServerSession()` and verify. Middleware excludes `/api` so it does NOT gate these routes.
 
 For admin routes elsewhere (`/api/admin/**`), use `requireAdmin(session)` consistently.
+
+## `gender` on the profile write paths (2026-08-17)
+
+Both profile writers accept the optional `User.gender` field (`"male"` / `"female"`; see [src/data/genders.ts](../../src/data/genders.ts)).
+
+**`POST /api/user/update-profile`** — `gender` is validated by a Zod transform that lowercases/trims and maps `""` → `undefined`, then a refine restricting it to the two values. The handler assigns it when the **property is present on the request body** (`hasOwnProperty`), not when it is truthy: the UI always sends the key, so a member can **clear** a previously-set gender, which a `!== undefined` check would silently ignore. Returned in the response alongside `state` / `profession`.
+
+**`POST /api/user/setup`** (step 2, `saveStateProfessionOnly`) — `gender` is **optional here while `state`, `profession` and `birthdate` are required**. It is deliberately excluded from the `completeSetupOnly` readiness check, so a missing gender can never block setup completion. The handler writes it **only when supplied**, so a re-prompted member who skips the field keeps whatever they already had.

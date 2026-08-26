@@ -91,3 +91,29 @@ export async function upsertBlockedTransaction(
     { upsert: true, new: true }
   );
 }
+
+/**
+ * Newest blocked-charge row for a card fingerprint, or null.
+ *
+ * Sorted by `capturedAt` (when the webhook recorded the block) — NOT
+ * `createdAt`, which stores the PaymentIntent's creation time and for retried
+ * renewal invoices can precede the actual block by days. Uses the
+ * `cardFingerprint` index; a single card has only a handful of rows.
+ *
+ * Feeds `shouldCooldownForDoNotRetry` in the bulk charge job.
+ */
+export async function findLatestBlockByFingerprint(
+  cardFingerprint: string
+): Promise<{ cardFingerprint: string; outcomeReason: string | null; capturedAt: Date } | null> {
+  if (!cardFingerprint) return null;
+  const row = await BlockedTransaction.findOne({ cardFingerprint })
+    .sort({ capturedAt: -1 })
+    .select("cardFingerprint outcomeReason capturedAt")
+    .lean<{ cardFingerprint: string; outcomeReason?: string | null; capturedAt?: Date }>();
+  if (!row?.capturedAt) return null;
+  return {
+    cardFingerprint: row.cardFingerprint,
+    outcomeReason: row.outcomeReason ?? null,
+    capturedAt: row.capturedAt,
+  };
+}

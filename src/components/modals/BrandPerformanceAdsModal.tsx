@@ -12,7 +12,7 @@ import {
 import { groupSpendByUrlDetailRowsByCampaign } from "@/utils/admin/spendByUrlAdBreakdown";
 import CampaignTreeTable from "@/components/admin/spend-by-url/CampaignTreeTable";
 
-export interface PrizePerformanceAdsModalProps {
+export interface BrandPerformanceAdsModalProps {
   isOpen: boolean;
   onClose: () => void;
   brandLabel: string;
@@ -116,7 +116,7 @@ function formatRangeLabel(startDate: string, endDate: string): string {
  * that platform's per-ad rows. One platform at a time is a hard constraint, not a UI choice:
  * ad ids are only unique WITHIN a platform, so a merged tree would be ambiguous.
  */
-export default function PrizePerformanceAdsModal({
+export default function BrandPerformanceAdsModal({
   isOpen,
   onClose,
   brandLabel,
@@ -125,7 +125,7 @@ export default function PrizePerformanceAdsModal({
   endDate,
   canonicalUrlsByPlatform,
   platform: initialPlatform,
-}: PrizePerformanceAdsModalProps) {
+}: BrandPerformanceAdsModalProps) {
   // The chips own the live platform; the prop only seeds it, so opening from a TikTok row
   // lands on TikTok while the reader can still flip to Meta without closing the modal.
   const [platform, setPlatform] = useState<Platform>(initialPlatform);

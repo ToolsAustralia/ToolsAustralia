@@ -123,7 +123,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "13",
       question: "What happens if my renewal payment fails?",
       answer:
-        "If a renewal payment fails, your membership moves to a past-due state. You will receive an email prompt and can retry the payment directly from your account dashboard. We will attempt to recover the payment — if it succeeds, your benefits and entries are reinstated immediately. You can also update your card details from your account settings at any time. The fastest fix is the in-app retry on your existing card from your dashboard — most failures are temporary.",
+        "If a renewal payment fails, your membership moves to a past-due state. You will receive an email prompt and can retry the payment directly from your account dashboard. We will attempt to recover the payment — if it succeeds, your benefits and entries are reinstated immediately. Most failures are temporary, so retrying your existing card from your dashboard is usually the quickest fix. If it keeps failing, or you're told the card is temporarily blocked, stop retrying and add a different card on your [Membership](/my-account/membership) page instead — repeated attempts on a card that's already failing make it stop going through for a few days.",
       category: "PAYMENTS",
     },
 
@@ -142,7 +142,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       category: "REWARDS",
     },
     {
-      id: "84",
+      id: "86",
       question: "Do I get free entries when I buy merchandise?",
       // Deliberately conditional ("where an item includes"). Entries on merchandise
       // are gated on a trade-promotion permit variation and ship switched off, so
@@ -219,7 +219,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "22",
       question: "What happens when I upgrade my membership?",
       answer:
-        "Upgrading takes effect straight away. You pay the new tier's full monthly price immediately, your billing cycle resets to today, and the extra monthly entries are added to the current draw right away. You can upgrade from [My Account → Membership](/my-account/membership) → **Manage plan**. (Upgrades aren't available while a payment is past due — resolve that first.)",
+        "Upgrading takes effect straight away: you pay the new tier's full monthly price now, and its extra free entries land in the current draw immediately. Your billing cycle resets to today — unless your renewal is anchored to the 24th, which stays put (moving to the following month if it's less than a fortnight away, so you're never charged twice in the same fortnight). Upgrade from [My Account → Membership](/my-account/membership) → **Manage plan**. (Not available while a payment is past due — resolve that first.)",
       category: "PAYMENTS",
     },
     {
@@ -436,7 +436,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "51",
       question: "If I upgrade to a higher tier mid-cycle, do I keep the free entries I've already built up? And do I get credit for the unused days on my old tier?",
       answer:
-        "Good news on your entries: upgrading mid-cycle keeps everything you've already built up. Your accumulated free entries carry over, and on top of that your new tier's free entries are added right away, so you're never worse off for upgrading early. On the billing side, an upgrade charges the new tier's full price straight away and resets your billing cycle to that date — there's no pro-rata credit for the unused days on your old tier, so it's usually best to upgrade close to your renewal date. You can review your tier and renewal date any time in [My Account → Membership](/my-account/membership).",
+        "Good news on your entries: upgrading mid-cycle keeps everything you've already built up. Your accumulated free entries carry over, and on top of that your new tier's free entries are added right away, so you're never worse off for upgrading early. On the billing side, an upgrade charges the new tier's full price straight away and resets your billing cycle to that date — unless your renewal is anchored to the 24th, which stays put (shifting to the following month if it's under a fortnight away, so a shifted renewal is always a full month ahead rather than days away). There's no pro-rata credit for the unused days on your old tier, so the later in your cycle you upgrade, the more you leave behind. Check your tier and renewal date any time in [My Account → Membership](/my-account/membership).",
       category: "PAYMENTS",
     },
     {
@@ -679,10 +679,39 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "Yes. Every Major Draw winner is published on our [Draw Results](/draw-results) page, shown as their first name and last initial (like \"John D.\") along with their state and the prize they took — plus the verification link from randomdraws.com.au, the independent service that picks the winner. Winners are also contacted directly by our team, and the draw itself is streamed live on [Facebook](https://www.facebook.com/toolsaust). We don't share any more of a winner's details than that. I can't look results up from here, so head to [Draw Results](/draw-results) for the latest.",
       category: "ALL QUESTIONS",
     },
+    {
+      id: "82",
+      question: "Do I have to tell you my gender? Can I leave it blank or remove it?",
+      answer:
+        "It's completely optional — leave it blank and nothing changes. You'll see a Gender field on [My Account → Settings](/my-account/settings) alongside your trade, state and date of birth, but unlike those it never has to be filled in, and you can clear it again from that same page whenever you like. It has no effect on your free entries, your eligibility for a draw, what you pay, or anything you receive. We only offer Male and Female, so if you're neither — or you'd simply rather not say — just leave it empty.",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "83",
+      question: "Why do you ask for my gender — what do you use it for?",
+      answer:
+        "Only to understand who our members are as a group, so we can make our advertising more relevant and stop showing ads to people they don't suit. It's never used to decide anything about you personally — not your free entries, not your eligibility, not your pricing. It's optional, you can leave it blank or clear it at any time from [My Account → Settings](/my-account/settings), and how we handle your personal information is set out in our [Privacy Policy](/privacy).",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "84",
+      question:
+        "My card was declined a few times and now it won't go through at all — what's happening?",
+      answer:
+        "After several failed attempts in a short space of time, our payment provider (Stripe) stops trying that card for a few days. It's an automatic protection against repeated declines — it isn't a block we've put on your account, and it clears by itself after about three days. The quicker fix is to add a different card on your [Membership](/my-account/membership) page under Payment, which applies straight away. Either way you don't lose anything you've already earned: free entries already credited to you stay in the Major Draw even while your membership is past-due. What's waiting on the payment is the **next** batch of free entries that comes with your renewal.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "85",
+      question: "Should I just wait for my card to start working again?",
+      answer:
+        "That depends on timing. Waiting is fine if there's still a while before the next Major Draw on the 27th — the block clears on its own in about three days and costs you nothing. But if the draw is close, adding a different card on your [Membership](/my-account/membership) page is the better move, because it applies immediately. To be clear about what's actually at stake: free entries you've already earned stay in that draw regardless — being past-due never removes them — but the free entries included with your renewal are only credited once the payment goes through. So the sooner the renewal succeeds, the sooner those land.",
+      category: "PAYMENTS",
+    },
 
     // ── MERCHANDISE SHOP (2026-08-19) ────────────────────────────────────────
     // The shop went live with only two grounded entries (15 = it exists + the
-    // money, 84 = entries on an item), so "where is my order" — the question a
+    // money, 86 = entries on an item), so "where is my order" — the question a
     // shop gets more than any other — had no answer at all, and Cobber is
     // forbidden from inventing one. Every figure below is imported-in-spirit from
     // the code that produces it: the status words are `STATUS_LABEL` in
@@ -692,35 +721,35 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
     // No delivery ETA is quoted anywhere: print turnaround is supplier-dependent
     // and unconfirmed, so a number here would be a guess told to a paying customer.
     {
-      id: "85",
+      id: "87",
       question: "Where's my order — how do I track it?",
       answer:
         "Every order you've placed is in [My Account → Orders](/my-account/orders) when you're signed in, newest first, with what you ordered and the size and colour you picked. Each one carries a status: **Awaiting payment**, **Being made**, **On its way**, **Delivered**, **Complete** or **Cancelled** — and once it's with the courier, the tracking number shows on that order. You'll also get a confirmation email as soon as your payment clears. I can't see your account from here, so I can't look an order up for you — if something looks wrong there, [contact us](/contact) with your order number.",
       category: "REWARDS",
     },
     {
-      id: "86",
+      id: "88",
       question: "How long will my shop order take, and why does it say \"Made to order\"?",
       answer:
         "Each garment is printed after you order it, in the colour and size you chose — nothing sits in a warehouse waiting, so \"Made to order\" is normal and never means sold out. That printing step is why it takes longer to reach you than something picked off a shelf, and we'd rather not quote a delivery date we can't stand behind. Your order reads **Being made** while it's in production and **On its way** once it's shipped, with the tracking number on it — both on [My Account → Orders](/my-account/orders).",
       category: "REWARDS",
     },
     {
-      id: "87",
+      id: "89",
       question: "How much is delivery, and do you ship outside Australia?",
       answer:
         "Delivery is a flat $10 on every order — there's no minimum spend to reach and no threshold to work out, so the delivery line is the same whatever's in your cart and whatever your member discount is. Checkout shows it before you pay. We deliver within Australia only: the checkout address form takes the eight Australian states and territories, so we can't send an order overseas at this stage.",
       category: "REWARDS",
     },
     {
-      id: "88",
+      id: "90",
       question: "My order arrived faulty, damaged or wrong — what do I do?",
       answer:
         "[Contact us](/contact) with your order number and a photo, and we'll replace it or refund it — return postage is on us. If the print itself cracks or peels in ordinary wear and washing, tell us and we'll sort that out too. The one thing we can't do is a change-of-mind return: each garment is printed to order in your chosen colour and size, so there's no way to resell it — worth double-checking your size before you order. None of this limits your rights under Australian Consumer Law.",
       category: "REWARDS",
     },
     {
-      id: "89",
+      id: "91",
       question: "Does my membership discount apply in the shop, and does a one-time pack count?",
       answer:
         "Yes — while your membership is active your shop discount comes off automatically at checkout (Tradie 10%, Foreman 15%, Boss 25%), across the whole shop, with no code to enter. It's a membership benefit only: one-time packs and Mini Packs carry no shop discount, and a membership that's paused, past due or cancelled doesn't discount either — settling a past-due payment switches it straight back on. Your tier is on [My Account → Membership](/my-account/membership).",

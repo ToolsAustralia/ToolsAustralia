@@ -351,7 +351,13 @@ Located at: `src/components/admin/ChargePastDueModal.tsx`
 3. **No Eligible Invoices**: Check that users have `subscription.status === "past_due"` in database
 4. **All Skipped**: Verify invoice filtering criteria are met
 5. **High Failure Rate**: Check Stripe dashboard for decline patterns
-6. **Mass "This invoice can no longer be paid" failures**: these are stranded invoices (see "Stranded invoices in the bulk run" above). Since 2026-07-19 the bulk run auto-recovers the retries-EXHAUSTED ones (`next_payment_attempt == null`). A residual few can still surface where Stripe **still has a retry scheduled** (`next_payment_attempt` set) but the current PaymentIntent is unpayable — since 2026-07-20 those are recorded as **skipped → "Awaiting Stripe retry"** with an accurate message (Stripe auto-retries them), not as scary failures. If you see the raw "consider voiding" text at scale again, verify `decideBulkChargeAction` is applied, `payments` is expanded, and the reclassification branch in `payOpenInvoiceAsPastDueAdmin` is intact.
+6. **Run ended `aborted` with "no progress for N min"**: the orphan sweep found the run genuinely
+   stalled — no worklist item gained an `InvoiceChargeLog` row for 35+ minutes. That is a real
+   wedge (Stripe hanging, a chunk crashing before it can log), **not** a run that merely took a
+   long time. Check `InvoiceChargeLog` for the run's last row timestamp and the function logs
+   around it. If you instead see the legacy message `"exceeded lock window without finalize"`, the
+   run predates 2026-08-24 and was killed by the elapsed-time bug below, not by a real stall.
+7. **Mass "This invoice can no longer be paid" failures**: these are stranded invoices (see "Stranded invoices in the bulk run" above). Since 2026-07-19 the bulk run auto-recovers the retries-EXHAUSTED ones (`next_payment_attempt == null`). A residual few can still surface where Stripe **still has a retry scheduled** (`next_payment_attempt` set) but the current PaymentIntent is unpayable — since 2026-07-20 those are recorded as **skipped → "Awaiting Stripe retry"** with an accurate message (Stripe auto-retries them), not as scary failures. If you see the raw "consider voiding" text at scale again, verify `decideBulkChargeAction` is applied, `payments` is expanded, and the reclassification branch in `payOpenInvoiceAsPastDueAdmin` is intact.
 
 ### Skip breakdown buckets
 
@@ -385,3 +391,94 @@ A successful charge via this tool emits `invoice.payment_succeeded`, which trigg
 - [Past-Due Reanchor](./PAST_DUE_REANCHOR.md) - Future-renewal reanchor on recovery
 - Stripe Invoice API: https://stripe.com/docs/api/invoices
 - Stripe Idempotency: https://stripe.com/docs/api/idempotent_requests
+
+## Excessive-retry cooldown (2026-08-18)
+
+Cards blocked by Stripe with `previously_declined_do_not_retry` are skipped for
+**3 days** instead of being re-attempted every run. Stripe support confirmed the Radar allow list
+cannot override this block, no account setting disables it, and the trigger is retry velocity —
+so a daily re-attempt collects nothing and feeds the block. It decays on its own (17% of blocked
+cards later succeeded), so the cohort is **slowed, not dropped**.
+
+The check is scoped to the **card fingerprint**, so a member who adds a new card is charged
+immediately, and Radar-type blocks (which allowlisting does fix) are unaffected. It costs no extra
+Stripe call and fails open. Skips land in the `excessiveRetryCooldown` bucket, shown as
+**"Retry in 3 days"**.
+
+Full detail: [docs/admin/backend.md](./admin/backend.md#excessive-retry-cooldown) and
+[docs/billing-stripe/gotchas.md](./billing-stripe/gotchas.md#adaptive-acceptance-blocks-are-not-overridable-by-the-radar-allow-list).
+
+## Run liveness: the orphan sweep keys on last progress (2026-08-24)
+
+A `running` `ChargeJobRun` is aborted by `sweepOrphanRuns` only when it has made **no progress**
+for `ORPHAN_RUN_THRESHOLD_MS` (35 min) — never because it has simply been running that long.
+
+Until 2026-08-24 the sweep selected `{ status: "running", startedAt: { $lt: cutoff } }`. Real runs
+take **36.5–39.0 minutes**, and the charge cron ticks every 5 minutes with the sweep running first,
+so **every run was aborted mid-charge at ~48% of its worklist**, five days in a row. Once
+`aborted`, the resume path stopped finding it and the one-run-per-local-day guard blocked a
+restart, so the day's collection halted permanently. Because the worklist is in Stripe's
+newest-first order, the same front half was retried daily (94% overlap day-to-day, up to 24
+attempts per invoice in 30 days) while **229 of 1,157 past-due members were never attempted at
+all** — and that retry velocity is what feeds the excessive-retry blocks described in the section
+above. One bug, both symptoms.
+
+**How it works now.** `ChargeJobRun.lastProgressAt` (optional `Date`) is stamped by
+`processChargePastDueChunk`'s mid-run progress write, but **only when the chunk actually advanced**
+— at least one more worklist item gained a log row. `isOrphanRun` keys on
+`lastProgressAt ?? startedAt`; runs written before 2026-08-24 have no heartbeat and fall back to
+`startedAt`, so nothing sticks `running` forever. The same rule is applied by the ops script
+`scripts/fix-stuck-charge-jobs.ts`.
+
+Consequences worth internalising:
+
+- **A run may now take as long as it needs.** A 90-minute run that keeps logging rows is never
+  swept; the cron resumes it tick after tick until the worklist is drained.
+- **A genuinely wedged run is still cleaned up** within ~35 minutes of its last logged row, and its
+  totals are still recomputed from `InvoiceChargeLog` before it is marked `aborted`.
+- **Raising the threshold is not the fix** and was explicitly rejected: eligible members went
+  813 → 1,103 in the five days the bug was measured, so any fixed elapsed-time budget breaks again.
+
+## Per-invoice attempt cap (proactive) — 2026-08-24
+
+The automated run submits any one invoice to Stripe **at most once every 3 days**
+(`BULK_ATTEMPT_SPACING_DAYS`), checked before `invoices.retrieve` so a held item costs no Stripe
+call. Stripe support's guidance is 2–3 days between retries of the same transaction; measured
+before this existed, individual invoices reached **24 submissions in 30 days**, and 82% of blocked
+transactions on this account carried `previously_declined_do_not_retry` — the block that guidance
+exists to avoid, and which the Radar allow list cannot override.
+
+- **Automated/bulk path only.** The per-user "Charge past due" button, Force Charge and member
+  self-serve are unchanged (6h `RECENT_ATTEMPT_WINDOW_HOURS` + per-path budgets).
+- **Counts only rows that reached an issuer** — excludes `skipped` rows (the cap's own output would
+  push the next eligible date forward forever), recovery step-audit rows, and `invoice_unavailable`
+  failures (Stripe unreachable, no card touched).
+- **2h grace on the boundary** so a day-3 touch landing minutes early is not slipped to day 4;
+  effective floor 70h, still far above 48h.
+- **Fails closed** — a lookup error holds the card back and writes the skip row, so the item still
+  leaves `remaining` and the run still finishes.
+- **Effect:** ~1,157 eligible invoices become ~386 real submissions per day (averaged over the
+  3-day cycle); the per-invoice ceiling drops from 24 to **10** per 30 days.
+- Skips are bucketed `attemptSpacing`, shown as **"Spaced out (3 days)"** in the run drawer.
+
+This is the **proactive** half. The **reactive** `excessive_retry_cooldown` (below) still applies
+to cards Stripe has already blocked; it cannot prevent a first block and fails open.
+
+## Run alerting — 2026-08-24
+
+Every terminal run is judged by `buildChargeRunAlerts` and emitted with `console.error` (greppable
+prefix `[chargePastDue][ALERT]`; `console.log` is stripped from production builds):
+
+- **`aborted`** — any run finalizing `aborted`/`failed`, with the reason and coverage numbers.
+  This is what five consecutive silently-aborted runs would have surfaced.
+- **`zero_coverage`** — a terminal run with `eligibleCount > 0` that attempted **nobody**. This is
+  the cap's own collapse mode: a systematic lookup failure holds everything, the run finalizes
+  `completed`, and neither other alert can see it.
+- **`low_success_rate`** — `succeeded / attempted` below **8%** with at least 50 attempts. The
+  five pre-fix runs scored 2.59–5.97%, so all five would have fired; the 2026-06-29
+  idempotency-replay incident (656/668 failures, $0 collected) would have fired too.
+
+Guarded by `npm run test:attempt-spacing`.
+
+Guarded by `npm run test:orphan-progress`. Full incident detail:
+[docs/admin/gotchas.md](./admin/gotchas.md#the-orphan-sweep-killed-every-healthy-charge-run-for-five-days-2026-08-24).

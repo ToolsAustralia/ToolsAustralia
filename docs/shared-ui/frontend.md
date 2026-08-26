@@ -1772,3 +1772,18 @@ visitor or a member on a package with no shop benefit gets the plain control wit
 extra branches in the JSX. Colour comes from `getRemappedPackageScheme`, the same
 resolver behind the account pill and the cart drawer, so the tier can never be one
 colour here and another there.
+## FilterDropdown (admin UI kit, 2026-08-17)
+
+`src/components/admin/ui/FilterDropdown.tsx` — a styled single-select for admin filter bars,
+added with the Receipts tab and exported from `@/components/admin/ui`.
+
+It exists because a native `<select>` renders the **OS control**, which ignores the admin theme
+entirely and looks nothing like the `DateRangeDropdown` sitting beside it in the same bar. This
+is that component's own trigger-button + `Popover` + option-list pattern, lifted into the kit
+so each filter bar doesn't grow its own copy.
+
+Generic over the value type (`FilterDropdown<T extends string>`), with an optional `allLabel`
+reset row, an optional leading `icon`, and an optional per-option `hint` rendered right-aligned
+(Receipts uses it for per-package row counts). Closing on outside click / scroll is inherited
+from `Popover`. Used three times on the Receipts tab (category, status, package) —
+[docs/admin/receipts.md § Filters](../admin/receipts.md#filters).

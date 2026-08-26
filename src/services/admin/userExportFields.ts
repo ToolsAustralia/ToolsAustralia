@@ -209,8 +209,29 @@ export const EXPORT_FIELDS: ExportFieldDefinition[] = [
     isDefault: true,
   },
   {
+    // Mini draws the user holds entries in that are ACTIVE right now. Resolved against the
+    // MiniDraw collection, so it always agrees with the "In an active mini draw" list filter.
     key: "miniDrawCount",
-    displayName: "Mini Draw Count",
+    displayName: "Active Mini Draws",
+    type: "number",
+    group: "entries",
+    isComputed: true,
+  },
+  {
+    // Lifetime entries granted by mini-draw package purchases, from the purchase ledger
+    // (User.miniDrawPackages) — so it survives winner selection and is net of refunds. Covers
+    // every tier: Mini Pack 1-3, the retired 4-8, and the additional-*-pack-mini records that
+    // display as Tradie / Foreman / Boss / Power / VIP Pack.
+    key: "miniPackEntries",
+    displayName: "Mini Pack Entries",
+    type: "number",
+    group: "entries",
+  },
+  {
+    // How many mini-draw packages they bought and kept. Pairs with the "Bought a Mini Pack"
+    // list filter, which is presence of at least one of these rows.
+    key: "miniPacksBought",
+    displayName: "Mini Packs Bought",
     type: "number",
     group: "entries",
   },

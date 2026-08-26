@@ -199,3 +199,10 @@ Two FAQ answers quote the ladder verbatim. Raised to Tradie 10%, Foreman 15%, Bo
 and the knowledge pack rebuilt (`npm run build:chat-knowledge-pack`); `test:chat-faqs`
 passes at 89 entries. Both answers still state free delivery over $100 — correct today,
 but see `docs/cart-shop-products/backend.md` on the unresolved threshold question.
+## Gender field coverage (2026-08-17)
+
+Two FAQ entries (ids `82`, `83`) cover the optional profile gender field: whether it can be left blank or removed, and what it is used for. Corpus count assertion in `src/data/__tests__/faqs.test.ts` bumped **83 → 85**.
+
+The ACCOUNT SELF-SERVICE MAP in `systemPrompt.ts` gained a matching bullet (navigation only, never a data value) and its "Update profile" line now reads *trade, state, date of birth, email*.
+
+Both answers state plainly that the field is optional, clearable, and affects nothing a member receives — and that only Male/Female are offered, so anyone else leaves it blank. Rule-11 clean: no probability or purchase-of-entries framing (guarded by `npm run test:chat-faqs`).

@@ -142,7 +142,14 @@ async function connectWithRetry(uri: string, opts: mongoose.ConnectOptions, maxR
       }
       
       const delay = RETRY_DELAYS[attempt] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
-      console.warn(`⚠️ MongoDB connection attempt ${attempt + 1} failed (SSL/TLS error), retrying in ${delay}ms...`);
+      // console.error, NOT console.warn — next.config.ts `removeConsole` strips warn/log/info/debug
+      // from production builds, which is the only environment where this path fails. Six
+      // consecutive /api/admin/metrics/users 504s produced zero diagnostic output because of it.
+      console.error(
+        `⚠️ MongoDB connection attempt ${attempt + 1}/${maxRetries + 1} failed (SSL/TLS error), retrying in ${delay}ms. ` +
+          `Cumulative retry sleep budget is ${RETRY_DELAYS.reduce((a, b) => a + b, 0)}ms — if the caller's ` +
+          `maxDuration is below that, it will be killed before this ladder can report anything.`
+      );
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -159,8 +166,10 @@ async function connectDB(): Promise<mongoose.Connection> {
     if (isHealthy) {
       return cached.conn;
     } else {
-      // Connection is stale, clear cache
-      console.warn('⚠️ Cached MongoDB connection is unhealthy, clearing cache');
+      // Connection is stale, clear cache.
+      // console.error so it survives `removeConsole` in production — a stale-cache clear means the
+      // next request pays a full reconnect, which is exactly what a timeout investigation needs.
+      console.error('⚠️ Cached MongoDB connection is unhealthy, clearing cache');
       cached.conn = null;
       cached.promise = null;
     }
@@ -196,7 +205,8 @@ async function connectDB(): Promise<mongoose.Connection> {
     // Set up connection event handlers (only once to prevent listener accumulation)
     if (!eventListenersRegistered) {
       mongoose.connection.on('disconnected', () => {
-        console.warn('⚠️ MongoDB disconnected');
+        // console.error: a mid-flight disconnect is a prime suspect for an unexplained timeout.
+        console.error('⚠️ MongoDB disconnected');
         cached.conn = null;
         cached.promise = null;
       });

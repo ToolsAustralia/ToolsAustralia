@@ -143,3 +143,10 @@ permanently lost. If you add another corner dev overlay, follow the same shape.
 
 `PromoHolidayDevToolbar`'s "Hide" button also swapped its icon from `X` to `ChevronDown`, so
 collapse and dismiss no longer look like the same action.
+
+## ModalsGallery: `ParticipantsModal` props renamed (2026-08-13)
+
+The gallery entry passes `drawId` / `drawName` / `drawType="major"` — the modal became
+draw-type-agnostic so the mini-draws admin page could reuse it (see
+[shared-ui/patterns.md](../shared-ui/patterns.md)). The preview still renders the major-draw
+variant; nothing else about the gallery changed.

@@ -61,13 +61,16 @@ The check is a **strict equality** to `"staff"`. Users with `userType === "admin
 
 The block fires before the protected-route and admin-route checks, so a staff user visiting `/my-account` is always redirected to `/admin` — never to `/login`.
 
-The block-list lives inline in `middleware.ts`. To add or remove a prefix, edit the `STAFF_BLOCKED_PREFIXES` array in the middleware function:
+The block-list lives in [`src/utils/security/staffRouteAccess.ts`](../../src/utils/security/staffRouteAccess.ts) as `STAFF_BLOCKED_PREFIXES` + the `isStaffBlockedPath()` predicate — extracted from `middleware.ts` on 2026-08-20 so it is unit-testable (`npm run test:staff-route-access`). Edit the array there:
 
 ```
 /my-account, /affiliate, /shop, /checkout, /purchase-success,
-/major-draw, /mini-draws, /mini-draw-success, /upsell-success,
-/rewards, /membership, /partner
+/mini-draw-success, /upsell-success, /rewards, /membership, /partner
 ```
+
+**The rule the list encodes:** block a route when visiting it would **create or expose customer state** — an account surface, a purchase flow, or a post-purchase confirmation. *Not* "is it outside `/admin`". `/mini-draws`, `/major-draw`, `/draw-results` and `/winners` are public read-only pages and are **not** blocked; `/mini-draw-success` is, because viewing a draw is read-only and buying into one is not. (`/mini-draws` and `/major-draw` were on the list until 2026-08-20 — see [gotchas.md](./gotchas.md).)
+
+⚠️ **This list is not a purchase guard.** Removing a prefix removes whatever the block *incidentally* prevented. Taking `/mini-draws` off it exposed a working buy widget on a page whose endpoint only checked authentication, so the employee-exclusion guard now lives at `POST /api/mini-draw/purchase` (`isEmployeeAccount`, Terms §5.5). Ask the same question of any future removal.
 
 ## Matcher
 

@@ -6,7 +6,7 @@
 |---|---|---|
 | [src/config/](../../src/config/) | Runtime feature config | featureFlags, brand-theme, prizes, promo-landing-slugs, rewardsSettings |
 | [src/constants/](../../src/constants/) | Truly fixed values | z-index, legal, promo-banner |
-| [src/data/](../../src/data/) | Seed / reference data + fixtures | australianStates, professions, sample{Products,Users,Winners,Orders,PartnerDiscounts,PrizeDraws,WhateverElse}, membershipPackages, miniDrawPackages, partnerBrandOffers, faqs, brandLogos, upsellPackages |
+| [src/data/](../../src/data/) | Seed / reference data + fixtures | australianStates, professions, genders, sample{Products,Users,Winners,Orders,PartnerDiscounts,PrizeDraws,WhateverElse}, membershipPackages, miniDrawPackages, partnerBrandOffers, faqs, brandLogos, upsellPackages |
 
 ## Config
 
@@ -97,6 +97,7 @@ error** (`Record<ConvertingPlatform, …>`) and is also asserted by `npm run tes
 | [src/data/miniDrawPackages.ts](../../src/data/miniDrawPackages.ts) | **Static** mini-draw package definitions. Exports `getMiniDrawPackagesForViewer(hasAccess)` for tier-aware catalog (guests → Mini Pack 1–3; access holders → additional-*-pack-mini). Untiered `getMiniDrawPackages()` kept for admin/lookup callers. |
 | [src/data/partnerBrandOffers.ts](../../src/data/partnerBrandOffers.ts) | Partner offer reference |
 | [src/data/professions.ts](../../src/data/professions.ts) | Profession dropdown options |
+| [src/data/genders.ts](../../src/data/genders.ts) | Gender dropdown options (`male`/`female` only) **plus the two mappers every consumer must share**: `genderBucketFor()` → admin/Norm bucket (`Male`/`Female`/`Not set`) and `genderToMetaGe()` → Meta `ge` (`"m"`/`"f"`, `undefined` when unknown). The field is optional; unset means unknown and covers both "declined" and "never asked". |
 | [src/data/sampleOrders.ts](../../src/data/sampleOrders.ts) | Dev fixture |
 | [src/data/samplePartnerDiscounts.ts](../../src/data/samplePartnerDiscounts.ts) | Dev fixture |
 | [src/data/samplePrizeDraws.ts](../../src/data/samplePrizeDraws.ts) | Dev fixture |

@@ -26,9 +26,10 @@ const test = (name: string, fn: () => void) => {
 
 test("AREAS matches AREA_ACTIONS keys exactly", () => {
   assert.deepEqual(AREAS, Object.keys(AREA_ACTIONS));
-  // Bump deliberately when an area is added. 17 as of 2026-08-17 (+`shop`, which
-  // gates the previously-unauthenticated /api/products admin + destructive routes).
-  assert.equal(AREAS.length, 17);
+  // Bump deliberately when an area is added. 18 as of 2026-08-26 - `shop` (gates the
+  // previously-unauthenticated /api/products admin + destructive routes) and `receipts`
+  // (the revenue ledger) were added on separate branches and both land in this merge.
+  assert.equal(AREAS.length, 18);
 });
 
 test("every area declares at least a 'view' action", () => {
@@ -65,6 +66,36 @@ test("users.view and users.viewDetail are separate — customer PII is its own g
     AREA_ACTIONS.users.indexOf("view"),
     AREA_ACTIONS.users.indexOf("viewDetail"),
     "view and viewDetail must be distinct actions, not aliases"
+  );
+});
+
+test("miniDraws.view and miniDraws.viewParticipants are separate — entrant PII is its own grant", () => {
+  // Same split, same reason (2026-08-13). `miniDraws.view` gated the draw list AND the
+  // CSV/Excel export — a full dump of every entrant's name, email, mobile and state. The new
+  // action gates the export and the in-app roster together, because they return identical
+  // data; collapsing them back into `view` silently re-widens PII access to every role that
+  // can merely see the mini-draw lineup.
+  assert.ok(AREA_ACTIONS.miniDraws.includes("view"), "the draw-list grant");
+  assert.ok(AREA_ACTIONS.miniDraws.includes("viewParticipants"), "the entrant (PII) grant");
+  assert.notEqual(
+    AREA_ACTIONS.miniDraws.indexOf("view"),
+    AREA_ACTIONS.miniDraws.indexOf("viewParticipants"),
+    "view and viewParticipants must be distinct actions, not aliases"
+  );
+});
+
+test("receipts.view and receipts.export are separate — the CSV is its own grant", () => {
+  // Same split, same reason as `users.export` (2026-08-17). The Receipts ledger joins every
+  // payment to the customer who made it; reading that table in the panel and downloading it
+  // as a file are different risks, so the export carries its own action. Collapsing them
+  // back into `view` silently hands a bulk revenue+PII dump to every role that can merely
+  // open the tab.
+  assert.ok(AREA_ACTIONS.receipts.includes("view"), "the ledger grant");
+  assert.ok(AREA_ACTIONS.receipts.includes("export"), "the CSV (bulk PII) grant");
+  assert.notEqual(
+    AREA_ACTIONS.receipts.indexOf("view"),
+    AREA_ACTIONS.receipts.indexOf("export"),
+    "view and export must be distinct actions, not aliases"
   );
 });
 
@@ -178,6 +209,7 @@ test("dangerous sub-actions are marked danger:true", () => {
     "errorReports.delete",
     "abTesting.selectWinner",
     "abTesting.delete",
+    "receipts.export",
     "settings.delete",
   ] as const;
   for (const p of dangerExpected) {

@@ -32,6 +32,7 @@ import PrintProviderSync from "@/components/admin/PrintProviderSync";
 import ShopEntryMultiplierPanel from "@/components/admin/ShopEntryMultiplierPanel";
 import OrdersManagement from "@/components/admin/OrdersManagement";
 import BlockedTransactionsManagement from "@/components/admin/BlockedTransactionsManagement";
+import ReceiptsManagement from "./ReceiptsManagement";
 import PastDueChargeHistory from "./PastDueChargeHistory";
 import StripeWebhookQueueManagement from "@/components/admin/StripeWebhookQueueManagement";
 import PromoAnalyticsManagement from "@/components/admin/PromoAnalyticsManagement";
@@ -178,6 +179,7 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
                   {selectedTab === "shop-orders" && "Hand paid orders to the printer, and search the full order history"}
                   {selectedTab === "shop-multipliers" && "Cap how far a promo multiplies merchandise entries"}
                   {selectedTab === "error-reports" && "View and manage error reports from users"}
+                  {selectedTab === "receipts" && "Every payment received — source, customer, amount, refund state, and its Stripe record"}
                   {selectedTab === "blocked-transactions" && "Stripe issuer-blocked cards — review and allowlist"}
                   {selectedTab === "past-due-history" && "History of bulk and manual past-due charge attempts"}
                   {selectedTab === "stripe-webhook-queue" && "Async Stripe webhook processing queue — replay failed events"}
@@ -262,6 +264,9 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
 
           {/* BLOCKED TRANSACTIONS TAB */}
           {selectedTab === "blocked-transactions" && <BlockedTransactionsManagement />}
+
+          {/* RECEIPTS TAB */}
+          {selectedTab === "receipts" && <ReceiptsManagement />}
 
           {/* PAST-DUE CHARGE HISTORY TAB */}
           {selectedTab === "past-due-history" && <PastDueChargeHistory />}

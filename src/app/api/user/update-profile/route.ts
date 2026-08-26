@@ -5,6 +5,7 @@ import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
 import { z } from "zod";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
+import { GENDER_VALUES, type GenderValue } from "@/data/genders";
 
 const updateProfileSchema = z.object({
   mobile: z
@@ -25,6 +26,16 @@ const updateProfileSchema = z.object({
     .max(100, "Profession cannot exceed 100 characters")
     .optional()
     .transform((val) => (val?.trim() || undefined)),
+  // Optional field. An empty string is accepted and normalized to `undefined` so a member can
+  // CLEAR a previously-set gender, not just change it — same shape as `profession` above.
+  gender: z
+    .string()
+    .optional()
+    .transform((val) => val?.trim().toLowerCase() || undefined)
+    .refine(
+      (val) => !val || GENDER_VALUES.includes(val as (typeof GENDER_VALUES)[number]),
+      "Gender must be either 'male' or 'female'"
+    ),
   birthdate: z
     .string()
     .optional()
@@ -89,6 +100,12 @@ export async function POST(request: NextRequest) {
       user.birthdate = parsed.data.birthdate ? new Date(parsed.data.birthdate) : undefined;
     }
 
+    // `hasOwnProperty` rather than `!== undefined`: the Zod transform maps "" → undefined so a
+    // member can clear the field, and a bare `!== undefined` check would silently ignore that.
+    if (Object.prototype.hasOwnProperty.call(body, "gender")) {
+      user.gender = parsed.data.gender as GenderValue | undefined;
+    }
+
     await user.save();
 
     try {
@@ -106,6 +123,7 @@ export async function POST(request: NextRequest) {
         mobile: user.mobile,
         state: user.state,
         profession: user.profession,
+        gender: user.gender,
         birthdate: user.birthdate?.toISOString?.()?.split("T")[0],
       },
     });

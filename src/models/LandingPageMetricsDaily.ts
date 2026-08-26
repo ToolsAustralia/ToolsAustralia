@@ -29,7 +29,7 @@ export interface ILandingPageMetricsDaily extends Document {
    * Which ad platform produced this row (2026-07-29). Part of the unique key.
    *
    * Without it, two platforms' rollups for the same landing URL on the same day would
-   * collide — and worse, `PrizePerformanceCard` sums every returned row matching
+   * collide — and worse, `BrandPerformanceCard` sums every returned row matching
    * `/promotions/<slug>`, so unfiltered reads would blend Meta and TikTok spend into one
    * figure with no visual indication, dividing one platform's revenue by combined spend.
    * Every read and the delete-and-rebuild filter must pass a platform.

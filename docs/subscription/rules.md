@@ -62,9 +62,14 @@ Failed `subscription_cycle` invoices set `pause_collection` so that newer cycle 
 
 The `resumeAfterSuccessfulRenewalPayment()` call must run **before** `processPaymentBenefits()` in the webhook. If the benefits path is slow, errors, or the Stripe CLI / proxy times out before the response, an unresumed pause would survive and break the next billing cycle.
 
-The clear-condition lives in `shouldClearPauseCollectionAfterPaidInvoice()` — clear when:
-- Previous Mongo status was `past_due` or `unpaid`, **or**
-- `billing_reason` is `subscription_cycle` | `subscription_threshold` | `subscription_update`.
+The clear-condition lives in **`decideClearPause()`** ([pauseCollectionPolicy.ts](../../src/services/subscription/pauseCollectionPolicy.ts)) — the single source of truth for this decision. Clear when **both**:
+
+- `subscription.pause_collection != null` — there is actually a pause to clear (**precondition**, added 2026-08-24), **and**
+- `subscription.metadata.pauseReason !== "retention"` — a retention `pause_30d` is never lifted by a paid invoice.
+
+That is the whole decision. It used to be the disjunction `shouldClearPauseCollectionAfterPaidInvoice(...) || recordMembershipRecurringAffiliate || pause_collection != null`, which meant a plain `subscription_cycle` renewal cleared a pause that was never set — a `/v1/subscriptions` **write** on every renewal, on the endpoint that hit Stripe's 25 req/sec per-endpoint cap during the 2026-08-23 burst. Every disjunct was ORed with the non-null clause, so requiring a pause to exist removed only no-op writes; a member who *is* paused is still resumed on the same path, in the same place. `shouldClearPauseCollectionAfterPaidInvoice()` is still exported and unit-tested but **no production code calls it**.
+
+**Read `pause_collection` carefully.** The webhook takes the subscription from the invoice **expansion**, not a fresh retrieve. `readPauseCollection()` splits the three states: an explicit `null` is an answer (not paused — skip the write), an **absent** field is not, and the handler re-reads from Stripe before deciding. Guessing "not paused" on a missing field would leave a paying, genuinely-paused member collection-paused — and this webhook is their only automatic clearer.
 
 ### R10. Resume is idempotent
 

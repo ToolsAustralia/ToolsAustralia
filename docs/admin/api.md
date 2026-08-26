@@ -9,6 +9,7 @@ The `/api/admin/**` namespace. Per the manifest, this domain is the catch-all fo
 | `/api/admin/users/[id]/cancel-subscription` | [subscription](../subscription/) | Admin cancel sub |
 | `/api/admin/users/[id]/charge-past-due` | [billing-stripe](../billing-stripe/) | Single past-due retry |
 | `/api/admin/users/[id]/payment-events/[eventId]/reverse` | [billing-stripe](../billing-stripe/) | Refund replay |
+| `GET /api/admin/receipts` | admin | **The Receipts ledger** — one row per payment received, newest first, unioning `PaymentEvent` (`BenefitsGranted`) with shop `Order`s. Gated by `receipts.view`; `?format=csv` additionally requires `receipts.export`. Query: `dateRange` (`today \| yesterday \| all-time \| custom \| current-draw \| last-draw`, default `today`) + `startDate`/`endDate` for custom/draw ranges, resolved by the dashboard's own `resolveRevenueDetailsRange` so the two are comparable by construction; `category` (a `ReceiptCategory`); `page`/`limit` (default 50, max 200). Returns `{ success, data: { rows, totals: { gross, refunded, net, count }, pagination, stripeMode } }`. **Two traps:** the headline `net` is net of refunds (a fully-refunded row nets to $0, matching the dashboard's basis), and `rows[].stripe.objectId` is polymorphic — `pi_…` for one-offs, `invoice_in_…` for renewals — so the server ships pre-built `objectUrl`/`customerUrl` rather than letting the client guess. Deliberately NOT under `invoices/` (that folder means past-due *charging actions*). Full rationale: [receipts.md](./receipts.md). |
 | `/api/admin/invoices/charge-past-due` | [billing-stripe](../billing-stripe/) | Bulk past-due retry |
 | `/api/admin/invoices/recover-past-due` | admin | Bulk stranded-invoice recovery (per-invoice, max 10) |
 | `/api/admin/invoices/recover-stranded` | admin | Bulk stranded-invoice recovery via scan + preview (GET preview / POST run) |
@@ -862,3 +863,81 @@ is a real `String` field on `User` (and was already in the route's `.select(...)
 participants modal advertises "search by name / email / mobile", so it is now matched with
 the same case-insensitive regex. Admins commonly paste an unspaced mobile, so the raw stored
 value is matched as-is rather than normalised.
+
+## `GET /api/admin/mini-draw/[id]/participants` (2026-08-13)
+
+The read behind the mini-draw **People** modal — the entry-pool roster, paginated and searchable,
+so staff can answer "did this person enter?" without downloading a spreadsheet of every entrant's
+personal details.
+
+**Permission: `miniDraws.viewParticipants`** (not `miniDraws.view`). The sibling
+`GET /api/admin/mini-draw/[id]/export` moved to the same gate in the same change — the two return
+byte-for-byte the same PII and differ only in pagination, so they must never diverge. See
+[auth/permissions-catalog.md](../auth/permissions-catalog.md) for the split and its backfill.
+
+| Query param | Default | Notes |
+|---|---|---|
+| `page` | `1` | Clamped to ≥ 1 |
+| `limit` | `20` | Clamped to 1–100 |
+| `search` | — | Matches `firstName`, `lastName`, `email`, `mobile`, and the concatenated full name |
+
+```jsonc
+{
+  "success": true,
+  "data": {
+    "participants": [
+      { "userId": "…", "firstName": "…", "lastName": "…", "email": "…",
+        "mobile": "…", "state": "…", "totalEntries": 200,
+        "firstAddedDate": "…", "lastUpdatedDate": "…" }
+    ],
+    "pagination": { "currentPage": 1, "totalPages": 1, "totalCount": 5,
+                    "limit": 20, "hasNextPage": false, "hasPrevPage": false },
+    "miniDraw": { "_id": "…", "name": "…", "totalEntries": 293, "minimumEntries": 1000 }
+  }
+}
+```
+
+Three deliberate choices:
+
+1. **The envelope matches `/api/admin/major-draw/participants` exactly.** One shared
+   `ParticipantsModal` consumes both, so a divergence shows up as a broken modal rather than a
+   compile error. Change one, change the other.
+2. **Sort happens BEFORE the slice.** `entries` is sorted by `totalEntries` desc and *then*
+   paginated. Sorting the page instead would make page 1 "the first N in insertion order, then
+   sorted" rather than the top N — the exact bug that was fixed in the major-draw route.
+3. **No `entriesBySource`.** Mini-draw entry is package-only (no membership / referral / upsell
+   sources), so there is no breakdown to report; the field is major-draw-only and optional on the
+   shared client type.
+
+Search resolves against `User` first and then filters the embedded `entries` array, because the
+searchable fields live on the user document, not on the entry. The regex is escaped before use.
+
+## `GET /api/admin/analytics/brand-performance` (2026-08-19)
+
+Ad spend and return per **brand lane**, backing the Overview's Brand Performance card. Permission `facebookAds.view`, matching every sibling under `analytics/`. Thin route → `BrandPerformanceService`.
+
+```
+?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD   (required)
+&lane=toolset|toolbox                       (default toolset)
+&basis=landing-page|built-prize|platform    (default landing-page)
+&platform=meta|tiktok|all                   (default all)
+&compare=previous-period                    (optional)
+```
+
+**`basis` is the only thing that changes where outcomes come from.** Spend is always keyed on the canonical URL, for every basis, because `canonicalizeLandingUrl` strips query strings — the ad platform cannot know which combination a visitor built.
+
+| basis | outcome source | lane key | membership split |
+|---|---|---|---|
+| `landing-page` | `PaymentEvent` | `data.promotionSlug` | yes — full 5-category split |
+| `built-prize` | `PaymentEvent` | `data.builtPrizeSlug` | yes — full 5-category split |
+| `platform` | `LandingPageMetricsDaily` | canonical URL | **no** — fields are `null` |
+
+**`platform=all` IS offered here, unlike the `spend-by-url` sibling which refuses it.** For the two server bases revenue comes from our own ledger and is read once, so combining platforms only combines *spend* — safe. Under `basis=platform` it is still offered but the response sets `meta.blendedPlatformRevenue: true` so the UI can flag the double-count (the same purchase can be claimed by Meta and TikTok) rather than the route refusing outright.
+
+**The comparison window is resolved server-side** (`resolvePreviousCalendarMonthAest`), not accepted from the client — otherwise two surfaces on the same screen could benchmark against different definitions of "last month". When `compare` is set, every row carries a `comparison` of the same shape; a lane with no prior activity gets an explicit **zero row**, not `undefined`, because "first spend this month" is a real reading.
+
+**Response invariants** (Advertising Analytics Suite master spec §3.1): renewals excluded via `data.billingReason === "subscription_cycle"` (never `isRenewal`), refunds netted whole-row, ROAS recomputed from summed spend ÷ summed revenue. All three come free from delegating to `classifyAcquisitionCategory` and `excludeRefundedBenefitsGrantedStages()` rather than re-writing the predicates.
+
+`unattributed` holds spend/outcomes that resolved to no lane and **is included in `totals`** — that is what keeps the Total reconciled with the ad account and with the Overview revenue card.
+
+`maxDuration = 60`: on-read freshness may sync trailing days, and `compare` doubles the outcome aggregation.

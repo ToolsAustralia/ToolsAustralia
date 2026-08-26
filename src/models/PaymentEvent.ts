@@ -154,6 +154,13 @@ PaymentEventSchema.index({ paymentIntentId: 1, eventType: 1 }, { unique: true })
 // Other indexes for efficient queries
 PaymentEventSchema.index({ userId: 1, timestamp: -1 });
 PaymentEventSchema.index({ packageType: 1, timestamp: -1 });
+// Every net-revenue / metrics aggregation starts with `$match: { eventType, timestamp: {range} }`
+// (see src/utils/payment/payment-event-net-queries.ts). Before this index, none of the eleven
+// existing indexes led with `eventType`, so those queries range-scanned `timestamp` and discarded
+// non-matching event types in memory — cost grew with total collection size, not with matches.
+// Created in production by scripts/migrations/2026-08-17-payment-event-eventtype-timestamp-index.ts;
+// declared here so fresh environments get it too.
+PaymentEventSchema.index({ eventType: 1, timestamp: -1 });
 // Revenue-by-platform aggregation (dashboard). attributionConfidence is filtered
 // in-memory, NOT part of the index key (low cardinality, poor selectivity).
 PaymentEventSchema.index({ convertingPlatform: 1, timestamp: -1 });

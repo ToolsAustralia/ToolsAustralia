@@ -1,5 +1,74 @@
 # Admin — Gotchas
 
+## The charge run manufactured the Stripe blocks it then failed against (2026-08-24)
+
+**The shape.** The daily past-due run submitted the *same* invoices to Stripe every day —
+24 submissions on one invoice in 30 days, 100 invoices at 17, 76 at 18 — while
+**835 of 1,024 blocked transactions (82%)** carried `previously_declined_do_not_retry`.
+That is Stripe **Adaptive Acceptance**, it is **not** overridable by the Radar allow list, and
+Stripe support named the cause as *"too many payment attempts were made in a short time window"*.
+The run was generating its own failure mode.
+
+**Trap 1 — a reactive cooldown cannot prevent a first block.**
+`shouldCooldownForExcessiveRetry` (`EXCESSIVE_RETRY_COOLDOWN_DAYS = 3`) looked like the fix and
+was not: it only engages once a `BlockedTransaction` row **already exists** for that card
+fingerprint, and it fails **open** on lookup error. Every one of those 24 submissions happened
+before there was anything for it to react to. The proactive cap
+(`shouldSkipForBulkAttemptSpacing`) is a **separate** rule reading only the invoice's own attempt
+history. Do not fold the two together — they answer different questions and fail in opposite
+directions on purpose.
+
+**Trap 2 — do not count `skipped` rows as attempts.** The cap holds an invoice back by writing a
+`skipped` `InvoiceChargeLog` row. If the "last attempt" lookup counted skip rows, *the cap's own
+output* would push the next eligible date forward on every run and the invoice would **never be
+charged again** — a silent, permanent revenue leak that looks like the rule working. Only
+`success`/`failed` count, matching `aggregateRunTotals`'s definition of `attempted`.
+
+**Trap 3 — the new skip bucket must be classified FIRST.** `classifySkipReasonFromMessage` is how
+persisted rows are re-bucketed for run totals. The `attempt_spacing` message names a prior attempt
+time; without its own branch at the top it falls through into `other` — and it is the *largest*
+bucket in a healthy run (~2/3 of the population), so the whole SKIP BREAKDOWN becomes unreadable.
+A later rewording containing "within" or "prior attempt" would be claimed by `recently_attempted`,
+which is the 6h **human**-retry window and means something else to an operator.
+
+**Trap 4 — this rule fails CLOSED, unlike its neighbour eight lines below.** The asymmetry is
+deliberate and worth preserving: a lookup error that let items through would, on a *systematic*
+failure, silently disable the entire cap and put every card back on a daily cadence. Holding one
+member back for a day is recoverable; re-hammering the whole past-due base is not.
+
+**Trap 5 — the cap's OWN failure mode finalizes as `completed`.** A systematic spacing-lookup
+failure holds every item, and the run finishes cleanly with `attempted: 0`. `aborted` never fires
+(nothing aborted) and `low_success_rate` is suppressed by its 50-attempt floor — so without a
+dedicated check the job would stop collecting entirely and report success. That is the
+`zero_coverage` alert (`eligibleCount > 0 && attempted === 0`), plus an ALERT-prefixed line per
+fail-closed hold to catch a *partial* failure the totals would hide. **Any future filter added to
+this path needs the same question asked of it.**
+
+**Trap 6 — a `failed` row is not proof a card was submitted.** `retrieveWorklistInvoice` writes
+`failed` when Stripe was unreachable after retries (429/5xx, no card touched), and recovery
+step-audit rows carry `success`/`failed` for void/create/finalize machinery. Counting either as an
+attempt costs the member a 3-day hold for something that never reached an issuer — worst during a
+Stripe incident, i.e. exactly when collection matters. The 6h guard already excludes step rows;
+this window is 12x longer, so it excludes both.
+
+**Trap 7 — a strict boundary is not a 3-day cadence.** A daily run reaches a given invoice at a
+slightly different time each cycle, so `now >= last + 72h` holds any day-3 touch landing minutes
+early and slips it to day 4. `BULK_ATTEMPT_SPACING_GRACE_MS` (2h) absorbs that. The Mongo cutoff
+must **not** be graced — it has to stay at least as wide as the predicate window or boundary rows
+fall outside the query.
+
+**Trap 8 — fixing the abort bug WITHOUT this cap would have been a net regression.** Runs used to
+die at ~34–52% of the worklist, so only ~400 invoices were ever reached. Making runs complete puts
+all ~1,157 on a daily cadence — strictly more of exactly what Stripe is blocking. The two changes
+must ship together.
+
+**Ordering was investigated and deliberately left alone.** `stripe.invoices.list` returns
+newest-first (verified against the live API; `InvoiceListParams` has no sort parameter). A
+least-recently-attempted *sort* is redundant once the cap exists: the cap **is** that rule,
+expressed as a filter, so the set eligible on any given day is exactly the set that has waited
+longest.
+
+
 ## The Advertising card's "Yesterday" understated TikTok — a cron ORDERING bug (2026-08-11)
 
 **Symptom:** the overview Advertising card showed TikTok ROAS·PLATFORM `0.10x` ($386.82 spend, $40.00 revenue) for AEST 2026-08-10, while TikTok Ads Manager showed `0.219` ($410.93 / $90.00). Days *before* that matched exactly.
@@ -51,11 +120,19 @@ The affiliate detail modal ([`AffiliateDetailModal.tsx`](../../src/components/ad
 
 `SubscriptionHistoryStatusBadge` ([`AdminBadge.tsx`](../../src/components/admin/ui/AdminBadge.tsx)) renders a membership-history row's `status` raw, so a `trialing` row would literally show "trialing". We never sell a real free trial — `trialing` only ever means a paid, **active** member whose billing date was anchored/reanchored via Stripe `trial_end` (join-25-27→24 and the past-due reanchor). The badge maps `trialing → "active"`; the current-state badge (`renderSubscriptionStateBadge`) already shows "Active" via `isActive`. Do not render the raw `trialing` string anywhere admin-facing. See `docs/PAST_DUE_REANCHOR.md`.
 
+## A snapshot row must describe a CLOSED day — the writer used to write today (2026-08-25)
+
+Same shape as the TikTok bug above, different cause. `writeSlidingWindow` enumerated today inclusively, so the `20 3 * * *` fire (13:20 AEST) froze a half-finished day under that date key. It was harmless while the other fires landed at 00:00 AEST — the complete-day rewrite arrived as the reader flipped live→snapshot — and became visible the moment those fires moved to 03:30 AEST: for 3.5h every night the Overview served a 13-hour day as a whole one. AEST 24 Aug read **$25,079.95** instead of **$30,782.43**.
+
+**The diagnostic that names it fast:** when revenue looks wrong, check whether the tiles agree *with each other*. Revenue / Ad spend / ROAS come from the snapshot; New signups, Cancellations, Renewals and MRR are live. Signups correct + revenue short = a stale or partial snapshot, not a revenue bug. Then compare the snapshot row's `updatedAt` against the AEST day it claims to describe — if `updatedAt` falls *inside* that day, it is a partial.
+
+The writer now refuses any day that has not closed, and the window ends at yesterday. Full write-up, including why the reschedule was still the right call: [infrastructure/gotchas.md](../infrastructure/gotchas.md). Regression test: `npm run test:dashboard-stats-window`.
+
 ## Ad-spend snapshots: a failed Facebook fetch PRESERVES the prior value (never wipes)
 
 The dashboard ad-spend / ROAS / CAC numbers come from `DashboardStatsDailySnapshot` rows written by [`DashboardStatsSnapshotWriter`](../../src/services/admin/dashboard-stats/DashboardStatsSnapshotWriter.ts) (daily cron + backfill). Each day's Facebook spend is fetched live via [`facebookAdChannelProvider`](../../src/services/admin/dashboard-stats/adChannelProviders.ts).
 
-**Why it matters:** the snapshot cron rewrites a **90-day sliding window** every run ([`SLIDING_WINDOW_DAYS = 90`](../../src/app/api/cron/dashboard-stats-daily-snapshot/route.ts), at 14:00 & 15:00 UTC). Before this guard, the writer did `if (metrics) adChannelsMap.set(...)` then `$set` the **whole** `adChannels` map — so a failed fetch omitted Facebook and the `$set` wiped it. On **2026-06-11** the marketing token expired ~26 min before the 15:00 UTC run; that single run silently zeroed Facebook spend for the entire trailing 90 days (~$283k). See [tracking/gotchas.md](../tracking/gotchas.md) for the token side and the backfill repair.
+**Why it matters:** the snapshot cron rewrites a **90-day sliding window** every run ([`SLIDING_WINDOW_DAYS = 90`](../../src/app/api/cron/dashboard-stats-daily-snapshot/route.ts), at 17:30 & 20:30 UTC — moved off 14:00/15:00 UTC on 2026-08-24 (via a same-day, later-reverted 18:00/19:00), see `docs/infrastructure/gotchas.md`). Before this guard, the writer did `if (metrics) adChannelsMap.set(...)` then `$set` the **whole** `adChannels` map — so a failed fetch omitted Facebook and the `$set` wiped it. On **2026-06-11** the marketing token expired ~26 min before the 15:00 UTC run; that single run silently zeroed Facebook spend for the entire trailing 90 days (~$283k). See [tracking/gotchas.md](../tracking/gotchas.md) for the token side and the backfill repair.
 
 **The guard (do not regress it):** `fetchForDay` returns a discriminated `AdChannelFetchResult`:
 - `ok` → write the metrics,
@@ -95,6 +172,82 @@ The bulk charge endpoint ([`charge-past-due/route.ts`](../../src/app/api/admin/i
 Two consequences worth remembering:
 - **Totals are recomputed from `InvoiceChargeLog` rows every chunk**, never from in-memory counters — so a tab close / crash / orphan-sweep abort still reports the real succeeded/failed/skipped/revenue, not 0/0/0. The orphan sweep (`sweepOrphanRuns`) and the standalone ops script `scripts/fix-stuck-charge-jobs.ts` ([infrastructure](../infrastructure/)) both recompute the same way before marking a stuck `running` run `aborted`.
 - **Progress/resumability is derived from which worklist invoices already have a log row** for the run, so a killed chunk resumes from the unlogged remainder. Double-charge safety still comes from `payOpenInvoiceAsPastDueAdmin` (30s debounce, 6h recent-attempt lock) plus the **run-scoped** idempotency key `admin-charge-${invoiceId}-run-${runId}` — stable within a run (a resumed chunk re-touching an invoice dedupes to one charge) but fresh across runs. The chunk worker calls that primitive with the run-scoped key.
+
+## The orphan sweep killed every healthy charge run for five days (2026-08-24)
+
+**Never key a liveness/timeout check on "time since started". Key it on "time since last progress".**
+
+`ORPHAN_RUN_THRESHOLD_MS = 35 * 60 * 1000` and `sweepOrphanRuns` selected orphans with
+`{ status: "running", startedAt: { $lt: cutoff } }` — *elapsed time since start*. Real production
+runs take **36.5–39.0 minutes**. The charge cron ticks every 5 minutes and sweeps first, so every
+single run was marked `aborted` while it was **actively charging**, at roughly the 35-minute mark:
+
+| Run (AEST) | Duration | Eligible | Attempted | Succeeded | Recovered |
+|---|---|---|---|---|---|
+| 20/8 07:01 | 39.0 min | 813 | 425 (52%) | 11 | $420 |
+| 21/8 07:02 | 38.2 min | 846 | 419 (50%) | 25 | $880 |
+| 22/8 07:02 | 38.1 min | 864 | 427 (49%) | 20 | $620 |
+| 23/8 07:03 | 36.5 min | 868 | 420 (48%) | 15 | $320 |
+| 24/8 07:0x | 39.0 min | 1103 | 376 (34%) | 21 | $580 |
+
+Every one carried `error: "Aborted by orphan sweep — exceeded lock window without finalize"`.
+
+**Why the day then stopped dead.** Once `aborted`, the resume path
+(`ChargeJobRun.findOne({ status: "running" })`) no longer finds the run, and the
+one-run-per-local-day guard blocks a fresh start. Collection permanently halted at ~48% of the
+worklist. Because the worklist is snapshotted in Stripe's newest-first list order, the *same*
+front half was retried every day and the tail was never reached:
+
+- **94% of each day's attempts were the same members as the day before** (362 of 387 overlapped);
+  individual invoices reached 17–24 attempts in 30 days.
+- **229 of 1,157 past-due members were never attempted once in 30 days.**
+
+That repeated hammering of the same cards is also the mechanism behind
+[billing-stripe/gotchas.md](../billing-stripe/gotchas.md)'s finding that **835 of 1,024 blocked
+transactions (82%)** carry Stripe's Adaptive Acceptance block. One bug, both symptoms.
+
+**The fix — and the fix that was rejected.** Raising `ORPHAN_RUN_THRESHOLD_MS` only moves the
+cliff: the eligible population went 813 → 1,103 in those same five days, so any fixed elapsed-time
+budget breaks again as the member base grows. The lock was **already** renewed per chunk, so a
+correct liveness signal existed — the sweep just never consulted it. Now:
+
+- `ChargeJobRun.lastProgressAt` (optional `Date`, no schema default) is stamped by
+  `processChargePastDueChunk` on its mid-run progress write.
+- `runLivenessAt` (`lastProgressAt ?? startedAt`) is the **only** place the fallback lives, and
+  `isOrphanRun` is the only place the threshold comparison lives. `sweepOrphanRuns` prefilters
+  `{ status: "running" }` and calls `isOrphanRun`; `scripts/fix-stuck-charge-jobs.ts` **imports**
+  `runLivenessAt` + `ORPHAN_RUN_THRESHOLD_MS` rather than re-deriving either. Its `@/` import is safe
+  above its dotenv call because `charge-past-due-totals.ts` is Mongoose-free and env-free (its
+  `ChargeJobRun` import is `import type`, erased at compile) — the dynamic `await import()` pattern
+  elsewhere in that script exists only to defer MODEL loading, which does not apply here.
+
+**Two traps to not fall into when touching this again:**
+
+1. **Don't stamp the heartbeat on every chunk.** It is gated on `processed > processedBefore` — the
+   chunk must have added at least one worklist item's log row. A run whose every item throws before
+   writing a row is *activity, not progress*; stamping unconditionally would let it refresh its own
+   liveness forever and never be swept. That would trade "kill every healthy run" for "never kill a
+   wedged one", which is worse.
+2. **Don't restate the rule anywhere — Mongo query OR a local helper.** The original bug survived
+   because the rule existed twice: `isOrphanRun` (exported, and not actually called by the sweep) and
+   a hand-written `startedAt: { $lt: cutoff }` predicate. Mongo cannot express
+   `lastProgressAt ?? startedAt` without an index-defeating `$expr`, so the sweep prefilters on
+   `status` and filters in TypeScript. The `running` set is at most a handful of documents; this is
+   not a scan risk. **A hand-rolled `const livenessAt = (r) => r.lastProgressAt ?? r.startedAt` in a
+   script counts as a second copy too** — an early draft of this very fix shipped one, and it had
+   already drifted (inclusive `>=` in `isOrphanRun` vs exclusive `<` in the script, disagreeing at
+   the boundary). Import the helper.
+
+3. **Keep the sweep loop fault-isolated.** Evaluating the predicate in JS instead of in Mongo means a
+   malformed document (no `startedAt`) would throw where the old query would simply not have matched
+   — and `sweepOrphanRuns` runs inside the charge cron's `try` at the **top of every tick**, so one
+   bad row would return HTTP 500 and the day would collect nothing. Each candidate is wrapped in its
+   own `try/catch` that `console.error`s and moves on.
+
+Guarded by `npm run test:orphan-progress`
+([`orphan-progress.test.ts`](../../src/server/admin/__tests__/orphan-progress.test.ts)), which
+asserts a 60-minute run with a 1-minute-old heartbeat is alive, a stalled run is swept, and legacy
+rows without the field still fall back to `startedAt`.
 
 ## Past-due charge keys MUST vary across runs — Stripe replays a stable key for 24h ($0 incident)
 
@@ -304,3 +457,53 @@ root restores the ability to shrink, so the scrolling happens where it was desig
 
 If a table is correctly wrapped and the page still scrolls sideways, look at the
 ancestors, not the wrapper.
+## Sorting the mini-draw grid would have corrupted the lineup order (2026-08-13)
+
+Caught while adding sort to `/admin/mini-draws`, and it applies to any drag-ordered
+list that also offers filters.
+
+`handleDragEnd` finds both indices in the **full** `miniDraws` array and
+`handleSaveOrder` posts `miniDraws.map(_id)` — the whole lineup. The grid, however,
+renders `filteredMiniDraws`. So the thing you drag and the thing you save are two
+different arrays, and they only agree when the view is unfiltered and unsorted.
+
+Sort by "Most entries", drag card A above card B, hit Save, and you write a
+`displayOrder` derived from positions in the display-ordered array while looking at
+an entry-ordered one — a scrambled customer-facing lineup, with no error and nothing
+to undo it. (The same hazard already existed with search + status filters, just less
+reachably.)
+
+**The fix is to make the two arrays identical whenever reordering is possible**, not
+to make the drag handler filter-aware:
+
+- `filteredMiniDraws` returns unsorted rows whenever `isReorderMode` — so a sort
+  picked *during* reorder can't take effect either.
+- Entering reorder mode clears search, status, brand and sort, with a toast saying
+  so. Resetting beats disabling the Reorder button: it is one click and there is
+  nothing to undo.
+- The sort/brand dropdowns are hidden entirely while reordering.
+
+**General rule: a drag-to-reorder list must render exactly the array it writes.** If
+a view can filter or sort it, reordering has to be gated on that view being the
+identity view.
+
+---
+
+## `/api/admin/major-draw/history` + `/api/analytics/mer-by-draw` 504s — the budget was smaller than the connection-failure path (2026-08-20)
+
+**Symptom:** both returned `504 Vercel Runtime Timeout Error: Task timed out after 10 seconds`, consistently (not intermittently), many times a day. Sibling admin routes on the same deploy returned 200.
+
+**Shared root cause: neither declared `maxDuration`,** so both fell through the catch-all `"src/app/api/**/route.ts": { "maxDuration": 10 }` in `vercel.json`, while every comparable admin analytics route already carries an explicit 60s override (`dashboard/stats`, `metrics/users`, `activity-log`, `major-draw/export`, `major-draw/participants`). They were later additions that were simply missed.
+
+That 10s ceiling is **smaller than `connectDB`'s own failure path**: `serverSelectionTimeoutMS: 10000` plus a `[1000, 2000, 4000]` TLS retry ladder ≈ 17s. A function budgeted below that **cannot report a connection error — it can only 504**. Identical to the `/api/admin/metrics/users` incident of 2026-08-17, whose queries measured 904ms.
+
+**Both Norm mirrors were broken the same way** (`/api/internal/norm/v1/major-draw/history`, `/api/internal/norm/v1/analytics/mer-by-draw`) and got the same override. Fixing only the admin half is the mistake to avoid here.
+
+**`mer-by-draw` was also genuinely mis-shaped**, so the ceiling alone would have been under-building — it grows by one draw every month and would come back:
+
+- It ran a **sequential `for…of` with `await` inside**, one full `readStatsForRange` per draw. Now chunked at `POOL_SIZE = 4` (not 8 — mongoose runs `maxPoolSize: 5`, so a wider pool just queues). Rows are written **by index**, because the most-recent-first order from the `.sort()` must survive and pushing from a pool interleaves by completion time.
+- Each of those calls unconditionally ran `computeDistinctUserCounts` — a PaymentEvent aggregation with a correlated `$lookup` self-join plus `$addToSet` under `allowDiskUse` — **whose result MER never reads** (it consumes only `adChannels` and `attributedRevenue`). `readStatsForRange` now takes `includeDistinctUserCounts` (default **true**, so both dashboard callers are untouched) and MER passes `false`.
+
+**Deliberately NOT done:** no new indexes. MER's draw lookup is already served by `{status:1, activationDate:-1}`, and the five-field index `distinctUserCounts.ts` asks for would be permanent write amplification on the hottest collection bought for a query now removed from this path. No MER snapshot model either — after the two fixes each draw is one indexed `find` on a unique index, and caching that is machinery for no measured win.
+
+⚠️ **Still worth measuring:** the snapshot cron writes a **90-day sliding window**, while MER's window opens earlier. Any day without a snapshot is recomputed **live**, which includes an untimed Meta Graph call (`fetchFacebookInsights` passes no `AbortSignal`; `outboundAgent` sets only a connect timeout, so undici's 300s header/body defaults stand). If MER is still slow after this, check `dashboardstatsdailysnapshots` coverage first and run `backfill:dashboard-stats-snapshots`.

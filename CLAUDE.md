@@ -385,6 +385,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "paths": [
         "src/utils/billing/**",
         "src/lib/stripe.ts",
+        "src/lib/stripe-rate-limiter.ts",
+        "src/lib/__tests__/stripe-rate-limiter.test.ts",
         "src/lib/stripe-client.ts",
         "src/services/allowlist/**",
         "src/services/stripe-webhook-queue/**",
@@ -403,6 +405,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/admin/stripe-webhook-queue/**",
         "src/app/api/cron/reconcile-blocked-transactions/**",
         "src/app/api/cron/process-stripe-webhook-queue/**",
+        "src/app/api/cron/reconcile-renewal-grants/**",
+        "src/services/reconciliation/**",
         "src/components/admin/StripeWebhookQueueManagement.tsx",
         "src/hooks/queries/admin/useBlockedCards.ts",
         "src/hooks/queries/admin/useAllowlistActions.ts",
@@ -976,7 +980,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/connect-ops-db.ts",
         "scripts/check-env.mjs"
       ],
-      "lastVerified": "2026-08-11"
+      "lastVerified": "2026-08-17"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",
@@ -994,7 +998,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/wt-*.sh",
         "scripts/codemods/**"
       ],
-      "lastVerified": "2026-08-10"
+      "lastVerified": "2026-08-14"
     },
     "config-and-data": {
       "docs": "docs/config-and-data/",

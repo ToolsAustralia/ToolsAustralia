@@ -182,6 +182,15 @@ export interface SpendByUrlDetailRow {
   adsetName?: string;
   /** Landing-URL strategy of this ad; "unclassified" = destination unresolved (unknown:// or no dest doc) */
   packagesFocus: PackagesFocusBucket;
+  /**
+   * The canonical landing URL THIS ad points at.
+   *
+   * A brand drill-down unions several URLs into one ad list (`5 landing URLs` in the header), so
+   * without this the reader can see that five exist but not which ad bought which — the one thing
+   * the table is for. Undefined when the destination is unresolved, which is the same condition
+   * that makes `packagesFocus` "unclassified".
+   */
+  canonicalUrl?: string;
 }
 
 export interface SpendByUrlDetailResult {
@@ -226,6 +235,8 @@ export type SpendByUrlDetailAggRow = {
   conversions: number;
   revenueCents: number;
   adFormat: "video" | "static" | "carousel" | "unknown";
+  /** The canonical landing URL this ad points at; undefined when the destination is unresolved. */
+  canonicalUrl?: string;
 };
 
 /**
@@ -545,6 +556,8 @@ export class SpendByUrlAggregationService {
         const packagesFocus = derivePackagesFocusForDestination(dest);
         return {
           adId,
+          // Already resolved per ad in `mergedDestByAd` — it was simply never emitted.
+          canonicalUrl: dest?.canonicalUrl ?? undefined,
           adName: v.adName,
           campaignId: v.campaignId,
           campaignName: v.campaignName,
@@ -689,6 +702,8 @@ export class SpendByUrlAggregationService {
           adsetId: r.adsetId,
           adsetName: r.adsetName,
           packagesFocus: r.packagesFocus,
+          // Explicit include-list — a field added upstream is DROPPED here unless it is named.
+          canonicalUrl: r.canonicalUrl,
         };
       }),
     };

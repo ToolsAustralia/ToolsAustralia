@@ -2,7 +2,7 @@
 
 import React from "react";
 
-/** Same typography/full-width treatment as OverviewToolbar `placement="layout"` */
+/** Mobile full-width treatment for the date control, inside the admin header slot. */
 export function AdminMobileLayoutDateRangeShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="w-full flex justify-center">

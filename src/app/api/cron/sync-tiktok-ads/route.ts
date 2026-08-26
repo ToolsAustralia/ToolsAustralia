@@ -65,10 +65,19 @@ const SLOT_HOURS = new Set([3, 6, 9, 12, 15, 18, 21]);
  *
  * ⚠️ The 23:59 slot is the one that matters for day-boundary accuracy: it lands just before
  * the AEST day closes, so the day is captured near-complete before `dashboard-stats-daily-
- * snapshot` writes it at 14:00/15:00 UTC. It does NOT remove the need for the later 03:20 UTC
+ * snapshot` writes it (its first two fires are `30 17`/`30 20 * * *` UTC as of 2026-08-24 —
+ * moved off 14:00/15:00 UTC to clear the renewal-webhook-burst hour; see
+ * docs/infrastructure/gotchas.md). It does NOT remove the need for the later 03:20 UTC
  * snapshot re-run — TikTok keeps attributing conversions for hours after midnight (7-day
  * click / 1-day view), so the day is only SETTLED well after it ends. The two fixes are
  * complementary: this one makes the number fresh, that one makes it final.
+ *
+ * ⚠️ If `dashboard-stats-daily-snapshot`'s first two fires ever move again, they must avoid
+ * landing on one of THIS cron's slot hours ({3,6,9,12,15,18,21}:00 Sydney local) in EITHER DST
+ * regime — that cron reads the tables this one is actively writing. A `0 18`/`0 19 * * *`
+ * attempt shipped and was reverted the same day this note was added: `19:00 UTC` is exactly
+ * the Sydney-06:00 slot during AEDT. A `:30` UTC minute is structurally immune (this gate only
+ * fires at local minute 0, or local 23:59).
  *
  * It ran insights-only until 2026-07-29. That left `LandingPageMetricsDaily` permanently
  * empty for TikTok in production: the Ad Spend drill-down and Prize Performance read the

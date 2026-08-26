@@ -1,5 +1,46 @@
 # Infrastructure — Gotchas
 
+## `membership-daily-snapshot`'s second daily fire silently overwrote the first — and the reschedule that fixed it needed a second pass (2026-08-24)
+
+`/api/cron/membership-daily-snapshot` is scheduled **twice a day** (see [architecture.md](./architecture.md#vercel-cron-schedules)) so a missed/failed first run still gets a snapshot — but both fires resolve to the SAME `(date, packageId)` key (the "yesterday in `Australia/Sydney`" computation is deterministic per calendar day, not per invocation). The upsert was an unconditional `$set`, so the second fire always won regardless of which run had the more trustworthy numbers.
+
+**The census is NOT point-in-time — this is the load-bearing fact, and an earlier version of this doc got it wrong.** `getMembershipByPackageLiveForSnapshot` (`MembershipAnalyticsService`) has **zero date filtering** — it's four `User.aggregate` calls over CURRENT subscription state, re-run fresh on every cron fire. The `date` field it gets stamped with is only a LABEL (`now − 24h`, formatted in Sydney), not a query boundary. So there is no run that is absolutely "pre-burst" — every fire, first or second, captures "membership state right now" and labels it "yesterday". The only variable is HOW MANY HOURS past the Sydney day boundary (14:00 UTC AEST / 13:00 UTC AEDT) the cron happened to fire: more hours = more of the next day's renewal/churn activity has already landed in a census still labelled with the previous day. The write-once guard's real job is to keep whichever run is CLOSER to the boundary — not to distinguish a "clean" run from a "dirty" one in any absolute sense.
+
+**Fix (guard):** `upsertMembershipSnapshotRow` (exported from [`route.ts`](../../src/app/api/cron/membership-daily-snapshot/route.ts)) now checks for an existing NON-DEGENERATE row at that `(date, packageId)` key before writing; if one exists, the write is skipped (`written: false`) and the second fire becomes a no-op fallback rather than a blind overwrite. **Escape hatch:** a row is "degenerate" when every count is zero — the signature of an aggregate that silently returned nothing (never throws on an empty result). A degenerate existing row is treated as absent, so a bad first write (crash mid-aggregate, empty result) can still be corrected by the second fire instead of a silent zero being locked in forever — nothing else writes this collection, and `getMembershipSnapshotHealth` (see below) only checks that a row EXISTS, not that its counts look sane. The two DB round trips are not atomic, but the two cron fires are scheduled hours apart (never concurrent) and the model's unique `{date, packageId}` index is a hard backstop against a genuine race. Regression test: `npm run test:membership-snapshot-write-once` ([`membership-daily-snapshot.test.ts`](../../src/app/api/cron/__tests__/membership-daily-snapshot.test.ts)) — includes a standalone reproduction of the OLD unconditional-`$set` pattern that asserts the overwrite actually happens (not just that the new function is absent), the real guard's first-write-wins/second-is-no-op behavior, and the degenerate-row self-heal path.
+
+**Fix (missing `maxDuration`):** `vercel.json`'s `functions` block had NO entry for this route, so it silently fell through the `src/app/api/**/route.ts` catch-all's **10s** cap instead of the 300s every other cron gets. Combined with the write-once guard, a timeout mid-loop was a genuine NEW failure mode: run 1 writes package 1 then times out; run 2 sees package 1's row already exists (guard fires) and only writes packages 2-3 — one day ends up with three package rows from two different census moments. Fixed with an **in-file** `export const maxDuration = 300;` in `route.ts` rather than a `vercel.json` entry, specifically to avoid the shadowing trap below.
+
+**`dashboard-stats-daily-snapshot` does NOT need the write-once guard** even though it also fires twice into the same day — its writer (`writeSlidingWindow` → `mergeAdChannels`) already does a field-level merge that prefers a successful fetch over the stored value and only preserves the old value when a provider errors (see [gotchas.md](../metrics-analytics/gotchas.md)), so a later re-run corrects a stale day and can never blank a good one. The two crons' "second fire" have opposite intents: `dashboard-stats-daily-snapshot` wants the second fire to WIN (self-healing); `membership-daily-snapshot` wants the EARLIER fire to win (closer to the day boundary). Don't copy one cron's redundancy pattern onto the other without checking which direction is correct.
+
+**The reschedule needed two attempts.** Both snapshot crons, plus `major-draw-transition` and `process-partner-discount-queues` (also still sitting at the top of the surge hour with no other owner), moved off `0 14`/`0 15 * * *` on 2026-08-24 — those two UTC hours carried 2,235 and 3,551 Stripe webhook events respectively on the 24 Aug renewal night (payment events trail invoice events by ~1h because Stripe finalizes subscription drafts after creating them), so several 300s-budget crons competing with that DB load in the same minute was its own incident.
+
+The FIRST attempt moved the two snapshot crons to `0 18`/`0 19 * * *` — quiet-looking, since no OTHER cron in `vercel.json` is scheduled at those exact hours. That reasoning missed something: `sync-meta-ads` and `sync-tiktok-ads` are fired hourly at the Vercel level (`0 * * * *`) but do REAL work only when gated in-handler against the Sydney wall clock, at local slots `{3,6,9,12,15,18,21}:00` (DST-correct via `date-fns-tz`, since Vercel cron itself is UTC-only and DST-blind). Which UTC hour each Sydney slot lands on depends on the DST regime:
+
+```
+AEST (UTC+10): Sydney slot hours map to UTC 02, 05, 08, 11, 17, 20, 23
+AEDT (UTC+11): Sydney slot hours map to UTC 01, 04, 07, 10, 16, 19, 22
+```
+
+`19:00 UTC` is not a slot hour in AEST — but it IS the Sydney-06:00 slot in AEDT. From the next DST changeover (~4 Oct) onward, the `0 19` fire would have landed exactly on a real `sync-meta-ads`/`sync-tiktok-ads` run — and `dashboard-stats-daily-snapshot` reads the `TikTokAdInsightsDaily`/ad-destination tables those syncs are actively writing, so this wasn't just a load collision, it was the exact ordering hazard the `20 3 * * *` corrector fire already exists to fix (see `sync-tiktok-ads`'s own docblock: "IF YOU MOVE `sync-tiktok-ads`, MOVE THIS TOO"). Nobody had considered moving the SNAPSHOT onto the SYNC's slot.
+
+**The actual fix:** `30 17 * * *` / `30 20 * * *` UTC (17:30 / 20:30) for both snapshot crons — a `:30` minute offset. The Sydney-slot gate above only fires real work at `localMinute === 0` (or local 23:59); it can NEVER match a `:30` UTC time, in either DST regime, regardless of which Sydney hour that time happens to land on. This is structurally robust rather than hour-picked-by-inspection: verify it holds by checking `localMinute===0` for the candidate time in both `+10` and `+11`, not by eyeballing whether the UTC hour "looks free" in today's `vercel.json`. `major-draw-transition` and `process-partner-discount-queues` got their own quiet, non-`:00`, non-slot times: `15 18` and `45 18` UTC.
+
+**Expected side effect — a daily "missing snapshot" window, not a fault.** `getMembershipSnapshotHealth` treats "yesterday" as expected from the moment Sydney rolls past midnight (14:00 UTC AEST / 13:00 UTC AEDT). Before this reschedule that gap was near-zero (the cron fired essentially at the boundary); now there is a real ~3.5–4.5 hour window each day, EVERY day (not just renewal nights), between the Sydney day boundary and the first snapshot fire (17:30 UTC), during which `/api/admin/health/membership-snapshot` and its Norm mirror correctly report `ok:false` for yesterday, `getMembershipByPackageSnapshot` falls back to live data with `snapshotMissing:true`, and the admin MRR trend card omits its trend rather than compare against a live baseline. This is expected and does not indicate a broken cron — see `docs/subscription/architecture.md`'s Health section and the `getMembershipSnapshotHealth` JSDoc.
+
+## The same reschedule made `dashboard-stats-daily-snapshot` serve a HALF-FINISHED day for 3.5h every night (2026-08-25)
+
+**Symptom:** at 00:34 AEST on 25 Aug the Overview's "24 Aug – 24 Aug" view showed revenue **$25,079.95** against an actual closed-day total of **$30,782.43** — 18.5% short — while New signups (431) and Renewals (868) on the *same screen* were correct. Tiles disagreeing with each other is the tell: some read the snapshot, some are live.
+
+**Root cause — a latent bug the reschedule exposed, not the reschedule itself.** `writeSlidingWindow` enumerated `todayAESTDateKey` **inclusively**, so every run also wrote a row for the day still in progress. The `20 3 * * *` fire runs at 13:20 AEST, so it froze ~13 of 24 hours under the `2026-08-24` key (verified: revenue up to that instant was $24,979.95 and `users.newSignups` was 216 against the day's true 431).
+
+That partial had always been written — it just never *mattered*, because `DashboardStatsSnapshotReader` bypasses the snapshot for the current day only (`if (snap && !isToday)`) and the old `0 14`/`0 15 UTC` fires landed at **00:00/01:00 AEST — the instant the day closed**. The complete-day rewrite therefore arrived at almost exactly the moment the reader flipped from live→snapshot. Moving the fires to `30 17`/`30 20 UTC` (03:30/06:30 AEST) opened a **3.5-hour hole**: the day closes at 14:00 UTC, the reader starts trusting the snapshot immediately, and the correcting write does not land until 17:30 UTC.
+
+**Fix:** the window is now the last `windowDays` **COMPLETE** AEST days, ending at yesterday (`resolveSlidingWindowKeys`), and `writeSnapshotForDate` **refuses** any day that has not closed. Note `getDashboardStatsSnapshotHealth` had *always* excluded today from its expected keys — the writer was the half that disagreed. Regression test: `npm run test:dashboard-stats-window`.
+
+**Consequence to expect:** between 14:00 UTC and the 17:30 UTC fire the just-closed day has **no** snapshot and the reader computes it live — correct, just slower — exactly like the membership-snapshot window documented above. Do not "fix" that gap by widening the window back to include today.
+
+**The general rule:** a daily snapshot row is a claim about a WHOLE day. Never write one for a day that has not closed — if a reader anywhere treats "has a row" as "is authoritative", a mid-day write becomes a lie the moment the clock rolls over. Historical days were unaffected (the 90-day sliding window re-derives them); only the freshest day was ever wrong — the same shape as the TikTok-settling bug in [admin/gotchas.md](../admin/gotchas.md).
+
 ## env vars: `.env.example` is the registry — `npm run check:env` detects drift (2026-07-09)
 
 `.env.example` is the tracked source of truth for **which** env vars exist (rescued from the `.env*` ignore by the `!.env.example` negation in `.gitignore`). `.env.local` holds per-folder **values** (gitignored, never merges — see CLAUDE.md §9); Vercel holds prod. There is **no runtime env validation** — `src/lib/environment.ts` only detects `NODE_ENV` (despite `.env.example`'s old header implying it validates).
@@ -120,3 +161,56 @@ clip each. This joins them back. Unlike the sibling `e2e:*` scripts it does **no
 rather than orchestrator flags and never touches the DB or a browser. Its only binary
 dependency is the already-installed `ffmpeg-static` (no system ffmpeg, no ffprobe — durations
 are parsed from `ffmpeg -i` stderr). Full mechanics: `docs/e2e/proof-mode.md` rule 4.
+
+## Vercel crons are UTC — Sydney DST needs handling in the HANDLER
+
+Vercel cron `schedule` has no timezone option; it is always UTC. Sydney runs UTC+10 (AEST) and
+UTC+11 (AEDT), so any fixed UTC hour drifts by an hour twice a year. Several existing jobs work
+around this with **duplicate entries** (e.g. `0 14` + `0 15`), which relies on the job being
+idempotent — fine for a snapshot, **dangerous for anything that moves money**.
+
+`/api/cron/charge-past-due` takes the safer approach: fire often across a window
+(`*/5 * * * *`) and let the handler resolve the true local hour via
+`formatInTimeZone(now, "Australia/Sydney", "H")`. One entry, no DST maintenance, and the handler
+owns the decision. Prefer this for any new time-sensitive cron.
+
+---
+
+## `find:stranded-mini-draw-payments` — why it scans Stripe first, and why it has no denominator (2026-08-20)
+
+`scripts/find-stranded-mini-draw-payments.ts` (read-only) answers: was a mini-draw payment ever captured that could never be granted? See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md) for the defect.
+
+**It starts from Stripe, not Mongo, and that is the point.** The failure mode *is* "the webhook recorded nothing" — no `PaymentEvent{BenefitsGranted}`, no `users.miniDrawPackages` row. Mongo cannot see a purchase it never wrote. So the scan reads Stripe (which definitely holds the charge) and cross-checks **into** Mongo to prove the absence. A Mongo-first audit for this class of bug finds nothing and reports "clean" — a false all-clear.
+
+**It deliberately breaks the up-front-total convention.** CLAUDE.md requires ops scripts to print a denominator. Stripe's list API has no count endpoint, and the only way to learn the total is to page the whole window — doing the job twice. It reports `processed · rate/sec · elapsed` on the same adaptive cadence instead, and prints the date window up front so the run stays bounded. If you add a Stripe-paging script, reuse this justification rather than inventing a fake total.
+
+**Exit codes:** `0` clean · `1` stranded payments found · `2` the script itself failed. CSV to **stdout**, progress and summary to **stderr**, so `> findings.csv` yields a clean file.
+
+It never refunds. `miniDrawId` is unrecoverable for a stranded row (the metadata never held it), so the intended draw cannot be inferred — remediation is a human decision, and the script says so in its exit message.
+
+
+## `backfill:missing-renewal-grants` — the five guards a prod-writing ops script needs (2026-08-23)
+
+`scripts/backfill-missing-renewal-grants.ts` credits renewals that were charged but granted nothing (defect: [billing-stripe/gotchas.md](../billing-stripe/gotchas.md); detection rationale: [draws/gotchas.md](../draws/gotchas.md)).
+
+```bash
+npm run backfill:missing-renewal-grants:dry           # local/dev DB, report only
+npm run backfill:missing-renewal-grants:prod:dry      # PRODUCTION, report only
+npm run backfill:missing-renewal-grants:prod -- --expect=11   # PRODUCTION, WRITES
+```
+
+Each guard below exists because its absence was a live footgun, not for symmetry. Reuse the set when writing the next prod-writing script.
+
+**1. `--dry-run` beats `--apply`.** The `:prod` npm entry already contains `--apply`, so `npm run …:prod -- --dry-run` — the exact thing muscle memory types — would otherwise perform a **live production write** while the operator believed they were dry-running. `--dry-run` now wins unconditionally and says so in a banner and in the summary. **If an npm entry bakes in a destructive flag, the safety flag must override it, not sit beside it.**
+
+**2. Apply requires an explicit `--expect=N`** and refuses if the derived set is a different size. Baking `11` into `package.json` would rot the moment the incident closed; requiring the operator to restate the number they just reviewed does not.
+
+**3. Lifecycle pre-flight.** The grant path (`grantBenefits` → `handleSubscriptionPackage`) unconditionally `$set`s `subscription.isActive: true` / `status: "active"` and `$unset`s `cancelledAt`. That is harmless when the webhook does it at charge time and **actively destructive days later** — it would erase a cancellation the member made after being charged, while Stripe still holds `cancel_at_period_end`. The script prints every target's lifecycle state and refuses to apply if any is cancelled/paused/inactive, unless `--allow-lifecycle-change`. **A backfill replays a code path outside the time window it was written for; re-read every unconditional write in that path with "…but days later" in mind.**
+
+**4. The prod DB name is pinned** via `injectDbName()` from [`scripts/connect-ops-db.ts`](../../scripts/connect-ops-db.ts). The prod Atlas string may carry no `/<dbName>` path, and a bare connect then lands on an empty `test` DB. For a script whose whole job is counting *absences*, that reports **"0 gaps — all clear"** and looks like success. The banner prints `PRODUCTION · db="Production" @ <host>` — never the connection string.
+
+**5. The CSV audit uses `appendFileSync`, not a `WriteStream`.** A stream's `write()` buffers; every `process.exit` path can drop the tail. `appendFileSync` puts the row on disk before the next row is touched. At ops-script row counts the cost is irrelevant and the guarantee is absolute.
+
+**Exit codes:** `0` clean · `2` gaps found (dry-run) or per-row errors/skips/SIGINT-abort (apply) · `3` fatal or a guard refused · `1` unhandled.
+
+**Why it also reads Stripe.** The Mongo join alone has a structural blind spot — `MembershipRenewalCycle` is written by the same handler that failed, after its first Stripe call, and only for `billing_reason=subscription_cycle`. A second pass lists paid Stripe invoices in the window and checks each against `PaymentEvent`, which is the only anchor that cannot lie by omission. Pass 2 is report-only; non-cycle invoices have different entry maths and are never auto-granted. Disable with `--no-stripe-check` (the script then says the count may understate the damage).

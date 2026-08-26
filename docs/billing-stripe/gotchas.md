@@ -1,5 +1,262 @@
 # Billing-Stripe — Gotchas
 
+## `billing_cycle_anchor: "now"` and a pending `trial_end` are mutually exclusive (2026-08-24)
+
+Stripe rejects `subscriptions.update` outright when the requested anchor lands before a trial that
+has not ended: *"Trial end (…) cannot be after billing_cycle_anchor (…). Consider ending the trial
+(trial_end=now)."* It is a **400 on every attempt**, not an intermittent failure.
+
+That is exactly the collision the tier-upgrade route shipped with. Upgrades are deliberately
+pay-first (`proration_behavior: "none"` + `billing_cycle_anchor: "now"`), and anchor-24 members —
+25th/26th/27th joiners, plus anyone re-anchored by past-due recovery — sit on a pending `trial_end`
+by design. **Result: the entire anchored cohort could not upgrade at all**, permanently.
+
+**The fix is a three-step sequence, and each step's position is load-bearing:**
+
+1. `trial_end: "now"` **in the same pay-first call** (only when the sub is `trialing`) so the anchor
+   is legal and the full new-tier charge lands.
+2. Read `latest_invoice` / `prorationAmount` and run the existing under-charge check.
+3. A **second** `subscriptions.update` re-applying the member's own `trial_end` for the next cycle
+   (`proration_behavior: "none"`; falls back to the shared `getNextAnchorTimestamp` only if the
+   captured anchor has already lapsed; non-fatal on failure — the charge already succeeded).
+
+**Trap 1 — step 3 before step 2 returns HTTP 500 to a correctly-charged member.** The re-apply makes
+Stripe spawn its $0 "Trial period" invoice, which becomes `latest_invoice`. Read it and the route's
+"charge must be ≥ half the expected amount" guard trips and returns *"Upgrade pricing error"*.
+
+**Trap 2 — `trialing` is a success state here.** After step 3 the subscription reports
+`status: "trialing"`, so both of the route's `status === "active"` success checks had to widen or the
+request drops through to the generic 500. A `trialing` member is fully paid and active
+([PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md)); the UI already maps `trialing → "Active"`.
+
+**Trap 3 — `trial_end` is a BILLING boundary, so the re-applied anchor needs a floor.** Stripe
+charges the FULL amount at `trial_end`. Re-applying the captured anchor unconditionally would charge
+an upgrading member twice within days whenever they upgrade near their anchor (full price on the
+20th, full price again on the 24th), with `proration_behavior: "none"` meaning no credit. The route
+keeps their anchor **day** but advances to the next **occurrence** when the nearest is under **14
+days** away, via `getReanchorTrialEndTimestamp` (next same-day occurrence strictly after, short-month
+safe). Any future change to that re-apply must preserve a floor — this is the same class of bug the
+past-due reanchor exists to prevent.
+
+**Trap 4 — the spawned $0 invoice must not grant.** It arrives as `subscription_update` with its own
+fresh id, moments after the real paid `subscription_update` upgrade invoice — so nothing about the id
+or the ordering distinguishes them. Only `isZeroAmountTrialUpdateInvoice` does, and it already
+matched this shape, so **no classifier change was required**. The regression lock is **Case D** of
+`npm run test:zero-trial-guard`, which dispatches the pair with distinct ids and asserts paid-grants /
+$0-skipped. Read the pre-flight checklist in [PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) before
+touching any of this.
+
+**Trap 5 — the webhook's pending-upgrade gate must accept `trialing`.** An anchored upgrade's LAST
+`customer.subscription.updated` carries `trialing`, because the route re-applies the anchor after
+charging. `handleSubscriptionUpdated`'s activation gate was the lone `status === "active"` holdout in
+that file (every sibling check already accepted `trialing`), and the re-apply widens the race by
+adding a Stripe round-trip before the route's own `user.save()`. If the gate loses that race and
+rejects, `pendingChange` is never cleared — and a stuck `pendingChange` makes every subsequent
+`customer.subscription.updated` early-return, silently suppressing cancel / pause / past_due handling
+until the next renewal. It now accepts both.
+
+**Verified against live Stripe, not inferred.** `npm run stripe:probe-upgrade-anchor` runs the whole
+sequence in test mode (10/10 green): the control reproduces the original 400 verbatim, the pay-first
+call is confirmed to produce **exactly one** invoice (full price, no $0 sibling — so `latest_invoice`
+is trustworthy), and the re-apply's $0 invoice is confirmed to satisfy `isZeroAmountTrialUpdateInvoice`
+as a real Stripe object. Re-run it before changing either update call.
+
+## A webhook handler returning normally is NOT proof it did its work (2026-08-24)
+
+**A returned promise that did not reject means "no exception escaped" — nothing more.** `handleInvoicePaymentSucceeded` wrapped its entire ~1,400-line body in one `try` whose outer catch logged and returned normally, so `dispatchStripeEvent` reached its hard-coded `shouldMarkAsProcessed = true` and `processQueuedEvent` called `markSucceeded()` on the non-throwing path. A Stripe HTTP 429 mid-handler therefore produced: money captured, no entries granted, queue row `succeeded`, no retry, and no error visible to any automated check.
+
+**Cost:** during the anchor-24 renewal burst at 2026-08-23 14:00 UTC (914 renewals in one minute), **11 members were charged $300.00 in total and received nothing.** July's baseline for the same failure was 1 of 864 (0.12%); August was 1.62% — a 13× rise.
+
+**The second trap — acking closes the healing path.** Because `shouldMarkAsProcessed` was true, `ackProcessedStripeEventOnce` wrote a `ProcessedStripeEvent` row. That collection's `eventId` is **unique**, so replaying the event from the Stripe dashboard was rejected as already-processed. The standard "just replay it" recovery does not work on these; they need a backfill script. **When you skip a grant, never write the dedup row.**
+
+**Fix (both halves — either alone is insufficient):**
+1. `handleInvoicePaymentSucceeded` now returns `InvoiceGrantOutcome` — `{granted:true}` only when the grant landed *or* the invoice legitimately grants nothing, otherwise `{granted:false, reason}` where `reason` is required and lands in the queue row's `lastError`; and it **re-throws** when an exception killed an ungranted invoice so the real error text gets there instead.
+2. `processQueuedEvent` gates `markSucceeded()` on a new `handlerFailed` flag from `dispatchStripeEvent`.
+
+**Do not gate on `shouldMarkAsProcessed`.** It is a *different question* — "write the dedup row?" — and only **2 of the dispatcher's 27 `case` labels** set it (`payment_intent.succeeded`, `invoice.payment_succeeded`); the other 25 leave it `false` on a fully successful run. Gating `markSucceeded` on it would dead-letter almost the entire event surface. The two flags stay separate deliberately; see [STRIPE_WEBHOOK_QUEUE.md → The ACK gate](./STRIPE_WEBHOOK_QUEUE.md#the-ack-gate-added-2026-08-24-after-the-renewal-surge-incident) for the full return-contract table.
+
+**A failure path that logs below `error` is invisible in production.** `webhookLog` early-returns for any non-`error` level outside development ([index.ts:90-93](../../src/services/stripe-webhook-handlers/index.ts)), *and* `next.config.ts` `removeConsole` strips `console.warn` at build — so a `webhookLog("warn", …)` on a path that now dead-letters leaves an operator with a dead row and nothing to read. That is why `handleInvoicePaymentSucceeded` returns `{granted:false, **reason**}` rather than a bare boolean: the reason is written to the queue row's `lastError`. Any new failure path must either log at `error` or carry a reason — preferably both.
+
+**Un-acking is safe, but only because idempotency already existed.** `PaymentEvent._id = BenefitsGranted-invoice_<invoiceId>` is unique, so a retried `invoice.payment_succeeded` cannot double-grant. Before adding a retry path to any handler, confirm that handler has a comparable unique key — otherwise a retry storm becomes a double-grant storm.
+
+**But "cannot double-grant" is NOT "will re-grant" — do not read the one as the other.** `processPaymentBenefits` writes the `PaymentEvent` ([payment-processing.ts:546](../../src/utils/payment/payment-processing.ts)) **before** calling `grantBenefits` (`:651`). So if `grantBenefits` throws: attempt 1 returns `{success:false}` → the ACK gate requeues → attempt 2 hits the duplicate-key branch and returns `{success:true, alreadyProcessed:true}` (`:593`) → the handler reports success → **the row ACKs with nothing granted**. The very same unique key that makes the retry safe is what makes it a no-op.
+
+The 24 Aug incident died *upstream* of `processPaymentBenefits`, so the ACK gate does fix that case — but this ordering hole is a separate, still-live way to reach the same "charged, no entries" outcome, and no queue-level gate can see it.
+
+**Corrected 2026-08-24 — the net for this shape is NOT the renewal-grant reconciler.** An earlier version of this note said it was. It is not: `PaymentEvent.create` has already run ([payment-processing.ts:526](../../src/utils/payment/payment-processing.ts)) before `grantBenefits` (`:650`) throws, so the row **exists** and `renewalGrantReconciler`'s anti-join finds a match and stays quiet. What that row carries is `data.entries > 0` with an **empty `data.grants.drawGrants`** (`createEmptyGrants` at `:487`) — which is exactly the candidate predicate of [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts) (`:108-112`, `/api/cron/reconcile-major-draw-entries`, `30 16 * * *`). **That** is the net, and it self-heals rather than only alerting.
+
+The two reconcilers are complements, not substitutes: one starts from the paid invoice and catches a **missing** grant row, the other starts from the grant row and catches an **incomplete** one. Reordering the write is a deliberate non-goal of the ACK-gate change — treat it as its own task, with its own idempotency analysis.
+
+**Another non-obvious `{success:false}`: the major-draw gate.** `processPaymentBenefits` closes for any membership invoice that is not a renewal while no draw is accepting entries (`payment-processing.ts:342-352`) — so `subscription_create` and upgrades, never `subscription_cycle`. One landing in a draw gap keeps failing until the next draw opens, which can outlast the ~7.5h retry budget and dead-letter. A burst of dead rows at a draw boundary, all `subscription_create`/upgrade, is this — replay them once the draw is active.
+
+**Two branches must still ACK `true`, or you create an infinite retry loop:** the `isZeroAmountTrialUpdateInvoice` guard (Stripe's $0 trial-bookkeeping invoice, auto-created on every past-due reanchor / anchor-billing migration / join-anchor) and an unrecognised `billing_reason`. Both are legitimate "nothing to grant". Guarded by `npm run test:zero-trial-guard` and `npm run test:ack-gate` (case D).
+
+**Related still-open gap:** `payment_intent.succeeded` has the same shape — `handlePaymentSuccess` returns `false` for metadata defects, which un-acks the dedup row but still lets the queue row go `succeeded`. Deliberately left alone here: several of those `false` returns are defects no retry can fix, so gating them would dead-letter noisily. Needs its own decision.
+
+## The renewal-grant reconciler: what it covers, and the two things it does not (2026-08-24)
+
+`/api/cron/reconcile-renewal-grants` is the only detector we have for a renewal whose grant row was never written ([architecture.md](./architecture.md#renewal-grant-reconciliation--the-paid-but-not-granted-detector-2026-08-24)). It is **not** a general "charged but no entries" detector, and two shapes fall outside it.
+
+**Not covered #1 — the grant row exists but is empty.** If `grantBenefits` throws *after* `PaymentEvent.create`, the anti-join finds a match and stays quiet. That shape belongs to [`reconcileActiveMajorDrawEntries`](../../src/utils/draws/reconcile-major-draw-entries.ts) (empty `data.grants.drawGrants`), which also self-heals it. See the corrected note in the ACK-gate section above; do not confuse the two nets.
+
+**Not covered #2 — the anchor row itself is missing.** It is anchored on `MembershipRenewalCycle`, **which is written by the same handler that can fail.**
+
+`handleInvoicePaymentSucceeded` writes the cycle row at [index.ts:3685](../../src/services/stripe-webhook-handlers/index.ts) — **after** its first Stripe call at `:3507`. So:
+
+| Where the renewal dies | Cycle row? | Grant row? | Reconciler sees it? |
+|---|---|---|---|
+| After the cycle write, before the grant | yes | no | **yes** — this is the 24 Aug shape |
+| Between `:3507` and `:3685` (e.g. a 429 on `invoices.retrieve`) | **no** | no | **no** |
+| Before the event is even enqueued (RC-4's HTTP 500s) | no | no | no — but Stripe redelivers, so it self-heals |
+
+The middle row is the hole. It is narrow (one Stripe call wide) and, since the ACK gate landed, such an event now **retries** and eventually dead-letters — which the same cron reports separately as a `dead` row. So the two signals together cover it in practice: no cycle row *and* a dead `invoice.payment_succeeded` row is the tell.
+
+**Do not "fix" this by adding a per-row Stripe call to the cron.** That is RC-3 — the API fan-out that caused the incident (182 req/s against a 100 req/s account cap). For an ad-hoc audit that must be Stripe-complete, use `scripts/backfill-missing-renewal-grants.ts`'s optional Stripe-side pass, which walks Stripe's paid `subscription_cycle` invoices directly. The right permanent fix is to move the cycle write ahead of the first Stripe call — a separate change with its own idempotency analysis.
+
+### The window MUST be on `updatedAt` — `createdAt` is false-clean for dunning recoveries
+
+`MembershipRenewalCycle` rows are **upserted, not inserted.** `upsertRenewalCycleFromFailedInvoice` creates the row with `status: "failed"` at **failure** time (from `invoice.payment_failed`, [index.ts:2989](../../src/services/stripe-webhook-handlers/index.ts)). A later successful retry — Stripe's dunning ladder, or `/api/cron/charge-past-due` — flips it to `"succeeded"` with `findOneAndUpdate`, which leaves `createdAt` **pinned to the original failure date**.
+
+So: a renewal declines on the 24th, is recovered on the 29th, and its grant then fails (e.g. the subscription is `canceled` by then → the non-manageable branch at `:3789`). Money kept, no entries — and under a `createdAt` window that row sits five days outside every window the cron will ever run. **Permanently invisible, for exactly the past-due-recovery population this spec exists to protect.** It shipped that way in `879b9b9d` and was corrected in the follow-up.
+
+Mongoose's `timestamps: true` bumps `updatedAt` on **both** the fresh insert and the failed→succeeded flip, so it is the single field covering both directions. `succeededAt` alone would miss the opposite case — a webhook Stripe delivers days late. Timestamps only ever move *forward*, so an `updatedAt` window has no false-clean direction: a row touched after `until` is picked up by a later run, never dropped. Pinned by `npm run test:renewal-grant-reconciler`, which drives the real upserts and asserts `createdAt` stays at the failure date while `updatedAt` moves.
+
+**Do not switch the window to `dueAt` to get an index.** `dueAt` is the invoice's `period_end`, not when the money moved — a renewal's `dueAt` sits a month away from its charge, so the window would select the wrong invoices entirely.
+
+**Neither `updatedAt` nor `createdAt` is index-backed** (`membershiprenewalcycles` indexes `stripeInvoiceId`, `userId`, `stripeSubscriptionId`, `status`, `dueAt`, `{dueAt,billingReason,status}`, `{userId,dueAt}`). At current volume the daily scan is cheap; past a few hundred thousand rows add `{ status: 1, updatedAt: -1 }` rather than widening the window. A bulk backfill that touches old rows will drag them into the window — that surfaces *old real gaps*, never a false clean, so it is noise at worst.
+
+## One renewal cost 10 Stripe API calls — three were pure waste (2026-08-24)
+
+Every successful membership renewal fans out across three webhook events. Stripe's published caps
+([rate-limits](https://docs.stripe.com/rate-limits)) are **100 req/sec globally per account** (reads
+and writes share the bucket) and **25 req/sec for any single endpoint**. At the 18 renewals/sec
+measured during the 23 Aug burst, `/v1/subscriptions` alone ran at ~73/sec — **2.9× over its own
+cap**, versus 1.8× over the global one. *That* is the bucket that broke first, and the 429s it
+returned are what killed 11 renewals mid-handler.
+
+**Calls per successful renewal, by endpoint:**
+
+| Event | Call | Endpoint | Before | After |
+|---|---|---|---|---|
+| `invoice.created` | `subscriptions.retrieve` — read `metadata.packageName` | `/v1/subscriptions` | 1 | **0** |
+| `invoice.created` | `invoices.update` — stamp "<Package> Renewal" | `/v1/invoices` | 1 | 1 |
+| `invoice.payment_succeeded` | `invoices.retrieve` (expanded) | `/v1/invoices` | 1 | 1 |
+| `invoice.payment_succeeded` | `subscriptions.retrieve` — the sub the invoice already carries | `/v1/subscriptions` | 1 | **0** |
+| `invoice.payment_succeeded` | `paymentIntents.retrieve` | `/v1/payment_intents` | 1 | 1 |
+| `invoice.payment_succeeded` | `paymentIntents.update` — relabel | `/v1/payment_intents` | 1 | 1 |
+| `invoice.payment_succeeded` | `charges.update` — relabel | `/v1/charges` | 1 | 1 |
+| `invoice.payment_succeeded` | `subscriptions.update` — `pause_collection: ""` | `/v1/subscriptions` | 1 | **0** |
+| `invoice.payment_succeeded` | `subscriptions.retrieve` — `endDate` sync | `/v1/subscriptions` | 1 | 1 |
+| `payment_intent.succeeded` | `paymentIntents.retrieve` — result discarded | `/v1/payment_intents` | 1 | 1 |
+| **Total** | | | **10** | **7** |
+| **of which `/v1/subscriptions`** | | | **4** | **1** |
+
+**At 18 renewals/sec:**
+
+| Bucket | Before | After | Stripe cap | Verdict |
+|---|---|---|---|---|
+| All Stripe calls | ~182/sec | ~127/sec | 100/sec | **still over — needs the limiter** |
+| `/v1/subscriptions` | ~73/sec | ~18/sec | 25/sec | under |
+
+**Why each of the three was free to delete:**
+
+1. **`handleInvoiceCreated`'s retrieve bought one metadata field.** Stripe snapshots the
+   subscription's metadata onto the invoice at creation — `parent.subscription_details.metadata`
+   **and** every line item's `metadata`. Checked against 190 production `subscription_cycle`
+   `invoice.created` payloads (`stripewebhookqueue.payload`, the verbatim event): 190/190 are
+   `status: "draft"` and 190/190 carry `packageName` on **both** paths. `packageNameFromInvoicePayload`
+   reads it with no call. (Stripe's SDK types say the snapshot is taken at *finalization* and
+   `invoice.created` fires before that — the production data says otherwise, which is why this was
+   settled by measurement, not by reading the types.)
+2. **The "fewer round trips" shortcut never fired.** It tested the **pre-Basil top-level
+   `invoice.subscription`**, which stripe@18.5.0 does not declare and Basil invoices do not return —
+   so the `else` branch ran on *every* renewal, retrieving a subscription the handler had already
+   expanded. `resolveExpandedInvoiceSubscription` now reads
+   `parent.subscription_details.subscription` (the handler already passes that `expand`; verified on
+   live invoice `in_1U7b0KJ3N9Ka6RJMcLvhPOHe` — it comes back as the full object, `status`,
+   `metadata`, `pause_collection` and all). The retrieve stays as the fallback for the paths where
+   the id came from the user's pending/canonical subscription instead of from this invoice.
+3. **`pause_collection: ""` was written for members who were never paused.** `billing_reason:
+   "subscription_cycle"` satisfied the old `decideClearPause` disjunction on its own, so every
+   renewal spent a `/v1/subscriptions` **write** clearing a pause that did not exist. It now
+   requires `pause_collection != null`. Paused members are still resumed on the same code path,
+   before benefits (rule R3).
+
+   **`null` is an answer; a missing field is not.** The predicate reads `pause_collection` off the
+   subscription **expanded inside `invoices.retrieve`**, so `readPauseCollection` splits three
+   states: an explicit `null` is trusted ("not paused", skip the write — the common case, and where
+   the saving comes from), a pause object clears, and an **absent** field triggers a
+   `subscriptions.retrieve` before deciding. Do not collapse those last two: for a genuinely paused
+   member who has just PAID, this webhook is the only automatic clearer — `pay-failed-invoice` does
+   not resume and `prepareRecoveredCycleInvoice` explicitly never resumes — so a wrong "not paused"
+   guess strands them with every later cycle held as a draft. Live invoices do return the field
+   (as `null`), and a scan of ~1,200 live subscriptions found **zero** currently paused, so the
+   cohort cannot be observed today; the fallback is what makes that unobservability safe rather than
+   load-bearing. It costs one retrieve on a paused member's renewal and nothing otherwise.
+
+   **Bonus, unclaimed at first:** dropping the write also drops one inbound
+   `customer.subscription.updated` webhook delivery per renewal — roughly **900 fewer queue rows**
+   in the 14:00 minute, on top of the outbound saving.
+
+**The general rule this leaves behind:** you were handed a payload — read it. A `retrieve` for an
+object the event already contains costs a full slot in a shared, low, per-endpoint bucket, and the
+cost only shows up on the one night of the month when 900 of them land in the same minute. When you
+add a Stripe call to a webhook handler, count what that handler already costs per event first.
+
+**Still open after this change:** the global bucket. 7 calls/renewal is ~127/sec at burst — over
+100/sec with no headroom — so a shared client-side token bucket was still required, and
+`maxNetworkRetries: 2` is **not** cover for it: `_shouldRetry`
+(`node_modules/stripe/cjs/RequestSender.js:138`) has no branch on status 429 (it retries
+connection errors, 409 and ≥500). It *does* honour a `stripe-should-retry: true` response header,
+which Stripe may send on a rate-limit response — but that is Stripe's choice, not ours, so it
+cannot be relied on. **This call-count reduction, not the limiter, is what carries account-level
+compliance** — see [architecture: what the limiter does and does not meter](./architecture.md#what-it-meters--and-what-it-does-not).
+That limiter now exists —
+[`src/lib/stripe-rate-limiter.ts`](../../src/lib/stripe-rate-limiter.ts), see
+[architecture.md](./architecture.md#client-side-rate-limiter).
+
+## Don't wrap the Stripe singleton in a `Proxy` — it breaks `for await` and `constructEvent` (2026-08-24)
+
+Adding the client-side rate limiter meant putting *something* in front of
+`src/lib/stripe.ts`'s singleton, which every payment in the app runs through (~83 importers).
+The obvious move — a recursive `Proxy` whose `get` trap returns
+`async (...args) => { await acquire(); return fn.apply(target, args); }` — **looks** transparent
+and is not. Measured against stripe@18.5.0:
+
+| Probe | Proxy result |
+|---|---|
+| `list[Symbol.asyncIterator]` | `undefined` |
+| `list.autoPagingEach` | `undefined` |
+| `for await (const c of stripe.customers.list(…))` | **TypeError: not async iterable** |
+| `stripe.webhooks.constructEvent(…)` | returns a **Promise**, not an event |
+
+Two separate ways to break production:
+
+1. **`.list()` / `.search()` return an `ApiListPromise`** — a promise that is *also* an async
+   iterator, carrying `autoPagingEach` / `autoPagingToArray`. An `async` wrapper function returns
+   a plain `Promise`, so all of that is stripped. **Three** call sites drive these with `for await`
+   *on the singleton* — [`cron/reconcile-blocked-transactions/route.ts:62,83`](../../src/app/api/cron/reconcile-blocked-transactions/route.ts),
+   [`scripts/backfill-blocked-transactions.ts:117,164`](../../scripts/backfill-blocked-transactions.ts),
+   [`scripts/investigate-blocked-transactions.ts:52,78`](../../scripts/investigate-blocked-transactions.ts)
+   (all three via `await import("@/lib/stripe")`). Three more — `audit-receipts-refund-accuracy.ts`,
+   `backfill-missing-refund-events.ts`, `find-stranded-mini-draw-payments.ts` — build their own
+   `new Stripe(...)`, so a Proxy would not have broken them, and the limiter does not meter them
+   either (see [architecture](./architecture.md#coverage-what-is-not-behind-the-limiter)).
+2. **`stripe.webhooks.constructEvent` is synchronous.**
+   [`webhook/route.ts:36`](../../src/app/api/stripe/webhook/route.ts) does
+   `event = stripe.webhooks.constructEvent(...)`. Through the proxy that assigns a *Promise*, so
+   `event.type` is `undefined` and **every webhook silently falls through the dispatcher** — and
+   a signature failure becomes an unhandled rejection instead of a caught 400.
+
+A proxy also **misses** calls it should meter: auto-pagination's follow-up page requests and the
+SDK's own network retries don't go back through the public resource method.
+
+**Do it at the HTTP layer instead.** `new Stripe(key, { httpClient })` takes a client the SDK
+calls exactly twice — `getClientName()` and `makeRequest()`
+(`RequestSender.js:366`, `stripe.core.js:283`) — and `makeRequest` is already awaited internally,
+so awaiting a token inside it is invisible to everything above. Return shapes, nested namespaces,
+per-call options, error classes and sync helpers are untouched *because you never touch them*.
+
 ## Confirm-time card declines are THROWN by the SDK, not returned (2026-07-16)
 
 With `confirm: true`, `stripe.paymentIntents.create` — and likewise `stripe.invoices.pay` and `stripe.subscriptions.update(payment_behavior: "error_if_incomplete")` — **reject with a `StripeCardError`** on an issuer decline instead of resolving with a failed intent. A branch that inspects `paymentIntent.last_payment_error` after `create()` resolves (both one-time-purchase routes have one) **never sees these declines** — they land in the catch block. Previously the generic catch-alls turned them into HTTP 500 with a generic message; production bug: `decline_code: invalid_account` → 500 "Failed to create one-time purchase".
@@ -178,11 +435,22 @@ longer imported here directly — it is still invoked, but only via
 
 Behavioral impact:
 
-- **Recovery / regular renewal pauses: unchanged.** For any `pauseReason` that is
-  not `"retention"` (including undefined), `decideClearPause` reproduces the old
+- **A pause must actually exist (added 2026-08-24).** `decideClearPause` now
+  short-circuits to `false` when `pauseCollectionPresent` is false, so the decision
+  is exactly `pauseCollectionPresent && pauseReason !== "retention"`. Every disjunct
+  of the old
   `shouldClearPauseCollectionAfterPaidInvoice(...) || recordMembershipRecurringAffiliate || subscription.pause_collection != null`
-  result exactly. Past-due/unpaid recovery and `subscription_cycle`/
-  `_threshold`/`_update` renewals still clear the pause and resume collection.
+  chain was ORed with that same non-null clause, so the only outcome that changed is
+  the one where nothing was paused — and `pause_collection: ""` on an unpaused
+  subscription is a Stripe no-op. What it is **not** is free: it was one
+  `/v1/subscriptions` write per renewal on the endpoint that broke on 23 Aug. See
+  "One renewal cost 10 Stripe API calls" above.
+- **Recovery pauses: unchanged.** A past-due/unpaid recovery or a
+  `subscription_cycle`/`_threshold`/`_update` renewal on a subscription that **is**
+  paused still clears the pause and resumes collection, on the same code path, before
+  benefits. Recovery channels that lift the pause themselves before the webhook lands
+  (`chargePastDueShared`, `renew-subscription`) simply no longer trigger a second,
+  redundant clear.
 - **Retention pauses: never cleared by a paid invoice.** If
   `subscription.metadata.pauseReason === "retention"`, `decideClearPause`
   short-circuits to `false` before any legacy condition runs, so a retention
@@ -451,3 +719,113 @@ retries the grant instead of returning early — see
 Shop PaymentIntent metadata now also carries `userEmail`. It was the only payment type without
 it, and the webhook's user-resolution fallback needs it; without it an unmatched
 `stripeCustomerId` lost the order silently.
+## Adaptive Acceptance blocks are NOT overridable by the Radar allow list
+
+**Confirmed by Stripe support, 2026-08-17.** `outcome.type === "blocked"` covers several
+mechanisms and the `card_fingerprint_allowlist` value list only overrides *some* of them:
+
+| `outcome.reason` | Mechanism | Allow list fixes it? |
+|---|---|---|
+| `rule`, `highest_risk_level`, `blocklist` | Radar | ✅ yes |
+| `previously_declined_do_not_retry` | **Stripe Adaptive Acceptance** | ❌ **no** |
+
+Stripe's wording: the allow list "only affects Radar rules", Adaptive Acceptance "operates
+independently of Radar rules… regardless of Radar allow lists or custom rules", and there is
+**no account-level setting** to disable it (it is automatic on IC+ pricing).
+
+**Measured on production 2026-08-17:** of 72 blocked charges in one day, **69** were
+`previously_declined_do_not_retry`, and **70 of the 72 were on cards already present on the live
+Radar list**, added 2–3 months earlier. Across the full `blockedtransactions` record,
+**835 of 1,024 (82%)** carry this reason — i.e. most of the blocked population was never
+allowlist-fixable.
+
+**It is self-inflicted.** Stripe blocks "based on prior network decline or advice codes" and
+explicitly to help merchants "avoid excessive retry penalties". A second support reply named the
+cause directly: *"too many payment attempts were made in a short time window"*, with two
+recommendations — **wait 2–3 days between retries of the same transaction**, and **spread batch
+processing over a longer window rather than submitting all at once**. A daily bulk run that fires
+its whole worklist in one burst (792 charges in 210s, measured) manufactures the blocks it then
+fails against.
+
+**It decays.** 118 of 701 blocked cards (17%) produced a successful charge after their first
+block, some 3+ months later — so the cohort must be slowed down, **not dropped**.
+
+**Both halves are now implemented — and the reactive one alone was never enough.** The cooldown
+below only engages once a `BlockedTransaction` row already exists for the card, so by construction
+it cannot prevent a **first** block, and it fails open. The **proactive** half is
+`shouldSkipForBulkAttemptSpacing` (`BULK_ATTEMPT_SPACING_DAYS = 3`) in
+[past-due-charge-idempotency.ts](../../src/server/admin/past-due-charge-idempotency.ts): the
+automated run refuses to submit the same invoice more than once every 3 days, reading only that
+invoice's own `success`/`failed` history. Measured 2026-08-24, before it existed: individual
+invoices reached **24 submissions in 30 days** (100 at 17, 76 at 18) — every one invisible to the
+reactive cooldown. It also answers the second recommendation: a ~1,157-invoice day becomes ~386
+real submissions, cutting per-invoice velocity from 24 to **10** per 30 days. See
+[docs/admin/backend.md](../admin/backend.md#per-invoice-attempt-cap-proactive).
+
+Implementation: `isStripeExcessiveRetryReason` / `STRIPE_EXCESSIVE_RETRY_OUTCOME_REASON` in
+[stripe-excessive-retry.ts](../../src/utils/payment/stripe/stripe-excessive-retry.ts) is the single
+source of truth for the reason string (do **not** coin a parallel "adaptive acceptance" vocabulary);
+the cooldown policy is `shouldCooldownForExcessiveRetry` in
+[chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts). See
+[docs/admin/backend.md](../admin/backend.md#excessive-retry-cooldown).
+
+---
+
+## `type: "mini-draw"` without `miniDrawId` is a money-in / nothing-out shape (fixed 2026-08-20)
+
+**The shape.** `handleMiniDrawWebhook` grants entries *against a specific draw*, read from `paymentIntent.metadata.miniDrawId`. A PaymentIntent stamped `type: "mini-draw"` **without** that key can never be granted — there is no draw to grant into. Stripe has already captured the money (nothing sets `capture_method`, so capture is automatic).
+
+**How it happened.** Both `create-one-time-purchase` and `…-existing-user` resolved package ids against the *mini-draw* catalogue as a fallback, synthesised a one-time package from the match, and stamped `type/packageType: "mini-draw"` — but neither route has a draw in scope and neither Zod schema even accepted a `miniDrawId`. `grep miniDrawId src/app/api/stripe/**` returned zero matches. The webhook then bailed at `if (!miniDrawId)`, logged to `console`, and returned.
+
+**Two things made it invisible rather than merely broken:**
+
+1. `webhookLog` is `console`-based, and production builds strip `console.log/info/debug/warn` (`next.config.ts` `compiler.removeConsole`). No durable trace anywhere a human looks.
+2. **It poisoned idempotency.** The dispatch did a bare `await handleMiniDrawWebhook(...)`, ignoring the return. `dispatchStripeEvent` computes `shouldMarkAsProcessed = paymentProcessed !== false`, so a bailed grant still ACKed the event — a Stripe retry or an admin replay would be **skipped**. The one-time branch eight lines below already did `return false`; the mini branch simply never matched it.
+
+**The two controls now in place:**
+
+- **Boundary (the seal).** `isMiniDrawPackageId` in [`src/data/miniDrawPackages.ts`](../../src/data/miniDrawPackages.ts) — a **catalogue** membership test, not a string-shape test, because the ids are two unrelated families (`mini-pack-1..8` and `additional-*-pack-mini`) and either a prefix or a suffix rule would miss one. Both one-time routes reject a match with **400 `MINI_DRAW_PACKAGE_WRONG_ENDPOINT`** before any Stripe call, and the fake-package fallback branches are deleted. Verified against `membershipPackages`: **zero id collisions**, so it cannot 400 a legitimate purchase — pinned by `npm run test:mini-draw-package-id`.
+- **Webhook (the net).** `handleMiniDrawWebhook` now returns `Promise<boolean>` — `false` on both metadata guards plus a durable `ErrorReport` via `reportStrandedMiniDrawPayment`, and `return result.success` at the end. The dispatch honours it. A non-ACKed event stays **replayable**, so a repaired PaymentIntent can be re-driven.
+
+⚠️ **`return result.success` is a deliberate behaviour change**: a genuine *processing* failure now also un-ACKs, where before it was ACKed and lost. That is the correct outcome — a retry can fix a transient failure, unlike a metadata defect. It does mean mini-draw processing failures will now be retried by Stripe.
+
+⚠️ **The success path MUST return a boolean.** If `handleMiniDrawWebhook` ever falls through to an implicit `undefined`, `if (!granted) return false` treats every *successful* grant as a failure and Stripe retries the event forever.
+
+**No auto-refund, deliberately.** There is no `refunds.create` anywhere in `src/`. Firing one on "metadata looks wrong" would refund a legitimate purchase whose metadata was merely truncated, and would bypass the refund-reversal ledger ([REFUND_REVERSAL.md](../REFUND_REVERSAL.md)). Grant-vs-refund is a human call.
+
+**Historical check:** `npm run find:stranded-mini-draw-payments` — read-only, scans Stripe for captured mini-draw PaymentIntents with no `miniDrawId` and cross-checks `PaymentEvent{BenefitsGranted}` + `users.miniDrawPackages.stripePaymentIntentId` to prove whether anything was granted. Expected result is zero: no live UI ever posted a mini id to those routes.
+
+**Still latent, watch it:** `MembershipModal` carries seven live `activePlan.id.startsWith("mini-pack-")` branches that feed these routes. Nothing sets such an `activePlan.id` today, and the server guard now neutralises them — but they are why this was worth sealing rather than documenting.
+
+## A swallowed Stripe error still acks the event — charged, marked succeeded, granted nothing (2026-08-23)
+
+The 24 Aug anchor-24 renewal burst (~914 renewals in one minute) rate-limited our Stripe fan-out. **11 members were charged $300.00 in total and got no entries.**
+
+**The hole.** `handleInvoicePaymentSucceeded` ([`stripe-webhook-handlers/index.ts`](../../src/services/stripe-webhook-handlers/index.ts)) wraps its entire body in a single `try`. An inner catch rethrows, but the **outer catch swallows and returns normally**. The dispatcher then sets `shouldMarkAsProcessed = true`; [`processQueuedEvent`](../../src/services/stripe-webhook-queue/processQueuedEvent.ts) writes `ProcessedStripeEvent` and calls `markSucceeded`. `markFailed` never runs, so the queue's retry machinery — which would have fixed this by itself — is never engaged.
+
+There is a second way in: the `if (result.success)` branch around the `processPaymentBenefits` call **does** have an else, but it only `webhookLog("error", …)`s — it neither rethrows nor signals failure upward, so a `{success: false}` return is acked exactly like a swallowed throw. (A logged failure is not a handled one.) The `payment_intent` path gets this right — it returns `result.success` so the event is not acked. Compare the two before touching either.
+
+**Consequences that make it hard to spot:**
+- `stripewebhookqueue` shows `succeeded`. `ProcessedStripeEvent` holds the id, so a replay is refused as a duplicate.
+- `MembershipRenewalCycle` shows `status: "succeeded"` — the money is real.
+- **No `PaymentEvent` is written**, so every ledger-anchored reconciler is blind (see [draws/gotchas.md](../draws/gotchas.md)).
+
+**Auditing for it.** Anchor on the charge record, not the ledger:
+
+```bash
+npm run backfill:missing-renewal-grants:prod:dry     # read-only; exit 2 means gaps exist
+```
+
+`scripts/backfill-missing-renewal-grants.ts` left-joins `MembershipRenewalCycle{succeeded, subscription_cycle}` against `PaymentEvent._id = BenefitsGranted-invoice_<invoiceId>` and reports the absences. `--apply` grants through the normal `processPaymentBenefits` path (so the `PaymentEvent`, accumulators and draw credit are created exactly as the webhook would have), passing the **original** `succeededAt` so draw routing lands the right month, then sets `subscription.lastMonthAccumulatedEntries` the way the handler does after a successful grant — omit that and the *next* renewal accumulates from a stale baseline and under-grants. `--expect=N` refuses to write unless the derived gap set is exactly N rows.
+
+**Not covered by the backfill:** the affiliate *recurring* commission is a separate webhook step; use `backfill:affiliate-recurring-commissions:all:dry` for those invoices.
+
+**When editing this handler:** an error inside it must reach `markFailed`. Bounded queue attempts plus dead-lettering already exist — letting the error through is what turns a lost grant into a retried one.
+
+**Three things that backfill must do that a naive replay would not:**
+
+1. **Refuse to resurrect a cancellation.** `grantBenefits` → `handleSubscriptionPackage` unconditionally `$set`s `subscription.isActive: true` / `status: "active"` and `$unset`s `cancelledAt`. Correct at charge time; destructive days later — a member who cancelled *because* they paid and got nothing would have that decision erased in Mongo while Stripe still holds `cancel_at_period_end`. The script prints every target's lifecycle state and refuses to apply if any is cancelled/paused/inactive (override: `--allow-lifecycle-change`).
+2. **Read Stripe as well as Mongo.** The `MembershipRenewalCycle` row is written by the same handler that failed, *after* its first Stripe call (`index.ts:3474` → `:3614`), and `upsertRenewalCycleFromPaidInvoice` returns early unless `billing_reason === "subscription_cycle"` (`membershipAnalyticsPersistence.ts:43`). So a 429 on that first call, or a lost grant on a `subscription_create`/`subscription_update` invoice, leaves **no trace in Mongo at all**. A second pass lists paid Stripe invoices in the window and checks each against `PaymentEvent`. On the 23 Aug window it independently returned the same 11 and zero Mongo-invisible extras — that agreement is what makes "exactly 11" trustworthy rather than merely repeatable.
+3. **Treat a per-row failure as unresolved forever.** `processPaymentBenefits` writes the `PaymentEvent` **before** `grantBenefits` and does not remove it if the grant throws. A row that dies inside `addToMajorDraw` is left with entries `$inc`ed, a `BenefitsGranted` row present, possibly no draw entries, and `lastMonthAccumulatedEntries` stale — and the next dry run reports it **healthy**. After any apply, grep the CSV for `,error,` and inspect those members by hand; a clean re-run is not evidence.
+
+**What actually fires on this path** (checked, because "grant through the normal path" sounds louder than it is): for `billingReason === "subscription_cycle"` the Meta CAPI Purchase is explicitly skipped (`payment-processing.ts:1462-1466`), the Klaviyo membership event is a `break` (`:1720-1726`), "Invoice Generated" is skipped, and there is no TikTok call. What does fire: Klaviyo "Placed Order" (`isRenewal: true`), Klaviyo profile sync, the milestone check, and the partner-discount queue update.

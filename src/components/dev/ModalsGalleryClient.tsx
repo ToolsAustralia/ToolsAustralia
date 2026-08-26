@@ -1183,8 +1183,9 @@ export default function ModalsGalleryClient() {
       <ParticipantsModal
         isOpen={isOpen("admin-participants")}
         onClose={close}
-        majorDrawId={PREVIEW_MAJOR_DRAW_ID}
-        majorDrawName={GALLERY_MAJOR_DRAW.name}
+        drawId={PREVIEW_MAJOR_DRAW_ID}
+        drawName={GALLERY_MAJOR_DRAW.name}
+        drawType="major"
       />
       <WinnerSelectionModal
         isOpen={isOpen("admin-winner-select")}

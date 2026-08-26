@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { PROFESSIONS } from "@/data/professions";
+import { GENDERS } from "@/data/genders";
 import { useUserContext } from "@/contexts/UserContext";
 import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { useReferralCode } from "@/hooks/useReferralCode";
@@ -59,12 +60,16 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const [selectedProfession, setSelectedProfession] = useState("");
   const [customProfession, setCustomProfession] = useState("");
   const [selectedBirthdate, setSelectedBirthdate] = useState("");
+  // Optional. Deliberately NOT part of `stepsNeeded` and NOT checked by step-2 validation —
+  // collected here for coverage only, so a member can always continue without answering.
+  const [selectedGender, setSelectedGender] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Dropdown open state tracking
   const [isStateDropdownOpen, setIsStateDropdownOpen] = useState(false);
   const [isProfessionDropdownOpen, setIsProfessionDropdownOpen] = useState(false);
+  const [isGenderDropdownOpen, setIsGenderDropdownOpen] = useState(false);
   const [isBirthdatePickerOpen, setIsBirthdatePickerOpen] = useState(false);
 
   const handleStateDropdownChange = useCallback((isOpen: boolean) => {
@@ -75,12 +80,18 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     setIsProfessionDropdownOpen(isOpen);
   }, []);
 
+  const handleGenderDropdownChange = useCallback((isOpen: boolean) => {
+    setIsGenderDropdownOpen(isOpen);
+  }, []);
+
   const handleBirthdateOpenChange = useCallback((open: boolean) => {
     setIsBirthdatePickerOpen(open);
   }, []);
 
-  // Step 2: extra scrollable room when a dropdown or the birthdate calendar is open
-  const isStep2OverlayOpen = isStateDropdownOpen || isProfessionDropdownOpen || isBirthdatePickerOpen;
+  // Step 2: extra scrollable room when a dropdown or the birthdate calendar is open.
+  // Gender is included so the last field on the step isn't clipped when its menu opens.
+  const isStep2OverlayOpen =
+    isStateDropdownOpen || isProfessionDropdownOpen || isGenderDropdownOpen || isBirthdatePickerOpen;
 
   // Refs for focusing on error fields
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -188,6 +199,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
       selectedProfession,
       customProfession,
       selectedBirthdate,
+      selectedGender,
       isEmailVerified,
       currentEmail,
       showEmailVerification,
@@ -208,6 +220,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     selectedProfession,
     customProfession,
     selectedBirthdate,
+    selectedGender,
     isEmailVerified,
     currentEmail,
     showEmailVerification,
@@ -245,6 +258,11 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const professionOptions: DropdownOption[] = PROFESSIONS.map((profession) => ({
     value: profession.value,
     label: profession.label,
+  }));
+
+  const genderOptions: DropdownOption[] = GENDERS.map((gender) => ({
+    value: gender.value,
+    label: gender.label,
   }));
 
   useEffect(() => {
@@ -309,6 +327,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
           setConfirmPassword(savedState.confirmPassword || "");
           setSelectedState(savedState.selectedState || userData.state || "");
           setSelectedProfession(savedState.selectedProfession || userData.profession || "");
+          setSelectedGender(savedState.selectedGender || userData.gender || "");
           setCustomProfession(savedState.customProfession || "");
           setSelectedBirthdate(
             savedState.selectedBirthdate ||
@@ -476,6 +495,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
           state: selectedState,
           profession: professionValue,
           birthdate: selectedBirthdate || undefined,
+          // Omitted entirely when unanswered, so the route leaves any existing value alone.
+          gender: selectedGender || undefined,
           saveStateProfessionOnly: true,
         }),
       });
@@ -940,6 +961,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                   selectedBirthdate={selectedBirthdate}
                   stateOptions={stateOptions}
                   professionOptions={professionOptions}
+                  selectedGender={selectedGender}
+                  genderOptions={genderOptions}
                   inlineErrors={{
                     profession: inlineErrors.profession,
                     customProfession: inlineErrors.customProfession,
@@ -953,8 +976,10 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                   onProfessionChange={handleProfessionChangeFromStep2}
                   onCustomProfessionChange={handleCustomProfessionChangeFromStep2}
                   onBirthdateChange={handleBirthdateChangeFromStep2}
+                  onGenderChange={setSelectedGender}
                   onStateDropdownChange={handleStateDropdownChange}
                   onProfessionDropdownChange={handleProfessionDropdownChange}
+                  onGenderDropdownChange={handleGenderDropdownChange}
                   onBirthdateOpenChange={handleBirthdateOpenChange}
                 />
               )}

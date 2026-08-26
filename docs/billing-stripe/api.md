@@ -15,7 +15,7 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 | POST | `/api/stripe/switch-tier-past-due` | Past-due tier-switch **teardown** (no body): cancels the caller's `past_due` sub immediately + voids its open/uncollectible renewal invoice(s), then the client opens the ordinary subscribe flow for the new tier. Accepts `past_due` **or** `canceled` (idempotent retry); the service reconciles against LIVE Stripe status — refuses to cancel a recovered sub (**409 `SUBSCRIPTION_RECOVERED`**), no-ops an already-gone one. 409 `NOT_PAST_DUE` otherwise. **Freeze-gated** (`enforceMajorDrawOpenForNewPurchasesOr403` → 403) like the resubscribe it hands off to, so a major-draw freeze can't strand a member mid-teardown. Delegates to `subscription/switchTierPastDue.abandonPastDueForTierSwitch`. See BUSINESS.md §10i + subscription/gotchas.md § Reconcile against LIVE Stripe status. |
 | POST | `/api/stripe/cancel-incomplete-subscription` | Clean up stuck `incomplete` checkout |
 | POST | `/api/stripe/confirm-subscription-payment` | Confirm a Payment Intent for a created subscription |
-| POST | `/api/stripe/upgrade-subscription-payment` | Upgrade flow — immediate full-price charge (`proration_behavior: "none"` + `billing_cycle_anchor: "now"`, `payment_behavior: "error_if_incomplete"`, clears `cancel_at_period_end`); returns the PI for client confirmation when needed. Thrown card declines → 400 Payment-failed shape ([§ Thrown card declines](#thrown-card-declines--400-payment-failed)) |
+| POST | `/api/stripe/upgrade-subscription-payment` | Upgrade flow — immediate full-price charge (`proration_behavior: "none"` + `billing_cycle_anchor: "now"`, `payment_behavior: "error_if_incomplete"`, clears `cancel_at_period_end`); returns the PI for client confirmation when needed. **Trial-aware (2026-08-24):** an anchor-24 (`trialing`) member gets `trial_end: "now"` in the same call so the anchor cannot veto the charge, then a second `subscriptions.update` re-applies their `trial_end` for the next cycle — after the `latest_invoice`/proration reads, and both success checks accept `trialing` ([§ Trial-aware upgrade](./gotchas.md)). Thrown card declines → 400 Payment-failed shape ([§ Thrown card declines](#thrown-card-declines--400-payment-failed)) |
 | POST | `/api/stripe/downgrade-subscription` | Downgrade flow — preserves old benefits via `User.subscription.previousSubscription` |
 | POST | `/api/stripe/update-auto-renew` | Toggle `cancel_at_period_end` |
 
@@ -45,13 +45,49 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/stripe/create-one-time-purchase` | Mini-draw / one-time pack purchase (new user). Thrown confirm-time card declines → 400 Payment-failed shape ([§ Thrown card declines](#thrown-card-declines--400-payment-failed)) |
+| POST | `/api/stripe/create-one-time-purchase` | One-time / membership pack purchase (new user). **Not** mini-draw — see below. Thrown confirm-time card declines → 400 Payment-failed shape ([§ Thrown card declines](#thrown-card-declines--400-payment-failed)) |
 | POST | `/api/stripe/create-one-time-purchase-existing-user` | Same, for existing user. Thrown confirm-time card declines → same 400 shape |
+
+Both one-time routes **reject mini-draw catalogue ids** (`mini-pack-1..8`, `additional-*-pack-mini`) with **400 `{ error, code: "MINI_DRAW_PACKAGE_WRONG_ENDPOINT" }`** before any Stripe call. They have no draw in scope, so they cannot stamp the `miniDrawId` the webhook needs to grant — accepting one captured money that could never be honoured. Mini packs go through `POST /api/mini-draw/purchase`. See [gotchas](./gotchas.md).
 | POST | `/api/stripe/pay-failed-invoice` | User pays a specific failed renewal invoice. **Stranded (open-but-retry-exhausted) invoices are auto-recovered:** the route voids the dead invoice + finalizes the held cycle draft via [`prepareRecoveredCycleInvoice`](../../src/services/subscription/prepareRecoveredCycleInvoice.ts) (under a `RecoveryClaim` lock) and returns the finalized draft's PaymentIntent `client_secret` through the existing `requiresPaymentConfirmation` shape — no more `invoice_not_payable` dead-end. **`no_held_draft` members now MINT** a fresh current cycle on their default card via [`mintCurrentCycleInvoice`](../../src/services/subscription/mintCurrentCycleInvoice.ts) (`skipClaim: true`; outcome mapped by [`classifyMemberResolveMintOutcome`](../../src/utils/payment/recovery/member-resolve-mint-policy.ts)): success reactivates; a decline returns `requiresNewCardPreflight` (add a card → retry collects on the new default via the normal open-invoice path — no re-mint, the failed card isn't re-charged); a scheduled-to-cancel / mint-error state is terminal. A declined mint fires "Subscription Renewal Failed" (webhook `isRebill`). Never creates a manual invoice (`billing_reason` stays `subscription_cycle`/`subscription_update`). Probe: `npm run stripe:probe-member-resolve-mint`. |
 | POST | `/api/stripe/force-charge-overdue` | Member self-serve off_session charge of the current cycle via `forceChargeCurrentCycle` (passes `mintCurrentCycleIfNoDraft: true`). **Stranded invoices are recovered** (void + finalize the held draft via `prepareRecoveredCycleInvoice` under the `RecoveryClaim` lock, then off_session-pay the finalized draft on its per-attempt idempotency key). The **`no_held_draft` cohort now MINTS** a fresh current cycle on the default card ([`mintCurrentCycleInvoice`](../../src/services/subscription/mintCurrentCycleInvoice.ts)) instead of the old 409 dead-end — the mint acquires its own `RecoveryClaim` (none is held at that point) and its result maps onto the existing force-charge reasons via `mapMintFailureToForceChargeReason` (decline → `pay_failed`; already-collected → `period_already_paid`; canceled/scheduled-to-cancel → `subscription_inactive`). The **admin** force-charge route (`/api/admin/users/[id]/force-charge`) passes the same flag. |
 | POST | `/api/stripe/webhook` | **THE** webhook receiver; verifies signature, dedupes via `ProcessedStripeEvent`, dispatches |
 
 > _TODO: read each handler to fill in exact auth requirements, request/response shapes, and error codes. Currently the routes are inventoried but not fully spec-documented._
+
+## Cron routes owned by this domain
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/cron/process-stripe-webhook-queue` | Bearer `CRON_SECRET` (**fails open** when unset) | Sweeps orphans + dispatches due queue rows — see [STRIPE_WEBHOOK_QUEUE.md](./STRIPE_WEBHOOK_QUEUE.md) |
+| GET | `/api/cron/reconcile-blocked-transactions` | Bearer `CRON_SECRET` | 48h `BlockedTransaction` vs Stripe drift + self-heal — see [architecture.md](./architecture.md#reconciliation-cron--phase-d) |
+| GET | `/api/cron/reconcile-renewal-grants` | Bearer `CRON_SECRET` (**fails CLOSED**) | `40 3 * * *`. Detects renewals Stripe was paid for whose entry grant never landed, plus every `dead` webhook-queue row. Read-only — no Mongo write, no Stripe call. See [architecture.md](./architecture.md#renewal-grant-reconciliation--the-paid-but-not-granted-detector-2026-08-24) |
+
+### `GET /api/cron/reconcile-renewal-grants`
+
+`200` response:
+
+```jsonc
+{
+  "success": true,
+  "since": "2026-08-21T19:40:00.000Z",   // now − 8h − 48h  (window is on updatedAt)
+  "until": "2026-08-23T19:40:00.000Z",   // now − 8h (settle margin)
+  "ungranted": [
+    { "stripeInvoiceId": "in_…", "userId": "…", "amountPaidCents": 2000, "chargedAt": "…" }
+  ],
+  "ungrantedCount": 1,
+  "ungrantedCents": 2000,
+  "dead": [
+    { "eventId": "evt_…", "type": "invoice.payment_succeeded", "attempts": 6, "lastError": "…", "diedAt": "…" }
+  ],
+  "deadCount": 1,
+  "durationMs": 963
+}
+```
+
+`401 { "error": "Unauthorized" }` when `CRON_SECRET` is unset **or** the Bearer token does not match. `500 { "success": false, "error": … }` on an unexpected failure.
+
+The service behind it, [`renewalGrantReconciler`](../../src/services/reconciliation/renewalGrantReconciler.ts), also exports `findUngrantedRenewals(since, until)` and `findDeadWebhookEvents(limit?)` for ops scripts that need an arbitrary window — use those rather than re-deriving the join, so there is only ever one definition of "ungranted".
 
 ## Cross-domain admin routes
 

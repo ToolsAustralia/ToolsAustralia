@@ -18,3 +18,4 @@ The admin panel — user management, payments, draws, promo, error reports, part
 - [staff-api.md](./staff-api.md) — `/api/admin/staff/**` list, invite, change role, deactivate
 - [staff-activity-log.md](./staff-activity-log.md) — audit trail of staff mutations (design + held-back items + future-work checklist)
 - [mer-table.md](./mer-table.md) — Marketing Efficiency Ratio (New Revenue ÷ Ad Spend) per draw, with per-platform breakdown + platform toggle
+- [receipts.md](./receipts.md) — the Receipts ledger (Billing tab): every payment received, its refund state, and its Stripe record; how it diverges from the dashboard's revenue slices and how the two reconcile

@@ -58,8 +58,20 @@ function emptyBuckets(): Record<RevenueBucketKey, { revenue: number; purchaseCou
 export async function readStatsForRange(args: {
   rangeStartUTC: Date;
   rangeEndUTC: Date;
+  /**
+   * Compute `revenue.buckets[].userCount`. Default true — every existing caller reads it.
+   *
+   * Opt OUT when you do not: it is a PaymentEvent aggregation carrying a correlated `$lookup`
+   * self-join plus `$addToSet` under `allowDiskUse`, and it runs unconditionally, so a caller
+   * that never touches `userCount` pays for it once PER CALL. `getMerByDraw` calls this once
+   * per draw and reads only `adChannels` + `attributedRevenue`, so it was buying N of these
+   * aggregations per request and discarding all of them.
+   *
+   * When false, `userCount` stays 0 — deliberately not `undefined`, so the shape is unchanged.
+   */
+  includeDistinctUserCounts?: boolean;
 }): Promise<SnapshotReadResult> {
-  const { rangeStartUTC, rangeEndUTC } = args;
+  const { rangeStartUTC, rangeEndUTC, includeDistinctUserCounts = true } = args;
 
   const startKey = aestKey(rangeStartUTC);
   // rangeEndUTC is meant to be the END of the last AEST day (or now() for "today"-inclusive).
@@ -256,10 +268,13 @@ export async function readStatsForRange(args: {
     c.roas = c.spend > 0 ? c.revenue / c.spend : 0;
   }
 
-  // Live distinct user counts per bucket
-  const distinctCounts = await computeDistinctUserCounts(rangeStartUTC, rangeEndUTC);
-  for (const k of REVENUE_BUCKET_KEYS) {
-    buckets[k].userCount = distinctCounts[k];
+  // Live distinct user counts per bucket. Skipped for callers that never read them — see the
+  // `includeDistinctUserCounts` note on the signature. Leaves userCount at its initialised 0.
+  if (includeDistinctUserCounts) {
+    const distinctCounts = await computeDistinctUserCounts(rangeStartUTC, rangeEndUTC);
+    for (const k of REVENUE_BUCKET_KEYS) {
+      buckets[k].userCount = distinctCounts[k];
+    }
   }
 
   return {

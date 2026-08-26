@@ -52,7 +52,7 @@ import {
   resumeAfterSuccessfulRenewalPayment,
   reanchorAfterPastDueRecovery,
 } from "@/services/subscription/SubscriptionCollectionPauseService";
-import { decideClearPause, decidePauseTransition, shouldReanchorAfterRecovery, shouldReanchorRebillToAnchor24 } from "@/services/subscription/pauseCollectionPolicy";
+import { decideClearPause, decidePauseTransition, readPauseCollection, shouldReanchorAfterRecovery, shouldReanchorRebillToAnchor24 } from "@/services/subscription/pauseCollectionPolicy";
 import { isJoinDateAnchoredTo24 } from "@/utils/billing/anchor-billing";
 import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/stripe-subscription-metadata";
 import { decideStreakOnSubscriptionCreate } from "@/utils/subscription/streak";
@@ -151,6 +151,81 @@ function resolveInvoiceSubscriptionId(invoice: Stripe.Invoice): string | undefin
 }
 
 /**
+ * The EXPANDED subscription object already carried by the invoice, when there is one.
+ *
+ * Walks the same `parent.subscription_details.subscription` slot as
+ * {@link resolveInvoiceSubscriptionId}, but returns the object instead of the id — so a caller
+ * that retrieved the invoice with `expand: ["parent.subscription_details.subscription"]` does
+ * NOT have to spend a second `/v1/subscriptions` call on the sub it was just handed.
+ *
+ * Returns `undefined` when the slot holds a bare id string (unexpanded), so the caller falls
+ * back to a real retrieve. Verified on live invoice `in_1U7b0KJ3N9Ka6RJMcLvhPOHe`: with that
+ * expand, the slot holds the full Subscription (status, metadata, pause_collection).
+ *
+ * The pre-Basil top-level `invoice.subscription` is checked second purely for older-API safety;
+ * stripe@18.5.0's `Invoice` interface does not declare it and Basil invoices do not return it.
+ */
+function resolveExpandedInvoiceSubscription(invoice: Stripe.Invoice): Stripe.Subscription | undefined {
+  const invoiceWithHints = invoice as Stripe.Invoice & {
+    subscription?: string | Stripe.Subscription | null;
+    parent?: unknown;
+  };
+
+  const parentSubscriptionDetails = objectValue(invoiceWithHints.parent, "subscription_details");
+  const candidates: unknown[] = [
+    objectValue(parentSubscriptionDetails, "subscription"),
+    invoiceWithHints.subscription,
+  ];
+
+  for (const candidate of candidates) {
+    // `status` separates a genuinely expanded Subscription from a `{id}`-shaped stub.
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      typeof (candidate as { id?: unknown }).id === "string" &&
+      (candidate as { id: string }).id.startsWith("sub_") &&
+      typeof (candidate as { status?: unknown }).status === "string"
+    ) {
+      return candidate as Stripe.Subscription;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * `packageName` for a renewal invoice, read from the invoice payload — no Stripe call.
+ *
+ * Stripe snapshots the subscription's metadata onto BOTH `parent.subscription_details.metadata`
+ * and each line item's `metadata` when it creates the cycle invoice. Verified against 190
+ * production `subscription_cycle` `invoice.created` payloads (`stripewebhookqueue.payload`,
+ * the verbatim Stripe event): 190/190 `status: "draft"`, and 190/190 carry `packageName` on
+ * both paths. So the DRAFT invoice already knows its package and the `subscriptions.retrieve`
+ * this replaces was buying nothing — at one `/v1/subscriptions` call per renewal, against
+ * Stripe's 25/sec per-endpoint cap (incident 2026-08-23).
+ */
+function packageNameFromInvoicePayload(invoice: Stripe.Invoice): string {
+  const parentSubscriptionDetails = objectValue(
+    (invoice as Stripe.Invoice & { parent?: unknown }).parent,
+    "subscription_details"
+  );
+  const fromSubscriptionDetails = objectValue(
+    objectValue(parentSubscriptionDetails, "metadata"),
+    "packageName"
+  );
+  if (typeof fromSubscriptionDetails === "string" && fromSubscriptionDetails.length > 0) {
+    return fromSubscriptionDetails;
+  }
+
+  for (const line of invoice.lines?.data ?? []) {
+    const fromLine = line.metadata?.packageName;
+    if (typeof fromLine === "string" && fromLine.length > 0) return fromLine;
+  }
+
+  return "Subscription";
+}
+
+/**
  * On `invoice.created` for a subscription RENEWAL (`billing_reason === "subscription_cycle"`),
  * stamp the draft invoice's description as "<Package> Renewal" BEFORE Stripe finalizes and
  * attempts payment. The auto-spawned PaymentIntent + Charge inherit it, so BOTH successful AND
@@ -167,13 +242,9 @@ async function handleInvoiceCreated(invoice: Stripe.Invoice): Promise<void> {
   if (invoice.billing_reason !== "subscription_cycle" || !invoice.id) return;
 
   try {
-    const subscriptionId = resolveInvoiceSubscriptionId(invoice);
-    let packageName = "Subscription";
-    if (subscriptionId) {
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      packageName = subscription.metadata?.packageName || "Subscription";
-    }
-    const renewalDescription = `${packageName} Renewal`;
+    // Read the package off the invoice Stripe just handed us — see packageNameFromInvoicePayload.
+    // This used to be a `subscriptions.retrieve` for this one metadata field.
+    const renewalDescription = `${packageNameFromInvoicePayload(invoice)} Renewal`;
 
     // Idempotent across webhook redeliveries — only write when it differs.
     if (invoice.description !== renewalDescription) {
@@ -885,7 +956,12 @@ async function handlePaymentSuccess(
       await handleUpsellWebhook(user, paymentIntent, eventCreatedUnixSeconds);
     } else if (paymentType === "mini-draw") {
       webhookLog("info", `Processing mini-draw payment: ${paymentIntent.id}`);
-      await handleMiniDrawWebhook(user, paymentIntent, eventCreatedUnixSeconds);
+      // Honour the return value. It used to be ignored, so a mini-draw grant that bailed still
+      // left `shouldMarkAsProcessed = paymentProcessed !== false` TRUE (dispatchStripeEvent) and
+      // the event was ACKed as processed — meaning a Stripe retry or an admin replay would be
+      // SKIPPED. The one-time branch immediately below already returns false; this now matches.
+      const granted = await handleMiniDrawWebhook(user, paymentIntent, eventCreatedUnixSeconds);
+      if (!granted) return false;
     } else if (paymentType === "one-time") {
       webhookLog("info", `🔄 Processing one-time payment: ${paymentIntent.id}`);
 
@@ -1365,13 +1441,70 @@ async function handleOneTimeWebhook(
 }
 
 /**
+ * A mini-draw payment was CAPTURED but cannot be granted against any draw.
+ *
+ * `webhookLog("error", …)` maps to `console.error`, which production DOES keep
+ * (`next.config.ts` `removeConsole: { exclude: ["error"] }`), so that line does survive into the
+ * Vercel runtime logs. It is still not enough on its own: nobody watches runtime logs for a money
+ * event. This additionally writes an `ErrorReport` so it surfaces on the admin Error Reports page.
+ *
+ * Fire-and-forget by design — a logging failure must never mask the caller's `return false`,
+ * which is what keeps the Stripe event un-ACKed and therefore replayable once the PaymentIntent
+ * metadata is repaired.
+ *
+ * ⚠️ Do NOT copy the `addToMajorDraw` call shape in `payment-processing.ts` — see the options
+ * argument below for why that one silently writes nothing.
+ *
+ * Deliberately does NOT auto-refund. There is no `refunds.create` anywhere in `src/`, and firing
+ * one on "metadata looks wrong" would refund a legitimate purchase whose metadata was merely
+ * truncated, while bypassing the refund-reversal ledger (`docs/REFUND_REVERSAL.md`). Grant-vs-refund
+ * is a human call.
+ */
+async function reportStrandedMiniDrawPayment(
+  paymentIntent: Stripe.PaymentIntent,
+  user: { _id: { toString: () => string } },
+  reason: string
+): Promise<void> {
+  try {
+    const { ErrorLoggingService } = await import("@/services/error-reporting/ErrorLoggingService");
+    await ErrorLoggingService.logError(
+      new Error(`Captured mini-draw payment could not be granted: ${reason}`),
+      {
+        endpoint: "handleMiniDrawWebhook",
+        userId: user._id.toString(),
+        userEmail: paymentIntent.metadata.userEmail,
+        paymentIntentId: paymentIntent.id,
+        packageId: paymentIntent.metadata.packageId,
+        amount: paymentIntent.amount,
+      },
+      /**
+       * ⚠️ This third argument is LOAD-BEARING — without it the call writes NOTHING.
+       *
+       * `logError` → `logPaymentError` branches on `if (options?.isServerSide && options.request)`
+       * (`ErrorLoggingService.ts:108`). With `options` undefined it takes the CLIENT path,
+       * `autoLogError`, which `fetch`es a RELATIVE url `/api/error-reports`. In Node that throws
+       * "Failed to parse URL", and the rejection is swallowed by that util's own
+       * `.catch(console.warn)` — which `removeConsole` strips in production. A silent no-op.
+       *
+       * `request` is the structural type `{ headers: Headers; url?: string }`, so a webhook can
+       * satisfy it without a NextRequest. `autoLogErrorServer` degrades cleanly from empty
+       * headers (IP falls back to "unknown") and skips `apiEndpoint` when `url` is absent.
+       */
+      { isServerSide: true, request: { headers: new Headers() } }
+    );
+  } catch (logError) {
+    webhookLog("error", `Failed to record stranded mini-draw payment: ${String(logError)}`);
+  }
+}
+
+/**
  * Handle mini draw payments in webhook (backup processing)
  */
 async function handleMiniDrawWebhook(
   user: { _id: { toString: () => string } },
   paymentIntent: Stripe.PaymentIntent,
   eventCreatedUnixSeconds?: number
-) {
+): Promise<boolean> {
   const packageId = paymentIntent.metadata.packageId;
   const miniDrawId = paymentIntent.metadata.miniDrawId; // Extract MiniDraw ID from metadata
   const packageName = paymentIntent.metadata.packageName || `Mini Draw Package ${packageId}`;
@@ -1380,12 +1513,14 @@ async function handleMiniDrawWebhook(
 
   if (entriesCount <= 0) {
     webhookLog("error", `No entries found for mini draw ${packageId}`);
-    return;
+    await reportStrandedMiniDrawPayment(paymentIntent, user, "entriesCount missing or zero");
+    return false;
   }
 
   if (!miniDrawId) {
     webhookLog("error", `No miniDrawId found in payment intent metadata for package ${packageId}`);
-    return;
+    await reportStrandedMiniDrawPayment(paymentIntent, user, "miniDrawId missing from metadata");
+    return false;
   }
 
   // Get active promo multiplier for mini-draw packages
@@ -1478,6 +1613,15 @@ async function handleMiniDrawWebhook(
   if (!result.success) {
     webhookLog("error", `Failed to process mini draw ${packageId}: ${result.error}`);
   }
+
+  // The success path MUST return true — without it the function returns `undefined`, the caller's
+  // `if (!granted)` treats every successful grant as a failure, the event is never ACKed and
+  // Stripe retries it forever.
+  //
+  // Returning `result.success` (not a bare `true`) also un-ACKs a genuine PROCESSING failure,
+  // where a retry legitimately helps — unlike the metadata defects above, which no retry can fix
+  // but which stay replayable once the PaymentIntent is repaired.
+  return result.success;
 }
 
 /**
@@ -1862,10 +2006,17 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
     // previousSubscription in user model handles benefit preservation automatically
     // Webhook just processes subscription updates normally
 
+    // `trialing` counts as active here, as it already does at every other status check in this
+    // file. It is load-bearing since the trial-aware upgrade shipped: an anchor-24 member's LAST
+    // `customer.subscription.updated` of an upgrade carries `trialing` (the route re-applies their
+    // anchor `trial_end` after charging). If this gate rejected it, `pendingChange` would never be
+    // cleared — and a stuck `pendingChange` makes every later `customer.subscription.updated`
+    // early-return below, silently suppressing cancel / pause / past_due handling until the next
+    // renewal. See docs/PAST_DUE_REANCHOR.md and the upgrade route.
     if (
       pendingUpgrade &&
       (pendingUpgrade.stripeSubscriptionId === subscription.id || isProrationUpgrade) &&
-      subscription.status === "active"
+      (subscription.status === "active" || subscription.status === "trialing")
     ) {
       const changeType = pendingUpgrade.changeType;
 
@@ -3429,16 +3580,49 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
 }
 
 /**
+ * Outcome of one `invoice.payment_succeeded` handler run.
+ *
+ * `granted: false` REQUIRES a `reason`, by design: it is written to the queue row's
+ * `lastError`. Some of these paths log via `webhookLog("warn"|"info", …)`, which is
+ * stripped in production twice over (`webhookLog` early-returns for non-error at :90-93,
+ * and `next.config.ts` `removeConsole` strips `warn` at build), so without the reason on
+ * the row a dead-lettered renewal would carry no diagnostic at all. Non-optional so a
+ * future failure path cannot be added without one.
+ */
+type InvoiceGrantOutcome = { granted: true } | { granted: false; reason: string };
+
+/**
  * Handle invoice.payment_succeeded events for subscription activations
  * This is Stripe's canonical event for subscription payment processing
+ *
+ * @returns `{granted: true}` when the event is safe to ACK — either the entry grant
+ * landed, or this invoice legitimately grants nothing (Stripe's $0 trial-bookkeeping
+ * invoice, a non-subscription invoice, an unrecognised billing_reason).
+ * `{granted: false, reason}` when money was collected and the grant did NOT complete; the
+ * caller must then leave the queue row un-acked so `markFailed(reason)` retries it.
+ *
+ * Throws when an exception killed an ungranted invoice, so the real error text (e.g.
+ * Stripe's 429) reaches the queue row's `lastError` instead of a generic message.
+ *
+ * Incident 2026-08-23: this used to return `void` and swallow every error in its outer
+ * catch, so the dispatcher hard-coded `shouldMarkAsProcessed = true` and 11 members were
+ * charged $300.00 with no entries and no retry. Never let a non-grant ACK silently.
  */
-async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
+async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<InvoiceGrantOutcome> {
+  // Set once `processPaymentBenefits` reports success. Read by the outer catch so a throw
+  // in a POST-grant best-effort step (affiliate commission, Klaviyo, endDate sync) does not
+  // un-ACK — and re-grant — an invoice whose entries already landed.
+  let benefitsGranted = false;
+  /** Why the grant did not complete. Carried into the queue row's `lastError`. */
+  let grantFailureReason: string | undefined;
   try {
     // ✅ Type guard: Invoice ID is always present in webhook events
     const invoiceId = invoice.id;
     if (!invoiceId) {
       webhookLog("error", `Invoice ID is missing`);
-      return;
+      // Defensive/unreachable. If it ever fires, money moved and we cannot identify the
+      // invoice — surface it as a queue failure rather than acking it away.
+      return { granted: false, reason: "invoice.payment_succeeded: invoice id missing from event" };
     }
 
     webhookLog("info", `🎯 INVOICE PAYMENT SUCCEEDED HANDLER CALLED for ${invoiceId}`);
@@ -3468,7 +3652,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         "info",
         `Skipping $0 trial-period subscription_update invoice ${invoiceId} (Stripe trial_end bookkeeping; no benefits/activity).`
       );
-      return;
+      // ACK true: a legitimate "nothing to grant". Returning false here would un-ACK a $0
+      // invoice that can never grant, producing an infinite retry → dead-letter loop.
+      return { granted: true };
     }
 
     // ✅ CRITICAL FIX: ATOMIC PaymentEvent creation to prevent race conditions
@@ -3497,12 +3683,43 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       user = await User.findOne({ stripeCustomerId: customerId });
     } else {
       webhookLog("error", `No customer ID in invoice`);
-      return;
+      // A paid invoice we cannot attribute to anyone — fail loud, don't ACK.
+      return { granted: false, reason: `invoice ${invoiceId}: paid invoice carries no Stripe customer` };
     }
 
     if (!user) {
-      webhookLog("warn", `User not found for customer: ${expandedInvoice.customer}`);
-      return;
+      // Classify BEFORE the unknown-customer gate can bite. An invoice that carries no
+      // subscription of its OWN cannot be a membership invoice for anyone, so there is
+      // nothing to grant and nothing a retry could fix. Without this, the same
+      // non-subscription invoice ACKs for a known customer (it falls through to the
+      // "no subscription ID" branch below) but dead-letters for an unknown one — the
+      // noisiest possible asymmetry, on the path most likely to see stray invoices.
+      //
+      // Deliberately scoped to `!user`: hoisting the whole check above the user lookup
+      // would ALSO skip invoices that legitimately resolve their subscription from the
+      // user's `pendingStripeSubscriptionId` / canonical `stripeSubscriptionId`, which
+      // would silently drop real grants.
+      if (!invoiceSubId) {
+        webhookLog(
+          "info",
+          `Invoice ${invoiceId} has no subscription and no known customer — nothing to grant, acking.`
+        );
+        return { granted: true };
+      }
+      // A genuine subscription invoice for a customer we do not know yet. Racy — the User
+      // row may not carry stripeCustomerId yet (signup / SCA-3DS completion can land the
+      // webhook first) — so a backoff retry genuinely heals it. Do not ACK.
+      //
+      // "error" level is load-bearing: webhookLog drops non-error levels in production
+      // (:90-93) AND next.config.ts strips console.warn at build, so a "warn" here would
+      // leave a dead-lettered renewal with no production diagnostic at all.
+      webhookLog("error", `User not found for customer: ${expandedInvoice.customer} (invoice ${invoiceId})`);
+      return {
+        granted: false,
+        reason: `invoice ${invoiceId}: no user for Stripe customer ${
+          typeof expandedInvoice.customer === "string" ? expandedInvoice.customer : expandedInvoice.customer?.id
+        }`,
+      };
     }
 
     /** DB subscription status before this payment (e.g. past_due recovery vs regular renewal) */
@@ -3555,11 +3772,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       lineItems: expandedInvoice.lines?.data?.length || 0,
     });
 
-    // Resolve subscription from invoice (expanded). For invoice.payment_succeeded, Stripe's invoice.subscription
-    // is the source of truth for which subscription was billed — not Mongo stripeSubscriptionId (can be stale
-    // after duplicate incomplete subs / checkout races).
-    const invoiceSubscription = (expandedInvoice as Stripe.Invoice & { subscription?: string | Stripe.Subscription })
-      .subscription;
+    // Resolve subscription from invoice (expanded). For invoice.payment_succeeded, the invoice's own
+    // subscription is the source of truth for which subscription was billed — not Mongo
+    // stripeSubscriptionId (can be stale after duplicate incomplete subs / checkout races).
+    // `expandedInvoice` was retrieved with `expand: ["parent.subscription_details.subscription"]`,
+    // so on the renewal path this IS the full object.
+    const invoiceSubscription = resolveExpandedInvoiceSubscription(expandedInvoice);
     const invoiceSubscriptionId = resolveInvoiceSubscriptionId(expandedInvoice);
     const pendingSubscriptionId = user.subscription?.pendingStripeSubscriptionId;
 
@@ -3584,7 +3802,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     if (!subscriptionId) {
       webhookLog("warn", `No subscription ID found for user: ${user.email}`);
-      return;
+      // Not a membership subscription invoice (no invoice sub, no pending, no canonical) —
+      // there is no membership to grant, so ACK. A retry would resolve to the same nothing.
+      return { granted: true };
     }
 
     if (expandedInvoice.billing_reason === "subscription_cycle" && expandedInvoice.id) {
@@ -3619,16 +3839,30 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
       webhookLog("info", `Invoice subscription ${invoiceSubscriptionId} (canonical) vs DB stripeSubscriptionId ${user.stripeSubscriptionId ?? "(none)"} — processing payment for invoice subscription`);
     }
 
-    // Use expanded subscription from invoice when it matches subscriptionId (metadata + fewer round trips)
+    // Use the expanded subscription from the invoice when it matches subscriptionId (metadata +
+    // fewer round trips). This shortcut USED to test the pre-Basil top-level `invoice.subscription`,
+    // which stripe@18.5.0 does not return — so it never fired and the retrieve below ran on EVERY
+    // renewal (incident 2026-08-23: one of four `/v1/subscriptions` calls per renewal against a
+    // 25/sec per-endpoint cap). The retrieve stays as the fallback for the paths where the id came
+    // from the user's pending/canonical subscription rather than from this invoice.
     let subscription: Stripe.Subscription;
     try {
-      if (
-        typeof invoiceSubscription === "object" &&
-        invoiceSubscription !== null &&
-        "id" in invoiceSubscription &&
-        (invoiceSubscription as Stripe.Subscription).id === subscriptionId
-      ) {
-        subscription = invoiceSubscription as Stripe.Subscription;
+      if (invoiceSubscription && invoiceSubscription.id === subscriptionId) {
+        subscription = invoiceSubscription;
+        // One thing the expanded copy MUST be authoritative about is `pause_collection`, because the
+        // clear decision below is now gated on it. `null` is an answer ("not paused" — trust it, skip
+        // the write). An ABSENT field is not an answer, so re-read rather than guess: for a paused
+        // member who has just paid, this webhook is the only automatic un-pauser (pay-failed-invoice
+        // does not resume; prepareRecoveredCycleInvoice never resumes), and guessing wrong leaves them
+        // collection-paused with every later cycle held as a draft. Live invoices DO return the field
+        // (as `null`), so this costs nothing on the renewal path — see readPauseCollection.
+        if (readPauseCollection(subscription) === "unknown") {
+          webhookLog(
+            "error",
+            `Expanded subscription ${subscription.id} omitted pause_collection on invoice ${expandedInvoice.id} — re-reading before the clear decision`
+          );
+          subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        }
       } else {
         subscription = await stripe.subscriptions.retrieve(subscriptionId);
       }
@@ -3687,15 +3921,26 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         "error",
         `Invoice customer ${invoiceCustomerId} does not match subscription customer ${subscriptionCustomerId}; skipping benefit grant`
       );
-      return;
+      // Deliberate safety skip on a PAID invoice — must surface in the queue, not vanish.
+      return {
+        granted: false,
+        reason: `invoice ${invoiceId}: invoice customer ${invoiceCustomerId} does not match subscription customer ${subscriptionCustomerId}`,
+      };
     }
 
     if (!isManageableStripeSubscriptionStatus(subscription.status)) {
+      // "error" level is load-bearing: webhookLog drops non-error levels in production
+      // (:90-93) AND next.config.ts strips console.warn at build, so a "warn" here would
+      // leave a dead-lettered renewal with no production diagnostic at all.
       webhookLog(
-        "warn",
+        "error",
         `Paid invoice resolved subscription ${subscription.id}, but status ${subscription.status} is not manageable; skipping benefit grant`
       );
-      return;
+      // Paid but not granted — the exact shape of the 2026-08-23 loss. Do not ACK.
+      return {
+        granted: false,
+        reason: `invoice ${invoiceId}: subscription ${subscription.id} status "${subscription.status}" is not manageable`,
+      };
     }
 
     if (user.stripeSubscriptionId !== paidSubscriptionId) {
@@ -3719,6 +3964,11 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     // Clear pause_collection BEFORE processPaymentBenefits. Benefits processing can be slow; Stripe CLI / proxies
     // may time out while waiting for the HTTP response, and processPaymentBenefits can still return success: false
     // — in those cases a late resume never ran, leaving the subscription in "Collection paused" despite a paid invoice.
+    //
+    // `decideClearPause` now requires a pause to ACTUALLY be present (see its precondition): the vast
+    // majority of renewals were never paused, and `pause_collection: ""` on an unpaused subscription is
+    // a Stripe no-op — one wasted `/v1/subscriptions` write per renewal. Members who ARE paused still
+    // get resumed here, on the same code path, before benefits.
     const invoiceAmountPaid = expandedInvoice.amount_paid ?? 0;
     const invoiceIsPaid = expandedInvoice.status === "paid" && invoiceAmountPaid > 0;
     // Snapshot pause_collection BEFORE resumeAfterSuccessfulRenewalPayment clears it in Stripe,
@@ -3820,7 +4070,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
 
     if (!packageId) {
       webhookLog("error", `No packageId found in subscription metadata`);
-      return;
+      // A paid membership invoice with no grant. Mirrors the payment_intent path's
+      // metadata-defect handling (:848-:920): report failure so it does not ACK.
+      return {
+        granted: false,
+        reason: `invoice ${invoiceId}: subscription ${subscriptionId} metadata has no packageId`,
+      };
     }
 
     webhookLog("info", `Processing subscription payment for package: ${packageId}`, {
@@ -3831,7 +4086,8 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     const membershipPackage = getPackageById(packageId);
     if (!membershipPackage) {
       webhookLog("error", `Membership package not found: ${packageId}`);
-      return;
+      // Same class as the missing packageId above — paid, ungranted, must not ACK.
+      return { granted: false, reason: `invoice ${invoiceId}: unknown membership package "${packageId}"` };
     }
 
     // Resubscribe: use subscription metadata first (API may have set user.subscription.isActive before webhook runs)
@@ -4083,7 +4339,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         "warn",
         `Unknown billing reason ${expandedInvoice.billing_reason} for package ${packageId} - skipping benefits`
       );
-      return; // Skip processing for unknown billing reasons
+      // Explicit classification: this invoice type grants nothing, so ACK. A retry would
+      // classify identically and only burn the retry budget.
+      return { granted: true }; // Skip processing for unknown billing reasons
     }
 
     // ✅ Let processPaymentBenefits handle atomic PaymentEvent creation
@@ -4343,6 +4601,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
     }
 
     if (result.success) {
+      // The entry grant landed. From here on the event is ACK-safe: a throw in any of the
+      // best-effort steps below must NOT un-ACK it (the outer catch reads this flag).
+      benefitsGranted = true;
+      grantFailureReason = undefined;
       // pause_collection is cleared before processPaymentBenefits (see above) so collection is not left paused on timeout/benefit errors.
 
       // ✅ Safety net: Sync canonical subscription state and clear pending initial checkout bridge.
@@ -4739,6 +5001,19 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         }
       }
     } else {
+      // `benefitsGranted` stays false, so this handler reports failure and the queue row
+      // is marked FAILED for a backoff retry. Before 2026-08-24 this branch only logged
+      // and fell through, so a `{success:false}` grant was acked as permanently complete
+      // — half of RC-1.
+      //
+      // `result.error` has several distinct causes and they do NOT all heal in the same
+      // window, so carry it into the queue row verbatim. Notably `processPaymentBenefits`
+      // closes the major-draw gate for any NON-renewal membership invoice while no draw is
+      // accepting entries (payment-processing.ts :342-352), so a `subscription_create` or
+      // an upgrade landing in a draw gap keeps failing for as long as the gap lasts —
+      // which can outlast the ~7.5h retry budget and dead-letter.
+      // See docs/billing-stripe/STRIPE_WEBHOOK_QUEUE.md → "The ACK gate".
+      grantFailureReason = `invoice ${invoiceId}: benefits not granted — ${result.error ?? "unknown error"}`;
       webhookLog("error", `Failed to process subscription benefits: ${result.error}`);
     }
 
@@ -4822,8 +5097,21 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
         );
       }
     }
+
+    return benefitsGranted
+      ? { granted: true }
+      : { granted: false, reason: grantFailureReason ?? "invoice.payment_succeeded: grant did not complete" };
   } catch (error) {
     webhookLog("error", `Error processing invoice.payment_succeeded: ${error}`);
+    // If the grant already landed, the failure is in a post-grant best-effort step —
+    // swallow it and ACK, exactly as before. Re-throwing would un-ACK a paid, granted
+    // renewal and send it round the retry loop for nothing.
+    if (benefitsGranted) return { granted: true };
+    // Otherwise the member was charged and got nothing. Re-throw so the real error text
+    // (on 2026-08-23, Stripe's HTTP 429 from the inner rethrow at the subscriptions.retrieve
+    // catch) lands in the queue row's `lastError` and `markFailed()` schedules a retry.
+    // This catch used to swallow here, which is what made RC-1 invisible.
+    throw error;
   }
 }
 
@@ -5342,15 +5630,44 @@ async function _handlePaymentIntentCanceled(paymentIntent: Stripe.PaymentIntent)
 }
 
 /**
+ * Result of dispatching one Stripe event.
+ *
+ * The two flags are deliberately NOT the same question:
+ *
+ * - `shouldMarkAsProcessed` — write the `ProcessedStripeEvent` dedup row (the
+ *   payment-idempotency ACK). Only the money-moving events set it; the ~19 other
+ *   subscribed event types leave it `false` and that is normal, healthy success.
+ * - `handlerFailed` — the handler reported it did NOT complete its work (a renewal
+ *   whose entry grant did not land). The worker must `markFailed()` so the queue
+ *   retries with backoff instead of burying the failure as `succeeded`.
+ *
+ * Conflating them would dead-letter every non-payment event, so keep them separate.
+ */
+export interface StripeDispatchResult {
+  shouldMarkAsProcessed: boolean;
+  /**
+   * REQUIRED, not optional. Every producer already sets it, and optionality would let a
+   * future payment handler forget it and silently default to "did not fail" — the unsafe
+   * direction for a flag whose whole job is to stop a paid-but-ungranted event acking.
+   */
+  handlerFailed: boolean;
+  /** Why, when `handlerFailed`. Written verbatim to the queue row's `lastError`. */
+  handlerFailureReason?: string;
+}
+
+/**
  * Dispatch a Stripe event to the appropriate handler. Equivalent to the
  * switch that used to live inside the webhook route, lifted out so the
  * async worker route can drive it without going through NextRequest.
  *
  * Returns shouldMarkAsProcessed so the caller can decide whether to call
- * ackProcessedStripeEventOnce for payment-idempotency purposes.
+ * ackProcessedStripeEventOnce for payment-idempotency purposes, plus
+ * handlerFailed so it can decide between markSucceeded() and markFailed().
  */
-export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ shouldMarkAsProcessed: boolean }> {
+export async function dispatchStripeEvent(event: Stripe.Event): Promise<StripeDispatchResult> {
   let shouldMarkAsProcessed = false;
+  let handlerFailed = false;
+  let handlerFailureReason: string | undefined;
 
   switch (event.type) {
     case "payment_intent.succeeded":
@@ -5499,8 +5816,16 @@ export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ should
       // no benefits granted and no retry, so the silence is no longer safe.
       // Layer-4 PaymentEvent (`BenefitsGranted-invoice_<id>`) makes retries
       // idempotent — re-throwing here is correct.
-      await handleInvoicePaymentSucceeded(event.data.object);
-      shouldMarkAsProcessed = true;
+      //
+      // 2026-08-24: `shouldMarkAsProcessed = true` used to be hard-coded here, and the
+      // handler's outer catch swallowed everything, so the "let errors bubble" intent
+      // above was never realised — 11 members were charged $300.00 and got no entries,
+      // with the queue rows sitting at `succeeded`. The handler now REPORTS whether the
+      // grant landed; a `false` un-ACKs the event AND fails the row so it is retried.
+      const invoiceOutcome = await handleInvoicePaymentSucceeded(event.data.object);
+      shouldMarkAsProcessed = invoiceOutcome.granted;
+      handlerFailed = !invoiceOutcome.granted;
+      if (!invoiceOutcome.granted) handlerFailureReason = invoiceOutcome.reason;
       break;
 
     case "invoice.created":
@@ -5568,7 +5893,7 @@ export async function dispatchStripeEvent(event: Stripe.Event): Promise<{ should
     // ✅ CRITICAL: Don't mark unhandled events as processed!
   }
 
-  return { shouldMarkAsProcessed };
+  return { shouldMarkAsProcessed, handlerFailed, handlerFailureReason };
 }
 
 // Re-export helpers the receiver uses pre-cutover (sig verification path

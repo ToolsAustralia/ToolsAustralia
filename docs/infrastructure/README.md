@@ -10,6 +10,18 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 
 > `.env.example` — `NEXT_PUBLIC_CONTENTSQUARE_ID` (added 2026-07-22) is the **inverse** of the streak flag above: production-only, blank everywhere else. It replaces a tag id previously hardcoded into `src/app/layout.tsx`'s Contentsquare `<Script>` (no env gate — loaded for every visitor in every environment); blank now renders nothing (mirrors `GoogleTagManager`'s `!gtmId` no-op). See [docs/tracking/rules.md R8](../tracking/rules.md).
 
+> `.env.example` — `STRIPE_RATE_LIMIT_GLOBAL_PER_SECOND` and `STRIPE_RATE_LIMIT_ENDPOINT_PER_SECOND`
+> (added 2026-08-24) tune the client-side token bucket in front of the Stripe singleton
+> (`src/lib/stripe-rate-limiter.ts`). Both are declared **BLANK on purpose** and should be left
+> that way unless you are deliberately tuning. Defaults live in code and are **key-aware**: 80/sec
+> global on a live key but **20/sec on an `sk_test_` key**, because sandbox's global cap is 25/sec,
+> not 100 (per-endpoint is 20/sec either way — 80% of the published caps). Writing a literal value
+> here overrides that key-aware branch, so copying `80` into a preview/dev `.env.local` would put
+> a sandbox key over its own cap — which is exactly what the branch exists to prevent. `0` disables
+> a bucket (e.g. an ops script). **The limiter is per-lambda-instance, so N concurrent invocations
+> multiply the aggregate rate, and it barely engages on the inbound webhook path** — see
+> [billing-stripe/architecture.md](../billing-stripe/architecture.md#what-it-meters--and-what-it-does-not).
+
 ## Index
 
 - [architecture.md](./architecture.md) — what lives here vs other domains
@@ -89,3 +101,16 @@ New npm script → `src/utils/partner-discounts/__tests__/discount-catalogue.tes
 layer behind the public `/discount` page (bands, the wall, the gate copy, and the two unlock
 routes at all 11 access levels). Standalone `tsx`, no runner. Detail:
 [docs/partner/testing.md](../partner/testing.md).
+
+## `vercel.json` — admin metrics routes raised to `maxDuration: 60` (2026-08-17)
+
+`src/app/api/admin/metrics/users/route.ts` and `src/app/api/internal/norm/v1/metrics/users/route.ts` now have explicit entries. Previously both inherited the `src/app/api/**/route.ts` catch-all of **10s**, while `src/lib/mongodb.ts` is configured with a 10s server-selection timeout plus a 7s TLS retry ladder — i.e. **the function budget was smaller than its own connection-failure path**, so a connection problem could only ever surface as an opaque 504. See `docs/mongodb/gotchas.md`.
+
+When adding an API route that does real database work, check its effective `maxDuration` against that ladder rather than assuming the catch-all is enough.
+
+## New scripts (2026-08-17)
+
+| Script | Purpose |
+|---|---|
+| `npm run verify:user-metrics` | **Read-only.** Times each query `UserMetricsService` runs, for the ranges the admin UI actually requests, with collection-size denominators and the live `PaymentEvent` index list. `-- --service` drives the real service through Mongoose (so the measurement includes `connectDB` + model init, which a raw-driver timing misses), asserts `purchaseHistory` parity between the new `$group` path and the legacy document loop, and validates the live output against the Norm `responseSchema` (a mismatch there is a runtime 500 `tsc` cannot catch). |
+| `npm run migrate:payment-event-eventtype-index[:prod][:dry]` | Creates `{ eventType: 1, timestamp: -1 }` on `paymentevents`. Idempotent, `background: true`, dry-run by default. |
