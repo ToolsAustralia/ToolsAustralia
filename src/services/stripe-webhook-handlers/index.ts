@@ -33,6 +33,7 @@ import { handlePaymentCancellation } from "@/utils/payment/payment-cleanup";
 // ✅ WEBHOOK-FIRST: Remove database dependency for event tracking
 import { klaviyo } from "@/lib/klaviyo";
 import { ensureUserProfileSynced } from "@/utils/integrations/klaviyo/klaviyo-profile-sync";
+import { isValidPendingUpgrade as isValidPendingUpgradeShared } from "@/utils/subscription/pending-upgrade";
 import { getRenewalEntriesPreviewForProfile } from "@/utils/integrations/klaviyo/klaviyo-renewal-entries-preview";
 import {
   createSubscriptionStartedEvent,
@@ -99,12 +100,15 @@ function webhookLog(level: "info" | "warn" | "error", message: string, data?: un
 
 type PendingUpgradeChange = NonNullable<IUser["subscription"]>["pendingChange"];
 
+/**
+ * Typed narrowing wrapper over the shared predicate in `utils/subscription/pending-upgrade`.
+ *
+ * The logic lives in `utils/` so the Klaviyo profile projection can share it (`utils/` may
+ * not import from `services/`). This wrapper exists only to preserve the `change is
+ * PendingUpgradeChange` narrowing the call sites below rely on — it adds no behaviour.
+ */
 function isValidPendingUpgrade(change: PendingUpgradeChange | undefined): change is PendingUpgradeChange {
-  return (
-    change?.changeType === "upgrade" &&
-    typeof change.newPackageId === "string" &&
-    change.newPackageId.length > 0
-  );
+  return isValidPendingUpgradeShared(change);
 }
 
 function stripeSubscriptionIdFromUnknown(value: unknown): string | undefined {

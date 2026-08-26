@@ -142,6 +142,9 @@ async function main() {
     countDistinctDrawsEntered,
     calculateEntryBreakdown,
   } = await import("../src/utils/integrations/klaviyo/klaviyo-helpers");
+  const { aggregateNetGrantsByUser, emptyGrantLedger } = await import(
+    "../src/utils/payment/payment-event-net-queries"
+  );
 
   await connectDB();
 
@@ -251,7 +254,13 @@ async function main() {
             const status = deriveMembershipStatus(user);
             const durationMonths = computeActiveDurationMonths(user.subscription?.startDate);
             const giveaways = await countDistinctDrawsEntered(user._id);
-            const breakdown = calculateEntryBreakdown(user);
+            // Entry counts come from the refund-netted payment ledger (2026-08-26), not from
+            // the package catalogue — so the dry-run CSV shows what would ACTUALLY be written.
+            const ledgerByUser = await aggregateNetGrantsByUser([user._id]);
+            const breakdown = calculateEntryBreakdown(
+              user,
+              ledgerByUser.get(String(user._id)) ?? emptyGrantLedger()
+            );
             const entriesPurchased =
               breakdown.memberEntries +
               breakdown.oneTimeEntries +

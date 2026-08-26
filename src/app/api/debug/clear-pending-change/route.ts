@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
+import { isValidPendingUpgrade } from "@/utils/subscription/pending-upgrade";
 import { protectDebugEndpoint } from "@/lib/debugAuth";
 
 /**
@@ -37,7 +38,7 @@ export async function POST() {
       success: true,
       message: "Pending changes cleared (DEBUG ONLY)",
       data: {
-        hadPendingChange: !!user.subscription?.pendingChange,
+        hadPendingChange: isValidPendingUpgrade(user.subscription?.pendingChange),
         subscription: {
           packageId: user.subscription?.packageId,
           isActive: user.subscription?.isActive,

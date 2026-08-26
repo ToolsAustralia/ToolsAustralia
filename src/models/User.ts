@@ -151,6 +151,9 @@ export interface IUser extends Document {
   entryWallet: number; // Free/unused entries from packages (deprecated - set to 0)
   rewardsPoints: number; // Earned from purchases
 
+  /** When WE last wrote this user's profile to Klaviyo. Set by the reconciliation sweep. */
+  klaviyoSyncedAt?: Date;
+
   // ✅ OPTION 1: Major Draw Entries removed - using single source of truth (majordraws.entries)
 
   // Shopping Cart - supports both products and ticket entries
@@ -822,6 +825,18 @@ const UserSchema = new Schema<IUser>(
       default: 0,
       min: [0, "Accumulated entries cannot be negative"],
     },
+
+    // Written by the Klaviyo reconciliation sweep with `{ timestamps: false }` so stamping it
+    // does NOT bump `updatedAt`. Without that option the stamp re-dirties the user, the sweep
+    // re-selects them next run, and it never converges. Verified on Mongoose 8.18.1.
+    //
+    // Deliberately NOT read from Klaviyo's own `updated` field: that moves whenever Klaviyo
+    // runs predictive analytics (two sampled profiles shared an identical `updated` timestamp
+    // with no write from us), so it cannot answer "when did WE last write this profile?".
+    klaviyoSyncedAt: {
+      type: Date,
+      required: false,
+    },
     entryWallet: {
       type: Number,
       default: 0,
@@ -1383,6 +1398,12 @@ UserSchema.index({ "miniDrawPackages.miniDrawId": 1 });
 UserSchema.index({ userType: 1 });
 UserSchema.index({ roleId: 1 }, { sparse: true });
 UserSchema.index({ inviteToken: 1 }, { sparse: true, unique: true });
+
+// The Klaviyo reconciliation sweep's selector (`{ updatedAt: { $gt: watermark } }`) AND its
+// backlog gauge both depend on this. LOAD-BEARING, not an optimisation: explained against
+// production on 2026-08-26 WITHOUT it, the selector examined 56,441 documents to return 4.
+// At a 5-minute cadence that would be 288 collection scans a day.
+UserSchema.index({ updatedAt: 1 });
 
 // Clear any cached model to ensure schema changes take effect
 if (mongoose.models.User) {

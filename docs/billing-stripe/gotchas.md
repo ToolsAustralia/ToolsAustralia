@@ -812,3 +812,19 @@ npm run backfill:missing-renewal-grants:prod:dry     # read-only; exit 2 means g
 3. **Treat a per-row failure as unresolved forever.** `processPaymentBenefits` writes the `PaymentEvent` **before** `grantBenefits` and does not remove it if the grant throws. A row that dies inside `addToMajorDraw` is left with entries `$inc`ed, a `BenefitsGranted` row present, possibly no draw entries, and `lastMonthAccumulatedEntries` stale — and the next dry run reports it **healthy**. After any apply, grep the CSV for `,error,` and inspect those members by hand; a clean re-run is not evidence.
 
 **What actually fires on this path** (checked, because "grant through the normal path" sounds louder than it is): for `billingReason === "subscription_cycle"` the Meta CAPI Purchase is explicitly skipped (`payment-processing.ts:1462-1466`), the Klaviyo membership event is a `break` (`:1720-1726`), "Invoice Generated" is skipped, and there is no TikTok call. What does fire: Klaviyo "Placed Order" (`isRenewal: true`), Klaviyo profile sync, the milestone check, and the partner-discount queue update.
+
+## `isValidPendingUpgrade` now delegates to a shared predicate (2026-08-26)
+
+`stripe-webhook-handlers/index.ts` used to own a private `isValidPendingUpgrade` type guard.
+The same check is needed by the Klaviyo profile projection, and `utils/` may not import from
+`services/`, so the logic moved to
+[`src/utils/subscription/pending-upgrade.ts`](src/utils/subscription/pending-upgrade.ts).
+
+The handler keeps a **thin typed wrapper** of the same name that delegates to it — purely to
+preserve the `change is PendingUpgradeChange` narrowing its four call sites rely on. No
+behaviour changed, and no call site was edited.
+
+Why it matters beyond DRY: `subscription.pendingChange` is a Mongoose **nested object**, so it
+materialises as `{}` and a truthiness check is permanently `true`. That bug had already shipped
+to Klaviyo (`subscription_has_pending_upgrade` was `true` on all 56,360 profiles). One shared
+implementation means it can only be fixed once. Pinned by `npm run test:pending-upgrade`.

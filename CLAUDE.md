@@ -310,7 +310,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-08-17",
+  "lastModified": "2026-08-26",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -344,7 +344,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useOpenMembershipModalListener.ts",
         "src/app/(site)/membership/**"
       ],
-      "lastVerified": "2026-08-11"
+      "lastVerified": "2026-08-26"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -379,7 +379,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-26"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -395,7 +395,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useSavedPaymentMethods.ts",
         "eslint/rules/no-eager-stripe.js"
       ],
-      "lastVerified": "2026-07-29"
+      "lastVerified": "2026-08-26"
     },
     "draws": {
       "docs": "docs/draws/",
@@ -664,6 +664,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/types/tracking.ts",
         "src/types/klaviyo.ts",
         "src/services/facebook-ads-health/**",
+        "src/models/KlaviyoSyncState.ts",
         "src/models/AdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
         "src/models/TikTokAdInsightsDaily.ts",
@@ -679,7 +680,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-08-10"
+      "lastVerified": "2026-08-26"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -933,7 +934,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/connect-ops-db.ts",
         "scripts/check-env.mjs"
       ],
-      "lastVerified": "2026-08-17"
+      "lastVerified": "2026-08-26"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

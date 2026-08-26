@@ -87,6 +87,14 @@
     {
       "path": "/api/cron/charge-past-due",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-klaviyo-profiles",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-klaviyo-profiles?mode=full",
+      "schedule": "7 * * * *"
     }
   ],
   "functions": {

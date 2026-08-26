@@ -12,6 +12,7 @@ import { userToKlaviyoProfile } from "@/utils/integrations/klaviyo/klaviyo-helpe
 import { calculateDrawSpecificPropertiesForUser } from "@/utils/integrations/klaviyo/klaviyo-draw-calculator";
 import type { IUser } from "@/models/User";
 import type { IMajorDraw } from "@/models/MajorDraw";
+import type { UserGrantLedger } from "@/utils/payment/payment-event-net-queries";
 
 /**
  * Subscribe user to Klaviyo lists ONCE during registration
@@ -163,12 +164,13 @@ export async function syncUserProfileToKlaviyo(
   user: IUser,
   brandInterestFromSignup?: string | null,
   targetDraw?: IMajorDraw,
-  cutoffDate?: Date
+  cutoffDate?: Date,
+  ledger?: UserGrantLedger
 ): Promise<void> {
   try {
     // ✅ CRITICAL FIX: await the async userToKlaviyoProfile function
     // Pass cached draw data if provided to avoid redundant database queries
-    const profile = await userToKlaviyoProfile(user, brandInterestFromSignup, targetDraw, cutoffDate);
+    const profile = await userToKlaviyoProfile(user, brandInterestFromSignup, targetDraw, cutoffDate, ledger);
     const result = await klaviyo.upsertProfile(profile);
 
     if (result.success && result.profile_id) {

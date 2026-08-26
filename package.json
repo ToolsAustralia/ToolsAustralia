@@ -201,7 +201,6 @@
     "test:rebill-classification": "tsx src/utils/billing/__tests__/rebill-classification.test.ts",
     "stripe:probe-reanchor:dry": "tsx scripts/stripe-probe-reanchor.ts --dry-run",
     "stripe:probe-upgrade-anchor:dry": "tsx scripts/stripe-probe-upgrade-anchor.ts --dry-run",
-
     "find:stranded-mini-draw-payments": "tsx scripts/find-stranded-mini-draw-payments.ts",
     "find:direct-attribution": "tsx scripts/find-direct-attribution.ts",
     "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",
@@ -477,7 +476,17 @@
     "migrate:promo-analytics-cleanup:prod:dry": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production",
     "migrate:promo-analytics-cleanup:prod": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production --apply",
     "harvest:partner-instore-artwork": "tsx scripts/harvest-partner-instore-artwork.ts",
-    "test:excessive-retry-cooldown": "tsx src/server/admin/__tests__/excessiveRetryCooldown.test.ts"
+    "test:excessive-retry-cooldown": "tsx src/server/admin/__tests__/excessiveRetryCooldown.test.ts",
+    "test:payment-grant-ledger": "tsx src/utils/payment/__tests__/payment-event-grant-ledger.test.ts",
+    "test:klaviyo-projection": "tsx src/utils/integrations/klaviyo/__tests__/klaviyo-profile-projection.test.ts",
+    "test:pending-upgrade": "tsx src/utils/subscription/__tests__/pending-upgrade.test.ts",
+    "test:klaviyo-reconciliation": "tsx src/services/klaviyo/__tests__/klaviyo-reconciliation.test.ts",
+    "backfill:klaviyo-accuracy": "tsx scripts/backfill-klaviyo-profile-accuracy.ts",
+    "backfill:klaviyo-accuracy:dry": "tsx scripts/backfill-klaviyo-profile-accuracy.ts --dry-run",
+    "verify:klaviyo-accuracy": "tsx scripts/verify-klaviyo-profile-accuracy.ts",
+    "sync:klaviyo-profiles": "tsx scripts/sync-klaviyo-profiles.ts",
+    "sync:klaviyo-profiles-bulk": "tsx scripts/sync-klaviyo-profiles-bulk.ts",
+    "migrate:klaviyo-draw-properties": "tsx scripts/migrate-klaviyo-draw-properties.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",
