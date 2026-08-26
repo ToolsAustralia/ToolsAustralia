@@ -265,10 +265,17 @@ Do **not** try to solve that by reading computed opacity inside the hook: framer
 > the **viewer's** browser locale/timezone, so the same instant read `04/10/2026`
 > to an en-AU browser and `10/4/2026` (read as 10 April, six months wrong) to an
 > en-US one. Both now render the server-computed `item.expiresAtLabel` instead —
-> the exact string the Klaviyo email renders (`formatExpiryLabelAEST`, see
+> `formatExpiryLabelAEST`, the single server-side formatter every copy of a
+> deadline comes from (see
 > [rewards-redeemables/frontend.md](../rewards-redeemables/frontend.md)). Never
 > reintroduce a client-side `toLocaleDateString()`/`toLocaleString()` on
-> `expiresAt` in either component.
+> `expiresAt` in either component. **Corrected 2026-08-26:** this line used to
+> call it "the exact string the Klaviyo email renders". The discount emails
+> render no deadline at all — the label goes to the `Bonus Code Issued` metric,
+> which those flows cannot read. And **neither of these two components is
+> currently reachable** (`RedeemablesWallet` mounts only on `/rewards`, behind
+> the rewards pause flag; `RewardsFloatingWidget` has been unmounted since the
+> 2026-07 revamp), so no customer sees a bonus-code deadline anywhere today.
 
 > **Redeemable unlock flow + MembershipModal coupon auto-apply (2026-07-06):** `RewardsClaimables` gained an
 > `onUnlock` prop — locked purchase-required coupons render an actionable amber "Join to unlock" / "Purchase to

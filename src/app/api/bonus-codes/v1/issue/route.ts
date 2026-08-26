@@ -38,6 +38,16 @@
  * value so a flow misconfiguration is visible in Klaviyo's delivery log — that
  * value came from the caller and leaks nothing about a customer.
  *
+ * THE STATUS LINE IS PART OF THE BODY, for this purpose. An opaque body bought
+ * nothing while one customer-state outcome answered a status of its own: a
+ * distinct status is a distinct answer, readable by exactly the same sweep. So
+ * EVERY customer-state outcome — minted, spent, no such account, and the
+ * identity conflict — answers 200 with a byte-identical body. Only conditions
+ * that are properties of the CALLER, not of a customer, get their own status:
+ * 400 (their body), 401 (their secret), 403 (the environment), 429 (our cap),
+ * 500 (our fault). Before giving a customer-state outcome its own status, ask
+ * what an attacker holding the secret learns by watching for it.
+ *
  * All diagnostics go to `console.error` with the `[bonus-code]` prefix.
  * Production builds strip log/info/debug/warn; `error` is the only level that
  * survives.
@@ -296,7 +306,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           userIdMatch: resolution.userIdMatch,
           emailMatch: resolution.emailMatch,
         });
-        return finish(409, "identity_conflict");
+        // 200, NOT 409 — deliberately, and do not "restore" the 409. A distinct
+        // status is a distinct answer, and a distinct answer is an oracle: post
+        // your own account id alongside a probe address and 409-vs-200 reads
+        // back whether that address belongs to a Tools Australia customer. The
+        // conflict check runs before the `isActive` gate and settles after your
+        // own first call, there is no rate limiter here by design, and the
+        // daily budget counts only mints — so the sweep is free, non-destructive
+        // and unbounded. That is exactly the enumeration the opaque body exists
+        // to prevent, reinstated through the status line. The 409 bought nothing
+        // operationally: Klaviyo does not retry it into a fix and nobody watches
+        // the delivery log for it. What makes this condition NOTICED is the
+        // `console.error` above and the `identity_conflict` audit row below —
+        // both kept, both queryable, both rate-visible. Invisible to the caller,
+        // just as loud to us.
+        return finish(200, "identity_conflict");
       }
       // 200: retrying for three days cannot conjure an account. Logged anyway —
       // a RISING RATE of these is the earliest signal that a flow's merge tags

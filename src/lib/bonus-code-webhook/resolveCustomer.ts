@@ -23,7 +23,15 @@
  * Klaviyo profiles were merged — which is precisely the situation where minting
  * to the wrong person is possible. A grant is money-equivalent and capped at one
  * per person for life, so silently picking a winner can burn a real customer's
- * lifetime grant. We refuse (409) and log loudly instead.
+ * lifetime grant. We refuse and log loudly instead.
+ *
+ * THE REFUSAL IS LOUD TO US AND SILENT TO THE CALLER. The route answers 200 with
+ * the same opaque body every other customer-state outcome gets — deliberately,
+ * since a status of its own would let anyone holding the shared secret pair
+ * their own account id with a probe address and read back whether that address
+ * belongs to a customer. The `console.error` and the `identity_conflict` audit
+ * row are what make it noticed. See the route header for the full reasoning
+ * before reaching for a distinct status here.
  *
  * THIS FUNCTION DOES NOT SWALLOW DATABASE ERRORS. A thrown query must reach the
  * route so it can answer 500 and let Klaviyo retry. Returning "not found" on a
@@ -70,8 +78,9 @@ const WEBHOOK_USER_PROJECTION = "_id email firstName lastName mobile isActive";
  * attempt after a failed lookup. A stale or merged Klaviyo profile can carry a
  * dead account's `user_id` alongside a live address belonging to someone else;
  * falling through would then mint that other person's ONE-PER-LIFETIME grant on
- * a signal that was never theirs — the exact substitution the 409 exists to
- * prevent, only silent, because there is no second document to disagree with.
+ * a signal that was never theirs — the exact substitution `identity_conflict`
+ * exists to prevent, only with no audit row saying so, because there is no
+ * second document to disagree with.
  * We answer `not_found` (200, `console.error`d by the route, audited), which
  * costs one dead code in an email and makes the data problem visible as a
  * rising rate, instead of burning a bystander's grant invisibly.

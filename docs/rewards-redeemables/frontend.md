@@ -4,7 +4,10 @@
 
 `RedeemableWalletItem.expiresAtLabel` (from `RedeemablesWalletService`) is the
 one customer-facing expiry string — `formatExpiryLabelAEST(issuance.expiresAt)`,
-the same function the Klaviyo email renders. The wallet components
+the same function that formats `expires_at_label` on the `Bonus Code Issued`
+Klaviyo metric and the checkout `campaignCodeExpiredMessage` refusal. (Until
+2026-08-26 this line said "the same function the Klaviyo email renders". The
+discount emails render no deadline — see the known gap below.) The wallet components
 (`RedeemablesWallet.tsx`, `RewardsFloatingWidget.tsx` — [shared-ui
 domain](../shared-ui/), see
 [frontend.md](../shared-ui/frontend.md)) and the `useRedeemablesQueries.ts` hook
@@ -28,8 +31,9 @@ Two things not to do to it:
 - **Do not shorten it to a bare date.** The customer can be inside the right calendar day and still
   be past the deadline, and this label is the only place they are told which.
 - **Do not replace it with a client-side countdown.** `RedeemablesWalletService.ts:29-35` states the
-  contract: components display the server's string and never derive one, precisely so the app and
-  the Klaviyo email cannot disagree. A countdown may be added *alongside* it, never instead.
+  contract: components display the server's string and never derive one, precisely so no two copies
+  of a deadline — the app, the `Bonus Code Issued` metric, the checkout refusal — can disagree with
+  each other or with what redemption enforces. A countdown may be added *alongside* it, never instead.
 
 ### Known gap — no customer-reachable surface shows a bonus code or its deadline (2026-08-26)
 
@@ -45,13 +49,29 @@ The live surface, `RewardsClaimables` on `/my-account/rewards`, renders `label(i
 amount and a Claim / unlock button — **no code string and no expiry date**. That is enough to redeem
 a `purchaseRequirement: "none"` grant and enough for the unlock flow (which carries the code into
 the purchase modal without ever showing it), but it cannot answer "what was my code and when does it
-run out?". Today the emailed label is the customer's only copy of the deadline, which is why
-`BonusCodeNotifier` and Cobber ids 86–88 both point at the email and not at the wallet.
+run out?".
+
+**And no email answers it either — corrected 2026-08-26.** This section used to end "today the
+emailed label is the customer's only copy of the deadline, which is why Cobber ids 86–88 point at
+the email". That was wrong in the same way the top-level docs were. The three discount emails carry
+the **code string**, hardcoded in the template, and nothing else: `expires_at_label` is a property of
+the `Bonus Code Issued` metric *we* emit, and a flow email renders against its own trigger metric, so
+the merge tag resolves to nothing. So the honest position is:
+
+- **Before the window lapses**, a customer has **no** way to learn their deadline. Not a page, not an
+  email. Support reads it off the `RedeemableIssuance` row.
+- **After it lapses**, and only then, `campaignCodeExpiredMessage` names the exact instant at
+  checkout to a signed-in caller.
+- Cobber id 86 now says exactly that and offers `[contact us](/contact)`; the systemPrompt ACCOUNT
+  SELF-SERVICE MAP carries the matching "there is no page for this" bullet.
 
 This is a **build**, not a copy fix, and it is deliberately not in the bonus-code webhook rework.
 Whoever closes it should surface `campaignCode` + `expiresAtLabel` on `RewardsClaimables` (both
 fields are already on `RedeemableWalletItem` and already reach the client) and then update
-BUSINESS.md §7d, CUSTOMER.md §7d and Cobber ids 86–88 in the same change.
+BUSINESS.md §7d, CUSTOMER.md §7d, Cobber ids 86–88 and the self-service-map bullet in the same
+change. The cheaper alternative — a separate Klaviyo flow on the `Bonus Code Issued` metric, which
+is the one place `expires_at_label` resolves — is written up in
+[gotchas.md](./gotchas.md) launch step 4; it also needs the id-86 copy updated.
 
 ## Locked-coupon unlock flow — purchase with the code carried (2026-07-06)
 

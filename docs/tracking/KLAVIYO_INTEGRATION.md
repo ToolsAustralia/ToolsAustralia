@@ -214,7 +214,7 @@ This is intentional drift containment — we accept the legacy schema as paid co
 | Promo / giveaway context | `promo_slug`, `promo_id`, `promo_title`, `prize_name`, `prize_image_url`, `promo_url` | string | When an event is fired from a promo page, include these so email templates can reference the asset directly. |
 | Deep link back to action | `checkout_url`, `resume_url`, etc. | string (absolute URL with UTM) | When the email's CTA needs to return the user to a specific preselected state. Always include UTM params so the ads team can attribute. |
 | Bonus-entry code | `code` | string | The redeemable code, e.g. `"BONUS-ABC123"`. |
-| Human-readable expiry, pre-formatted | `expires_at_label` | string | Built via `formatExpiryLabelAEST()` (`src/utils/common/timezone.ts`) — the SAME function the rewards wallet renders, so the email and the app can never disagree. **Never** hand-format from `expires_at`; never use `formatDateForKlaviyo` (`en-US`, no `timeZone`). |
+| Human-readable expiry, pre-formatted | `expires_at_label` | string | Built via `formatExpiryLabelAEST()` (`src/utils/common/timezone.ts`) — the single server-side formatter every rendered copy of the deadline derives from, so no copy can disagree with the instant redemption enforces. **It reaches the `Bonus Code Issued` metric only: neither the three discount emails nor any live page renders it today** — see [`Bonus Code Issued`](#bonus-code-issued-2026-08-25) below before you put `{{ event.expires_at_label }}` in a template. Corrected 2026-08-26; this cell used to say it was "the SAME function the rewards wallet renders, so the email and the app can never disagree" — the wallet components are unreachable and no email renders it. **Never** hand-format from `expires_at`; never use `formatDateForKlaviyo` (`en-US`, no `timeZone`). |
 | Which flow minted/re-armed the code | `trigger` | enum string | `BonusCodeTrigger` — `"cancel-click"` / `"checkout-start"` / `"one-time-purchase"` (`src/utils/redeemables/bonus-code-policy.ts`). **Supplied by the caller in the webhook body** since 2026-08-26, not derived server-side: the Klaviyo flow names which of the three it is when it calls `POST /api/bonus-codes/v1/issue`. An unknown value is a `400`. |
 
 ### Profile properties added 2026-05-28
@@ -288,7 +288,9 @@ Fires when a per-customer bonus-entry code is minted or re-armed. Emitted server
 
 **This event no longer delivers the code to the customer, and has not since 2026-08-26.** The code string is hardcoded in the flow's own discount-email template; the flow calls `POST /api/bonus-codes/v1/issue` one step above that email to make the code real for that person, and this event fires from inside that call. It is kept as the **only** record that a customer was issued a code and whether the notification went out — there is no admin screen for bonus codes, so dropping it would make "why didn't this customer get their code?" unanswerable. Treat it as observability, not as a delivery mechanism.
 
-`expires_at` / `expires_at_label` are always the **persisted issuance value**, never recomputed — the same instant the server enforces at redemption and the same string the rewards wallet renders. See [rewards-redeemables docs](../rewards-redeemables/) for the issuance model.
+`expires_at` / `expires_at_label` are always the **persisted issuance value**, never recomputed — the same instant the server enforces at redemption. See [rewards-redeemables docs](../rewards-redeemables/) for the issuance model.
+
+**`expires_at_label` reaches no customer today, and the three discount emails cannot render it.** A Klaviyo flow email renders against its **own trigger metric** — for these three sequences that is cancel-click / checkout-abandon / one-time-purchase, not this event — so `{{ event.expires_at_label }}` in a discount template resolves to **empty**. Printing a deadline to the customer would need a **separate flow triggered on `Bonus Code Issued`**; none exists, and none is required for launch (see [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md), launch step 4). The wallet field that renders the same string (`RedeemableWalletItem.expiresAtLabel`) is likewise unreachable — both of its components are behind the rewards pause flag or unmounted. Corrected 2026-08-26; this paragraph used to claim the wallet rendered it and the email was "ready to render as-is".
 
 | Property | Type | Example |
 |---|---|---|
@@ -297,7 +299,7 @@ Fires when a per-customer bonus-entry code is minted or re-armed. Emitted server
 | `entries_granted` | number | `15` |
 | `issued_at` | ISO 8601 | `"2026-08-25T03:00:00.000Z"` |
 | `expires_at` | ISO 8601 — the persisted `RedeemableIssuance.expiresAt`, passed as a parameter, never `new Date()` | `"2026-08-28T03:00:00.000Z"` |
-| `expires_at_label` | string — `formatExpiryLabelAEST(expires_at)`, ready to render as-is in the email | `"Friday 28 August 2026, 1:00PM AEST"` |
+| `expires_at_label` | string — `formatExpiryLabelAEST(expires_at)`. Render it **verbatim** if a flow on *this* metric is ever built; never re-format `expires_at` yourself. Not readable from the three discount emails (see above). | `"Friday 28 August 2026, 1:00PM AEST"` |
 | `trigger` | enum (`"cancel-click"` / `"checkout-start"` / `"one-time-purchase"`) | `"cancel-click"` |
 
 Idempotency: `event.unique_id` is set to `` `${issuance.id}:${issuance.expiresAt.toISOString()}` `` before the emit — the same issuance with the same deadline collapses to one Klaviyo event even if `trackEvent`'s retry logic (`MAX_RETRIES = 5`, `"timeout"` is retryable) redelivers an accepted-but-slow POST; a legitimately re-armed deadline produces a new `unique_id` and a new event.

@@ -482,6 +482,7 @@
     "test:bonus-code-policy": "tsx src/utils/redeemables/__tests__/bonus-code-policy.test.ts",
     "test:issuance-expiry": "tsx src/services/redeemables/__tests__/issuance-expiry.test.ts",
     "test:campaign-window": "tsx src/services/redeemables/__tests__/campaign-window.test.ts",
+    "test:campaign-code-metadata": "tsx src/app/api/stripe/__tests__/campaign-code-metadata.test.ts",
     "test:trigger-eligibility": "tsx src/services/redeemables/__tests__/trigger-eligibility.test.ts",
     "test:bonus-code-mint": "tsx src/services/redeemables/__tests__/bonus-code-mint.test.ts",
     "test:campaign-enrolment": "tsx src/services/redeemables/__tests__/campaign-enrolment.test.ts",

@@ -85,9 +85,16 @@ function safeEqual(presented: string, expected: string): boolean {
  * Parse `BONUS_CODE_WEBHOOK_SECRET` into its candidate list.
  *
  * Splits on commas, trims each entry, drops empties (so a trailing comma is
- * harmless) and drops anything shorter than `MIN_SECRET_LENGTH`. Exported for
- * tests and for a health check; it returns the COUNT-relevant list, and callers
- * must never log its contents.
+ * harmless) and drops anything shorter than `MIN_SECRET_LENGTH`. It returns the
+ * COUNT-relevant list, and callers must never log its contents.
+ *
+ * The `export` is currently unclaimed. This JSDoc said "exported for tests and
+ * for a health check" until 2026-08-26; there is no health check, and no test
+ * imports it — `test:bonus-code-webhook` drives the floor behaviourally through
+ * `verifyBonusCodeWebhookSecret`. If that is still true when you read this,
+ * either give it a real consumer or drop the `export`; do not leave the claim
+ * standing unbacked, because "something must be testing this" is how an
+ * unpinned security constant survives review.
  */
 export function parseConfiguredSecrets(raw: string | undefined): string[] {
   if (!raw) return [];

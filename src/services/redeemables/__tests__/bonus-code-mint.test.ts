@@ -51,6 +51,7 @@ import User from "@/models/User";
 import MajorDraw from "@/models/MajorDraw";
 import MonthlyEntryCampaign from "@/models/MonthlyEntryCampaign";
 import RedeemableIssuance from "@/models/RedeemableIssuance";
+import MilestoneIssuance from "@/models/MilestoneIssuance";
 import { CampaignService } from "../CampaignService";
 import { RedemptionService } from "../RedemptionService";
 import { RedeemablesWalletService } from "../RedeemablesWalletService";
@@ -213,9 +214,14 @@ async function run() {
       check("notify outcome starts empty", [stored.notifiedAt ?? null, stored.notifyError ?? null], [null, null]);
       check("unique campaign mode minted a per-customer code", /^TA-\d{6}-[A-Z0-9]{6}$/.test(stored.code ?? ""), true);
 
-      // The email prints what the caller was handed. If that is ever a
-      // recomputed value rather than the persisted one, a mint 150ms either
-      // side of Sydney midnight prints a date redemption will not honour.
+      // Every rendered copy of the deadline derives from what the caller was
+      // handed. Rationale corrected 2026-08-26: this used to read "the email
+      // prints what the caller was handed … a mint 150ms either side of Sydney
+      // midnight prints a date redemption will not honour". No email prints the
+      // deadline, and `expiryAfterHours` removed the midnight cliff. The rule
+      // stands for the surviving reason: a re-arm MOVES this instant, so a
+      // recomputed value on a row the caller did not just write can be a whole
+      // 72-hour window off what redemption enforces.
       check(
         "the reported deadline IS the persisted deadline",
         result.issuance?.expiresAt?.toISOString(),
@@ -603,14 +609,41 @@ async function run() {
       check("…writing exactly one row", await rowsFor(personalId, userId), 1);
     }
   } finally {
-    await RedeemableIssuance.deleteMany({ userId: { $in: userIds } });
-    await MajorDraw.updateMany(
-      { "entries.userId": { $in: userIds } },
-      { $pull: { entries: { userId: { $in: userIds } } } }
-    );
-    await MonthlyEntryCampaign.deleteMany({ _id: { $in: campaignIds } });
-    await User.deleteMany({ _id: { $in: userIds } });
-    await mongoose.connection.close();
+    // MILESTONE ISSUANCES ARE PART OF THIS FILE'S FOOTPRINT. Section 4 drives a
+    // real `RedemptionService.redeem()`, and that calls
+    // `MilestoneService.checkAndIssueMilestones` — the same chain the sibling
+    // suite (campaign-window.test.ts) already cleans up after for exactly this
+    // reason. It is latent today only because no active MilestoneReward has a
+    // threshold low enough for a fixture user's entry count to reach; the moment
+    // one does, every run of this file leaks a MilestoneIssuance permanently.
+    //
+    // EACH STEP INDIVIDUALLY GUARDED. As unguarded sequential awaits, ONE
+    // throwing deleteMany skipped everything below it — including the MajorDraw
+    // `$pull`, which is the step that removes a real entry subdocument from a
+    // LIVE draw document. Same pattern, and same rationale, as
+    // campaign-window.test.ts / campaign-enrolment.test.ts.
+    const steps: Array<[string, () => Promise<unknown>]> = [
+      ["issuances", () => RedeemableIssuance.deleteMany({ userId: { $in: userIds } })],
+      [
+        "major-draw entries",
+        () =>
+          MajorDraw.updateMany(
+            { "entries.userId": { $in: userIds } },
+            { $pull: { entries: { userId: { $in: userIds } } } }
+          ),
+      ],
+      ["milestone issuances", () => MilestoneIssuance.deleteMany({ userId: { $in: userIds } })],
+      ["campaigns", () => MonthlyEntryCampaign.deleteMany({ _id: { $in: campaignIds } })],
+      ["users", () => User.deleteMany({ _id: { $in: userIds } })],
+      ["connection", () => mongoose.connection.close()],
+    ];
+    for (const [name, step] of steps) {
+      try {
+        await step();
+      } catch (error) {
+        console.error(`  CLEANUP FAILED (${name}) — check for leaked fixtures`, error);
+      }
+    }
   }
 
   if (failures > 0) {

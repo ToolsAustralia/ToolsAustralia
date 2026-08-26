@@ -19,10 +19,14 @@
  *   3. THE BODY CONTRACT, including the one that matters most in practice: an
  *      EMPTY `userId` (what `{{ person.user_id }}` renders on a newsletter-form
  *      profile) must fall through to the email, not 400.
- *   4. CUSTOMER RESOLUTION, including the 409 refusal when `userId` and `email`
- *      name two different accounts, and the quieter cousin of it: a usable
- *      `userId` that resolves to nothing must NOT fall back to the email, or a
- *      stale profile mints a bystander's one-per-lifetime grant invisibly.
+ *   4. CUSTOMER RESOLUTION, including the `identity_conflict` refusal when
+ *      `userId` and `email` name two different accounts — which answers 200
+ *      with a body byte-identical to a mint, so the AUDIT ROW is asserted too:
+ *      with the status no longer distinguishing it, that row is the only
+ *      remaining way to detect the condition. And the quieter cousin of it: a
+ *      usable `userId` that resolves to nothing must NOT fall back to the
+ *      email, or a stale profile mints a bystander's one-per-lifetime grant
+ *      invisibly.
  *   5. THE STATUS MAP — and specifically that a service `error` answers 500
  *      while `not_applicable` answers 200. Those two were one value until this
  *      rework; the endpoint's whole retry story rests on telling them apart.
@@ -30,11 +34,29 @@
  *      it, and a spent grant stays spent.
  *   7. THE BUDGET: kill switch and daily cap both refuse with 429 and mint
  *      nothing — and a budget gate that cannot be EVALUATED refuses with 500,
- *      because a cap that uncaps itself during an outage is not a cap.
+ *      because a cap that uncaps itself during an outage is not a cap. Section
+ *      10b then pins WHICH OUTCOMES CONSUME IT, by delta across real calls:
+ *      emptying `BUDGET_CONSUMING_OUTCOMES` uncaps the endpoint entirely, and
+ *      adding a non-minting outcome to it lets a few hundred inert calls starve
+ *      every legitimate flow send for the rest of the UTC day. Neither is a
+ *      compile error and neither was reachable by any assertion before this.
  *   8. RESPONSE OPACITY: `{ ok: <status is 200> }` byte-for-byte, so "minted"
  *      and "no such customer" are indistinguishable to the caller.
  *   9. THE AUDIT ROW on every path. It is not bookkeeping — the daily mint
  *      budget COUNTS these rows, so an unwritten row is an uncounted mint.
+ *  10. THE RE-ARM COOLDOWN, end to end (section 11). `rearmed` and
+ *      `expired_no_rearm` are the only two of the eleven status-map rows that no
+ *      test drove through the endpoint, and they are exactly the two the
+ *      cooldown decides between. The anchor is passed as an OPTIONAL argument at
+ *      `CampaignService.ts`, so replacing it with `undefined` type-checks — and
+ *      turns "one grant per person for life" into "one per flow re-entry",
+ *      unbounded, on money-equivalent prize-draw entries. The pure suite passes
+ *      the anchor in as an argument and cannot see the caller; the DB-backed
+ *      mint suite deliberately ages past the cooldown. This is where the caller
+ *      is pinned.
+ *  11. THE KLAVIYO PROFILE the event is addressed to (section 7). Not the
+ *      properties — the `customer_properties` block, which is the only witness
+ *      that `WEBHOOK_USER_PROJECTION` still selects the fields the emit reads.
  *
  * KLAVIYO IS NEVER CALLED. `@/lib/klaviyo` is replaced in `require.cache`
  * before anything can load the real client, and the swap is VERIFIED by object
@@ -71,7 +93,10 @@ import BonusCodeWebhookCall from "@/models/BonusCodeWebhookCall";
 import { CampaignService } from "../CampaignService";
 import { BONUS_CODE_BY_TRIGGER } from "@/config/bonusCodes";
 import { hashIp } from "@/lib/bonus-code-webhook/audit";
-import { BONUS_CODE_SECRET_HEADER } from "@/lib/bonus-code-webhook/auth";
+import { BONUS_CODE_SECRET_HEADER, MIN_SECRET_LENGTH } from "@/lib/bonus-code-webhook/auth";
+import { BUDGET_CONSUMING_OUTCOMES, utcDayKey } from "@/lib/bonus-code-webhook/budget";
+import { REARM_COOLDOWN_DAYS } from "@/utils/redeemables/bonus-code-policy";
+import type { BonusCodeCallOutcome } from "@/models/BonusCodeWebhookCall";
 import type { KlaviyoEvent, KlaviyoEventResponse } from "@/types/klaviyo";
 
 const RUN_ID = Date.now();
@@ -106,13 +131,27 @@ function check(name: string, actual: unknown, expected: unknown) {
 // --- the Klaviyo stub -----------------------------------------------------
 interface RecordedEmit {
   event: string;
+  /**
+   * RECORDED, not discarded. This block is built from the user document
+   * `resolveBonusCodeCustomer` projected, so it is the only place a field
+   * silently missing from `WEBHOOK_USER_PROJECTION` becomes visible: that
+   * projection is a plain string literal, so dropping `email` from it is not a
+   * compile error — the event simply goes out addressed to `""`, Klaviyo has no
+   * profile to attach it to, and the one record that answers "why didn't this
+   * customer get their code?" quietly stops landing. Asserted in section 7.
+   */
+  customer_properties: KlaviyoEvent["customer_properties"];
   properties: Record<string, unknown>;
 }
 const emits: RecordedEmit[] = [];
 
 const stubKlaviyo = {
   async trackEvent(event: KlaviyoEvent): Promise<KlaviyoEventResponse> {
-    emits.push({ event: event.event, properties: { ...event.properties } });
+    emits.push({
+      event: event.event,
+      customer_properties: { ...event.customer_properties },
+      properties: { ...event.properties },
+    });
     return { success: true };
   },
 };
@@ -223,12 +262,31 @@ async function run() {
     }
   };
 
+  /**
+   * EACH STEP INDIVIDUALLY GUARDED, for the same reason the steps exist at all.
+   * As unguarded sequential awaits, ONE throwing deleteMany skips everything
+   * below it — and the campaigns this file creates are genuinely LIVE campaigns
+   * in a shared database. Leaking one leaves a real `MonthlyEntryCampaign` row
+   * carrying a fixture code, which also collides with the unique index on `code`
+   * on the next run. `restore()` runs first and outside the loop: it puts
+   * `VERCEL_ENV` and the secret back, and it cannot throw.
+   * Same pattern as campaign-window.test.ts / campaign-enrolment.test.ts.
+   */
   async function cleanup() {
     restore();
-    await RedeemableIssuance.deleteMany({ userId: { $in: userIds } });
-    await BonusCodeWebhookCall.deleteMany({ ipHash: hashIp(TEST_CLIENT_IP) });
-    await MonthlyEntryCampaign.deleteMany({ _id: { $in: campaignIds } });
-    await User.deleteMany({ _id: { $in: userIds } });
+    const steps: Array<[string, () => Promise<unknown>]> = [
+      ["issuances", () => RedeemableIssuance.deleteMany({ userId: { $in: userIds } })],
+      ["audit rows", () => BonusCodeWebhookCall.deleteMany({ ipHash: hashIp(TEST_CLIENT_IP) })],
+      ["campaigns", () => MonthlyEntryCampaign.deleteMany({ _id: { $in: campaignIds } })],
+      ["users", () => User.deleteMany({ _id: { $in: userIds } })],
+    ];
+    for (const [name, step] of steps) {
+      try {
+        await step();
+      } catch (error) {
+        console.error(`  CLEANUP FAILED (${name}) — check for leaked fixtures`, error);
+      }
+    }
   }
 
   // An interrupt between a create and the finally below would otherwise leak a
@@ -291,12 +349,25 @@ async function run() {
     const other = await makeUser("other");
     const inactive = await makeUser("inactive", { isActive: false });
 
+    // Sections 10b and 11 each need a customer who has never held a grant: a
+    // second call for an existing holder settles as already_active / spent and
+    // mints nothing, which is precisely what those two sections must not measure.
+    const capMinter = await makeUser("cap-minter");
+    const capEdge = await makeUser("cap-edge");
+    const rearmer = await makeUser("rearmer");
+
     const holderCampaign = await makeCampaign(`WHHOLD${RUN_ID}`, holder.id);
     const spenderCampaign = await makeCampaign(`WHSPENT${RUN_ID}`, spender.id);
     const budgetCampaign = await makeCampaign(`WHBUDGET${RUN_ID}`, budgeted.id);
+    const capMinterCampaign = await makeCampaign(`WHCAPMINT${RUN_ID}`, capMinter.id);
+    const capEdgeCampaign = await makeCampaign(`WHCAPEDGE${RUN_ID}`, capEdge.id);
+    const rearmCampaign = await makeCampaign(`WHREARM${RUN_ID}`, rearmer.id);
     const holderCampaignId = holderCampaign._id as unknown as mongoose.Types.ObjectId;
     const spenderCampaignId = spenderCampaign._id as unknown as mongoose.Types.ObjectId;
     const budgetCampaignId = budgetCampaign._id as unknown as mongoose.Types.ObjectId;
+    const capMinterCampaignId = capMinterCampaign._id as unknown as mongoose.Types.ObjectId;
+    const capEdgeCampaignId = capEdgeCampaign._id as unknown as mongoose.Types.ObjectId;
+    const rearmCampaignId = rearmCampaign._id as unknown as mongoose.Types.ObjectId;
 
     // A code no campaign carries. The inert state — and, under the webhook
     // model, a launch-configuration error.
@@ -317,10 +388,33 @@ async function run() {
       check("a wrong secret → 401", wrong.status, 401);
       check("…and it is audited as bad_secret", (await latestAudit())?.outcome, "bad_secret");
 
-      // A same-length wrong secret is the case a naive `timingSafeEqual` throws
-      // on when lengths differ — and the case a `===` compare leaks timing on.
+      // A same-length wrong secret is the one case `timingSafeEqual` actually
+      // compares byte by byte — and the case a `===` compare leaks timing on.
       const sameLength = await post(body, { secret: "x".repeat(SECRET_CURRENT.length) });
       check("a wrong secret of the SAME length → 401, not a thrown error", sameLength.status, 401);
+
+      // THE LENGTH GUARD, which is load-bearing and was unreachable: every
+      // rejection fixture above is exactly `SECRET_CURRENT.length` characters.
+      // `timingSafeEqual` THROWS a RangeError on buffers of DIFFERENT lengths,
+      // so without the byte-length pre-check in `auth.ts` every wrong-length
+      // secret would answer 500 — and 500 is the one status this endpoint uses
+      // to mean "retry, the grant is still recoverable", so Klaviyo would retry
+      // an unauthenticated caller indefinitely instead of refusing it once.
+      // Spec §7 requires 401 here, not a throw.
+      const tooShort = await post(body, { secret: "x" });
+      check("a wrong secret SHORTER than the configured one → 401, never a 500", tooShort.status, 401);
+      check("…and it is audited as bad_secret, not error", (await latestAudit())?.outcome, "bad_secret");
+
+      const tooLong = await post(body, { secret: `${SECRET_CURRENT}-with-extra-bytes-appended` });
+      check("a wrong secret LONGER than the configured one → 401, never a 500", tooLong.status, 401);
+
+      // Same STRING length, different BYTE length. The guard compares
+      // `Buffer.length`, not `String.length`, so a multi-byte character cannot
+      // slip a mismatch past it into the throw.
+      const multiByte = await post(body, {
+        secret: `é${"x".repeat(SECRET_CURRENT.length - 1)}`,
+      });
+      check("a multi-byte secret of the same STRING length → 401, never a 500", multiByte.status, 401);
 
       check("no issuance was written by any refused call", await rowsFor(holderCampaignId, holder.id), 0);
     }
@@ -347,6 +441,33 @@ async function run() {
       check("an UNSET server secret → 500, not 200", unset.status, 500);
       check("…and the body is opaque", unset.body, { ok: false });
       check("…and it is audited as misconfigured", (await latestAudit())?.outcome, "misconfigured");
+
+      // THE FLOOR, which nothing pinned. `BONUS_CODE_WEBHOOK_SECRET=abc` — a
+      // placeholder, a truncated paste, a stray `BONUS_CODE_WEBHOOK_SECRET= x`
+      // — is brute-forceable, so `parseConfiguredSecrets` DROPS every candidate
+      // under `MIN_SECRET_LENGTH`. Dropping the only candidate must leave the
+      // endpoint fail-CLOSED (`misconfigured`, 500), never accept the short
+      // value and never fall through to "no secret configured, let it through".
+      //
+      // PINNED IN BOTH HALVES, deliberately. The behavioural leg below derives
+      // its fixture from the constant, so on its own it would simply MOVE with a
+      // lowered floor and keep passing — which is the "content assertion naming a
+      // business value has its own expiry date" trap written up in
+      // docs/config-and-data/gotchas.md. So the constant is asserted directly
+      // first. It is a >= assertion, not an equality: raising the floor is a
+      // tightening and must stay allowed; LOWERING it is the regression.
+      check("MIN_SECRET_LENGTH is at least 16 — the floor may be raised, never lowered", MIN_SECRET_LENGTH >= 16, true);
+
+      // `Math.max(1, …)` so this stays a real one-character secret rather than
+      // collapsing to "" (which `parseConfiguredSecrets` rejects for a different
+      // reason) if someone drops the floor to 1.
+      const belowFloor = "s".repeat(Math.max(1, MIN_SECRET_LENGTH - 1));
+      process.env.BONUS_CODE_WEBHOOK_SECRET = belowFloor;
+      const shortConfigured = await post(body, { secret: belowFloor });
+      check("a configured secret UNDER the floor is dropped, not honoured → 500", shortConfigured.status, 500);
+      check("…and it is audited as misconfigured", (await latestAudit())?.outcome, "misconfigured");
+      check("…and the body is opaque", shortConfigured.body, { ok: false });
+
       process.env.BONUS_CODE_WEBHOOK_SECRET = SECRET_CURRENT;
     }
 
@@ -444,25 +565,73 @@ async function run() {
 
       // THE REFUSAL. A disagreement means a stale or merged Klaviyo profile,
       // which is exactly when minting to the wrong person is possible.
-      const conflict = await post({
-        userId: String(holder.id),
-        email: other.email,
-        trigger: "cancel-click",
-      });
-      check("userId and email naming DIFFERENT accounts → 409", conflict.status, 409);
-      check("…and the body is opaque", conflict.body, { ok: false });
-      check("…and it is audited as identity_conflict", (await latestAudit())?.outcome, "identity_conflict");
+      //
+      // IT ANSWERS 200, INDISTINGUISHABLY. This was a 409 until 2026-08-26 and
+      // must not go back: the conflict check runs before the isActive gate, so
+      // anyone holding the secret could pair their OWN account id with a probe
+      // address and read "is this a Tools Australia customer" straight off the
+      // status line — free, non-destructive, unbounded (no rate limiter by
+      // design; the daily cap counts only mints). Driven against a REAL
+      // campaign, so a regression that answered 409 fails on the status AND a
+      // regression that silently minted fails on the row count.
+      // THE OTHER DETECTOR, PINNED. `console.error` is the only log level
+      // production keeps, so that one line is the whole real-time signal that a
+      // marketing flow is pairing disagreeing identities — the audit collection
+      // has no admin surface and nobody queries it on a schedule. Captured
+      // across the call and restored in a `finally`, so `check` keeps printing
+      // failures either way.
+      pointTriggerAt(holderCampaign.code);
+      const conflictLogs: string[] = [];
+      const realConsoleError = console.error;
+      let conflict: { status: number; body: WebhookBody };
+      try {
+        console.error = (...args: unknown[]) => {
+          conflictLogs.push(
+            args.map((arg) => (typeof arg === "string" ? arg : JSON.stringify(arg))).join(" ")
+          );
+        };
+        conflict = await post({
+          userId: String(holder.id),
+          email: other.email,
+          trigger: "cancel-click",
+        });
+      } finally {
+        console.error = realConsoleError;
+      }
+      check("userId and email naming DIFFERENT accounts → 200, not a status of its own", conflict.status, 200);
+      check(
+        "…and the body is byte-identical to a successful mint, so the status leaks nothing",
+        conflict.body,
+        { ok: true }
+      );
+      // THE REMAINING DETECTORS. With the status no longer distinguishing this
+      // condition, the audit row and the console.error above are all that is
+      // left, so BOTH are pinned here — a test asserting only the status would
+      // let either signal be deleted silently.
+      check("…and it is STILL audited as identity_conflict", (await latestAudit())?.outcome, "identity_conflict");
+      check(
+        "…and the console.error detector fired — the only real-time signal left",
+        conflictLogs.some((line) =>
+          line.includes("[bonus-code] userId and email resolve to different customers")
+        ),
+        true
+      );
       check("…with no user attributed to the call", (await latestAudit())?.userId, undefined);
+      check(
+        "…and neither account was minted to",
+        await rowsFor(holderCampaignId, holder.id),
+        0
+      );
 
       // THE SILENT SUBSTITUTION. A stale or merged profile can carry a dead
       // account's user_id next to a live address belonging to someone else.
       // The email branch is the fallback for an ABSENT id, never a second
       // attempt after a usable one failed — otherwise this call would burn
       // `holder`'s one-per-lifetime grant on a signal that was never theirs,
-      // and unlike the 409 there is no second document to disagree with, so
-      // nothing would ever show it happened. Driven against the REAL campaign
-      // so a regression mints instead of no-opping.
-      pointTriggerAt(holderCampaign.code);
+      // and unlike `identity_conflict` there is no second document to disagree
+      // with, so no audit row would ever show it happened. Driven against the
+      // REAL campaign (still pointed there from the case above) so a regression
+      // mints instead of no-opping.
       const staleId = await post({
         userId: String(new mongoose.Types.ObjectId()),
         email: holder.email,
@@ -521,6 +690,26 @@ async function run() {
         "…carrying the deadline that was PERSISTED, not a recomputed one",
         emits[0]?.properties.expires_at,
         row?.expiresAt.toISOString()
+      );
+
+      // THE PROFILE THE EVENT IS ADDRESSED TO. `customer_properties` is built by
+      // `getCustomerProperties` off the user document `resolveBonusCodeCustomer`
+      // PROJECTED, and that projection is a plain string literal
+      // (`WEBHOOK_USER_PROJECTION`). Dropping a field from it is not a compile
+      // error and not a runtime error: the emit simply goes out with
+      // `email: ""`, Klaviyo has no profile to attach the event to, and the only
+      // record that answers "why didn't this customer get their code?" silently
+      // stops landing — with no admin surface to notice it from. Asserting the
+      // properties block alone would not see any of that.
+      check(
+        "…addressed to the customer's own email, so Klaviyo has a profile to attach it to",
+        emits[0]?.customer_properties.email,
+        holder.email
+      );
+      check(
+        "…and carrying their first name, so the email can greet them",
+        emits[0]?.customer_properties.first_name,
+        "Webhook"
       );
 
       // -------------------------------------------------------------------
@@ -657,6 +846,207 @@ async function run() {
       const allowed = await post({ userId: String(budgeted.id), trigger: "cancel-click" });
       check("with the budget restored, the same call mints", allowed.status, 200);
       check("…exactly one issuance", await rowsFor(budgetCampaignId, budgeted.id), 1);
+    }
+
+    // -----------------------------------------------------------------------
+    console.log("\n10b. WHICH outcomes consume the cap — the wire the cases above never touch");
+    // Everything in section 10 sets the cap to "0" (trips at ANY count,
+    // including a permanently-zero one) or "1000000" (allows at any count), so
+    // `mintedToday` is never load-bearing in an assertion there and
+    // BUDGET_CONSUMING_OUTCOMES is never read at all. That leaves the cap's
+    // definition — the ONLY control that still bounds the damage once the shared
+    // secret leaks, with no rate limiter behind it by design — mutable in both
+    // directions with type-check, lint and every suite still green:
+    //
+    //   EMPTY IT, or drop "minted"/"rearmed": real mints stop being counted,
+    //   `mintedToday` is permanently 0, the cap never fires, and the endpoint is
+    //   uncapped from the moment the secret leaks.
+    //
+    //   ADD A NON-MINTING OUTCOME: `not_applicable` is this branch's normal
+    //   RESTING STATE — no campaign carries the code until an admin creates one,
+    //   plus every ineligible customer — so a few hundred inert calls in one UTC
+    //   day answer 429 to every legitimate flow send for the rest of that day.
+    //   That is the starvation the constant's own JSDoc forbids.
+    //
+    // Both are closed below: a membership assertion for the definition, and two
+    // DELTAS through the real route for the query that reads it.
+    {
+      /**
+       * Every audit outcome, classified. Typed as an exhaustive record so a new
+       * outcome added to the model without a decision here is a COMPILE error —
+       * the same forcing function `BonusCodeWebhookCall.ts` uses for the trigger
+       * enum, and for the same reason: this is a security control whose failure
+       * mode is silence.
+       */
+      const CONSUMES_BUDGET: Record<BonusCodeCallOutcome, boolean> = {
+        // Walked away with a live window. These, and only these.
+        minted: true,
+        rearmed: true,
+        // Handed out nothing, so they must not eat the cap.
+        already_active: false,
+        spent: false,
+        expired_no_rearm: false,
+        not_applicable: false,
+        error: false,
+        misconfigured: false,
+        missing_secret: false,
+        bad_secret: false,
+        not_production: false,
+        invalid_body: false,
+        identity_conflict: false,
+        user_not_found: false,
+        daily_cap: false,
+        kill_switch: false,
+      };
+      const expectedConsuming = (Object.keys(CONSUMES_BUDGET) as BonusCodeCallOutcome[])
+        .filter((outcome) => CONSUMES_BUDGET[outcome])
+        .sort();
+      check(
+        "BUDGET_CONSUMING_OUTCOMES is exactly the grant-creating outcomes",
+        [...BUDGET_CONSUMING_OUTCOMES].sort(),
+        expectedConsuming
+      );
+
+      /**
+       * The production counting query, verbatim — same `dayKey`, same `$in`
+       * against the same constant `budget.ts` reads.
+       *
+       * DELTA, NEVER AN ABSOLUTE. This count is collection-wide for the UTC day
+       * and other suites share this database, so no absolute number is
+       * assertable; what IS assertable is how much one call moves it.
+       */
+      const budgetCount = () =>
+        BonusCodeWebhookCall.countDocuments({
+          dayKey: utcDayKey(),
+          outcome: { $in: [...BUDGET_CONSUMING_OUTCOMES] },
+        });
+
+      pointTriggerAt(capMinterCampaign.code);
+      const beforeMint = await budgetCount();
+      const counted = await post({ userId: String(capMinter.id), trigger: "cancel-click" });
+      check("fixture: the call minted", counted.status, 200);
+      check("fixture: audited as minted", (await latestAudit())?.outcome, "minted");
+      check("fixture: exactly one issuance", await rowsFor(capMinterCampaignId, capMinter.id), 1);
+      check("one real mint moves the budget count by exactly 1", (await budgetCount()) - beforeMint, 1);
+
+      // The other direction. not_applicable is the resting state, so if it
+      // counted, ordinary inert traffic would exhaust the cap on its own.
+      pointTriggerAt(UNCONFIGURED_CODE);
+      const beforeInert = await budgetCount();
+      const inert = await post({ userId: String(holder.id), trigger: "cancel-click" });
+      check("fixture: the call was inert", inert.status, 200);
+      check("fixture: audited as not_applicable", (await latestAudit())?.outcome, "not_applicable");
+      check("a not_applicable call does NOT move the budget count", (await budgetCount()) - beforeInert, 0);
+
+      // AND THE COUNT IS LOAD-BEARING IN THE GATE. Section 10 proves 0 refuses
+      // and 1000000 allows, which holds even if `mintedToday` were hard-wired to
+      // zero. Setting the cap to the count the query actually returns makes the
+      // refusal depend on that number, and count+1 makes the allow depend on it.
+      pointTriggerAt(capEdgeCampaign.code);
+      const live = await budgetCount();
+      check("fixture: this run has already minted, so the count is non-zero", live > 0, true);
+
+      process.env.BONUS_CODE_DAILY_MINT_CAP = String(live);
+      const atCap = await post({ userId: String(capEdge.id), trigger: "cancel-click" });
+      check("a cap set to the LIVE count refuses the next call → 429", atCap.status, 429);
+      check("…audited as daily_cap", (await latestAudit())?.outcome, "daily_cap");
+      check("…and nothing was minted", await rowsFor(capEdgeCampaignId, capEdge.id), 0);
+
+      process.env.BONUS_CODE_DAILY_MINT_CAP = String(live + 1);
+      const underCap = await post({ userId: String(capEdge.id), trigger: "cancel-click" });
+      check("one above the live count, the same call mints", underCap.status, 200);
+      check("…exactly one issuance", await rowsFor(capEdgeCampaignId, capEdge.id), 1);
+
+      process.env.BONUS_CODE_DAILY_MINT_CAP = "1000000";
+    }
+
+    // -----------------------------------------------------------------------
+    console.log("\n11. The re-arm cooldown — 'one per person for life', not 'one per flow re-entry'");
+    // `rearmed` and `expired_no_rearm` are the only two of the endpoint's eleven
+    // status-map rows that nothing drove end to end, and they are exactly the two
+    // the cooldown decides between. The anchor reaches `decideRearm` as an
+    // OPTIONAL fourth argument (`existing?.firstIssuedAt ?? existing?.issuedAt`),
+    // so replacing it with `undefined` type-checks cleanly — and with it gone
+    // rule 4 never fires: every lapsed row plus a trigger returns `rearmed`, so a
+    // flow re-entry, a late retry or marketing re-running a sequence hands the
+    // same customer a second full 72-hour window and a second code, unbounded, on
+    // money-equivalent prize-draw entries.
+    //
+    // Neither existing suite can see that. The pure suite passes `firstIssuedAt`
+    // in as an argument, so it tests the decision in isolation and never reaches
+    // the caller; the DB-backed mint suite deliberately ages `firstIssuedAt` PAST
+    // the cooldown (its own comment says so), so no DB-backed test ever builds a
+    // lapsed row INSIDE the cooldown. This does both, through the route.
+    {
+      pointTriggerAt(rearmCampaign.code);
+      emits.length = 0;
+
+      const minted = await post({ userId: String(rearmer.id), trigger: "cancel-click" });
+      check("fixture: the first call minted", minted.status, 200);
+      check("fixture: audited as minted", (await latestAudit())?.outcome, "minted");
+      check("fixture: one email went out", emits.length, 1);
+
+      const original = await RedeemableIssuance.findOne({
+        campaignId: rearmCampaignId,
+        userId: rearmer.id,
+      }).lean();
+      if (!original) throw new Error("re-arm fixture: the mint wrote no row");
+      const originalFirstIssuedAt = original.firstIssuedAt?.getTime();
+      check("fixture: the mint stamped firstIssuedAt", typeof originalFirstIssuedAt, "number");
+
+      // INSIDE THE COOLDOWN. Only the window is lapsed; `firstIssuedAt` stays
+      // where the mint put it, moments ago. This is the shape a real flow
+      // re-entry produces, and the shape no test has ever built.
+      const lapsedAt = new Date(Date.now() - 60_000);
+      await RedeemableIssuance.updateOne({ _id: original._id }, { $set: { expiresAt: lapsedAt } });
+
+      emits.length = 0;
+      const refused = await post({ userId: String(rearmer.id), trigger: "cancel-click" });
+      check("a lapsed grant re-triggered INSIDE the cooldown → 200", refused.status, 200);
+      check("…and it is audited as expired_no_rearm", (await latestAudit())?.outcome, "expired_no_rearm");
+      check("…and the body is opaque, like every other customer-state outcome", refused.body, { ok: true });
+      check("…still exactly one issuance", await rowsFor(rearmCampaignId, rearmer.id), 1);
+
+      const afterRefusal = await RedeemableIssuance.findOne({
+        campaignId: rearmCampaignId,
+        userId: rearmer.id,
+      }).lean();
+      check(
+        "…and the lapsed deadline was NOT moved — no second window was handed out",
+        afterRefusal?.expiresAt.getTime(),
+        lapsedAt.getTime()
+      );
+      check("…and no second email was emitted", emits.length, 0);
+
+      // OUTSIDE THE COOLDOWN. One day past the boundary; the window stays lapsed.
+      const agedFirstIssuedAt = new Date(Date.now() - (REARM_COOLDOWN_DAYS + 1) * DAY_MS);
+      await RedeemableIssuance.updateOne(
+        { _id: original._id },
+        { $set: { issuedAt: agedFirstIssuedAt, firstIssuedAt: agedFirstIssuedAt, expiresAt: lapsedAt } }
+      );
+
+      emits.length = 0;
+      const rearmed = await post({ userId: String(rearmer.id), trigger: "cancel-click" });
+      check("the same call OUTSIDE the cooldown → 200", rearmed.status, 200);
+      check("…and it is audited as rearmed", (await latestAudit())?.outcome, "rearmed");
+      check("…still exactly one issuance — a re-arm updates, never inserts", await rowsFor(rearmCampaignId, rearmer.id), 1);
+
+      const rearmedRow = await RedeemableIssuance.findOne({
+        campaignId: rearmCampaignId,
+        userId: rearmer.id,
+      }).lean();
+      check(
+        "…with a deadline exactly 72 hours from the instant Klaviyo called",
+        rearmedRow ? rearmedRow.expiresAt.getTime() - rearmedRow.issuedAt.getTime() : null,
+        SEVENTY_TWO_HOURS_MS
+      );
+      check("…and that deadline is in the future", rearmedRow ? rearmedRow.expiresAt.getTime() > Date.now() : null, true);
+      check(
+        "…and firstIssuedAt was PRESERVED, so the next cooldown still anchors on the first grant",
+        rearmedRow?.firstIssuedAt?.getTime(),
+        agedFirstIssuedAt.getTime()
+      );
+      check("…and exactly one email went out for the fresh window", emits.length, 1);
     }
   } finally {
     await cleanup();

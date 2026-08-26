@@ -18,10 +18,22 @@ export const NEVER_EXPIRES_ISSUANCE_DATE = new Date("9999-12-31T23:59:59.999Z");
 export const LEGACY_MISSING_EXPIRY = new Date(0);
 
 /**
- * The row as it was PERSISTED, handed back to the caller so the Klaviyo email
- * prints the stored instant. Recomputing it at the caller would let a 150ms gap
- * across Sydney midnight print a date a full calendar day off what redemption
- * will actually enforce.
+ * The row as it was PERSISTED, handed back to the caller so every downstream
+ * copy of the deadline is the STORED instant — the `Bonus Code Issued` event's
+ * `expires_at` / `expires_at_label`, the wallet's `expiresAtLabel`, and the
+ * checkout refusal sentence. The stored instant is the one the redemption gate
+ * compares against, so any recomputed value is a second source of truth that
+ * can only ever be wrong.
+ *
+ * RATIONALE UPDATED 2026-08-26 — the rule survived the exact-hours switch, the
+ * reason changed. This used to read "a 150ms gap across Sydney midnight would
+ * print a date a full calendar day off": `endOfDayAESTAfterDays` snapped every
+ * expiry to the end of a Sydney day, so a caller recomputing a millisecond
+ * later could land on the next day. `expiryAfterHours` removed that midnight
+ * cliff, so do NOT conclude the drift is now harmless milliseconds. A re-arm
+ * MOVES this instant, so a caller recomputing `now + validForHours` against a
+ * row it did not just write can be a whole 72-hour window away from what is
+ * enforced — a bigger error than the one this comment used to describe.
  */
 export interface StampedIssuance {
   id: string;
@@ -341,7 +353,10 @@ export class CampaignService {
     // trigger and no email, burning every one-per-lifetime grant. A personal window
     // may only be minted from an explicit eligibility moment.
     if (params.issuedBy === "cron" && personalWindowGoverns(params.campaign)) {
-      console.error("issueCampaignToUsers refused: cron cannot mass-mint a personal-window campaign", {
+      // `[bonus-code]` prefix is the documented grep handle for this feature's
+      // diagnostics (docs/rewards-redeemables/api.md) — an operator filtering on
+      // it during an incident must see every line, not most of them.
+      console.error("[bonus-code] issueCampaignToUsers refused: cron cannot mass-mint a personal-window campaign", {
         campaignId: String(params.campaign._id),
         campaignCode: params.campaign.code,
         validForHours: params.campaign.validForHours,
@@ -353,9 +368,15 @@ export class CampaignService {
     let issuedCount = 0;
     let skippedCount = 0;
 
-    // ONE instant for the whole batch. Hoisted above the loop so a single admin
-    // click that straddles Sydney midnight cannot hand two users in the same
-    // batch different expiry days.
+    // ONE instant for the whole batch. Hoisted above the loop so every user in a
+    // single admin click gets the SAME deadline.
+    // Rationale updated 2026-08-26: this used to say "so a click that straddles
+    // Sydney midnight cannot hand two users different expiry DAYS". The
+    // calendar-day model (`endOfDayAESTAfterDays`) is gone, so there is no
+    // midnight cliff left to straddle — but the hoist still earns its place. A
+    // per-iteration `new Date()` would spread deadlines across the loop's own
+    // wall-clock duration (seconds to minutes on a large batch), so two people
+    // granted by the same click would hold windows that end at different times.
     const issuedAt = new Date();
     const batchExpiresAt = resolveIssuanceExpiry(params.campaign, issuedAt) ?? undefined;
 
@@ -570,7 +591,15 @@ export class CampaignService {
    * Mint / re-arm exactly one campaign issuance for one user.
    *
    * `now` is the SINGLE captured instant: both `issuedAt` and `expiresAt` derive
-   * from it, so the persisted pair can never straddle Sydney midnight.
+   * from it, so the persisted pair is always exactly `validForHours` apart and a
+   * row can never disagree with itself.
+   *
+   * Rationale updated 2026-08-26: this used to read "so the persisted pair can
+   * never straddle Sydney midnight". `expiryAfterHours` replaced the calendar-day
+   * model and there is no midnight cliff any more — but two separate `new Date()`
+   * calls would still stamp a window that is not the one the campaign promises,
+   * and this instant is what the redemption gate and every rendered label are
+   * derived from.
    */
   private static async createIssuanceForUser(
     userId: mongoose.Types.ObjectId,
@@ -788,8 +817,19 @@ export class CampaignService {
    * The ONE entry point for the three eligibility triggers. Resolves a single
    * campaign by code, checks eligibility, and mints/re-arms the caller's row.
    *
-   * Never throws — a failure here must not take down a cancellation or a
-   * payment webhook. Callers check `outcome`.
+   * WHO CALLS THIS, as of 2026-08-26. Exactly one production caller:
+   * `mintBonusCodeForTrigger`, behind `POST /api/bonus-codes/v1/issue`. The
+   * three internal call sites this JSDoc used to describe (the cancel route, the
+   * payment webhook, registration) were DELETED in the launch reversal — the
+   * Klaviyo flow now calls us one step above its discount email instead.
+   *
+   * Never throws — callers check `outcome`. The old rationale was "a failure
+   * here must not take down a cancellation or a payment webhook", and those
+   * callers are gone; the contract is load-bearing for a different reason now.
+   * The route maps `outcome` onto the status Klaviyo sees, and that mapping is
+   * the whole retry design: `error` is the one status whose retry can still
+   * recover a grant while the discount email is already in flight. A throw would
+   * bypass the map entirely.
    */
   static async ensureCampaignIssuanceForUser(params: {
     userId: string;
@@ -806,7 +846,13 @@ export class CampaignService {
       // Campaign FIRST, user second. `code` is uniquely indexed, and the overwhelmingly
       // common state of this call is "no campaign carries this code" — the feature is
       // inert until an admin creates one. Resolving the campaign first makes that path
-      // cost one indexed hit instead of two, on live payment/cancel/registration routes.
+      // cost one indexed hit instead of two.
+      // (Until 2026-08-26 this said "on live payment/cancel/registration routes",
+      // which were deleted with the launch reversal. The ordering is still right,
+      // and for a stronger reason: the sole caller is now the Klaviyo webhook,
+      // whose traffic is a whole marketing cohort arriving in a burst, and whose
+      // NORMAL resting state — before any admin creates the campaign — is exactly
+      // the "no campaign carries this code" path being optimised here.)
       const campaign = await MonthlyEntryCampaign.findOne({
         code: params.campaignCode.trim().toUpperCase(),
         isActive: true,
@@ -841,7 +887,15 @@ export class CampaignService {
         trigger: params.trigger,
       });
     } catch (error) {
-      console.error("ensureCampaignIssuanceForUser failed", {
+      // `[bonus-code]` prefix is MANDATORY here, not cosmetic: this is the sole
+      // producer of the `error` outcome — the one status whose retry recovers a
+      // grant while the discount email is already in flight — and there is no
+      // admin surface to fall back on. An operator filtering Vercel logs on
+      // `[bonus-code]` during an incident would otherwise see the route's "mint
+      // failed" line and NOT the line saying why. (docs/rewards-redeemables/api.md
+      // has promised this prefix on all diagnostics since the endpoint shipped;
+      // this line and the cron refusal above were the two that did not carry it.)
+      console.error("[bonus-code] ensureCampaignIssuanceForUser failed", {
         userId: params.userId,
         campaignCode: params.campaignCode,
         trigger: params.trigger,

@@ -225,10 +225,25 @@ async function run() {
     }
   } finally {
     currentSession = null;
-    await RedeemableIssuance.deleteMany({ userId: { $in: userIds } });
-    await MonthlyEntryCampaign.deleteMany({ _id: { $in: campaignIds } });
-    await User.deleteMany({ _id: { $in: userIds } });
-    await mongoose.connection.close();
+    // EACH STEP INDIVIDUALLY GUARDED. As unguarded sequential awaits, ONE
+    // throwing deleteMany skipped every step below it — and the campaigns this
+    // file creates are genuinely LIVE campaigns in a shared database. Leaking
+    // one leaves a real `MonthlyEntryCampaign` row carrying a fixture code,
+    // which then collides with the unique index on `code` on the next run.
+    // Same pattern as campaign-window.test.ts / campaign-enrolment.test.ts.
+    const steps: Array<[string, () => Promise<unknown>]> = [
+      ["issuances", () => RedeemableIssuance.deleteMany({ userId: { $in: userIds } })],
+      ["campaigns", () => MonthlyEntryCampaign.deleteMany({ _id: { $in: campaignIds } })],
+      ["users", () => User.deleteMany({ _id: { $in: userIds } })],
+      ["connection", () => mongoose.connection.close()],
+    ];
+    for (const [name, step] of steps) {
+      try {
+        await step();
+      } catch (error) {
+        console.error(`  CLEANUP FAILED (${name}) — check for leaked fixtures`, error);
+      }
+    }
   }
 
   if (failures > 0) {

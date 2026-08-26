@@ -522,27 +522,28 @@ async function run() {
       );
     }
 
-    console.log("\nSite 5 — every Stripe route writes the VERIFIED code into metadata, never the body field");
-    {
-      // Four routes write campaignCode into Stripe metadata. A fix applied to
-      // one of them is not a fix; this is the guard that keeps the other three
-      // from drifting back, and that catches a fifth route being added.
-      const routes = [
-        "create-subscription",
-        "create-subscription-existing-user",
-        "create-one-time-purchase",
-        "create-one-time-purchase-existing-user",
-      ];
-      for (const route of routes) {
-        const src = readFileSync(path.resolve(process.cwd(), `src/app/api/stripe/${route}/route.ts`), "utf8");
-        check(`${route} re-validates the code server-side`, src.includes("resolveCodeForCheckout("), true);
-        check(
-          `${route} writes the verified code, not validatedData.campaignCode`,
-          src.includes("campaignCode: validatedData.campaignCode"),
-          false
-        );
-      }
-    }
+    // Site 5 — "every Stripe route writes the VERIFIED code into metadata,
+    // never the body field" — MOVED, not dropped. It lived here as two
+    // `src.includes(...)` checks against each route read as TEXT, which pinned
+    // nothing: the positive leg passed if the call sat in a dead branch or a
+    // comment, and the negative leg was defeated by any rewrite of the same bug
+    // (`const { campaignCode } = validatedData`, `validatedData?.campaignCode`,
+    // `body.campaignCode`) — each of which ships a customer-supplied,
+    // unvalidated code into Stripe metadata that is redeemed later. Both were
+    // demonstrated against the real files.
+    //
+    // It is now `npm run test:campaign-code-metadata`
+    // (src/app/api/stripe/__tests__/campaign-code-metadata.test.ts), which
+    // DRIVES all four handlers with Stripe stubbed as the recorder and asserts
+    // the argument Stripe would actually have received — in both directions:
+    // resolver refuses → no `campaignCode` key at all; resolver returns a
+    // canonicalised value → that value, not the caller's. It needs a
+    // require.cache stub set installed before any route module loads, which is
+    // why it is its own file rather than another section here.
+    //
+    // What stays in THIS file is the behaviour underneath it: sites 4 and 5
+    // above drive the real `resolveCodeForCheckout` through guest, non-holder,
+    // expired and refunded cases.
   } finally {
     // Three scenarios above drive a SUCCESSFUL RedemptionService.redeem(), and
     // RedemptionService calls DrawGrantService.grantMonthlyCouponEntries, which

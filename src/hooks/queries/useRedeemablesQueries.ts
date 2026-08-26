@@ -22,9 +22,17 @@ export interface RedeemableWalletItem {
   isRedeemableNow: boolean;
   /**
    * The one customer-facing expiry string, pre-formatted server-side in AEST
-   * via formatExpiryLabelAEST — the same function the Klaviyo email uses.
-   * Never derive a display date from `expiresAt` client-side: that renders in
-   * the viewer's own locale/timezone and can disagree with the email.
+   * via formatExpiryLabelAEST — the single formatter every copy of a deadline
+   * comes from. Never derive a display date from `expiresAt` client-side: that
+   * renders in the viewer's own locale/timezone and can disagree with the
+   * instant the server actually enforces at redemption.
+   *
+   * (Corrected 2026-08-26: this said "the same function the Klaviyo email
+   * uses". No customer email prints a bonus-code deadline — a Klaviyo flow
+   * email renders against its own trigger metric, so the discount templates
+   * cannot read `expires_at_label` off the `Bonus Code Issued` event we emit.
+   * The rule is unchanged; the thing it must not disagree with is the
+   * redemption gate, not an email.)
    *
    * Optional here even though RedeemableWalletItem on the SERVICE side
    * (RedeemablesWalletService.ts) declares it required and always populates

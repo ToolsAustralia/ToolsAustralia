@@ -26,20 +26,36 @@
  *      minus the package block (dropping it would silently exclude that member
  *      from the only win-back trigger there is). A cancellation with no persisted
  *      `cancelledAt` fires nothing rather than anchoring the flow on a guess.
+ *   5. THE OTHER HALF OF THE GATE — the CALLER that asks for it. Everything
+ *      above loads `CancelSubscriptionService` directly and supplies
+ *      `isMemberChurn` itself, so it can only prove the gate INSIDE the service.
+ *      `isMemberChurn: true` appears at exactly one call site in the whole
+ *      repo — `src/app/api/stripe/cancel-subscription/route.ts` — and it
+ *      defaults to `false`, so DELETING it from that route type-checks, lints
+ *      and leaves every suite green while the cancellation event stops firing
+ *      for every real customer. The win-back Klaviyo flow is the only consumer
+ *      of the cancel click, and the `cancel-click` bonus code lives inside that
+ *      very flow: nobody enters it and nothing errors. Section 5 drives both
+ *      routes through `require.cache` stubs and pins them in OPPOSITE
+ *      directions — the member route must ask for churn, the admin route must
+ *      not.
  *
  * NOTHING LEAVES THIS PROCESS. `@/lib/stripe`, `@/lib/klaviyo`, the reference
  * resolver, the partner-discount queue, the profile sync and the analytics writer
  * are all replaced in `require.cache` before the service is loaded, and the two
  * that can reach the network are VERIFIED by object identity before a single case
- * runs. There is no database connection and no `.env.local` read.
+ * runs. Section 5 adds stubs for Mongo, the `User` model, the session and the
+ * service BARREL, so the routes still touch no database and read no `.env.local`.
  *
  * Run via: `npm run test:cancel-churn-emit`
  */
 import assert from "node:assert/strict";
 import path from "node:path";
+import { NextRequest } from "next/server";
 import type Stripe from "stripe";
 import type { IUser } from "@/models/User";
 import type { KlaviyoEvent } from "@/types/klaviyo";
+import type { CancelSubscriptionOptions } from "../CancelSubscriptionService";
 
 // ---------------------------------------------------------------------------
 // Recorders
@@ -144,6 +160,86 @@ stub("src/services/subscription/SubscriptionReferenceService.ts", stubReferenceS
 stub("src/utils/partner-discounts/partner-discount-queue.ts", stubPartnerQueue);
 stub("src/utils/integrations/klaviyo/klaviyo-profile-sync.ts", stubProfileSync);
 stub("src/services/admin/membershipAnalyticsPersistence.ts", stubAnalytics);
+
+// ---------------------------------------------------------------------------
+// Section 5 stubs — the two ROUTES that call the service
+//
+// The barrel (`src/services/subscription/index.ts`) is what both routes import,
+// and it is a DIFFERENT module from `CancelSubscriptionService.ts`, which the
+// cases above require directly. So stubbing the barrel records what the routes
+// ASK FOR without disturbing anything sections 1-4 exercise.
+// ---------------------------------------------------------------------------
+
+/** What each route passed as `cancelSubscription`'s second argument. */
+const cancelCalls: Array<CancelSubscriptionOptions | undefined> = [];
+
+const stubCancelResult = {
+  subscriptionId: "sub_fixture_1",
+  status: "active",
+  cancelAtPeriodEnd: true,
+  currentPeriodEnd: new Date("2026-09-24T13:59:59.000Z"),
+  endDate: new Date("2026-09-24T13:59:59.000Z"),
+  cancelledImmediately: false,
+  isPastDue: false,
+};
+
+const stubSubscriptionBarrel = {
+  async cancelSubscription(_user: unknown, options?: CancelSubscriptionOptions) {
+    cancelCalls.push(options);
+    return stubCancelResult;
+  },
+  isSubscriptionReferenceError: () => false,
+  SUBSCRIPTION_REFERENCE_ERROR_CODES: {
+    NO_ACTIVE_SUBSCRIPTION: "NO_ACTIVE_SUBSCRIPTION",
+    STRIPE_RETRYABLE: "STRIPE_RETRYABLE",
+  },
+};
+
+/** The member whose `_id` both routes resolve to. Never persisted anywhere. */
+const ROUTE_FIXTURE_USER_ID = "6543210987654321098765ab";
+const routeFixtureUser = {
+  _id: ROUTE_FIXTURE_USER_ID,
+  email: "route-fixture@example.test",
+  stripeSubscriptionId: "sub_fixture_1",
+  stripeCustomerId: "cus_fixture_1",
+};
+
+/** No connection is ever opened — this keeps the whole file database-free. */
+const stubMongo = { __esModule: true, default: async () => undefined };
+const stubUserModel = {
+  __esModule: true,
+  default: { findById: async () => routeFixtureUser },
+};
+const stubSession = {
+  getServerSession: async () => ({ user: { id: ROUTE_FIXTURE_USER_ID } }),
+};
+const stubAuthOptions = { authOptions: {} };
+/** The admin route's permission gate. Returns a guard, never a NextResponse. */
+const stubAuditLog = {
+  requirePermissionWithAudit: async () => ({
+    session: { user: { id: "admin-fixture" } },
+    log: async () => undefined,
+  }),
+};
+
+stub("src/services/subscription/index.ts", stubSubscriptionBarrel);
+stub("src/lib/mongodb.ts", stubMongo);
+stub("src/models/User.ts", stubUserModel);
+stub("src/lib/auth.ts", stubAuthOptions);
+stub("src/lib/audit-log.ts", stubAuditLog);
+
+// `next-auth` is a package, not a local file, so it is stubbed by its resolved
+// entry point rather than by repo path. Verified by identity in `run()`.
+const nextAuthPath = require.resolve("next-auth");
+require.cache[nextAuthPath] = {
+  id: nextAuthPath,
+  filename: nextAuthPath,
+  loaded: true,
+  children: [],
+  paths: [],
+  parent: undefined,
+  exports: stubSession,
+} as unknown as NodeModule;
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -389,6 +485,79 @@ async function testNoPersistedCancelledAtEmitsNothing(mod: CancelModule) {
 }
 
 // ---------------------------------------------------------------------------
+// Section 5 — the caller half: which ROUTE asks for the churn emit
+// ---------------------------------------------------------------------------
+
+type UserCancelRoute = typeof import("@/app/api/stripe/cancel-subscription/route");
+type AdminCancelRoute = typeof import("@/app/api/admin/users/[id]/cancel-subscription/route");
+
+function cancelRequest(url: string) {
+  return new NextRequest(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ cancelAtPeriodEnd: true }),
+  });
+}
+
+/**
+ * THE MEMBER-FACING ROUTE MUST ASK FOR CHURN.
+ *
+ * `isMemberChurn` defaults to `false` in the service, so deleting the flag from
+ * this route is not a compile error and not a lint error — the cancellation
+ * simply stops emitting `Subscription Cancellation Requested` for every real
+ * customer, the win-back flow loses its only trigger, nobody enters it, and
+ * nothing anywhere reports a problem. Sections 1-4 cannot see this: they call
+ * the service directly and supply the flag themselves.
+ */
+async function testUserRouteRequestsChurn(route: UserCancelRoute) {
+  cancelCalls.length = 0;
+
+  const response = await route.POST(
+    cancelRequest("https://toolsaustralia.com.au/api/stripe/cancel-subscription")
+  );
+
+  check("the member cancel route answers 200", response.status, 200);
+  check("…and it called cancelSubscription exactly once", cancelCalls.length, 1);
+  check(
+    "…ASKING for the churn emit — this is the win-back flow's only trigger",
+    cancelCalls[0]?.isMemberChurn,
+    true
+  );
+  check("…and tagging the analytics actor as the member", cancelCalls[0]?.analytics?.actor, "user");
+}
+
+/**
+ * THE ADMIN ROUTE MUST NOT. Pinned in the opposite direction on purpose: a
+ * "fix" that moved the flag into the service default, or that copy-pasted it
+ * into this route, would send a win-back sequence to members who never asked to
+ * leave — someone ELSE cancelled on their behalf.
+ */
+async function testAdminRouteDoesNotRequestChurn(route: AdminCancelRoute) {
+  cancelCalls.length = 0;
+
+  const response = await route.POST(
+    cancelRequest(
+      `https://toolsaustralia.com.au/api/admin/users/${ROUTE_FIXTURE_USER_ID}/cancel-subscription`
+    ),
+    { params: Promise.resolve({ id: ROUTE_FIXTURE_USER_ID }) }
+  );
+
+  check("the admin cancel route answers 200", response.status, 200);
+  check("…and it called cancelSubscription exactly once", cancelCalls.length, 1);
+  check(
+    "…WITHOUT asking for churn — an admin cancel is not a member walking away",
+    cancelCalls[0]?.isMemberChurn,
+    undefined
+  );
+  check(
+    "…and the key is absent entirely, not present-and-false",
+    Object.prototype.hasOwnProperty.call(cancelCalls[0] ?? {}, "isMemberChurn"),
+    false
+  );
+  check("…and tagging the analytics actor as the admin", cancelCalls[0]?.analytics?.actor, "admin");
+}
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 
@@ -429,6 +598,35 @@ async function run() {
   console.log("\n4. Fallbacks");
   await testUnresolvablePackageStillEmits(mod);
   await testNoPersistedCancelledAtEmitsNothing(mod);
+
+  console.log("\n5. The caller half - which ROUTE asks for the churn emit");
+  /*
+   * Required here, after the stubs above are installed, for the same reason the
+   * service is: a static import would be hoisted above them.
+   */
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const loadedBarrel = require("@/services/subscription") as unknown;
+  const loadedNextAuth = require("next-auth") as unknown;
+  const userRoute = require("@/app/api/stripe/cancel-subscription/route") as UserCancelRoute;
+  const adminRoute =
+    require("@/app/api/admin/users/[id]/cancel-subscription/route") as AdminCancelRoute;
+  /* eslint-enable @typescript-eslint/no-require-imports */
+
+  // Same hard gate as above. If either stub failed to take, the routes would
+  // reach the REAL cancel path (Stripe + Mongo) instead of the recorder, and the
+  // assertions below would be meaningless rather than failing.
+  if (loadedBarrel !== stubSubscriptionBarrel) {
+    throw new Error(
+      "REFUSING TO RUN: the @/services/subscription barrel stub did not take — the routes would reach the real cancel path."
+    );
+  }
+  if (loadedNextAuth !== stubSession) {
+    throw new Error(
+      "REFUSING TO RUN: the next-auth stub did not take — the member route would reach the real session lookup."
+    );
+  }
+  await testUserRouteRequestsChurn(userRoute);
+  await testAdminRouteDoesNotRequestChurn(adminRoute);
 
   if (failures > 0) {
     console.error(`\n${failures} assertion(s) failed`);

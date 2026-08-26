@@ -27,10 +27,20 @@ export interface RedeemableWalletItem {
   source: "monthly-coupon" | "milestone";
   isRedeemableNow: boolean;
   /**
-   * The one customer-facing expiry string (formatExpiryLabelAEST) — the same
-   * function the Klaviyo email renders. Components must display this, never
-   * derive a date string from `expiresAt` themselves (that's viewer-locale
-   * dependent and can disagree with the email).
+   * The one customer-facing expiry string (formatExpiryLabelAEST) — the single
+   * server-side formatter every copy of a deadline comes from. Components must
+   * display this, never derive a date string from `expiresAt` themselves
+   * (that's viewer-locale dependent and can disagree with the instant the
+   * server enforces at redemption).
+   *
+   * Corrected 2026-08-26: this said "the same function the Klaviyo email
+   * renders". No email renders it — the three discount templates carry the
+   * hardcoded code string only, because a Klaviyo flow email renders against
+   * its OWN trigger metric and cannot read `expires_at_label` off the
+   * `Bonus Code Issued` event. Note also that neither component consuming this
+   * field is currently reachable by a customer (`/rewards` is behind the
+   * rewards pause flag, `RewardsFloatingWidget` is unmounted) — see
+   * docs/rewards-redeemables/frontend.md, "Known gap".
    */
   expiresAtLabel: string;
 }

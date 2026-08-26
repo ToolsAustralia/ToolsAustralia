@@ -988,10 +988,25 @@ export function createStartedCheckoutEvent(
 /**
  * Bonus Code Issued — a per-customer bonus-entry code was minted or re-armed.
  *
+ * THIS EVENT IS OBSERVABILITY, NOT DELIVERY. It does not put the code or the
+ * deadline in front of the customer: the three discount emails carry the code
+ * string hardcoded in the marketing template, and a Klaviyo flow email renders
+ * against its OWN trigger metric (cancel-click / checkout-abandon /
+ * one-time-purchase), so it cannot resolve `expires_at_label` from here. With
+ * no admin screen for bonus codes, this event is the only record that a
+ * customer was issued one and whether the notification went out — which is why
+ * it is kept. See docs/tracking/KLAVIYO_INTEGRATION.md.
+ *
  * `expiresAt` is a PARAMETER and must be the persisted issuance value. Never
- * call new Date() for it here: the email prints this value and the server
- * enforces the stored one, so a recomputed instant can silently differ by a
- * whole calendar day across Sydney midnight.
+ * call new Date() for it here: the server enforces the stored instant, so a
+ * recomputed one makes this record disagree with what actually happened, and
+ * that record is what support answers a customer from.
+ *
+ * (Rationale corrected 2026-08-26 on both counts. It used to say "the email
+ * prints this value", and to justify itself with "a whole calendar day across
+ * Sydney midnight" — `expiryAfterHours` replaced the calendar-day model, so
+ * there is no midnight cliff. The rule survives both corrections: a re-arm
+ * MOVES this instant, so a recomputed value can be a whole 72-hour window out.)
  */
 export function createBonusCodeIssuedEvent(
   user: IUser,

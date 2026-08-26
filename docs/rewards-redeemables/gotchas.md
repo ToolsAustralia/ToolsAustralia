@@ -28,15 +28,17 @@
 
 4. **`already_active` returns the STORED `expiresAt`, never a recomputed one.** Note it does **not**
    email — `already_active` is a silent no-op, so there is no "re-send" anywhere in this system. The
-   stored date is returned so that a later **re-arm** email cannot print a recomputed one, and so a
-   caller inspecting the outcome sees the deadline the customer was actually told. This is also why
-   the mint returns a `StampedIssuance` instead of a boolean.
+   stored date is returned so that a later **re-arm** cannot hand back a recomputed one, and so a
+   caller inspecting the outcome sees the deadline the redemption gate will actually enforce. This is
+   also why the mint returns a `StampedIssuance` instead of a boolean. (Corrected 2026-08-26: this
+   used to say "a later re-arm **email**" and "the deadline the customer was actually **told**". No
+   email prints the deadline — see launch step 4 below.)
    **The reason changed on 2026-08-26 but the rule did not.** Under the calendar-day model the danger
    was a 150ms gap across Sydney midnight printing a deadline a full **calendar day** off what
    redemption enforces. `expiryAfterHours` has no midnight cliff, so the same gap now costs 150ms —
    which is why nobody should downgrade this to "recompute, it's close enough". The stored value is
-   still the only one that is *the same instant* the customer was emailed and the redemption gate
-   compares against (`expiresAt: { $gt: now }`, strictly exclusive), and a re-arm legitimately moves
+   still the only one that is *the same instant* every rendered copy derives from and the redemption
+   gate compares against (`expiresAt: { $gt: now }`, strictly exclusive), and a re-arm legitimately moves
    it, so a recomputed value on an `already_active` outcome would be a different deadline entirely,
    not a rounding difference.
 
@@ -180,16 +182,79 @@ fails at checkout with "Invalid campaign code". The flow is now the LAST thing p
    id 86 in the same change** — it tells customers "a fixed 72 hours", and `test:chat-faqs` asserts
    that wording against the copy, not against any campaign row, so a mismatch ships green and Cobber
    states a deadline the server does not enforce.
-3. **Smoke-test the endpoint in production**, against a real production account, using a disposable
-   campaign. The production gate sits ahead of the MINT, deliberately (see P7 rule 3b), so this path
-   **cannot** be rehearsed on a preview deploy or locally — this smoke test is the first genuine
-   execution the code ever gets. Confirm the issuance row, the Klaviyo event and the delivered email
-   all name the same deadline.
+3. **Smoke-test the endpoint in production, against the REAL campaign.** The production gate sits
+   ahead of the MINT, deliberately (see P7 rule 3b), so this path **cannot** be rehearsed on a
+   preview deploy or locally — this smoke test is the first genuine execution the code ever gets.
+
+   **There is no such thing as a disposable campaign here, and you cannot make one.** The endpoint
+   accepts only the three `trigger` values, each of which resolves to one fixed code via
+   [`BONUS_CODE_BY_TRIGGER`](../../src/config/bonusCodes.ts), and `code` is **uniquely indexed**
+   (`MonthlyEntryCampaign.ts:148`) — so a second campaign carrying the same code cannot be created,
+   and a campaign carrying any other code is unreachable by any trigger. (This step said "using a
+   disposable campaign" until 2026-08-26; that was never possible.)
+
+   Do it in this order:
+
+   a. **Pick an account you control** and are willing to spend — one grant per person is for life,
+      and if you redeem during the test that account's grant is gone permanently. A staff account is
+      the right choice; a real customer's is not.
+
+   b. **Fire one call** with the Production secret. Nothing else can trigger this — the three in-app
+      call sites were deleted on 2026-08-26:
+
+      ```bash
+      curl -sS -i https://toolsaustralia.com.au/api/bonus-codes/v1/issue \
+        -H 'Content-Type: application/json' \
+        -H "X-Bonus-Code-Secret: $BONUS_CODE_WEBHOOK_SECRET" \
+        -d '{"email":"you@toolsaustralia.com.au","trigger":"cancel-click"}'
+      ```
+
+      Expect `200 {"ok":true}`. **A `200` alone proves nothing** — it is also what "no campaign
+      carries that code" returns. That is the whole reason steps (c) and (d) exist.
+
+   c. **Confirm the `RedeemableIssuance` row** in Mongo: one row for `(campaignId, userId)`, `status:
+      "active"`, and `expiresAt` exactly 72 hours after `issuedAt` — not the end of any Sydney day.
+
+   d. **Confirm the `Bonus Code Issued` event** on that profile in Klaviyo (Profiles → the account →
+      Activity feed) and that `expires_at` / `expires_at_label` name the **same instant** as the row.
+      **Do not check the delivered email for a deadline** — it cannot carry one, for the reason in
+      step 4. (Until 2026-08-26 this step said to confirm the row, the event and the email "all name
+      the same deadline". That check could only ever have passed under the pre-reversal design, where
+      the flow was built on our own metric.)
+
+   e. **Clean up: delete that `RedeemableIssuance` row.** It is the only artefact the smoke test
+      leaves, and deleting it restores the test account's one-per-lifetime grant *and* clears the
+      30-day re-arm cooldown, because `redeemedEverAt` and `firstIssuedAt` both live on that row.
+      **This only works while the grant is unredeemed** — once `redeemedEverAt` is stamped, deleting
+      the row does not give the grant back, by design (that is the refund-abuse gate). Leaving the
+      row is not harmful; it just means that account is used up.
+
+   Run this **before** step 4. The mint emits `Bonus Code Issued`, so once a flow is listening on
+   that metric your smoke test becomes a live send.
+
 4. **Only then does marketing publish the flows.** Each flow calls
-   `POST /api/bonus-codes/v1/issue` one step above its discount email, and the email renders
-   `expires_at_label` verbatim. Never re-format `expires_at` in the template: the label is the stored
-   instant formatted in Sydney time, and any other formatting can print a time that contradicts what
-   redemption enforces.
+   `POST /api/bonus-codes/v1/issue` one step above its discount email. **The email carries the code
+   string hardcoded in the template, and nothing else comes back** — Klaviyo webhooks are one-way
+   ([api.md](./api.md)); the call is what makes that hardcoded string work for that person.
+
+   **The discount email cannot print the deadline. Do not put `{{ event.expires_at_label }}` in it.**
+   `expires_at_label` is a property of the `Bonus Code Issued` metric **our server** emits, and a
+   flow email renders against its **own trigger metric** — for these three sequences that is
+   cancel-click / checkout-abandon / one-time-purchase, not ours. The merge tag renders **empty**,
+   and the sequence ships with a blank deadline line that nobody notices until a customer asks.
+
+   So, today: **no email prints the deadline, and no page shows it either** (see
+   [frontend.md](./frontend.md), "Known gap"). The only place a customer is ever shown the exact
+   instant is the checkout refusal *after* it has already lapsed; before that, support has to read it
+   off the issuance row. Cobber id 86 says exactly this — keep them in step.
+
+   If marketing does want a customer-facing deadline, that is a **separate flow triggered on the
+   `Bonus Code Issued` metric**, which is the one place `expires_at_label` actually resolves. It is
+   **not** part of this launch and nothing above depends on it. If you build it: render
+   `expires_at_label` verbatim, never re-format `expires_at` (the label is the stored instant
+   formatted in Sydney time, and any other formatting can print a time that contradicts what
+   redemption enforces), and **update Cobber FAQ id 86 in the same change** — it currently tells
+   customers the date is not printed anywhere they can reach.
 
 **A 72-hour window is a duration, not a wall-clock time — and it shifts across a DST transition.**
 `expiryAfterHours` is exact epoch-millisecond arithmetic, so a code issued Friday 2:00pm AEST expires

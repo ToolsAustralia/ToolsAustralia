@@ -188,6 +188,31 @@ function main() {
     !bonusExpiry!.answer.includes("11:59"),
     'Bonus-code expiry FAQ (id 86) must NOT promise an 11:59pm cut-off — the window is an exact 72-hour offset and can end at any time of day'
   );
+  // 2026-08-26, final review: the two assertions above held while the sentence NEXT to the
+  // number was still false. The first rewrite told the customer "the exact date and time is
+  // printed in the email that carries your code — check that email". No email prints it:
+  // expires_at_label is a property of the `Bonus Code Issued` metric WE emit, and a Klaviyo
+  // flow email renders against its OWN trigger metric (cancel-click / checkout-abandon /
+  // one-time-purchase), so the merge tag resolves to empty. The three discount templates
+  // carry the hardcoded code string and no date. With no in-app surface either
+  // (docs/rewards-redeemables/frontend.md, "Known gap"), that sent a customer holding a
+  // 72-hour, one-per-lifetime grant somewhere the answer does not exist. So pin the
+  // DIRECTION as well as the number: no "printed in the email", and a support path offered.
+  // If a flow on the `Bonus Code Issued` metric is ever built, this goes red — which is the
+  // point: the copy change becomes part of that work instead of drifting behind it.
+  //
+  // Pin the DIRECTIVE, not the topic. A first attempt at this guard banned the substring
+  // "printed in the email" and went red against the corrected copy, which legitimately says
+  // the date is NOT printed in the email. What must never come back is the instruction to go
+  // and look there.
+  assert.ok(
+    !/check (that|your|the) email/i.test(bonusExpiry!.answer),
+    "Bonus-code expiry FAQ (id 86) must NOT send the customer to their email for the deadline — the discount templates render against their own trigger metric and cannot resolve expires_at_label, so no email prints it"
+  );
+  assert.ok(
+    bonusExpiry!.answer.includes("/contact"),
+    "Bonus-code expiry FAQ (id 86) must offer a support path — with no email and no page showing the deadline, support reading the issuance row is the ONLY way a customer can learn it before it lapses"
+  );
   const bonusReuse = entries.find((e) => e.id === "87");
   assert.ok(bonusReuse !== undefined, "FAQ entry id=87 (bonus-code single use) must exist");
   // The re-arm cooldown (REARM_COOLDOWN_DAYS = 30) is a customer-visible limit on the

@@ -53,15 +53,28 @@ feature is switched on, per CLAUDE.md rule 5c — once codes start reaching cust
 asking Cobber about them, and an ungrounded Cobber would improvise copy that is legally constrained
 (rule 11: entries are a free inclusion, never sold; no probability framing).
 
-**Three things about this batch changed on 2026-08-26. Two are FIXED; one is a standing warning:**
+**Four things about this batch changed on 2026-08-26. Three are FIXED; one is a standing warning:**
 
+0. **FIXED (second pass, final review) — id 86 no longer sends the customer to an email that does not
+   carry the date.** The first pass replaced the 11:59pm promise with "the exact date and time is
+   printed in the email that carries your code… so if you are not sure, check that email." That is
+   not true under the shipped design and never could be: `expires_at_label` is a property of the
+   `Bonus Code Issued` metric **our server** emits, and a Klaviyo flow email renders against its
+   **own** trigger metric — cancel-click / checkout-abandon / one-time-purchase — so the merge tag
+   resolves to nothing. The three discount templates carry the hardcoded **code string** and no date.
+   Combined with the standing note below (no page shows it either), a customer asking "when does mine
+   expire?" was being sent nowhere, on a 72-hour fuse they get one of per lifetime. The entry now
+   says plainly that the exact date is not shown anywhere they can reach, gives them the safe rule
+   (use it within 72 hours of the email arriving), offers `[contact us](/contact)`, and keeps the one
+   honest fallback it already had: signed in, the checkout message names the exact instant **once the
+   code has already run out**. A matching ACCOUNT SELF-SERVICE MAP bullet was added to
+   `systemPrompt.ts` — with no lookup surface, "there is no page for this, escalate" is exactly what
+   that map exists to say. Edited in place; corpus count unchanged at **90**.
 1. **FIXED — id 86 no longer promises an 11:59pm Sydney cut-off.** It used to say the deadline "always
    runs to 11:59pm Sydney time on that day," which was true only under the deleted calendar-day model
    (`endOfDayAESTAfterDays`). The window is now an exact **72 hours** from the moment the code is
    created, so it runs out at whatever time of day that lands on. The entry now says exactly that — a
-   fixed 72 hours, not an end-of-day cut-off, not tied to a whole calendar date — and points the
-   customer at the date and time printed in the email that carries the code, which is DST-proof
-   because it is an absolute instant rather than a rule they have to apply themselves. Edited in
+   fixed 72 hours, not an end-of-day cut-off, not tied to a whole calendar date. Edited in
    place, so the corpus count stayed at **90**.
    The guard moved with it: `faqs.test.ts` used to **require** the string `"11:59pm Sydney time"` on id
    86 — an assertion pinning the wrong fact. It now requires `"72 hours"` and asserts `"11:59"` is
@@ -78,14 +91,18 @@ asking Cobber about them, and an ungrounded Cobber would improvise copy that is 
    `POST /api/bonus-codes/v1/issue`. So the campaign is **necessary but not sufficient**, and the flows
    going live is the real moment customers start asking.
 
-**One thing these entries deliberately do NOT say: "check your rewards wallet."** There is no
-customer-reachable surface that displays the code string or its deadline. `RedeemablesWallet` renders
-both, but it is mounted only on `/rewards`, which is behind the `rewardsEnabled` pause flag
-(BUSINESS.md §8a); `RewardsFloatingWidget` also renders both and has been unmounted since the 2026-07
-dashboard revamp. The live claimables surface (`/my-account/rewards`) shows the grant and a Claim
-button but neither the code nor the date. So the **email is the only place a customer can read their
-deadline**, and Cobber must not send them looking anywhere else. If a wallet surface ever shows the
-code again, update ids 86–88 and this note together.
+**Two things these entries deliberately do NOT say: "check your rewards wallet", and "check your
+email for the date."** There is no customer-reachable surface that displays the code string or its
+deadline. `RedeemablesWallet` renders both, but it is mounted only on `/rewards`, which is behind the
+`rewardsEnabled` pause flag (BUSINESS.md §8a); `RewardsFloatingWidget` also renders both and has been
+unmounted since the 2026-07 dashboard revamp. The live claimables surface (`/my-account/rewards`)
+shows the grant and a Claim button but neither the code nor the date. **And the email carries the
+code but not the deadline** (see item 0 above). So there is currently **nowhere** a customer can read
+their deadline before it lapses, and Cobber must say that rather than send them looking. Two things
+would change it, and each must update ids 86–88, the self-service-map bullet and this note in the
+same change: a wallet/claimables surface that shows the code again, or a **separate Klaviyo flow
+built on the `Bonus Code Issued` metric** — the one place `expires_at_label` actually resolves
+(docs/rewards-redeemables/gotchas.md, launch step 4).
 
 **Consequence to watch:** until those campaigns exist, Cobber describes something no customer has. That
 is accepted and low-risk — the entries only answer a question a customer would not think to ask — but

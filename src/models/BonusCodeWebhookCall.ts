@@ -56,7 +56,13 @@ export const BONUS_CODE_CALL_OUTCOMES = [
   "not_production",
   /** Zod rejected the body, or neither userId nor email was usable — 400. */
   "invalid_body",
-  /** userId and email resolved to different users — 409. */
+  /**
+   * userId and email resolved to different users — 200, opaque, like every
+   * other customer-state outcome. (Was a 409 until 2026-08-26; a status of its
+   * own let anyone holding the secret probe "is this address a customer".) THIS
+   * ROW AND THE ROUTE'S `console.error` ARE NOW THE ONLY WAY TO SEE THE
+   * CONDITION — do not drop either.
+   */
   "identity_conflict",
   /** No such user, or the account is inactive — 200 (not retryable). */
   "user_not_found",

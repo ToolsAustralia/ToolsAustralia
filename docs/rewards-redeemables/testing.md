@@ -9,7 +9,7 @@
 
 ### Per-customer bonus codes
 
-Six suites are **pure** (no DB, no env) and cover the arithmetic and the decision tables; three are
+Five suites are **pure** (no DB, no env) and cover the arithmetic and the decision tables; six are
 **integration** suites that run the real service/route code against a live database. The split
 matters: a pure suite proves a predicate is right, an integration suite proves the call site
 actually consults it and that the write lands.
@@ -19,7 +19,8 @@ actually consults it and that the write lands.
 | `npm run test:bonus-code-expiry` | pure | [expiry-hours.test.ts](../../src/utils/redeemables/__tests__/expiry-hours.test.ts) — `expiryAfterHours`'s exact-offset arithmetic (both DST transitions asserted on elapsed milliseconds, not the shifted wall-clock hour; year rollover; leap day; no second/ms rounding; zero/negative/fractional guards), plus `decideRearm`'s re-arm cooldown (`REARM_COOLDOWN_DAYS`): inside vs outside the cooldown, the exact boundary, `redeemedEverAt` winning regardless of cooldown, the no-`firstIssuedAt` fallback, and that the no-trigger path is byte-identical to before. Replaces `expiry-window.test.ts`, deleted 2026-08-26 with the calendar-day helper it tested (`endOfDayAESTAfterDays`). |
 | `npm run test:bonus-code-policy` | pure | [bonus-code-policy.test.ts](../../src/utils/redeemables/__tests__/bonus-code-policy.test.ts) — `decideRearm`'s decision table (3-arg calls only), `personalWindowGoverns`, `isCampaignRedeemable`. |
 | `npm run test:issuance-expiry` | pure | [issuance-expiry.test.ts](../../src/services/redeemables/__tests__/issuance-expiry.test.ts) — `resolveIssuanceExpiry`'s precedence chain. |
-| `npm run test:campaign-window` | DB | [campaign-window.test.ts](../../src/services/redeemables/__tests__/campaign-window.test.ts) — the four campaign-window truncation sites (see [rules.md R9](./rules.md)). |
+| `npm run test:campaign-window` | DB | [campaign-window.test.ts](../../src/services/redeemables/__tests__/campaign-window.test.ts) — the four campaign-window truncation sites (see [rules.md R9](./rules.md)). Its "every Stripe route writes the verified code into metadata" guard **moved out** on 2026-08-26 — see `test:campaign-code-metadata` below. |
+| `npm run test:campaign-code-metadata` | **DB** | [campaign-code-metadata.test.ts](../../src/app/api/stripe/__tests__/campaign-code-metadata.test.ts) — all four Stripe checkout routes write the **server-verified** campaign code into Stripe metadata, never the request-body field. Lives in [billing-stripe](../billing-stripe/testing.md) (its files are `src/app/api/stripe/**`) but the invariant is this domain's: the code that lands in metadata is what the webhook later redeems, granting entries and burning a one-per-lifetime grant. Replaces a text-grep guard; see below. |
 | `npm run test:trigger-eligibility` | pure | [trigger-eligibility.test.ts](../../src/services/redeemables/__tests__/trigger-eligibility.test.ts) — the trigger bypass in `isUserEligibleForCampaign`. |
 | `npm run test:klaviyo-canonical` | pure | Bonus Code Issued event-property shape, and that the builder emits the *passed* expiry. |
 | `npm run test:bonus-code-mint` | **DB** | [bonus-code-mint.test.ts](../../src/services/redeemables/__tests__/bonus-code-mint.test.ts) — the mint, the re-arm lifecycle, the refund guarantee, concurrency, and legacy parity. See below. |
@@ -41,7 +42,9 @@ actually consults it and that the write lands.
    the deadline handed back to the caller **is** the persisted one. (The old rationale — "a
    recomputed value could print a date a calendar day off" — was the calendar-day model's midnight
    cliff and no longer applies under `expiryAfterHours`. The assertion stays because the persisted
-   instant is the one the email prints and the redemption gate compares against, and a re-arm moves
+   instant is the one the redemption gate compares against and the one every rendered copy derives
+   from — the `Bonus Code Issued` event, the wallet label, the checkout refusal; no email prints it,
+   see [gotchas.md](./gotchas.md) launch step 4 — and a re-arm moves
    it: recomputing on an `already_active` outcome would hand back a *different* deadline.)
 3. **Re-send vs re-arm.** A second trigger inside the live window returns the stored deadline and
    writes nothing. A lapsed grant re-arms in place: `firstIssuedAt` survives, `issuedAt` moves,
@@ -85,13 +88,30 @@ actually consults it and that the write lands.
 
 #### `test:bonus-code-webhook` — what it protects
 
-Ten sections, all through the real `POST` handler with real `NextRequest` objects:
+Twelve sections, all through the real `POST` handler with real `NextRequest` objects:
 
 - **Authorization.** No header, a wrong secret and a wrong secret *of the same length* all answer
-  `401` (the same-length case is the one a naive `timingSafeEqual` throws on). An **unset** server
+  `401`. The same-length case is the only one `timingSafeEqual` actually compares byte by byte;
+  three further cases (added 2026-08-26, fix round 2) drive **differing lengths** — shorter, longer,
+  and a multi-byte value of the same *string* length but a different *byte* length — because every
+  rejection fixture here used to be exactly `SECRET_CURRENT.length` characters, so the case
+  spec §7 explicitly names ("wrong-length header → 401, **not** a thrown `timingSafeEqual`") was
+  unreachable. `timingSafeEqual` THROWS a RangeError on unequal-length buffers, so the byte-length
+  pre-check in `auth.ts` is load-bearing: without it (and its `try`/`catch`) every wrong-length
+  secret answers `500`, which is the status this endpoint uses to mean "retry, the grant is
+  recoverable" — Klaviyo would retry an unauthenticated caller indefinitely. *Mutation-proven:*
+  removing the guard and the catch turns 4 assertions red. An **unset** server
   secret answers `500`, never `200` — the fail-closed property, asserted rather than assumed.
 - **Rotation.** With `BONUS_CODE_WEBHOOK_SECRET=<old>,<new>` both are accepted; dropping `<old>` from
-  the list revokes it on the next call.
+  the list revokes it on the next call. **And the `MIN_SECRET_LENGTH` floor** (added 2026-08-26): a
+  configured secret one byte under the floor is DROPPED, leaving no candidates, so the endpoint
+  fails **closed** with `misconfigured` / `500` rather than honouring a brute-forceable value. Pinned
+  in both halves deliberately — the behavioural leg derives its fixture from the constant, so on its
+  own it would simply move with a lowered floor and keep passing (the "a content assertion naming a
+  business value has its own expiry date" trap in `docs/config-and-data/gotchas.md`), so the
+  constant is also asserted directly as `>= 16`: raising the floor is a tightening and stays
+  allowed, lowering it is the regression. *Mutation-proven:* `MIN_SECRET_LENGTH = 1` turns 4
+  assertions red — and turned **none** red before the direct assertion was added.
 - **The production assertion.** With `VERCEL_ENV=preview`, a fully valid authorised call answers
   `403` and writes **no issuance row**.
 - **The body contract**, including the case that matters most in practice: an **empty** `userId`
@@ -100,9 +120,16 @@ Ten sections, all through the real `POST` handler with real `NextRequest` object
   `400`** a call the `userId` can serve. An unknown trigger answers `400` and echoes the offending
   value; a `400` whose trigger *was* valid still records that trigger on its audit row, because that
   row is what names the broken flow.
-- **Customer resolution**, including the `409` when `userId` and `email` name different accounts, and
-  the `200 user_not_found` for an unknown id, an unknown address and a deactivated account. Also the
-  quiet cousin of the `409`: a **usable `userId` that resolves to nothing does not fall back to the
+- **Customer resolution**, including the `identity_conflict` refusal when `userId` and `email` name
+  different accounts, and the `200 user_not_found` for an unknown id, an unknown address and a
+  deactivated account. The conflict answers `200` with a body byte-identical to a mint (see api.md,
+  "Why the identity conflict is not a `409`"), so the suite asserts **both remaining detectors** as
+  well as the status: the **audit row**, and the route's **`console.error`** — captured across the call
+  by swapping `console.error` for a recorder and restoring it in a `finally`. With the status no longer
+  distinguishing the condition those two are the only ways to see it at all, and a test checking only
+  the status would let either signal be deleted silently (deleting the `console.error` used to leave
+  the suite green). Also
+  the quiet cousin of it: a **usable `userId` that resolves to nothing does not fall back to the
   email**. Driven against the real fixture campaign and asserting **zero** issuance rows for the
   address's owner, so a regression to the falling-through behaviour mints and fails the assertion
   rather than silently no-opping.
@@ -121,18 +148,73 @@ Ten sections, all through the real `POST` handler with real `NextRequest` object
   nothing. That is the assertion that keeps a database outage BLOCKING minting instead of uncapping
   it, and this gate is the only control that survives a leaked secret. The suite first asserts the
   patched query was actually reached, so the `500` cannot pass for some unrelated reason.
+- **WHICH outcomes consume the cap** (section 10b, added 2026-08-26, fix round 2). Everything above
+  sets the cap to `"0"` (trips at any count, including a permanently-zero one) or `"1000000"`
+  (allows at any count), so `mintedToday` was never load-bearing in an assertion and
+  `BUDGET_CONSUMING_OUTCOMES` was never read at all — leaving the cap's *definition* mutable in
+  both directions with type-check, lint and every suite green. Empty it (or drop `"minted"` /
+  `"rearmed"`) and real mints stop being counted: `mintedToday` is permanently `0`, the cap never
+  fires, and the endpoint is uncapped from the moment the secret leaks. Add a non-minting outcome
+  and the opposite happens: `not_applicable` is the branch's normal RESTING state — no campaign
+  carries the code until an admin creates one, plus every ineligible customer — so a few hundred
+  inert calls in one UTC day answer `429` to every legitimate flow send for the rest of that day.
+  Closed by three things: an **exhaustive `Record<BonusCodeCallOutcome, boolean>` classification**
+  in the test (so a new outcome added to the model without a decision here is a compile error, the
+  same forcing function `BonusCodeWebhookCall.ts` uses for the trigger enum) asserted equal to the
+  constant; a **delta** across one real mint through the route using the production counting query
+  verbatim (`+1`, never an absolute — the count is collection-wide for the UTC day and other suites
+  share the database); and the same delta across one `not_applicable` call (`0`). Plus the count
+  made load-bearing in the gate itself: a cap set to the LIVE count refuses the next call, one
+  above it mints. *Mutation-proven:* emptying the constant turns 3 assertions red, adding
+  `"not_applicable"` to it turns 2 red; both type-check and lint clean.
 - **Response opacity**: `{ ok: true }` for a mint and `{ ok: true }` for "no such customer" are
   asserted byte-for-byte identical, which is the property that stops the endpoint being a
   customer-state oracle.
 - **The audit row on every path**, checked by outcome — including the refusals, which is what makes
   the daily cap real, since the budget counts these rows.
+- **The Klaviyo profile the event is addressed to** (section 7, added 2026-08-26). The stub records
+  `customer_properties`, not just the properties, and the mint case asserts the customer's own
+  `email` and `first_name`. That block is built from the user document
+  `resolveBonusCodeCustomer` PROJECTED, and `WEBHOOK_USER_PROJECTION` is a plain string literal:
+  dropping a field from it is neither a compile error nor a runtime error. The event simply goes out
+  with `email: ""`, Klaviyo has no profile to attach it to, and the only record that answers "why
+  didn't this customer get their code?" silently stops landing — with no admin surface to notice it
+  from. *Mutation-proven:* removing `email` from the projection type-checks and turns one assertion
+  red; before this it turned none.
+- **The re-arm cooldown, end to end** (section 11, added 2026-08-26, fix round 2). `rearmed` and
+  `expired_no_rearm` were the only two of the endpoint's eleven status-map rows that nothing drove
+  through the route, and they are exactly the two the cooldown decides between. The anchor reaches
+  `decideRearm` as an OPTIONAL fourth argument (`existing?.firstIssuedAt ?? existing?.issuedAt` at
+  `CampaignService.ts`), so replacing it with `undefined` type-checks cleanly — and with it gone
+  rule 4 never fires: every lapsed row plus a trigger returns `rearmed`, so a flow re-entry, a late
+  retry, or marketing re-running a sequence hands the same customer a second full 72-hour window and
+  a second code, unbounded, on money-equivalent prize-draw entries. **Neither existing suite can see
+  it**: `test:bonus-code-policy` passes `firstIssuedAt` in as an argument, so it tests the decision
+  in isolation and never reaches the caller, and `test:bonus-code-mint` §5 deliberately ages
+  `firstIssuedAt` PAST the cooldown (its own comment says so), so no DB-backed test ever built a
+  lapsed row *inside* it. Section 11 does both through the route: mint, push `expiresAt` into the
+  past leaving `firstIssuedAt` where the mint put it → `200` + `expired_no_rearm` + deadline
+  unmoved + one row + zero emits; then age `firstIssuedAt` one day past `REARM_COOLDOWN_DAYS` →
+  `200` + `rearmed` + a deadline exactly 72 hours out and in the future + `firstIssuedAt` preserved
+  (so the next cooldown still anchors on the FIRST grant) + exactly one email. *Mutation-proven:*
+  passing `undefined` for the anchor type-checks, lints clean, leaves `test:bonus-code-policy` and
+  `test:bonus-code-mint` fully green, and turns 3 section-11 assertions red.
 
 Two safety mechanisms worth knowing before editing it: Klaviyo is stubbed and **verified by object
 identity** before `VERCEL_ENV` is forced to `"production"`; and `BONUS_CODE_BY_TRIGGER` is repointed
 at per-run fixture codes (restored in `finally`), so the suite never creates a campaign carrying the
 real `BACKIN200` / `LOCKIN100` / `EXTRA100` — so it needs no refuse-to-run guard and stays runnable
 after launch. Audit rows are cleaned up by the sha256 of a per-run client IP that only this file
-sends.
+sends. Cleanup runs each deletion as an **individually guarded step** (2026-08-26): as unguarded
+sequential `await`s, one throwing `deleteMany` skipped everything below it — and the campaigns this
+file creates are genuinely live campaigns in a shared database, so a leak leaves a real
+`MonthlyEntryCampaign` row carrying a fixture code that then collides with the unique index on
+`code` on the next run. Same pattern as `campaign-window.test.ts` / `campaign-enrolment.test.ts`;
+`test:bonus-code-mint` was converted at the same time and had `MilestoneIssuance` added to its
+steps — its §4 drives a real `RedemptionService.redeem()`, which runs
+`MilestoneService.checkAndIssueMilestones`, so it shares that footprint with its sibling. That leak
+is latent only while no active `MilestoneReward` has a threshold low enough for a fixture user to
+reach; the moment one does, every run leaks a row permanently.
 
 #### `test:code-visibility` — what it protects
 
@@ -143,7 +225,16 @@ is a redaction, not a filter — asserting only "no code" would also pass if the
 vanished); and a caller holding a *different* campaign's issuance sees exactly one of the two
 codes, which is the assertion that catches a naive "does this user hold any issuance?" check.
 `next-auth` is stubbed in `require.cache` to stand in for the session cookie a test process cannot
-mint; everything downstream is the real handler.
+mint; everything downstream is the real handler. Its cleanup was converted to individually guarded
+steps on 2026-08-26 for the same reason as its two siblings — it also creates live campaigns in a
+shared database.
+
+**All four DB-backed suites in this domain now guard each cleanup step**
+(`test:campaign-window`, `test:campaign-enrolment`, `test:bonus-code-mint`,
+`test:bonus-code-webhook`), as does `test:code-visibility`. Copy that shape into any new one:
+unguarded sequential `await`s mean one failure silently skips every step below it, and what is left
+behind is not a stray test row but a **live campaign** and, in two of them, a real entry
+subdocument inside a live `MajorDraw`.
 
 ## Test conventions
 

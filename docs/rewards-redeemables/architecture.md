@@ -52,7 +52,10 @@ TRIGGER PATH  (cancel-click | checkout-start | one-time-purchase)
   Klaviyo flow, one step above the discount email
     → POST /api/bonus-codes/v1/issue                            ← owns 100% of its own auth
         → production assertion → shared secret → daily mint budget
-        → Zod → resolveBonusCodeCustomer({ userId?, email? })    ← 409 when the two disagree
+        → Zod → resolveBonusCodeCustomer({ userId?, email? })    ← identity_conflict when the two
+                                                                   disagree: audited + console.error,
+                                                                   answered 200 like every other
+                                                                   customer-state outcome (api.md)
         → mintBonusCodeForTrigger(user, trigger)                 ← the mint-and-email orchestration
         → CampaignService.ensureCampaignIssuanceForUser({ userId, campaignCode, trigger })
              → resolve campaign by code (endsAt still gates MINTING)
@@ -141,9 +144,19 @@ legacy row minted before `firstIssuedAt` existed still has something to anchor t
 `existingRow` query already projects both fields (`.select("... issuedAt firstIssuedAt")`), so no query
 change was needed to wire this.
 
-Every outcome returns the row **as persisted** (`StampedIssuance`), because the Klaviyo "Bonus Code Issued"
-email must print the stored instant. Recomputing the date at the caller lets a sub-second gap across Sydney
-midnight print a deadline a full calendar day off what redemption enforces.
+Every outcome returns the row **as persisted** (`StampedIssuance`), because the persisted instant is the one
+the redemption gate compares against and the one every rendered copy of the deadline derives from.
+
+**Rationale corrected 2026-08-26 — the rule survived, both of its old reasons did not.** This used to read
+"the Klaviyo 'Bonus Code Issued' email must print the stored instant … a sub-second gap across Sydney
+midnight prints a deadline a full calendar day off". No email prints it at all (a Klaviyo flow email renders
+against its own trigger metric, so the three discount templates cannot read `expires_at_label` off that
+event), and the midnight cliff belonged to the calendar-day model — `expiryAfterHours` removed it. The
+surviving reason is the re-arm: a **re-arm moves this instant**, so a caller recomputing `now +
+validForHours` against a row it did not just write can be a whole **72-hour window** away from what
+redemption enforces. See the header comment in
+[CampaignService.ts](../../src/services/redeemables/CampaignService.ts) and
+[testing.md](./testing.md) §2.
 
 ### `StampedIssuanceResult.outcome` — which outcomes are retryable
 

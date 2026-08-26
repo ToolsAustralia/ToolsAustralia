@@ -44,10 +44,14 @@ interface StampedIssuance { id; campaignId; campaignCode; code?; entriesAmount; 
 interface StampedIssuanceResult { outcome: RearmOutcome | "not_applicable" | "error"; issuance?: StampedIssuance }
 ```
 
-`issuance` is always the row **as persisted**, never a recomputed value — the Klaviyo "Bonus Code Issued"
-email prints the stored instant, and `already_active` deliberately returns the ORIGINAL date so a later
-**re-arm** email can never print a recomputed one. `already_active` itself emails nothing — it is a silent
-no-op (see [patterns.md](./patterns.md) P7 rule 2); there is no "re-send".
+`issuance` is always the row **as persisted**, never a recomputed value — the persisted instant is the one
+the redemption gate compares against and the one every rendered copy derives from, and a **re-arm MOVES
+it**, so a caller recomputing `now + validForHours` against a row it did not just write can be a whole
+72-hour window away from what redemption enforces. `already_active` deliberately returns the ORIGINAL date
+for exactly that reason. `already_active` itself emails nothing — it is a silent no-op (see
+[patterns.md](./patterns.md) P7 rule 2); there is no "re-send". (Corrected 2026-08-26: this used to say the
+"Bonus Code Issued" **email prints the stored instant**. No email prints it at all — see
+[BonusCodeNotifier — the Klaviyo emit](#bonuscodenotifier--the-klaviyo-emit).)
 
 ### The trigger gate — TWO halves, and both are load-bearing
 
@@ -155,9 +159,14 @@ Issued" Klaviyo event (`createBonusCodeIssuedEvent` in
 writes the outcome back onto the issuance row.
 
 - **`expiresAt` on the event is `issuance.expiresAt` — the persisted value, never recomputed.** The
-  email and the server enforcing redemption must agree on the exact instant; see gotchas trap 2/4.
-  `expires_at_label` is built via `formatExpiryLabelAEST()`, the same function the rewards wallet
-  renders, so app and email can never print different strings for the same date.
+  persisted instant is the one the redemption gate compares against and the one every rendered copy
+  derives from, and a **re-arm moves it**, so a recomputed value can be a whole 72-hour window out;
+  see gotchas trap 2/4. `expires_at_label` is built via `formatExpiryLabelAEST()`, the single
+  server-side formatter every rendered copy derives from — but **no email renders it**: a Klaviyo
+  flow email renders against its OWN trigger metric, so the three discount templates cannot read
+  `expires_at_label` off this event, and the two components that would render the same wallet string
+  are behind the rewards pause flag or unmounted. Corrected 2026-08-26 (this bullet used to say "the
+  email and the server … must agree" and "app and email can never print different strings").
 - **Awaited, not `trackEventBackground`.** Every other Klaviyo event in this codebase fires via
   `klaviyo.trackEventBackground(...)` (fire-and-forget). This one is `await klaviyo.trackEvent(...)`
   deliberately — `trackEvent` cannot throw (its own `catch` returns `{ success: false }`), so the
@@ -200,10 +209,16 @@ already scopes campaigns to the ones behind the caller's own issuances
 (`campaignIds = redeemableIssuances.map(...)`).
 
 **One customer-facing expiry string.** `RedeemableWalletItem.expiresAtLabel`
-(required, `string`) is `formatExpiryLabelAEST(issuance.expiresAt)` — the exact
-same function the Klaviyo "Bonus Code Issued" email renders (see
+(required, `string`) is `formatExpiryLabelAEST(issuance.expiresAt)` — the single
+server-side formatter every rendered copy of the deadline derives from, so no
+copy can disagree with the instant redemption enforces. Corrected 2026-08-26:
+this used to read "the exact same function the Klaviyo 'Bonus Code Issued' email
+renders". **No email renders it.** The event carries `expires_at_label`, but a
+Klaviyo flow email renders against its OWN trigger metric, so the three discount
+templates cannot read it (see
 [BonusCodeNotifier — the Klaviyo emit](#bonuscodenotifier--the-klaviyo-emit)
-above). `RedeemablesWallet.tsx` and `RewardsFloatingWidget.tsx` now render this
+above), and this field's own two consumers are unreachable today (see
+[frontend.md](./frontend.md), "Known gap"). `RedeemablesWallet.tsx` and `RewardsFloatingWidget.tsx` now render this
 label instead of `new Date(item.expiresAt).toLocaleDateString()`, which formats
 in the **viewer's** browser locale/timezone (the same instant reads `04/10/2026`
 to an en-AU browser and `10/4/2026` — read as 10 April, six months wrong — to an

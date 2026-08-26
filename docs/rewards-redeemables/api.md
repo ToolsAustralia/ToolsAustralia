@@ -77,9 +77,11 @@ two attempts:
    treated as absent, not as an error — that is what a half-rendered merge tag looks like.
 2. **Else** `email`, when present → `findOne({ email: email.trim().toLowerCase() })`. Exact and safe:
    `User.email` is `unique` + `lowercase` + `trim` at the schema level.
-3. Both present and resolving to **different** users → **refuse with `409`** and `console.error`. A
-   disagreement means a stale or merged Klaviyo profile, which is precisely the case where minting to
-   the wrong person is possible. Do not silently prefer one. (An email that matches **nothing** while
+3. Both present and resolving to **different** users → **refuse**, `console.error`, audit
+   `identity_conflict`. A disagreement means a stale or merged Klaviyo profile, which is precisely the
+   case where minting to the wrong person is possible. Do not silently prefer one. The refusal answers
+   `200` with the same opaque body every other customer-state outcome gets — loud to us, silent to the
+   caller; see the status map below for why it is not a `409`. (An email that matches **nothing** while
    the id resolves is *not* a disagreement — an address can change without the profile's `user_id`
    changing — so `byId` wins there.)
 4. No match, or `isActive === false` → `user_not_found`.
@@ -88,8 +90,8 @@ two attempts:
 branch is the fallback for an **absent** id; it is never a second attempt after a failed lookup. A
 stale or merged Klaviyo profile can carry a dead account's `user_id` next to a live address belonging
 to somebody else — falling through would mint *that* person's one-per-lifetime grant on a signal that
-was never theirs. It is the same substitution the `409` exists to prevent, except silent, because
-there is no second document to disagree with. The cost of refusing is one dead code in one email and
+was never theirs. It is the same substitution `identity_conflict` exists to prevent, except with no
+audit row saying so, because there is no second document to disagree with. The cost of refusing is one dead code in one email and
 a `user_not_found` row whose *rate* is watchable; the cost of falling through is a bystander's
 lifetime grant, burned invisibly. Pinned by the webhook contract suite against a real campaign, so a
 regression mints rather than no-ops.
@@ -106,13 +108,22 @@ instant of the window), and with the email fallback it also becomes an "is this 
 Australia customer" oracle for people who never interacted with us. This repo already carries a
 written incident of exactly that disclosure class at `src/app/api/codes/validate/route.ts`.
 
+**And the status line counts as body.** Every *customer-state* outcome — minted, spent, no such
+account, the identity conflict — answers `200`, byte-identical. A status of its own is an answer of its
+own, and reads back to the same sweep. See "Why the identity conflict is not a `409`" below.
+
 **The one deliberate exception** is `400`, which answers
 `{ "ok": false, "error": "invalid_body", "trigger": "<the offending value, truncated to 64 chars>" }`
 so a flow misconfiguration is visible in Klaviyo's delivery log. That value came from the caller and
 leaks nothing about a customer.
 
 All diagnostics go to `console.error` with the `[bonus-code]` prefix — production builds strip
-`log`/`info`/`debug`/`warn`, so `error` is the only level that survives.
+`log`/`info`/`debug`/`warn`, so `error` is the only level that survives. **Treat the prefix as a
+rule, not a habit.** With no admin surface and no alerting, a Vercel log filtered on `[bonus-code]`
+is the whole incident toolkit; a line without it is invisible at exactly the moment it matters. Two
+lines in `CampaignService.ts` were missing it until 2026-08-26 — including the sole producer of the
+`error` outcome, the one status whose retry can still recover a grant while the discount email is
+already in flight, so an operator saw the route's "mint failed" line and not the line saying why.
 
 ### Status map
 
@@ -129,13 +140,46 @@ permanent condition does not manufacture a retry storm against a live send.
 | `200` | Re-arm refused inside `REARM_COOLDOWN_DAYS`. | `expired_no_rearm` | A retry inside the cooldown refuses identically. |
 | `200` | No active campaign carries the trigger's code, **or** the customer is not eligible for it. | `not_applicable` | Not retryable. **`CampaignService` `console.error`s the missing campaign** — under this model that is a launch-configuration error, not a benign no-op, and it is the cheapest early warning available. |
 | `200` | No such user, or `isActive === false`. | `user_not_found` | Retrying for three days cannot conjure an account. Still logged — a *rising rate* of these is the earliest signal that a flow's merge tags broke. |
+| `200` | `userId` and `email` resolve to different users. | `identity_conflict` | **Amended 2026-08-26 — this was a `409`; do not restore it.** A data-integrity refusal, but a *customer-state* one, so it answers like every other customer-state outcome. See "Why the identity conflict is not a `409`" below. Noticed via the `console.error` and the audit row, never via the status. |
 | `400` | Body is not JSON, fails Zod, carries an unknown `trigger`, or has neither `userId` nor `email`. | `invalid_body` | Flow misconfiguration. Retrying an invalid enum forever is pure waste. Body echoes the offending `trigger`. |
 | `401` | Missing or wrong `X-Bonus-Code-Secret`. | `missing_secret` / `bad_secret` | Honest answer; a retry is harmless because nothing minted. |
 | `403` | `VERCEL_ENV !== "production"`. | `not_production` | "Klaviyo only calls the production URL" constrains the intended caller, not the reachable surface — the route exists on every preview deploy and every localhost, and Vercel env vars are set for all environments by default. Belt and braces with scoping the secret to the Production environment. |
-| `409` | `userId` and `email` resolve to different users. | `identity_conflict` | Data-integrity refusal. A retry with the same body refuses identically; the loud status is what gets it noticed. |
 | `429` | Daily mint cap reached, or the kill switch is on. | `daily_cap` / `kill_switch` | Fail-closed cap. A retry after the day rolls over (or the switch flips) succeeds, so a retryable status is right. |
 | `500` | Unset/unusable server secret. | `misconfigured` | Fail **closed**. Never copy the cron idiom `if (!secret) return true` — on a mint endpoint an unset env var would give the entire product away. |
 | `500` | Genuine internal error — DB unreachable, unexpected throw, or the budget gate itself failed. | `error` | **The only status whose retry recovers a grant that would otherwise be lost forever** while the discount email is already in flight. This is why `StampedIssuanceResult.outcome` carries `"error"` separately from `"not_applicable"`; do not collapse them back together. |
+
+#### Why the identity conflict is not a `409`
+
+*Amended 2026-08-26 (final review, must-fix 7). The spec originally mandated `409`; the spec has been
+amended to match. This is a recorded decision, not an omission — do not re-add the `409`.*
+
+**The status line is part of the response.** An opaque body buys nothing while one customer-state
+outcome answers a status of its own: a distinct status is a distinct answer, readable by exactly the
+same sweep the opaque body exists to defeat. And the `409` was reachable on **attacker-chosen input** —
+the two lookups run in parallel and the conflict check fires *before* the `isActive` gate, so someone
+holding the shared secret posts their **own** account id alongside a probe address and reads the answer
+off the status line: `409` means that address belongs to a Tools Australia customer, `200` means it
+does not. After their own first call the outcome settles, so every subsequent probe is free and
+non-destructive. There is deliberately no rate limiter here, and the daily mint cap counts only
+`minted`/`rearmed`, so the probes cost nothing — the sweep is unbounded and unthrottled. That is
+customer-list enumeration against people who never interacted with the attacker, which is the whole
+reason the body is opaque in the first place.
+
+**The `409` bought nothing operationally.** Klaviyo does not retry a `409` into a fix, nobody watches
+the delivery log for one, and the `identity_conflict` audit row already answers the only question an
+operator actually asks — *which flow is sending disagreeing identities* — queryably and by rate, which
+a status buried in a third-party delivery log does not.
+
+**What is kept.** The route's `console.error` (both ids, opaque, no PII) and the `identity_conflict`
+audit row. The condition is invisible **to the caller** only; it is exactly as visible to us as it was.
+Deleting either of those is not this change — it is the loss this change was careful to avoid, and
+`test:bonus-code-webhook` §5 asserts the audit row for that reason.
+
+**The general rule.** Only conditions that are properties of the **caller** get a status of their own:
+`400` (their body), `401` (their secret), `403` (the environment), `429` (our cap), `500` (our fault).
+Every condition that is a property of a **customer** answers `200` with a byte-identical body. Before
+giving a customer-state outcome its own status, ask what someone holding the secret learns by watching
+for it.
 
 **Retry semantics are UNVERIFIED.** No other inbound Klaviyo route exists in this repo to learn from.
 The map assumes non-2xx is retried, 2xx is not, and retries are minutes rather than days. Confirm
@@ -217,7 +261,7 @@ exactly backwards, and following it is the single easiest way to ship a broken l
    `validForHours` to anything other than 72, update Cobber FAQ id 86 in the same change — it states
    "a fixed 72 hours" in customer-facing copy, and `test:chat-faqs` guards the wording, not the
    campaign row, so a mismatch stays green.
-3. Smoke-test against a real production account with a disposable campaign.
+3. Smoke-test against a real production account, **against the REAL campaign** — a disposable one is impossible (one fixed code per trigger, and `code` is uniquely indexed). Full procedure, including the cleanup that restores the test account's grant: [gotchas.md → launch order](./gotchas.md#per-customer-bonus-codes-launch-order-is-load-bearing-too--and-it-inverted-on-2026-08-26).
 4. **Then** marketing publishes the flows.
 
 Publishing the flows first ships a live sequence emailing a hardcoded code into a void: with no

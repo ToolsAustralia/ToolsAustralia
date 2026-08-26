@@ -78,7 +78,7 @@ Guest checkout-start (`LOCKIN100`) is the cohort most exposed to this, and it is
 **Customer resolution order**
 1. If `userId` is present and a valid ObjectId → resolve by `_id`.
 2. Else if `email` is present → `findOne({ email: email.trim().toLowerCase() })`. Safe and exact: `User.email` is `unique` + `lowercase` + `trim` at the schema level (`src/models/User.ts:370-376`).
-3. If **both** are present and resolve to **different** users → **refuse** (`409`), `console.error`. A disagreement means a stale or merged Klaviyo profile, which is precisely the case where minting to the wrong person is possible. Do not silently prefer one.
+3. If **both** are present and resolve to **different** users → **refuse** (`200`, opaque body — see the amendment below), `console.error`, audited `identity_conflict`. A disagreement means a stale or merged Klaviyo profile, which is precisely the case where minting to the wrong person is possible. Do not silently prefer one.
 
 **Clarification, 2026-08-26 (fix round 1, finding F1).** Step 2 is an **else-if**, and the implementation must read it that way: the email branch is the fallback for an **absent** `userId`, never a second attempt after a present-and-valid one failed to resolve. A usable `userId` that names no account → `user_not_found` (200), full stop. The first implementation fell through to the email, which lets a stale or merged profile carrying a dead account's `user_id` alongside a live address mint **that** person's one-per-lifetime grant on a signal that was never theirs — the same substitution rule 3 refuses, except silent, because there is no second document to disagree with. A `userId` that is not a valid ObjectId is still treated as **absent** (a half-rendered merge tag), so the fallback applies there as designed.
 
@@ -105,12 +105,46 @@ The governing principle: **a non-2xx exists to make Klaviyo retry.** Return 5xx 
 | `200` | No active campaign carries the trigger's code. | The documented inert state (`src/services/redeemables/CampaignService.ts:805`). **But `console.error` it** — under the new model this is a launch-configuration error, not a benign no-op, and it is the cheapest early warning we have. |
 | `200` | Customer not resolvable (no such user, `isActive === false`). | Retrying for three days cannot conjure an account. Still `console.error` — a *rising rate* of these is the earliest signal that the flow's merge tags broke. |
 | `200` | Customer resolved but not eligible for the campaign. | Audience filters legitimately excluded them. Not retryable. |
+| `200` | `userId` and `email` resolve to different users. | **Amended 2026-08-26 — was `409`. See the amendment note below; do not restore the `409` as a "missing" row.** A data-integrity refusal, but a *customer-state* one, so it answers exactly like every other customer-state outcome. A retry with the same body refuses identically. What gets it noticed is the `console.error` and the `identity_conflict` audit row, not the status. |
 | `400` | Body fails Zod, unknown `trigger`, neither `userId` nor `email` present. | Flow misconfiguration. Retrying an invalid enum value forever is pure waste. Echo the offending `trigger` value in the body so it surfaces in Klaviyo's delivery log — this is the one case where a non-opaque body is worth it, because it leaks nothing about a customer. |
 | `401` | Missing or wrong `X-Bonus-Code-Secret`. | Honest answer. A retry is harmless because nothing minted. |
 | `403` | `process.env.VERCEL_ENV !== "production"`. | See §9. |
-| `409` | `userId` and `email` resolve to different users. | Data-integrity refusal. A retry with the same body will refuse identically, but the loud status is what gets it noticed. |
 | `429` | Daily issuance budget exhausted or kill switch on. | Fail-closed cap (§9). A retry after the day rolls over succeeds, so a retryable status is right. |
 | `500` | **Genuine internal error** — DB unreachable, unexpected throw. | This is the only status where a retry recovers a grant that would otherwise be lost forever. **This status is currently unreachable and that is the blocker in §9.** |
+
+**AMENDMENT, 2026-08-26 (final review, must-fix 7) — the identity conflict answers `200`, not `409`.**
+This spec originally mandated `409` for the disagreement case, on the reasoning that "the loud status
+is what gets it noticed." That was wrong, and the reason it was wrong is the same reason this section
+already insists the body be opaque.
+
+**The status line is part of the response.** An opaque body buys nothing while one customer-state
+outcome answers a status of its own — a distinct status is a distinct answer, readable by exactly the
+same sweep the opaque body exists to defeat. And the `409` was reachable on **attacker-chosen input**:
+the two lookups run in parallel and the conflict check fires *before* the `isActive` gate, so anyone
+holding the shared secret can post their **own** account id alongside a probe address and read the
+result off the status line — `409` means that address belongs to a Tools Australia customer, `200`
+means it does not. After their own first call the outcome settles, so every subsequent probe is free
+and non-destructive. There is deliberately no rate limiter on this endpoint, and the daily budget
+counts only `minted`/`rearmed`, so the probes consume nothing: the sweep is unbounded and unthrottled.
+That is customer-list enumeration against people who never interacted with the attacker — precisely
+the disclosure class §2 cites `src/app/api/codes/validate/route.ts` for.
+
+**What the `409` bought, weighed honestly: nothing operational.** Klaviyo does not retry a `409` into a
+fix; nobody watches the delivery log for one; and the `identity_conflict` audit row already answers the
+only question an operator actually asks — *which flow is sending disagreeing identities* — and answers
+it queryably and by rate, which a status line buried in a third-party delivery log does not. So the
+`409` traded a real privacy leak, in exactly the leaked-secret scenario the whole budget-and-audit
+design was built for, for a signal we were never going to read.
+
+**What is kept, and must stay kept.** The `console.error` at the route and the `identity_conflict`
+audit row. The condition is *invisible to the caller only* — it is exactly as visible to us as it was.
+Removing either of those is not this amendment; it is the loss this amendment was careful to avoid.
+
+**The rule this generalises to**, and the one to apply to any status added later: only conditions that
+are properties of the **caller** get a status of their own — `400` (their body), `401` (their secret),
+`403` (the environment), `429` (our cap), `500` (our fault). Every condition that is a property of a
+**customer** answers `200` with a byte-identical body. Before giving a customer-state outcome its own
+status, ask what someone holding the secret learns by watching for it.
 
 **Retry semantics are UNVERIFIED.** There is no existing inbound Klaviyo route anywhere under `src/app/api` to learn from (only `admin/klaviyo`, `health/klaviyo`, `test/klaviyo-*`), and the Klaviyo MCP server is unauthenticated in this session. The map above assumes non-2xx is retried, 2xx is not, and retries are minutes rather than days. **Confirm this before launch** (§9, item 5). The re-arm cooldown below is designed so that the map is safe under either answer.
 
@@ -337,7 +371,7 @@ Pure, no DB. Must assert:
 - Missing header → 401; wrong-length header → 401 (**not** a thrown `timingSafeEqual`); unset server secret → 500.
 - Unknown `trigger` → 400.
 - Neither `userId` nor `email` → 400.
-- `userId` + `email` disagreeing → 409.
+- `userId` + `email` disagreeing → **200 with a body byte-identical to a mint** (amended 2026-08-26 — was 409), **and** an `identity_conflict` audit row, **and** the route's `console.error`. Assert all three: with the status no longer distinguishing it, the audit row and the route's `console.error` are the only remaining ways to detect the condition, so a test that checks only the status would let either signal be deleted silently.
 - Service returns `"error"` → **500**; returns `not_applicable` → **200**. This is the assertion that pins C1 and it is the most important test in the change.
 - Budget gate returns `{ ok: false }` → 429.
 - `VERCEL_ENV !== "production"` → 403.

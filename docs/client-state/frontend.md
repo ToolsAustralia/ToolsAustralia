@@ -55,6 +55,20 @@ only to a caller who holds an issuance for it (see
 Neither field was consumed by any component before this change (confirmed by
 grep), so no other client code needed updating.
 
+**JSDoc corrected 2026-08-26.** The `expiresAtLabel` comment said the label was
+"the same function the Klaviyo email uses" and that a client-derived date "can
+disagree with the email". No customer email prints a bonus-code deadline: a
+Klaviyo flow email renders against its **own** trigger metric, so the three
+discount templates cannot resolve `expires_at_label` from the `Bonus Code
+Issued` event the server emits. The rule is unchanged — render the server's
+string, never derive one — but the thing it must not disagree with is the
+**redemption gate**, not an email. Worth knowing before wiring a new consumer:
+both components that render this field are currently unreachable by customers
+(`/rewards` is behind the rewards pause flag, `RewardsFloatingWidget` has been
+unmounted since the 2026-07 revamp), so today nothing shows a customer their
+deadline at all — see
+[rewards-redeemables/frontend.md](../rewards-redeemables/frontend.md).
+
 ## Listener helpers in floating widgets
 
 `RewardsFloatingWidget` uses [`addThrottledResize`](../../src/utils/dom/listenerHelpers.ts) instead of a raw `window.addEventListener("resize", …)` so positional recompute on viewport resize is RAF-throttled. The button is tagged with `data-floating-widget="true"` for the print stylesheet.
