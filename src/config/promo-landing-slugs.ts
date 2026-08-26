@@ -209,7 +209,7 @@ export const TOOLBOX_LANE_DISPLAY: Record<ToolboxLaneId, BrandLaneDisplay> = {
     logoPath: wordmark("milwaukee"),
     // EXACTLY the fill of milwaukeeText.svg, so the toolbox row and the toolset row of the same
     // brand are the same red on the same screen.
-    markColor: { light: "#c92a28", dark: "#c92a28" },
+    markColor: { light: "#F72D2C", dark: "#F72D2C" },
   },
   gearwrench: {
     label: "GearWrench",

@@ -43,13 +43,26 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { execFileSync } from "node:child_process";
 import sharp from "sharp";
 
 const IMAGE_ROOT = path.join(process.cwd(), "public", "images", "background", "promo", "landing");
 const VIDEO_ROOT = path.join(process.cwd(), "public", "videos", "landing");
 
-const DOWNLOADS = "C:/Users/Genesis/Downloads";
+/**
+ * Where the designer's exports land. Defaults to the current user's Downloads folder, which is
+ * where they arrive in practice, but is overridable so this is not one machine`s script:
+ *   DRAW10_SOURCE_DIR=/path/to/exports npx tsx scripts/convert-draw10-landing-assets.ts
+ *   npx tsx scripts/convert-draw10-landing-assets.ts --source=/path/to/exports
+ *
+ * A missing source dir is reported LOUDLY below rather than silently yielding zero jobs — a
+ * silent zero reads as "nothing to convert" when it actually means "wrong machine".
+ */
+const DOWNLOADS =
+  process.argv.find((a) => a.startsWith("--source="))?.slice("--source=".length) ??
+  process.env.DRAW10_SOURCE_DIR ??
+  path.join(os.homedir(), "Downloads");
 const SOURCES = [
   { dir: `${DOWNLOADS}/D10 - LANDING PAGES (DESKTOP VIEW)`, viewport: "desktop" as const, kind: "still" as const },
   { dir: `${DOWNLOADS}/D10 - LANDING PAGES (MOBILE VIEW)`, viewport: "mobile" as const, kind: "still" as const },
@@ -121,6 +134,7 @@ async function main(): Promise<void> {
   // ── collect + pair ────────────────────────────────────────────────────────
   const groups = new Map<string, Job[]>();
   const unmatched: string[] = [];
+  let dirsFound = 0;
 
   for (const s of SOURCES) {
     if (s.kind === "still" && !wantStills) continue;
@@ -129,6 +143,7 @@ async function main(): Promise<void> {
       console.error(`  ! source folder missing, skipped: ${s.dir}`);
       continue;
     }
+    dirsFound++;
     const ext = s.kind === "still" ? /\.png$/i : /\.mp4$/i;
     for (const name of fs.readdirSync(s.dir).filter((f) => ext.test(f))) {
       const d = decode(name.replace(ext, ""));
@@ -149,6 +164,14 @@ async function main(): Promise<void> {
         luma: await meanLuma(file, s.kind),
       });
     }
+  }
+
+  // Not one source folder existed. That is a wrong-machine / wrong-path error, not an empty
+  // job list, and exiting 0 here would read as "nothing to convert" — so say so and stop.
+  if (dirsFound === 0) {
+    console.error(`  FATAL: no source folder existed under ${DOWNLOADS}.`);
+    console.error("  Point the script at the exports with --source=<dir> or DRAW10_SOURCE_DIR=<dir>.");
+    process.exit(3);
   }
 
   if (unmatched.length) {

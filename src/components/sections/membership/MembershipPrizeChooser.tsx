@@ -125,8 +125,26 @@ export default function MembershipPrizeChooser() {
   }, [activeCombo?.slug]);
 
   const tagLabel = isCash ? "$10,000 cash" : (comboName ?? "The Ultimate Tradie Setup");
-  const amount = isCash ? 10000 : 5000;
-  const amountCap = isCash ? "paid straight to your bank account" : "cash on top of the gear";
+  /**
+   * Draw 10 removed the $5,000 cash bonus that used to ride along with a tool combination, so
+   * "the setup" has no dollar figure of its own any more -- the only cash in the prize is the
+   * $10,000 cash-INSTEAD option, which is a different selection. Rather than drop the headline
+   * (which would collapse the right column and re-centre the Seg mid-click, the exact jump the
+   * `lg:items-start` note below guards against), the setup lane counts the tools it actually
+   * contains. That is a real number from the toolset registry, so a seventh toolset moves it.
+   */
+  const toolCount = useMemo(() => {
+    const lanes = fromPrizeSlug(activeCombo?.slug);
+    return lanes ? (getToolset(lanes.toolset)?.toolCount ?? null) : null;
+  }, [activeCombo?.slug]);
+
+  const amount = isCash ? 10000 : (toolCount ?? 0);
+  const amountFormat = isCash
+    ? (n: number) => `$${Math.round(n).toLocaleString()}`
+    : (n: number) => `${Math.round(n)} tools`;
+  const amountCap = isCash
+    ? "paid straight to your bank account"
+    : "plus the toolbox and its storage system";
 
   return (
     // `scroll-mt` because the site header is `position: fixed` (86px, 106px at lg) and so
@@ -295,10 +313,16 @@ export default function MembershipPrizeChooser() {
             <div className="hidden lg:block">
               <Seg value={pick} onChange={setPick} tone="dark" accentHex="#f0a500" options={pickOptions} />
             </div>
-            <div className="mt-5 font-poppins text-5xl font-extrabold text-amber-300">
-              <AnimatedNumber value={amount} format={(n) => `$${Math.round(n).toLocaleString()}`} />
-            </div>
-            <div className="text-sm text-white/60">{amountCap}</div>
+            {/* Guarded: an unparseable slug leaves toolCount null, and an unguarded render
+                would print a confident "0 tools". Cash always has its figure. */}
+            {(isCash || toolCount !== null) && (
+              <>
+                <div className="mt-5 font-poppins text-5xl font-extrabold text-amber-300">
+                  <AnimatedNumber value={amount} format={amountFormat} />
+                </div>
+                <div className="text-sm text-white/60">{amountCap}</div>
+              </>
+            )}
             <ul className="mt-5 flex flex-col gap-2.5">
               {ITEMS[pick].map((it) => (
                 <li key={it} className="flex items-start gap-2 text-sm text-white/90">

@@ -51,7 +51,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "3",
       question: "What can I win?",
       answer:
-        "Each month's Grand Winner builds their own prize. They match any toolbox (Monster Milwaukee, 470-piece Kincrome CONTOUR®, 356-piece Sidchrome, or the 288-piece GEARWRENCH tool set & mobile workstation) with any power toolset (Milwaukee, DeWalt, Makita, Ryobi, HiKOKI, or the new STIHL outdoor power kit — each ships with its own brand storage system, and the STIHL kit comes with two AP 300 S batteries and an AL 301 charger). Or they skip the gear entirely and take a single $10,000 AUD tax-free cash prize straight to their bank account. That cash option is the only cash in the prize — a tool combination does not come with a cash bonus on top. You can build and preview any combination on the prize showcase on our [home page](/).",
+        "Each month's Grand Winner builds their own prize. They match any toolbox (Monster Milwaukee, 470-piece Kincrome CONTOUR®, 356-piece Sidchrome, or the 288-piece GEARWRENCH tool set & mobile workstation) with any power toolset (Milwaukee, DeWalt, Makita, Ryobi, HiKOKI, or the new STIHL outdoor power kit — the first five each ship with their own brand storage system, and the STIHL kit comes with two AP 300 S batteries and an AL 301 charger). Or they skip the gear entirely and take a single $10,000 AUD tax-free cash prize straight to their bank account. That cash option is the only cash in the prize — a tool combination does not come with a cash bonus on top. You can build and preview any combination on the prize showcase on our [home page](/).",
       category: "SHOPPING",
     },
     {

@@ -1107,11 +1107,11 @@ the new frames carry more product. Quality below 76 buys almost nothing (271 →
 q68 on the worst case), so 76 / effort 6 is the settled point.
 
 > **The shoot also covers STIHL.** 24 combinations = **6** toolsets × 4 toolboxes, i.e. the five
-> live ones plus STIHL. Its four combo renders are staged at
+> previously live ones plus STIHL. Its four combo renders are staged at
 > `public/images/majordraws/stihl-set/stihl-{milwaukee,sidchrome,kincrome,gearwrench}.webp` and are
-> **not referenced by any code yet** — they land with the STIHL toolset wiring. Nothing stats them,
-> so they are inert until then. **Still missing for STIHL: the reel-card kit photo**
-> (`stihl-set/STIHL.webp`) — this shoot is combinations only.
+> **now referenced** — the STIHL toolset wiring landed in the same branch, so these are live art,
+> not inert files. The reel-card kit photo (`stihl-set/STIHL.webp`) shipped as well, so nothing
+> from this shoot is outstanding.
 
 ### STIHL individual tool art — 106 frames curated to 11 (2026-08-25)
 

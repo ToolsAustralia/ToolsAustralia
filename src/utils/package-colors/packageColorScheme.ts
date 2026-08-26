@@ -302,6 +302,7 @@ export function slugToPromoTierPlanId(slug: string): COLOR_KEYS {
   if (s.startsWith("makita")) return "makita-teal";
   if (s.startsWith("hikoki")) return "hikoki-green";
   if (s.startsWith("milwaukee")) return "milwaukee-red";
+  if (s.startsWith("stihl")) return "stihl-orange";
   if (s.includes("tradie")) return "ryobi-green";
   if (s.includes("kincrome") || s.includes("apprentice")) return "kincrome-blue";
   if (s.includes("cash")) return "cash-green";

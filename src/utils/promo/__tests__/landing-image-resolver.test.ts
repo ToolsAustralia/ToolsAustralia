@@ -13,7 +13,7 @@ import { LANDING_IMAGE_MANIFEST } from "@/generated/landingImageManifest";
  * export (previously base-only), so it now belongs in the same loops as the other four
  * rather than being excluded from the drawn/urgency assertions.
  */
-const LANDING_BRANDS = ["ryobi", "milwaukee", "dewalt", "makita", "hikoki"] as const;
+const LANDING_BRANDS = ["ryobi", "milwaukee", "dewalt", "makita", "hikoki", "stihl"] as const;
 
 /**
  * Light sidTB base files NOW ship for every brand (2026-06-12 — the winning A/B

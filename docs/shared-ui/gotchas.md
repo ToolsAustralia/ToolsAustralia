@@ -1163,6 +1163,52 @@ opened it, not from the boolean alone.
 
 ---
 
+## Two draw-10 misses that `tsc` and a text search both slept through (2026-08-26)
+
+### 1. `/membership` kept a $5,000 headline, because the number was never written as `$5,000`
+
+`MembershipPrizeChooser.tsx` renders a large amber figure with a caption under it. The figure was:
+
+```ts
+const amount = isCash ? 10000 : 5000;
+const amountCap = isCash ? "paid straight to your bank account" : "cash on top of the gear";
+```
+
+A repo-wide grep for `$5,000` cannot see that — the string is **composed at render time** from a
+bare integer and a `toLocaleString()` format. Nor did the draw-10 Playwright guard catch it: that
+spec walks `/promotions`, and this lives on `/membership`.
+
+The setup lane now shows its **tool count** (a real number off the toolset registry, so a seventh
+toolset moves it) rather than a dollar figure, because a tool combination no longer has one. The
+block is guarded on `toolCount !== null` — an unparseable slug would otherwise render a confident
+"0 tools".
+
+**The lesson: a money claim is not always a string.** When removing a price or a prize component,
+grep the bare number (`5000`) near `cash`/`bonus`/`amount`, not just the formatted form.
+
+### 2. A new brand's theme was unreachable, and every branch still type-checked
+
+STIHL was added to `COLOR_KEYS`, `LANDING_PAGE_BRAND`, `SCHEMES` and `BRAND_GRADIENTS` in
+[packageColorScheme.ts](../../src/utils/package-colors/packageColorScheme.ts) — but not to
+`slugToPromoTierPlanId()`, the hand-written `if` ladder that turns a slug into a `COLOR_KEYS`.
+Result: `stihl-orange` was **defined but unreachable**. Three STIHL slugs fell past every
+`startsWith` test to the `milwaukee-red` default, and `stihl-kincrome` matched the
+`includes("kincrome")` line and came back **blue**.
+
+`tsc` is blind to this — every branch returns a valid `COLOR_KEYS`, so the ladder is total by
+construction and simply never mentions the new brand. The live consumers are
+`usePromoThemeStore` (the promo landing theme) and the login brand rotator, so four landing pages
+shipped in the wrong brand colour.
+
+**Two rules fall out.** (a) Put a new brand's `startsWith` test **above** the `includes()`
+fallbacks — below them, `stihl-kincrome` is swallowed by the kincrome rule. (b) After adding a
+brand, *execute* the resolver over its real slugs and read the output; do not infer from the fact
+that the registries compile. `docs/config-and-data/patterns.md` used to list this file under
+"derives automatically — NO edit needed", which is precisely how the gap got in; it has been
+corrected.
+
+---
+
 ## MembershipModal: the mini-pack branches were dead and are now removed (2026-08-20)
 
 `MembershipModal` carried ~19 references to `activePlan.id.startsWith("mini-pack-")` threading through promo multipliers, tracking payloads, the upsell context and a full ~95-line mini-draw purchase branch. **None of it could ever run.**

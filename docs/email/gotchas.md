@@ -1,5 +1,37 @@
 # Email — Gotchas
 
+## The winner email kept promising $5,000 that the draw no longer awards (2026-08-26)
+
+Draw 10 removed the $5,000 cash bonus from every tool combination. A catalogue-wide sweep
+cleared 113 `$5,000` strings from `src/config/`, the prize builder and Cobber — and **missed the
+one string that gets mailed to the actual winner**:
+
+```
+src/lib/email/templates.ts -> createWinnerEmailTemplate()
+  "...your power-tool + storage combo with $5,000 cash, or $10,000 tax-free cash. Your call."
+```
+
+That is the body of the *You won!* email, sent from `emailService.sendWinnerEmail` by both
+`/api/major-draw/select-winner` and its admin twin. It over-promised a prize component that no
+longer exists, in the one message where the prize is legally being awarded under permit.
+
+**Why the sweep missed it.** The sweep was scoped to prize *config* and *UI*; nobody thought of
+the transactional email as a prize surface. The plain-text fallback in `email-service.ts` was
+already generic ("arrange your prize"), so only the HTML body — the part virtually every client
+renders — was wrong.
+
+**The near-miss that makes this worth writing down.** The same branch DID fix
+`src/components/email-preview/WinnerEmailPreview.tsx` (its sample prize string), and even added a
+gotcha here saying to grep `src/components/email-preview/` alongside `src/lib/email/`. The author
+wrote the rule and applied it in the wrong direction — correcting the copy that is **dev-only and
+404s in production**, while leaving the copy that is actually mailed. **`/email-preview` is a
+mirror, never the source. Fix `src/lib/email/templates.ts` first, then make the preview match.**
+
+Rule of thumb: when a prize, price, tier or policy changes, the surface list is
+`src/config/` + UI + Cobber + **`src/lib/email/templates.ts`** + `email-templates/klaviyo/`.
+
+---
+
 ## Email copy is customer-facing — same free-entry / no-gambling rule (2026-07-08)
 
 Email templates (Klaviyo + SendGrid) count as customer-facing copy and must follow **CLAUDE.md §11** (no "odds/chance/lottery/gambling"; entries are a free inclusion, never sold). The Klaviyo `draw-reminder-email-template.html` used the forbidden "better odds" (+ "shot at the prize") — and since it was **never deployed to Klaviyo** (no snapshot in `email-templates/klaviyo-exports/`, marked NOT WIRED), it was **removed entirely** (2026-07-08) along with its `/email-preview` tab (`DrawReminderPreview`, the `EmailPreviewLayout` wiring, and its `designSamples.generated.ts` entry). **Reminder:** editing a live template's repo `.html` fixes the SOURCE only — the copy must also be updated **in Klaviyo** (paste the corrected HTML). Check `email-templates/klaviyo-exports/` for a deployed snapshot to gauge whether a template is actually live before assuming a fix took effect.

@@ -1,5 +1,25 @@
 # Subscription — Gotchas
 
+## The competition-terms prize schedule: derived, and why it also carries model numbers (2026-08-26)
+
+`/competition-term-majordraw` publishes Part B, the prize schedule, under NT permit `NTP/17808`.
+It used to hand-list **six** options while the site offered **twenty** — Kincrome, GearWrench,
+Ryobi and HiKOKI combinations were winnable but simply absent from the legal terms. It is now
+derived from `PRIZE_SUMMARIES`, so the schedule cannot drift from the catalogue again.
+
+Deriving it created a second, quieter problem worth knowing about: the hand-written list carried
+**manufacturer model numbers** (`SCMT11402`, `M18FPP13B4564B`) and `PRIZE_SUMMARIES.label` does
+not — it is marketing shorthand. Trading itemised legal identification for completeness would
+have been a poor swap, so each option now also renders `prize.summary`, which does carry the
+model numbers ("the Sidchrome SCMT11402 356-piece storage cabinet").
+
+**Still not ideal, and deliberately not papered over:** the catalogue has no dedicated
+`modelNumber` field, so precision depends on whoever wrote each `summary`. If the schedule ever
+needs guaranteed per-item identification, add that field to `PrizeSummary` and render it — do
+**not** hand-write model numbers back into the page, which is what drifted the first time.
+
+---
+
 Real failure modes, surprising behaviours, and tribal knowledge from incidents. Most of these came from production bugs and have lessons attached.
 
 ## Anchor-24 members could not upgrade at all (2026-08-24)

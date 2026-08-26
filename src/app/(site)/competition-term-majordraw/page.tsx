@@ -83,12 +83,16 @@ export default async function MajorGiveawayTermsPage() {
    */
   const prizeOptions = PRIZE_SUMMARIES.map((prize, index) => {
     const splitAt = prize.slug === "cash-prize" ? -1 : prize.label.indexOf(", ");
+    const itemised =
+      splitAt < 0
+        ? [prize.label]
+        : [prize.label.slice(0, splitAt), prize.label.slice(splitAt + 2)];
+    // `summary` carries the manufacturer model numbers the bare label drops (e.g. the Sidchrome
+    // SCMT11402). A prize schedule published under a trade-promotion permit should identify the
+    // goods as precisely as the data allows, so it is appended rather than left in the catalogue.
     return {
       title: `Option ${index + 1}`,
-      items:
-        splitAt < 0
-          ? [prize.label]
-          : [prize.label.slice(0, splitAt), prize.label.slice(splitAt + 2)],
+      items: prize.summary && prize.summary !== prize.label ? [...itemised, prize.summary] : itemised,
     };
   });
 

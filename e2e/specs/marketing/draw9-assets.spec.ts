@@ -348,6 +348,17 @@ async function showPrizeDetails(
 }
 
 test.describe("draw 9 assets @demo", () => {
+  // ─── SKIPPED 2026-08-26 (draw 10) ──────────────────────────────────────────────────
+  // Superseded by draw10-assets.spec.ts. Two things broke this spec at once: its four
+  // drawn-tier walks assert the art draw 10 deleted, and its grid narration says twenty
+  // combinations (4 x 5) where the registries now hold twenty-four (4 x 6, STIHL added).
+  // The base-tier walks would still pass, but the video it produces documents draw 9 — a
+  // draw that is over — so recording it is not worth the 3,600s timeout it reserves.
+  //
+  // Kept rather than deleted because it is the reference for the full grid x tier x mode
+  // walk; when the drawn-tier art ships, lift its shape into a draw-10 tier spec.
+  test.skip(true, "superseded by draw10-assets.spec.ts; asserts drawn-tier art removed in draw 10");
+
   let originalDrawDate: unknown = null;
 
   test.beforeAll(async () => {

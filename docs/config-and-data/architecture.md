@@ -149,9 +149,11 @@ always parked off stage and rotates in as the reel steps — by design. `PrizeBu
 asserted "nothing is off stage with today's registries", which only held at five; it now asserts the
 invariant it is named for (off-stage cards are `aria-hidden` and untabbable) and survives brand seven.
 
-**Landing art is the one real gap.** STIHL's combo renders, reel card and all 11 tool shots shipped;
-its 48 landing webp + 96 clips have not. `/promotions/stihl` falls back to the standard promo hero
-(`LANDING_HERO_MAP` is a `Partial<Record<…>>`, and the Kincrome/GearWrench combos already rely on
-that fallback), and the four pairs are recorded in `KNOWN_GAPS` in
-[check-landing-hero-assets.mjs](../../scripts/check-landing-hero-assets.mjs) so the guard stays green
-and the gap stays visible.
+**Landing art shipped too — the gap is closed.** STIHL's combo renders, reel card and all 11 tool
+shots shipped, and so did its landing heroes (2026-08-26): 16 stills + 16 mp4 + 16 webm covering all
+four toolbox pairings in light and dark, desktop and mobile. `/promotions/stihl` now serves STIHL's
+own art rather than the evergreen fallback. `LANDING_HERO_MAP` gained nine entries in the same pass —
+four STIHL plus five Kincrome that had never been mapped for **any** brand — so all 24 combinations
+have a dedicated hero and `KNOWN_GAPS` in
+[check-landing-hero-assets.mjs](../../scripts/check-landing-hero-assets.mjs) is **empty** for the
+first time. The one asset set still outstanding is the `drawn-tomorrow` / `drawn-tonight` tier.

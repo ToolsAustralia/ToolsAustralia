@@ -138,13 +138,13 @@ The current monthly Major Draw prize is **fully customizable by the winner**. Af
    - Kincrome CONTOUR® **470-piece** 17-drawer workshop kit (P1823).
    - GEARWRENCH **288-piece** tool set & mobile workstation (foam-inlaid drawers, full work top, heavy-duty castors).
 
-That's a 6 × 4 grid = **24 power-tool × storage combinations** (tools only — no cash on top), each rendered as its own `PrizeCatalogEntry` with full specs, hero gallery, and highlight copy. (HiKOKI is the 5th toolset, added June 2026 — a 15-piece 36V/18V MultiVolt kit: a 13-piece Mega Combo plus framing + finishing nailers, bundled with its own HiKOKI Multi Cruiser 3-piece storage system. GEARWRENCH is the 4th toolbox, added July 2026 for draw 9 — it pairs with all five toolsets, so it added 5 combos in one go.)
+That's a 6 × 4 grid = **24 power-tool × storage combinations** (tools only — no cash on top), each rendered as its own `PrizeCatalogEntry` with full specs, hero gallery, and highlight copy. (HiKOKI is the 5th toolset, added June 2026 — a 15-piece 36V/18V MultiVolt kit: a 13-piece Mega Combo plus framing + finishing nailers, bundled with its own HiKOKI Multi Cruiser 3-piece storage system. GEARWRENCH is the 4th toolbox, added July 2026 for draw 9 — it paired with all five toolsets then, adding 5 combos in one go — six pairings now, with STIHL.)
 
 **Option B — Cash instead of tools.** A single **$10,000 AUD tax-free cash** prize (`prizeValueLabel: "$10,000 Cash"`) — no equipment, "no tools, no hassle, just $10,000 straight to your bank account." This is now the **only** cash in the prize: since draw 10 (2026-08-28) a tool combination carries no cash bonus at all. There is no standalone $5,000 tier and no standard/upgraded distinction.
 
 The cash option lives as the 25th (last) `PrizeCatalogEntry` (`slug: "cash-prize"`).
 
-**Why this is in the doc.** Each promo landing page (§11) pins a specific prize combination as its hero — so the prize catalog isn't only what the winner picks, it's also what the campaign sells. The 5×4 grid + cash means the same monthly draw can be marketed with very different copy (e.g. a Milwaukee-focused landing for Milwaukee fans vs a Sidchrome-storage-focused landing for cabinet-shop tradies) without changing the underlying draw.
+**Why this is in the doc.** Each promo landing page (§11) pins a specific prize combination as its hero — so the prize catalog isn't only what the winner picks, it's also what the campaign sells. The 6 × 4 grid + cash means the same monthly draw can be marketed with very different copy (e.g. a Milwaukee-focused landing for Milwaukee fans vs a Sidchrome-storage-focused landing for cabinet-shop tradies) without changing the underlying draw.
 
 **Winner contact & claim — partially in code, mostly operational.** When the winner is selected:
 
@@ -156,7 +156,7 @@ The cash option lives as the 25th (last) `PrizeCatalogEntry` (`slug: "cash-prize
 
 > _Asset note (2026-07-22, no catalog change):_ the three toolbox renders already used by the prize picker (`toolbox/{milwaukee,kincrome,sidchrome}TB.webp`) were wired into `SPEC_ITEM_IMAGE_BY_NAME`, and the workshop/toolbox storage arrays were added to `applySpecItemImages` so the mapping actually reaches them. The specs modal Storage tab previously drew a "photo coming soon" placeholder for the toolbox — the single biggest item in the prize — while the same art sat on screen one section above. Presentational only: no combo, cash tier, price or copy changed.
 
-> _Catalog change (2026-07-27, draw 9):_ **GEARWRENCH 288-piece tool set & mobile workstation** was added as the **fourth workshop-storage option**, pairing with all five toolsets — so the grid went 5×3=15 → **5×4=20** tool combos, and `PRIZE_CATALOG` / `PRIZE_SUMMARIES` went 16 → **21** entries (the cash option stays last). Cash bonus is unchanged at **$5,000** per combo, and Option B is unchanged at **$10,000**. The five new entries carry the explicit "$5000 Cash Bonus" highlight. Their composite "toolset + toolbox" combo renders were photographed and shipped on 2026-07-28 for **four of the five** — Milwaukee, DeWalt, Makita and HiKOKI — each carrying `cardBackgroundImage` + a combo gallery hero at `{toolset}-set/{toolset}-gearwrench.webp`.
+> _Catalog change (2026-07-27, draw 9):_ **GEARWRENCH 288-piece tool set & mobile workstation** was added as the **fourth workshop-storage option**, pairing with all five toolsets — so the grid went 5×3=15 → **5×4=20** tool combos, and `PRIZE_CATALOG` / `PRIZE_SUMMARIES` went 16 → **21** entries (the cash option stays last). Cash bonus *was* unchanged at **$5,000** per combo at that time (removed entirely in draw 10 — see the 2026-08-28 entry below), and Option B is unchanged at **$10,000**. The five new entries carry the explicit "$5000 Cash Bonus" highlight. Their composite "toolset + toolbox" combo renders were photographed and shipped on 2026-07-28 for **four of the five** — Milwaukee, DeWalt, Makita and HiKOKI — each carrying `cardBackgroundImage` + a combo gallery hero at `{toolset}-set/{toolset}-gearwrench.webp`.
 
 > _Artwork completed (2026-08-06):_ **Ryobi × GearWrench is now shot and wired**, so **all 20 combinations carry their own composite render** and none is on a fallback. `ryobi-set/ryobi-gearwrench.webp` (1600×1200, matching the other 19) is its `cardBackgroundImage` + `gallery[0]`. Until this edit the entry still pointed at the standalone `toolbox/gearwrenchTB.webp` — a 1000×1000 square of the bare toolbox with no Ryobi tools in shot — which was visible to customers as one odd, under-sized frame in the `/membership` prize carousel. `COMBOS_AWAITING_COMBO_ART` in `prize-builder-model.ts` was already empty, so the per-COMBINATION "combo photo coming" fallback is now unused by any live combo; keep the mechanism, it is what a future toolbox/toolset addition lands behind.
 
@@ -190,11 +190,14 @@ The cash option lives as the 25th (last) `PrizeCatalogEntry` (`slug: "cash-prize
 > silently drifted: it advertised 6 combinations while the site offered 20, so Kincrome,
 > GearWrench, Ryobi and HiKOKI were winnable but absent from the legal terms.
 >
-> **Still outstanding — the artwork.** The $5,000 is *rasterised into the photography*, not just
-> the copy: the landing heroes bake `& $5K CASH` into the sub-headline (240 webp + 480 video
-> clips across five brand folders) and all 20 composite combo renders show the model holding a
-> fan of cash. No code change can remove those; they need re-shooting/re-exporting before the
-> tools-only claim is true end to end.
+> **The artwork was re-exported, not just the copy.** The $5,000 was *rasterised into the
+> photography*, not only written in it: the landing heroes baked `& $5K CASH` into the
+> sub-headline and every composite combo render showed the model holding a fan of cash. No code
+> change can edit a bitmap, so the art itself was replaced — 160 stale stills and 480 stale clips
+> deleted, base landing heroes re-exported for all 24 combinations (light/dark × desktop/mobile),
+> and the combo renders re-shot with the model holding no cash. **Still outstanding:** only the
+> `drawn-tomorrow` / `drawn-tonight` countdown tier, which has not been re-exported yet — the
+> `@demo` specs that walk that tier are skipped until it lands.
 
 > _Catalog change (2026-08-28, draw 10):_ **STIHL** joined as the **sixth power toolset** — the
 > first outdoor-power brand in the prize, and the first that is not a cordless drill/driver kit.
@@ -216,9 +219,10 @@ The cash option lives as the 25th (last) `PrizeCatalogEntry` (`slug: "cash-prize
 >
 > **Artwork status:** the four `stihl-*` combo renders, the `STIHL.webp` reel card and all 11
 > individual tool shots shipped, and STIHL is the **only** brand whose every spec item carries a
-> photo. Its **landing hero art has NOT** — 48 webp + 96 clips — so `/promotions/stihl` falls back
-> to the standard promo hero and the four pairs are recorded in `KNOWN_GAPS` in
-> `scripts/check-landing-hero-assets.mjs`.
+> photo. Its **landing hero art shipped too** (2026-08-26) — 16 stills + 16 mp4 + 16 webm covering
+> all four toolbox pairings in light and dark, desktop and mobile — so `/promotions/stihl` serves
+> STIHL's own hero rather than the evergreen fallback, and `KNOWN_GAPS` in
+> `scripts/check-landing-hero-assets.mjs` is now **empty** for the first time.
 
 
 ### 3d. Anchor-day-24 alignment
