@@ -615,6 +615,26 @@ A customer participates passively — visiting via an affiliate link stamps `Use
 
 ---
 
+### The retention offer could silently fail (fixed 2026-08-26)
+
+A member part-way through cancelling is offered **100 free entries** to stay. Between December
+2025 and June 2026 that offer could take the member's acceptance, tell them *"100 free entries
+successfully added to your account"*, raise the entry number shown on their account — and never
+put the entries into a giveaway. It happened whenever the offer was accepted during the window
+when one giveaway was closing and the next had not opened.
+
+**373 of the 590 members who accepted the offer were affected** — they stayed subscribed on a
+promise that did not execute.
+
+The offer now puts the entries into the giveaway **first**, and only then records them on the
+member's account. If no giveaway is open at that moment the member sees *"We couldn't add your
+free entries just now — the next giveaway is being set up. Please try again shortly; your offer
+is still available"*, keeps their one-time offer, and nothing is recorded. Their account can no
+longer show entries they do not hold.
+
+This was **fixed forward only**. The 373 members were not retroactively granted entries: the
+giveaways they accepted against have already been drawn and their winners chosen.
+
 ## 8. Marketing & attribution data captured
 
 What marketing/attribution data we capture about a customer, and which of it **leaves to third parties** (Klaviyo, Meta/TikTok/Snapchat). See [docs/tracking/](docs/tracking/).

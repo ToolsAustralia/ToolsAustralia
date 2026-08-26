@@ -201,7 +201,6 @@
     "test:rebill-classification": "tsx src/utils/billing/__tests__/rebill-classification.test.ts",
     "stripe:probe-reanchor:dry": "tsx scripts/stripe-probe-reanchor.ts --dry-run",
     "stripe:probe-upgrade-anchor:dry": "tsx scripts/stripe-probe-upgrade-anchor.ts --dry-run",
-
     "find:stranded-mini-draw-payments": "tsx scripts/find-stranded-mini-draw-payments.ts",
     "find:direct-attribution": "tsx scripts/find-direct-attribution.ts",
     "find:duplicate-subscriptions": "tsx scripts/find-duplicate-stripe-subscriptions.ts",
@@ -477,7 +476,9 @@
     "migrate:promo-analytics-cleanup:prod:dry": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production",
     "migrate:promo-analytics-cleanup:prod": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production --apply",
     "harvest:partner-instore-artwork": "tsx scripts/harvest-partner-instore-artwork.ts",
-    "test:excessive-retry-cooldown": "tsx src/server/admin/__tests__/excessiveRetryCooldown.test.ts"
+    "test:excessive-retry-cooldown": "tsx src/server/admin/__tests__/excessiveRetryCooldown.test.ts",
+    "find:missing-retention-entries": "tsx scripts/find-missing-retention-entries.ts",
+    "test:retention-grant-order": "tsx src/services/redeemables/__tests__/retention-offer-grant-order.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",

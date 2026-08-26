@@ -53,3 +53,18 @@ regression tests for `src/utils/partner-discounts/{unlock-packages,portal-return
 ## Webhook
 
 [src/utils/webhook/](../../src/utils/webhook/) — generic webhook helpers (signature verification, payload parsing, retry handling). Stripe webhook is handled in [billing-stripe](../billing-stripe/).
+
+## `find:missing-retention-entries` (2026-08-26)
+
+Read-only report of members who redeemed the 100-entry cancellation retention offer but never
+received the draw entries it promised, caused by a silent-skip defect in the redeem route
+(see `docs/upsell/gotchas.md`).
+
+```bash
+npm run find:missing-retention-entries -- --prod        # summary + first 15
+npm run find:missing-retention-entries -- --prod --csv  # full list to CSV
+```
+
+Reports totals, a breakdown by redemption month, and (with `--csv`) the full list. Exit 0 when
+none found, 2 when affected members exist. **The CSV contains customer emails — treat as PII and
+do not commit it.**
