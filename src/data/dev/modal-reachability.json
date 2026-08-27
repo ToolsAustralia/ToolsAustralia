@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-07-30T03:21:27.824Z",
+  "generatedAt": "2026-08-27T02:20:22.630Z",
   "method": "Transitive imports from Next.js app entry files (page, layout, route, loading, error, template, default, not-found, global-error, middleware, instrumentation). Does not evaluate dynamic non-literal imports or runtime-only usage.",
-  "entrySeedCount": 495,
-  "reachableSrcFileCount": 1871,
-  "modalInventoryCount": 53,
-  "reachableModalCount": 51,
+  "entrySeedCount": 511,
+  "reachableSrcFileCount": 1967,
+  "modalInventoryCount": 52,
+  "reachableModalCount": 50,
   "unreachableModalCount": 2,
   "modals": [
     {
@@ -64,14 +64,6 @@
       "reachable": true
     },
     {
-      "path": "src/components/auth/OTPVerificationModal.tsx",
-      "reachable": true
-    },
-    {
-      "path": "src/components/auth/PasswordlessLoginModal.tsx",
-      "reachable": true
-    },
-    {
       "path": "src/components/modals/AdminAlternatingMultiplierModal.tsx",
       "reachable": true
     },
@@ -120,6 +112,10 @@
       "reachable": true
     },
     {
+      "path": "src/components/modals/BrandPerformanceAdsModal.tsx",
+      "reachable": true
+    },
+    {
       "path": "src/components/modals/ChannelDetailModal.tsx",
       "reachable": true
     },
@@ -129,6 +125,10 @@
     },
     {
       "path": "src/components/modals/draws/AdminMiniDrawModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/modals/draws/DrawLockedModal.tsx",
       "reachable": true
     },
     {
@@ -169,10 +169,6 @@
     },
     {
       "path": "src/components/modals/PartnerModal.tsx",
-      "reachable": true
-    },
-    {
-      "path": "src/components/modals/PrizePerformanceAdsModal.tsx",
       "reachable": true
     },
     {

@@ -66,8 +66,6 @@ import UserExportModal from "@/components/admin/UserExportModal";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import FullscreenImageViewer from "@/components/ui/FullscreenImageViewer";
 import SuccessScreen from "@/components/loading/SuccessScreen";
-import PasswordlessLoginModal from "@/components/auth/PasswordlessLoginModal";
-import OTPVerificationModal from "@/components/auth/OTPVerificationModal";
 import EmailVerificationModal from "@/components/auth/EmailVerificationModal";
 import MobileNavSidebarPreview from "@/components/dev/MobileNavSidebarPreview";
 import Dropdown, { type DropdownOption } from "@/components/modals/ui/Dropdown";
@@ -347,8 +345,6 @@ const GALLERY_SOURCE_PATH: Partial<Record<string, string>> = {
   settings: "src/components/modals/SettingsModal.tsx",
   "subscription-management": "src/components/modals/SubscriptionManagementModal.tsx",
   "saved-payment-methods": "src/components/modals/SavedPaymentMethodsModal.tsx",
-  "passwordless-login": "src/components/auth/PasswordlessLoginModal.tsx",
-  "otp-verification": "src/components/auth/OTPVerificationModal.tsx",
   "email-verification": "src/components/auth/EmailVerificationModal.tsx",
   "custom-date-range": "src/components/admin/CustomDateRangeModal.tsx",
   "fullscreen-image": "src/components/ui/FullscreenImageViewer.tsx",
@@ -491,8 +487,6 @@ const BASE_ENTRIES: Omit<Entry, "sourcePath">[] = [
     note: "Heavy — hooks & packages",
   },
   { id: "saved-payment-methods", label: "SavedPaymentMethodsModal", category: "Account", note: "Stripe methods" },
-  { id: "passwordless-login", label: "PasswordlessLoginModal", category: "Auth" },
-  { id: "otp-verification", label: "OTPVerificationModal", category: "Auth", note: "Standalone OTP UI" },
   { id: "email-verification", label: "EmailVerificationModal", category: "Auth" },
   { id: "custom-date-range", label: "CustomDateRangeModal", category: "Overlays — date & pickers" },
   { id: "fullscreen-image", label: "FullscreenImageViewer", category: "Overlays — date & pickers" },
@@ -1324,15 +1318,6 @@ export default function ModalsGalleryClient() {
       />
       <SavedPaymentMethodsModal isOpen={isOpen("saved-payment-methods")} onClose={close} />
 
-      <PasswordlessLoginModal isOpen={isOpen("passwordless-login")} onClose={close} onLoginSuccess={() => close()} />
-      <OTPVerificationModal
-        isOpen={isOpen("otp-verification")}
-        onClose={close}
-        email="preview@toolsaustralia.test"
-        mobile="0400000000"
-        onVerificationSuccess={() => close()}
-        onResendOTP={async () => {}}
-      />
       <EmailVerificationModal
         isOpen={isOpen("email-verification")}
         onCloseAction={close}

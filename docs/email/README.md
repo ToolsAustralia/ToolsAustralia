@@ -1,16 +1,16 @@
 # Email domain
 
-Transactional email via SendGrid; HTML templates at repo root; SMS via separate provider; newsletter integration with Klaviyo (Klaviyo lives in [tracking](../tracking/) for marketing flows).
+Transactional email via SendGrid; HTML templates at repo root; transactional SMS via Mobile Message (Klaviyo owns marketing SMS); newsletter integration with Klaviyo (Klaviyo lives in [tracking](../tracking/) for marketing flows).
 
 ## Index
 
 - [architecture.md](./architecture.md) — providers, template structure, send paths
 - [frontend.md](./frontend.md) — `/email-preview/` page, components/email-preview/
-- [backend.md](./backend.md) — `lib/email`, `lib/sms`, template rendering
+- [backend.md](./backend.md) — `lib/email`, template rendering, **`lib/sms` (Mobile Message adapter)**
 - [api.md](./api.md) — `/api/newsletter/`
-- [rules.md](./rules.md) — provider split (SendGrid transactional, Klaviyo marketing)
+- [rules.md](./rules.md) — provider split (SendGrid transactional, Klaviyo marketing, Mobile Message transactional SMS)
 - [patterns.md](./patterns.md) — template lockstep with code
-- [gotchas.md](./gotchas.md) — preview workflow, root template files
+- [gotchas.md](./gotchas.md) — preview workflow, root template files, SMS silent-drop traps
 - [cross-client-rendering.md](./cross-client-rendering.md) — build reference for cross-client/dark-mode-safe HTML email (Gmail/Outlook/Apple/Yahoo); use when authoring or hardening templates
 - [models.md](./models.md) — _N/A — emails aren't persisted; uses User for recipients_
 - [testing.md](./testing.md) — `docs/SENDGRID_TESTING_GUIDE.md`
