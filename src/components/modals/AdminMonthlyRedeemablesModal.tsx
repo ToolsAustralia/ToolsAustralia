@@ -48,10 +48,14 @@ interface AdminMonthlyRedeemablesModalProps {
     startsAt: string;
     endsAt?: string;
     neverExpires?: boolean;
+    /** Per-customer window in HOURS, counted from the issuing instant; mutually exclusive with neverExpires. */
+    validForHours?: number;
     code: string;
     requiresPurchase?: boolean;
     purchaseRequirement?: PurchaseRequirement;
     segmentConfig?: MonthlyRedeemableSegmentConfig | null;
+    /** Total issuances (any status) — drives the "already has issuances" edit warning. */
+    issuanceCount?: number;
   } | null;
 }
 
@@ -114,6 +118,7 @@ export default function AdminMonthlyRedeemablesModal({
     endsAt: "",
     code: "",
     neverExpires: false,
+    validForHours: "",
     minInactiveDays: "",
     maxInactiveDays: "",
     requiresEmailVerified: true,
@@ -126,12 +131,17 @@ export default function AdminMonthlyRedeemablesModal({
   const canSubmit = useMemo(() => {
     const hasDates = Boolean(formData.startsAt && (formData.neverExpires || formData.endsAt));
     const hasCode = Boolean(formData.code.trim());
+    const validForHoursOk =
+      !formData.validForHours.trim() ||
+      (Number.isInteger(Number(formData.validForHours)) && Number(formData.validForHours) >= 1);
     return Boolean(
       formData.monthKey.trim() &&
         formData.name.trim() &&
         Number(formData.entriesAmount) > 0 &&
         hasDates &&
-        hasCode
+        hasCode &&
+        validForHoursOk &&
+        !(formData.neverExpires && formData.validForHours.trim())
     );
   }, [formData]);
 
@@ -167,6 +177,7 @@ export default function AdminMonthlyRedeemablesModal({
       endsAt: "",
       code: "",
       neverExpires: false,
+      validForHours: "",
       minInactiveDays: "",
       maxInactiveDays: "",
       requiresEmailVerified: true,
@@ -222,10 +233,35 @@ export default function AdminMonthlyRedeemablesModal({
       return;
     }
 
+    const isEdit = Boolean(editingCampaign?.id);
+    const trimmedValidForHours = formData.validForHours.trim();
+    const nextValidForHours = trimmedValidForHours ? Number(trimmedValidForHours) : undefined;
+    // Clearing sentinel: only meaningful on an edit of a campaign that previously HAD
+    // validForHours set — the create route's zod schema is `.optional()`, not `.nullable()`,
+    // so `null` must never be sent on create.
+    const validForHoursPayload = isEdit
+      ? (nextValidForHours ?? (editingCampaign?.validForHours != null ? null : undefined))
+      : nextValidForHours;
+
+    // Existing RedeemableIssuance rows are stamped with an expiry at MINT time and are
+    // never re-stamped, so newly enabling/changing validForHours on a campaign that already
+    // has issuances silently splits the audience: old rows keep the old deadline while the
+    // flow promises everyone a rolling window.
+    if (
+      isEdit &&
+      typeof nextValidForHours === "number" &&
+      nextValidForHours !== editingCampaign?.validForHours &&
+      (editingCampaign?.issuanceCount ?? 0) > 0
+    ) {
+      const confirmed = window.confirm(
+        "This campaign already has issuances. Existing issuances are NOT re-stamped — they keep their original deadline. Only NEW issuances minted after this save will use the updated window. Continue?"
+      );
+      if (!confirmed) return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
-      const isEdit = Boolean(editingCampaign?.id);
       const segmentConfig = buildSegmentConfigPayload();
       const response = await fetch(
         isEdit ? `/api/admin/monthly-coupon/campaign/${editingCampaign?.id}` : "/api/admin/monthly-coupon/campaign",
@@ -242,6 +278,7 @@ export default function AdminMonthlyRedeemablesModal({
             startsAt: formData.startsAt,
             endsAt: formData.neverExpires ? undefined : formData.endsAt,
             neverExpires: formData.neverExpires,
+            validForHours: validForHoursPayload,
             code: normalizeCouponCode(formData.code),
             purchaseRequirement,
             segmentConfig,
@@ -292,6 +329,7 @@ export default function AdminMonthlyRedeemablesModal({
       endsAt: editingCampaign.endsAt ? new Date(editingCampaign.endsAt).toISOString().slice(0, 16) : "",
       code: editingCampaign.code,
       neverExpires: Boolean(editingCampaign.neverExpires),
+      validForHours: editingCampaign.validForHours != null ? String(editingCampaign.validForHours) : "",
       minInactiveDays: sc?.minInactiveDays != null ? String(sc.minInactiveDays) : "",
       maxInactiveDays: sc?.maxInactiveDays != null ? String(sc.maxInactiveDays) : "",
       requiresEmailVerified: sc?.requiresEmailVerified ?? true,
@@ -431,7 +469,9 @@ export default function AdminMonthlyRedeemablesModal({
                   <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1.5">
                     <span className="inline-flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-red-600" />
-                      End
+                      {formData.validForHours.trim() && !formData.neverExpires
+                        ? "Backstop — no new customers qualify after this date"
+                        : "End"}
                     </span>
                   </label>
                   <DateTimePicker
@@ -453,11 +493,34 @@ export default function AdminMonthlyRedeemablesModal({
                       ...prev,
                       neverExpires: e.target.checked,
                       endsAt: e.target.checked ? "" : prev.endsAt,
+                      // Mutually exclusive with validForHours — clear it so a disabled,
+                      // stale value can't silently ride along in the submit payload.
+                      validForHours: e.target.checked ? "" : prev.validForHours,
                     }))
                   }
                 />
                 Never expires
               </label>
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-neutral-200 mb-1.5">
+                  Per-customer window (hours)
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={formData.validForHours}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, validForHours: e.target.value }))}
+                  placeholder="e.g. 72 — leave blank for a fixed end date"
+                  disabled={formData.neverExpires}
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-neutral-500">
+                  When set, each customer&apos;s coupon expires exactly this many hours after the marketing
+                  flow issues it — that is the moment the discount email is about to send, NOT the moment
+                  the customer qualified; those are typically days apart. The End date above becomes a
+                  backstop that only gates new customers, not the redemption deadline for coupons already
+                  issued.
+                </p>
+              </div>
             </FormSection>
 
             {targetingMode === "dynamic-segment" && (

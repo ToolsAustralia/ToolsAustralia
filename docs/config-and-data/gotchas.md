@@ -1,5 +1,67 @@
 # Config & Data — Gotchas
 
+## The bonus-code FAQs asserted an 11:59pm deadline — and the TEST required it (2026-08-26)
+
+Cobber ids **86** and **87** were rewritten in place for the bonus-code webhook rework. Corpus size
+is unchanged at **90** (no ids added or removed), so the `faqs.test.ts` count assertion did not move.
+
+- **id 86** said the deadline "always runs to 11:59pm Sydney time on that day." True only under the
+  deleted calendar-day model. A bonus code now expires an exact **72 hours** after the instant it was
+  issued, so it runs out at whatever time of day that lands on. The answer now says so.
+  **Second correction, final review (2026-08-26):** the first rewrite replaced the 11:59pm promise
+  with "the exact date and time is printed in the email that carries your code… check that email."
+  That was a second wrong fact, not a fix. `expires_at_label` is a property of the `Bonus Code
+  Issued` metric **our server** emits; a Klaviyo flow email renders against its **own** trigger
+  metric, so the three discount templates cannot read it and the merge tag renders empty. They carry
+  the hardcoded code string and no date. With no page showing it either, the entry was directing a
+  customer with a 72-hour, one-per-lifetime grant to a place the answer does not exist. It now states
+  that plainly, gives the safe rule ("use it within 72 hours of the email arriving"), offers
+  `[contact us](/contact)`, and keeps the honest fallback below. A matching ACCOUNT SELF-SERVICE MAP
+  bullet was added in `systemPrompt.ts` — with no lookup surface, "there is no page for this,
+  escalate" is precisely what that map exists to say. **Its closing sentence is scoped
+  to signed-in customers on purpose** (fix round 1): the dated refusal
+  (`campaignCodeExpiredMessage`) is produced inside the `if (callerId)` branch of
+  `CampaignCodeValidationService.validate()`, so a **guest** — which is exactly what the
+  `checkout-start` / LOCKIN100 cohort is, since step-1 registration does not authenticate — falls
+  through to `{ valid: true }` and never sees it. The copy must not promise an experience that
+  cohort does not get; the underlying guest gap is pre-existing and tracked separately in
+  [rewards-redeemables/gotchas.md](../rewards-redeemables/gotchas.md).
+- **id 87** promised an expired unused code "can be re-issued to you later with a fresh deadline."
+  Still true, but only outside the 30-day re-arm cooldown (`REARM_COOLDOWN_DAYS`) — inside it,
+  qualifying again produces no code and no email at all. The answer now names the waiting period.
+
+**The trap worth remembering: the guard was pinning the wrong fact.** `faqs.test.ts` did not merely
+fail to catch the staleness — it contained
+`assert.ok(bonusExpiry!.answer.includes("11:59pm Sydney time"), …)`, so correcting the copy made the
+suite go **red**, and the lazy fix would have been to revert the copy. A content assertion that names
+a specific business value has an expiry date of its own; when the value changes, the assertion is
+part of the change, not an obstacle to it. It is now inverted — id 86 must contain `"72 hours"` and
+must **not** contain `"11:59"` — so the old sentence cannot come back quietly.
+
+Cobber answers only from grounded knowledge, so a stale entry here is not a gap, it is a confidently
+wrong answer on a legally constrained topic — and a customer told "11:59pm" who redeems at 6pm on the
+expiry day is refused by `campaignCodeExpiredMessage` naming a different time. Also note the two
+things these entries deliberately do **not** say: "check your rewards wallet" and "check your email
+for the date". No customer-reachable surface shows a bonus code or its deadline today, and no email
+prints the deadline either — see
+[rewards-redeemables/frontend.md](../rewards-redeemables/frontend.md). Re-ran
+`npm run build:chat-knowledge-pack` then `npm run test:chat-faqs`.
+
+**The same trap, one turn later.** The inverted guard (`"72 hours"` present, `"11:59"` absent) held —
+and the sentence it let through was still false, because the guard pinned the *number* and nothing
+pinned *where the customer is sent*. That is the general shape: a content assertion protects the fact
+it names and gives no cover to the sentence beside it. `faqs.test.ts` now also asserts id 86 does not
+**send the customer to their email for the deadline** (`!/check (that|your|the) email/i`), and that it
+offers a support path (`/contact`) — so if a `Bonus Code Issued` flow is ever built and the copy should
+change, the suite goes red and forces the decision instead of letting the two drift apart again.
+
+**Know what that guard does and does not cover.** It pins the **directive**, not the claim. Copy saying
+"the exact date and time is printed in the email that carries your code", with no "check that email",
+would still pass. The wider ban on the substring `"printed in the email"` was tried first and went red
+against the corrected copy, which legitimately says the date is **not** printed there — so the guard was
+narrowed deliberately (the reason is recorded in the test's own comment beside the assertion). Do not
+read it as a general ban on discussing the email.
+
 ## Two upgrade FAQs asserted "your billing cycle resets to today" (2026-08-24)
 
 Cobber ids **22** and **51** both stated flatly that upgrading resets the billing cycle to the

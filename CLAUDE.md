@@ -428,7 +428,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-08-12"
+      "lastVerified": "2026-08-26"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
@@ -436,9 +436,12 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/services/redeemables/**",
         "src/services/milestones/**",
         "src/utils/redeemables/**",
+        "src/lib/bonus-code-webhook/**",
         "src/models/RedeemableIssuance.ts",
+        "src/models/BonusCodeWebhookCall.ts",
         "src/models/MilestoneIssuance.ts",
         "src/models/MilestoneReward.ts",
+        "src/app/api/bonus-codes/**",
         "src/app/api/redeemables/**",
         "src/app/api/rewards/**",
         "src/app/(site)/rewards/**",
@@ -447,7 +450,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useEntryRewardToast.ts",
         "src/utils/rewards-widget-spotlight-storage.ts"
       ],
-      "lastVerified": "2026-08-03"
+      "lastVerified": "2026-08-26"
     },
     "promo": {
       "docs": "docs/promo/",
@@ -487,7 +490,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-draw9-landing-videos.ts",
         "src/docs/PROMOTION_ANALYTICS.md"
       ],
-      "lastVerified": "2026-08-10"
+      "lastVerified": "2026-08-25"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -618,7 +621,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/migrate-seed-staff-roles.ts",
         "src/contexts/UserContext.tsx"
       ],
-      "lastVerified": "2026-08-17"
+      "lastVerified": "2026-08-25"
     },
     "email": {
       "docs": "docs/email/",
@@ -780,7 +783,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-08-14"
+      "lastVerified": "2026-08-26"
     },
     "client-state": {
       "docs": "docs/client-state/",
@@ -805,7 +808,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-08-17"
+      "lastVerified": "2026-08-25"
     },
     "internal-norm": {
       "docs": "docs/internal-norm/",
@@ -827,7 +830,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-08-11"
+      "lastVerified": "2026-08-26"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -856,7 +859,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-08-17"
+      "lastVerified": "2026-08-26"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",

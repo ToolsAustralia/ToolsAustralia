@@ -47,6 +47,11 @@ const MonthlyCampaignRowSchema = z.object({
   startsAt: z.string(), // ISO 8601
   endsAt: z.string().nullable(), // ISO 8601 or null (neverExpires)
   neverExpires: z.boolean(),
+  // Per-customer window in HOURS; when set, each issuance expires exactly validForHours
+  // after the instant it was issued (the marketing flow's webhook call), not at campaign
+  // endsAt. Optional — a legacy/fixed-end campaign never has this set, and it's mutually
+  // exclusive with neverExpires.
+  validForHours: z.number().int().positive().optional(),
   isActive: z.boolean(),
   code: z.string(),
   requiresPurchase: z.boolean(),
@@ -55,6 +60,9 @@ const MonthlyCampaignRowSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   redeemedCount: z.number().int().nonnegative(),
+  // Total issuances (any status), not just redeemed — lets Norm see the same "this campaign
+  // already has issuances" signal the admin UI warns on when validForHours is being enabled.
+  issuanceCount: z.number().int().nonnegative(),
 });
 
 export const NormMonthlyCouponCampaignsListSchema = z.object({

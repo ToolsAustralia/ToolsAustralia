@@ -49,6 +49,10 @@ export interface MonthlyCampaignListRow {
   startsAt: Date;
   endsAt?: Date;
   neverExpires: boolean;
+  /** Per-customer window in HOURS. When set, each issuance expires exactly validForHours
+   * after the instant it was issued (the marketing flow's webhook call), not at campaign
+   * endsAt — see personalWindowGoverns. */
+  validForHours?: number;
   isActive: boolean;
   code: string;
   requiresPurchase: boolean;
@@ -57,6 +61,10 @@ export interface MonthlyCampaignListRow {
   createdAt: Date;
   updatedAt: Date;
   redeemedCount: number;
+  /** Total RedeemableIssuance rows minted for this campaign (any status), not just redeemed.
+   * Drives the admin UI's "already has issuances" warning when enabling validForHours on an
+   * existing campaign — existing rows are never re-stamped with the new window. */
+  issuanceCount: number;
 }
 
 /**
@@ -73,20 +81,33 @@ export async function listCampaignsWithRedemptionCounts(filters?: {
   const campaigns = await MonthlyEntryCampaign.find(query)
     .sort({ monthKey: -1, createdAt: -1 })
     .select(
-      "monthKey name displayLabel entriesAmount campaignMode targetingMode startsAt endsAt neverExpires isActive code requiresPurchase purchaseRequirement segmentConfig createdAt updatedAt",
+      "monthKey name displayLabel entriesAmount campaignMode targetingMode startsAt endsAt neverExpires validForHours isActive code requiresPurchase purchaseRequirement segmentConfig createdAt updatedAt",
     )
     .lean();
 
   const campaignIds = campaigns.map((c) => c._id);
-  const redemptionCounts = await RedeemableIssuance.aggregate<{
+  // Single aggregate pass computes BOTH counts (total issuances + redeemed-only) so the
+  // admin "already has issuances" warning (Task 7) and the existing redeemedCount rollup
+  // share one query instead of two.
+  const issuanceCounts = await RedeemableIssuance.aggregate<{
     _id: mongoose.Types.ObjectId;
+    totalCount: number;
     redeemedCount: number;
   }>([
-    { $match: { campaignId: { $in: campaignIds }, status: "redeemed" } },
-    { $group: { _id: "$campaignId", redeemedCount: { $sum: 1 } } },
+    { $match: { campaignId: { $in: campaignIds } } },
+    {
+      $group: {
+        _id: "$campaignId",
+        totalCount: { $sum: 1 },
+        redeemedCount: { $sum: { $cond: [{ $eq: ["$status", "redeemed"] }, 1, 0] } },
+      },
+    },
   ]);
   const redemptionCountMap = new Map(
-    redemptionCounts.map((item) => [item._id.toString(), item.redeemedCount]),
+    issuanceCounts.map((item) => [item._id.toString(), item.redeemedCount]),
+  );
+  const issuanceCountMap = new Map(
+    issuanceCounts.map((item) => [item._id.toString(), item.totalCount]),
   );
 
   return campaigns.map((c) => ({
@@ -100,6 +121,7 @@ export async function listCampaignsWithRedemptionCounts(filters?: {
     startsAt: c.startsAt,
     endsAt: c.endsAt,
     neverExpires: c.neverExpires,
+    validForHours: c.validForHours,
     isActive: c.isActive,
     code: c.code,
     requiresPurchase: c.requiresPurchase,
@@ -108,6 +130,7 @@ export async function listCampaignsWithRedemptionCounts(filters?: {
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     redeemedCount: redemptionCountMap.get(String(c._id)) ?? 0,
+    issuanceCount: issuanceCountMap.get(String(c._id)) ?? 0,
   }));
 }
 

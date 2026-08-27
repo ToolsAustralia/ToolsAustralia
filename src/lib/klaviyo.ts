@@ -1887,6 +1887,7 @@ class KlaviyoClient {
             },
             properties: formattedEvent.properties,
             time: formattedEvent.time ? new Date(formattedEvent.time * 1000).toISOString() : new Date().toISOString(),
+            ...(formattedEvent.unique_id ? { unique_id: formattedEvent.unique_id } : {}),
           },
         },
       };

@@ -6,7 +6,11 @@ Canonical purchase / cancel / refund events fire SERVER-SIDE (Meta CAPI, Klaviyo
 
 ## R2. Webhook is the single emitter for cancel / paid events
 
-Per [billing-stripe R2](../billing-stripe/rules.md#r2-the-webhook-is-the-only-emitter-of-cancellation-tracking-events): cancel / paid analytics fire from the matching webhook only, not from API paths. Prevents double-counting.
+Per [billing-stripe R2](../billing-stripe/rules.md#r2-the-webhook-is-the-only-emitter-of-cancellation-tracking-events): `Subscription Cancelled` and the paid analytics fire from the matching webhook only, not from API paths. Prevents double-counting.
+
+**Two clarifications carried from that rule (2026-08-26):** there is **no** Meta CAPI cancellation event — `src/lib/facebook.ts` has never had one, despite what these three copies used to imply; and the ban covers *duplicating* `Subscription Cancelled`, not every cancel-time emit. A differently-named cancel-time event from a service path is a different signal to a different flow — name it as a carve-out in all three copies of this rule in the same edit.
+
+**Named carve-out (2026-08-26): `Subscription Cancellation Requested`.** Emitted server-side from `cancelSubscription()` when `isMemberChurn === true`, fire-and-forget, after the user document is saved. It is the win-back flow's trigger and is **allowed**: `Subscription Cancelled` only fires when Stripe deletes the subscription, which on a cancel-at-period-end cancel is up to a month after the member clicked cancel. Property table: [KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md#subscription-cancellation-requested-2026-08-26).
 
 ## R3. Honour unsubscribe / GDPR deletion
 

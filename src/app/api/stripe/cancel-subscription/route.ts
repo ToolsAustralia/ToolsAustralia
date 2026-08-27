@@ -45,6 +45,10 @@ export async function POST(request: NextRequest) {
     const result = await cancelSubscription(user, {
       cancelAtPeriodEnd: validatedData.cancelAtPeriodEnd,
       analytics: { actor: "user" },
+      // Only the member-initiated cancel is churn. The admin cancel route and the
+      // past-due tier switch leave this off (default false). Gates the cancel-time
+      // "Subscription Cancellation Requested" Klaviyo emit that starts the win-back flow.
+      isMemberChurn: true,
     });
 
     const message = result.cancelledImmediately

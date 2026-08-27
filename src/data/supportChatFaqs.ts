@@ -696,5 +696,27 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "That depends on timing. Waiting is fine if there's still a while before the next Major Draw on the 27th — the block clears on its own in about three days and costs you nothing. But if the draw is close, adding a different card on your [Membership](/my-account/membership) page is the better move, because it applies immediately. To be clear about what's actually at stake: free entries you've already earned stay in that draw regardless — being past-due never removes them — but the free entries included with your renewal are only credited once the payment goes through. So the sooner the renewal succeeds, the sooner those land.",
       category: "PAYMENTS",
     },
+    // -- BONUS CODES (per-customer, personal deadline) -----------------------
+    {
+      id: "86",
+      question: "How long do I have to use my bonus code before it expires?",
+      answer:
+        "Your bonus code has its own deadline, and it belongs to you alone -- the clock starts the moment the code is created for you, not on a shared cut-off date, so two members who get the same code on different days will have different deadlines. It then runs for a fixed 72 hours from that moment, which means it can run out at any time of day: it is not an end-of-day cut-off and it is not tied to a whole calendar date. To be straight with you, the exact date and time is not shown anywhere you can reach -- it is not printed in the email and there is no page in [My Account](/my-account) that displays it -- so the safe rule is to use the code within 72 hours of the email arriving. If you need the precise moment yours runs out, [contact us](/contact) and our team will read it off your account. Redeem it at checkout before the deadline and the free entries it includes are added to your next Major Draw. If the window has already passed, the code no longer works and the free entries it includes are not added -- and when you are signed in, the message at checkout does name the exact date and time it ran out.",
+      category: "REWARDS",
+    },
+    {
+      id: "87",
+      question: "Can I use my bonus code more than once, or on a second order?",
+      answer:
+        "No -- a bonus code is a one-off. Once you redeem it, the free entries it includes are credited and the code is used up for good, so it will not work on a later order. It is also one code per person, not one per order: you will not be issued the same code again after you have redeemed it. If your code expired before you got to use it, that is a different situation -- an unused code that has run out of time can be re-issued to you later with a fresh deadline if you become eligible again, and we will email you if that happens. That is not immediate, though: there is a waiting period of about a month from when the first code was created for you, so qualifying again straight away will not produce a second code.",
+      category: "REWARDS",
+    },
+    {
+      id: "88",
+      question: "I got a refund on an order where I used a bonus code -- do I get the code back?",
+      answer:
+        "No. A refund reverses what came with that order, including the free entries the code added, and the code itself stays used -- it is not returned to your account and it will not work again. This is deliberate: a bonus code is a one-per-person thank-you, not something that can be recycled by refunding and re-ordering. If you think a refund has been applied incorrectly, or you were charged for something you did not order, get in touch through our [Contact](/contact) page with your order details and our team will sort it out.",
+      category: "REWARDS",
+    },
   ];
 }
