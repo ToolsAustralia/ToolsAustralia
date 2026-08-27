@@ -489,7 +489,29 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
                   { label: "Print", value: specs.print },
                   {
                     label: "Made",
-                    value: serializedProduct.trackInventory === false ? "To order · 3–5 days" : "In stock",
+                    /*
+                      NO NUMBER HERE, DELIBERATELY.
+
+                      This read "To order · 3–5 days". Nothing supplied that
+                      figure: the print provider's API carries no turnaround,
+                      production-time or lead-time field, and no supplier
+                      turnaround is recorded anywhere in the repo. It was five
+                      hard-coded words on every made-to-order item.
+
+                      It also contradicted a policy the rest of the system
+                      holds on purpose — CUSTOMER.md states no delivery date is
+                      ever promised, and Cobber is grounded to say "we'd rather
+                      not quote a delivery date we can't stand behind". The
+                      product page was the one surface handing one out.
+
+                      And it read shorter than it was: this cell sits beside
+                      "Ships", with nothing saying the days elapse BEFORE the
+                      courier is involved. The signal a buyer actually needs is
+                      that the garment does not exist yet — that is what "Made
+                      to order" says, without representing a date we cannot
+                      substantiate.
+                    */
+                    value: serializedProduct.trackInventory === false ? "Made to order" : "In stock",
                   },
                   { label: "Ships", value: `${FLAT_SHIPPING_RATE_LABEL} flat, Australia-wide` },
                 ]

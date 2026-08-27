@@ -570,3 +570,36 @@ first route hit — a 500 that appears only on the deploy right after a restart.
 `import "@/models/Product"` is now there for its side effect. **Any service that
 populates a ref must import the ref'd model itself**; relying on another module's
 import order is a race the compiler cannot see.
+
+## "To order · 3–5 days" was invented, and it fought our own policy (2026-08-27)
+
+The PDP spec grid's **Made** cell read `"To order · 3–5 days"` for every
+made-to-order item. Nothing supplied that figure:
+
+- The print provider's client models **no** turnaround, production-time or
+  lead-time field — `src/lib/print-provider/client.ts` maps `productDetails
+  .description` and pricing, so the mapping layer is real; timing simply is not
+  in it. (Control: the same grep that found zero timing fields did find the
+  description mapping, so the search was working.)
+- No supplier turnaround is recorded anywhere in `docs/`.
+
+Worse, it contradicted a policy the rest of the system holds deliberately.
+`CUSTOMER.md` states **no delivery date is ever promised**, and Cobber is
+grounded to answer *"we'd rather not quote a delivery date we can't stand
+behind"* (`supportChatFaqs.ts`, with a code comment saying no ETA is quoted
+anywhere). The product page was the single surface handing one out — so the
+chatbot refused a date while the page beside it gave one.
+
+It also read shorter than it was. The cell sits next to **Ships**, with nothing
+saying those days elapse *before* the courier is involved; the public FAQ then
+claimed another 3–5 business days for shipping. The honest total was roughly
+6–10 business days.
+
+Now `"Made to order"`. **The signal a buyer needs is that the garment does not
+exist yet** — that is what the cell must say, and it carries no representation
+we cannot substantiate.
+
+**Rule: never put a duration on a fulfilment surface unless it came from the
+supplier in writing and is stored.** If one is ever added, state it as
+production time explicitly and separately from shipping, or it will be read as
+the whole wait.

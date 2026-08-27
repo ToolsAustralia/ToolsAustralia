@@ -1350,3 +1350,34 @@ tracking endpoint — see `docs/upsell/gotchas.md`.
 
 `UpsellOffer` and `SAMPLE_UPSELL_OFFERS` remain in `types/upsell.ts`: the dev modal gallery
 (`src/components/dev/ModalsGalleryClient.tsx`) still uses them.
+
+## `select { font-size: 16px !important }` silently eats any smaller text (2026-08-27)
+
+`src/app/globals.css` (~line 1496) forces every `input`/`textarea`/`select` to
+16px under 768px:
+
+```css
+@media screen and (max-width: 768px) {
+  select { font-size: 16px !important; }
+}
+```
+
+**That rule is load-bearing, not legacy.** iOS Safari zooms the whole viewport
+when a form control whose text is under 16px takes focus, and it does not zoom
+back — so the guard is the reason the site does not lurch on every filter tap.
+
+The trap: a Tailwind `text-[11.5px]` on a `<select>` applies everywhere *except*
+mobile, where it is discarded with no warning. Padding, height and colour classes
+on the same element all apply normally, so the control looks styled and simply
+renders its text too large — which reads as "Tailwind didn't work" rather than
+"a global rule outranks it".
+
+**Do not raise the specificity to win.** Removing or overriding the guard trades a
+type-size nit for viewport zoom on every iPhone.
+
+**The pattern that satisfies both** (shop sort control, `ShopContent.tsx`): keep a
+real `<select>` at its 16px, give it `peer absolute inset-0 opacity-0`, and draw
+the visible pill as a sibling `div` at whatever size the design wants with
+`pointer-events-none`. The native picker, arrow keys, `aria-label` and the absence
+of a scroll lock all survive; only the painting moves. Carry the focus ring across
+with `peer-focus-visible:` or keyboard focus becomes invisible.

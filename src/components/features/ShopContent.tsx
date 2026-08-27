@@ -504,7 +504,23 @@ export default function ShopContent({
             sibling of the grid its containing block is the whole results column,
             which is the distance it actually needs to cover.
           */}
-            <div className="sticky top-[var(--app-header-h)] z-20 -mx-4 space-y-3 border-b border-gray-200 bg-white/95 px-4 pb-3 pt-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/95 sm:-mx-5 sm:px-5 md:hidden">
+            {/*
+              top-[60px] IS THE HEADER, MEASURED — not --app-header-h.
+
+              That variable is a flat 86px while the mobile header actually
+              renders 60px (verified in the browser: <header> is `fixed top-0`
+              with a 60px box). Pinning the band at 86 parked it 26px BELOW the
+              header's bottom edge, and that strip is transparent — so product
+              cards scrolled up through the gap between the navbar and this bar,
+              which is exactly what it looked like: a leak, not a spacing choice.
+
+              Fixed here rather than by correcting the variable, because
+              --app-header-h is also the top PADDING on many pages; changing it
+              globally would shift every mobile page by 26px in one go. That is a
+              real fix worth making deliberately, not as a side effect of
+              straightening one bar.
+            */}
+            <div className="sticky top-[60px] z-20 -mx-4 space-y-3 border-b border-gray-200 bg-white/95 px-4 pb-3 pt-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/95 sm:-mx-5 sm:px-5 md:hidden">
               <div className="flex items-center gap-2">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
@@ -576,20 +592,16 @@ export default function ShopContent({
                 </div>
               )}
 
-              <div className="flex items-center gap-2">
-                <div className="relative min-w-0 flex-1">
-                  <div className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-500 dark:text-neutral-400">
-                    <ArrowUpDown className="h-4 w-4" />
-                  </div>
-                  <Dropdown
-                    options={sortOptions}
-                    value={sortBy}
-                    onChange={handleSortChange}
-                    placeholder="Sort by"
-                    className="[&>button]:h-[42px] [&>button]:rounded-xl [&>button]:border-gray-300 dark:[&>button]:border-neutral-600 [&>button]:bg-white dark:[&>button]:bg-neutral-950 [&>button]:pl-9 [&>button]:pr-8 [&>button]:text-sm [&>button]:font-medium [&>button]:text-gray-800 dark:text-neutral-100 dark:[&>button]:text-neutral-100 [&>button]:focus:ring-red-600/10"
-                  />
-                </div>
-              </div>
+              {/*
+                THE SORT USED TO SIT HERE, FULL-WIDTH, AND IT WAS THE SECOND ONE.
+
+                The results row below already pairs the count with a sort control,
+                so a phone carried two "Featured" pickers a few hundred pixels
+                apart — and this one spent a whole sticky row saying one word,
+                pushing the products themselves further down the fold on the
+                breakpoint with the least room. The count row keeps it: sorting
+                belongs beside the number it reorders.
+              */}
             </div>
 
           {/* Results Header - Enhanced styling */}
@@ -642,7 +654,7 @@ export default function ShopContent({
             */}
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <p className="text-[13px] font-semibold text-gray-600 dark:text-neutral-400">
+                <p className="text-[11.5px] font-semibold text-gray-600 dark:text-neutral-400">
                   {totalProducts > 0
                     ? `${totalProducts} ${totalProducts === 1 ? "item" : "items"}`
                     : "No products found"}
@@ -652,13 +664,30 @@ export default function ShopContent({
                 )}
               </div>
 
+              {/*
+                A TRANSPARENT NATIVE SELECT OVER A PILL WE DRAW OURSELVES.
+
+                Styling the select directly cannot make this text smaller.
+                globals.css carries `select { font-size: 16px !important }` under
+                768px, and that rule is load-bearing: iOS Safari zooms the whole
+                viewport when a form control under 16px takes focus, and the page
+                does not zoom back. Any `text-[11.5px]` on a <select> is silently
+                discarded on the one breakpoint that asked for it.
+
+                So the select keeps its 16px and its opacity drops to zero; the
+                pill beside it is what a reader sees, at whatever size the design
+                wants. The control underneath is still a real <select> — the
+                platform's own picker on a phone, no scroll lock, arrow keys and
+                a label for assistive tech — which is why it was chosen over a
+                custom menu in the first place. `peer-focus-visible` moves the
+                focus ring onto the visible pill so keyboard focus stays legible.
+              */}
               <div className="relative shrink-0">
-                <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
                 <select
                   value={sortBy}
                   onChange={(e) => handleSortChange(e.target.value)}
                   aria-label="Sort products"
-                  className="h-9 cursor-pointer appearance-none rounded-full border border-gray-300 bg-white pl-8 pr-8 text-[12.5px] font-bold text-gray-800 outline-none transition-colors hover:border-gray-400 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+                  className="peer absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
                 >
                   {sortOptions.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -666,7 +695,13 @@ export default function ShopContent({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
+                <div className="pointer-events-none inline-flex h-8 items-center gap-1.5 rounded-full border border-gray-300 bg-white pl-2.5 pr-2.5 text-[11.5px] font-bold text-gray-800 transition-colors peer-hover:border-gray-400 peer-focus-visible:border-red-600/40 peer-focus-visible:ring-2 peer-focus-visible:ring-red-600/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
+                  <ArrowUpDown className="h-3 w-3 shrink-0 text-gray-500 dark:text-neutral-400" aria-hidden />
+                  <span className="whitespace-nowrap">
+                    {sortOptions.find((o) => o.value === sortBy)?.label ?? "Sort"}
+                  </span>
+                  <ChevronDown className="h-3 w-3 shrink-0 text-gray-500 dark:text-neutral-400" aria-hidden />
+                </div>
               </div>
             </div>
 
