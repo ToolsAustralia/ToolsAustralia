@@ -1,5 +1,47 @@
 # Promo — Frontend
 
+## STIHL promo-banner art — installed from exports flattened on white (2026-08-27)
+
+`public/images/promoBanner/Stihl/` now carries the full nine-file set (`SpecialPromo`,
+`DrawnTomorrow`, `DrawnTonight` x `3x/5x/10x`), and `stihl: "Stihl"` is wired into
+`BANNER_FOLDER_BY_TOOLSET`. Until this landed the resolver deliberately returned Milwaukee for
+STIHL — see the note in that file about the 404-per-banner the derived-folder version caused.
+
+**Do not confuse the two banner families.** `promoBanner/<Brand>/` (this one) is the left-column
+promo art. `banners/multiplier/<brand>/` is a different set with its own gate,
+`BRANDS_WITH_BANNER_ART` in `utils/promo/multiplier-banner.ts`, which STIHL is **not** in because
+it has no multiplier art. Adding a brand to one says nothing about the other.
+
+### The exports arrived flattened on white, and that costs fidelity
+
+Every other brand's banners are transparent PNGs exported from the layered source (~43% fully
+clear, ~6% partial-alpha fringe). STIHL's arrived as **opaque PNGs on a white background**, so
+they had to be un-composited. Two steps, and the second is the non-obvious one:
+
+1. **Edge-connected flood fill** decides which white is background, so interior white — the
+   `ENTRIES ACTIVATED` lettering, the clock face — survives. Removing *all* white would punch
+   holes straight through the text.
+2. Inside that region, `alpha = 255 - min(r,g,b)` and the colour is **unpremultiplied from
+   white** (`orig = (c - 255*(1-a)) / a`). That reproduces the anti-aliased fringe; a binary cut
+   leaves jagged edges beside the other brands. Verified by re-compositing the result back onto
+   white and confirming it reproduces the source exactly.
+
+**The catch: the title carries a white outline that touches the white background.** Flattened,
+outline-white and background-white are the same pixels, so a plain fill walks through the gaps
+between letters and eats both the outline and the clock face behind it. Mitigated by **opening**
+the background mask (erode then dilate, radius 2) so thin leak channels do not count as
+background. Radius was tuned against the HiKOKI art: 0 punches holes in the clock, 4+ leaves
+white slabs in the concave gaps between tools, 10 is clearly wrong at full size.
+
+**Known limitation, deliberately not papered over:** STIHL's title outline is thinner than the
+other five brands' because part of it is genuinely unrecoverable — the information was destroyed
+when the art was flattened. Encoding matches the rest (`quality: 82, effort: 5`, per
+`scripts/convert-multiplier-banners-to-webp.ts`). **If exact parity matters, ask the designer for
+transparent PNG exports and re-run the same two steps with `open: 0`** — with real alpha the
+knockout is unnecessary and it is a straight webp conversion.
+
+---
+
 ## `/promotions/[slug]` mobile redesign (2026-08-13)
 
 Built from the design handoff at `Milwaukee promotions page redesign/design_handoff_promotions_page/`

@@ -1,7 +1,7 @@
 import { isToolsetLandingSlug, TOOLSET_LANDING_SLUGS } from "@/config/promo-landing-slugs";
 
 /** Folder names under `public/images/promoBanner/` (PascalCase). */
-export type PromoBannerAssetBrand = "Dewalt" | "Hikoki" | "Makita" | "Milwaukee" | "Ryobi";
+export type PromoBannerAssetBrand = "Dewalt" | "Hikoki" | "Makita" | "Milwaukee" | "Ryobi" | "Stihl";
 
 const DEFAULT_BRAND: PromoBannerAssetBrand = "Milwaukee";
 
@@ -27,7 +27,7 @@ const BANNER_FOLDER_BY_TOOLSET: Record<string, PromoBannerAssetBrand> = {
   makita: "Makita",
   milwaukee: "Milwaukee",
   ryobi: "Ryobi",
-  // stihl: no promoBanner/Stihl/ art yet — falls back to Milwaukee. Add when it ships.
+  stihl: "Stihl",
 };
 
 function toolsetSlugToBrandFolder(slug: string): PromoBannerAssetBrand {
