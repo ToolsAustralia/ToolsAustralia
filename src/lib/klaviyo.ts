@@ -180,7 +180,17 @@ class KlaviyoClient {
    * opt-in as absent and refuse the very backfill it is meant to permit.
    */
   private canWriteProfiles(): boolean {
-    if (this.mode === "production") return true;
+    // Gate on the REAL deployment signal (`NODE_ENV`), not on `KLAVIYO_MODE`.
+    //
+    // `KLAVIYO_MODE` is an event-name-prefix setting that a human sets by hand, and this repo's
+    // own `.env.local` ships it as "development". If it were also set that way in Vercel, gating
+    // on it would refuse EVERY profile write in production — silently disabling the entire
+    // reconciliation sweep while it still reported success. A safety gate must not be
+    // disableable by a cosmetic config var. `NODE_ENV === "production"` is true for any deployed
+    // build and false on a developer's machine, which is exactly the distinction this guard is
+    // for. The existing constructor already warns when the two disagree.
+    if (process.env.NODE_ENV === "production" || this.mode === "production") return true;
+
     if (process.env.KLAVIYO_ALLOW_DEV_PROFILE_WRITES === "true" || this.allowDevProfileWrites) {
       return true;
     }
