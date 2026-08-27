@@ -525,3 +525,65 @@ pointing at them. Without it this fix would have recreated the silent-skip bug i
 **They still self-heal.** Fixing the underlying data bumps `user.updatedAt`, so the incremental
 sweep picks them up on its own. And once the initial drain completes,
 `{ klaviyoSyncedAt: { $exists: false } }` is the standing query for "never successfully synced".
+
+## Reading the sweep's signals — and why silence is not the same as health
+
+The reconciliation cron emits four `console.error` lines. Only `console.error` survives
+production builds, so **all of them appear at error level in Vercel even when nothing is
+wrong**. Judge them by content, not severity.
+
+| line | what it means | act? |
+|---|---|---|
+| `RETRYABLE failure(s) … watermark HELD` | transient (429/5xx/timeout). Same users re-covered next run | only if it persists across many runs |
+| `PERMANENT failure(s) stepped over` | a hard 4xx. **The cursor moved past them** — this line is the ONLY record | yes — fix the named users' data |
+| `TIME BUDGET EXHAUSTED after ~100/500` | normal. The 45s budget always binds before the 500 limit | no |
+| `BACKLOG: N still awaiting sync` | N users behind the cursor | only if N is **rising** across runs |
+
+**How the 2026-08-27 stall hid for over an hour.** During the initial backfill drain, both
+`TIME BUDGET EXHAUSTED` and `BACKLOG` fire on *every single run* — 19 error-level lines in 90
+minutes that all say "still working". A genuine `sync failure … watermark HELD` was sitting in
+the same block and read as more of the same. The alerts were correct and were ignored because
+they were indistinguishable from noise.
+
+So: **during a drain, watch the backlog TREND, not the presence of the line.** Falling ~100
+per run is healthy. Flat or rising across three or more consecutive runs is the real signal —
+that is what a stall looks like, and it is what `BACKLOG` alone cannot tell you.
+
+Once the backlog is normal, both noisy lines go quiet on their own and become meaningful
+again. If they are still firing every run once the population is caught up, tune
+`BACKLOG_ALERT_THRESHOLD` (25 was a guess) rather than assuming the sweep is broken.
+
+## `watermark` position is not the same as work done
+
+Two numbers that look interchangeable and are not:
+
+- **Backlog** = `countDocuments({ updatedAt: { $gt: watermark } })` — how many users the cursor
+  has yet to reach. This is the honest "remaining" figure.
+- **`klaviyoSyncedAt` count** = how many profiles this deployment has actually written.
+
+They diverge sharply during a drain. Measured mid-backfill: the cursor had travelled past
+27,489 users while only **607** profiles had been written. "Covered" counts everything below
+the watermark including users the cursor passed before the sweep existed; only
+`klaviyoSyncedAt` counts real writes.
+
+Use the backlog for ETA and the stamped count for "how much has actually been pushed to
+Klaviyo". Reporting the first as progress overstates it.
+
+## Three bugs this subsystem shipped with, and how each was found
+
+None of them were caught by review, type-check, or tests. All three were caught by measuring
+production. Worth knowing before trusting a green suite here.
+
+1. **A 500-user page took 66.6s against `maxDuration = 60`.** Vercel would have killed the
+   run, losing its work AND leaving the watermark unmoved — re-selecting the same page
+   forever. Found by reading `durationMs` in a real response. Fixed by `MAX_RUN_MS`.
+2. **The backlog gauge was a full collection scan.** It compared two *fields*, which MongoDB
+   cannot serve from any index: 56,441 docs examined, 0 keys, 95ms — 288 times a day. Found by
+   running `explain()` against production after a question about cost. Fixed by counting
+   against the `updatedAt` index instead.
+3. **One permanently-rejected profile pinned the cursor for over an hour.** Found by comparing
+   the stored watermark across two readings and noticing it had not moved. See the incident
+   note above.
+
+The pattern: each bug was invisible to every static check and visible immediately in one
+production measurement. When changing this service, measure a real run before believing it.

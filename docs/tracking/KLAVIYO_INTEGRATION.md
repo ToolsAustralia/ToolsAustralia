@@ -427,17 +427,62 @@ users = User.find({ updatedAt: { $gt: watermark } })   // KlaviyoSyncState singl
   the live watermark so a repair pass can never rewind it. It advances every run and wraps on
   completion. This is NOT optional: a full pass that restarts from epoch re-syncs the same
   first page forever — verified, two consecutive runs both began at 1970-01-01 and covered the
-  same 50 users, i.e. 0.6% coverage at 56k profiles. A run covers ~344 users, so a circuit
-  takes ~7 days at 56k and ~27 days at 4x — inside the monthly tick of the one property it
-  exists to refresh (`membership_active_duration_months`). Callers passing `afterUpdatedAt`
-  explicitly (the ops backfill) manage their own cursor and never touch this one.
+  same 50 users, i.e. 0.6% coverage at 56k profiles. A run covers ~100 users (see **Measured
+  throughput** below), so a circuit takes **~24 days at 57k profiles** — only just inside the
+  monthly tick of the one property it exists to refresh
+  (`membership_active_duration_months`), and NOT inside it at 2x the population or beyond.
+  Raise the cadence before the population grows. Callers passing `afterUpdatedAt` explicitly
+  (the ops backfill) manage their own cursor and never touch this one.
 - **Scaling shape:** the incremental sweep keys on MUTATION RATE, not profile count — an
-  indexed seek returning only dirty users. Measured throughput is 7.6 users/sec (~344 per
-  45s run) against ~6 mutations per 5 minutes today, so it runs at ~1.7% of capacity with
-  roughly 57x headroom. Profile-count growth lands on the full-pass circuit time, not on the
-  incremental path.
+  indexed seek returning only dirty users. Profile-count growth lands on the full-pass circuit
+  time, not on the incremental path.
 - **Requires the `updatedAt` index on `User`.** Without it the selector is a full collection
   scan (56,441 docs examined to return 4).
+
+### Measured throughput — from production, not from a dev machine
+
+| | value | how it was obtained |
+|---|---|---|
+| users per run | **~96–104** | `lastRunProcessed` over many production runs |
+| effective rate | **~2.2 users/sec** | ~100 users inside the 45s `MAX_RUN_MS` budget |
+| binding constraint | the **time budget**, never `DEFAULT_LIMIT` | every run logs `TIME BUDGET EXHAUSTED after ~100/500` |
+| normal inflow | **0–9 users per 5 min** | hourly `updatedAt` histogram, 24h |
+| observed burst | **~292 per 5 min** | 03:00–04:00 UTC 2026-08-27 — see the open question below |
+
+> **An earlier revision of this doc claimed 7.6 users/sec / ~344 per run.** That was measured
+> locally with `KLAVIYO_ENABLED=false`, so it timed Mongo and CPU and not a single Klaviyo
+> round-trip. Real throughput is roughly **3.4x slower**. Any capacity or headroom figure
+> derived from the old number was wrong — the `DEFAULT_LIMIT` of 500 is decorative, because
+> the time budget always binds first.
+
+**What this means for growth.** The incremental sweep tracks mutation rate, so at normal
+inflow (0–9 per 5 min against ~100 capacity) it is far from saturated and a 2–4x larger
+population is fine. The pressure lands on the **full-pass circuit** instead: ~24 days at
+today's 57k, and proportionally worse as the population grows. That is the number to watch,
+and the lever is the hourly cadence.
+
+**A burst does not break it, it just delays it.** The sweep absorbed a ~5,200-user burst and
+drained the resulting backlog at ~100 per 5 minutes. Backlog *rising* across several
+consecutive runs is the signal that inflow has outrun the sweep; a temporarily large backlog
+that is falling is normal.
+
+### Open question — a nightly burst of dormant-user mutations
+
+Between **03:00 and 04:00 UTC** the `users` collection saw ~5,200 mutations against a normal
+0–9 per 5 min. Of the 5,205 users changed in the 03:00–05:00 window, **only 11 logged in** —
+so this is not customer activity. The affected users are dormant (`lastLogin` months old,
+often equal to `createdAt`).
+
+The cause was **not identified**. It is not the reconciliation sweep (which writes
+`klaviyoSyncedAt` with `{ timestamps: false }` precisely so it cannot dirty its own input) and
+not `migrate-remove-upsell-stats` (which goes through the raw driver, bypassing Mongoose
+timestamps).
+
+Why it matters: every one of those users becomes a sweep candidate, so if this recurs nightly
+the sweep performs ~5,200 Klaviyo writes a night for profiles whose data did not meaningfully
+change. Worth identifying — the nightly cron window (03:15 `reconcile-blocked-transactions`,
+03:20 `dashboard-stats-daily-snapshot`, 03:40 `reconcile-renewal-grants`,
+03:45 `reconcile-affiliate-commissions`) is the place to look.
 
 **Never call the sweep from a payment path.** The Klaviyo client uses a 30s timeout and Stripe
 retries webhooks that do not return a fast 2xx.

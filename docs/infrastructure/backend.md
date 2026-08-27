@@ -145,3 +145,27 @@ npm run find:missing-retention-entries -- --prod --csv  # full list to CSV
 Reports totals, a breakdown by redemption month, and (with `--csv`) the full list. Exit 0 when
 none found, 2 when affected members exist. **The CSV contains customer emails — treat as PII and
 do not commit it.**
+
+## Ops-script status — what has already been run against production (2026-08-27)
+
+Future sessions: check here before re-running anything. All timings and counts measured, not
+estimated.
+
+| script | status | notes |
+|---|---|---|
+| `migrate:remove-upsell-stats` | **RUN — complete** | Stripped `upsellStats` from 56,969 users. Verified 0 remaining. Took well under 2 minutes. Idempotent, so a re-run is harmless but pointless. |
+| `backfill:klaviyo-accuracy` | **NOT run, and not needed** | The incremental sweep started from epoch, so it backfills the whole population on its own at ~100 users / 5 min. Keep the script for a stall or a targeted repair. |
+| `verify:klaviyo-accuracy` | run repeatedly | Passing: 200/200 `member_entries` match the ledger, 200/200 pending-upgrade correct, live draw reconciles exactly. |
+| `find:missing-retention-entries` | run (read-only) | 373 of 590 redeemers never received their draw entries. **Fixed forward only** — no retroactive grant, by owner decision. Re-run any time to list them. |
+
+### `migrate-remove-upsell-stats` has an O(n²) scan pattern — do not copy it
+
+Each batch re-runs `find({ upsellStats: { $exists: true } }).limit(1000)` from the start of the
+collection. Already-unset documents no longer match, so batch N scans past N×1000 documents to
+find its page: ~1.65M document examinations for 57k users, and there is **no index on
+`upsellStats`**.
+
+Harmless at 57k (the whole run was under two minutes, dominated by the ~210ms per-batch
+round-trip). It would be pathological on a much larger collection. If you need this pattern
+again, page by `_id` ascending with a cursor, or just issue one server-side `updateMany` and
+accept the single long write.
