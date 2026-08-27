@@ -400,3 +400,16 @@ profile. It is written with `{ timestamps: false }` — without that, stamping i
 `UserSchema.index({ updatedAt: 1 })` is **load-bearing** for that sweep, not an optimisation:
 without it the selector examined 56,441 documents to return 4. See
 `docs/tracking/KLAVIYO_INTEGRATION.md`.
+
+## `User.upsellStats` removed (2026-08-27)
+
+The field held five counters written only by `POST /api/upsell/track`, reachable only from a
+component that was imported nowhere. Measured 2026-08-26: **0 of 56,360 users had a non-zero
+value**, while 2,290 had real `upsellPurchases`.
+
+Interface, schema and all three initialisation sites (register, `account-manager`, the Klaviyo
+test route) are gone. Stored documents are stripped by
+`npm run migrate:remove-upsell-stats -- --prod` — the migration refuses to run if it finds any
+non-zero value, so it cannot silently discard real data. See `docs/upsell/gotchas.md`.
+
+`upsellPurchases` and `upsellHistory` are untouched and remain live.

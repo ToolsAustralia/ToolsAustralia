@@ -111,3 +111,22 @@ Off by default. Dev and production share one Klaviyo account, so profile **mutat
 refused outside `KLAVIYO_MODE=production` unless this is `"true"`. Events are unaffected —
 they carry a `[DEV]` prefix. Set it explicitly for a sanctioned ops backfill, never in a
 script. Registered in `.env.example`.
+
+## `migrate:remove-upsell-stats` (2026-08-27)
+
+Strips the dead `upsellStats` sub-document from every user after the upsell tracker was
+deleted (`docs/upsell/gotchas.md`).
+
+```bash
+npm run migrate:remove-upsell-stats:dry -- --prod   # report only
+npm run migrate:remove-upsell-stats -- --prod       # perform it
+```
+
+`$unset` only — it touches no other field and cannot alter entries, billing or draw
+participation. Batched by `_id` (1,000/batch) so no long single write sits on the hot `users`
+collection, and an interrupted run resumes because already-unset documents stop matching.
+Idempotent. Exit 0 clean / 1 fatal / 2 partial.
+
+**Safety gate:** it counts `upsellStats.totalShown > 0` first and **refuses to run** if any
+user carries real tracking data, so it cannot silently discard something that turned out to be
+live. Verified against production 2026-08-27: 0 of 56,882 users had any, 56,882 to strip.

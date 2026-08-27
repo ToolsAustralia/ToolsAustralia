@@ -66,14 +66,6 @@ export interface OriginalPurchaseContext {
   cardBrand?: string;
 }
 
-export interface UpsellManagerProps {
-  triggerEvent: "membership-purchase" | "ticket-purchase" | "one-time-purchase";
-  userContext: UpsellUserContext;
-  onOfferShown: (offer: UpsellOffer) => void;
-  onOfferAccepted: (offer: UpsellOffer) => void;
-  onOfferDeclined: (offer: UpsellOffer) => void;
-}
-
 export interface UpsellContextType {
   isUpsellActive: boolean;
   currentOffer: UpsellOffer | null;

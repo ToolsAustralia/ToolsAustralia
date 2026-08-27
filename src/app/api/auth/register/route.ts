@@ -860,14 +860,6 @@ export async function POST(request: NextRequest) {
       isActive: true,
       savedPaymentMethods: [], // No payment methods initially
       upsellPurchases: [],
-      upsellStats: {
-        totalShown: 0,
-        totalAccepted: 0,
-        totalDeclined: 0,
-        totalDismissed: 0,
-        conversionRate: 0,
-        lastInteraction: null,
-      },
       upsellHistory: [],
       miniDrawPackages: [],
     });

@@ -95,3 +95,10 @@ purpose, not a side effect of a sidebar fix. The one behavioural difference to w
 
 **If you ever see a sticky element not sticking**, check the computed `overflow` of every
 ancestor **including `body` and `html`** before touching the element itself.
+
+## `upsellStats` dropped from the my-account projection (2026-08-27)
+
+`MY_ACCOUNT_USER_FIELDS` no longer includes `upsellStats` — the field is deleted from the User
+model entirely (`docs/upsell/gotchas.md`). Nothing in the member UI read it; it was five
+permanent zeros travelling on every my-account response. The projection guard test still
+passes, as it asserts a required subset and `upsellStats` was never in it.
