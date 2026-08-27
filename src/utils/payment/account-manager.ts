@@ -4,6 +4,8 @@ import Stripe from "stripe";
 import bcrypt from "bcryptjs";
 import { stripe } from "@/lib/stripe";
 
+import { claimMobileForNewUser } from "@/utils/auth/claim-mobile";
+
 /**
  * Account Manager
  * 
@@ -163,7 +165,7 @@ export async function createUserFromPaymentMetadata(
       lastName: metadata.lastName.trim(),
       email: metadata.userEmail.toLowerCase().trim(),
       password: hashedPassword, // Will be undefined for passwordless users
-      mobile: cleanedMobile,
+      mobile: await claimMobileForNewUser(cleanedMobile, "account-manager"),
       role: "user",
       stripeCustomerId: customerId,
       subscription: {

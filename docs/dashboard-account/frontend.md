@@ -980,3 +980,44 @@ line must render. It falls back to a package glyph rather than a gap.
 
 **The quantity chip rides the thumbnail's corner and only appears above one** — most
 lines are a single unit, and a column of "1" is a column of noise.
+
+## Settings → Profile: contact-verification card (2026-08-27)
+
+The single "Email verification" banner at the top of
+[`ProfileTab.tsx`](../../src/app/(site)/my-account/components/settings/ProfileTab.tsx) is now a
+**two-row contact-verification card** — one row for email, one for mobile. Rationale:
+[2026-08-25-mobile-verification-and-sms-login-design.md](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+- **Each row owns its own state** — `ShieldCheck` / `AlertTriangle` icon, a **Verified /
+  Unverified** chip, and its own hint line. The two channels are independent and routinely
+  disagree.
+- **Two Verify buttons, one destination.** Both call
+  `requestModal("user-setup", true, { initialStep: 3 })` — setup step 3, which is no longer
+  email-only but a channel picker
+  ([`Step3VerifyContact.tsx`](../../src/components/modals/UserSetupModal/Step3VerifyContact.tsx),
+  documented in [shared-ui/frontend.md](../shared-ui/frontend.md)). A row renders its button only
+  when it is unverified **and** has a value — with no number on file there is nothing to send a
+  code to.
+- **The outer banner is amber only when NEITHER channel is verified**, and the "Verify your email
+  or your mobile…" line appears only in that case. Either channel satisfies the account
+  requirement, so verifying one flips the whole card to neutral (`border-token bg-surface`) while
+  the other row keeps its own Unverified chip. Don't re-derive the banner tone from
+  `isEmailVerified` alone.
+- **A member with no number still gets the mobile row** — italic "No mobile on file" in place of
+  the value, Unverified chip, no button. The place to add one is the **Mobile number** field in
+  the Personal details card directly below.
+
+### Where `isMobileVerified` comes from
+
+`ProfileTabProps.user` gained `isMobileVerified?: boolean`. No call site changed:
+[`settings/page-client.tsx`](../../src/app/(site)/my-account/settings/page-client.tsx) passes the
+whole `accountData.user`, and `isMobileVerified` was **already** in `MY_ACCOUNT_USER_FIELDS`
+([my-account-projection.ts](../../src/utils/dashboard/my-account-projection.ts)) — it was simply
+undeclared on the client `UserData` interface
+([useUserQueries.ts](../../src/hooks/queries/useUserQueries.ts)), so no client gate could read it.
+Both are now declared and nothing new goes over the wire.
+
+`src/components/modals/SettingsModal/ProfileTab.tsx` is a **different** component with its own
+email-only verified chip; it is reachable today only from the dev modals gallery and was not part
+of this change. Don't mistake it for this file.
+

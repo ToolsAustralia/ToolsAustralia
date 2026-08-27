@@ -1281,3 +1281,64 @@ corrected.
 **Not removed:** `getMiniDrawPackageById` is still passed as the `mini:` resolver to `getReceiptLabelByPackageId`. That is a lookup map, not a branch — harmless, and removing it would change how a shared helper is called.
 
 Mini packs are bought at `/mini-draws/<id>` via `POST /api/mini-draw/purchase`, which is the only route that stamps the `miniDrawId` the webhook needs. See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md).
+
+## `ExistingAccountModal`'s mobile branch offered a login that could never succeed (fixed 2026-08-27)
+
+The modal already supported `conflictField: "mobile"` and titled itself "Mobile already exists" —
+so it *looked* finished. But its Login button was `disabled={!email}`, and `LoginModal` was rendered
+only under `{email && …}`. Meanwhile `register` **deliberately withholds** the matched account's
+email on a mobile match (enumeration guard — disclosing it would leak a customer's address to anyone
+who guessed their number), so `MembershipModal` falls back to `formData.email`: the address the
+caller just typed.
+
+On a mobile collision the modal therefore opened a password form addressed to an email with **no
+account behind it**. Not a flaky failure — a structural one: no credential the member possessed
+could have worked. And the population hitting it is precisely the one least able to recover, since
+people re-register *because* they cannot sign in.
+
+**Fix:** `conflictField === "mobile"` + a `mobile` prop now routes to SMS sign-in
+(`initialFlow="sms"`), using the number the caller just typed — the only identifier that resolves
+the right account. `canRecover` replaces `!email` as the button's gate.
+
+**Transferable lesson:** a branch can be fully implemented, correctly labelled, and still be
+unreachable-by-construction because a *different* module withholds the data it needs. The
+enumeration guard in `register` and the `disabled={!email}` in this modal were each individually
+correct; the dead end only exists in the seam between them. When adding a `conflictField`-style
+variant, trace what the server actually returns for that variant — not what the prop names imply
+it might.
+
+## UserSetupModal: the step-3 derivation was written twice (fixed 2026-08-27)
+
+`stepsNeeded` was computed in the render `useMemo` **and** again inline in the open/restore
+effect that chooses the starting step index. Two copies of one rule: edit either and the step the
+modal restores from `sessionStorage` disagrees with the step it renders, with no error anywhere.
+
+Both now call the exported `computeStepsNeeded(userData)` in
+[`UserSetupModal/index.tsx`](../../src/components/modals/UserSetupModal/index.tsx) — see
+[frontend.md](./frontend.md) § UserSetupModal step 3. **If you add a fourth step, add it there and
+nowhere else.**
+
+The same section covers the other half of this: `hasVerifiedContact` ORs the modal's local
+`isEmailVerified` / `isMobileVerified` flags with `userData`, because waiting on `refetch()` left
+the footer button disabled for a beat after the server had already accepted the code.
+
+## `Header`'s "Verify Email" item was renamed, not re-widened (2026-08-27)
+
+The `verifiedContactRequired()` rename went through
+[`Header.tsx:297-301`](../../src/components/layout/Header.tsx), but the condition it guards did
+not: `needsEmailVerification` is still `profileSetupCompleted && !userData.isEmailVerified &&
+environmentFlags.verifiedContactRequired()`. It never consults `isMobileVerified`.
+
+So a member who satisfied step 3 **by mobile** still sees a red "Verify Email" item in the account
+menu (both the desktop user menu and the mobile one). Clicking it calls
+`forceShowEmailVerificationModal`, i.e. `requestModal("user-setup", true, { initialStep: 3 })`,
+and the modal immediately closes itself again: `computeStepsNeeded` returns
+`[]` for them, and the open/restore effect's `profileSetupCompleted && hasState && verifiedContact`
+branch calls `onClose()`. A door that opens onto nothing, for the one population the mobile channel
+was added to serve.
+
+It also suppresses the "Complete Profile" item beside it, which is gated on
+`isSetupRequired && !needsEmailVerification`.
+
+Widening the condition to `!(isEmailVerified || isMobileVerified)` is the fix; it is **not** applied
+yet. Traced in the code, not observed in a browser.

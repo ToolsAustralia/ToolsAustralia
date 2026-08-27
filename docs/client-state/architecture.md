@@ -72,3 +72,56 @@ Note the pattern for the 409: **consent is a resolved value, not a thrown error.
 ## `UserData.gender` (2026-08-17)
 
 `UserData` in [useUserQueries.ts](../../src/hooks/queries/useUserQueries.ts) carries the optional `gender?: string`, sourced from the `MY_ACCOUNT_USER_FIELDS` projection. `UserContext` re-exports it, which is what lets `ConversionPixelsAdvancedMatching` pass gender to `buildAdvancedMatching` with no extra request.
+
+## `UserData.isMobileVerified` (2026-08-27)
+
+`UserData` in [useUserQueries.ts](../../src/hooks/queries/useUserQueries.ts) now declares
+`isMobileVerified?: boolean`.
+
+**No server change was needed** — the field was already in the `MY_ACCOUNT_USER_FIELDS` projection
+and already arriving over the wire. It was simply **absent from the interface**, so TypeScript could
+not see it and no client gate could read mobile-verification state at all. That gap is why setup
+step 3 could only ever ask about email.
+
+It now backs the "at least one verified contact channel" requirement: `computeStepsNeeded` in
+[UserSetupModal](../../src/components/modals/UserSetupModal/index.tsx) drops step 3 when **either**
+`isEmailVerified` or `isMobileVerified` is true.
+
+**Watch the refetch lag.** The modal deliberately ORs these `userData` fields with its own local
+`isEmailVerified` / `isMobileVerified` state, so the step unlocks the moment a code is accepted
+rather than waiting for the profile query to settle. Reading `userData` alone would leave the
+member staring at a disabled "Complete Setup" for a beat after a successful verification. Any new
+surface gating on verification should do the same, or accept the lag knowingly.
+
+## JWT `hasEverPaid` is a server-side gate (2026-08-27)
+
+`JWT` in [global.d.ts](../../src/types/global.d.ts) gained `hasEverPaid?: boolean`. The jwt callback
+in [auth.ts](../../src/lib/auth.ts) stamps it from `hasEverPaid(dbUser)`
+([src/utils/auth/has-ever-paid.ts](../../src/utils/auth/has-ever-paid.ts)) on **both** branches —
+first token and per-request refresh — and [middleware.ts](../../src/middleware.ts) reads it to send a
+signed-in never-buyer from `/my-account` and `/rewards` to `/membership`. Design:
+[2026-08-25 mobile verification and SMS login](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+**It stops at the JWT.** The `session` callback does not copy it onto `session.user`, and the
+`Session` interface in that same `global.d.ts` does not declare it — so `useSession()` / `getSession()`
+return nothing for it and no client component can read it today. The gate runs in middleware, before
+the page is served, which is the only place it can redirect without a flash of dashboard.
+
+What that means for client state:
+
+- **Do not re-derive it on the client.** `UserData` in
+  [useUserQueries.ts](../../src/hooks/queries/useUserQueries.ts) cannot reproduce the predicate: its
+  primary signal is `processedPayments`, which `MY_ACCOUNT_USER_FIELDS` deliberately keeps off the
+  wire ([my-account-projection.ts](../../src/utils/dashboard/my-account-projection.ts)). An
+  approximation from `subscription` / `oneTimePackages` would disagree with middleware on exactly the
+  accounts the gate exists for. If a client surface genuinely needs the fact, widen the `session`
+  callback and the `Session` interface so both sides read one value.
+- **The stamp travels with the token, not with the query cache.** `withAuth` hands middleware
+  `req.nextauth.token` — the decoded cookie — so invalidating React Query after a purchase does
+  nothing for it; the token itself has to be re-issued. In an open tab the only scheduled session
+  refresh is `<SessionProvider>`'s 15-minute `refetchInterval` (focus refresh is off — see
+  [Polling intervals](#polling-intervals)); nothing in `src/` calls `useSession().update()`. The 3DS
+  path does not wait on that: [use3DSRedirectHandler.ts](../../src/hooks/use3DSRedirectHandler.ts)
+  calls `signIn("auto-login")` after the payment, which mints a token through the first-token branch.
+- **`undefined` is allowed through** by middleware (tokens minted before this shipped), and because
+  nothing client-side reads the field, no UI needs a matching "unknown" branch.

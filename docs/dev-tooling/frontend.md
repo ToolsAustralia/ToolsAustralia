@@ -150,3 +150,19 @@ The gallery entry passes `drawId` / `drawName` / `drawType="major"` — the moda
 draw-type-agnostic so the mini-draws admin page could reuse it (see
 [shared-ui/patterns.md](../shared-ui/patterns.md)). The preview still renders the major-draw
 variant; nothing else about the gallery changed.
+
+## ModalsGallery: passwordless-login + OTP entries removed (2026-08-26)
+
+`PasswordlessLoginModal` and `OTPVerificationModal` were deleted along with the dead
+`/api/auth/passwordless-login`, `/api/auth/send-otp` and `/api/auth/verify-otp` routes — this
+gallery was their only remaining consumer, nothing in the product reached them. All four touch
+points per modal (import, `MODAL_SOURCES`, `MODAL_LIST`, render) are gone from
+[`ModalsGalleryClient.tsx`](../../src/components/dev/ModalsGalleryClient.tsx).
+
+[`src/data/dev/modal-reachability.json`](../../src/data/dev/modal-reachability.json) was
+regenerated with `npm run analyze:modals` in the same change — it is generated, never
+hand-edited (see [config-and-data/architecture.md](../config-and-data/architecture.md)). The
+inventory is now 52 modals: 50 reachable, 2 unreachable.
+
+The replacement mobile-verification UI is **not built yet**; its design lives in the
+[2026-08-25 mobile verification + SMS login spec](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).

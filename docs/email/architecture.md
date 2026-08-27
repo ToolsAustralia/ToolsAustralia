@@ -4,7 +4,8 @@
 
 Per CLAUDE.md:
 - **SendGrid** — transactional email (verification, password reset, login code, staff invite, contact/partner notifications, admin replies, **major-draw winner**, **referral reward**), sent from code via `EmailService`.
-- **Klaviyo** — marketing / lifecycle email (invoice receipt, renewal success/failed, signup payment failed). The code only **tracks events**; the email/flow lives in the Klaviyo UI. The hardened HTML is pasted into Klaviyo manually.
+- **Klaviyo** — marketing / lifecycle email (invoice receipt, renewal success/failed, signup payment failed) **and all marketing SMS**. The code only **tracks events**; the email/flow lives in the Klaviyo UI. The hardened HTML is pasted into Klaviyo manually.
+- **Mobile Message** — transactional **SMS** (mobile-verification / sign-in codes), sent from code via `sendSms()`. Same split, different channel — never send marketing SMS down this path. See [backend.md — SMS](./backend.md#sms).
 
 ## 2026 design system
 
@@ -24,7 +25,7 @@ All transactional templates share one visual family (dark industrial navy header
 | [src/lib/email/staff-invite.ts](../../src/lib/email/staff-invite.ts) | Builds the staff-invite HTML via `createStaffInviteEmailTemplate()` (code-as-source) and sends it. |
 | [src/lib/email/utils.ts](../../src/lib/email/utils.ts) | Rate limiting (incl. form-submission limit **3 per 5 min** per `email_IP`), code generation, HTML escaping. |
 | [src/lib/email.ts](../../src/lib/email.ts) | **Deprecated** — transporter returns `null`; do not use. The live module is the `src/lib/email/` directory. Import via `@/lib/email/` (trailing slash) so resolution hits the directory index, not this file. |
-| [src/lib/sms.ts](../../src/lib/sms.ts) | SMS provider integration. |
+| [src/lib/sms.ts](../../src/lib/sms.ts) | Transactional SMS — Mobile Message gateway adapter. The **only** file naming the SMS provider; carries no OTP logic (that is [src/utils/auth/mobile-otp.ts](../../src/utils/auth/mobile-otp.ts)). See [backend.md — SMS](./backend.md#sms). |
 
 ## Klaviyo paste-ready HTML templates
 

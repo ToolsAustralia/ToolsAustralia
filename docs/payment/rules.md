@@ -50,7 +50,7 @@ The `return_url` passed to `confirmPayment()` must be same-origin. Cross-origin 
 
 ### R7. Always poll after 3DS redirect
 
-After the user returns from a 3DS challenge, **don't trust the URL params alone**. Always call `/api/stripe/verify-payment-complete` server-side. The hook `use3DSRedirectHandler` does this — use it; don't reimplement.
+After the user returns from a 3DS challenge, **don't trust the URL params alone** — Stripe's `redirect_status` is a hint, not the record. [`use3DSRedirectHandler`](../../src/hooks/use3DSRedirectHandler.ts) re-reads the intent from Stripe via `stripe.retrievePaymentIntent(clientSecret)` and maps *that* status. Use the hook; don't reimplement. (`/api/stripe/verify-payment-complete` exists for the same job server-side but has no client caller as of 2026-08-27.)
 
 ## Idempotency
 
@@ -87,3 +87,9 @@ Before `stripe.subscriptions.create()`, call `stripeCustomerHasManageableSubscri
 ### R12. Pause-collection resume runs first
 
 In any path that succeeds a renewal payment (webhook, admin retry, user retry), call `resumeAfterSuccessfulRenewalPayment()` BEFORE `processPaymentBenefits()`. See [subscription R9](../subscription/rules.md#r9).
+
+## Post-payment session
+
+### R13. A post-payment sign-in must never surface as a payment error
+
+The 3DS landing exchanges the redirect's client secret for a session ([frontend.md](./frontend.md#3ds-session-establishment)). That call is fired with `void`, is never awaited into rendered state, and swallows every failure — no error state, no toast, no `ErrorReport`. The money has already moved, so a failed sign-in must degrade to "success page, logged out", never to "your payment failed". Retry only the `202 pending` webhook race; treat every other status as terminal. The same applies to any future landing that signs a buyer in from proof of payment.

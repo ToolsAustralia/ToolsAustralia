@@ -6,6 +6,7 @@ import connectDB from "./mongodb";
 import User from "@/models/User";
 import Role from "@/models/Role";
 import { verifyJWT } from "./jwt";
+import { hasEverPaid } from "@/utils/auth/has-ever-paid";
 
 /**
  * Lightweight debug helper so we never log sensitive auth data in production.
@@ -249,6 +250,9 @@ export const authOptions: NextAuthOptions = {
             token.lastName = dbUser.lastName;
             token.email = dbUser.email;
             token.userType = dbUser.userType ?? "customer";
+            // Dashboard access (middleware reads this). Free to compute — the
+            // user document is already loaded on this branch.
+            token.hasEverPaid = hasEverPaid(dbUser);
             token.roleId = dbUser.roleId ? dbUser.roleId.toString() : null;
             {
               const r = await loadRole(token.roleId);
@@ -320,6 +324,9 @@ export const authOptions: NextAuthOptions = {
           token.lastName = dbUser.lastName;
           token.role = dbUser.role;
           token.userType = dbUser.userType ?? "customer";
+          // Re-stamped on every request, so a first purchase unlocks the dashboard
+          // on the next navigation — the member never has to sign in again for it.
+          token.hasEverPaid = hasEverPaid(dbUser);
 
           const dbRoleId = dbUser.roleId ? dbUser.roleId.toString() : null;
           const roleChanged = dbRoleId !== (token.roleId ?? null);

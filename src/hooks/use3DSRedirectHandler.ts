@@ -34,6 +34,43 @@ export interface Use3DSRedirectHandlerResult {
  * 
  * @returns Payment status, PaymentIntent object, loading state, and error
  */
+/**
+ * Exchange the redirect's client secret for a session.
+ *
+ * Best-effort and deliberately silent: the payment already succeeded, so a
+ * sign-in hiccup must never surface as a payment error. The worst case is the
+ * member sees the success page logged out — exactly today's behaviour — and the
+ * SMS/email sign-in paths remain available to them.
+ *
+ * Retries the `202 pending` case, which is the webhook race: a one-time buyer who
+ * never registered has no account until the Stripe webhook creates one.
+ */
+async function establishSessionFromPayment(clientSecret: string): Promise<void> {
+  const DELAYS_MS = [0, 1500, 3000, 5000];
+
+  for (const delay of DELAYS_MS) {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    try {
+      const res = await fetch("/api/auth/session-from-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentIntentClientSecret: clientSecret }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.token) {
+        const { signIn } = await import("next-auth/react");
+        await signIn("auto-login", { token: data.token, redirect: false });
+        return;
+      }
+      // 202 = account not created yet; anything else is terminal.
+      if (res.status !== 202) return;
+    } catch {
+      return;
+    }
+  }
+}
+
 export function use3DSRedirectHandler(): Use3DSRedirectHandlerResult {
   const searchParams = useSearchParams();
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle");
@@ -86,6 +123,11 @@ export function use3DSRedirectHandler(): Use3DSRedirectHandlerResult {
         const status = retrievedPaymentIntent.status;
         if (status === "succeeded") {
           setPaymentStatus("succeeded");
+          // A 3DS buyer arrives here having lost all in-page state (including the
+          // `guestUserData` bridge) to Stripe's redirect, so nothing could sign
+          // them in — they finished PAYING and stayed logged OUT, never reaching
+          // profile setup. Establish the session from proof of payment.
+          void establishSessionFromPayment(clientSecret);
         } else if (status === "processing") {
           setPaymentStatus("processing");
         } else if (status === "requires_action") {

@@ -206,3 +206,33 @@ Two FAQ entries (ids `82`, `83`) cover the optional profile gender field: whethe
 The ACCOUNT SELF-SERVICE MAP in `systemPrompt.ts` gained a matching bullet (navigation only, never a data value) and its "Update profile" line now reads *trade, state, date of birth, email*.
 
 Both answers state plainly that the field is optional, clearable, and affects nothing a member receives — and that only Male/Female are offered, so anyone else leaves it blank. Rule-11 clean: no probability or purchase-of-entries framing (guarded by `npm run test:chat-faqs`).
+
+## Verified contact + SMS sign-in (2026-08-27)
+
+Members must now finish profile setup holding **one verified contact channel — email OR mobile**
+(their choice), and `/login` gained **SMS sign-in**. All three of Cobber's levers were updated in
+lockstep — see [gotchas.md](./gotchas.md) for why they must move together.
+
+**FAQ corpus** ([`supportChatFaqs.ts`](../../src/data/supportChatFaqs.ts)), now **90 entries**:
+
+| id | Change |
+|---|---|
+| 44 | **Rewritten.** Previously said verification "is optional and never required" *and* that "your entries are granted whether or not your email is verified" — the second half was **already false** before this project, because campaign redeemable issuance defaults to `requiresEmailVerified: true` and was silently skipping 1,406 active subscribers. Now states the one-of-two rule and its purpose (password recovery). |
+| 32 | **Rewritten.** Login now lists three routes and calls out SMS sign-in as the one that works when the member cannot reach their email at all. |
+| 37 | Settings now also shows email/mobile verification state. |
+| 88 | **New** — "I never got my SMS code": wrong number on file, 10-min expiry, 3/day + 60s, and that no code is sent to a non-purchaser. |
+
+**ACCOUNT SELF-SERVICE MAP** ([`systemPrompt.ts`](../../src/services/support-chat/systemPrompt.ts))
+gained two bullets — one for verifying email/mobile in Settings, one for "I can't sign in / can't
+get into my email" routing to SMS sign-in — and its "Update profile" line now reads *trade, state,
+date of birth, mobile, email*. Both are navigation-only and explicitly forbid stating whether a
+given member is verified.
+
+> **The pack has a hard token ceiling and these additions hit it.** `npm run test:chat-knowledge`
+> caps the pack at 15,200 tokens and its comment says not to raise it again. The first draft came
+> in at 15,372; the copy was **trimmed back to 15,198** rather than bumping the ceiling. Budget for
+> that when adding here — and note the test previously had no npm script (added 2026-08-27), so
+> nothing would have caught the breach.
+
+Not yet wired: no `decisionTree.ts` intent rule for the SMS-code question — id 88 currently relies
+on `faqSearch` cosine matching. Add one (plus a `routingGoldenSet.ts` case) if it under-matches.

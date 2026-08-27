@@ -607,13 +607,38 @@ This is the **customer-facing** counterpart to §9e's admin past-due tool — th
 
 > **Note** — this past-due *renewal recovery* (force-charge the existing overdue invoice) is a different code path from the §10i *reactivation* of a `canceled` subscription, even though both surface "reactivated" copy.
 
-### 10f. Email verification — what it actually gates
+### 10f. Contact verification — what it actually gates
 
-[src/app/api/auth/send-login-code/route.ts](src/app/api/auth/send-login-code/route.ts) is the **only hard gate**: passwordless email-code sign-in rejects unverified users with "Please verify your email first…".
+**Updated 2026-08-27.** Members must now finish profile setup holding **at least one verified
+contact channel — email OR mobile**, their choice. It is the recovery credential for the password
+they set in that same step: registration is passwordless, and before this a member who mistyped
+their email had *no* self-service route back in (reset links, emailed sign-in codes and the
+verify-email bridge all require the inbox they cannot read). Switch:
+`environmentFlags.verifiedContactRequired()`, which replaced `emailVerificationMandatory()` — the
+latter was hardcoded `false`, so the gate had been built and left off.
 
-Everywhere else, email verification is **either a nag** (badge in header / Settings / `UserSetupModal`) or **an audience filter** (campaign and redeemable targeting defaults to `requiresEmailVerified: true` in [`CampaignService`](src/services/redeemables/CampaignService.ts) and [`TargetingService`](src/services/redeemables/TargetingService.ts) — unverified users are silently excluded from campaign sends rather than blocked from purchases).
+Two hard gates now exist:
+- **Completing profile setup** — needs one verified channel (either one).
+- **Passwordless email-code sign-in** ([send-login-code](src/app/api/auth/send-login-code/route.ts)) — still specifically requires a verified *email*. **SMS sign-in is the alternative** and needs no inbox at all; see §10f-bis.
 
-**Not gated** by verification: cancellation, withdrawing entries, purchases, subscription management. Side effect: changing the email resets the flag; Google OAuth auto-verifies.
+Elsewhere, email verification remains **a nag** (header / Settings / `UserSetupModal`) or **an audience filter** (campaign and redeemable targeting defaults to `requiresEmailVerified: true` in [`CampaignService`](src/services/redeemables/CampaignService.ts) / [`TargetingService`](src/services/redeemables/TargetingService.ts) — as of the 2026-08-26 audit that silently excluded **1,406 active subscribers**, 28.9% of them).
+
+**Not gated** by verification: cancellation, withdrawing entries, purchases, subscription management. Side effects: changing the email resets the flag; Google OAuth auto-verifies; and **completing an SMS sign-in verifies the mobile** (the code goes to the number already on file, so returning it proves control of it).
+
+### 10f-bis. SMS sign-in and the dashboard gate (2026-08-27)
+
+**SMS sign-in.** `/login` and `LoginModal` both offer a 6-digit code texted to the mobile on the
+account, over the Australian gateway **Mobile Message** (~3¢/message; Twilio was evaluated and
+rejected at ~4.7× the cost — see the [design spec](docs/superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md) §7). It resolves the account **by mobile**, so the request can never
+name one account and redirect its code elsewhere. 3 codes/day, 60s apart, 10-minute expiry, and it
+refuses anyone who has never purchased — 44,445 never-paid accounts hold a mobile, and every send
+costs a credit. Ships inert until `SMS_ENABLED=true`.
+
+**Dashboard access.** A signed-in member who has never paid is redirected from `/my-account` and
+`/rewards` to `/membership`. Gated on [`hasEverPaid`](src/utils/auth/has-ever-paid.ts) — **ever**
+paid, never "currently active": cancelled, paused and past-due members keep access, and past-due
+members in particular still hold live entries and can win. They keep their session and can still
+buy; only the dashboard is gated.
 
 ### 10g. Welcome / first-purchase activation
 

@@ -295,7 +295,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "32",
       question: "How do I log in, or what if I can't?",
       answer:
-        "Sign in with your email and password from the [login page](/login), or use **Sign in with Google**. **Forgot your password?** On the login page tap **\"Forgot password?\"** (or go straight to [reset your password](/reset-password)), enter the email you joined with, and we'll email you a **single-use reset link** — it stays valid for 24 hours, and you can request a new one every 5 minutes. Open the link, choose a new password, and you're back in. Two things that catch people out: **\"Sign in with Google\"** only works if you already have an account with that email (otherwise register first), and if you get **\"no account found\"** when resetting, double-check the email address you used to join. Still stuck? [Contact us](/contact) and we'll help.",
+        "Three ways in from the [login page](/login): **email and password**, **Google**, or **SMS sign in** (a 6-digit code texted to the mobile on your account). **Forgot your password?** Tap **\"Forgot password?\"** (or [reset it here](/reset-password)), enter the email you joined with, and we'll email a single-use link — valid 24 hours, one request every 5 minutes. **Can't get into your email at all?** Use **SMS sign in** — it needs only your mobile, so it works when the email on your account is wrong. Up to 3 codes a day, a minute apart. Catches people out: Google only works if an account already uses that email, and SMS needs an Australian mobile already on your account. Still stuck? [Contact us](/contact).",
       category: "PAYMENTS",
     },
     {
@@ -330,7 +330,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "37",
       question: "How do I update my card or account details?",
       answer:
-        "It's all self-service in [My Account](/my-account) when you're signed in: update your saved card and payment details on your [Membership](/my-account/membership) page (Payment), manage your plan there via **Manage plan**, and update your profile (trade, state, email) in [Settings](/my-account/settings). Your state matters because it affects draw eligibility. I can't make these changes for you from here, but they're quick to do there.",
+        "It's all self-service in [My Account](/my-account) when you're signed in: update your saved card and payment details on your [Membership](/my-account/membership) page (Payment), manage your plan there via **Manage plan**, and update your profile (trade, state, mobile, email) in [Settings](/my-account/settings). Settings also shows whether your **email and mobile** are verified, each with a Verify button. Your state matters because it affects draw eligibility. I can't make these changes for you from here, but they're quick to do there.",
       category: "PAYMENTS",
     },
     {
@@ -381,9 +381,16 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
     // ── ACCOUNT & AUTH ───────────────────────────────────────────────────────
     {
       id: "44",
-      question: "Do I have to verify my email to use my membership?",
+      question: "Do I have to verify my email or mobile?",
       answer:
-        "No — verifying your email is optional and never required to use your membership or to receive your free entries. Your account works and your entries are granted whether or not your email is verified. The one place it matters is signing in with an emailed one-time code — for that we need to confirm your address. You can always verify later from [My Account → Settings](/my-account/settings).",
+        "Yes — **one** of them, and you pick which. We ask once while you set up your account after your first purchase. It takes seconds, and it's what gets you back in if you forget your password. Your entries are never affected either way. Confirm or change either anytime in [My Account → Settings](/my-account/settings).",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "94",
+      question: "I never got my SMS code",
+      answer:
+        "Codes go **only to the Australian mobile on your account** — if that number is wrong, use email or [contact us](/contact). They last **10 minutes**; up to **3 a day**, a minute apart. Never bought a membership or pack? No code is sent — join from the [membership page](/membership) first.",
       category: "ALL QUESTIONS",
     },
     {

@@ -4,15 +4,20 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
-## The knowledge-pack token ceiling — raised twice, and why it is still a standing debt (2026-08-26)
+## The knowledge-pack token ceiling — raised three times now (2026-08-27)
 
 `npm run test:chat-knowledge` asserts the generated pack stays under a **ceiling** on approx tokens
-(`text.length / 4`). Current state: ceiling **15,200**, pack **~15,123** — under, with roughly **77
-tokens of headroom**. The next FAQ addition will breach it.
+(`text.length / 4`). Current state: ceiling **16,400**, pack **~16,160** — roughly **240 tokens**
+of headroom, which the next FAQ will eat.
+
+The 2026-08-27 raise (15,200 -> 16,400) bought nothing new by itself: it is the arithmetic of two
+independently-shipped feature sets merging — draw 10 (competition-terms section + refund FAQs) and
+staging (six merchandise-shop entries). A merge is the wrong moment to decide which of two sets of
+customer answers to delete, so the number moved instead.
 
 History, because the pattern matters more than the numbers: the ceiling was **12,000**, was breached
 at 12,540, was raised to **14,000** on 2026-08-11, was breached again at 14,067 on `main` (e762dcda,
-blocked-card guidance), and was raised to **15,200** on 2026-08-24 for draw 10. Twice now the guard
+blocked-card guidance), and was raised to **15,200** on 2026-08-24 for draw 10, then to **16,400** on 2026-08-27 merging staging. Twice now the guard
 went red on `main` for content that was **not** nice-to-have, and twice the number moved. **A ceiling
 that is raised every time it binds is not a budget — it is a changelog.**
 

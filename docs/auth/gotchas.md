@@ -1,5 +1,50 @@
 # Auth — Gotchas
 
+## 3DS buyers paid and stayed logged OUT — and `auto-login` never checked the payment succeeded (fixed 2026-08-27)
+
+Two defects in the same seam, found together.
+
+**The stranding.** A 3DS/SCA buyer is sent to the issuer's page by Stripe and returns through a
+**redirect**. That redirect destroys all in-page React state — including the `guestUserData`
+bridge that carries a guest buyer's details from the payment step into profile setup. Nothing on
+the success landing knew who had just paid, so nothing could sign them in. The member finished
+**paying** and stayed **logged out**: never reaching profile setup, never setting a password, never
+verifying a channel. They are precisely the cohort that turns up later unable to get in — and
+before SMS sign-in existed, unable to be recovered.
+
+Non-3DS buyers never hit it, because their purchase completes in the modal with state intact. That
+is why it survived: the path that breaks is the one you don't take in testing.
+
+**The weaker check underneath.** The existing
+[`/api/auth/auto-login`](../../src/app/api/auth/auto-login/route.ts) could not have been reused
+as-is. It takes `{userId, email, paymentIntentId}` — identity from the **client**, merely
+cross-checked against the PaymentIntent's customer — and, verified by reading the handler, **it
+never asserts the PaymentIntent actually succeeded**. It retrieves the intent and compares the
+customer, then stops. Combined with `create-one-time-purchase` returning `autoLogin: true` on a
+`requires_action` intent, a session could be minted for a payment that had not landed and might
+never land.
+
+**Fix:** [`POST /api/auth/session-from-payment`](../../src/app/api/auth/session-from-payment/route.ts)
+takes **only** the client secret out of the redirect URL, derives the user from the PI's customer,
+compares `client_secret` against the value Stripe holds (proof of possession — Stripe returns it
+only to the payer), and requires `status === "succeeded"`.
+[`use3DSRedirectHandler`](../../src/hooks/use3DSRedirectHandler.ts) calls it on `succeeded` and
+exchanges the returned token through `signIn("auto-login", { token })`. That call is **best-effort
+and silent by design**: the payment already succeeded, so a sign-in hiccup must never surface as a
+payment error — the worst case is today's behaviour, a success page seen logged out. It retries the
+`202 pending` webhook race on `[0, 1.5s, 3s, 5s]`.
+
+**Still open, deliberately:** the three in-modal `MembershipModal` call sites continue to use
+`auto-login`. Migrating them is mechanical, and was left out so a fault in the new route could not
+break the purchase path that already works. Once proven in production, delete `auto-login` and
+point all four at the new route. See [api.md](./api.md) and [rules.md](./rules.md) R9.
+
+**Transferable lesson:** a redirect is a state boundary as hard as a page reload — anything the
+return leg needs must be reconstructible from the URL plus the server, never from React state. And
+when a route's job is "trust this because a payment happened", read the handler to confirm it
+checks that the payment *happened*; a route named for a payment can still be checking only that a
+payment **exists**.
+
 ## The React Query cache is part of the auth boundary — and sign-out alone can't clear it (fixed 2026-08-03)
 
 `totalSignOut()` cleared every user-scoped `localStorage`/`sessionStorage` key and then called
@@ -30,22 +75,36 @@ singletons, service-worker state — needs its own clear driven by *observed ide
 sign-out handler. And when a cache key isn't itself user-scoped, a stale entry doesn't just leak
 privately; it renders as the next user's data.
 
-## `send-otp` must deliver the code to the STORED mobile, never a request-supplied one (fixed 2026-07-23)
+## The SMS-OTP takeover hole is closed by DELETION, not by a guard (resolved 2026-08-25)
 
-`POST /api/auth/send-otp` resolved the account by **email**, then sent the SMS login code to
-`validatedData.mobile` — the number in the **request body**, not the account's stored
-`user.mobile`. Anyone who knew a member's email could POST `{email: victim, mobile: attackerPhone}`
-and receive that member's login code on their own phone → account takeover (gated only on the
-victim having an active membership). **Fix:** removed `mobile` from `sendOTPSchema` entirely and
-now deliver only to `user.mobile` (400 if none/invalid on file) — see the delivery block in
-[`send-otp/route.ts`](../../src/app/api/auth/send-otp/route.ts). The client
-([`PasswordlessLoginModal.tsx`](../../src/components/auth/PasswordlessLoginModal.tsx)) may still
-send a `mobile` field; Zod strips it, so there is no break.
+**Original (F-001, patched 2026-07-23):** `POST /api/auth/send-otp` resolved the account by
+**email**, then delivered the SMS login code to `validatedData.mobile` — the number in the
+**request body**, not the account's stored `user.mobile`. Anyone who knew a member's email could
+POST `{email: victim, mobile: attackerPhone}` and receive that member's login code on their own
+phone. The patch removed `mobile` from `sendOTPSchema` so delivery could only reach `user.mobile`.
 
-**Not live today** (no `TWILIO_*` configured, and `verify-otp` issues no session), so this was a
-*latent* takeover — but the fix lands now so enabling SMS-OTP login can't ship the hole. **Pre-launch
-UX follow-up:** `PasswordlessLoginModal` still renders a mobile input that is now ignored — drop it
-(or show the masked stored number) when SMS-OTP is switched on. See
+**What that patch missed:** `POST /api/auth/passwordless-login` carried the *identical* shape —
+account resolved by one identifier, code delivered to a request-body number — and was never
+touched, because F-001 was written against `send-otp` alone. Two routes, one bug, one fix.
+
+**Resolution:** all three legacy routes and their two modals are **deleted** — `api/auth/send-otp`,
+`api/auth/verify-otp`, `api/auth/passwordless-login`,
+`components/auth/PasswordlessLoginModal.tsx`, `components/auth/OTPVerificationModal.tsx`. Nothing
+in production reached them; the only references were the dev modal gallery, so
+[`src/data/dev/modal-reachability.json`](../../src/data/dev/modal-reachability.json) was
+regenerated via `npm run analyze:modals`. Deleted code cannot be revived by someone setting an env
+var, which is what "latent, not live" was relying on.
+
+**The replacement is structurally immune, not guarded.** The design in
+[2026-08-25-mobile-verification-and-sms-login-design.md](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md)
+resolves the account **BY MOBILE** — the number the caller supplies *is* the lookup key, so the
+code always lands on the handset that identified the account. There is no second identifier left
+to disagree with it, so the "resolve by A, deliver to B" class of takeover has nowhere to exist.
+
+**Transferable lesson:** when a security finding names a route, grep for the *shape* — "identifier
+A resolves the account, identifier B receives the secret" — across every sibling before closing
+it. And when the feature is being rewritten anyway, prefer the data flow in which those two
+identifiers are the same value over patching the mismatch. Original finding:
 `docs/tech-debt/panel-review-feature-winner-testimonies.md` (F-001).
 
 ## Public registration must never touch a STAFF/ADMIN account (fixed 2026-07-23)

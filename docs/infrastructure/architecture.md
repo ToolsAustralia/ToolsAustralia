@@ -162,6 +162,26 @@ Two scripts ship for finding and fixing the major-draw entry-row corruption docu
 
   First real run (2026-08-04): 19 of 229 records overlapped the window; `ScheduledPromo` 101 → 120, 0 errors. A second dry-run then reported "would insert 0, would update 19", which is the idempotency check worth repeating after any seed.
 
+### Mobile normalisation migration (`migrate:normalise-mobiles`, added 2026-08-27)
+
+- [`scripts/migrate-normalise-mobiles.ts`](../../scripts/migrate-normalise-mobiles.ts) — normalises every `User.mobile` to E.164 (`04…` → `+61…`) and frees duplicate numbers. **Phase 0 of [the mobile-verification / SMS-login spec](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md)**: `User.mobile` becomes a login identifier, and a lookup on the canonical form silently misses every row still stored `04…` (the model's `pre("save")` hook never ran on them — `updateOne` bypasses it).
+
+  npm scripts: `migrate:normalise-mobiles:dry` / `migrate:normalise-mobiles` (local), `migrate:normalise-mobiles:prod:dry` / `migrate:normalise-mobiles:prod` (production via [`connectOpsDb`](../../scripts/connect-ops-db.ts)). Extra flags: `--skip-dupes` (normalise drift only, leave duplicate groups alone), `--csv <path>`.
+
+  **What it deliberately does NOT do.** For each duplicate group it `$unset`s `mobile` on the **lower-value** account and stops there. It does **not** delete accounts and does **not** merge entries, `processedPayments`, or subscriptions — the unique index only needs uniqueness, and merging is a customer-service decision. The loser keeps everything except the phone number.
+
+  **Value ranking** (highest wins; ties → the account created **first** keeps the number): active subscription > active one-time pack > more entries (`accumulatedEntries`) > has paid (`processedPayments`) > older account. A group containing a **privileged** account ([`isPrivilegedAccount`](../../src/utils/auth/privileged-account.ts)) is skipped and reported for a human. Values that fail `normaliseAuMobile` ([`src/lib/sms.ts`](../../src/lib/sms.ts)) are counted as **invalid** and left untouched.
+
+  **Idempotent / re-runnable** — normalising an already-canonical value is a no-op, and a cleared mobile stays cleared. Every write is a targeted `updateOne` by `_id`. Dry-run is not the default (the `:dry` npm variants pass the flag, per the convention in [rules.md R7](./rules.md#r7-dry-run-before-live-for-ops-scripts)); a live run prints the plan and pauses **10s** first. Adaptive progress lines (~20 for any size) plus an append-mode CSV audit log (`action,userId,email,fromMobile,toMobileOrKept`).
+
+  **Exit codes:** `0` clean · `1` groups still needing a human decision · `2` fatal.
+
+  **Production dry run (2026-08-27):** 4,964 to normalise, 109 duplicates to clear, **0** needing a human, **0** invalid. Spot-checked: all 6 both-have-entries groups keep the higher-value account, and both active subscriptions are preserved.
+
+  **Ordering — not optional.** It **must run before SMS login is enabled** (`SMS_ENABLED=true`), or ~5,000 members whose number is stored `04…` cannot be found by the login lookup at all. Then re-run the read-only pre-flight audit `npm run find:duplicate-mobiles:prod` ([testing.md](./testing.md#diagnostic-find-scripts)); it should report 0 drift and 0 duplicate groups. **The unique + sparse index on `mobile` comes after that**, never before.
+
+  > **The default CSV path is not gitignored.** `--csv` defaults to `./mobile-migration.csv`, and the audit rows carry emails and phone numbers. `.gitignore` covers `backfill-*.csv`, `seed-*.csv`, `*-audit.csv` and `/temp` — none of which match that name. Pass `--csv temp/mobile-migration.csv` so the PII lands in the ignored scratch folder.
+
 ## Vercel cron schedules
 
 [`vercel.json`](../../vercel.json) lists the registered cron paths and schedules. Times are UTC.

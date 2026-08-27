@@ -24,6 +24,11 @@ seed-*.csv
 # ABSOLUTE source paths from whoever ran them, so they are machine-local run records, not
 # repo content.
 *-audit.csv
+# migrate-normalise-mobiles writes one row per changed account: userId, EMAIL and PHONE NUMBER.
+# Its default output path now lives under /temp (already ignored below), but a run that predates
+# that change — or one given an explicit --csv at the repo root — drops the file here. Ignored by
+# name too, because a 6,000-row PII file is not something to catch on review.
+mobile-migration*.csv
 
 # scratch / read-only probe scripts + ops CSV audit output (may contain PII) — never commit/build
 /temp

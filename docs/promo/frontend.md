@@ -1,5 +1,41 @@
 # Promo — Frontend
 
+## STIHL promo-banner art (2026-08-27)
+
+`public/images/promoBanner/Stihl/` carries the full nine-file set (`SpecialPromo`,
+`DrawnTomorrow`, `DrawnTonight` x `3x/5x/10x`), and `stihl: "Stihl"` is wired into
+`BANNER_FOLDER_BY_TOOLSET`. Until this landed the resolver deliberately returned Milwaukee for
+STIHL — see the note in that file about the 404-per-banner the derived-folder version caused.
+Straight `sharp(...).webp({ quality: 82, effort: 5 })` from the supplied transparent PNGs, the
+same encoding as [`convert-multiplier-banners-to-webp.ts`](../../scripts/convert-multiplier-banners-to-webp.ts).
+
+**Do not confuse the two banner families.** `promoBanner/<Brand>/` (this one) is the left-column
+promo art. `banners/multiplier/<brand>/` is a different set with its own gate,
+`BRANDS_WITH_BANNER_ART` in `utils/promo/multiplier-banner.ts`, which STIHL is **not** in because
+it has no multiplier art. Adding a brand to one family says nothing about the other.
+
+**Two things that will bite the next brand.**
+
+*The folder names lie.* The exports arrived in two folders, `SPECIAL PROMO` and `DRAWN TONIGHT`,
+but the second holds **both** countdown states interleaved — `32/34/36` are Drawn **Tomorrow**
+3/5/10 and `33/35/37` are Drawn **Tonight** 3/5/10. Classify by reading each image, never by
+filename order or the folder it came in.
+
+*Insist on transparent exports.* The first drop was flattened onto **white**. That is not
+cosmetic: the title carries a white outline that touches the white background, so once flattened
+the outline and the background are literally the same pixels and no amount of knockout can tell
+them apart — an edge-connected flood fill walks through the gaps between letters and eats both
+the outline and the clock face behind it. Morphological opening of the background mask recovers
+most of it, but the outline still comes back thinner than the other five brands. The re-exported
+transparent PNGs (~43% fully clear, matching HiKOKI exactly) need no processing at all. **If a
+drop has no alpha channel, ask for it again rather than reconstructing it.**
+
+`npm run test:promo-banner-brand` asserts every resolvable brand has all nine files on disk —
+strengthened from a folder-existence check, because the folder existed empty for a moment during
+this change and the weaker assertion would have passed.
+
+---
+
 ## `/promotions/[slug]` mobile redesign (2026-08-13)
 
 Built from the design handoff at `Milwaukee promotions page redesign/design_handoff_promotions_page/`

@@ -163,12 +163,17 @@ function main() {
   // called our own page an "external link" it could not read, because the page was in neither
   // [key-pages] nor the knowledge pack. id 12 was CORRECTED (not added) in the same change, so
   // it does not move the count.
-  // Bumped 89 -> 95 on staging (2026-08-26): the six merchandise-shop entries. They were
-  // authored as ids 84-89, renumbered 86-91 when feature/merchandise took origin/main (which
-  // had independently claimed 84 + 85), and renumbered again to 88-93 here because
-  // feature/august-28-draw-10-updates had independently claimed 86 + 87 for the refund rules.
-  // Draw 10 ships first, so ITS numbering is the one that stayed put. 89 + 6 = 95.
-  assert.strictEqual(entries.length, 95, `Expected 95 FAQ entries, got ${entries.length}`);
+  // 89 (draw 10) + 6 (merchandise shop, staging) + 1 (SMS code, draw 10) = 96.
+  //
+  // Both sides independently claimed id 88: the shop batch authored 88-93, and the SMS
+  // work authored a single 88. Renumbering the ONE SMS entry to 94 was cheaper than
+  // renumbering six shop entries, and it keeps staging's id-89 / id-91 guards below valid
+  // without edits. Nothing outside the corpus referenced 88, so the move is inert.
+  //
+  // NOTE: ids 77 and 78 each appear TWICE. That is PRE-EXISTING — both duplicates are in
+  // the merge base — so 96 entries carry 94 distinct ids. Not introduced here, and not
+  // fixed here either; a lookup by those ids silently returns only the first match.
+  assert.strictEqual(entries.length, 96, `Expected 96 FAQ entries, got ${entries.length}`);
 
   // 8d. Merchandise-shop batch (ids 89-93). The order-tracking entry is the reason the
   // batch exists, so it must route to the page that actually answers it — /my-account

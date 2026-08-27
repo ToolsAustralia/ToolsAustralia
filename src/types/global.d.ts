@@ -71,6 +71,18 @@ declare module "next-auth/jwt" {
      */
     tokenVersion?: number;
     deleted?: boolean;
+    /**
+     * Whether the account has EVER completed a purchase — the dashboard-access
+     * gate read by `src/middleware.ts`. Stamped by the jwt callback on every
+     * request from the user document it already loads, so a first purchase
+     * unlocks `/my-account` on the next navigation.
+     *
+     * Optional: tokens issued before this shipped lack it. Middleware treats
+     * absent as "not yet known" and lets the request through rather than
+     * bouncing an existing signed-in member mid-session — the next request
+     * carries the stamp. See `src/utils/auth/has-ever-paid.ts`.
+     */
+    hasEverPaid?: boolean;
   }
 }
 

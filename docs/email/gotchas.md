@@ -80,3 +80,24 @@ string assert a prize Tools Australia no longer gives. It is now
 `src/components/email-preview/` alongside `src/lib/email/` and `email-templates/`. Prefer sample
 values that describe *structure* (a kit + its storage) over ones that quote *amounts*, so the
 preview survives the next repricing without an edit.
+
+---
+
+## An SMS the gateway 200s is not an SMS anyone received (2026-08-26)
+
+Two ways a code SMS disappears with no error anywhere. Both are handled in
+[src/lib/sms.ts](../../src/lib/sms.ts); both will bite the next adapter if it is written from scratch.
+
+1. **HTTP 200 ≠ accepted.** Mobile Message returns 200 with the real outcome in
+   `results[0].status` — `success` | `blocked` | `error`. Check `response.ok` only and a blocked
+   number logs as a successful send while the member waits for a code that never left.
+2. **A marketing STOP suppresses transactional sends.** A member who once replied STOP to a Klaviyo
+   marketing SMS is on the gateway's suppression list. Without `ignore_unsubscribes: true` their
+   login code is silently dropped and they are locked out of their own account with nothing visible
+   to support. That flag is set on every send here **and must never be copied onto a promotional
+   path** — see [rules.md R4/R7](./rules.md).
+
+Related, same family: the repo had six AU-mobile normalisers with three behaviours. The old
+`formatMobileNumber` handled a bare 9-digit number starting `4` but not `5`, so a `+615…` number
+stored by the `User` pre-save hook reached the gateway as `512345678` — a valid-looking string sent
+to nobody. `normaliseAuMobile` is now the single normaliser; new callers must use it.

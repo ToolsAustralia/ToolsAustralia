@@ -297,3 +297,68 @@ Three separate traps, all of which had to be fixed together — see `reportDrawC
 **Volume:** deduplicated on (message + errorName + userId + category + severity) within a **30-minute** payment window, so a renewal burst collapses to one row per affected user, not one per attempt. `ErrorReport` has a 90-day TTL. `autoLogErrorServer` wraps its whole body in try/catch and `reportDrawCreditFailure` adds its own, so reporting can never abort a grant mid-flight.
 
 ⚠️ **When adding any server-side error report, check the argument count first.** A two-argument call compiles, type-checks, lints, and does nothing.
+
+## Resolved — a 3DS buyer finished paying and stayed logged out (2026-08-27)
+
+3DS/SCA sends the buyer to their bank and Stripe brings them back to `return_url`. That round trip
+destroys every bit of in-page React state — **including the `guestUserData` bridge** that carries a
+guest from checkout into profile setup. The success landing therefore had nothing to identify the
+payer with, and no code path signed them in: they completed the purchase and stayed logged out,
+never reaching profile setup, never setting a password, never verifying a contact channel.
+Registration is passwordless, so that is terminal — this is the cohort with no self-service route
+back into their own account.
+
+The fix, in [`use3DSRedirectHandler.ts`](../../src/hooks/use3DSRedirectHandler.ts), is
+`establishSessionFromPayment(clientSecret)` on `succeeded` → `POST`
+[`/api/auth/session-from-payment`](../../src/app/api/auth/session-from-payment/route.ts) →
+`signIn("auto-login", { token })`. The route takes **only** the redirect's client secret and derives
+the user from the PaymentIntent's customer, so the client asserts no identity; it is documented in
+[auth/api.md](../auth/api.md) and specified in
+[2026-08-25 mobile verification and SMS login](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+**Best-effort and silent, on purpose.** The payment already succeeded. Awaiting the exchange,
+surfacing its error, or logging it as a payment failure would turn a sign-in hiccup into "your
+payment failed" on the screen that has just taken the customer's money. Failure degrades to exactly
+the pre-fix behaviour — success page, logged out — with the email / SMS sign-in paths still open.
+Encoded as [R13](./rules.md#r13); the full contract is in
+[frontend.md](./frontend.md#3ds-session-establishment).
+
+**The `202` retry is the webhook race, not a flaky network.** A one-time buyer who never registered
+has no `User` document until the Stripe webhook creates one, so the route answers
+`202 { pending: true }` rather than failing someone who has genuinely paid. The hook re-POSTs on
+`[0, 1500, 3000, 5000]` ms. Every other non-`ok` status is terminal and returns immediately —
+retrying a 403 (client-secret mismatch) or a 409 (intent not `succeeded`, or no customer on the
+intent) cannot change the answer.
+
+**Still on `auto-login`: the three in-modal `MembershipModal` purchase paths.** Not an oversight —
+bundling that migration would have put a working purchase path at risk of a fault in a brand-new
+route. Once `session-from-payment` has run in production, delete `auto-login` and point all four
+call sites here.
+
+## Three payment paths created accounts with an unchecked mobile (guarded 2026-08-27)
+
+`User.mobile` is now a login identifier and carries a `unique` index. Three paths create accounts
+with a mobile and **none of them checked uniqueness**:
+
+- [`account-manager.ts`](../../src/utils/payment/account-manager.ts) (Stripe webhook — the buyer who never registered)
+- [`user-subscription-utils.ts`](../../src/utils/payment/user-subscription-utils.ts)
+- [`/api/stripe/create-subscription`](../../src/app/api/stripe/create-subscription/route.ts)
+
+Under the unique index a collision is an **`E11000` thrown inside account creation for someone who
+has already been charged** — the worst possible place to surface a data-integrity error. The
+customer's money moves and their account never appears.
+
+All three now route the value through
+[`claimMobileForNewUser()`](../../src/utils/auth/claim-mobile.ts): if the number is already on
+another account, the new account is created **without** it and the collision is logged with
+`console.error` (which survives the production console strip). The customer keeps their purchase,
+their entries and their account; they add a mobile later from Settings, where the check is friendly
+and interactive.
+
+**Do not "improve" this into a hard failure or a silent steal from the other account.** A phone
+number is recoverable. A broken checkout is not.
+
+> **Ordering:** this guard must be deployed **before** `migrate:unique-mobile-index` runs against
+> production. Until it is, the index turns a rare data collision into a failed purchase. The
+> normalise migration has no such constraint — it is safe to run against the old code, and in fact
+> makes `register`'s existing duplicate check work correctly.

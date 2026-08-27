@@ -11,10 +11,26 @@
 import mongoose from "mongoose";
 import MajorDraw from "@/models/MajorDraw";
 import MiniDraw from "@/models/MiniDraw";
+import { normaliseAuMobile } from "@/lib/sms";
 
 // UserFilters type is available but not directly imported here to avoid circular dependencies
 
 const AU_STATE_CODES = new Set(["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"]);
+
+/**
+ * Escape regex metacharacters in an admin-supplied search term.
+ *
+ * The search box feeds `$regex` directly. Without this, any term containing a
+ * metacharacter is compiled as a PATTERN, not a literal — and MongoDB **throws**
+ * on an invalid one, so the whole query 500s rather than returning no rows.
+ * Real terms that broke it: `+61412345678` ("quantifier does not follow a
+ * repeatable item" — a leading `+`), `(02) 1234`, and plus-addressed emails such
+ * as `someone+tools@gmail.com`. Escaping also removes a catastrophic-backtracking
+ * surface, since the term reached the engine verbatim.
+ */
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 /** Canonical id for the "top 20% of active major-draw entry holders" segment. */
 export const TOP20_MAJOR_DRAW_SEGMENT = "top20MajorDraw";
@@ -198,26 +214,57 @@ export async function buildUserFilter(
   // Initialize filter object
   const filter: Record<string, unknown> = {};
 
-  // Build search filter (email, first name, last name, or full name)
+  // Build search filter (email, first name, last name, full name, or mobile)
   const searchOrConditions: Array<Record<string, unknown>> = [];
   if (search) {
     const normalizedSearch = search.trim();
     if (normalizedSearch) {
+      // Escaped: the raw term used to reach the regex engine verbatim, so a `+`
+      // or `(` made MongoDB throw and the search 500 rather than return rows.
+      const safeSearch = escapeRegex(normalizedSearch);
+
       searchOrConditions.push(
-        { email: { $regex: normalizedSearch, $options: "i" } },
-        { firstName: { $regex: normalizedSearch, $options: "i" } },
-        { lastName: { $regex: normalizedSearch, $options: "i" } },
+        { email: { $regex: safeSearch, $options: "i" } },
+        { firstName: { $regex: safeSearch, $options: "i" } },
+        { lastName: { $regex: safeSearch, $options: "i" } },
         // Full name search (firstName + lastName) - handles "frank polak"
         {
           $expr: {
             $regexMatch: {
               input: { $concat: ["$firstName", " ", "$lastName"] },
-              regex: normalizedSearch,
+              regex: safeSearch,
               options: "i",
             },
           },
         }
       );
+
+      // ── Mobile search (2026-08-27) ──────────────────────────────────────────
+      // Only when the term is phone-SHAPED: digits plus the punctuation people
+      // actually type. Requiring no letters keeps a name like "john2024" out of
+      // the mobile branch, which would otherwise match any number containing 2024.
+      const looksLikePhone = /^[\d\s+()-]{4,}$/.test(normalizedSearch);
+      if (looksLikePhone) {
+        const digits = normalizedSearch.replace(/\D/g, "");
+
+        // Strip an AU trunk (0) or country (61) prefix so the needle is the
+        // NATIONAL number. That substring is present in BOTH stored forms —
+        // "+61412345678" and the not-yet-migrated "0412345678" — so one regex
+        // finds a member whichever way their row happens to be stored. Searching
+        // the typed string directly would miss: "0412345678" is not a substring
+        // of "+61412345678".
+        const national = digits.replace(/^(?:61|0)/, "");
+
+        if (national.length >= 4) {
+          // Digits only, so no regex metacharacters can reach the engine.
+          searchOrConditions.push({ mobile: { $regex: national } });
+        }
+
+        // A complete number also gets an exact equality clause, which the
+        // `mobile` index can answer directly instead of scanning.
+        const exact = normaliseAuMobile(normalizedSearch);
+        if (exact) searchOrConditions.push({ mobile: exact });
+      }
     }
   }
 

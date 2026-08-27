@@ -87,6 +87,12 @@ export interface UserData {
   rewardsPoints: number;
   accumulatedEntries: number;
   isEmailVerified: boolean;
+  /**
+   * Already shipped over the wire by `MY_ACCOUNT_USER_FIELDS`, but was missing
+   * from this interface — so no client gate could read mobile-verification state.
+   * Either this or `isEmailVerified` satisfies the setup requirement.
+   */
+  isMobileVerified?: boolean;
   hasPassword?: boolean;
   isActive: boolean;
   createdAt: string;

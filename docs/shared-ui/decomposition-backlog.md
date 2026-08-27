@@ -91,13 +91,14 @@ _(none)_
 - [src/components/modals/CampaignTargetingModal.tsx](../../src/components/modals/CampaignTargetingModal.tsx) — **score 3.5** — 603 LOC
   - signals: ternary-explosion (14 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components); loc-500-800 (603 LOC); long-className (longest className=343 chars); many-useState (15 useState slices)
 
-- [src/components/modals/LoginModal.tsx](../../src/components/modals/LoginModal.tsx) — **score 3.5** — 877 LOC
+- [src/components/modals/LoginModal/index.tsx](../../src/components/modals/LoginModal/index.tsx) — **score 3.5** — 877 LOC at the scan, **965 LOC today**
   - signals: loc>800 (877 LOC); ternary-explosion (5 JSX ternaries); multiple-concerns (4 concern buckets: hooks, services, components, integrations); many-useState (12 useState slices)
+  - **Still open, and bigger.** The 2026-05-08 scan saw a flat `LoginModal.tsx`; the file now sits in a folder beside `Hero.tsx` and its smoke suite. The 2026-08-27 SMS sign-in flow took it 877 → **965 LOC** and 12 → **14 `useState` slices** — see [frontend.md](./frontend.md) § SMS sign-in in `LoginModal` + `ExistingAccountModal`.
 
 - [src/components/modals/PaymentMethodsTab.tsx](../../src/components/modals/PaymentMethodsTab.tsx) — **score 3.5** — 667 LOC
   - signals: ternary-explosion (10 JSX ternaries); multiple-concerns (4 concern buckets: hooks, services, components, integrations); loc-500-800 (667 LOC); long-className (longest className=537 chars); many-useState (9 useState slices)
 
-- ~~src/components/modals/UserSetupModal.tsx~~ — **DECOMPOSED 2026-05-08** → folder at [src/components/modals/UserSetupModal/](../../src/components/modals/UserSetupModal/) (orchestrator preserves all state/effects/handlers byte-identical; 5 sub-components extracted: Step1Password, Step2Demographics, Step3EmailVerification, SuccessScreen, ActionFooter; 11-test smoke suite). Public API preserved; consumers (ModalsGalleryClient, UnifiedModalManager) need no changes.
+- ~~src/components/modals/UserSetupModal.tsx~~ — **DECOMPOSED 2026-05-08** → folder at [src/components/modals/UserSetupModal/](../../src/components/modals/UserSetupModal/) (orchestrator preserves all state/effects/handlers byte-identical; 5 sub-components extracted: Step1Password, Step2Demographics, Step3EmailVerification — renamed [Step3VerifyContact](../../src/components/modals/UserSetupModal/Step3VerifyContact.tsx) on 2026-08-27, SuccessScreen, ActionFooter; 11-test smoke suite). Public API preserved; consumers (ModalsGalleryClient, UnifiedModalManager) need no changes.
 
 - [src/components/ui/ProductCard.tsx](../../src/components/ui/ProductCard.tsx) — **score 3.5** — 768 LOC
   - signals: ternary-explosion (19 JSX ternaries); multiple-concerns (3 concern buckets: hooks, services, components); loc-500-800 (768 LOC); many-arbitraries (90 arbitrary-value classNames); long-className (longest className=688 chars)

@@ -218,7 +218,13 @@ export interface IUser extends Document {
   /** Previous email to merge from in Klaviyo after verified email change (cleared after merge) */
   pendingKlaviyoMergeFromEmail?: string;
 
-  // SMS OTP for passwordless authentication
+  // SMS OTP for passwordless authentication.
+  // `smsOtpHash` is the live field: an HMAC-SHA256 digest keyed with NEXTAUTH_SECRET
+  // (see utils/auth/mobile-otp.ts). `smsOtpCode` held the code in PLAINTEXT and is
+  // retained only because the admin "resend SMS verification" action still writes it;
+  // nothing reads it, and it is removed when that action is rebuilt.
+  smsOtpHash?: string;
+  /** @deprecated plaintext — use `smsOtpHash`. */
   smsOtpCode?: string;
   smsOtpExpires?: Date;
   smsOtpAttempts?: number;
@@ -970,8 +976,9 @@ const UserSchema = new Schema<IUser>(
       lowercase: true,
     },
 
-    // SMS OTP for passwordless authentication
-    smsOtpCode: String,
+    // SMS OTP for passwordless authentication — see the interface note above.
+    smsOtpHash: String,
+    smsOtpCode: String, // @deprecated plaintext
     smsOtpExpires: Date,
     smsOtpAttempts: {
       type: Number,

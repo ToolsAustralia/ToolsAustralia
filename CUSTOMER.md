@@ -92,7 +92,7 @@ Two **ghost states** ride on top of the enum without being in it: `pendingChange
 |---|---|---|
 | Acquisition / attribution | UTM + click-IDs captured; converting platform resolved at purchase | §8a, §8b · [docs/tracking/](docs/tracking/) |
 | Register (guest bridge) | Step-1 register creates a passwordless guest — **no login, no membership**. Registering with an existing guest's email/mobile updates that plain account; registering with a **staff/admin** email/mobile is rejected (`400`, "please log in") — privileged accounts are never created or mutated via public register (marker: `roleId`/`userType`, not `role`) | §4a, §4b · [docs/auth/gotchas.md](docs/auth/gotchas.md) |
-| Login | password / email sign-in code / Google / post-payment auto-login (a scaffolded **SMS** sign-in code also exists but is **not live** — no SMS provider configured; when enabled, `send-otp` delivers the code only to the mobile **on file** for the account, never a number supplied in the request — see [docs/auth/gotchas.md](docs/auth/gotchas.md)) | §4c–§4f |
+| Login | password / email sign-in code / Google / post-payment auto-login / **SMS sign-in code** (added 2026-08-27). SMS is surfaced on `/login` as *"Can't access your email? Sign in with your mobile"* — the recovery path for a member whose email is wrong or unverified, for whom every other route back in goes through an inbox they cannot read. It resolves the account **by mobile** and texts that same number, so a caller can never redirect another account's code; it is gated on having ever paid, capped at 3 codes/day with a 60s cooldown, and completing it also sets `isMobileVerified` (proving control of the number *is* verification). Ships **dark** until `SMS_ENABLED=true`. The old scaffold (`send-otp`, `verify-otp`, `passwordless-login`) was deleted 2026-08-26 — unreachable in production, and `passwordless-login` delivered the code to a **request-supplied** number. See [docs/auth/gotchas.md](docs/auth/gotchas.md) and [the design spec](docs/superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md). | §4c–§4f |
 | First payment & activation | Full price at signup; webhook grants membership. Card declines return a 400 with the decline reason, and checkout shows short per-decline-code guidance (e.g. "Not enough funds on this card. Try another card."); sensitive codes (lost/stolen/fraud) get a generic "card declined" message | §5.1 · [BUSINESS.md §9, §10g](BUSINESS.md) · [payment-error-messages.ts](src/utils/payment/stripe/payment-error-messages.ts) |
 | Post-purchase setup | UserSetupModal captures profession/state/DOB (all required) **+ gender (optional, never gates "Continue")** + email-verify prompt | [BUSINESS.md §10g](BUSINESS.md) · [docs/USER_SETUP_MODAL.md](docs/USER_SETUP_MODAL.md) |
 | Upsell offer | Post-success offer; per-trigger dedup | §2i · [docs/upsell/](docs/upsell/) · [BUSINESS.md §5](BUSINESS.md) |
@@ -143,7 +143,7 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 | `isMobileVerified` | boolean (opt, def false) | Mobile verified flag ([User.ts:146](src/models/User.ts#L146)) | — |
 | `emailVerificationToken` / `mobileVerificationToken` | string (opt) | Verification tokens ([User.ts:147-148](src/models/User.ts#L147)) | **Sensitive** |
 | `emailVerificationCode` / `…Expires` / `…Attempts` | string / Date / number | 6-char email code + expiry + attempt counter ([User.ts:151-153](src/models/User.ts#L151)) | **Sensitive** (code) |
-| `smsOtpCode` / `…Expires` / `…Attempts` | string / Date / number | SMS OTP for passwordless auth ([User.ts:159-161](src/models/User.ts#L159)) | **Sensitive** (code) |
+| `smsOtpCode` / `…Expires` / `…Attempts` | string / Date / number | **Vestigial since 2026-08-26.** Held a *plaintext* SMS OTP for the deleted passwordless-auth routes. Only the admin "resend SMS verification" action still writes them — and that action sends no message (its gateway call is commented out while it returns success). Scheduled for replacement: the new policy stores an **HMAC-SHA256 digest keyed with `NEXTAUTH_SECRET`**, never the code ([mobile-otp.ts](src/utils/auth/mobile-otp.ts)). ([User.ts:159-161](src/models/User.ts#L159)) | **Sensitive** (code) |
 | `loginCode` / `…Expires` / `…Attempts` | string / Date / number | Emailed passwordless sign-in code ([User.ts:164-166](src/models/User.ts#L164)) | **Sensitive** (code) |
 | `passwordResetToken` / `passwordResetExpires` | string / Date | Single-use reset token + expiry ([User.ts:169-170](src/models/User.ts#L169)) | **Sensitive** (token) |
 
@@ -397,11 +397,47 @@ back. New-account branches still assign directly — there is nothing to preserv
 | **Email + password** | `LoginModal` → `signIn("credentials")`; the provider looks up the user and `bcrypt.compare`s the password. **Passwordless users (no `password`) cannot use this provider** — `authorize` returns `null` ([auth.ts:56-135](src/lib/auth.ts#L56)). |
 | **Email sign-in code (passwordless)** | "Send code to sign in instead" → `POST /api/auth/send-login-code` then `POST /api/auth/verify-login-code`, which returns a bridge `token` consumed by `signIn("auto-login", { token })`. This is how no-password customers log in ([LoginModal/index.tsx:464-556](src/components/modals/LoginModal/index.tsx#L464)). |
 | **Google OAuth** | `signIn("google")` via popup. The `signIn` callback **rejects Google sign-in for emails with no existing account** (`return false`) — new users must register the normal way first. On success it sets `isEmailVerified = true` ([auth.ts:373-399](src/lib/auth.ts#L373)). |
+| **SMS sign-in code** (2026-08-27) | *"Can't access your email? Sign in with your mobile"* on [`/login`](src/app/login/page-client.tsx) → `POST /api/auth/send-mobile-login-code` then `POST /api/auth/verify-mobile-login`, returning the same bridge `token` consumed by `signIn("auto-login", { token })`. **Resolves the account BY MOBILE** and texts that number — the request carries no other identifier, so there is no {account, deliver-here} pair to manipulate. Gated on [`hasEverPaid`](src/utils/auth/has-ever-paid.ts) **before** the gateway is called (44,445 never-paid accounts hold a mobile; each send costs a credit). 3 codes/day, 60s cooldown, 10-minute expiry, 5 verify attempts — rate limiting is off in development unless `SMS_OTP_RATE_LIMIT_IN_DEV=true`. Success sets `isMobileVerified`. Inert until `SMS_ENABLED=true`. |
 | **Post-payment auto-login** | `/api/auth/auto-login` (payment-proof) → `signIn("auto-login")` — converts a paying guest into a session ([MembershipModal/index.tsx:2448-2477](src/components/modals/MembershipModal/index.tsx#L2448)). |
 
-**Deactivated accounts (`User.isActive: false`) are rejected at login on every path (2026-07-09).** Credentials `authorize` throws `ACCOUNT_DEACTIVATED` (checked **after** password validation so account status is only revealed to a valid credential holder) and both login UIs surface "This account has been deactivated. Please contact an administrator."; the email sign-in-code path rejects at `verify-login-code` (403 + the same message, after the OTP is validated); Google's `signIn` callback returns `false` (AccessDenied); the auto-login provider re-checks `isActive` in the DB before accepting any bridge token and throws the same `ACCOUNT_DEACTIVATED`; and the jwt callback refuses to mint a first token for an inactive account. Previously login *succeeded* and the session-refresh guard killed the token seconds later — an unexplained login→auto-logout loop (hit by removed staff, admin-deactivated accounts, and invited staff who set a password via the public reset flow without completing `/staff-setup`).
+**Deactivated accounts (`User.isActive: false`) are rejected at login on every path (2026-07-09).** Credentials `authorize` throws `ACCOUNT_DEACTIVATED` (checked **after** password validation so account status is only revealed to a valid credential holder) and both login UIs surface "This account has been deactivated. Please contact an administrator."; the email sign-in-code path rejects at `verify-login-code` (403 + the same message, after the OTP is validated); the SMS path rejects at `verify-mobile-login` the same way — **after** the code is validated, so status is revealed only to whoever holds the number (the send route says nothing at all, see below); Google's `signIn` callback returns `false` (AccessDenied); the auto-login provider re-checks `isActive` in the DB before accepting any bridge token and throws the same `ACCOUNT_DEACTIVATED`; and the jwt callback refuses to mint a first token for an inactive account. Previously login *succeeded* and the session-refresh guard killed the token seconds later — an unexplained login→auto-logout loop (hit by removed staff, admin-deactivated accounts, and invited staff who set a password via the public reset flow without completing `/staff-setup`).
 
 After a successful login the client reads the fresh id via `getSession()`, invalidates user-scoped caches via `usePurchaseInvalidation`, then `router.push("/my-account")` + `router.refresh()`.
+
+### 4c-bis. Verified contact channel — required since 2026-08-27
+
+**Every member must finish profile setup holding at least ONE verified contact channel — email
+**or** mobile.** They choose which; email is offered first because it costs nothing to send.
+
+**Why it exists.** Registration is passwordless, and step 1 of the post-purchase setup modal is
+where the member chooses their password. The verified channel is the **recovery credential** for
+that password. Before this, a member who mistyped their email had *no* self-service way back in —
+`/reset-password` mails a link to the address on file, the emailed sign-in code requires
+`isEmailVerified`, and the verify-email bridge needs that same inbox. All three dead-end on an
+inbox they cannot read.
+
+| | |
+|---|---|
+| Where it is asked | Setup step 3 ([`Step3VerifyContact`](src/components/modals/UserSetupModal/Step3VerifyContact.tsx)), after purchase and after the upsell |
+| Where it can be done later | [My Account → Settings](src/app/(site)/my-account/components/settings/ProfileTab.tsx) — each channel shows its own Verified/Unverified state with a Verify button |
+| The switch | `environmentFlags.verifiedContactRequired()` — replaced `emailVerificationMandatory()`, which was hardcoded `false`, so the gate had been built and left off |
+| What it does **not** affect | Entries, draw eligibility, pricing, purchases. It gates completing setup, nothing else. |
+| Existing members | Only asked when the setup modal appears (`profileSetupCompleted` false). Members who already completed setup are not retro-gated. |
+
+Verifying a mobile is the same act as signing in by SMS — the code goes to the number already on
+the account, so returning it proves control of it. Members who use SMS login therefore become
+mobile-verified without a separate step.
+
+### 4c-ter. Dashboard access requires a purchase (2026-08-27)
+
+A signed-in member who has **never paid** is redirected from `/my-account` and `/rewards` to
+`/membership` by [`src/middleware.ts`](src/middleware.ts). They keep their session and can still
+buy, claim a promo or use a referral link — only the dashboard is gated, because it has nothing to
+show them.
+
+Gated on [`hasEverPaid`](src/utils/auth/has-ever-paid.ts) — **ever** paid, not currently active.
+Cancelled, paused and past-due members keep full access; past-due members in particular still hold
+live draw entries and can win. Staff are diverted to `/admin` before this check.
 
 ### 4d. Email verification — what it actually gates
 
