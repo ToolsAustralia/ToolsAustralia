@@ -41,10 +41,14 @@ import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types
 import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
 import {
+  appliedCodeReceiptLine,
   evaluatePurchaseRequirementGate,
   resolveTypedCodeAtCheckout,
+  settleAppliedCodeLabel,
   typedCodeRefusalCopy,
+  type AppliedCodeReceiptLabel,
   type PurchaseRequirementStop,
+  type TypedCodeType,
 } from "@/utils/payment/typed-code-at-checkout";
 import { resolveUpsellPromoMultiplierForDisplay } from "@/utils/payment/upsell-promo-multiplier";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
@@ -143,6 +147,21 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
    * exists so the two callers cannot drift apart again.
    */
   const requirementStopRef = useRef<PurchaseRequirementStop | null>(null);
+  /**
+   * WHAT THE RECEIPT MAY CLAIM, settled from the SERVER's answer to the charge
+   * that just ran — never from `couponApplied`.
+   *
+   * This modal never calls the attach seam: the code rides in the create body,
+   * and that route re-resolves a campaign code against a server-resolved user
+   * and DROPS one this customer no longer holds (it expired between Apply and
+   * Buy Now, or was redeemed in another tab). The route now reports which legs
+   * it stamped; `handlePurchase` settles this from that report, and both
+   * receipts — the immediate one and the one the processing screen prints
+   * minutes later — read it instead of state. A ref because the processing
+   * screen resolves long after `handlePurchase` returned, and the state its
+   * closure captured is exactly the browser-hoped claim being vetoed.
+   */
+  const acceptedCodeLabelRef = useRef<AppliedCodeReceiptLabel | null>(null);
 
   // Payment processing state
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
@@ -268,6 +287,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       // re-arrive "already refused" and be dropped from the charge in silence.
       refusedCodeRef.current = null;
     requirementStopRef.current = null;
+      // A receipt claim belongs to the charge that earned it, never to the next one.
+      acceptedCodeLabelRef.current = null;
       setSetupIntentSecret(null);
       setLoadingSetupIntent(false);
 
@@ -484,20 +505,23 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       referralCode?: string;
       promoLinkCode?: string;
       campaignCode?: string;
-      appliedLabel: { label: "Campaign" | "Referral" | "Promo"; code: string } | null;
+      /**
+       * The raw string the customer settled on, and our best reading of its
+       * kind. Deliberately NOT a finished "applied" label any more: these two
+       * are what the browser HOPED, and the receipt is settled from the
+       * server's answer once the charge comes back (`settleAppliedCodeLabel`).
+       * Same two names `MembershipModal`'s `SettledCoupon` uses, so the two
+       * checkout surfaces describe the same thing with the same words.
+       */
+      typedCode: string | null;
+      typedCodeType: TypedCodeType | null;
     } = {
       referralCode: couponApplied && couponType === "referral" ? normalizedTypedCode : undefined,
       promoLinkCode:
         couponApplied && couponType === "promo" ? normalizedTypedCode : promoLinkCode || undefined,
       campaignCode: couponApplied && couponType === "campaign" ? normalizedTypedCode : undefined,
-      appliedLabel:
-        couponApplied && couponType && normalizedTypedCode
-          ? {
-              label:
-                couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo",
-              code: normalizedTypedCode,
-            }
-          : null,
+      typedCode: couponApplied && normalizedTypedCode ? normalizedTypedCode : null,
+      typedCodeType: couponApplied && couponType ? couponType : null,
     };
 
     let settledCampaignRequirement: "none" | "membership" | "one-time" | "any" | null =
@@ -540,15 +564,8 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
           referralCode: resolution.type === "referral" ? resolution.code : undefined,
           promoLinkCode: resolution.type === "promo" ? resolution.code : promoLinkCode || undefined,
           campaignCode: resolution.type === "campaign" ? resolution.code : undefined,
-          appliedLabel: {
-            label:
-              resolution.type === "campaign"
-                ? "Campaign"
-                : resolution.type === "referral"
-                  ? "Referral"
-                  : "Promo",
-            code: resolution.code,
-          },
+          typedCode: resolution.code,
+          typedCodeType: resolution.type,
         };
       } else if (resolution.status === "inconclusive") {
         // Could not obtain an answer — never a reason to cost the sale. The raw
@@ -564,7 +581,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
           referralCode: undefined,
           promoLinkCode: promoLinkCode || undefined,
           campaignCode: normalizedTypedCode,
-          appliedLabel: null,
+          typedCode: normalizedTypedCode,
+          // We do not know the kind, so nothing may be claimed about it.
+          typedCodeType: null,
         };
       }
     }
@@ -605,7 +624,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       setCouponApplied(false);
       setCouponType(null);
       setCampaignPurchaseRequirement(null);
-      settledCoupon = { ...settledCoupon, campaignCode: undefined, appliedLabel: null };
+      settledCoupon = {
+        ...settledCoupon,
+        campaignCode: undefined,
+        typedCode: null,
+        typedCodeType: null,
+      };
     }
     // ──────────────────────────────────────────────────────────────────────────
 
@@ -635,6 +659,21 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         throw new Error("Package purchase failed");
       }
 
+      // WHAT THE SERVER ACTUALLY TOOK. The charge is done and the route has told
+      // us which code legs it stamped onto the PaymentIntent. Everything the
+      // customer is about to read about their code is settled HERE, from that
+      // answer — the fields above are only what the browser sent. The window
+      // this closes is narrow but real: `/api/codes/validate` cleared the code
+      // at Apply time, then it expired (or was redeemed in another tab) before
+      // this charge, and `resolveCodeForCheckout` dropped it. The purchase still
+      // succeeded; a dropped code simply goes unmentioned.
+      const acceptedCodeLabel = settleAppliedCodeLabel({
+        typedCode: settledCoupon.typedCode,
+        typedCodeType: settledCoupon.typedCodeType,
+        applied: result.data?.appliedCodes,
+      });
+      acceptedCodeLabelRef.current = acceptedCodeLabel;
+
       markPurchaseCompleted();
       hideLoading();
 
@@ -651,12 +690,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         const fallbackBenefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[] = [
           { text: `${pkg.totalEntries || 0} free entries added to your wallet`, icon: "gift" },
         ];
-        if (settledCoupon.appliedLabel) {
-          fallbackBenefits.push({
-            text: `${settledCoupon.appliedLabel.label} code ${settledCoupon.appliedLabel.code} applied`,
-            icon: "tag",
-            highlight: true,
-          });
+        const acceptedCodeLine = appliedCodeReceiptLine(acceptedCodeLabel);
+        if (acceptedCodeLine) {
+          fallbackBenefits.push({ text: acceptedCodeLine, icon: "tag", highlight: true });
         }
         showSuccess(
           "Purchase Successful!",
@@ -830,14 +866,13 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       });
     }
 
-    // Add code redemption info
-    if (couponApplied && couponCode) {
-      const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
-      benefits.push({
-        text: `${label} code ${couponCode.trim().toUpperCase()} applied`,
-        icon: "tag" as const,
-        highlight: true,
-      });
+    // Add code redemption info — from the SERVER's answer to the charge that
+    // opened this screen, never from `couponApplied`. This callback closes over
+    // the render that started the purchase, so state here is the browser's hope
+    // at Buy Now time and knows nothing of a code the route then dropped.
+    const acceptedCodeLine = appliedCodeReceiptLine(acceptedCodeLabelRef.current);
+    if (acceptedCodeLine) {
+      benefits.push({ text: acceptedCodeLine, icon: "tag" as const, highlight: true });
     }
 
     // Show success modal with entry information

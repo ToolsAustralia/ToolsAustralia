@@ -53,6 +53,7 @@ import type {
   CheckoutCodeSlot,
 } from "@/utils/payment/attach-typed-code";
 import {
+  appliedCodeReceiptLine,
   evaluatePurchaseRequirementGate,
   resolveTypedCodeAtCheckout,
   typedCodeRefusalCopy,
@@ -407,6 +408,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   // Payment processing state
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
+  /**
+   * The label `handleSubmit` settled for the charge in flight — written by
+   * `settleAppliedLabel` (and cleared at the top of every submit), so it always
+   * holds the SERVER's answer about the code this charge is carrying.
+   *
+   * IT EXISTS BECAUSE THREE RECEIPT SURFACES RUN OUTSIDE THAT CLOSURE and cannot
+   * see `settledCoupon`: `handlePaymentProcessingSuccess` (after a poll that
+   * outlives the submit), `handlePaymentSuccess` (defined outside `handleSubmit`),
+   * and the deferred-confirm effect (a render later again). Each of them closes
+   * over the render that STARTED the submit, so reading `couponApplied` there
+   * resurrects precisely the browser-hoped claim `settleAppliedLabel` exists to
+   * veto: a code the attach answered `200 { slot: null }` for — the server
+   * refusing it — would still have printed "Campaign code EXTRA100 applied". A
+   * ref because it has to survive every re-render between the charge and the
+   * receipt.
+   */
+  const settledAppliedLabelRef = useRef<SettledCoupon["appliedLabel"]>(null);
   const [processingPackageName, setProcessingPackageName] = useState<string>("");
   const [processingPackageType, setProcessingPackageType] = useState<
     "one-time" | "membership" | "upsell" | "mini-draw"
@@ -2434,13 +2452,29 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   ]);
 
   /**
-   * @param settled Pass the local built by `handleSubmit`'s purchase-time resolve.
-   *   This callback closes over `couponApplied` / `couponType` FROM THE RENDER
-   *   THAT STARTED THE SUBMIT, and calling `setCouponApplied` mid-invocation does
-   *   not update it — so without the override the success screen would omit
-   *   "Campaign code BACKIN200 applied" for exactly the customer who typed a code
-   *   and never pressed Apply. Every call site INSIDE `handleSubmit` passes it;
-   *   the ones outside pass nothing and keep reading state.
+   * THE ONLY PLACE THIS MODAL TELLS A CUSTOMER A CODE APPLIED.
+   *
+   * `settled` IS REQUIRED, AND THAT IS THE FIX. It used to be optional, and the
+   * no-argument form fell back to `couponApplied` / `couponType` — the browser's
+   * own hope, which nothing can veto. A guest who registers at step 1 (which does
+   * NOT authenticate — CLAUDE.md rule 6) gets `valid: true` out of
+   * `/api/codes/validate` on the campaign window alone; the attach then resolves
+   * their real identity and answers `200 { code: null, slot: null }`, a definite
+   * refusal. `settleAppliedLabel` nulls the label correctly — and the five bare
+   * calls inside `handlePaymentSuccess` printed "Campaign code EXTRA100 applied"
+   * anyway, because omitting the argument silently opted them out of the veto.
+   *
+   * Deleting the overload is what makes that unrepeatable: there is no longer a
+   * form of this call that reads state, so a future call site cannot fall back to
+   * it by omission — `tsc` stops it. Every caller must hand over a label that was
+   * settled against a SERVER answer (`settledCoupon.appliedLabel`, or the ref that
+   * carries it across a poll / a deferred confirm). Passing `{ appliedLabel: null }`
+   * is the honest way to say "the server did not license a claim" and prints
+   * nothing.
+   *
+   * @param settled Only `appliedLabel` is ever read, so the narrower shape lets the
+   *   processing screen pass the ref it carried across the poll. Every call site
+   *   inside `handleSubmit` hands over a full `SettledCoupon`, which satisfies it.
    */
   const appendCodeBenefits = useCallback(
     (
@@ -2449,32 +2483,17 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         icon: "gift" | "star" | "zap" | "ticket" | "tag";
         highlight?: boolean;
       }[],
-      settled?: SettledCoupon,
+      settled: Pick<SettledCoupon, "appliedLabel">,
     ) => {
-      if (settled) {
-        // `appliedLabel` — NOT the payload fields. `promoLinkCode` falls back to
-        // the `?promo=` attribution code even when nothing was typed, and
-        // surfacing that as "Promo code X applied" would be a new claim on the
-        // success screen. Only a code the customer actually applied shows here,
-        // exactly as before.
-        if (!settled.appliedLabel) return;
-        benefits.push({
-          text: `${settled.appliedLabel.label} code ${settled.appliedLabel.code} applied`,
-          icon: "tag",
-          highlight: true,
-        });
-        return;
-      }
-      if (couponApplied && couponCode) {
-        const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
-        benefits.push({
-          text: `${label} code ${normalizedCouponCode} applied`,
-          icon: "tag",
-          highlight: true,
-        });
-      }
+      // `appliedLabel` — NOT the payload fields. `promoLinkCode` falls back to
+      // the `?promo=` attribution code even when nothing was typed, and
+      // surfacing that as "Promo code X applied" would be a new claim on the
+      // success screen. Only a code the customer actually applied shows here.
+      const line = appliedCodeReceiptLine(settled.appliedLabel);
+      if (!line) return;
+      benefits.push({ text: line, icon: "tag", highlight: true });
     },
-    [couponApplied, couponCode, couponType, normalizedCouponCode]
+    []
   );
 
   const buildActivationBenefits = useCallback(
@@ -2587,7 +2606,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       benefits.push({ text: partnerLine, icon: "tag" as const });
     }
 
-    appendCodeBenefits(benefits);
+    // ALWAYS pass the ref, even when it is null: the no-argument form falls back
+    // to `couponApplied` / `couponType` state, which is the browser's hope and
+    // cannot be vetoed by a refusal the server already told us about.
+    appendCodeBenefits(benefits, { appliedLabel: settledAppliedLabelRef.current });
 
     const purchaseProcessingSubtitle =
       processingPackageType === "membership"
@@ -2710,6 +2732,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   };
 
+  /**
+   * The success screen for every door that does NOT go through the processing
+   * screen — and the one the deferred-confirm effect reaches too.
+   *
+   * IT CANNOT SEE `settledCoupon`. It is not defined inside `handleSubmit`, and
+   * the deferred-confirm effect calls it a render later still, so the only thing
+   * that can carry the server's answer here is `settledAppliedLabelRef` — parked
+   * by `settleAppliedLabel` after each attach answers, cleared at the start of
+   * every submit. Reading `couponApplied` here instead is what printed
+   * "Campaign code EXTRA100 applied" for a code the attach had already answered
+   * `200 { slot: null }` about; that fallback no longer exists
+   * (`appendCodeBenefits` requires the settled label).
+   */
   const handlePaymentSuccess = async (data?: {
     autoLogin?: boolean;
     user?: {
@@ -2814,7 +2849,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             hideLoading();
             {
               const benefits = buildActivationBenefits();
-              appendCodeBenefits(benefits);
+              appendCodeBenefits(benefits, { appliedLabel: settledAppliedLabelRef.current });
               showSuccess("Successful!", purchaseSuccessSubtitle, benefits, 3000);
             }
 
@@ -2896,7 +2931,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             hideLoading();
             {
               const benefits = buildActivationBenefits();
-              appendCodeBenefits(benefits);
+              appendCodeBenefits(benefits, { appliedLabel: settledAppliedLabelRef.current });
               showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
             }
           }
@@ -2904,7 +2939,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           hideLoading();
           {
             const benefits = buildActivationBenefits();
-            appendCodeBenefits(benefits);
+            appendCodeBenefits(benefits, { appliedLabel: settledAppliedLabelRef.current });
             showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
           }
         }
@@ -2913,7 +2948,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         hideLoading();
         {
           const benefits = buildActivationBenefits();
-          appendCodeBenefits(benefits);
+          appendCodeBenefits(benefits, { appliedLabel: settledAppliedLabelRef.current });
           showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
         }
       }
@@ -2933,7 +2968,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       hideLoading();
 
       const benefits = buildActivationBenefits();
-      appendCodeBenefits(benefits);
+      appendCodeBenefits(benefits, { appliedLabel: settledAppliedLabelRef.current });
       showSuccess("Successful!", purchaseSuccessSubtitle, benefits);
 
       let entriesCount = activePlan.metadata?.entriesCount ?? 0;
@@ -3233,6 +3268,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       !(isAuthenticated && !!useSavedPaymentMethod && !!selectedPaymentMethod)
     );
 
+    // A label settled for a PREVIOUS submit is not evidence about this one.
+    // Cleared here, before anything can read it, so an abandoned attempt (a
+    // refusal stop, a requirement stop) can never leak its claim into the next
+    // charge's receipt.
+    settledAppliedLabelRef.current = null;
+
     let settledCoupon: SettledCoupon = {
       referralCode: appliedCouponPayload.referralCode,
       promoLinkCode: appliedCouponPayload.promoLinkCode,
@@ -3470,6 +3511,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             ? { label: CODE_TYPE_LABEL[type], code }
             : null,
       };
+      // PARKED HERE, NOT AT THE DOORS. Three receipt surfaces run outside this
+      // closure and cannot see `settledCoupon` — the processing screen (after a
+      // poll), `handlePaymentSuccess` (defined outside `handleSubmit`), and the
+      // deferred-confirm effect (a render later still). Writing the ref at the
+      // one place the label is decided means every one of them reads the SAME
+      // server-settled answer, and re-running after an attach refusal retracts
+      // the claim on all three at once. Assigning at each door instead is what
+      // let five of them quietly keep reading state.
+      settledAppliedLabelRef.current = settledCoupon.appliedLabel;
     };
     // Settled again after each attach; this call covers every door the attach
     // block below skips (saved-card, no pre-warmed object, empty box).
@@ -4382,6 +4432,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             setPaymentIntentId(paymentIntentId);
             setProcessingPackageName(getReceiptLabelByPackageId(activePlan.id, { membership: getPackageById, mini: getMiniDrawPackageById }));
             setProcessingPackageType("one-time");
+            // Belt-and-braces re-park before the processing screen mounts.
+            // `settleAppliedLabel` already wrote this ref (it writes on every
+            // settle, including after the attach answered), so this is a no-op
+            // restatement at the door — kept because this is the door that hands
+            // the claim to a screen the submit closure never sees again.
+            settledAppliedLabelRef.current = settledCoupon.appliedLabel;
             setShowPaymentProcessing(true);
           } else {
             const triggerType = activePlan.period === "one-time" ? "one-time-purchase" : "membership-purchase";

@@ -172,6 +172,16 @@ The extended `test`/`expect` every spec imports from `../../fixtures/test` (neve
   or same-origin HTTP ≥500 response occurred during the test. `CONSOLE_ALLOWLIST` is a short,
   deliberately-extended-not-wildcarded regex list (React DevTools banner, Fast Refresh, "third-
   party cookie" warnings).
+
+  **Two `[typed-code]` lines are allowlisted, and a third deliberately is not.** Both allowlisted
+  entries are exact sentences, never `/\[typed-code\]/`:
+  `attach outcome unknown` (the client gave up waiting; the server may well have written the code)
+  and — added 2026-08-28 — `attach answered 200 with no slot`, which is the **veto working**: the
+  server refused the code and the client is announcing that it will not claim the code applied.
+  Leaving that one out failed every spec that deliberately exercises a refusal, *on the alarm
+  proving the refusal was handled correctly*. The sibling line `attach failed before confirm` stays
+  un-allowlisted on purpose — it means the server DEFINITELY did not write the code, i.e. a customer
+  charged without it, and must keep failing specs.
 - **`freshUser`** — worker-safe factory for mutating specs: `e2e+w<workerIndex>-<runId>-<n>@e2e.local`,
   created directly via `createLoginableUser` (the register API creates passwordless users, so
   login-capable users are created straight in Mongo). Disconnects the e2e DB connection on

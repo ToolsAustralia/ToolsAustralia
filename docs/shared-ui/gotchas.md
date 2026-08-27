@@ -1382,12 +1382,39 @@ Two related rules:
 - **`appendCodeBenefits(benefits, settled)` takes `settled.appliedLabel`, not the payload fields.**
   `promoLinkCode` falls back to the `?promo=` attribution code even when nothing was typed, and
   rendering that as "Promo code X applied" would be a new claim on the success screen.
-- **The `settled`-less overload reads `couponApplied` state**, and five call sites in
-  `handlePaymentSuccess` / `handlePaymentProcessingSuccess` use it. So `setCouponApplied(true)` is
-  itself a **claim on the success screen**, not just a row decoration — never set it for a code the
-  charge is not going to carry. This is also why the requirement gate's `allow_without_code` outcome
-  clears `couponApplied` / `couponType`: the resolve re-ran on that press and set them, and leaving
+- **THE `settled`-LESS OVERLOAD IS GONE (2026-08-28) — `settled` is now a REQUIRED parameter.**
+  While it was optional, omitting it fell back to `couponApplied` / `couponType`: the browser's own
+  hope, which nothing can veto. Five call sites inside `handlePaymentSuccess` did exactly that, so a
+  code the attach had already answered `200 { code: null, slot: null }` about — the server refusing
+  it — still printed *"Campaign code EXTRA100 applied"* on the success screen. The veto worked; the
+  receipt ignored it. **The wider exposure of the two**, because the guest/unauthenticated journey is
+  precisely the one `/api/codes/validate` cannot check (step-1 registration does not authenticate —
+  CLAUDE.md rule 6), so the server's refusal at attach time is the ONLY signal there is.
+  Passing the argument at five sites would have fixed today; deleting the overload is what makes it
+  unrepeatable — there is no longer a form of the call that reads state, and `tsc` stops a new call
+  site falling back by omission. `{ appliedLabel: null }` is the honest way to say "the server did not
+  license a claim" and prints nothing. Second parameter type is
+  `Pick<SettledCoupon, "appliedLabel">`: only that field was ever read, and the narrow type is what
+  lets a bare ref be passed.
+- **THE THREE SURFACES THAT PRINT THIS LINE ALL READ `settledAppliedLabelRef` (2026-08-28).**
+  `settleAppliedLabel()` writes that ref every time it settles — including after an attach refusal
+  retracts the claim — and `handleSubmit` clears it to `null` before each new submit, so an abandoned
+  attempt cannot leak its claim into the next charge's receipt. The three are:
+  `handlePaymentProcessingSuccess` (after a poll that outlives the submit),
+  `handlePaymentSuccess` (defined outside `handleSubmit`, five call sites), and the
+  **deferred-confirm effect** (`setPendingFirstSubscriptionConfirm(true)` → a `useEffect` that
+  confirms a render later and calls `handlePaymentSuccess`; it cannot see `settledCoupon` at all).
+  Parking the label at each *door* instead is what let five of them quietly keep reading state — the
+  ref is written at the one place the label is **decided**. The seven call sites inside `handleSubmit`
+  still pass `settledCoupon` directly, which is the same value.
+- `setCouponApplied(true)` is still a row decoration only, but never set it for a code the charge is
+  not going to carry: the requirement gate's `allow_without_code` outcome clears `couponApplied` /
+  `couponType` for exactly that reason — the resolve re-ran on that press and set them, and leaving
   them would show a green **APPLIED** beside a code the charge is deliberately dropping.
+- **The sentence itself lives in one place.** All three surfaces (this modal's `appendCodeBenefits`
+  and both of `SpecialPackagesModal`'s receipts) call `appliedCodeReceiptLine()` in
+  `@/utils/payment/typed-code-at-checkout` rather than interpolating their own string. It is
+  customer-facing copy governed by rule 11, and three hand-built copies were three chances to drift.
 - **`settleAppliedLabel()` decides what the success screen may claim, and it runs after the attach.**
   `appliedLabel` exists only when `attachedCodeSlot === typedCodeType` (the server told us which
   metadata key it wrote) **or** `codeRidesInCreateBody` (the create call in this submit carries all
@@ -1412,6 +1439,61 @@ Two related rules:
   positively names a slot. Note the asymmetry that stays: `outcome: "refused"` (a non-`ok` response —
   `wrong_state`, `not_authorized`, `stripe_error`) is **not** a refusal of the code and does not veto,
   because the create body may still deliver it. The label proves acceptance, never delivery.
+
+## SpecialPackagesModal: the receipt must name what the SERVER took, not what the browser sent
+
+_Added 2026-08-28._
+
+**Do not copy `MembershipModal`'s `settleAppliedLabel` predicate here — it does not apply.** This
+modal **never calls the attach seam**. It delivers the code in the create body
+(`purchaseMembership` → `POST /api/stripe/create-one-time-purchase-existing-user`, which always mints
+a **fresh** PaymentIntent with the code already in metadata), so there is no `slot` to read and
+nothing to stamp after the fact.
+
+Its receipt label used to be built from `couponApplied && couponType && normalizedTypedCode` — three
+pieces of local state that only ever recorded what the browser believed at **Apply** time. The server
+already knew better and simply did not say: the route resolves `verifiedCampaignCode` through
+`resolveCodeForCheckout` and writes it into metadata, but answered with `entriesAdded`,
+`totalEntries`, `packageName`, `source`, `paymentVerified` and nothing about the code.
+
+The fix runs both ways:
+
+- The route now returns `data.appliedCodes: { referralCode, promoLinkCode, campaignCode }` — the
+  three legs it actually stamped. Additive; no existing field changed.
+- `handlePurchase` settles the label **after** the mutation returns, via `settleAppliedCodeLabel()`
+  (`@/utils/payment/typed-code-at-checkout`), and parks it in `acceptedCodeLabelRef`. Both receipts
+  read that ref: the immediate `showSuccess` fallback **and** `handlePaymentSuccess`, which prints
+  minutes later from a closure over the render that started the purchase and so cannot see a code the
+  route dropped in between.
+- `settledCoupon` therefore carries `typedCode` / `typedCodeType` — the same two names
+  `MembershipModal`'s `SettledCoupon` uses — instead of a finished `appliedLabel`. The two checkout
+  surfaces now describe the same thing with the same words.
+
+**THE THREE LEGS DO NOT PROVE THE SAME THING (stated plainly 2026-08-28).** Only `campaignCode` is
+server-checked: the route reports `resolveCodeForCheckout`'s answer against a server-resolved user
+id, so `null` there is a real refusal. `referralCode` and `promoLinkCode` are the **request body
+echoed back** — stamped verbatim, validated by nobody on that route. For those two the report proves
+**delivery** (the code is on the charge and the webhook will see it) and **not acceptance**: a
+returning customer typing a mate's referral code — invalid, new customers only — is still told
+*"Referral code MATE-CODE applied"* while the webhook grants nothing. That is functionally identical
+to the local-state label it replaced, and it is a **known, deliberate limit of this round**: closing
+it means giving those two legs their own server-side check, a bigger change than the receipt fix.
+The doc-comments, the route comment and the test names in
+`src/utils/payment/__tests__/typed-code-at-checkout.test.ts` all say so explicitly — do not reword
+any of them to imply all three were vetted.
+
+**Honest scope.** This surface is member-only and authenticated, so `/api/codes/validate` does the
+real per-user check at Apply time; a code the customer does not hold is refused before they ever
+reach Purchase. The window is a code **valid at Apply time and refused at charge time** — expired in
+between, or redeemed in another tab. Narrower than the `MembershipModal` hole, and still worth
+closing: entries are money-equivalent and the grant is one-per-customer-for-life.
+
+**A dropped code goes unmentioned.** No apology line, no error on a successful purchase — the pack
+still delivers everything it includes and the unspent issuance stays in the rewards wallet.
+
+Pinned by `npm run test:typed-code-checkout` §8; see
+[payment/gotchas.md](../payment/gotchas.md) → *"Never claim a code applied unless it reached the
+server"*.
 
 ## Both checkout modals: an early return after the submit lock must release it by hand
 

@@ -678,9 +678,17 @@ leg mints for a customer that has never existed. To reset by hand, delete that c
 
 ## The console watchdog and the typed-code log lines (2026-08-27)
 
-`CONSOLE_ALLOWLIST` in `e2e/fixtures/test.ts` carries **one** typed-code entry, and the split is
+`CONSOLE_ALLOWLIST` in `e2e/fixtures/test.ts` carries **two** typed-code entries, and the split is
 deliberate:
 
+- **Allowlisted (added 2026-08-28):** `[typed-code] attach answered 200 with no slot`. This is the
+  **veto working** — the server refused this code for this customer, and the client is announcing
+  that it will therefore not claim the code applied. It is printed on every run of the leg *"no minted
+  code: the same code at checkout grants nothing, and the receipt does not claim it applied"*, which
+  is exactly a refusal journey: `/api/codes/validate` clears the code for a guest (no session to key a
+  per-user lookup on) and the attach is what refuses. **The allowlist entry names that leg in a
+  comment** so nobody has to guess whether it still guards anything; delete the entry if the leg ever
+  goes. Without it, that spec fails on the alarm proving the refusal was handled correctly.
 - **Allowlisted:** `[typed-code] attach outcome unknown`. The browser stopped waiting for
   `/api/stripe/attach-typed-code` — a client cap or a dropped connection. The server may well have
   completed: during the fix's own run it answered `200 in 8089ms` on a request the page had already

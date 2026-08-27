@@ -143,6 +143,35 @@ const resolution = await resolveTypedCodeAtCheckout({ code, inviteeUserId, invit
   different kind of memory. Both modals call this one helper so the decision and the sentence cannot
   drift apart again.
 
+- `settleAppliedCodeLabel({ typedCode, typedCodeType, applied })` →
+  `{ label: "Referral" | "Promo" | "Campaign", code } | null` — **what the receipt may claim.**
+  `applied` is the purchase route's `data.appliedCodes` report of the three legs it actually stamped
+  onto the charge (`referralCode` / `promoLinkCode` / `campaignCode` — the same names the body and
+  the Stripe metadata use). Each kind of typed code reads **its own** leg; the code printed is the
+  **server's** string, because that is the one riding on the charge.
+
+  This is the create-body equivalent of the attach seam's `slot`. `SpecialPackagesModal` never calls
+  the attach — its code rides in the create body — so without a report from the route it had nothing
+  to label from but the browser's own hope. Returns `null` when nothing was typed (the `?promo=`
+  attribution code rides in `promoLinkCode` with an untouched box and must never be claimed), when
+  the route reported nothing at all (silence is not consent), or when that leg came back empty (a
+  refusal). See gotchas → *"Never claim a code applied unless it reached the server"*.
+
+  **The three legs are not equally vetted, and the names say so (2026-08-28).** `campaignCode` is a
+  real server-side check — `resolveCodeForCheckout`'s answer against a server-resolved user id, so
+  `null` there is a refusal. `referralCode` and `promoLinkCode` are the **request body echoed back**;
+  the route validates neither. Those two prove **delivery**, not **acceptance** — a returning customer
+  typing a mate's referral code (invalid: new customers only) is still told it applied while the
+  webhook grants nothing. Unchanged from the local-state label this replaced, and a deliberate limit
+  of this round rather than an oversight.
+
+- `appliedCodeReceiptLine(settled)` → `"Campaign code BACKIN200 applied"` or `null` — **the one
+  sentence**, shared by all three receipt surfaces (`MembershipModal.appendCodeBenefits` and both of
+  `SpecialPackagesModal`'s). The argument is **required and nullable** on purpose: *"nothing may be
+  claimed"* must be stated, because stating it by **omission** is precisely how five call sites in
+  `MembershipModal` fell back to browser state for a code the server had refused. Rule-11 governed
+  copy, so it lives in one place rather than three interpolations.
+
 Rule 11 applies to every string it produces and is asserted in
 `npm run test:typed-code-checkout`.
 

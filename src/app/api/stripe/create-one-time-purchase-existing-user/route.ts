@@ -579,6 +579,31 @@ export async function POST(request: NextRequest) {
         packageName: membershipPackage.name,
         source: "one-time-package",
         paymentVerified: !awaitingAuthentication,
+        // WHAT THIS CHARGE IS ACTUALLY CARRYING. The exact three code legs
+        // written into the PaymentIntent metadata above.
+        //
+        // THE THREE LEGS DO NOT PROVE THE SAME THING, and the caller's receipt
+        // copy depends on knowing which is which:
+        //  - `campaignCode` is CHECKED — it is `resolveCodeForCheckout`'s answer
+        //    against a server-resolved user id, not the body's value, so a code
+        //    this customer no longer holds reads back `null` here exactly as it
+        //    is absent from Stripe.
+        //  - `referralCode` / `promoLinkCode` are the REQUEST BODY ECHOED BACK,
+        //    stamped verbatim and validated by nobody here. They report DELIVERY
+        //    (this code is on the charge and the webhook will see it), never
+        //    ACCEPTANCE — the webhook may still refuse them.
+        //
+        // Reported because a route that silently drops a code and answers a bare
+        // success leaves its caller with nothing but the browser's own hope to
+        // label the receipt from: `SpecialPackagesModal` delivers the code in
+        // THIS body (there is no attach call to veto it), so this is the only
+        // thing that can tell it whether "Campaign code BACKIN200 applied" is
+        // true. Additive — no existing field moved or changed meaning.
+        appliedCodes: {
+          referralCode: validatedData.referralCode || null,
+          promoLinkCode: validatedData.promoLinkCode || null,
+          campaignCode: verifiedCampaignCode || null,
+        },
       },
       paymentIntent: {
         id: paymentIntent.id,

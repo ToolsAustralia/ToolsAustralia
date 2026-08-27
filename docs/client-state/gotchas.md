@@ -220,6 +220,20 @@ facing consequence.
 **When a response type and a route disagree, tsc protects nothing.** If you change a purchase
 route's response shape, update the hook's interface in the same edit.
 
+**Followed 2026-08-28:** `create-one-time-purchase-existing-user` gained
+`data.appliedCodes: AppliedCheckoutCodes` — the three code legs it actually stamped onto the
+PaymentIntent — and `MembershipResponse` gained it in the same edit, importing the type from
+`@/utils/payment/typed-code-at-checkout` rather than re-declaring the three key names a third time.
+It is **optional** on purpose, and the reason is the meaning of silence, not sharing — the doc-comment
+used to say *"every other route sharing this type answers without it"*, which is simply untrue:
+`MembershipResponse` has exactly **one** call site (`usePurchaseMembership` →
+`/api/stripe/create-one-time-purchase-existing-user`). Corrected 2026-08-28. Absent must read as
+*"the server did not say"*, which licenses **no claim at all** — the same answer an `unknown` attach
+outcome gets. So any older deploy, any error shape, or any future response that omits the field prints
+nothing rather than falling back to what the browser sent. See
+[payment/frontend.md](../payment/frontend.md) and
+[billing-stripe/backend.md](../billing-stripe/backend.md).
+
 ## `hasEverPaid` is on the JWT, not on the session (2026-08-27)
 
 `token.hasEverPaid` gates `/my-account` and `/rewards` in

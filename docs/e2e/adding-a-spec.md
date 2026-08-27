@@ -316,6 +316,27 @@ here to catch the difference.
 
 When you write a leg like this, say so loudly in the spec's own comment, or the next person will
 "tidy" the two legs into one. It is registered under the existing `npm run e2e:bonus-code` grep.
+
+## A leg whose assertion is a SENTENCE THAT MUST NOT APPEAR (2026-08-28)
+
+The same spec's negative leg — *"no minted code: the same code at checkout grants nothing, and the
+receipt does not claim it applied"* — now also reads the receipt. That customer was never minted the
+code, `/api/codes/validate` clears it anyway (a guest has no session), and the **attach** is the only
+thing that knows better. The success screen printed *"Campaign code LOCKIN100 applied"* anyway,
+because `handlePaymentSuccess` used an `appendCodeBenefits` overload that fell back to browser state.
+
+Two patterns worth copying:
+
+- **Anchor a negative assertion on a positive one.** The success screen is transient (it auto-closes
+  and redirects), so the leg waits for `getByText("Successful!")` to be visible *first*, then asserts
+  `getByText(/code\s+LOCKIN100\s+applied/i)` has count 0. A bare absence check would also pass if the
+  screen never appeared at all — which is a green test proving nothing.
+- **Put it before the long wait.** The receipt check runs immediately after the purchase click, ahead
+  of the 180 s ledger wait, or the screen is long gone by the time it runs.
+
+This leg is also what makes the `attach answered 200 with no slot` allowlist entry load-bearing (see
+[gotchas.md](./gotchas.md)), and it is the only executable proof of the receipt fix — there is no DOM
+runner in this repo, so no unit test can reach it.
 ## Shop catalogue spec (2026-08-17) — two harness traps it hit
 
 [`e2e/specs/admin/shop-catalogue.spec.ts`](../../e2e/specs/admin/shop-catalogue.spec.ts) covers

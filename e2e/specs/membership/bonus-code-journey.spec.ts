@@ -65,6 +65,14 @@ import {
  * `CampaignCodeValidationService.resolveCodeForCheckout`, server-side. Without
  * the negative test this spec could not tell "the code worked" from "everyone
  * gets entries regardless", which is the entire visibility rule.
+ *
+ * AND THE NEGATIVE LEG NOW ALSO READS THE RECEIPT (2026-08-28). Granting nothing
+ * was only half the requirement: the same journey printed "Campaign code
+ * LOCKIN100 applied" on the success screen for a code the server had explicitly
+ * refused, because `handlePaymentSuccess` used an `appendCodeBenefits` overload
+ * that fell back to browser state. That overload is gone; this leg is what proves
+ * it, and it is the only leg that can — the refusal is invisible to every unit
+ * test because there is no DOM runner in this repo.
  */
 
 /** The `checkout-start` trigger's code (src/config/bonusCodes.ts). */
@@ -418,7 +426,7 @@ test.describe("bonus code journey @purchase", () => {
     expect(metadata.campaignCode).toBe(ONE_TIME_CAMPAIGN_CODE);
   });
 
-  test("no minted code: the same code at checkout grants nothing", async ({ page }) => {
+  test("no minted code: the same code at checkout grants nothing, and the receipt does not claim it applied", async ({ page }) => {
     test.setTimeout(420_000);
     const { email, mobile } = purchaseIdentity("bonusnone", test.info());
 
@@ -461,6 +469,34 @@ test.describe("bonus code journey @purchase", () => {
     await fillPaymentElement(page, CARDS.ok);
     await expect(purchaseButton).toBeEnabled({ timeout: 30_000 });
     await purchaseButton.click();
+
+    /**
+     * THE RECEIPT MUST NOT LIE — asserted here because this is the ONLY journey
+     * in which the server's refusal is the only signal there is.
+     *
+     * This customer was never minted the code. `/api/codes/validate` cleared it
+     * anyway (a guest has no session to key a per-user lookup on, and step-1
+     * registration does not authenticate — CLAUDE.md rule 6), so the browser
+     * genuinely believes the code applied and the row says APPLIED. The attach
+     * then resolves their real identity and answers `200 { code: null, slot: null }`
+     * — a definite refusal, and the *only* thing that knows better.
+     *
+     * The success screen printed "Campaign code LOCKIN100 applied" here anyway,
+     * because `handlePaymentSuccess` took the argument-less `appendCodeBenefits`
+     * overload and read `couponApplied` — the browser's hope — instead of the
+     * settled label. That overload no longer exists; this is the executable
+     * proof, and there is no unit test that can reach it (no DOM runner).
+     *
+     * The screen is transient (it auto-closes and redirects), so it is anchored
+     * on FIRST — a bare absence assertion would also pass if it never appeared.
+     * It runs before the 180s ledger wait below for the same reason.
+     *
+     * NOTE FOR THE WATCHDOG ALLOWLIST: this leg is what makes
+     * `/\[typed-code\] attach answered 200 with no slot/i` in e2e/fixtures/test.ts
+     * load-bearing. That line is the veto FIRING, printed on exactly this path.
+     */
+    await expect(page.getByText("Successful!", { exact: true })).toBeVisible({ timeout: 90_000 });
+    await expect(page.getByText(/code\s+LOCKIN100\s+applied/i)).toHaveCount(0);
 
     // Absence needs an OBSERVED edge to be measured against, not a guess. Wait for
     // the BenefitsGranted doc itself — that proves the webhook ran and the base

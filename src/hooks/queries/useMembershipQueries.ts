@@ -12,6 +12,7 @@ import { useAttribution } from "@/hooks/useAttribution";
 import { freezeRefetchIntervals } from "@/lib/purchaseCooldown";
 import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
 import { completePendingAuthentication } from "@/utils/payment/stripe/complete-pending-authentication";
+import type { AppliedCheckoutCodes } from "@/utils/payment/typed-code-at-checkout";
 import {
   armDashboardEntryHoldFromUserStatsCache,
   clearDashboardEntryHold,
@@ -112,6 +113,22 @@ export interface MembershipResponse {
     source?: string;
     /** NOTE: true even for `requires_action` — do not treat as "money taken". */
     paymentVerified?: boolean;
+    /**
+     * The code legs the route actually stamped onto the PaymentIntent. The ONLY
+     * thing that licenses a "code applied" line on the receipt — see
+     * `settleAppliedCodeLabel` (which also records what each leg does and does
+     * not prove: `campaignCode` is server-checked, the other two are the request
+     * body echoed back).
+     *
+     * OPTIONAL BECAUSE ABSENT MUST STAY MEANINGFUL. `undefined` has to read as
+     * "the server did not say", and that licenses no claim at all — the same
+     * answer an `unknown` attach outcome gets. Any older deploy, any error shape,
+     * any future response that omits the field therefore prints nothing rather
+     * than falling back to what the browser sent. (This type has exactly one call
+     * site — `usePurchaseMembership` → `/api/stripe/create-one-time-purchase-existing-user`
+     * — so optionality is about the meaning of silence, not about sharing.)
+     */
+    appliedCodes?: AppliedCheckoutCodes;
   };
   /** Present on the one-time purchase route; `status` may be `requires_action`. */
   paymentIntent?: {

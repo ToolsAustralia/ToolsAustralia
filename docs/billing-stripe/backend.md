@@ -84,6 +84,56 @@ In `create-one-time-purchase` the call is deliberately **hoisted above** the
 `if (validatedData.paymentIntentId)` branch, because that route has two metadata sites (reuse-PI
 and create-PI) in opposite branches and both must see the same verified value.
 
+### …and `create-one-time-purchase-existing-user` now SAYS what it verified (2026-08-28)
+
+Dropping the code silently was only half the problem. That route's success response carried
+`entriesAdded` / `totalEntries` / `packageName` / `source` / `paymentVerified` and nothing about the
+code, so its only caller — `SpecialPackagesModal`, which has **no attach call** and delivers the code
+in this very body — had nothing to label its receipt from except what the browser hoped at Apply
+time. It printed *"Campaign code BACKIN200 applied"* for codes this route had just refused.
+
+The response now also carries:
+
+```ts
+data: {
+  // …existing fields, unchanged
+  appliedCodes: {
+    referralCode: validatedData.referralCode || null,
+    promoLinkCode: validatedData.promoLinkCode || null,
+    campaignCode: verifiedCampaignCode || null,   // the RESOLVER's answer, not the body's
+  },
+}
+```
+
+Purely additive — every existing field keeps its name and meaning, because other callers read them.
+The three keys are the request-body / Stripe-metadata names verbatim, so there is no third vocabulary
+for the same three legs.
+
+**The legs prove different things, and the route comment now says so.** `campaignCode` is CHECKED —
+`null` there is a real refusal (this customer no longer holds the code) and a value is the resolver's
+canonical string. `referralCode` / `promoLinkCode` are the **request body echoed back**, stamped
+verbatim and validated by nobody here: they report **delivery** (the code is on the charge and the
+webhook will see it) and **never acceptance**. A caller that labels a receipt off those two is telling
+the customer their code applied on the strength of having sent it. That is today's deliberate
+behaviour — see [payment/gotchas.md](../payment/gotchas.md) → *"The surfaces with no attach call to
+veto them"*.
+
+**Pinned by `npm run test:campaign-code-metadata` §2 (2026-08-28).** §1 of that suite records the
+Stripe metadata and then throws a sentinel, so the response never forms and the report was invisible
+to it — a mutation back to `validatedData.campaignCode` here restored the original bug verbatim with
+every suite green. §2 adds a **return-mode**: the same identity-checked Stripe stub hands back a
+fixture PaymentIntent instead of throwing, this route runs to completion, and the assertions are made
+against the JSON a browser would actually receive (then fed through the real `settleAppliedCodeLabel`
++ `appliedCodeReceiptLine`, so what is checked is the customer-visible sentence). Verified red on that
+exact mutation.
+
+**No new logic lives here.** The route reports a value it had already computed one screen up; the
+decision about what the customer may be *told* lives in `settleAppliedCodeLabel`
+([payment/frontend.md](../payment/frontend.md)). A route that silently drops a code and answers a
+bare success is the shape of this whole class of bug — see
+[payment/gotchas.md](../payment/gotchas.md) → *"Never claim a code applied unless it reached the
+server"*.
+
 ## Anchor-billing helper
 
 [src/utils/billing/anchor-billing.ts](../../src/utils/billing/anchor-billing.ts) — `getSubscriptionCreateParamsForAnchor(joinDate)` returns the Stripe `subscriptions.create()` params for users joining 25th/26th/27th to anchor renewal to the 24th.

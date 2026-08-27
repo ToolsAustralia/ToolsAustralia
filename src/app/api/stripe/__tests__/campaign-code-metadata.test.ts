@@ -42,12 +42,32 @@
  * therefore cannot be stubbed). No document is created, updated or deleted by
  * this file, so there are no fixtures to clean up.
  *
- * BOTH STRIPE CREATE CALLS RECORD AND THEN THROW a sentinel. Everything after
- * the metadata write — the subscription/PaymentIntent post-processing, the user
- * writes, the background jobs — is out of scope and would need a far larger
- * stub surface to satisfy. The routes' own catch blocks turn the sentinel into
- * an error response, so the RESPONSE is deliberately not asserted; the recorded
- * metadata is. Expect loud error logging from the routes: that is the sentinel.
+ * §1 — WHAT GETS STAMPED. Both Stripe create calls RECORD AND THEN THROW a
+ * sentinel. Everything after the metadata write — the subscription/PaymentIntent
+ * post-processing, the user writes, the background jobs — is out of scope there
+ * and would need a far larger stub surface to satisfy. The routes' own catch
+ * blocks turn the sentinel into an error response, so the response is not
+ * asserted in §1; the recorded metadata is. Expect loud error logging from the
+ * routes: that is the sentinel.
+ *
+ * §2 — WHAT GETS REPORTED BACK (added 2026-08-28). Stopping at the Stripe
+ * boundary means the RESPONSE never forms, and `data.appliedCodes` is built
+ * after that boundary — so §1 could not see the field at all. That field is the
+ * only thing licensing a "code applied" line on `SpecialPackagesModal`'s
+ * receipt (it delivers the code in the create body and has no attach call to
+ * veto a stale label), and a mutation that reported the request body instead of
+ * the resolver's answer restored the original bug verbatim with every suite
+ * still green. §2 therefore runs the ONE reporting route in RETURN-MODE — the
+ * same identity-checked Stripe stub hands back a fixture PaymentIntent instead
+ * of throwing — and asserts the JSON a browser would actually receive, then
+ * feeds it through the real `settleAppliedCodeLabel` + `appliedCodeReceiptLine`
+ * so the assertion is the customer-visible SENTENCE.
+ *
+ * WHAT THIS FILE STILL CANNOT PROVE: that the modal component passes that field
+ * rather than an object it built itself. There is no DOM runner in this repo,
+ * and a source-text grep is the exact pattern this file was written to replace.
+ * The e2e legs in e2e/specs/membership/bonus-code-journey.spec.ts are the proof
+ * of that half.
  *
  * Run via: `npm run test:campaign-code-metadata`
  */
@@ -58,6 +78,11 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
+import {
+  appliedCodeReceiptLine,
+  settleAppliedCodeLabel,
+  type AppliedCheckoutCodes,
+} from "@/utils/payment/typed-code-at-checkout";
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -85,6 +110,30 @@ let resolverAnswer: string | undefined;
 
 /** Thrown after recording, to stop each route at the Stripe boundary. */
 const STRIPE_SENTINEL = "campaign-code-metadata-test: recorded, stopping here";
+
+/**
+ * THROW-MODE vs RETURN-MODE, and why the second one had to exist.
+ *
+ * Every case in §1 stops at the Stripe boundary, so the response never forms —
+ * which was fine while metadata was the only thing being asserted. It is not
+ * fine for `data.appliedCodes`: that field is built AFTER the Stripe call, so a
+ * suite that always throws can never see it, and a route that stopped reporting
+ * it (or reported the request body instead of the resolver's answer) would leave
+ * every assertion in this file green. That is the whole complaint §2 answers.
+ *
+ * RETURN-MODE lets ONE route run to completion — the only one that reports —
+ * with a fixture PaymentIntent standing in for Stripe. Still no outbound call:
+ * the same identity-checked stub serves both modes.
+ */
+let stripeMode: "throw" | "return" = "throw";
+
+/** A succeeded PaymentIntent, so the route takes its normal success path. */
+const fixturePaymentIntent = {
+  id: "pi_campaign_code_fixture",
+  status: "succeeded",
+  client_secret: "pi_campaign_code_fixture_secret_stub",
+  last_payment_error: null,
+} as unknown as Stripe.PaymentIntent;
 
 function recordAndStop(metadata: unknown): never {
   recordedMetadata.push((metadata ?? {}) as Record<string, unknown>);
@@ -131,8 +180,10 @@ const stubStripe = {
     },
   },
   paymentIntents: {
-    async create(config: { metadata?: unknown }): Promise<never> {
-      return recordAndStop(config?.metadata);
+    async create(config: { metadata?: unknown }): Promise<Stripe.PaymentIntent> {
+      if (stripeMode === "throw") return recordAndStop(config?.metadata);
+      recordedMetadata.push((config?.metadata ?? {}) as Record<string, unknown>);
+      return fixturePaymentIntent;
     },
   },
 };
@@ -251,6 +302,16 @@ stub("src/services/error-reporting/ErrorLoggingService.ts", {
 });
 stub("src/lib/affiliate.ts", { trackAffiliateSignup: async () => undefined });
 
+// Reached only in RETURN-MODE (§2), where the route runs past the Stripe call.
+// Both are fire-and-forget side effects on the success path and neither has
+// anything to do with which code got stamped.
+stub("src/utils/webhook/background-jobs.ts", {
+  executeBackgroundJob: () => undefined,
+});
+stub("src/utils/payment/payment-method-manager.ts", {
+  savePaymentMethodToUser: async () => ({ success: true }),
+});
+
 // `next-auth` is a package, not a repo file, so it is stubbed by its resolved
 // entry point. Both "existing user" routes read the session through it.
 const stubSession = {
@@ -359,8 +420,14 @@ async function drive(route: RouteUnderTest, handler: RouteHandler) {
   // `check` FAIL is never swallowed.
   const realConsoleError = console.error;
   console.error = () => {};
+  let body: { data?: { appliedCodes?: Record<string, unknown> } } | undefined;
   try {
-    await handler(request, route.context);
+    const response = await handler(request, route.context);
+    // Only RETURN-MODE gets this far; in throw-mode the sentinel escapes or the
+    // route's own catch turns it into an error body we deliberately ignore.
+    if (stripeMode === "return") {
+      body = (await response.json()) as typeof body;
+    }
   } catch (error) {
     // The sentinel escaping a route's own catch is fine — the recording already
     // happened. Anything else is a genuine failure and must not be swallowed.
@@ -373,6 +440,7 @@ async function drive(route: RouteUnderTest, handler: RouteHandler) {
     metadata: recordedMetadata[0],
     resolverCall: resolverCalls[0],
     stripeCalls: recordedMetadata.length,
+    appliedCodes: body?.data?.appliedCodes,
   };
 }
 
@@ -457,6 +525,117 @@ async function run() {
         accepted.metadata?.campaignCode === ATTACKER_SUPPLIED_CODE,
         false
       );
+    }
+
+    // ---- §2: WHAT THE ROUTE REPORTS BACK ---------------------------------
+    //
+    // Everything above stops at the Stripe boundary, so it can prove what got
+    // STAMPED and nothing about what gets SAID. `data.appliedCodes` is built
+    // after that boundary and is the only thing licensing a "code applied" line
+    // on `SpecialPackagesModal`'s receipt — that modal delivers the code in the
+    // create body and has no attach call to veto a stale label. Until this
+    // section, a route that quietly stopped reporting the field, or reported
+    // `validatedData.campaignCode` instead of the resolver's answer, restored the
+    // original "the receipt lied" bug verbatim with every suite still green.
+    //
+    // Driven, not asserted about the source text: RETURN-MODE lets the handler
+    // run to completion against a fixture PaymentIntent, so what is checked is
+    // the actual JSON a browser would receive.
+    {
+      const route = ROUTES.find((r) => r.name === "create-one-time-purchase-existing-user");
+      if (!route) throw new Error("§2 fixture route missing");
+      /* eslint-disable @typescript-eslint/no-require-imports */
+      const handler = (require(route.modulePath) as { POST: RouteHandler }).POST;
+      /* eslint-enable @typescript-eslint/no-require-imports */
+
+      stripeMode = "return";
+      console.log(`\n${route.name} — what it REPORTS back (data.appliedCodes)`);
+
+      // ---- refusal: the resolver drops the code, the report must say so ----
+      resolverAnswer = undefined;
+      const reportedRefusal = await drive(route, handler);
+
+      check(
+        `  ${route.name}: the success response reports appliedCodes at all`,
+        typeof reportedRefusal.appliedCodes,
+        "object"
+      );
+      // THE ASSERTION THIS SECTION EXISTS FOR. `null`, not the body's value, not
+      // absent — the receipt reads this leg and must find a definite refusal.
+      check(
+        `  ${route.name}: a REFUSED campaign code is reported as null`,
+        reportedRefusal.appliedCodes?.campaignCode,
+        null
+      );
+      check(
+        `  ${route.name}: …and the caller's raw value is nowhere in the report`,
+        JSON.stringify(reportedRefusal.appliedCodes ?? {}).includes(ATTACKER_SUPPLIED_CODE),
+        false
+      );
+      // And the receipt the customer would read, assembled by the SAME two
+      // functions the modal calls — so this pins the route → label seam end to
+      // end, not just the field's value.
+      check(
+        `  ${route.name}: → the receipt claims NOTHING about a refused code`,
+        appliedCodeReceiptLine(
+          settleAppliedCodeLabel({
+            typedCode: ATTACKER_SUPPLIED_CODE,
+            typedCodeType: "campaign",
+            applied: reportedRefusal.appliedCodes as AppliedCheckoutCodes,
+          })
+        ),
+        null
+      );
+
+      // ---- acceptance: the report must carry the RESOLVER's own string ----
+      resolverAnswer = SERVER_VERIFIED_CODE;
+      const reportedAcceptance = await drive(route, handler);
+
+      check(
+        `  ${route.name}: an ACCEPTED campaign code is reported as the resolver's value`,
+        reportedAcceptance.appliedCodes?.campaignCode,
+        SERVER_VERIFIED_CODE
+      );
+      check(
+        `  ${route.name}: → the receipt names the SERVER's string, not the caller's`,
+        appliedCodeReceiptLine(
+          settleAppliedCodeLabel({
+            typedCode: ATTACKER_SUPPLIED_CODE,
+            typedCodeType: "campaign",
+            applied: reportedAcceptance.appliedCodes as AppliedCheckoutCodes,
+          })
+        ),
+        `Campaign code ${SERVER_VERIFIED_CODE} applied`
+      );
+
+      // THE OTHER TWO LEGS REPORT DELIVERY, NOT ACCEPTANCE — pinned here so the
+      // difference is visible in the suite rather than only in a comment. The
+      // route stamps these two verbatim and validates neither, so the report
+      // echoes the body back and the receipt will name them. That is today's
+      // deliberate behaviour; if either leg ever gains a server-side check, this
+      // is the assertion that must change.
+      check(
+        `  ${route.name}: the referral leg is the request body echoed back (delivery, not acceptance)`,
+        reportedAcceptance.appliedCodes?.referralCode,
+        null
+      );
+      const withCodes: RouteUnderTest = {
+        ...route,
+        body: { ...route.body, referralCode: "MATE-CODE", promoLinkCode: "SPRING" },
+      };
+      const echoed = await drive(withCodes, handler);
+      check(
+        `  ${route.name}: …an UNVALIDATED referral code is reported as sent`,
+        echoed.appliedCodes?.referralCode,
+        "MATE-CODE"
+      );
+      check(
+        `  ${route.name}: …and so is an unvalidated promo-link code`,
+        echoed.appliedCodes?.promoLinkCode,
+        "SPRING"
+      );
+
+      stripeMode = "throw";
     }
   } finally {
     for (const [key, value] of [

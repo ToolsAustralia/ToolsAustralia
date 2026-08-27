@@ -18,6 +18,22 @@ const CONSOLE_ALLOWLIST: RegExp[] = [
   // did not write it, and must keep failing the spec. Never widen this to
   // \[typed-code\].
   /\[typed-code\] attach outcome unknown/i,
+  // The veto WORKING. A 200 carrying no slot is the server refusing this code,
+  // and the client is announcing that it will not claim the code applied — the
+  // correct outcome, and the only evidence a refusal spec has that the veto
+  // fired. Leaving it out failed every spec that deliberately exercises a
+  // refusal, on the alarm proving the refusal was handled. Still NARROW: this is
+  // one more exact sentence, not a widening to \[typed-code\] — the sibling line
+  // "attach failed before confirm" means the server DEFINITELY did not write the
+  // code and must keep failing specs.
+  //
+  // WHICH SPEC PRINTS IT: bonus-code-journey.spec.ts, "no minted code: the same
+  // code at checkout grants nothing, and the receipt does not claim it applied".
+  // That customer was never minted the code, /api/codes/validate clears it anyway
+  // (a guest has no session), and the attach is what refuses — so this line fires
+  // on every run of that leg. Named here so nobody has to guess whether this entry
+  // still guards anything; if that leg is ever deleted, delete this entry with it.
+  /\[typed-code\] attach answered 200 with no slot/i,
 ];
 
 type Fixtures = {

@@ -25,16 +25,37 @@
  * 4. RULE 11 over the assembled copy. Every string here is customer-facing at the
  *    most sensitive moment there is, and the ban list mirrors the FAQ corpus's.
  *
+ * 5. THE RECEIPT MAY ONLY CLAIM WHAT THE ROUTE REPORTED ON THE CHARGE
+ *    (`settleAppliedCodeLabel`, section 8). `SpecialPackagesModal` has no attach
+ *    call to veto it — the code rides in the create body — so the purchase
+ *    route's report of which legs it stamped is the only thing standing between a
+ *    dropped code and a receipt that says it applied. Both directions are pinned,
+ *    and a silent route claims nothing.
+ *
+ *    THE THREE LEGS ARE NOT EQUALLY VETTED, and section 8's names say which is
+ *    which. `campaignCode` is the route's `resolveCodeForCheckout` answer — a
+ *    real server-side check, so `null` there is a refusal. `referralCode` and
+ *    `promoLinkCode` are the REQUEST BODY ECHOED BACK: those two prove DELIVERY
+ *    (the code is on the charge) and NOT acceptance, so a returning customer
+ *    typing a mate's referral code — invalid, new customers only — is still told
+ *    it applied while the webhook grants nothing. Known and deliberate for this
+ *    round; the alternative is a per-leg server check, a bigger change than the
+ *    receipt fix. Nothing in this file may be named as though those two were
+ *    vetted.
+ *
  * What this file CANNOT prove: that the modals thread the answer into the charge.
  * There is no DOM runner in this repo, and a source-text grep guard is the exact
- * pattern `campaign-code-metadata.test.ts` was written to replace. The e2e case
- * "types the code, never presses Apply" in e2e/specs/membership/bonus-code-journey.spec.ts
- * is the executable proof of that half.
+ * pattern `campaign-code-metadata.test.ts` was written to replace. The e2e cases
+ * "types the code, never presses Apply" and "no minted code" in
+ * e2e/specs/membership/bonus-code-journey.spec.ts are the executable proof of that
+ * half — the second one asserts the receipt stays silent about a refused code.
  */
 
 import {
+  appliedCodeReceiptLine,
   evaluatePurchaseRequirementGate,
   resolveTypedCodeAtCheckout,
+  settleAppliedCodeLabel,
   typedCodeRefusalCopy,
   TYPED_CODE_RESOLVE_TIMEOUT_MS,
   type TypedCodeResolution,
@@ -469,6 +490,180 @@ async function run(): Promise<void> {
     const lowered = copy.toLowerCase();
     for (const banned of RULE_11_BANNED) {
       checkTrue(`rule 11: "${banned.trim()}" absent from "${copy.slice(0, 28)}…"`, !lowered.includes(banned));
+    }
+  }
+
+  // ── 8. THE RECEIPT CLAIM ────────────────────────────────────────────────
+  //
+  // THE RULE: never tell a customer a code applied unless the SERVER accepted it.
+  //
+  // `MembershipModal` gets its veto from the attach seam's `slot`. The packages
+  // modal has no attach call at all — the code rides in the create body — so its
+  // "Campaign code BACKIN200 applied" line was built from `couponApplied`, which
+  // only ever recorded that the browser thought the code was good at Apply time.
+  // `/api/codes/validate` really does check per-user there, so the window is
+  // narrow: the code expired between Apply and Buy Now, or was redeemed in
+  // another tab, and `resolveCodeForCheckout` dropped it at charge time. Narrow
+  // is not the same as absent, and entries are money-equivalent.
+  //
+  // `buildReceiptLine` is `appliedCodeReceiptLine` — the SHARED builder all three
+  // receipt surfaces now call, not a copy of their string — so what is asserted
+  // is the sentence the customer reads, not just a return value.
+  console.log("\nsettleAppliedCodeLabel — what the receipt may claim\n");
+
+  const buildReceiptLine = appliedCodeReceiptLine;
+
+  // THE CASE THIS SECTION EXISTS FOR. Applied at Apply time, refused at charge
+  // time: the route reports the campaign leg empty, so the receipt says nothing
+  // about it. No apology either — the purchase succeeded and the pack still
+  // delivers everything it includes.
+  //
+  // "the server refused it" is accurate HERE and only here: the campaign leg is
+  // `resolveCodeForCheckout`'s answer against a server-resolved user id.
+  check(
+    "campaign leg (server-CHECKED): a code the server REFUSED produces no applied line",
+    buildReceiptLine(
+      settleAppliedCodeLabel({
+        typedCode: "BACKIN200",
+        typedCodeType: "campaign",
+        applied: { referralCode: null, promoLinkCode: null, campaignCode: null },
+      })
+    ),
+    null
+  );
+
+  check(
+    "campaign leg (server-CHECKED): an ACCEPTED code is named, in the resolver's own string",
+    buildReceiptLine(
+      settleAppliedCodeLabel({
+        typedCode: "backin200",
+        typedCodeType: "campaign",
+        applied: { referralCode: null, promoLinkCode: null, campaignCode: "BACKIN200" },
+      })
+    ),
+    "Campaign code BACKIN200 applied"
+  );
+
+  // SILENCE IS NOT CONSENT. A route that did not report cannot license a claim —
+  // the same reasoning that stops an `unknown` attach outcome licensing one.
+  for (const [label, applied] of [
+    ["absent", undefined],
+    ["null", null],
+  ] as const) {
+    check(
+      `a route that reported nothing (${label}) claims nothing`,
+      settleAppliedCodeLabel({ typedCode: "BACKIN200", typedCodeType: "campaign", applied }),
+      null
+    );
+  }
+
+  // THE OTHER TWO LEGS ARE SEPARATE ANSWERS. A refused campaign code must not be
+  // rescued by a `?promo=` attribution code the route happens to be carrying —
+  // that would print "Promo code …" for a code the customer never typed.
+  check(
+    "a refused campaign code is not rescued by another leg",
+    settleAppliedCodeLabel({
+      typedCode: "BACKIN200",
+      typedCodeType: "campaign",
+      applied: { referralCode: "MATE-CODE", promoLinkCode: "SPRING", campaignCode: null },
+    }),
+    null
+  );
+
+  // …and nothing typed claims nothing, however full the report is. This is the
+  // `?promo=` fallback: `promoLinkCode` rides on attribution alone.
+  check(
+    "an untouched code box claims nothing even when the charge carries a promo link",
+    settleAppliedCodeLabel({
+      typedCode: null,
+      typedCodeType: null,
+      applied: { referralCode: null, promoLinkCode: "SPRING", campaignCode: null },
+    }),
+    null
+  );
+
+  // An inconclusive resolve leaves the kind unknown, so there is no leg to read
+  // an answer out of — the raw string still rides, but nothing is claimed.
+  check(
+    "an unclassified code claims nothing",
+    settleAppliedCodeLabel({
+      typedCode: "BACKIN200",
+      typedCodeType: null,
+      applied: { referralCode: null, promoLinkCode: null, campaignCode: "BACKIN200" },
+    }),
+    null
+  );
+
+  // Each kind reads its OWN leg. A flattened mapping would let an accepted
+  // referral code print as a campaign claim, and vice versa.
+  //
+  // NAMED FOR WHAT THEY ACTUALLY PROVE. The route stamps `referralCode` and
+  // `promoLinkCode` VERBATIM from the request body and validates neither, so
+  // these two legs report DELIVERY — the code is on the charge — and not
+  // acceptance. Calling them "the server accepted it" would be the same
+  // overstatement the receipt itself must avoid.
+  check(
+    "referral leg (DELIVERY only — the body echoed back, never validated here): reads its own leg",
+    buildReceiptLine(
+      settleAppliedCodeLabel({
+        typedCode: "MATE-CODE",
+        typedCodeType: "referral",
+        applied: { referralCode: "MATE-CODE", promoLinkCode: null, campaignCode: null },
+      })
+    ),
+    "Referral code MATE-CODE applied"
+  );
+  check(
+    "promo leg (DELIVERY only — the body echoed back, never validated here): reads its own leg",
+    buildReceiptLine(
+      settleAppliedCodeLabel({
+        typedCode: "SPRING",
+        typedCodeType: "promo",
+        applied: { referralCode: null, promoLinkCode: "SPRING", campaignCode: null },
+      })
+    ),
+    "Promo code SPRING applied"
+  );
+  // THE KNOWN GAP, PINNED SO IT CANNOT BE MISREAD AS A CHECK. A returning
+  // customer typing a mate's referral code is ineligible (new customers only),
+  // the route stamps it anyway, and the receipt says it applied while the webhook
+  // grants nothing. This is the CURRENT, DELIBERATE behaviour of the referral
+  // leg — unchanged from the local-state label it replaced. If someone later
+  // routes referral through its own server check, THIS assertion is the one that
+  // must change, and its name says so out loud.
+  check(
+    "referral leg: an INELIGIBLE-but-delivered code still prints (delivery, not acceptance — known gap)",
+    buildReceiptLine(
+      settleAppliedCodeLabel({
+        typedCode: "MATE-CODE",
+        typedCodeType: "referral",
+        applied: { referralCode: "MATE-CODE", promoLinkCode: null, campaignCode: null },
+      })
+    ),
+    "Referral code MATE-CODE applied"
+  );
+  check(
+    "a referral code is not claimed off the campaign leg",
+    settleAppliedCodeLabel({
+      typedCode: "MATE-CODE",
+      typedCodeType: "referral",
+      applied: { referralCode: null, promoLinkCode: null, campaignCode: "MATE-CODE" },
+    }),
+    null
+  );
+
+  // Rule 11 over the receipt line itself — it is customer-facing copy like any
+  // other, printed at the moment of purchase.
+  {
+    const lowered = (buildReceiptLine(
+      settleAppliedCodeLabel({
+        typedCode: "BACKIN200",
+        typedCodeType: "campaign",
+        applied: { campaignCode: "BACKIN200" },
+      })
+    ) ?? "").toLowerCase();
+    for (const banned of RULE_11_BANNED) {
+      checkTrue(`rule 11: "${banned.trim()}" absent from the receipt line`, !lowered.includes(banned));
     }
   }
 
