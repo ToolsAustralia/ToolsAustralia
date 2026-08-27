@@ -154,6 +154,7 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 | `mobile` | string (opt) | AU mobile; validated + normalized to `+61…` on save ([User.ts:9](src/models/User.ts#L9), hook [1136-1158](src/models/User.ts#L1136)) | **PII** |
 | `acceptsPromotionalEmail` | boolean (opt) | Klaviyo marketing opt-in; **omitted/undefined ⇒ opted in** ([User.ts:180](src/models/User.ts#L180)) | — |
 | `pendingKlaviyoMergeFromEmail` | string (opt, lowercase) | Old email to merge from in Klaviyo after a verified email change; cleared after merge ([User.ts:156](src/models/User.ts#L156)) | **PII** |
+| `klaviyoSyncedAt` | Date (opt) | When **we** last wrote this customer's Klaviyo marketing profile. Set by the reconciliation sweep with `{ timestamps: false }` so it never bumps `updatedAt`. Internal only — never surfaced to the customer. Added 2026-08-26 (§8-0) | — |
 
 ### 2d. Subscription / membership
 
@@ -640,6 +641,43 @@ The old limitation — that only the **guest** checkout-start moment could enrol
 ## 8. Marketing & attribution data captured
 
 What marketing/attribution data we capture about a customer, and which of it **leaves to third parties** (Klaviyo, Meta/TikTok/Snapchat). See [docs/tracking/](docs/tracking/).
+
+### 8-0. What Klaviyo holds about a customer, and when it catches up (2026-08-26)
+
+Klaviyo keeps its own copy of each customer. Our database is the truth; that copy's job is to
+keep up. Two things about it changed.
+
+**It now catches up on its own.** Previously a customer's Klaviyo record only refreshed if
+they happened to trigger one of ~24 scattered "please sync" calls — and every one of those was
+fire-and-forget, so it often never landed. A customer could pay, receive their entries, and
+have Klaviyo still believe they had none. Two customers who bought twenty minutes apart on
+2026-08-25 differed only in that one of them clicked one extra button afterwards; that one's
+record was correct, the other's said **zero entries** and **never entered a giveaway**.
+
+A job now runs **every five minutes**, finds every customer whose record changed since it last
+succeeded, and refreshes them — regardless of which part of the site made the change. This
+also closes five gaps that were never wired up at all: cancellations, admin edits, referral
+rewards, milestone rewards, and redeemed rewards.
+
+**The entry and spend figures are now what actually happened.** Four properties were
+*recalculated* from the price list (`entries per month × months subscribed`) rather than read
+from what we granted. That was wrong for **every single active member** — a Tradie who
+received 150 entries under a promotion was reported as 15. They are now read from the payment
+record. `accumulated_entries` is unchanged and still counts entries from **all** sources
+including free ones; the paid-only figures sit alongside it.
+
+Also corrected: a flag claiming the customer had a **pending upgrade** was `true` on every
+profile in the database while nobody actually had one. And five upsell-engagement properties
+that had been empty for every customer since launch are **removed** from their profile — the
+thing meant to fill them was never switched on.
+
+One new field is held on the customer record: **`klaviyoSyncedAt`**, the time we last wrote
+their marketing profile. It is internal, never shown to the customer, and exists so a record
+that has fallen behind is visible to us instead of silent.
+
+Nothing new about a customer leaves to a third party as a result of this — the same properties
+go to Klaviyo, with correct values, more reliably. See
+[docs/tracking/KLAVIYO_INTEGRATION.md](docs/tracking/KLAVIYO_INTEGRATION.md).
 
 ### 8a. UTM / attribution capture & persistence
 

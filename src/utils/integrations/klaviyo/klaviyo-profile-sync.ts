@@ -12,6 +12,7 @@ import { userToKlaviyoProfile } from "@/utils/integrations/klaviyo/klaviyo-helpe
 import { calculateDrawSpecificPropertiesForUser } from "@/utils/integrations/klaviyo/klaviyo-draw-calculator";
 import type { IUser } from "@/models/User";
 import type { IMajorDraw } from "@/models/MajorDraw";
+import type { UserGrantLedger } from "@/utils/payment/payment-event-net-queries";
 
 /**
  * Subscribe user to Klaviyo lists ONCE during registration
@@ -158,17 +159,29 @@ export async function syncKlaviyoEmailMarketingFromAdminPreference(
  *                                   Only used if user hasn't made any purchases yet
  * @param targetDraw - Optional cached target draw (for performance optimization in bulk operations)
  * @param cutoffDate - Optional cached cutoff date (for performance optimization in bulk operations)
+ * @param ledger - Optional prefetched paid-grant ledger (batch callers resolve one per batch)
+ *
+ * @returns **true only when the upsert actually landed in Klaviyo.**
+ *
+ * This function swallows its own errors by design — a profile sync must never break the caller
+ * — so the return value is the ONLY signal that the write succeeded. Any caller that depends on
+ * the profile being current (the reconciliation sweep) MUST check it: treating a swallowed
+ * failure as success advances the sweep's watermark past users whose write was refused, which
+ * silently skips them forever. That is the exact failure class this subsystem exists to remove.
+ *
+ * Same contract as `DrawGrantService.grantMonthlyCouponEntries`: false means "not delivered".
  */
 export async function syncUserProfileToKlaviyo(
   user: IUser,
   brandInterestFromSignup?: string | null,
   targetDraw?: IMajorDraw,
-  cutoffDate?: Date
-): Promise<void> {
+  cutoffDate?: Date,
+  ledger?: UserGrantLedger
+): Promise<boolean> {
   try {
     // ✅ CRITICAL FIX: await the async userToKlaviyoProfile function
     // Pass cached draw data if provided to avoid redundant database queries
-    const profile = await userToKlaviyoProfile(user, brandInterestFromSignup, targetDraw, cutoffDate);
+    const profile = await userToKlaviyoProfile(user, brandInterestFromSignup, targetDraw, cutoffDate, ledger);
     const result = await klaviyo.upsertProfile(profile);
 
     if (result.success && result.profile_id) {
@@ -185,11 +198,15 @@ export async function syncUserProfileToKlaviyo(
           drawProperties: drawProps,
         });
       }
-    } else {
-      console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
+
+      return true;
     }
+
+    console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
+    return false;
   } catch (error) {
     console.error(`❌ Error syncing Klaviyo profile for ${user.email}:`, error);
+    return false;
   }
 }
 

@@ -64,3 +64,50 @@ regression tests for `src/utils/partner-discounts/{unlock-packages,portal-return
 ## Webhook
 
 [src/utils/webhook/](../../src/utils/webhook/) — generic webhook helpers (signature verification, payload parsing, retry handling). Stripe webhook is handled in [billing-stripe](../billing-stripe/).
+
+## `reconcile-klaviyo-profiles` cron (2026-08-26)
+
+Two schedules on one route
+([`src/app/api/cron/reconcile-klaviyo-profiles`](src/app/api/cron/reconcile-klaviyo-profiles/route.ts)):
+
+| schedule | mode | purpose |
+|---|---|---|
+| `*/5 * * * *` | incremental | re-sync users whose `updatedAt` moved since the watermark |
+| `7 * * * *` | `?mode=full` | hourly pass over a rotating cursor, for time-derived properties that dirty no document (~7-day circuit at 56k profiles, ~27 days at 4x) |
+
+Auth **fails closed** (matches `reconcile-renewal-grants` / `charge-past-due`): a missing
+`CRON_SECRET` returns 401 rather than leaving the endpoint open. Findings are reported via
+`console.error` with a greppable `[reconcile-klaviyo-profiles]` prefix — the only log level
+that survives `compiler.removeConsole` — matching the sibling `reconcile-*` crons. Four
+findings lines: sync failures, time-budget exhaustion on an incremental run, backlog above
+threshold, and entry-ledger divergence.
+
+`maxDuration = 60`, and the service self-limits at `MAX_RUN_MS = 45s`. That limit is measured,
+not guessed: a 500-user page took 66.6s, and a Vercel-killed run would have lost its work and
+left the watermark unmoved. Brings `vercel.json` to **24** cron entries.
+
+## Klaviyo profile accuracy scripts (2026-08-26)
+
+| script | npm |
+|---|---|
+| backfill all profiles with corrected properties | `backfill:klaviyo-accuracy` / `:dry` |
+| verify the result (read-only) | `verify:klaviyo-accuracy` |
+
+The backfill runs the **same service the cron runs** in `full` mode, paged by an
+`afterUpdatedAt` cursor — there is no separate backfill logic to keep true. `--dry-run` is the
+default; `--live` writes; `--prod` targets `PROD_MONGODB_URI` via `connectOpsDb`. It appends a
+CSV audit trail, logs `processed/total (%) · rate/sec · ETA` on ~20 lines, and exits 0 / 1 / 2.
+
+A **live** run additionally requires `KLAVIYO_ALLOW_DEV_PROFILE_WRITES=true` — the script
+deliberately does not set it, because that is the point of the guard.
+
+Also registered three pre-existing scripts that had no npm entry and were therefore
+undiscoverable: `sync:klaviyo-profiles`, `sync:klaviyo-profiles-bulk`,
+`migrate:klaviyo-draw-properties`.
+
+## New env var: `KLAVIYO_ALLOW_DEV_PROFILE_WRITES`
+
+Off by default. Dev and production share one Klaviyo account, so profile **mutation** is
+refused outside `KLAVIYO_MODE=production` unless this is `"true"`. Events are unaffected —
+they carry a `[DEV]` prefix. Set it explicitly for a sanctioned ops backfill, never in a
+script. Registered in `.env.example`.

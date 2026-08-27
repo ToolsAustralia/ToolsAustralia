@@ -276,3 +276,30 @@ That branch used to log at `console.warn`, which `next.config.ts`'s `compiler.re
 
 - `payment-processing.ts` is the ONLY caller passing `{ allowStreakIssuance: true }` to `MilestoneService.checkAndIssueMilestones` — new streak-months issuances are payment-coupled by construction (the cron/mass evaluator may only re-deliver, never newly issue).
 - `reverseMembershipLedger` ([refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)) now gives back a refunded renewal's streak +1: it atomically flips the matching `MembershipRenewalCycle` row (`userId` + `paymentIntentId` + `billing_reason: subscription_cycle`, `succeeded/recovered → refunded` — the pre-image gate makes replays no-op) and decrements `subscription.streakMonths` with a floor of 0. The milestone issuances granted on that payment were already revoked via `grants.milestoneIssuanceIds` (`milestoneRevoke` step).
+
+## Per-user grant ledger — `aggregateNetGrantsByUser` (2026-08-26)
+
+[`src/utils/payment/payment-event-net-queries.ts`](src/utils/payment/payment-event-net-queries.ts)
+
+```ts
+aggregateNetGrantsByUser(userIds): Promise<Map<string, UserGrantLedger>>
+UserGrantLedger = { memberEntries, oneTimeEntries, upsellEntries, miniDrawEntries, netSpend }
+```
+
+Lifetime **paid** grants per user, refund-netted by the same
+`excludeRefundedBenefitsGrantedStages()` (Option B) the admin revenue breakdown uses, so the
+two figures can never disagree. `netSpend` is in **dollars**, matching the
+`BenefitsGranted.data.price` convention at the top of that file.
+
+- Groups by `(userId, packageType)` in one aggregation; indexed on `userId_1_timestamp_-1`.
+- Users with no grants are **absent** from the Map — callers fall back to `emptyGrantLedger()`.
+- Accepts `string | ObjectId` because `IUser._id` is declared `string` in this codebase.
+- `foldGrantRows` is split out as a pure function so the arithmetic is testable without Mongo
+  (`npm run test:payment-grant-ledger`). The bug it replaces was arithmetic, not I/O.
+
+**Covers paid sources only.** Free grants — referral, promo-link, cancellation-upsell, streak,
+bonus-entry-promo — never produce a `BenefitsGranted` row. The all-sources lifetime total is
+`user.accumulatedEntries`.
+
+Consumed by the Klaviyo profile projection to replace a catalogue reconstruction that was
+wrong for 4,904 of 4,904 active members. See `docs/tracking/KLAVIYO_INTEGRATION.md`.

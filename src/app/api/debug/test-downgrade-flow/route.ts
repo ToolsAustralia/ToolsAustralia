@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
+import { isValidPendingUpgrade } from "@/utils/subscription/pending-upgrade";
 import { getPackageById } from "@/data/membershipPackages";
 
 /**
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
         daysUntilEffective: 30,
       },
       currentState: {
-        hasPendingChange: !!user.subscription.pendingChange,
+        hasPendingChange: isValidPendingUpgrade(user.subscription.pendingChange),
         pendingChangeDetails: user.subscription.pendingChange,
         lastDowngradeDate: user.subscription.lastDowngradeDate,
       },
