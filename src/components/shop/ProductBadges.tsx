@@ -167,8 +167,20 @@ function Badge({ spec, size }: { spec: BadgeSpec; size: "sm" | "lg" }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md font-extrabold uppercase tracking-[.02em] whitespace-nowrap",
-        size === "sm" ? "h-5 px-[7px] text-[9px]" : "h-[26px] rounded-lg px-[10px] text-[11px]"
+        "inline-flex items-center rounded-md font-extrabold uppercase tracking-[.02em] whitespace-nowrap",
+        /*
+          THE SMALL SIZE IS SMALLER STILL ON A PHONE.
+
+          Two grid columns on a 390px screen leave each card about 185px wide,
+          and a badge reading "10 ENTRIES" was consuming most of that — the two
+          corners met in the middle and the entries chip sat hard against the
+          card's right edge. Shrinking a step below `sm:` gives the label room
+          to be a label again; from `sm:` up nothing changes, because there the
+          card is wide enough that the old size was never the problem.
+        */
+        size === "sm"
+          ? "gap-[3px] h-[17px] px-[5px] text-[8px] sm:gap-1 sm:h-5 sm:px-[7px] sm:text-[9px]"
+          : "gap-1 h-[26px] rounded-lg px-[10px] text-[11px]"
       )}
       style={{
         background: spec.fill,
@@ -176,7 +188,7 @@ function Badge({ spec, size }: { spec: BadgeSpec; size: "sm" | "lg" }) {
         ...(spec.border ? { border: `1px solid ${spec.border}` } : {}),
       }}
     >
-      {Icon ? <Icon className={size === "sm" ? "h-2.5 w-2.5" : "h-3 w-3"} aria-hidden /> : null}
+      {Icon ? <Icon className={size === "sm" ? "h-2 w-2 sm:h-2.5 sm:w-2.5" : "h-3 w-3"} aria-hidden /> : null}
       {spec.label}
     </span>
   );
@@ -202,7 +214,7 @@ export function ProductBadges({
   if (left.length === 0 && right.length === 0) return null;
 
   return (
-    <div className={cn("pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2", className)}>
+    <div className={cn("pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-1.5 p-1.5 sm:gap-2 sm:p-2", className)}>
       {/*
         EACH CORNER IS A COLUMN.
 
@@ -212,12 +224,12 @@ export function ProductBadges({
         two-corner split exists to prevent. Stacking keeps each axis in its own
         vertical run no matter how long a label is.
       */}
-      <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-col items-start gap-[3px] sm:gap-1">
         {left.map((b) => (
           <Badge key={b.kind + b.label} spec={b} size={size} />
         ))}
       </div>
-      <div className="flex flex-col items-end gap-1">
+      <div className="flex flex-col items-end gap-[3px] sm:gap-1">
         {right.map((b) => (
           <Badge key={b.kind + b.label} spec={b} size={size} />
         ))}

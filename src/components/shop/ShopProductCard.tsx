@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, Check, SlidersHorizontal, ChevronRight } from "lucide-react";
+import { Loader2, ChevronRight } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useCart } from "@/contexts/CartContext";
 import { useUserContext } from "@/contexts/UserContext";
@@ -272,43 +272,25 @@ export default function ShopProductCard({
       </div>
 
       {/*
-        MOBILE FAB, half-overlapping the image's bottom edge.
+        THE MOBILE FAB IS GONE, DELIBERATELY.
 
-        The wrapper is a ZERO-HEIGHT anchor sitting exactly on the image/body
-        boundary, so `-top-[17px]` (half of 34px) centres the button on that line
-        without knowing the image's height or the body's. Pinning it with a pixel
-        offset from the card's bottom instead breaks the moment a product name
-        wraps to a second line.
+        A red circle half-overlapping each card's image, carrying a sliders icon
+        whenever the product had colours or sizes. Both live garments have
+        variants, so every apparel card on a phone wore what reads as a FILTER
+        control — sitting a thumb's width under the real Filters button, on a
+        page whose whole top band is about filtering. It looked like a per-card
+        filter, and that is how it was read.
 
-        It is a sibling of the Link, not a child — a button inside an anchor is
-        invalid markup and the tap would navigate instead of adding.
+        The icon was also promising something it could not do: on a product with
+        variants the tap could never add to the cart, because a colour and a size
+        have to be chosen first. It went to the product page — which is exactly
+        where tapping the card already goes.
+
+        So the card is now one target that does one thing. Choosing happens on
+        the product page, which has the swatches, the size grid and the sticky
+        buy bar. The full-width add button is unchanged from `sm:` up, where
+        there is room for a control that reads as a button rather than a glyph.
       */}
-      {variant === "grid" && (
-      <div className="relative z-10 h-0 sm:hidden">
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={busy || soldOut}
-          aria-label={ctaLabel}
-          className={cn(
-            "absolute -top-[17px] right-2.5 grid h-[34px] w-[34px] place-items-center rounded-full",
-            "text-white shadow-lg transition-transform duration-150 active:scale-95",
-            "focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1",
-            soldOut ? "cursor-not-allowed bg-neutral-400 dark:bg-neutral-600" : "bg-red-600 disabled:opacity-60"
-          )}
-        >
-          {busy ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : hasVariants ? (
-            <SlidersHorizontal className="h-4 w-4" />
-          ) : inCartQty > 0 ? (
-            <Check className="h-4 w-4" />
-          ) : (
-            <Plus className="h-4 w-4" />
-          )}
-        </button>
-      </div>
-      )}
 
       <div className="flex flex-1 flex-col gap-1.5 p-3 sm:p-3.5">
         <div className="flex items-center justify-between gap-2">

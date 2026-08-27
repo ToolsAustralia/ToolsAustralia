@@ -1030,3 +1030,38 @@ control at the bottom of the screen — "Proceed to Checkout" lands exactly wher
 sits, so the bar showed through beneath the drawer and competed for the same tap.
 Suppressed rather than pushed under by z-index: it stays readable behind a translucent
 overlay, and a visible control that cannot be pressed is worse than one that is not there.
+
+## Shop grid, mobile pass (2026-08-27)
+
+**The per-card FAB is gone.** A red circle half-overlapped each card's image
+carrying a sliders icon whenever the product had variants. Both live garments do,
+so every apparel card on a phone wore what reads as a *filter* control — a thumb's
+width below the real Filters button, on a page whose entire top band is about
+filtering. It was also promising something it could not deliver: on a variant
+product the tap could never add to cart (a colour and size must be chosen first),
+so it routed to the product page — exactly where tapping the card already went.
+The card is now one target that does one thing. The full-width add button from
+`sm:` up is unchanged.
+
+**The sticky band pins at `top-[60px]`, not `var(--app-header-h)`.** That variable
+is a flat **86px** while the mobile header actually renders **60px** (verified:
+`<header>` is `fixed top-0` with a 60px box). Pinning at 86 parked the band 26px
+below the header's bottom edge, and that strip is transparent — so product cards
+scrolled up *through* the gap between the navbar and the bar. Measured flush at
+0px after the fix. Corrected locally rather than by changing the variable, since
+`--app-header-h` is also the top padding on many pages and moving it shifts every
+mobile page by 26px at once — a worthwhile change, but a deliberate one.
+
+**One sort control, not two.** The sticky band carried a full-width sort dropdown
+while the results row below already paired the count with one, so a phone had two
+"Featured" pickers a few hundred pixels apart — and the sticky one spent an entire
+row saying one word, pushing products further down the fold on the breakpoint with
+the least room. The band's copy is removed; sorting lives beside the number it
+reorders.
+
+**Badges step down below `sm:`.** Two columns on a 390px screen leave each card
+~185px wide, and a chip reading "10 ENTRIES" consumed most of it — the two corners
+met in the middle and the entries chip sat hard against the card's right edge.
+`size="sm"` is now `h-[17px]/text-[8px]` on mobile and the previous
+`h-5/text-[9px]` from `sm:` up, with tighter inset and stack gaps. Nothing changes
+at the widths where the old size was never the problem.
