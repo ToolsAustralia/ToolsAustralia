@@ -438,6 +438,8 @@
     "test:api-auth-permissions": "tsx src/lib/__tests__/api-auth-permissions.test.ts",
     "migrate:seed-staff-roles": "tsx scripts/migrate-seed-staff-roles.ts",
     "migrate:seed-staff-roles:dry": "tsx scripts/migrate-seed-staff-roles.ts --dry-run",
+    "migrate:seed-staff-roles:prod:dry": "tsx scripts/migrate-seed-staff-roles.ts --production --dry-run",
+    "migrate:seed-staff-roles:prod": "tsx scripts/migrate-seed-staff-roles.ts --production",
     "test:staff-activity": "tsx src/lib/__tests__/staff-activity.test.ts",
     "test:session-invalidation": "tsx src/lib/__tests__/session-invalidation.test.ts",
     "test:membership-display-status": "tsx src/utils/subscription/__tests__/membership-display-status.test.ts",
