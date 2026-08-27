@@ -5,6 +5,11 @@
 | Method | Path | Purpose |
 |---|---|---|
 | _NextAuth_ | `/api/auth/[...nextauth]/` | NextAuth handler (signin, callback, signout, session) |
+| `POST` | `/api/auth/send-mobile-login-code` | SMS sign-in code — resolves the account **by mobile**, texts that number |
+| `POST` | `/api/auth/verify-mobile-login` | Verifies the SMS code → bridge token for `signIn("auto-login")` |
+| `POST` | `/api/auth/send-mobile-verification` | Session-authed — texts a code to the mobile **on file**. Empty body |
+| `POST` | `/api/auth/verify-mobile` | Session-authed — confirms the code, sets `isMobileVerified`. Issues **no** session |
+| `POST` | `/api/auth/session-from-payment` | Bridge token derived from a Stripe **client secret** alone (3DS/SCA redirect landing) |
 | _TODO_ | `/api/auth/**` | Domain-specific auth helpers (signup, password reset, etc.) |
 | `POST` | `/api/user/change-password` | Change **or** first-time set the session user's password |
 | _TODO_ | `/api/user/**` | Other current-user reads/writes |
@@ -13,6 +18,123 @@
 | _TODO_ | `/api/users/**` | Multi-user reads (admin-only typically) |
 
 > _TODO: read each handler under [src/app/api/auth/](../../src/app/api/auth/), [src/app/api/user/](../../src/app/api/user/), [src/app/api/users/](../../src/app/api/users/) and document._
+
+**Deleted 2026-08-25** — `POST /api/auth/send-otp`, `POST /api/auth/verify-otp`,
+`POST /api/auth/passwordless-login` (plus `PasswordlessLoginModal` / `OTPVerificationModal`).
+The legacy Twilio SMS-OTP surface was dead in production and carried the F-001 takeover shape;
+the replacement resolves the account by mobile. See [gotchas.md](./gotchas.md) and the design at
+[2026-08-25-mobile-verification-and-sms-login-design.md](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+The emailed sign-in code (`send-login-code` / `verify-login-code`) is unaffected.
+
+### SMS sign-in — `send-mobile-login-code` + `verify-mobile-login` (2026-08-27)
+
+The replacement for the deleted surface, and the recovery path for a member whose email is wrong
+or unverified: `/reset-password`, the emailed sign-in code, and the verify-email bridge **all**
+require an inbox they cannot read, so before this they had no self-service route back in.
+Surfaced on [`/login`](../../src/app/login/page-client.tsx) as *"Can't access your email? Sign in
+with your mobile"* — framed as recovery, not a co-equal button, because every code costs a credit.
+
+**`POST /api/auth/send-mobile-login-code`** — body is `{ mobile }` and **nothing else**. Adding an
+email or userId would recreate the {resolve by A, deliver to B} shape that made the old route a
+takeover; there is deliberately no way to name an account and choose a delivery number.
+
+Order of operations, and why:
+
+| Step | Why it is where it is |
+|---|---|
+| `requireSameOrigin` | Standard CSRF guard. Missing `Origin` is allowed by design — see the helper's own note. |
+| Normalise → 400 if not AU | A format error is the caller's own mistake, so saying so reveals nothing. |
+| **Rate limit, keyed on the number** | Before the DB lookup, so someone walking `04xxxxxxxx` is throttled without ever reaching Mongo. |
+| Find user, check `isActive` + [`hasEverPaid`](../../src/utils/auth/has-ever-paid.ts) | 44,445 never-paid accounts hold a mobile; ungated this would hand them all a working login at ~$0.03 a send, all landing on `/membership` anyway. |
+| Send, else `release()` the allowance | A gateway failure must not burn one of the member's 3 daily codes, and the stored code is cleared so it cannot eat their verify attempts either. |
+
+**Uniform response — a deliberate divergence from `send-login-code`.** That route 404s on an
+unknown email. This one returns the *same* body for found / not-found / never-paid / deactivated,
+because **mobile numbers are enumerable in a way email addresses are not** — an attacker can walk
+the number space, and a distinguishable reply would make this a customer-list oracle. The copy
+names the join fallback so a genuine non-customer is not left waiting for a code that will never
+arrive.
+
+**`POST /api/auth/verify-mobile-login`** — `{ mobile, code }`, per-IP limiter (10 / 5 min, matching
+`verify-login-code`), constant-time compare against the keyed hash, 5 attempts, 10-minute expiry.
+The `isActive` check runs **after** the code validates, so account status is revealed only to
+whoever holds the number. On success it mints the same `signJWT` bridge token the emailed path
+uses — this route does not create a session itself.
+
+**It also sets `isMobileVerified`.** For SMS, logging in *is* verifying: the code went to the
+number already on the account, so returning it proves control of that number — the same proof a
+separate verification step would collect. That is why ~46k members with an unverified mobile need
+no backfill campaign; they verify by using it.
+
+### Mobile verification — `send-mobile-verification` + `verify-mobile` (2026-08-27)
+
+The SMS siblings of `send-email-verification` / `verify-email`, and the second way to satisfy the
+"at least one verified contact channel" requirement (see [rules.md](./rules.md) R8). Phases 0–3 of
+[2026-08-25-mobile-verification-and-sms-login-design.md](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+Consumed by setup step 3 and by the account-settings contact card — see
+[frontend.md](./frontend.md).
+
+**`POST /api/auth/send-mobile-verification`** — [route](../../src/app/api/auth/send-mobile-verification/route.ts).
+**The body is empty by design**: the destination is `user.mobile` read off the session's user
+document, never a value from the request. That is the same structural immunity the SMS sign-in
+route gets from resolving the account by mobile — there is no second identifier that could
+disagree with the delivery number, so the "resolve by A, deliver to B" takeover shape (F-001,
+[gotchas.md](./gotchas.md)) cannot exist here either.
+
+Security model — how it differs from the logged-out SMS routes:
+
+| Concern | How it is handled |
+|---|---|
+| CSRF | `requireSameOrigin`, as on every other OTP route. |
+| Identity | `requireAuthenticatedUserDoc()` ([`src/lib/api-auth.ts`](../../src/lib/api-auth.ts)) — session only. |
+| Enumeration | **No surface.** The caller cannot name an account, so there is nothing to probe and the uniform-response rule that `send-mobile-login-code` needs does not apply. |
+| Spend gate | **No [`hasEverPaid`](../../src/utils/auth/has-ever-paid.ts) check** — deliberately. That gate exists to stop 44k never-paid accounts minting free logins; here the caller is already a signed-in member and only their own number is reachable. |
+| Rate limit | `claimOtpSendAllowance("user:<id>")` — keyed on the **user id**, not the number, because the account is the thing worth budgeting once a session exists. |
+| Gateway failure | `release()`s the allowance **and** clears `smsOtpHash` / `smsOtpExpires`, so a failed send costs neither one of the member's 3 daily codes nor a verify attempt. |
+
+Already-verified ⇒ `400`. No normalisable AU mobile on file ⇒ `400 { code: "NO_VALID_MOBILE" }`,
+worded so settings can send the member to correct the number rather than dead-ending them.
+
+**`POST /api/auth/verify-mobile`** — [route](../../src/app/api/auth/verify-mobile/route.ts). Body is
+`{ code }`. Same expiry / attempt-cap / constant-time-compare policy as every other OTP path
+(`OTP_MAX_VERIFY_ATTEMPTS`, `isOtpExpired`, `verifyOtpCode` — see [backend.md](./backend.md)). On
+success it clears the code state, sets `isMobileVerified`, and syncs the Klaviyo profile property.
+
+**It issues NO session — that is the whole difference from `verify-mobile-login`.** The caller
+already has one. `verify-mobile-login` proves identity to a logged-out visitor and therefore mints
+a bridge token; this route only records a fact about an already-authenticated account. Keep them
+separate: giving this one a token would turn a verification endpoint into a second sign-in path.
+
+### `POST /api/auth/session-from-payment` — a session from proof of payment (2026-08-27)
+
+[Route](../../src/app/api/auth/session-from-payment/route.ts). Body is
+`{ paymentIntentClientSecret }` and **nothing else** — the caller asserts no identity at all. The
+user is derived from the PaymentIntent's `customer`. Returns a `signAutoLoginToken(user)` bridge
+token (the same `signJWT` wrapper `auto-login` uses); the client exchanges it via
+`signIn("auto-login", { token })`.
+
+**Why it exists:** a 3DS/SCA buyer leaves the page for Stripe's redirect and comes back having lost
+all in-page React state — including the `guestUserData` bridge — so no success landing could sign
+them in. They finished paying and stayed logged out. See [gotchas.md](./gotchas.md).
+
+**Security model — strictly stronger than [`/api/auth/auto-login`](../../src/app/api/auth/auto-login/route.ts):**
+
+| Property | `auto-login` | `session-from-payment` |
+|---|---|---|
+| Identity input | `{ userId, email }` from the **client**, cross-checked against the PI's customer | none — derived **from** the PI's customer |
+| Credential | `paymentIntentId` (an id, not a secret) | `client_secret`, compared against the value Stripe holds — Stripe returns it only to the payer, and it is unguessable |
+| Payment actually succeeded | **never asserted** (verified — the status is not read at all) | `status === "succeeded"`; `processing` / `requires_action` ⇒ `409` |
+| Rate limit | per-IP 10 / 5 min (`auth-auto-login`) | per-IP 30 / 5 min (`auth-session-from-payment`) — looser on purpose, the retry loop below needs the headroom |
+
+`202 { pending: true }` is returned when no `User` carries that `stripeCustomerId` yet. That is the
+**webhook race**, not a failure: a one-time buyer who never registered has no account until the
+Stripe webhook creates one, and they *have* paid — so the client retries rather than being refused.
+Deactivated account ⇒ `403`.
+
+**Scope note:** the three in-modal `MembershipModal` call sites still use `auto-login`. Migrating
+them is a mechanical follow-up, deliberately **not** bundled, so a fault in the new route cannot
+break the purchase path that already works. Once this has run in production, delete `auto-login`
+and point all four at this route.
 
 ### `GET /api/users/[id]` + `GET /api/users/[id]/my-account` — explicit wire projections (2026-07-19)
 

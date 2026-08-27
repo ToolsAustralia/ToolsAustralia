@@ -10,6 +10,27 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 
 > `.env.example` — `NEXT_PUBLIC_CONTENTSQUARE_ID` (added 2026-07-22) is the **inverse** of the streak flag above: production-only, blank everywhere else. It replaces a tag id previously hardcoded into `src/app/layout.tsx`'s Contentsquare `<Script>` (no env gate — loaded for every visitor in every environment); blank now renders nothing (mirrors `GoogleTagManager`'s `!gtmId` no-op). See [docs/tracking/rules.md R8](../tracking/rules.md).
 
+> `.env.example` — `SMS_ENABLED` / `MOBILE_MESSAGE_API_USERNAME` / `MOBILE_MESSAGE_API_PASSWORD` /
+> `MOBILE_MESSAGE_SENDER` (added 2026-08-26) configure the **Mobile Message** Australian SMS gateway
+> used for mobile-verification and SMS-login codes. `SMS_ENABLED` is **opt-IN** (mirrors
+> `EMAIL_ENABLED`): left `false`, `src/lib/sms.ts` short-circuits, so merging cannot text anyone or
+> spend credits. Basic auth — credentials live in the Mobile Message dashboard under Settings → API.
+> **Before `SMS_ENABLED` is ever set `true`, `migrate:normalise-mobiles` must have run** — see
+> "Mobile normalisation migration" below.
+>
+> `MOBILE_MESSAGE_SENDER` is the free dedicated virtual number (Settings → Sender IDs); sending from
+> a **number** rather than a branded alphanumeric ID deliberately bypasses the ACMA SMS Sender ID
+> Register (live 2026-07-01), so codes never carry the "Unverified" handset label. Design +
+> provider rationale: [the verification spec](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md) §7.
+> _The `twilio` package `sms.ts` used to wrap was **removed** from `package.json` in the same
+> change — see "`twilio` dependency removed" below._
+>
+> _`SMS_OTP_RATE_LIMIT_IN_DEV` (read by [`src/utils/auth/mobile-otp.ts`](../../src/utils/auth/mobile-otp.ts))
+> is **local-dev only**, and declared blank on purpose. OTP send rate limiting (3/day, 60s
+> cooldown) is OFF in development so the flow can be exercised repeatedly; setting this to `"true"`
+> forces it back on, which is the only way to test the limiter itself. Production ALWAYS enforces —
+> there is deliberately no env var that can disable it there._
+
 > `.env.example` — `STRIPE_RATE_LIMIT_GLOBAL_PER_SECOND` and `STRIPE_RATE_LIMIT_ENDPOINT_PER_SECOND`
 > (added 2026-08-24) tune the client-side token bucket in front of the Stripe singleton
 > (`src/lib/stripe-rate-limiter.ts`). Both are declared **BLANK on purpose** and should be left
@@ -114,3 +135,40 @@ When adding an API route that does real database work, check its effective `maxD
 |---|---|
 | `npm run verify:user-metrics` | **Read-only.** Times each query `UserMetricsService` runs, for the ranges the admin UI actually requests, with collection-size denominators and the live `PaymentEvent` index list. `-- --service` drives the real service through Mongoose (so the measurement includes `connectDB` + model init, which a raw-driver timing misses), asserts `purchaseHistory` parity between the new `$group` path and the legacy document loop, and validates the live output against the Norm `responseSchema` (a mismatch there is a runtime 500 `tsc` cannot catch). |
 | `npm run migrate:payment-event-eventtype-index[:prod][:dry]` | Creates `{ eventType: 1, timestamp: -1 }` on `paymentevents`. Idempotent, `background: true`, dry-run by default. |
+
+## `twilio` dependency removed (2026-08-26)
+
+`twilio@^5.9.0` is gone from `package.json` `dependencies` — nothing imports it any more.
+[`src/lib/sms.ts`](../../src/lib/sms.ts) was rewritten from a Twilio client into a send-only
+**Mobile Message** adapter over `resilientFetch`, and its only other callers — the five dead OTP
+surfaces (`/api/auth/passwordless-login`, `/api/auth/send-otp`, `/api/auth/verify-otp`,
+`PasswordlessLoginModal`, `OTPVerificationModal`) — were deleted.
+
+It was never configured: `TWILIO_*` appears nowhere in `.env.example` — the registry — and
+never has (`git log -S TWILIO -- .env.example` is empty), so the client had no credentials to
+send with. **That absence was load-bearing** — an unconfigured client is why the deleted
+`passwordless-login` route, which sent a login code to a number taken from the **request body**,
+never became a live account-takeover path. Deleting the routes closes the hole; dropping the
+package removes the means to reintroduce it silently. See
+[docs/auth/gotchas.md](../auth/gotchas.md) and
+[the verification spec](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+Three `tsx` scripts landed with it, none in CI: `test:sms` and `test:mobile-otp` (pure units —
+see [testing.md](./testing.md)) and `smoke:sms-send`, which sends a **real** SMS and spends
+gateway credits (see [dev-tooling/testing.md](../dev-tooling/testing.md)).
+
+## Mobile normalisation migration (2026-08-27)
+
+[`scripts/migrate-normalise-mobiles.ts`](../../scripts/migrate-normalise-mobiles.ts) — phase 0 of
+[the verification spec](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+`package.json` gained four entries: `migrate:normalise-mobiles[:dry]` (local) and
+`migrate:normalise-mobiles:prod[:dry]` (production). It normalises `User.mobile` to `+61…` and
+frees duplicate numbers by **unsetting** `mobile` on the lower-value account of each pair — it does
+**not** delete accounts and does **not** merge entries. Ranking: active sub > active pack > more
+entries > has paid > older account; groups involving a privileged account are left for a human.
+3-tier exit codes (0 clean / 1 human decisions outstanding / 2 fatal).
+
+**Production dry run (2026-08-27): 4,964 to normalise, 109 duplicates to clear, 0 needing a human,
+0 invalid.** It **must run before SMS login is enabled**, and the unique + sparse index on `mobile`
+comes **after** it. Full detail, flags and the CSV-path gotcha:
+[architecture.md](./architecture.md#mobile-normalisation-migration-migratenormalise-mobiles-added-2026-08-27).

@@ -76,6 +76,80 @@ Auth components use `cn()` from `@/utils/cn` for conditional class composition. 
 
 The "Sign in" h1 and "Please login to continue to your account." sub-copy render inline (baseline-aligned, `flex-wrap`) below `lg` and stack vertically on desktop, so the form header doesn't dominate small viewports.
 
+### SMS sign-in (2026-08-27)
+
+Below the divider, **Google and SMS share one row** (`grid grid-cols-2`) with identical styling —
+`[G] Sign in` and `[📱] SMS sign in`. Presented as equals on purpose: SMS is a first-class way in,
+not a buried fallback. It is also the *only* recovery route for a member with a typo'd email —
+"Forgot password?" mails a link to the address on file, which is exactly the address they cannot
+read.
+
+**Cost note for anyone changing this:** every SMS code costs a credit, so the button's prominence
+drives spend directly. The ceiling is held by the server, not the UI — `hasEverPaid` refuses
+non-customers before the gateway is called, and 3/day + 60s throttles the rest. Keep both gates if
+this row is ever made more prominent still.
+
+Clicking it **replaces** the password form rather than expanding beside it — a member who needs
+this path cannot use the others, so leaving them on screen is noise. Two steps, driven by
+`smsStep: "off" | "mobile" | "code"`:
+
+1. **mobile** — `tel` input → `POST /api/auth/send-mobile-login-code`.
+2. **code** — 6-digit input (`inputMode="numeric"`, `autoComplete="one-time-code"` so iOS/Android
+   offer the code from the notification) → `POST /api/auth/verify-mobile-login` → the returned
+   bridge token goes through `signIn("auto-login", { token })`, the same exchange the emailed-code
+   path uses. The existing session `useEffect` handles the redirect.
+
+A `smsCooldown` countdown (seeded to 60s after a send, or to `retryAfterSeconds` from a 429)
+disables both "Send me a code" and "Resend code" and renders the remaining seconds, so the
+server's 60-second rule is visible rather than a silent rejection.
+
+**Copy is deliberately sparse.** The panel renders only the back link, the input and the button —
+no heading, no explainer. The page header already says "Sign in", the placeholder carries the
+field's meaning, and a first draft with its own `<h2>` + subtitle stacked *three* headings on one
+small screen. The one line that survives is on the code step — "Code sent to 0412 345 678" —
+because a member must be able to spot a typo before spending another of their three daily codes.
+The non-customer fallback needs no copy either: "Need an account? Create one" already sits at the
+bottom of the page.
+
+The server's reply is **uniform** — it never says whether a number has an account (see
+[api.md](./api.md)) — so the UI always advances to the code step rather than branching on whether
+a code was actually sent. It does **not** render `data.message`; that message exists for API
+consumers, and showing it here duplicated the "Code sent to…" line. Do not "improve" this by
+inferring account existence from the response; there is nothing there to infer, by design.
+
+## SMS in `LoginModal` — and the mobile-collision dead end it fixes (2026-08-27)
+
+`/login` is not the only sign-in surface. [`LoginModal`](../../src/components/modals/LoginModal/index.tsx)
+is the popup, and in production it is reachable from exactly one place:
+`MembershipModal` → [`ExistingAccountModal`](../../src/components/modals/ExistingAccountModal/index.tsx)
+→ `LoginModal`, fired when `register` replies `isExistingAccount`. That path is *literally the
+locked-out member* — someone who could not sign in, so tried to register again.
+
+**The bug this closes.** `ExistingAccountModal` accepts `conflictField: "mobile"` and titles itself
+"Mobile already exists", but its Login button was `disabled={!email}` and it rendered `LoginModal`
+only under `{email && …}`. On a **mobile** collision `register` deliberately withholds the matched
+account's email (enumeration guard — see [gotchas.md](./gotchas.md)), so `MembershipModal` falls
+back to `formData.email`: the address the caller just typed, which by definition is not the
+account's. Every sign-in from that modal therefore failed by construction — a member holding the
+right phone number was shown a door that could not open.
+
+Now: `conflictField === "mobile"` + a `mobile` prop ⇒ the button reads **"Sign in with your mobile"**
+and opens `LoginModal` with `initialFlow="sms"`. The mobile is the one identifier that *does*
+resolve the right account, and it is the one thing the caller definitely has — they just typed it.
+
+**Channel switch, not a second flow.** `LoginModal` gained `codeChannel: "email" | "sms"` rather
+than a parallel SMS panel, so both channels share the existing digit-box entry, paste button and
+keyboard navigation; only the endpoints and the copy differ. The password form now offers **"Email
+me a code"** and — when a `mobile` is known — **"Text me a code"**. The "Signing in as" header shows
+the **mobile** in the SMS flow, because the email on screen may not be the account's. Resend
+respects the same 60s countdown as `/login`.
+
+`MembershipModal` passes `mobile={formData.phone}` — that form calls the field `phone`, but it is
+the value posted as `mobile` to `register`.
+
+`LoginPromptModal` is unrelated: it is a "please sign in" interstitial used by the mini-draw
+surfaces and offers no credentials of its own.
+
 `RotatingToolsetCard` is defined inline in `src/app/login/page-client.tsx` because it has a single consumer. It reuses shared brand assets (`POWERSET_IMAGES`, `POWERSET_BRAND_TEXT` from `src/components/sections/promo/prize-selection/constants.ts`) and brand color helpers (`getToolsetBadgeStyle`, `getPackageColorScheme`, `getLandingPageThemeFromSlug`, `hexToRgbaString` from `src/utils/package-colors/packageColorScheme.ts`), so Ryobi's lime-on-dark-green pill treatment is identical across the site. **Those two maps are now DERIVED from the `TOOLSETS` registry** (2026-07-21) — this page is their only remaining consumer besides the registry itself, since the prize picker reads `TOOLSETS` directly. Do not hand-write entries into them. Auto-rotation respects `prefers-reduced-motion`.
 
 ## Sign-out storage clear — streak celebration marker (2026-07-07)
@@ -127,3 +201,53 @@ registration **fields** need nothing — Contentsquare masks `<input>` content b
 always-on redaction replaces any email address found in the DOM or a URL. It is the *confirmation
 copy* that leaks. Any new auth surface that prints an email, phone or name back to the user needs
 the attribute.
+
+## A fourth sign-in surface: the 3DS redirect landing (2026-08-27)
+
+`/login`, `LoginModal` and the emailed-code bridge are no longer the only ways a session starts.
+[`use3DSRedirectHandler`](../../src/hooks/use3DSRedirectHandler.ts) — mounted on all four
+payment-return landings (`/checkout/success`, `/purchase-success`, `/mini-draw-success`,
+`/upsell-success`) through
+[`PaymentSuccessHandler`](../../src/components/payment/PaymentSuccessHandler.tsx) — now signs the
+buyer in when the redirect reports `succeeded`, by POSTing the URL's
+`payment_intent_client_secret` to `/api/auth/session-from-payment` and exchanging the returned
+token via `signIn("auto-login", { token })`.
+
+**It renders nothing, and that is the point.** The payment has already succeeded, so a sign-in
+failure must never appear as a payment error: `establishSessionFromPayment` swallows every outcome,
+has no loading state and no error surface. The worst case is the pre-fix behaviour — a success page
+seen logged out. It retries only the `202 pending` webhook race, on `[0, 1.5s, 3s, 5s]`.
+
+Consequences for anyone touching these pages:
+
+- **The session can appear mid-render**, a second or two after mount, without any user action.
+  Anything on a payment-return landing that branches on `useSession()` must tolerate
+  `unauthenticated → authenticated` without a navigation.
+- **Do not add a spinner or a toast for it.** Making it visible turns a silent recovery into a
+  second thing that can look broken on the most sensitive page in the funnel.
+
+Why it exists — and why the older `auto-login` route could not be reused — is in
+[gotchas.md](./gotchas.md); the route's security model is in [api.md](./api.md).
+
+## Verified-contact surfaces — setup step 3 and account settings (2026-08-27)
+
+Both of these are owned by other domains; listed here because they are the only places a member can
+satisfy the auth-level requirement in [rules.md](./rules.md) R8, and because they call the two
+session-authed routes in [api.md](./api.md).
+
+- **Profile setup step 3** — `Step3EmailVerification.tsx` is renamed
+  [`Step3VerifyContact.tsx`](../../src/components/modals/UserSetupModal/Step3VerifyContact.tsx) and
+  is now a **channel picker**: Email (the default — free to send) or Mobile, with the mobile tab
+  rendered only when a number is on file. Either verified channel satisfies the step, and once one
+  does it collapses to a single confirmation. Component detail: [shared-ui/](../shared-ui/).
+- **Account settings → Profile** —
+  [`ProfileTab.tsx`](../../src/app/(site)/my-account/components/settings/ProfileTab.tsx) replaces
+  the single "Email verification" banner with a two-row contact card (email **and** mobile), each
+  row carrying its own Verified/Unverified chip and its own Verify button; both buttons open setup
+  step 3. The outer banner is amber only when **neither** is verified — matching the requirement,
+  which is "at least one", not "both". Surface detail: [dashboard-account/](../dashboard-account/).
+
+`UserData` in [`src/hooks/queries/useUserQueries.ts`](../../src/hooks/queries/useUserQueries.ts)
+gained `isMobileVerified?: boolean`. The field was **already on the wire** via
+`MY_ACCOUNT_USER_FIELDS`, just undeclared — so no client gate could read it. Optional because the
+account payload is the only source; treat absent as unverified.

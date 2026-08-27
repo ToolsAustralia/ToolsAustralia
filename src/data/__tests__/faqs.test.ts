@@ -163,7 +163,7 @@ function main() {
   // called our own page an "external link" it could not read, because the page was in neither
   // [key-pages] nor the knowledge pack. id 12 was CORRECTED (not added) in the same change, so
   // it does not move the count.
-  assert.strictEqual(entries.length, 89, `Expected 89 FAQ entries, got ${entries.length}`);
+  assert.strictEqual(entries.length, 90, `Expected 90 FAQ entries, got ${entries.length}`);
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).
