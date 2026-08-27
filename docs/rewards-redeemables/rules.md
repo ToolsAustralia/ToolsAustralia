@@ -219,7 +219,7 @@ the browser charges regardless of how it ends — observed live: the server answ
 the browser had already aborted, the card was charged, and the webhook saw no `campaignCode`. Raising
 the cap does not close that; a dropped connection or a closed tab reproduces it at any cap.
 
-So the server records its own copy. `attachCampaignCodeToCheckout` calls
+So the server records its own copy. `attachTypedCodeToCheckout` calls
 `CampaignCodeValidationService.recordCheckoutIntent` — writing `checkoutIntentAt` /
 `checkoutIntentTargetId` onto the customer's own issuance — **before** the Stripe round trip, because
 the Stripe round trip is the slow half the browser abandons during. `checkAndRedeemCampaign` then
@@ -242,4 +242,4 @@ A recovery fires a `console.error` naming the issuance and the Stripe object —
 attach was lost, and a rising rate means the attach path needs attention even though the grant landed.
 
 Regression coverage: `npm run test:checkout-intent-recovery` (the service pair) and
-`npm run test:campaign-code-checkout` §7 (the ordering — intent before Stripe).
+`npm run test:attach-typed-code` §7 (the ordering — intent before Stripe).

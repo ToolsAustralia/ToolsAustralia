@@ -456,7 +456,7 @@ async function handlePaymentSuccess(
     // ⚠️ DO NOT replace this with the event payload. Same reason as the invoice
     // handler below: the one-time pack's `campaignCode` is stamped onto this
     // PaymentIntent at the PURCHASE click, before confirm
-    // (`src/utils/payment/campaign-code-checkout.ts`). Reading the frozen event
+    // (`src/utils/payment/attach-typed-code.ts`). Reading the frozen event
     // instead would drop it silently. See docs/billing-stripe/gotchas.md.
     let freshPaymentIntent: Stripe.PaymentIntent;
     try {
@@ -3645,7 +3645,7 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
     // ⚠️ DO NOT "optimize" this into reading the event payload (or
     // `parent.subscription_details.metadata`). The FRESHNESS is load-bearing:
     // `campaignCode` is written onto the subscription at the PURCHASE click, just
-    // before confirm (`src/utils/payment/campaign-code-checkout.ts`), because the
+    // before confirm (`src/utils/payment/attach-typed-code.ts`), because the
     // coupon box only exists on the step whose mount already pre-warmed the
     // subscription. A stale read here silently returns the "customer applied a
     // code, paid, and got nothing" defect fixed on 2026-08-27, with no error

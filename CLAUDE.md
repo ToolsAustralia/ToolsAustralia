@@ -413,7 +413,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-08-26"
+      "lastVerified": "2026-08-27"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -525,7 +525,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-draw10-landing-assets.ts",
         "src/docs/PROMOTION_ANALYTICS.md"
       ],
-      "lastVerified": "2026-08-26"
+      "lastVerified": "2026-08-27"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -598,7 +598,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/upsellImageManifest.ts",
         "scripts/build-upsell-image-manifest.ts"
       ],
-      "lastVerified": "2026-08-04"
+      "lastVerified": "2026-08-27"
     },
     "cart-shop-products": {
       "docs": "docs/cart-shop-products/",

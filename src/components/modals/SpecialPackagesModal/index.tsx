@@ -40,6 +40,12 @@ import { useModalPriorityStore } from "@/stores/useModalPriorityStore";
 import { UpsellOffer, UpsellUserContext, OriginalPurchaseContext } from "@/types/upsell";
 import { getPackageBaseEntries } from "@/utils/payment/package-base-entries";
 import { formatPaymentError } from "@/utils/payment/stripe/payment-error-messages";
+import {
+  evaluatePurchaseRequirementGate,
+  resolveTypedCodeAtCheckout,
+  typedCodeRefusalCopy,
+  type PurchaseRequirementStop,
+} from "@/utils/payment/typed-code-at-checkout";
 import { resolveUpsellPromoMultiplierForDisplay } from "@/utils/payment/upsell-promo-multiplier";
 import { markPurchaseCompleted } from "@/utils/tracking/purchase-tracking";
 import { clearDashboardEntryHold } from "@/utils/dashboard-entry-hold";
@@ -109,11 +115,34 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponType, setCouponType] = useState<"referral" | "promo" | "campaign" | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
-  const [, setCampaignPurchaseRequirement] = useState<"none" | "membership" | "one-time" | "any" | null>(null);
+  /**
+   * The requirement of the code the APPLY handler last accepted. It has to be
+   * readable now: the purchase-requirement gate moved out of the resolve branch
+   * so it also judges a code that arrived via Apply, and a write-only value
+   * cannot be judged.
+   */
+  const [campaignPurchaseRequirement, setCampaignPurchaseRequirement] = useState<
+    "none" | "membership" | "one-time" | "any" | null
+  >(null);
   const [upsellTriggered, setUpsellTriggered] = useState(false);
   const lastAutoAppliedCodeRef = useRef<string | null>(null);
   /** Ref updates synchronously so a second tap cannot start a second charge before isProcessing re-renders. */
   const specialPackagePurchaseLockRef = useRef(false);
+  /**
+   * The exact normalized code the server DEFINITIVELY refused at the Buy Now
+   * click. One shot: the next tap carrying the same string skips the resolve and
+   * charges with no code. Cleared on any keystroke, so a corrected typo is
+   * re-checked rather than silently dropped.
+   */
+  const refusedCodeRef = useRef<string | null>(null);
+  /**
+   * The purchase-requirement stop, remembered as (code + purchase kind) — the
+   * same split `MembershipModal` makes, so the shared gate is called the same way
+   * from both surfaces. This modal only ever sells one-time packs, so the kind is
+   * always false here and the split changes nothing about its behaviour; it
+   * exists so the two callers cannot drift apart again.
+   */
+  const requirementStopRef = useRef<PurchaseRequirementStop | null>(null);
 
   // Payment processing state
   const [showPaymentProcessing, setShowPaymentProcessing] = useState(false);
@@ -234,6 +263,11 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       setUpsellTriggered(false);
       lastAutoAppliedCodeRef.current = null;
       specialPackagePurchaseLockRef.current = false;
+      // A refusal belongs to one press in one session. It was cleared only by a
+      // keystroke, so the `initialCouponCode` re-prefill below would otherwise
+      // re-arrive "already refused" and be dropped from the charge in silence.
+      refusedCodeRef.current = null;
+    requirementStopRef.current = null;
       setSetupIntentSecret(null);
       setLoadingSetupIntent(false);
 
@@ -260,6 +294,10 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
       setCouponCode(normalizedCode);
     }
 
+    // An explicit Apply is a fresh intent on this code — it supersedes any
+    // earlier purchase-time refusal so the next tap re-checks it.
+    refusedCodeRef.current = null;
+    requirementStopRef.current = null;
     setCouponError(null);
     try {
       const response = await fetch("/api/codes/validate", {
@@ -429,6 +467,148 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
     specialPackagePurchaseLockRef.current = true;
     setIsProcessing(true);
 
+    // ── THE TYPED CODE, SETTLED ───────────────────────────────────────────────
+    // Same rule as MembershipModal: tapping Buy Now means the same thing as
+    // pressing Apply first. Resolved after the lock (a second tap cannot start a
+    // second charge across the round trip) and before showLoading (a stop for a
+    // bad code must not flash a "Processing Purchase" overlay at someone who is
+    // not being charged). This handler builds its whole request body inline, so
+    // ALL THREE code types are covered here — there is no create/reuse split.
+    const releaseSpecialPackagePurchase = () => {
+      specialPackagePurchaseLockRef.current = false;
+      setIsProcessing(false);
+    };
+
+    const normalizedTypedCode = couponCode.trim().toUpperCase();
+    let settledCoupon: {
+      referralCode?: string;
+      promoLinkCode?: string;
+      campaignCode?: string;
+      appliedLabel: { label: "Campaign" | "Referral" | "Promo"; code: string } | null;
+    } = {
+      referralCode: couponApplied && couponType === "referral" ? normalizedTypedCode : undefined,
+      promoLinkCode:
+        couponApplied && couponType === "promo" ? normalizedTypedCode : promoLinkCode || undefined,
+      campaignCode: couponApplied && couponType === "campaign" ? normalizedTypedCode : undefined,
+      appliedLabel:
+        couponApplied && couponType && normalizedTypedCode
+          ? {
+              label:
+                couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo",
+              code: normalizedTypedCode,
+            }
+          : null,
+    };
+
+    let settledCampaignRequirement: "none" | "membership" | "one-time" | "any" | null =
+      couponApplied && couponType === "campaign" ? campaignPurchaseRequirement : null;
+
+    if (!couponApplied && normalizedTypedCode && refusedCodeRef.current !== normalizedTypedCode) {
+      const resolution = await resolveTypedCodeAtCheckout({
+        code: normalizedTypedCode,
+        inviteeUserId: userData?._id,
+        inviteeEmail: userData?.email,
+      });
+
+      if (resolution.status === "refused") {
+        refusedCodeRef.current = normalizedTypedCode;
+        setCouponError(typedCodeRefusalCopy(resolution, "Buy Now"));
+        setCouponApplied(false);
+        setCouponType(null);
+        releaseSpecialPackagePurchase();
+        return;
+      }
+
+      if (resolution.status === "resolved") {
+        setCouponApplied(true);
+        setCouponType(resolution.type);
+        setCouponError(null);
+        if (resolution.type === "referral") {
+          setReferralCode(resolution.code);
+          clearPromoCode();
+        } else if (resolution.type === "promo") {
+          setPromoCode(resolution.code);
+          clearReferralCode();
+        } else {
+          setCampaignPurchaseRequirement(resolution.purchaseRequirement ?? null);
+          clearReferralCode();
+          clearPromoCode();
+        }
+        settledCampaignRequirement =
+          resolution.type === "campaign" ? resolution.purchaseRequirement ?? null : null;
+        settledCoupon = {
+          referralCode: resolution.type === "referral" ? resolution.code : undefined,
+          promoLinkCode: resolution.type === "promo" ? resolution.code : promoLinkCode || undefined,
+          campaignCode: resolution.type === "campaign" ? resolution.code : undefined,
+          appliedLabel: {
+            label:
+              resolution.type === "campaign"
+                ? "Campaign"
+                : resolution.type === "referral"
+                  ? "Referral"
+                  : "Promo",
+            code: resolution.code,
+          },
+        };
+      } else if (resolution.status === "inconclusive") {
+        // Could not obtain an answer — never a reason to cost the sale. The raw
+        // string rides as `campaignCode` only, because that is the one leg the
+        // purchase route re-validates server-side, fail-closed.
+        console.error("[typed-code] resolve outcome unknown — charging with the raw code", {
+          reason: resolution.reason,
+          code: resolution.code,
+          email: userData?.email,
+        });
+        settledCampaignRequirement = null;
+        settledCoupon = {
+          referralCode: undefined,
+          promoLinkCode: promoLinkCode || undefined,
+          campaignCode: normalizedTypedCode,
+          appliedLabel: null,
+        };
+      }
+    }
+
+    // This modal sells ONE-TIME packs only, so a membership-only campaign code is
+    // refused here exactly as the Apply handler refuses it. The gate sits OUTSIDE
+    // the resolve branch so it also catches a code that reached this submit via
+    // Apply, and so `allow_without_code` can drop the code on the second tap.
+    //
+    // Shared with MembershipModal so the decision AND the sentence stay identical:
+    // this surface already recorded the refusal and let the second tap buy, but
+    // never said so, while the other surface said nothing and blocked forever.
+    // One helper, one contract, one message.
+    const requirementGate = evaluatePurchaseRequirementGate({
+      campaignCode: settledCoupon.campaignCode,
+      purchaseRequirement: settledCampaignRequirement,
+      isSubscriptionPurchase: false,
+      ctaLabel: "Buy Now",
+      previousStop: requirementStopRef.current,
+    });
+
+    if (requirementGate.outcome === "stop") {
+      requirementStopRef.current = requirementGate.stop;
+      setCouponError(requirementGate.message);
+      setCouponApplied(false);
+      setCouponType(null);
+      setCampaignPurchaseRequirement(null);
+      releaseSpecialPackagePurchase();
+      return;
+    }
+
+    if (requirementGate.outcome === "allow_without_code") {
+      // The second tap. Buy, but drop the code — `RedemptionService` would refuse
+      // it as `ineligible` after the charge anyway, so sending it would be a
+      // promise the purchase cannot keep. The row must stop saying APPLIED with
+      // it, or the customer reads a green tick beside a code this charge is not
+      // carrying.
+      setCouponApplied(false);
+      setCouponType(null);
+      setCampaignPurchaseRequirement(null);
+      settledCoupon = { ...settledCoupon, campaignCode: undefined, appliedLabel: null };
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     showLoading("Processing Purchase", "", [
       "Authorizing payment method",
       "Confirming transaction with Stripe",
@@ -443,12 +623,12 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         userId: userData?._id || "",
         paymentMethodId: paymentMethodIdToCharge,
         idempotencyKey: crypto.randomUUID(),
-        referralCode: couponApplied && couponType === "referral" ? couponCode.trim().toUpperCase() : undefined,
-        promoLinkCode:
-          couponApplied && couponType === "promo"
-            ? couponCode.trim().toUpperCase()
-            : promoLinkCode || undefined,
-        campaignCode: couponApplied && couponType === "campaign" ? couponCode.trim().toUpperCase() : undefined,
+        // The SETTLED local, not the state: the setters above cannot update what
+        // this invocation already read, and this is the only place the code
+        // reaches the server.
+        referralCode: settledCoupon.referralCode,
+        promoLinkCode: settledCoupon.promoLinkCode,
+        campaignCode: settledCoupon.campaignCode,
       });
 
       if (!result.success) {
@@ -471,10 +651,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
         const fallbackBenefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[] = [
           { text: `${pkg.totalEntries || 0} free entries added to your wallet`, icon: "gift" },
         ];
-        if (couponApplied && couponCode) {
-          const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
+        if (settledCoupon.appliedLabel) {
           fallbackBenefits.push({
-            text: `${label} code ${couponCode.trim().toUpperCase()} applied`,
+            text: `${settledCoupon.appliedLabel.label} code ${settledCoupon.appliedLabel.code} applied`,
             icon: "tag",
             highlight: true,
           });
@@ -917,6 +1096,9 @@ const SpecialPackagesModal: React.FC<SpecialPackagesModalProps> = ({
               setCouponApplied(false);
               setCouponType(null);
               setCouponError(null);
+              // Re-arm purchase-time validation so a corrected typo is re-checked.
+              refusedCodeRef.current = null;
+    requirementStopRef.current = null;
             }}
             onCouponApply={() => handleCouponApply()}
           />

@@ -408,11 +408,11 @@ exactly one record is created per checkout and it always carries a real customer
 - **Membership.** The PURCHASE handler takes the `subscriptionCreatedRef` reuse branch and sends no `campaignCode` at all. The subscription that gets charged carries none, the webhook's `metadata.campaignCode` read finds nothing, `checkAndRedeemCampaign` early-returns on an absent code. **Deterministic.**
 - **One-time pack (guest).** `create-one-time-purchase` *does* resolve the code — but patches the PaymentIntent metadata **after** the browser already confirmed it. That races `handlePaymentSuccess`'s fresh `paymentIntents.retrieve`, which usually wins. **A race, which is worse than a deterministic bug: it looks green in some test runs.** Under `redirect: "if_required"`, a confirm that navigates away means the patch never runs at all.
 
-**Fix:** one awaited call to `attachCampaignCodeToCheckout` (via `POST /api/stripe/attach-campaign-code`) in `handleSubmit`, placed **above every** `confirmStripeIntent()` branch, immediately after `lastChargedStaticPackageIdRef.current = packageId`. See [backend.md](./backend.md#campaign-code-checkoutts--the-authoritative-campaign-code-write).
+**Fix:** one awaited call to `attachTypedCodeToCheckout` (via `POST /api/stripe/attach-typed-code`) in `handleSubmit`, placed **above every** `confirmStripeIntent()` branch, immediately after `lastChargedStaticPackageIdRef.current = packageId`. See [backend.md](./backend.md#attach-typed-codets--the-authoritative-typed-code-write).
 
 **The three ways to reintroduce it:**
 
-1. **Move the attach below a confirm, or into one branch.** Putting it inside the subscription branch turns `npm run e2e:bonus-code`'s membership leg green while the pack leg stays broken — and the pack leg, being a race, will *sometimes pass anyway*. Mechanical check: `grep -n "attachCampaignCode({" src/components/modals/MembershipModal/index.tsx` must return exactly one line, and its number must be lower than every line from `grep -n "confirmStripeIntent()"` in the same file.
+1. **Move the attach below a confirm, or into one branch.** Putting it inside the subscription branch turns `npm run e2e:bonus-code`'s membership leg green while the pack leg stays broken — and the pack leg, being a race, will *sometimes pass anyway*. Mechanical check: `grep -n "attachTypedCode({" src/components/modals/MembershipModal/index.tsx` must return exactly one line, and its number must be lower than every line from `grep -n "confirmStripeIntent()"` in the same file.
 2. **Make the webhook read the frozen event payload** instead of its fresh `invoices.retrieve` / `paymentIntents.retrieve`. That freshness is now load-bearing — see [billing-stripe/gotchas.md](../billing-stripe/gotchas.md).
 3. **Narrow the state guard back to `incomplete` only.** On the anchor days (AEST 25/26/27) these subscriptions are created `trialing`, so an `incomplete`-only guard makes the whole fix a silent no-op on three days of every month.
 
@@ -420,7 +420,7 @@ exactly one record is created per checkout and it always carries a real customer
 
 **Two holes found by review AFTER the first fix landed, both now closed — and both worth knowing about, because each one silently un-fixes the thing above.**
 
-**1. The guest pack PaymentIntent had no identity, and there were two of them.** `handleRegistration` in `MembershipModal` creates the one-time PaymentIntent itself and used to pass **no `userEmail`** — every other call site passes one. Without it, `create-payment-intent` takes its "true guest" branch and stamps the literal placeholders `userId: "guest"`, `userEmail: "guest"`. `resolveOwnerUserId` skips both (they are in `NON_IDENTITY_USER_IDS` / the explicit `"guest"` email exclusion), `resolveCodeForCheckout` refuses with *"no resolved account for this purchase"*, and the attach writes `campaignCode: ""` — it **clears** the customer's code. Worse, that call did not set `isCreatingPaymentIntentRef`, the only mutex the step-2 pre-warm honours, so a **second** PaymentIntent (this one carrying the email) was created a tick later and whichever resolved last was the one charged. A real object: `pi_3U8uJYQxMEki11tJ0clg0b2W`, Apprentice Pack, `userId: "guest"`, `userEmail: "guest"`. **This was EXTRA100's entire audience.** Fixed by passing `userEmail: result.data.email` and holding the mutex across the whole round trip. Pinned by section 5b of `npm run test:campaign-code-checkout`.
+**1. The guest pack PaymentIntent had no identity, and there were two of them.** `handleRegistration` in `MembershipModal` creates the one-time PaymentIntent itself and used to pass **no `userEmail`** — every other call site passes one. Without it, `create-payment-intent` takes its "true guest" branch and stamps the literal placeholders `userId: "guest"`, `userEmail: "guest"`. `resolveOwnerUserId` skips both (they are in `NON_IDENTITY_USER_IDS` / the explicit `"guest"` email exclusion), `resolveCodeForCheckout` refuses with *"no resolved account for this purchase"*, and the attach writes `campaignCode: ""` — it **clears** the customer's code. Worse, that call did not set `isCreatingPaymentIntentRef`, the only mutex the step-2 pre-warm honours, so a **second** PaymentIntent (this one carrying the email) was created a tick later and whichever resolved last was the one charged. A real object: `pi_3U8uJYQxMEki11tJ0clg0b2W`, Apprentice Pack, `userId: "guest"`, `userEmail: "guest"`. **This was EXTRA100's entire audience.** Fixed by passing `userEmail: result.data.email` and holding the mutex across the whole round trip. Pinned by section 5b of `npm run test:attach-typed-code`.
 
 **2. The client cap fired on requests the server had completed.** The helper aborted at 8s; the server was observed answering `200 in 8089ms` **having written the code**, while the browser logged the "charged without it" line. Three costs: the one production alarm for this defect cried wolf; the e2e console watchdog failed unrelated specs; and if an abort lands *before* the Stripe update the code really is lost. The cap is now 15s and the helper returns `outcome: "attached" | "refused" | "unknown"` so a definite refusal and a give-up are logged as different things. **Never collapse those two back into one log line** — that is exactly the "we cannot tell" state that hid the original bug.
 
@@ -444,20 +444,20 @@ adding a fifth.
 
 | Surface | Code input | Creates its Stripe object | Verdict |
 |---|---|---|---|
-| `MembershipModal` (`CouponRow`, rendered inside `PaymentStep`) | yes | **on step-2 mount — before the code box is reachable** | the bug; fixed by `attachCampaignCode` |
-| `SpecialPackagesModal` (`PackagesGrid`) | yes | inside the purchase handler, **after** the code is collected (`create-one-time-purchase-existing-user` always mints a fresh PaymentIntent with the code already in metadata, `confirm: true`) | structurally safe |
+| `MembershipModal` (`CouponRow`, rendered inside `PaymentStep`) | yes — **and a typed-but-not-applied code is resolved at the Purchase click** (`resolveTypedCodeAtCheckout`) | **on step-2 mount — before the code box is reachable** | the bug; fixed by `attachTypedCode` |
+| `SpecialPackagesModal` (`PackagesGrid`) | yes — same purchase-click resolve, applied to all three code types | inside the purchase handler, **after** the code is collected (`create-one-time-purchase-existing-user` always mints a fresh PaymentIntent with the code already in metadata, `confirm: true`) | structurally safe |
 | `RedeemablesWallet` | yes | **never — no Stripe object at all**; the code goes straight to the redeem API, which grants entries server-side | not a payment path, cannot have this bug |
 | `my-account/rewards` | hosts the wallet, no input of its own | — | n/a |
 
 **`SpecialPackagesModal` is safe for a reason, not by luck, and the reason is fragile.** It is a
 saved-card one-click purchase, so it never mounts the Payment Element that `MembershipModal`
 pre-warms for. **Give it a Payment Element — for new cards, say — and it inherits this bug the same
-day**, because `attachCampaignCode` is wired only into `MembershipModal` via `useStripeSubscription`.
+day**, because `attachTypedCode` is wired only into `MembershipModal` via `useStripeSubscription`.
 
 **So, before you add either half of the pair, check the other:**
 
 - **Adding a code box to a surface?** Find where that surface creates its Stripe object. If it is
-  created before the box can be reached, wire `attachCampaignCode` in above every confirm branch.
+  created before the box can be reached, wire `attachTypedCode` in above every confirm branch.
 - **Adding a pre-warm / Payment Element to a surface that already takes a code?** Same wire, same
   place. The pre-warm is what breaks it, not the code box.
 - **Adding a new payment route?** It must accept `campaignCode`, and it must resolve it through
@@ -475,7 +475,7 @@ and there is no second number to hide behind.
 **Symptom.** A customer applies a discount code, sees APPLIED, clicks PURCHASE, is charged — and the
 webhook grants no bonus entries. In the acceptance run that caught it the attach answered
 `200 in 14903ms` against the client's 15000ms cap: the server had done the work, the browser had
-already aborted, `attachCampaignCode` reported `"unknown"`, `confirmPayment` charged anyway, and the
+already aborted, `attachTypedCode` reported `"unknown"`, `confirmPayment` charged anyway, and the
 `invoice.payment_succeeded` handler logged `Original metadata` with no `campaignCode`. The margin
 between the cap and the observed server latency under load was about 100ms.
 
@@ -485,7 +485,7 @@ cap makes a genuinely hung request stall a customer who is watching a spinner. T
 sale" contract is correct and stays.
 
 **What actually fixes it.** The server knows whether the customer asked for the code; the browser
-does not. `attachCampaignCodeToCheckout` now writes `checkoutIntentAt` / `checkoutIntentTargetId`
+does not. `attachTypedCodeToCheckout` now writes `checkoutIntentAt` / `checkoutIntentTargetId`
 onto the customer's own `RedeemableIssuance` **before** the Stripe round trip — the slow half the
 browser abandons during — and `checkAndRedeemCampaign` reads it back when the paid object carries no
 `campaignCode`. The grant is recovered after the fact from a record that survives the client hanging
@@ -503,3 +503,208 @@ attach path is slow and wants attention. See
 **What is NOT covered.** The intent is only recorded for a customer the server can resolve to a real
 account from the checkout object's own metadata. A code applied by someone with no account row could
 never redeem anyway (`resolveCodeForCheckout` refuses it first), so there is nothing to recover.
+## `account-manager` no longer initialises `upsellStats` (2026-08-27)
+
+`createUserAccount` in `src/utils/payment/account-manager.ts` seeded a five-counter
+`upsellStats` object on guest-checkout account creation. The field is deleted from the User
+model — see `docs/upsell/gotchas.md`. `upsellPurchases` / `upsellHistory` are untouched.
+
+---
+
+## The Apply button was a gate, and an un-pressed gate is a silent money loss
+
+_Added 2026-08-27, after the owner hit it on the first real run of the flow: **"it seems like i need
+to click the apply"**._
+
+The checkout code box has an **Apply** button beside it. Until this change that button was the only
+thing that made a typed code real — `appliedCouponPayload` gates all three code fields on
+`couponApplied`, which only `handleCouponApply` sets. So:
+
+> **A customer who typed `BACKIN200` and pressed PURCHASE without pressing Apply was charged, got
+> nothing, and was told nothing.** The code was still sitting in the box, which made it look like it
+> had worked.
+
+That is not a cosmetic loss. Entries are money-equivalent and a campaign grant is
+**one-per-customer-for-life, attached to a purchase**, so the purchase the grant was meant to ride
+on is burned, and (per `CUSTOMER.md`) a customer who loses the email cannot look their code up
+anywhere.
+
+**The rule now:** pressing Purchase means the same thing as pressing Apply first. `handleSubmit` /
+`handlePurchase` resolve an un-applied typed code through
+`src/utils/payment/typed-code-at-checkout.ts` and charge on the answer. The Apply button stays — it
+is an accelerator (instant confirmation), no longer a gate.
+
+### The three outcomes, and why they differ
+
+| Server said | We do |
+|---|---|
+| `200` + `success:true` + `valid:true` | Carry the classified code, charge, no prompt |
+| `200` + `success:true` + `valid:false` | **Stop the sale once.** Show why in the code row, name the second press as the way through. Nothing is charged |
+| `429` / `4xx` / `5xx` / abort / network / `success:false` / unknown `type` | **Charge anyway.** Pass the raw typed string as `campaignCode` only |
+
+**Do not collapse rows 2 and 3.** `/api/codes/validate` returns `{ success: false, valid: false }`
+for **both** a 429 (its own rate limiter) and a 500 (its own outage). A `!body.valid` read would
+turn our rate limiter and our downtime into **refused sales** — strictly worse than the bug being
+fixed, and invisible to `tsc`. The only shape that means "we know this code is bad" is:
+
+```
+response.ok && body.success === true && body.valid === false
+```
+
+Both directions are pinned by `npm run test:typed-code-checkout`.
+
+**Why a definite refusal is allowed to stop the sale at all**, when `attachTypedCode` famously
+never does: that contract is about **failing to obtain an answer** — its own comment says
+*"Blocking a membership sale because a bonus lookup **timed out** is the worse trade."* It was never
+a promise to ignore a definite answer that the code is wrong. Nothing is charged at the stop, the
+customer is asked once, and the second press buys regardless. A `refusedCodeRef` holds the exact
+refused string so the second press skips the resolve; any keystroke clears it, so a corrected typo
+is re-checked rather than silently dropped.
+
+**Why the raw string is safe to send when we could not check.** Campaign is the only leg every door
+re-validates server-side, fail-closed, against a **server-resolved** user id
+(`resolveCodeForCheckout`, called from all four create routes and the attach seam). Referral and
+promo have no such gate, so an unclassified string is never sent as either.
+
+### The trap when changing this
+
+`handleSubmit` is an async closure that captured `appliedCouponPayload` **at render time**. Calling
+`setCouponApplied(true)` mid-invocation does **not** update that memo, so every read inside the
+submit must come from the settled local (`settledCoupon`), never the memo. Building the local and
+forgetting to thread it produces a fix that **tests green and changes nothing**, because the path
+that looks right (Apply, then Purchase) is the path that was never broken. There is no DOM runner
+here; the e2e leg *"minted code TYPED BUT NEVER APPLIED"* in
+`e2e/specs/membership/bonus-code-journey.spec.ts` is the only executable proof of that half.
+
+### A stop with no way out — the purchase-requirement gate
+
+**Every stop on this surface must be escapable by pressing the button again.** A code that is
+dropped costs a perk; a sale that cannot complete costs the sale, and that is the worse failure.
+
+Moving the resolve to the Purchase click brought *live* codes to the campaign purchase-requirement
+gate for the first time. In its first shipped form that gate toasted and returned without recording
+anything, so the next press re-read the same state, took the same branch and stopped again —
+**forever**, with no second press that worked and no sentence telling the customer to clear the box.
+The only escape was guessing. Before the resolve existed, that same customer's code was dropped and
+the sale simply completed.
+
+The fix is `evaluatePurchaseRequirementGate` in `typed-code-at-checkout.ts`, shared by both modals.
+It takes `previousStop` and returns `allow_without_code` for a pairing it already stopped on,
+**before** it looks at the requirement — so no re-arming of state anywhere can resurrect the wall.
+The callers also clear `couponApplied` / `couponType` / `campaignPurchaseRequirement` (so
+`appliedCouponPayload` cannot re-supply the code from state and the row stops saying APPLIED beside
+a code the charge is not carrying), but the escape does not *depend* on those setters landing.
+
+#### The stop is keyed on (code + purchase kind), NOT on the code alone
+
+The gate's own sentence is *"This code is for membership packs only."* The sensible customer does
+exactly what that implies — **they switch to a membership tier**, where the code is perfectly valid.
+While the stop was remembered in `refusedCodeRef` (by code alone), nothing reset it on a package
+change: the next press skipped the resolve, `couponApplied` was false, and the customer was charged
+for the membership with their **one-per-lifetime grant silently dropped** and the code still sitting
+in the box looking applied. The stop's own copy was what routed them into the loss, which makes it
+worse than an inherited bug.
+
+So the two memories are now **separate, because they are different kinds of fact**:
+
+| Memory | Holds | Survives a package switch? |
+|---|---|---|
+| `refusedCodeRef` | a **definite refusal** — "we don't recognise this", "already redeemed" | **yes.** A fact about the code alone; re-asking would repeat a question already answered |
+| `requirementStopRef` | a **requirement stop**, as `{ code, isSubscriptionPurchase }` | **no.** A fact about a *pairing*; the switch is a new question |
+
+Only `refusedCodeRef` suppresses the resolve on the next press. A requirement stop deliberately lets
+the resolve re-run, which costs one 8s-capped round trip behind the button's existing `Processing…`
+state and is what makes the switch work. The second press **on the same package kind** returns
+`allow_without_code`: it buys, and it **drops the code**, because `RedemptionService` enforces
+`purchaseRequirement` via `hasQualifyingPurchase` and would refuse it as `ineligible` after the
+charge anyway — stamping it would be a promise the sale cannot keep.
+
+Do **not** "simplify" this back to one ref, and do **not** reset it on `activePlan?.id` instead:
+that resets definite refusals too, so every package click re-asks a question the customer already
+answered.
+
+`MembershipModal` shows both stops through `showToast` **when the code row cannot render them**:
+`CouponRow` returns `null` on an upsell offer and swaps its input+error slot out under a valid
+promo-link panel, so a message written only to `referralError` is a dead button press.
+`showCodeStop(message)` sets `referralError` (it is what `onCouponCodeChange` clears) **and** toasts
+when `couponErrorIsVisible` is false. On an upsell the resolve is skipped entirely instead — an
+upsell purchase carries no code fields at all, so resolving there could only ever produce a stop
+nobody can see or correct. `SpecialPackagesModal` uses its always-rendered `couponError` row. Both
+sentences come from the shared helper and both end with what pressing the button again will do.
+Pinned by `npm run test:typed-code-checkout` §6/§6b — the assertions that matter are *"press 2 with
+the same inputs buys"* and *"the same code, after switching to a membership, is honoured"*.
+
+### Never claim a code applied unless it reached the server
+
+`referralCode` and `promoLinkCode` ride in a **subscription create body and nowhere else**. On a
+membership checkout where step-2's mount already pre-warmed the subscription and the customer is not
+paying with a saved method, that create call is skipped (`canReuseSubscription`, and the guest
+`subscriptionCreatedRef` branch) — so those two codes never leave the browser. That gap is older
+than this change and is **not** closed here.
+
+**That gap is now closed** — see *All three code types ride the attach seam* below. What remains is
+the rule that outlived it: the success screen's `appendCodeBenefits` prints
+`"Referral code MATE-CODE applied"` off `settledCoupon.appliedLabel`, and that label may only exist
+for a code that **actually reached the server**. It is therefore settled **last**, by
+`settleAppliedLabel()`, from two facts and nothing else:
+
+```
+reachedServer = attachedCodeSlot === typedCodeType   // the server said which slot it wrote
+             || codeRidesInCreateBody               // the create call in THIS submit carries all three
+```
+
+An attach outcome of `unknown` (we stopped listening; the server may well have written it)
+deliberately does **not** license the claim. A missing claim costs a line of reassurance; a false one
+is a statement about a money-equivalent perk at the moment of purchase.
+
+### All three code types ride the attach seam
+
+`referralCode` and `promoLinkCode` used to ride in a **subscription create body and nowhere else**,
+so on the two doors where the pre-warm means that create call is skipped they never left the browser
+— *pressing Apply did not rescue them either*. The webhook, however, already reads all three off
+Stripe metadata (`stripe-webhook-handlers/index.ts`: `promoLinkCode` from subscription + PaymentIntent
++ invoice, `referralCode` from subscription + invoice + PaymentIntent, `campaignCode` from
+subscription + PaymentIntent). So the fix is to widen the **existing, reviewed, metadata-only** attach
+seam rather than build a new one:
+
+- The browser sends `code` — the **raw typed string**, with no claim about its kind.
+- `attach-typed-code.ts` classifies it server-side in the same order `/api/codes/validate` uses
+  (referral → promo → campaign), each leg validated against an identity resolved from the Stripe
+  object's **own server-written metadata** (`userId` / `userEmail`), never from the request body.
+- It writes the matching key and returns `{ code, slot }`.
+
+That is what keeps the widening safe: **the client gains no new trust, because it never says which
+kind of code it typed.** The promo leg is in fact *stricter* than the create routes, which stamp
+`promoLinkCode` from the request body with no check at all.
+
+⚠️ **`metadata.typedCodeSlot` is why clearing is still safe.** Three keys are now in play and the
+write is desired-state, so without a marker recording which key this seam owns, stamping a campaign
+code would wipe the `?promo=` **attribution** `promoLinkCode` that a *different* writer put there at
+create time. The seam only ever clears the slot the marker names. An object stamped **before** the
+marker existed carries `campaignCode` and no marker, so an absent marker falls back to `"campaign"` —
+that fallback is what keeps *"apply A → decline → remove A → retry"* working, and `promoLinkCode` gets
+no equivalent fallback on purpose. Pinned by `npm run test:attach-typed-code` §8.
+
+**Still not delivered, and deliberately not claimed:** a pre-warmed object that exists but yields no
+possession proof (a sessionStorage blob restored without `subscriptionRequestId`). The code is lost
+there, it is logged as such, and `settleAppliedLabel` withholds the claim rather than printing one.
+
+### `refusedCodeRef` must not outlive the code in the box
+
+Both modals' `refusedCodeRef` was cleared *only* from the coupon input's `onChange`. But the box is
+also filled programmatically — MembershipModal's prefill listener, the stored-referral autofill and
+`handleCouponApply`; SpecialPackagesModal's `initialCouponCode` open effect and its apply handler —
+and neither modal's open reset cleared it. So: refuse `EXTRA100` (not held yet), close the modal,
+claim the reward, reopen — the same code is re-prefilled *without a keystroke*, the resolve is
+skipped as "already refused", and the customer is charged with nothing attached and nothing said.
+A refusal is a fact about **one press in one session**, not about the code: clear the ref in each
+modal's open reset, in every programmatic `setCouponCode`, and at the top of `handleCouponApply`
+(an explicit Apply is a fresh intent that supersedes an earlier purchase-time refusal).
+
+**Where the resolve sits, and why exactly there:** after the re-entry lock
+(`checkoutSubmitLockRef` / `specialPackagePurchaseLockRef`) is taken — awaiting a network call with
+the button still enabled is a double-charge window — after the tracking block, so InitiateCheckout
+and Klaviyo `Started Checkout` still fire on the real click, and before `showLoading`, so a stop for
+a bad code does not flash "Processing Purchase" at someone who is not being charged. **Every early
+return from that region must release the lock by hand**: the `finally` that clears it belongs to the
+try that starts *after* `showLoading`.
