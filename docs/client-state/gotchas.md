@@ -229,3 +229,14 @@ route's response shape, update the hook's interface in the same edit.
 anything" is a second, disagreeing predicate, not a mirror of the server one. Widen the session
 shape if you need it client-side. Full note:
 [architecture.md](./architecture.md#jwt-haseverpaid-is-a-server-side-gate-2026-08-27).
+## Three upsell hooks deleted (2026-08-27)
+
+`useUpsellManager`, `useTrackUpsellEvent` and `useUpsellTracking` are gone from
+`useUpsellQueries.ts` and its barrel export. All three served the upsell tracker, which was
+never mounted — see `docs/upsell/gotchas.md`. `useUpsellTracking` additionally called
+`/api/upsell/tracking/${offerId}`, a route that has never existed.
+
+**`usePurchaseUpsell` and `useUpsellPrefetch` are live and were preserved.** `useUpsellOffers`,
+`useUpsellAnalytics`, `useAcceptUpsellOffer` and `useDismissUpsellOffer` now have zero consumers
+(their only caller was `useUpsellManager`) — left in place as they are separate dead code, not
+part of the tracker.

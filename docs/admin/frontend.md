@@ -68,6 +68,27 @@ you extend this.
 The modal refuses to submit while an image is still a `File` rather than a Cloudinary URL —
 `ImageUpload` uploads on drop, so a pending upload would otherwise be dropped from the payload
 on save.
+## Monthly Redeemables Campaign panel — `validForHours` (2026-08-25; renamed from `validForDays` 2026-08-26)
+
+`MonthlyRedeemablesCampaignPanel` (Admin > Redeemable Coupons, `src/components/admin/MonthlyRedeemablesCampaignPanel.tsx`)
+lists `MonthlyEntryCampaign` rows from `GET /api/admin/monthly-coupon/campaign`, which now also
+returns `validForHours` (per-customer window, in HOURS from the issuing instant) and `issuanceCount` (total
+`RedeemableIssuance` rows for the campaign, any status).
+
+- A shared `renderExpiryLabel()` helper renders at all three expiry display sites (the mobile
+  card, the desktop table's Window column, and the desktop name-column subtext) so an operator
+  can tell a fixed-end campaign from a rolling one at a glance:
+  `{n}-hour window per customer (backstop {formatted endsAt})` when `validForHours` is set
+  (checked via the imported `personalWindowGoverns` predicate from
+  `src/utils/redeemables/bonus-code-policy.ts` — never re-derived inline), else the existing
+  `neverExpires` / `formatDateTime(endsAt)` behavior, byte-identical to before this change.
+- Delete is now always a soft delete (`isActive: false`) server-side — the confirm copy was
+  updated to say so plainly rather than the old "if issuances exist" hedge.
+
+The create/edit form itself is `AdminMonthlyRedeemablesModal` — see
+[shared-ui/frontend.md](../shared-ui/frontend.md#adminmonthlyredeemablesmodal--validforhours-2026-08-25-renamed-from-validfordays-2026-08-26)
+(it lives under `src/components/modals/**`, which the Domain Manifest routes to `shared-ui`, not
+`admin`, despite being admin-only).
 
 ## Repeat Purchases tab (2026-07-09)
 

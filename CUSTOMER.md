@@ -154,6 +154,7 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 | `mobile` | string (opt) | AU mobile; validated + normalized to `+61…` on save ([User.ts:9](src/models/User.ts#L9), hook [1136-1158](src/models/User.ts#L1136)) | **PII** |
 | `acceptsPromotionalEmail` | boolean (opt) | Klaviyo marketing opt-in; **omitted/undefined ⇒ opted in** ([User.ts:180](src/models/User.ts#L180)) | — |
 | `pendingKlaviyoMergeFromEmail` | string (opt, lowercase) | Old email to merge from in Klaviyo after a verified email change; cleared after merge ([User.ts:156](src/models/User.ts#L156)) | **PII** |
+| `klaviyoSyncedAt` | Date (opt) | When **we** last wrote this customer's Klaviyo marketing profile. Set by the reconciliation sweep with `{ timestamps: false }` so it never bumps `updatedAt`. Internal only — never surfaced to the customer. Added 2026-08-26 (§8-0) | — |
 
 ### 2d. Subscription / membership
 
@@ -277,7 +278,6 @@ tier benefit lists while the shop was pre-launch and is now shown.
 | `retentionOffersConsumed` | subdoc (opt) | One-time retention flags: `pause30d?`, `discount50_2mo?` ([User.ts:193](src/models/User.ts#L193)) | — |
 | `upsellPurchases[]` | array (opt) | Each: `offerId, offerTitle, entriesAdded, amountPaid, purchaseDate, triggeringPaymentIntentId?` ([User.ts:867-897](src/models/User.ts#L867)). `triggeringPaymentIntentId` keys the per-trigger "one purchase per appearance" upsell dedup ([upsell/purchase/route.ts:203-214](src/app/api/upsell/purchase/route.ts#L203)). **Caveat:** rows written before 2026-07-10 lack it — the field was missing from the schema block and `strict: true` stripped it on write (fixed 2026-07-10), so the dedup only bites on purchases made after the fix. | — |
 | `upsellHistory[]` | array (opt) | Each: `offerId, action, triggerEvent, timestamp` ([User.ts:207-212](src/models/User.ts#L207)) | — |
-| `upsellStats` | subdoc (opt) | `totalShown, totalAccepted, totalDeclined, totalDismissed, conversionRate, lastInteraction` ([User.ts:215-222](src/models/User.ts#L215)) | — |
 | `redemptionHistory[]` | array (opt, def []) | Points-redemption log: `redemptionId?, redemptionType("discount"\|"entry"\|"shipping"\|"package"), packageId?, packageName?, pointsDeducted, value, description, redeemedAt, status("completed"\|"pending"\|"cancelled")` ([User.ts:259-269](src/models/User.ts#L259)) | — |
 
 ### 2j. Timestamps
@@ -513,6 +513,10 @@ No charge now; takes effect at cycle end. **Fields that change:** `subscription.
 
 No instant cancel — always routes through `CancellationFlowModal`. **Customer-OWNED fields consumed/set:** `retentionOffersConsumed` (tracks one-time saves used: `pause30d`, `discount50_2mo`), `cancellationUpsellRedeemed` (one-time +100-entry offer). For the five save-offer types, the seven cancellation reasons, and `past_due` short-circuit logic see [BUSINESS.md §13c](BUSINESS.md).
 
+A member-initiated cancellation that actually **commits** is what puts the customer into the `cancel-click` win-back sequence (§7d). It no longer creates their bonus code — until 2026-08-26 it did, and because the win-back email lands days later while the code lives only 72 hours, the customer would have been emailed a code that had already died. The code is now created when that email is about to send. A member saved by a retention offer never reaches this point, and an admin-initiated cancellation never enters the sequence either.
+
+**What actually puts them in the sequence (2026-08-26).** At the moment the cancellation commits, we send Klaviyo a `Subscription Cancellation Requested` event naming the customer, the tier they are leaving, when they cancelled, and when their access ends (§8c). That event is the win-back sequence's starting gun. It is sent **only** for a genuine member-initiated cancellation — an admin cancelling on someone's behalf and a past-due tier switch (where the member is staying) both deliberately send nothing, so neither can trigger a "we want you back" email at a customer who never asked to leave. It is fire-and-forget: if the marketing send fails, the cancellation still completes normally and the customer is never blocked. Before this, the only cancellation signal Klaviyo received arrived when the subscription actually expired — up to a month later, and not guaranteed at all — which is far too late to be worth emailing about.
+
 ### 5.7 Reactivate vs Resubscribe
 
 Two distinct paths via `POST /api/stripe/renew-subscription`:
@@ -687,11 +691,97 @@ A customer participates passively — visiting via an affiliate link stamps `Use
 
 **Event-based redeemables ledger (current).** An issuance ledger (not a points balance) — each grant is a discrete `RedeemableIssuance` / `MilestoneIssuance` record. Items auto-issue for active campaigns on wallet read; redeemable when `status === "active"` and not past `expiresAt`. For campaign config, milestone types, and `purchaseRequirement` rules see [docs/rewards-redeemables/](docs/rewards-redeemables/).
 
+**Per-customer bonus codes with a personal deadline (inert until a campaign exists).** A campaign carrying `validForHours` (default 72) gives each customer **their own** expiry window rather than a shared campaign deadline or a monthly cron. **The clock starts when the discount email is about to send** — the marketing flow calls us one step before the email goes out (`POST /api/bonus-codes/v1/issue`, shipped 2026-08-26), we create the code at that instant, and the email lands seconds later with it printed in. That is a change of anchor, not just of unit: the code used to be created days earlier, at the moment the customer qualified, and the nurture emails land 2.5–17 days after that — so most customers would have received a code that had already expired. Three flows call it:
+
+| Flow | What the customer did to enter it | Code |
+|--------|---------------------------|------|
+| `cancel-click` | Committed a member-initiated cancellation (not a retention save, not an admin cancel, not a past-due tier switch) | `BACKIN200` |
+| `one-time-purchase` | Bought a one-time pack while **not** holding an active membership | `EXTRA100` |
+| `checkout-start` | Registered as a guest with a package selected | `LOCKIN100` |
+
+Customer-visible effect: **the discount email itself**, carrying the code string — hardcoded in the marketing template, made real for that person by the call one step above it. Alongside it we record a `Bonus Code Issued` Klaviyo event holding the code, the free entries it includes and **that customer's own deadline** (the stored instant, formatted in Sydney time, never recomputed — so no copy of the deadline can disagree with the one redemption enforces). **That event is our record, not a message to the customer** (corrected 2026-08-26 — this line used to imply the deadline was emailed): a Klaviyo flow email renders against its own trigger metric, so the three discount templates cannot read the deadline off our event and none of them prints it. One **redeemed** grant per person, per code, for life: a grant that has ever been redeemed is never re-issued, and that survives a refund — the refund takes back the entries and the code stays used, so it is refused at redemption and at checkout, and the wallet shows it as **Redeemed** in the "past" list rather than as a claimable coupon. The check that decides whether a code may be applied at checkout also runs **server-side at payment**, on an id the server resolved, so a customer who applies a code they do not hold is refused **before** they pay rather than silently granted nothing afterwards — this matters because a customer applying a code straight after registering is still a guest at that point. A re-trigger *inside* a live window is a **silent no-op on our side** — nothing is written and **no second `Bonus Code Issued` event fires**; the flow's own discount email may still send, because we sit one step above it and answer "carry on". Either way the deadline is not extended and the code is unchanged, so a second email is harmless in this case — it carries a code that still works. (Corrected 2026-08-26 — this used to say flatly "no second email is sent".) A customer who loses that first email **cannot look the code up anywhere** (corrected 2026-08-26 — this used to say they could find it in their rewards wallet at `/my-account`, and they cannot): the only two surfaces that print a code and its deadline are the `/rewards` wallet, which is behind the rewards pause flag, and a floating widget that has been unmounted since the 2026-07 dashboard revamp. What they *can* see, at [My Account → Rewards](/my-account/rewards), is the reward itself with a Claim button — which is enough to use a code that needs no purchase, and not enough to tell them the code string or the date. **And the deadline is worse off than the code: even the email does not name it.** Before the window lapses there is nowhere a customer can learn their exact date and time; after it lapses, the checkout message names it to a signed-in caller. Anything else has to come from support, which is what Cobber id 86 now tells them. An **unredeemed** code whose window has already lapsed is the one case that can come back: if the customer triggers again later, it is re-armed with a fresh deadline and a new email — they never used the first one, so nothing was spent. The event is emitted only in production, so preview deploys cannot email a real customer or burn their grant.
+
+The old limitation — that only the **guest** checkout-start moment could enrol, because the authenticated one is emitted client-side and a component cannot reach the database — disappears under the webhook model: what decides whether a customer gets a code is whether they entered the Klaviyo flow, not where the event that put them there was emitted. Two things a customer could notice: a code they never used and whose deadline has passed can be re-issued with a fresh deadline if they qualify again, but **not within 30 days** of the first one — the flows can be re-entered and re-run, and without that cooldown "one grant per person" would quietly become "one per flow re-entry"; and the deadline is now an exact 72 hours, so a code issued at 2:47pm on a Friday dies at 2:47pm on the Monday rather than at 11:59pm. Across a daylight-saving change the displayed time shifts by an hour (a Friday 2pm issue expires Monday 3pm) — that is correct for "exactly 72 hours", and it will look like a bug to anyone who does not know.
+
+**A daily cap, and a record of every issuing call (added 2026-08-26, live with the webhook endpoint).** A **global daily cap** bounds how many codes can be created in a day (default 500, plus a break-glass switch that stops all minting at once). It **fails closed**: if our database is unreachable, if the cap is misconfigured, or if the webhook secret is not set, we mint **nothing** rather than minting without a limit. What a customer would see if the cap trips is nothing at all on our site — the marketing email still sends with the code printed in it (we cannot stop it from our side), and the code then reads as not available on their account at checkout. That is the trade for a hard cap, and it is why the cap sits well above normal daily volume.
+
+**Which customer the code goes to, and when we would rather give nobody one (2026-08-26).** The marketing flow tells us who the customer is by their account id, their email address, or both. The id wins when we have a usable one; the address is the fallback for a profile that carries no id — which is normal, not an edge case, for someone who only ever joined the newsletter or started a guest checkout. **If the flow sends an account id that no longer matches an account, we stop there rather than trying the address instead.** A marketing profile can go stale or be merged with another one, so an old id sitting next to a live address is exactly the situation where the wrong person would be handed the grant — and because entries are a free inclusion capped at **one grant per person for life**, that would quietly spend a bystander's only grant on something they never did. The customer in that case receives an email whose code does not work; we treat that as the better failure, and we record it so a rising rate is visible. For the same reason, an id and an address that name **two different** accounts are refused outright. What does **not** stop a call is a half-written field: a merge tag that renders partially is treated as missing, not as an error, so a call still succeeds on whichever identity did arrive.
+
+**What we store about the customer for this:** one row per issuing call — accepted, refused **or** errored — holding a request id, the resolved `userId` where we could resolve one, which of the three flows called, the outcome and the HTTP status, and a **hashed** (never raw) IP of the caller. No email address, no code string and no request body are kept. Rows auto-delete after **90 days**. This is the only record that can answer "why did this customer not get their code?", because there is no admin screen for bonus codes; the refused rows are also how we would notice someone probing the endpoint with a leaked secret. **The endpoint itself tells the caller nothing about the customer** — every customer-state answer (code created, already held, already used, no such account, and the case where the flow sends two identities that name two different accounts) comes back identical, so someone holding the secret cannot use it to find out whether an email address belongs to a Tools Australia customer. That last case used to answer with a distinct status and no longer does (2026-08-26); it is still logged and still written to the audit row, so it is exactly as visible to us as it was.
+
 ---
+
+### The retention offer could silently fail (fixed 2026-08-26)
+
+A member part-way through cancelling is offered **100 free entries** to stay. Between December
+2025 and June 2026 that offer could take the member's acceptance, tell them *"100 free entries
+successfully added to your account"*, raise the entry number shown on their account — and never
+put the entries into a giveaway. It happened whenever the offer was accepted during the window
+when one giveaway was closing and the next had not opened.
+
+**373 of the 590 members who accepted the offer were affected** — they stayed subscribed on a
+promise that did not execute.
+
+The offer now puts the entries into the giveaway **first**, and only then records them on the
+member's account. If no giveaway is open at that moment the member sees *"We couldn't add your
+free entries just now — the next giveaway is being set up. Please try again shortly; your offer
+is still available"*, keeps their one-time offer, and nothing is recorded. Their account can no
+longer show entries they do not hold.
+
+This was **fixed forward only**. The 373 members were not retroactively granted entries: the
+giveaways they accepted against have already been drawn and their winners chosen.
 
 ## 8. Marketing & attribution data captured
 
 What marketing/attribution data we capture about a customer, and which of it **leaves to third parties** (Klaviyo, Meta/TikTok/Snapchat). See [docs/tracking/](docs/tracking/).
+
+### Five dormant upsell fields removed from the customer record (2026-08-27)
+
+The customer record carried five counters meant to describe how they respond to upsell offers —
+how many were shown, accepted, declined, dismissed, and a conversion rate. The thing that was
+supposed to fill them was never switched on, so for **every one of the ~56,900 customers all
+five read zero** since launch. They looked like measured behaviour and were not.
+
+They are removed from the customer record and from what we send to the email platform. Nothing
+a customer can see changes: no page displayed them, and their actual upsell **purchases** —
+which 2,290 customers have — are untouched and still recorded.
+
+### 8-0. What Klaviyo holds about a customer, and when it catches up (2026-08-26)
+
+Klaviyo keeps its own copy of each customer. Our database is the truth; that copy's job is to
+keep up. Two things about it changed.
+
+**It now catches up on its own.** Previously a customer's Klaviyo record only refreshed if
+they happened to trigger one of ~24 scattered "please sync" calls — and every one of those was
+fire-and-forget, so it often never landed. A customer could pay, receive their entries, and
+have Klaviyo still believe they had none. Two customers who bought twenty minutes apart on
+2026-08-25 differed only in that one of them clicked one extra button afterwards; that one's
+record was correct, the other's said **zero entries** and **never entered a giveaway**.
+
+A job now runs **every five minutes**, finds every customer whose record changed since it last
+succeeded, and refreshes them — regardless of which part of the site made the change. This
+also closes five gaps that were never wired up at all: cancellations, admin edits, referral
+rewards, milestone rewards, and redeemed rewards.
+
+**The entry and spend figures are now what actually happened.** Four properties were
+*recalculated* from the price list (`entries per month × months subscribed`) rather than read
+from what we granted. That was wrong for **every single active member** — a Tradie who
+received 150 entries under a promotion was reported as 15. They are now read from the payment
+record. `accumulated_entries` is unchanged and still counts entries from **all** sources
+including free ones; the paid-only figures sit alongside it.
+
+Also corrected: a flag claiming the customer had a **pending upgrade** was `true` on every
+profile in the database while nobody actually had one. And five upsell-engagement properties
+that had been empty for every customer since launch are **removed** from their profile — the
+thing meant to fill them was never switched on.
+
+One new field is held on the customer record: **`klaviyoSyncedAt`**, the time we last wrote
+their marketing profile. It is internal, never shown to the customer, and exists so a record
+that has fallen behind is visible to us instead of silent.
+
+Nothing new about a customer leaves to a third party as a result of this — the same properties
+go to Klaviyo, with correct values, more reliably. See
+[docs/tracking/KLAVIYO_INTEGRATION.md](docs/tracking/KLAVIYO_INTEGRATION.md).
 
 ### 8a. UTM / attribution capture & persistence
 
@@ -799,6 +889,11 @@ Before persisting, the webhook runs a **persisted-UTM reconcile** ([reconcilePer
 | Upsell engagement | `total_upsells_purchased`, `upsell_total_shown/accepted/declined`, `upsell_conversion_rate`, `upsell_last_interaction` |
 | Referral / partner | `referral_code`, `referral_successful_conversions`, `referral_total_entries_awarded`, `partner_discount_active/queued_count/total_days/next_activation_date` |
 | Segmentation / current draw | `brand_interest` (removed once any purchase is made); `current_draw_id/name/start_date/subscription_active/one_time_packages/entries` |
+
+**Two event-level data points added 2026-08-26** (events, not profile properties — they describe a moment, and the profile only ever describes *now*):
+
+- **`Subscription Cancellation Requested`** — sent the instant a member-initiated cancellation commits. Carries the customer's account id, the tier they are leaving (id, name, tier and monthly price), the time they cancelled and the time their access ends. No new personal information leaves: the email address and name were already on the profile, and the tier and dates are already synced as profile properties. What is new is the *timing* — a cancel-click signal Klaviyo previously never received.
+- **`had_active_subscription` on `One-Time Package Purchased`** — a single true/false recorded at the instant of the purchase, saying whether the buyer already held an active membership. It is the **same** "is this an active member" test the profile already carries, frozen at the moment of purchase rather than describing the customer today: a nurture email sends days later, by which time they may have joined or cancelled in between. It does **not** read any differently in the awkward cases — a member whose membership is paused, or who is behind on payment, counts as *not* active here exactly as they do on the profile, and a member who has scheduled a cancellation but still has access counts as active. Telling those states apart needs the five-state membership status already on the profile, not this flag. It replaces a server-side check removed on 2026-08-26 and cannot be reconstructed afterwards from anything else we hold.
 
 **Note:** UTM / converting-platform values are **not** synced as Klaviyo properties — only `brand_interest` (from signup slug) is. **List/consent:** marketing subscribe happens **once at registration**, gated by `acceptsPromotionalEmail`; SMS marketing + transactional subscribe if a phone exists; later syncs update data only, never re-subscribe ([klaviyo-profile-sync.ts:34-70,150-177](src/utils/integrations/klaviyo/klaviyo-profile-sync.ts#L34)). Exception: `syncKlaviyoEmailMarketingFromAdminPreference` re-subscribes or unsubscribes email + SMS *marketing* (transactional SMS untouched) when an admin toggles `acceptsPromotionalEmail` ([klaviyo-profile-sync.ts:81-146](src/utils/integrations/klaviyo/klaviyo-profile-sync.ts#L81), called from the admin users PATCH route `src/app/api/admin/users/[id]/route.ts`); the cancellation flow's retention unsubscribe reuses the same helper with `false` ([RetentionUnsubscribeService.ts](src/services/subscription/RetentionUnsubscribeService.ts)).
 

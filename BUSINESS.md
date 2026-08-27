@@ -425,7 +425,122 @@ A single endpoint — [`/api/codes/validate`](src/app/api/codes/validate/route.t
 
 - **Referral codes** — derived from the inviter's user record. See [`src/lib/referral.ts`](src/lib/referral.ts). Successful redemption is tracked by `ReferralEvent` and feeds the affiliate / referral lifecycle.
 - **`PromoLink`** ([src/models/PromoLink.ts](src/models/PromoLink.ts)) — typed-at-checkout or link-shared (`?promo=` / `?bonus=`) entries code. 6–32 chars `A-Z0-9-`. **One-use-per-user** via `usedBy[]`. Optional `expiresAt`. Gated by `appliesToMembership` / `appliesToOneTime`. `eligibilityAudience` ∈ `all | cancelled-members` — the cancelled-members audience is how comeback campaigns are gated to people who've previously churned.
-- **`MonthlyEntryCampaign` codes** — admin-issued bonus-entry codes redeemed via `RedeemableIssuance` (see §8). One-per-user, status flips to `redeemed` on consumption.
+- **`MonthlyEntryCampaign` codes** — admin-issued bonus-entry codes redeemed via `RedeemableIssuance` (see §8). One-per-user, status flips to `redeemed` on consumption. A campaign with `validForHours` set is a **trigger campaign** (see §7d).
+
+### 7d. Trigger campaigns — a per-customer code with a personal deadline (BUILT, NOT YET SWITCHED ON)
+
+A `MonthlyEntryCampaign` with `validForHours` set behaves differently from a normal campaign in two
+ways, and the pair is the whole point. **Field renamed `validForDays` → `validForHours` (2026-08-26)**
+as part of an in-progress move to a Klaviyo-webhook-driven mint (still inert; see the roadmap entry
+below) — the window is now a fixed hour count (default 72) rather than a whole-calendar-day count,
+and it is anchored on the instant the marketing flow's webhook fires, not on the customer's original
+eligibility moment. Those two moments are typically 2.5–17 days apart.
+
+1. **The deadline is per customer, not per campaign.** Each `RedeemableIssuance` expires exactly
+   `validForHours` hours after the instant *that* customer's code was issued, not at the campaign's
+   `endsAt`. The campaign's `endsAt` becomes a **minting backstop** — after
+   it, nobody new qualifies, but a deadline already emailed to a customer is still honoured.
+   **It is a duration, not a wall-clock time (changed 2026-08-26).** Until this change every code died
+   at 11:59pm Sydney time on a calendar day; now a code issued at 2:47pm on a Friday dies at 2:47pm on
+   the Monday. Two consequences worth writing down. (a) There is no "expires today" grace — a customer
+   who reads the date and leaves it until the evening can be inside the right day and still be refused,
+   which is why every customer-facing string prints the **time** alongside the date and never a
+   bare date. (b) **Across a daylight-saving change the displayed hour moves by one**: a Friday 2:00pm
+   AEST issue expires Monday **3:00pm** AEDT. The elapsed time is still exactly 72 hours — that is
+   correct arithmetic on the timeline, and it will look like a bug to the first person who notices it.
+   Do not "fix" it; see [docs/rewards-redeemables/gotchas.md](docs/rewards-redeemables/gotchas.md).
+2. **Enrolment is by FLOW, not by audience — and no longer by the act itself (changed 2026-08-26).**
+   Nobody is mass-minted. Each code belongs to one Klaviyo nurture flow, and the code is minted the
+   moment that flow reaches the step above its discount email and calls
+   `POST /api/bonus-codes/v1/issue`. The act the customer performed is what puts them **into** the
+   flow; it is no longer what mints. Until 2026-08-26 the server minted at the act itself, and since
+   these flows send 2.5–17 days later, two of the three would have emailed an already-expired code
+   ([`src/config/bonusCodes.ts`](src/config/bonusCodes.ts) is the only place these are named):
+
+| Flow | Who enters it | Code |
+|---|---|---|
+| `cancel-click` (win-back) | A member who **committed** a self-service cancellation (not a retention save, not an admin cancel, not a past-due tier switch) — including immediate/past-due cancellations | `BACKIN200` |
+| `one-time-purchase` | Someone who bought a one-time pack while **not** holding an active membership | `EXTRA100` |
+| `checkout-start` | A guest who registered with a package selected | `LOCKIN100` |
+
+   A customer can sit in one of these flows for days without a code existing. Nothing is written for
+   them, and nothing is spent, until the flow fires that webhook.
+
+The entries the code carries are, as everywhere else, a **free inclusion** — the customer buys the
+membership or the pack, never the entries (§1).
+
+**One redeemed grant per person, per code, for life.** Redemption is permanent and survives a
+refund: the refund takes back the entries and the code stays used, so buy → redeem → refund →
+re-trigger cannot farm it — the code is refused at redemption and at checkout, and the wallet shows
+it as Redeemed rather than claimable. The checkout check is re-run **server-side at payment** on an
+id the server resolved, so a code the customer does not hold is dropped before the charge instead of
+silently granting nothing after it. A re-trigger inside a live window is a **silent no-op on our
+side** — nothing is written and no `Bonus Code Issued` event fires (the notifier fires only on a
+fresh mint or a re-arm) — but **the flow's own discount email still sends**, because the webhook sits
+one step *above* it and a `200` is the "carry on" answer. That one is harmless: the code and its
+deadline are unchanged, so the second email carries a code that still works. The stored deadline is
+returned to the caller because the persisted instant is the one the redemption gate compares against
+and the one every rendered copy derives from, and a **re-arm MOVES it** — so a caller recomputing
+`now + validForHours` against a row it did not just write can be a whole 72-hour window out from what
+redemption enforces. It is not a re-send. (Corrected 2026-08-26 — this clause used to say "no email
+is sent", and used to justify returning the stored deadline as stopping "a later re-arm email
+printing a recomputed date". No email prints the deadline at all — see the sentence below — and the
+flow's own email is not ours to hold back.) **A customer who loses that email cannot look the code up anywhere** — corrected 2026-08-26,
+this line previously said to send them to their rewards wallet at `/my-account`, and that is not
+true. The only two components that render a code string and its expiry label are `RedeemablesWallet`
+(mounted only on `/rewards`, which is behind the §8a rewards pause flag) and `RewardsFloatingWidget`
+(unmounted since the 2026-07 dashboard revamp). The live claimables surface at `/my-account/rewards`
+shows the grant and a Claim button but neither the code nor the deadline — enough to redeem a
+`purchaseRequirement: "none"` grant, not enough to answer "what was my code and when does it run
+out?". Support has to read it off the issuance row. Nor does the **email** name the deadline: the
+three discount templates carry the hardcoded code string only, because a Klaviyo flow email renders
+against its own trigger metric and cannot read `expires_at_label` off the `Bonus Code Issued` event
+we emit. So **before** a window lapses there is no customer-reachable copy of the deadline at all;
+**after** it lapses, the checkout refusal names the exact instant to a signed-in caller. Cobber id 86
+says exactly that and points at support. **Making a code visible again is a build, not a
+copy fix** — it is not in this change. An
+**unredeemed** code whose window lapsed can be re-armed with a fresh deadline on a later trigger —
+nothing was spent — but **only outside a 30-day cooldown measured from the first issue**
+(`REARM_COOLDOWN_DAYS`). Inside that window the re-trigger is a **silent no-op on our side**: nothing
+is written, no `Bonus Code Issued` event fires, and the endpoint still answers `200`. **The flow's own
+discount email still sends** — the webhook step sits one step *above* the email and a `200` is the
+"do not retry, carry on" answer, so nothing on our side can hold it back. That matters operationally
+as well as legally: **re-running a sequence to recover a cohort whose codes expired does not reach
+nobody — it emails the whole cohort a code that is already dead**, and it will look like it worked,
+because success and no-op are the same answer by design. The only trace on our side is an
+`expired_no_rearm` audit row behind a `200`; the customer's first sign is the checkout refusal naming
+a deadline weeks in the past. (Corrected 2026-08-26 — this clause used to say "no email is sent …
+reach nobody inside the cooldown", which read as safe and is the opposite of what happens.)
+Without the cooldown, "one grant per person for life" would quietly become "one per flow re-entry",
+since a flow can be re-entered and re-run at will.
+
+**The grant follows the account id, and a stale one refuses rather than substitutes (2026-08-26).**
+The marketing flow identifies the customer by account id, email address, or both. The id is
+authoritative when it is usable; the address is the fallback for a profile that carries **no** id (a
+newsletter sign-up or a guest checkout-start legitimately has none). An id that resolves to no
+account **does not** then fall back to the address — a stale or merged marketing profile pairs a dead
+id with somebody else's live address, and a grant is money-equivalent and capped at one per person
+for life, so substituting there spends a bystander's only grant on an act that was never theirs.
+Same reasoning as the outright refusal when an id and an address name two *different* accounts. The
+cost is one dead code in one email, recorded so the rate is watchable. A partially rendered field is
+treated as missing rather than as an error, so a broken merge tag never fails a call the other
+identity could serve.
+
+**Three locks keep the monthly cron away from these campaigns**, because a mass-mint would stamp
+one shared deadline on the whole audience and burn everyone's lifetime grant with no email: the
+cron route filters out any campaign with a personal window; `isUserEligibleForCampaign` refuses
+without an explicit trigger (so the wallet read path cannot self-enrol a member); and
+`issueCampaignToUsers` refuses `issuedBy: "cron"` outright.
+
+**Status: built and wired to the webhook, inert until an admin creates the campaigns AND marketing
+publishes the flows.** No campaign carrying `BACKIN200` / `LOCKIN100` / `EXTRA100` exists yet, so
+every call is currently a no-op and no customer sees anything. **There are no longer any server-side
+mint call sites** — the cancel service, the payment path and the guest-registration helper each used
+to mint directly, and all three were removed on 2026-08-26; the webhook endpoint is the only door.
+What those places still owe the feature is the Klaviyo event that puts the customer into the flow.
+Minting is additionally gated to `VERCEL_ENV === "production"` so a preview deploy cannot burn a
+real customer's grant. Cobber's answers for these codes are already live (corpus ids 86–88). See
+[docs/rewards-redeemables/patterns.md](docs/rewards-redeemables/patterns.md) P7.
 
 ### 7c. UX
 
@@ -621,7 +736,7 @@ Two hard gates now exist:
 - **Completing profile setup** — needs one verified channel (either one).
 - **Passwordless email-code sign-in** ([send-login-code](src/app/api/auth/send-login-code/route.ts)) — still specifically requires a verified *email*. **SMS sign-in is the alternative** and needs no inbox at all; see §10f-bis.
 
-Elsewhere, email verification remains **a nag** (header / Settings / `UserSetupModal`) or **an audience filter** (campaign and redeemable targeting defaults to `requiresEmailVerified: true` in [`CampaignService`](src/services/redeemables/CampaignService.ts) / [`TargetingService`](src/services/redeemables/TargetingService.ts) — as of the 2026-08-26 audit that silently excluded **1,406 active subscribers**, 28.9% of them).
+Elsewhere, email verification remains **a nag** (header / Settings / `UserSetupModal`) or **an audience filter** (campaign and redeemable targeting defaults to `requiresEmailVerified: true` in [`CampaignService`](src/services/redeemables/CampaignService.ts) / [`TargetingService`](src/services/redeemables/TargetingService.ts) — as of the 2026-08-26 audit that silently excluded **1,406 active subscribers**, 28.9% of them). **Exception:** a §7d trigger campaign waives it — those codes are minted at a moment the customer created (cancel, purchase, guest checkout-start), and `checkout-start` fires seconds after registration, before anyone could have actioned a verification email.
 
 **Not gated** by verification: cancellation, withdrawing entries, purchases, subscription management. Side effects: changing the email resets the flag; Google OAuth auto-verifies; and **completing an SMS sign-in verifies the mobile** (the code goes to the number already on file, so returning it proves control of it).
 
@@ -902,6 +1017,7 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 | **Partner Discount API @ 1,000+ brands** | Partly delivered — 1,833 offers live via the portal | The **breadth** shipped through the iGoDirect portal (1,833 curated offers, tier-gated). What is still outstanding is the *original* plan: our own DB-backed catalog with admin CRUD + a public API, so we are not dependent on a vendor's UI. The audit is the argument for it — we cannot badge entitlement, filter by "available to me", or read a single redemption back today. **Catalogue fit is also unresolved:** Milwaukee, DeWalt, Makita and Ryobi return **zero** offers, so member-facing copy must not claim tool brands (see [docs/partner/rules.md](docs/partner/rules.md) R8). |
 | **Partner portal (SSO)**                | ✅ **LIVE in production (2026-07-31)**        | Moved out of "coming soon": both `PARTNER_DISCOUNT_SSO_ENABLED` and its `NEXT_PUBLIC_` twin are set in Vercel and the flow was walked end-to-end on production on 2026-07-31 (the route 404s if the flag is unset, so a successful hand-off is proof it is on). The dashboard-hero "Partner portal" button + the Rewards-page "Open partner portal" button mint a single-use 60-minute token into `myrewards.toolsaustralia.com.au`. **Known live issue — vendor-side:** the portal renders locked and unlocked offers identically, so a Tradie meets a 68%-locked home page with nothing marked; see the audit + the 16 vendor asks in [docs/partner/igodirect-portal-ux-audit.md](docs/partner/igodirect-portal-ux-audit.md). Our side now states the tier, the real unlocked count, and what to expect before the hand-off. |
 | **Membership Streak (loyalty streak)**  | Backend + UI built; **dark until the launch runbook** | Consecutive paid renewals earn escalating **free entries** auto-granted into the Major Draw: rungs at renewals 2/4/6/8/10/12 → +100…+600 + permanent Founding-member badge, and the **full ladder repeats every streak year** (month 14 ≡ month 2 → +100 again … month 24 ≡ month 12 → +600) — flat across tiers, join = month 0. **P1 (counter + backfill), P2 (milestone engine: `streak-months` type, autoGrant into a first-class `streak` entry bucket, generation-scoped re-earn), and P3 (the tier-tinted medallion dashboard card, milestones track, wallet Streak segment, guest teaser, celebration toast) built 2026-07-07; adversarial-review hardening 2026-07-15** (resubscribe/renew routes carry the streak across the subdoc replacement with in-route grace/reset decisions; a refunded counted renewal decrements the counter and flips its ledger row to `refunded`; new streak issuances are strictly payment-coupled — the cron/mass evaluator can only re-deliver failed grants, never newly issue; failed auto-grants compensate and re-open for retry). `DASHBOARD_FEATURES.loyaltyStreak`/`milestoneProgress` are **OFF** so the UI never promises grants that aren't active yet (local dev preview via `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW=true` in `.env.local`; dev-DB rehearsal of the full runbook completed 2026-07-15). Launch runbook (in order, after this code deploys): 1) `npx tsx scripts/backfill-membership-streaks.ts --live --roundup-incomplete` (round-up flag is LAUNCH-ONLY; standing repair runs omit it) → 2) `npm run seed:streak-rewards` (legacy-issuance generation stamp + index swap + dark rungs + markers) → 3) `npx tsx scripts/seed-streak-milestone-rewards.ts --live --activate` → 4) flip both `DASHBOARD_FEATURES` flags to true and deploy. Cobber FAQ ids 69–71 cover the feature. Design: `claudeDesign/Membership milestone streak design`. Spec: [docs/superpowers/specs/2026-07-07-membership-streak-design.md](docs/superpowers/specs/2026-07-07-membership-streak-design.md). |
+| **Per-customer bonus codes (BACKIN200 / EXTRA100 / LOCKIN100)** | Backend built; **inert until the launch runbook** | A per-customer code with that customer's **own** 72-hour deadline, minted by **an inbound webhook Klaviyo calls from inside the flow, one step above the discount email** (`POST /api/bonus-codes/v1/issue`, shipped 2026-08-26). The clock starts when the email is about to send, not days earlier when the customer qualified — under the old design the nurture sequences landed 2.5–17 days later and two of the three flows would have emailed a guaranteed-expired code. Nothing comes back into the email: Klaviyo webhooks are one-way, so the code string is hardcoded in the template and this call is what makes it work for that person. The endpoint answers an **opaque** `{ ok }` (never the customer's state), refuses everything outside production, and returns a retryable 5xx **only** where a retry can actually recover the grant. **The first real execution will be on a real customer:** the production gate sits ahead of the *mint* (not just the email), deliberately, so a preview deploy cannot burn anyone's one-per-lifetime grant — which also means the path cannot be rehearsed end-to-end on a preview. Launch runbook — **this order is the REVERSE of the old one, and getting it wrong is the easiest way to ship a broken launch**: 1) endpoint live in production with `BONUS_CODE_WEBHOOK_SECRET` scoped to the Production environment only; 2) create the campaign(s) in Admin → Monthly Coupons with `code` / `validForHours: 72` / `entriesAmount` / `purchaseRequirement` / targeting — `purchaseRequirement: "none"` for cancel-click, since there is no purchase to qualify on, and **if you set `validForHours` to anything other than 72, update Cobber FAQ id 86 in the same change** (it tells customers "a fixed 72 hours", and the FAQ test guards that wording, not the campaign row, so a mismatch ships green); 3) smoke-test ONE end-to-end in production against a staff account you are willing to spend, **against the REAL campaign** — a disposable campaign is impossible, since each trigger resolves to one fixed code and `code` is uniquely indexed; delete the resulting issuance row afterwards to give that account its grant back (only works while unredeemed); 4) **then** marketing publishes the flows. Publishing the flows first ships a live sequence emailing a hardcoded code into a void — with no campaign carrying the code the endpoint answers 200, the email sends anyway, and every customer in the cohort gets a code that is refused at checkout. **A fail-closed daily cap now bounds total issuance.** The inbound webhook may mint at most `BONUS_CODE_DAILY_MINT_CAP` codes per UTC day (unset → 500; an explicit `0` blocks all minting), counted from the `BonusCodeWebhookCall` audit rows — a **soft** cap, since the audit row is written after the mint, so concurrent calls can each read the same pre-mint count and overshoot slightly (bounded by concurrency, never unbounded). `BONUS_CODE_KILL_SWITCH=true` is the immediate break-glass. The gate **fails closed** — a database outage, a bad cap value, or an unset `BONUS_CODE_WEBHOOK_SECRET` all *block* minting rather than uncapping it — and it writes an early-warning log line once a day passes 80% of the cap. This is the only control that survives a leaked webhook secret, so there is deliberately no rate limiter on the route. Two limits it does **not** impose: it is a global daily cap, **not** a per-campaign budget, and it does not bound `entriesAmount` × the eligible population within a day — so still watch the issuance count after switch-on. Every call (accepted, refused and errored) is recorded for 90 days with a hashed IP. **A 30-day re-arm cooldown** (`REARM_COOLDOWN_DAYS`) bounds the other direction: an unredeemed code whose window lapsed is re-armed with a fresh deadline on a later trigger, but **only outside 30 days from the first issue** — inside it the call is a silent no-op on our side that still answers `200` and fires no `Bonus Code Issued` event, **but the flow's own discount email still sends**, because the webhook sits one step above it and a `200` is the "carry on" answer. Read that before re-running a sequence to recover an expired cohort: it will report success for everyone and email the whole cohort a code that is already dead, refused at checkout with a deadline weeks in the past. Without it, "one grant per person for life" becomes "one per flow re-entry". **No email and no page shows the customer their deadline** — the discount templates carry the hardcoded code only (a flow email renders against its own trigger metric, so it cannot read `expires_at_label` off our `Bonus Code Issued` event), and no live surface prints it; the checkout refusal names the instant only once the window has already lapsed. If marketing ever wants a deadline in front of the customer, that is a separate flow on the `Bonus Code Issued` metric, and Cobber id 86 must change with it. Cobber FAQ ids 86–88 cover the feature. |
 | **Loyalty milestones (progress)**       | Built, dark (launches with the streak)       | Distinct from the streak card above: the Rewards-page milestones section + the home dashboard's "Milestones" quick-tile are gated behind `DASHBOARD_FEATURES.milestoneProgress` ([`src/config/dashboardFeatures.ts`](src/config/dashboardFeatures.ts)); the section renders the real streak ladder (per-rung +N amounts from `streakMilestones.ts`) and flips on at streak-launch step 4 alongside `loyaltyStreak`. |
 | **TikTok Ads insights sync**            | Pixel + server-side CAPI live; hourly **and per-ad daily** ad-spend built, creds-gated | Events API (CAPI) ships via the conversion registry (§14a). Marketing-API ad-spend is now wired both **hour-of-day** (`fetchTikTokHourlySpend`) and **per-ad daily** (`fetchTikTokAdInsightsDaily` → `TikTokInsightsSyncService` → `TikTokAdInsightsDaily`, nightly `/api/cron/sync-tiktok-ads`) — the latter drives the admin **per-TikTok-ad breakdown** (ad name · spend · TikTok-reported conv/revenue · ROAS). The daily-insights writer (previously outstanding) now ships; only live `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN` + verification against the live API remain. |
 | **Snapchat Ads insights sync**          | Admin shell + client pixel only              | Conversions API is a stub; no Marketing-API spend client yet — spend/ROAS show "—". Insights pipeline pending. |

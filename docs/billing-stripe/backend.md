@@ -34,6 +34,56 @@ The `$0`-trial guard returns before both writers for its invoices; upgrades neve
 
 **Route-side carry (2026-07-15):** `create-subscription-existing-user` and `renew-subscription` (both branches) replace the whole `user.subscription` subdoc and persist BEFORE this webhook runs — each now spreads `carryStreakAcrossSubscriptionReplace(prev)` into the replacement (in-route grace/reset decision from the OLD `endDate`; the webhook then sees the NEW endDate, computes "continue", and preserves what the route wrote). Previously both wiped banked streaks (review BLOCKER). Never add a subdoc-replacing route without this carry.
 
+## `campaignCode` is initial-invoice only (2026-08-25)
+
+In [stripe-webhook-handlers/index.ts](../../src/services/stripe-webhook-handlers/index.ts), the subscription-metadata
+read of `campaignCode` is gated on `isInitialSubscriptionInvoice` (`billing_reason === "subscription_create"`) —
+the same gate the adjacent A/B `experimentId`/`variantId` fields already carry, for the same reason.
+
+`campaignCode` is written to **subscription** metadata at creation
+([create-subscription](../../src/app/api/stripe/create-subscription/route.ts),
+[create-subscription-existing-user](../../src/app/api/stripe/create-subscription-existing-user/route.ts) — both
+`SubscriptionCreateParams`), so it persists for the life of the subscription. That was harmless while a grant was
+one-shot (the issuance row is already redeemed), but once a per-customer code can be **re-armed**, a renewal invoice
+months later would silently auto-redeem a freshly re-armed grant that the customer never applied. The
+METHOD 2 (the invoice's own payment intent) carries the same gate as belt-and-braces. Tracing every
+write site shows a renewal's payment intent is Stripe-generated and should hold no `campaignCode` of
+ours — but Stripe's metadata-copying semantics are not something this repo can prove, and the cost of
+being wrong is a silently auto-redeemed re-armed grant. The gate is free on the initial invoice.
+**All four METHODs now carry the gate.** METHODs 3–4 (the charge's payment intent, and the invoice's
+own metadata) were initially left ungated on the argument that they are `promoLinkCode`-led fallbacks
+reading Stripe-generated objects. That is the same assumption METHOD 2's own rationale deliberately
+refuses to rely on, and METHOD 4 sits **outside** the `!promoLinkCode` guard, so it ran on every
+invoice including every renewal. Reachability is nil today — nothing writes `campaignCode` into
+invoice metadata, only into subscription and payment-intent metadata — but "nothing writes it today"
+is exactly the premise that stops being true first. All four are `isInitialSubscriptionInvoice &&`.
+
+## `campaignCode` is re-validated server-side before it reaches metadata (2026-08-25)
+
+All four routes that write `campaignCode` into Stripe metadata — `create-subscription`,
+`create-subscription-existing-user`, `create-one-time-purchase` (two metadata sites) and
+`create-one-time-purchase-existing-user` — now write a **verified** code:
+
+```ts
+const verifiedCampaignCode = await CampaignCodeValidationService.resolveCodeForCheckout({
+  code: validatedData.campaignCode,
+  userId: /* the id THIS route resolved: session, or an email lookup */,
+  context: "create-subscription",
+});
+// …
+...(verifiedCampaignCode && { campaignCode: verifiedCampaignCode }),
+```
+
+The body field is never written directly. `/api/codes/validate` answers a guest from the campaign
+window alone, and a customer applying a code right after registering **is** a guest here, so
+without this they would see APPLIED, pay, and receive nothing. Refusal drops the code and logs at
+`console.error`; it never fails the purchase. Full rationale and the three load-bearing properties:
+[rewards-redeemables rules.md R3c](../rewards-redeemables/rules.md).
+
+In `create-one-time-purchase` the call is deliberately **hoisted above** the
+`if (validatedData.paymentIntentId)` branch, because that route has two metadata sites (reuse-PI
+and create-PI) in opposite branches and both must see the same verified value.
+
 ## Anchor-billing helper
 
 [src/utils/billing/anchor-billing.ts](../../src/utils/billing/anchor-billing.ts) — `getSubscriptionCreateParamsForAnchor(joinDate)` returns the Stripe `subscriptions.create()` params for users joining 25th/26th/27th to anchor renewal to the 24th.

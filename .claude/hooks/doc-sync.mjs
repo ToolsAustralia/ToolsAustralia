@@ -19,8 +19,9 @@ const ROT_CHANGE_THRESHOLD = 5;
 // source file matches one of these globs and NEITHER root doc was edited in the same turn,
 // the Stop is BLOCKED. These are the files that carry business-level facts a reader of
 // BUSINESS.md/README.md relies on (prices/tiers/entries, draw cadence & gating, prize catalog,
-// billing/anchor/refund rules, partner catalog, promo/upsell multipliers, ad-tracking providers
-// & analytics surfaces, rewards pause, RBAC/staff governance, the coming-soon roadmap).
+// billing/anchor/refund rules, partner catalog, promo/upsell multipliers, bonus-entry code
+// campaigns (§7d), ad-tracking providers & analytics surfaces, rewards pause, RBAC/staff
+// governance, the coming-soon roadmap).
 const BUSINESS_TRIGGER_GLOBS = [
   "src/data/membershipPackages.ts",
   "src/data/upsellPackages.ts",
@@ -30,6 +31,12 @@ const BUSINESS_TRIGGER_GLOBS = [
   "src/config/prizes.ts",
   "src/config/featureFlags.ts",
   "src/config/rewardsSettings.ts",
+  "src/config/bonusCodes.ts",
+  "src/services/redeemables/**",
+  "src/utils/redeemables/**",
+  "src/lib/bonus-code-webhook/**",
+  "src/app/api/bonus-codes/**",
+  "src/models/MonthlyEntryCampaign.ts",
   "src/utils/draws/major-draw-gate-http.ts",
   "src/utils/draws/major-draw-helpers.ts",
   "src/utils/billing/**",
@@ -50,11 +57,12 @@ const BUSINESS_DOCS = ["README.md", "BUSINESS.md"];
 
 // CLAUDE.md rule 5b: CUSTOMER.md (the customer-side companion to BUSINESS.md) must stay in sync with
 // customer-material source — the customer data model (User), the lifecycle/state machine, account
-// creation & auth, the membership journey (cancel/upgrade/downgrade/reactivate), entries/eligibility,
-// perks (partner/referral/affiliate), the marketing data captured about the customer, and the account
-// surface. When a touched source file matches one of these globs and CUSTOMER.md was NOT edited in the
-// same turn, the Stop is BLOCKED. Mirrors the BUSINESS_TRIGGER mechanism. Add new customer-material
-// source paths here when you introduce them.
+// creation & auth, the membership journey (cancel/upgrade/downgrade/reactivate), entries/eligibility
+// (including per-customer bonus-entry codes and their redemption/re-arm lifecycle), perks
+// (partner/referral/affiliate), the marketing data captured about the customer (incl. what reaches
+// Klaviyo), and the account surface. When a touched source file matches one of these globs and
+// CUSTOMER.md was NOT edited in the same turn, the Stop is BLOCKED. Mirrors the BUSINESS_TRIGGER
+// mechanism. Add new customer-material source paths here when you introduce them.
 const CUSTOMER_TRIGGER_GLOBS = [
   "src/models/User.ts",
   "src/contexts/UserContext.tsx",
@@ -73,6 +81,13 @@ const CUSTOMER_TRIGGER_GLOBS = [
   "src/lib/affiliate.ts",
   "src/services/attribution/**",
   "src/services/klaviyo/**",
+  "src/services/redeemables/**",
+  "src/utils/redeemables/**",
+  "src/lib/bonus-code-webhook/**",
+  "src/app/api/bonus-codes/**",
+  "src/models/RedeemableIssuance.ts",
+  "src/models/BonusCodeWebhookCall.ts",
+  "src/utils/integrations/klaviyo/**",
   "src/app/(site)/my-account/**",
 ];
 const CUSTOMER_DOCS = ["CUSTOMER.md"];

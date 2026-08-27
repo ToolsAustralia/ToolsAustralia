@@ -33,6 +33,7 @@ import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata"
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
+import { CampaignCodeValidationService } from "@/services/redeemables/CampaignCodeValidationService";
 
 import { claimMobileForNewUser } from "@/utils/auth/claim-mobile";
 
@@ -475,6 +476,18 @@ export async function POST(request: NextRequest) {
     const { metadata: resolvedAttr } = resolveAttributionAtEdge(request);
 
     // Traceability: subscriptionRequestId, userId, planId for webhooks and debugging
+    // AUTHORITATIVE campaign-code check. `/api/codes/validate` answers a GUEST
+    // from the campaign window alone (it has no session to key a per-user lookup
+    // on), and step-1 registration in this codebase does not authenticate — so a
+    // customer applying a code right after registering reaches checkout as a
+    // guest and would otherwise see APPLIED, pay, and receive nothing. Here the
+    // user id was resolved by the SERVER, so the per-user check can actually run.
+    // Refusal drops the code and logs; it never fails the purchase.
+    const verifiedCampaignCode = await CampaignCodeValidationService.resolveCodeForCheckout({
+      code: validatedData.campaignCode,
+      userId: registeredUser?._id?.toString(),
+      context: "create-subscription",
+    });
     const userIdForMetadata = registeredUser?._id?.toString() ?? "new";
     const baseMetadata = {
       packageId: validatedData.packageId,
@@ -485,7 +498,7 @@ export async function POST(request: NextRequest) {
       ...(validatedData.packageId && { planId: validatedData.packageId }),
       ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
       ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-      ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
+      ...(verifiedCampaignCode && { campaignCode: verifiedCampaignCode }),
       ...(experimentAssignment && {
         experimentId: experimentAssignment.experimentId,
         variantId: experimentAssignment.variantId,

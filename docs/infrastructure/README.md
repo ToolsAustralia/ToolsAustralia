@@ -30,6 +30,19 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 > cooldown) is OFF in development so the flow can be exercised repeatedly; setting this to `"true"`
 > forces it back on, which is the only way to test the limiter itself. Production ALWAYS enforces —
 > there is deliberately no env var that can disable it there._
+> `.env.example` — `BONUS_CODE_WEBHOOK_SECRET`, `BONUS_CODE_DAILY_MINT_CAP`, `BONUS_CODE_KILL_SWITCH`
+> (added 2026-08-26) guard the inbound bonus-code webhook, which **mints codes that grant real
+> prize-draw entries**. Treat the secret as a payment credential: **scope it to Vercel's Production
+> environment only** (a preview deploy plus the secret would otherwise mint into the shared
+> production database). It is a **comma-separated** list so rotation can overlap; each entry must be
+> ≥ 16 characters or it is ignored. All three fail **closed**: an unset/too-short secret refuses
+> every call with `500 misconfigured` (NOT the `if (!cronSecret) return true` idiom in
+> `src/app/api/cron/monthly-redeemables-issuance/route.ts`), and a DB outage while reading the cap
+> blocks minting rather than uncapping it. Unset cap → 500/UTC-day; an explicit `0` blocks all
+> minting; `BONUS_CODE_KILL_SWITCH=true` is the break-glass. Declared **blank on purpose** in
+> `.env.local` on dev machines, so nothing can mint locally. See
+> [docs/rewards-redeemables/backend.md](../rewards-redeemables/backend.md) and
+> [gotchas.md](../rewards-redeemables/gotchas.md).
 
 > `.env.example` — `STRIPE_RATE_LIMIT_GLOBAL_PER_SECOND` and `STRIPE_RATE_LIMIT_ENDPOINT_PER_SECOND`
 > (added 2026-08-24) tune the client-side token bucket in front of the Stripe singleton

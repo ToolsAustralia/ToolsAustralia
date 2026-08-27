@@ -549,3 +549,22 @@ The mobile branch only runs when the term is **phone-shaped** (`/^[\d\s+()-]{4,}
 the punctuation people type, no letters). Without that guard a name like `john2024` would search
 `2024` against every mobile and return noise. Verified against production across all six
 storage × format combinations.
+## Admin engagement score lost its upsell component (2026-08-27)
+
+Both engagement scorers (`GET /api/admin/users/[id]` and
+`src/features/admin/users/server/queries.ts`) contained:
+
+```ts
+if (upsellStats?.totalAccepted > 0) score += 10;
+```
+
+`upsellStats` was 0 for **all 56,360 users** — the tracker that wrote it was mounted nowhere —
+so this branch contributed nothing to any score. It was removed with the field, and **no score
+changes as a result**.
+
+`upsellPurchases.length` IS a real signal (2,290 users have one). Re-adding an upsell component
+on that basis would be a deliberate scoring change and was deliberately NOT done as part of a
+deletion. The decision is recorded in a comment at both sites.
+
+`upsellStats` was also dropped from the admin user-detail response and from
+`src/types/admin.ts`.

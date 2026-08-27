@@ -327,3 +327,9 @@ The general rule this follows is the standing one for this file: **a per-user br
 localStorage must never survive an auth boundary.** Anything new that records "this person has
 already seen X" gets its prefix added here in the same change, or the next member on a shared
 device silently inherits it and is never shown the feature.
+
+## Registration no longer initialises `upsellStats` (2026-08-27)
+
+`POST /api/auth/register` used to seed a five-counter `upsellStats` object on every new user.
+The field is deleted from the model — see `docs/upsell/gotchas.md`. `upsellPurchases: []` and
+`upsellHistory: []` are still initialised and remain live.

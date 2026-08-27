@@ -136,3 +136,9 @@ then edits it keeps the green **Verified** chip against a number nobody ever con
 SMS login is live, that stale flag is attached to the recovery credential. Anything that treats
 `isMobileVerified` as proof of the number *currently* on file must not read it from this surface
 alone. Same shape as the email field, except email is not editable here.
+## `upsellStats` dropped from the my-account projection (2026-08-27)
+
+`MY_ACCOUNT_USER_FIELDS` no longer includes `upsellStats` — the field is deleted from the User
+model entirely (`docs/upsell/gotchas.md`). Nothing in the member UI read it; it was five
+permanent zeros travelling on every my-account response. The projection guard test still
+passes, as it asserts a required subset and `upsellStats` was never in it.

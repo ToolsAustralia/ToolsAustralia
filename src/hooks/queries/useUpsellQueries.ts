@@ -160,43 +160,7 @@ export const useUpsellAnalytics = (params: UpsellOfferParams = {}) => {
   });
 };
 
-export const useUpsellTracking = (offerId?: string) => {
-  return useQuery({
-    queryKey: queryKeys.upsell.tracking(offerId!),
-    queryFn: async () => {
-      const response = await apiGet<{ success: boolean; data: UpsellTrackingData[] }>(
-        `/api/upsell/tracking/${offerId}`
-      );
-      return response.data;
-    },
-    enabled: !!offerId,
-    staleTime: 30 * 1000, // 30 seconds
-    gcTime: 2 * 60 * 1000, // 2 minutes
-  });
-};
-
 // Mutations
-export const useTrackUpsellEvent = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (trackingData: UpsellTrackingData) => {
-      const response = await apiPost<{ success: boolean; data: UpsellTrackingData }>("/api/upsell/track", trackingData);
-      return response.data;
-    },
-    onSuccess: (data) => {
-      // Update tracking data in cache
-      queryClient.setQueryData(queryKeys.upsell.tracking(data.offerId), (old: UpsellTrackingData[] = []) => {
-        return [...old, data];
-      });
-
-      // Invalidate analytics to reflect new data
-      queryClient.invalidateQueries({ queryKey: queryKeys.upsell.analytics({}) });
-    },
-    retry: 1, // Don't retry tracking calls too much
-  });
-};
-
 export const usePurchaseUpsell = () => {
   const queryClient = useQueryClient();
   const attribution = useAttribution();
@@ -407,76 +371,6 @@ export const useDismissUpsellOffer = () => {
 };
 
 // Utility hooks
-export const useUpsellManager = () => {
-  const { data: offers } = useUpsellOffers({});
-  const trackEvent = useTrackUpsellEvent();
-  const acceptOffer = useAcceptUpsellOffer();
-  const dismissOffer = useDismissUpsellOffer();
-
-  const getEligibleOffers = (params: UpsellOfferParams) => {
-    if (!offers) return [];
-
-    return offers.filter((offer) => {
-      // Check if offer is active
-      if (!offer.isActive) return false;
-
-      // Check date range
-      const now = new Date();
-      if (new Date(offer.startDate) > now) return false;
-      if (offer.endDate && new Date(offer.endDate) < now) return false;
-
-      // Check target audience
-      if (offer.targetAudience === "non-members" && params.membershipType) return false;
-      if (offer.targetAudience === "members" && !params.membershipType) return false;
-
-      // Check conditions
-      if (offer.conditions.minCartValue && (params.cartValue || 0) < offer.conditions.minCartValue) return false;
-      if (offer.conditions.maxCartValue && (params.cartValue || 0) > offer.conditions.maxCartValue) return false;
-
-      return true;
-    });
-  };
-
-  const trackImpression = (offerId: string, userId?: string, metadata?: Record<string, unknown>) => {
-    trackEvent.mutate({
-      offerId,
-      userId,
-      sessionId: "current-session", // This should be generated properly
-      event: "impression",
-      metadata,
-    });
-  };
-
-  const trackClick = (offerId: string, userId?: string, metadata?: Record<string, unknown>) => {
-    trackEvent.mutate({
-      offerId,
-      userId,
-      sessionId: "current-session",
-      event: "click",
-      metadata,
-    });
-  };
-
-  const handleAcceptOffer = (offerId: string, userId?: string, metadata?: Record<string, unknown>) => {
-    trackClick(offerId, userId, metadata);
-    acceptOffer.mutate({ offerId, userId, metadata });
-  };
-
-  const handleDismissOffer = (offerId: string, userId?: string, reason?: string) => {
-    dismissOffer.mutate({ offerId, userId, reason });
-  };
-
-  return {
-    offers,
-    getEligibleOffers,
-    trackImpression,
-    trackClick,
-    handleAcceptOffer,
-    handleDismissOffer,
-    isLoading: trackEvent.isPending || acceptOffer.isPending || dismissOffer.isPending,
-  };
-};
-
 export const useUpsellPrefetch = () => {
   const queryClient = useQueryClient();
 

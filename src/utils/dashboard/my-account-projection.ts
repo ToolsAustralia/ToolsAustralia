@@ -67,7 +67,6 @@ export const MY_ACCOUNT_USER_FIELDS = [
   "cancellationUpsellRedeemed",
   "cancellationUpsellRedeemedAt",
   "retentionOffersConsumed",
-  "upsellStats",
   "referral",
   "affiliateReferral",
   "signupAttribution",

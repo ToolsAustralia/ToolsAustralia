@@ -412,3 +412,42 @@ no code in flight. Not added to `MY_ACCOUNT_USER_FIELDS` — it must never reach
 Verifying a code also sets `isMobileVerified`, because for SMS the code went to the number already
 on the account: returning it proves control of that number. See
 [auth/api.md](../auth/api.md#sms-sign-in--send-mobile-login-code--verify-mobile-login-2026-08-27).
+## `pendingChange` is a Mongoose NESTED object — never truthiness-check it (2026-08-26)
+
+`User.subscription.pendingChange` declares all sub-fields optional, so **Mongoose materialises
+it as `{}` on every hydrated document even when nothing is stored**. `!!{}` is `true`.
+
+That shipped: `subscription_has_pending_upgrade` was `true` on **all 56,360** production
+profiles while **zero** users had a real `pendingChange.newPackageId`. Any Klaviyo segment
+keyed on it matched everyone.
+
+Use the shared predicate — [`isValidPendingUpgrade`](src/utils/subscription/pending-upgrade.ts) —
+which checks the payload (`changeType === "upgrade"` and a non-empty `newPackageId`), not the
+object's existence. It lives in `utils/` so the Klaviyo profile projection can share it
+(`utils/` may not import from `services/`); `stripe-webhook-handlers` keeps a thin typed
+wrapper purely to preserve its `change is PendingUpgradeChange` narrowing.
+
+`tsc` cannot catch this class of bug. Pinned by `npm run test:pending-upgrade`.
+
+## `User.klaviyoSyncedAt` and the `updatedAt` index (2026-08-26)
+
+`klaviyoSyncedAt` records when the Klaviyo reconciliation sweep last wrote this user's
+profile. It is written with `{ timestamps: false }` — without that, stamping it bumps
+`updatedAt`, re-dirtying the user so the sweep never converges.
+
+`UserSchema.index({ updatedAt: 1 })` is **load-bearing** for that sweep, not an optimisation:
+without it the selector examined 56,441 documents to return 4. See
+`docs/tracking/KLAVIYO_INTEGRATION.md`.
+
+## `User.upsellStats` removed (2026-08-27)
+
+The field held five counters written only by `POST /api/upsell/track`, reachable only from a
+component that was imported nowhere. Measured 2026-08-26: **0 of 56,360 users had a non-zero
+value**, while 2,290 had real `upsellPurchases`.
+
+Interface, schema and all three initialisation sites (register, `account-manager`, the Klaviyo
+test route) are gone. Stored documents are stripped by
+`npm run migrate:remove-upsell-stats -- --prod` — the migration refuses to run if it finds any
+non-zero value, so it cannot silently discard real data. See `docs/upsell/gotchas.md`.
+
+`upsellPurchases` and `upsellHistory` are untouched and remain live.

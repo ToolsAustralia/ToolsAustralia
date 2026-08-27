@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { PAID_ORDER_STATUSES } from "@/services/shop/orderQueries";
 import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
@@ -309,9 +309,11 @@ function calculateEngagementScore(user: any, paymentEvents: any[], majorDrawPart
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if ((user as any).oneTimePackages?.length > 0) score += 10;
 
-  // Upsell engagement
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if ((user as any).upsellStats?.totalAccepted > 0) score += 10;
+  // NOTE (2026-08-27): the "upsell engagement" component was removed with `upsellStats`.
+  // It read `upsellStats.totalAccepted > 0`, which was 0 for all 56,360 users because the
+  // tracker that wrote it was mounted nowhere — so it contributed nothing to any score.
+  // `upsellPurchases.length` IS a real signal (2,290 users have one); re-adding a component
+  // on that basis would be a deliberate scoring change, not part of this deletion.
 
   return Math.min(score, 100); // Cap at 100
 }
@@ -716,7 +718,6 @@ async function buildAdminUserProfile(userId: string) {
     partnerAccessRing,
     upsellPurchases: user.upsellPurchases || [],
     upsellHistory,
-    upsellStats: user.upsellStats || null,
     redemptionHistory,
     statistics: {
       totalSpent,

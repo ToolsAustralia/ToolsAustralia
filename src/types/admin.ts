@@ -346,7 +346,6 @@ export interface AdminUserDetail {
   // Purchase History
   upsellPurchases: Array<Record<string, unknown>>;
   upsellHistory: Array<Record<string, unknown>>;
-  upsellStats?: Record<string, unknown>;
 
   // Redemption History
   redemptionHistory: Record<string, unknown>[];

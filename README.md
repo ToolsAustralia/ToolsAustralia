@@ -1,6 +1,6 @@
 # Tools Australia
 
-Membership-driven giveaway and rewards platform for Australian tradies. Members buy entries into monthly tool giveaways, unlock tiered partner discounts, and earn bonus entries through upsells and referrals.
+Membership-driven giveaway and rewards platform for Australian tradies. A membership or a one-time pack **includes free entries** into monthly tool giveaways plus tiered partner discounts, and members pick up more free entries through upsells and referrals. Entries are never sold separately — the purchasable unit is always the membership or the pack (see BUSINESS.md §1).
 
 > **For AI agents and onboarding:** see [BUSINESS.md](BUSINESS.md) for the full domain model — packages, draw mechanics, payment lifecycle, partner-access tiers, and the rules the platform actually enforces.
 

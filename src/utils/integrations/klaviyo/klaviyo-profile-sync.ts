@@ -12,6 +12,78 @@ import { userToKlaviyoProfile } from "@/utils/integrations/klaviyo/klaviyo-helpe
 import { calculateDrawSpecificPropertiesForUser } from "@/utils/integrations/klaviyo/klaviyo-draw-calculator";
 import type { IUser } from "@/models/User";
 import type { IMajorDraw } from "@/models/MajorDraw";
+import type { UserGrantLedger } from "@/utils/payment/payment-event-net-queries";
+
+/** Outcome of one profile upsert. `retryable` is meaningless when `ok` is true. */
+export interface ProfileSyncResult {
+  ok: boolean;
+  /** True when trying again later could plausibly succeed. */
+  retryable: boolean;
+  error?: string;
+}
+
+/**
+ * Is a Klaviyo failure worth retrying?
+ *
+ * RETRYABLE — the request could succeed later, unchanged:
+ *   429 / throttled, 5xx, timeouts, socket + network errors.
+ *
+ * PERMANENT — the request will fail identically forever until the DATA changes:
+ *   4xx other than 429. In production on 2026-08-27 one profile returned a hard 400,
+ *   "The phone number provided either does not exist or is ineligible to receive
+ *   ChannelType.SMS". Because the sweep held its watermark on every failure, that single
+ *   profile pinned the cursor for over an hour and the backlog stopped draining entirely —
+ *   the self-healing retry became a permanent stall. Permanent failures must be stepped over,
+ *   loudly, not retried until the heat death of the universe.
+ *
+ * Classification is by message text because that is what `upsertProfile` surfaces; the client
+ * formats these as `Klaviyo API error: <status> - <body>`.
+ */
+/**
+ * Did Klaviyo reject the profile specifically because of its phone number?
+ *
+ * Klaviyo's 400 body names the offending attribute via a JSON-Pointer, e.g.
+ *   "source": { "pointer": "/data/attributes/phone_number" }
+ * with detail "The phone number provided either does not exist or is ineligible to receive
+ * ChannelType.SMS".
+ *
+ * This matters because `phone_number` is an OPTIONAL attribute. A well-formed Australian
+ * mobile that Klaviyo's carrier lookup dislikes should not cost the customer their entire
+ * marketing profile — their email, entry counts and membership state are all still valid and
+ * still worth syncing. Seen in production on 2026-08-27 with a perfectly normal `+614…`
+ * number that 54,884 other profiles share the format of.
+ */
+export function isPhoneNumberRejection(error: string | undefined): boolean {
+  const message = (error ?? "").toLowerCase();
+  return (
+    message.includes("/data/attributes/phone_number") ||
+    (message.includes("phone number") && message.includes("channeltype.sms"))
+  );
+}
+
+export function classifyKlaviyoFailure(error: string | undefined): { retryable: boolean } {
+  const message = (error ?? "").toLowerCase();
+
+  // Explicitly retryable signals first — a 429 body can also contain other digits.
+  if (
+    message.includes("429") ||
+    message.includes("throttled") ||
+    message.includes("rate limit") ||
+    message.includes("timeout") ||
+    message.includes("network") ||
+    message.includes("fetch failed") ||
+    message.includes("socket") ||
+    /\b5\d\d\b/.test(message)
+  ) {
+    return { retryable: true };
+  }
+
+  // A hard 4xx is a data/config problem: identical retries produce identical failures.
+  if (/\b4\d\d\b/.test(message)) return { retryable: false };
+
+  // Unknown shape — prefer retrying over silently stepping past a real profile.
+  return { retryable: true };
+}
 
 /**
  * Subscribe user to Klaviyo lists ONCE during registration
@@ -158,17 +230,32 @@ export async function syncKlaviyoEmailMarketingFromAdminPreference(
  *                                   Only used if user hasn't made any purchases yet
  * @param targetDraw - Optional cached target draw (for performance optimization in bulk operations)
  * @param cutoffDate - Optional cached cutoff date (for performance optimization in bulk operations)
+ * @param ledger - Optional prefetched paid-grant ledger (batch callers resolve one per batch)
+ *
+ * @returns a {@link ProfileSyncResult}. `ok` is true ONLY when the upsert actually landed.
+ *
+ * This function swallows its own errors by design — a profile sync must never break the caller
+ * — so the return value is the ONLY signal that the write succeeded. Any caller that depends on
+ * the profile being current (the reconciliation sweep) MUST check it: treating a swallowed
+ * failure as success advances the sweep's watermark past users whose write was refused, which
+ * silently skips them forever.
+ *
+ * `retryable` distinguishes "try again later" from "this will never succeed". The sweep holds
+ * its watermark for the former and advances past the latter — without that split, one
+ * permanently-rejected profile pins the cursor and the whole sweep stalls forever. That is not
+ * hypothetical: it happened in production on 2026-08-27 (see `classifyKlaviyoFailure`).
  */
 export async function syncUserProfileToKlaviyo(
   user: IUser,
   brandInterestFromSignup?: string | null,
   targetDraw?: IMajorDraw,
-  cutoffDate?: Date
-): Promise<void> {
+  cutoffDate?: Date,
+  ledger?: UserGrantLedger
+): Promise<ProfileSyncResult> {
   try {
     // ✅ CRITICAL FIX: await the async userToKlaviyoProfile function
     // Pass cached draw data if provided to avoid redundant database queries
-    const profile = await userToKlaviyoProfile(user, brandInterestFromSignup, targetDraw, cutoffDate);
+    const profile = await userToKlaviyoProfile(user, brandInterestFromSignup, targetDraw, cutoffDate, ledger);
     const result = await klaviyo.upsertProfile(profile);
 
     if (result.success && result.profile_id) {
@@ -185,11 +272,44 @@ export async function syncUserProfileToKlaviyo(
           drawProperties: drawProps,
         });
       }
-    } else {
-      console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
+
+      return { ok: true, retryable: false };
     }
+
+    // RECOVERY: Klaviyo rejected the profile because of its phone number.
+    //
+    // `phone_number` is optional; the email, entry counts and membership properties on this
+    // same payload are all valid. Losing the whole profile — permanently, since a hard 400
+    // never succeeds on retry — because one optional attribute displeases Klaviyo's carrier
+    // lookup is the wrong trade. Retry once without it so the customer's marketing data is
+    // correct, and log loudly so the underlying number gets fixed.
+    if (isPhoneNumberRejection(result.error) && profile.phone_number) {
+      const { phone_number: _rejected, ...profileWithoutPhone } = profile;
+      const retry = await klaviyo.upsertProfile(profileWithoutPhone);
+
+      if (retry.success && retry.profile_id) {
+        // console.error, not warn — production strips warn.
+        console.error(
+          `[klaviyo] profile synced WITHOUT phone_number for user ${user._id} — Klaviyo rejected ` +
+            `their stored mobile as SMS-ineligible. Every other property is up to date; fix the ` +
+            `number to restore SMS. Original error: ${result.error}`
+        );
+        return { ok: true, retryable: false };
+      }
+
+      console.error(
+        `❌ Klaviyo profile still rejected after dropping phone_number for user ${user._id}:`,
+        retry.error
+      );
+      return { ok: false, ...classifyKlaviyoFailure(retry.error), error: retry.error };
+    }
+
+    console.error(`❌ Failed to sync Klaviyo profile for ${user.email}:`, result.error);
+    return { ok: false, ...classifyKlaviyoFailure(result.error), error: result.error };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error(`❌ Error syncing Klaviyo profile for ${user.email}:`, error);
+    return { ok: false, ...classifyKlaviyoFailure(message), error: message };
   }
 }
 

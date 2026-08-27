@@ -413,7 +413,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-07-31"
+      "lastVerified": "2026-08-26"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -462,7 +462,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-08-12"
+      "lastVerified": "2026-08-26"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
@@ -470,9 +470,12 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/services/redeemables/**",
         "src/services/milestones/**",
         "src/utils/redeemables/**",
+        "src/lib/bonus-code-webhook/**",
         "src/models/RedeemableIssuance.ts",
+        "src/models/BonusCodeWebhookCall.ts",
         "src/models/MilestoneIssuance.ts",
         "src/models/MilestoneReward.ts",
+        "src/app/api/bonus-codes/**",
         "src/app/api/redeemables/**",
         "src/app/api/rewards/**",
         "src/app/(site)/rewards/**",
@@ -481,7 +484,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useEntryRewardToast.ts",
         "src/utils/rewards-widget-spotlight-storage.ts"
       ],
-      "lastVerified": "2026-08-03"
+      "lastVerified": "2026-08-26"
     },
     "promo": {
       "docs": "docs/promo/",
@@ -713,6 +716,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/types/tracking.ts",
         "src/types/klaviyo.ts",
         "src/services/facebook-ads-health/**",
+        "src/models/KlaviyoSyncState.ts",
         "src/models/AdDestination.ts",
         "src/models/MetaAdInsightsDaily.ts",
         "src/models/TikTokAdInsightsDaily.ts",
@@ -728,7 +732,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-08-10"
+      "lastVerified": "2026-08-26"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",
@@ -877,7 +881,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-08-11"
+      "lastVerified": "2026-08-26"
     },
     "admin": {
       "docs": "docs/admin/",

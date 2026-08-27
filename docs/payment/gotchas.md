@@ -362,3 +362,8 @@ number is recoverable. A broken checkout is not.
 > production. Until it is, the index turns a rare data collision into a failed purchase. The
 > normalise migration has no such constraint — it is safe to run against the old code, and in fact
 > makes `register`'s existing duplicate check work correctly.
+## `account-manager` no longer initialises `upsellStats` (2026-08-27)
+
+`createUserAccount` in `src/utils/payment/account-manager.ts` seeded a five-counter
+`upsellStats` object on guest-checkout account creation. The field is deleted from the User
+model — see `docs/upsell/gotchas.md`. `upsellPurchases` / `upsellHistory` are untouched.

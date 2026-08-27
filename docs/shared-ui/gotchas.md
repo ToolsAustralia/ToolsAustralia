@@ -1342,3 +1342,11 @@ It also suppresses the "Complete Profile" item beside it, which is gated on
 
 Widening the condition to `!(isEmailVerified || isMobileVerified)` is the fix; it is **not** applied
 yet. Traced in the code, not observed in a browser.
+## `UpsellManager.tsx` deleted (2026-08-27)
+
+`src/components/modals/UpsellManager.tsx` was imported nowhere in the app and has been removed,
+along with `UpsellManagerProps` from `src/types/upsell.ts`. It was the only caller of the upsell
+tracking endpoint — see `docs/upsell/gotchas.md`.
+
+`UpsellOffer` and `SAMPLE_UPSELL_OFFERS` remain in `types/upsell.ts`: the dev modal gallery
+(`src/components/dev/ModalsGalleryClient.tsx`) still uses them.

@@ -1,8 +1,12 @@
 import mongoose from "mongoose";
 import { MilestoneService } from "@/services/milestones";
 
-/** Draw buckets this service may grant into. "streak" = Membership Streak auto-grants. */
-export type DrawGrantSourceKey = "bonus-entry-promo" | "streak";
+/**
+ * Draw buckets this service may grant into.
+ * - "streak"              — Membership Streak auto-grants
+ * - "cancellation-upsell" — the 100-entry retention offer (added 2026-08-26)
+ */
+export type DrawGrantSourceKey = "bonus-entry-promo" | "streak" | "cancellation-upsell";
 
 export class DrawGrantService {
   /**
