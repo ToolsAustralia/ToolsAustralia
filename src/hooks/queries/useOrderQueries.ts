@@ -137,7 +137,15 @@ export interface OrderListRow {
   shippingCost?: number;
   submittedAt?: string;
   trackingNumber?: string;
-  items: { name: string; sku?: string; variant?: string; quantity: number; price: number }[];
+  items: {
+    name: string;
+    sku?: string;
+    variant?: string;
+    quantity: number;
+    price: number;
+    /** Joined from the referenced product, not snapshotted — see orderQueries. */
+    image?: string;
+  }[];
 }
 
 export interface OrderResponse {

@@ -1,5 +1,16 @@
 import mongoose, { type FilterQuery } from "mongoose";
 import Order, { type IOrder } from "@/models/Order";
+/*
+  Imported for its SIDE EFFECT, not its value: the populate() below resolves
+  `products.product` through the "Product" model, and Mongoose throws
+  MissingSchemaError at query time if nothing has registered it yet.
+
+  Until now this worked only because some other module happened to import
+  Product first. That holds on a warm server and fails on a cold one where
+  /api/orders is the first route hit — a 500 that appears only on the deploy
+  after a restart, which is the worst kind to reproduce.
+*/
+import "@/models/Product";
 import { sendShopOrderShipped } from "@/services/shop/sendOrderShipped";
 
 /**
@@ -97,6 +108,18 @@ export interface OrderListItem {
     variant?: string;
     quantity: number;
     price: number;
+    /**
+     * First catalogue image, joined from the referenced product.
+     *
+     * NOT a snapshot like name and price. Those are frozen because a rename must
+     * not rewrite order history; an image is the same garment either way, so the
+     * current one is the right one to show — and storing a copy per line would
+     * duplicate a URL that already exists.
+     *
+     * Optional throughout: a product deleted since the order still has a line,
+     * and that line must render without one.
+     */
+    image?: string;
   }[];
 }
 
@@ -211,7 +234,7 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
   // customer's own history, so it cannot leak there even if someone later adds it
   // to the unconditional half of the row mapping.
   const projection =
-    "orderNumber status createdAt totalAmount shippingCost products.name products.sku products.size products.colour products.quantity products.price products.category shippingAddress.firstName shippingAddress.lastName entriesGranted submittedAt trackingNumber" +
+    "orderNumber status createdAt totalAmount shippingCost products.product products.name products.sku products.size products.colour products.quantity products.price products.category shippingAddress.firstName shippingAddress.lastName entriesGranted submittedAt trackingNumber" +
     (isAdminSurface
       ? " paymentIntentId shippingAddress.email shippingAddress.phone shippingAddress.addressLine1 shippingAddress.addressLine2 shippingAddress.address shippingAddress.city shippingAddress.state shippingAddress.postalCode shippingAddress.deliveryInstructions"
       : "");
@@ -219,6 +242,13 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
   const [docs, total] = await Promise.all([
     Order.find(query)
       .select(projection)
+      /*
+        One extra query for the whole page, not one per line: Mongoose collects
+        every referenced product id and fetches them with a single $in. `images`
+        only — the rest of a product document is irrelevant here and this list has
+        already shipped MB-scale payloads once by not saying so.
+      */
+      .populate({ path: "products.product", select: "images" })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
@@ -263,6 +293,13 @@ export async function listOrders(filters: OrderListFilters = {}): Promise<OrderL
       items: (o.products ?? []).map((p) => ({
         name: p.name ?? "Item",
         sku: p.sku,
+        // populate() replaces the ObjectId with the document when it resolves and
+        // leaves the id in place when it does not, so the shape is checked rather
+        // than assumed — a deleted product must not throw here.
+        image:
+          typeof p.product === "object" && p.product !== null && "images" in p.product
+            ? ((p.product as { images?: string[] }).images ?? [])[0]
+            : undefined,
         // Colour before size reads the way a person says it: "Black · L".
         variant: [p.colour, p.size].filter(Boolean).join(" · ") || undefined,
         quantity: p.quantity,

@@ -532,3 +532,41 @@ buckets must include it**, or the displayed total falls short of the entries act
 
 The legend row renders only above zero — merchandise entries ship dark at
 `includedEntries: 0`, and a "Shop 0" line would state a promise we are not making.
+
+## A grid item's `min-width: auto` floors the checkout at ~414px (2026-08-27)
+
+Checkout was clipped on small phones — the right-hand edge of the address form and
+the totals column simply were not there below ~430px. The layout looked correct in
+DevTools' element panel, which is why it read as a rendering bug.
+
+It is a **shrink** bug. A grid item defaults to `min-width: auto`, which floors it
+at its content's *min-content* width rather than at zero. A bare `<input>` reports
+a min-content width of roughly twenty characters (~177px) regardless of the CSS
+width applied to it — **`w-full` sets the used width, not the intrinsic minimum**.
+Two inputs in a `grid-cols-2` row therefore floored the left column near 372px,
+414px with the section padding. On a 320px viewport that column overflowed its
+278px track.
+
+Nothing scrolled, because `body` carries `overflow-x: clip` — so instead of a
+horizontal scrollbar revealing the overflow, the content was silently sliced off.
+**A clipped ancestor turns a layout bug into an invisible one**; `document
+.documentElement.scrollWidth` stays inside the viewport and the usual overflow
+check reports healthy. Measure `document.body.scrollWidth` and each element's
+`getBoundingClientRect().right` against `innerWidth` instead.
+
+The fix is `min-w-0` at **every** level of the chain — the two outer grid columns,
+the label wrappers that are the inner grid's items, and the controls themselves.
+One `min-w-0` at the top does nothing while a descendant still floors the width.
+
+## `orderQueries.ts` populates a model it does not import (2026-08-27)
+
+`listOrders` resolves `products.product` through the `"Product"` model, and Mongoose
+throws `MissingSchemaError` at query time if nothing has registered it. The file
+imported only `Order`, so it worked purely because some other module happened to
+import `Product` first.
+
+That holds on a warm server and fails on a cold one where `/api/orders` is the
+first route hit — a 500 that appears only on the deploy right after a restart.
+`import "@/models/Product"` is now there for its side effect. **Any service that
+populates a ref must import the ref'd model itself**; relying on another module's
+import order is a race the compiler cannot see.

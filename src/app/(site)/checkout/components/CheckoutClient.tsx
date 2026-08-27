@@ -418,9 +418,23 @@ export default function CheckoutClient() {
     <div className="mx-auto max-w-5xl px-4 pb-8 pt-[calc(var(--app-header-h)+1.5rem)] sm:pb-12 sm:pt-[calc(var(--app-header-h-lg)+2rem)]">
       <h1 className="mb-8 text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">Checkout</h1>
 
+      {/*
+        min-w-0 on BOTH columns, not decoration.
+
+        A grid item defaults to `min-width: auto`, which floors it at its content's
+        min-content width instead of at zero. A bare <input> reports a min-content
+        width of roughly twenty characters (~177px) no matter what CSS width it is
+        given — `w-full` sets the used width, not the intrinsic minimum. Two of them
+        in a two-column row therefore floor this column near 372px, so on a 320px
+        phone the column overflowed its 278px track and `body { overflow-x: clip }`
+        quietly sliced the right edge off the form and the totals.
+
+        It clipped rather than scrolled, which is why it read as a rendering bug
+        rather than a layout one.
+      */}
       <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
         {/* Left: address then payment */}
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <section className="rounded-xl border border-gray-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900">
             <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">Delivery address</h2>
 
@@ -447,7 +461,7 @@ export default function CheckoutClient() {
                   Postcode paired beneath it; all three sit on one row from sm up. */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
                 <Field wrapperClassName="col-span-2 sm:col-span-1" label="Suburb" value={address.city} onChange={set("city")} onBlur={markTouched("city")} error={fieldError("city")} required disabled={!!clientSecret} />
-                <label className="block">
+                <label className="block min-w-0">
                   <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-neutral-200">State</span>
                   <select
                     value={address.state}
@@ -456,7 +470,7 @@ export default function CheckoutClient() {
                     aria-invalid={fieldError("state") ? true : undefined}
                     required
                     disabled={!!clientSecret}
-                    className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50 dark:bg-neutral-800 dark:text-neutral-100 ${
+                    className={`w-full min-w-0 rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 disabled:bg-gray-50 dark:bg-neutral-800 dark:text-neutral-100 ${
                       fieldError("state")
                         ? "border-red-500 dark:border-red-500"
                         : "border-gray-300 dark:border-neutral-700"
@@ -569,7 +583,7 @@ export default function CheckoutClient() {
             payment element) is far taller — without it the total scrolls out of sight
             exactly when the customer is deciding whether to pay. `h-fit` stays: it keeps
             the card at content height rather than stretching down the grid row. */}
-        <aside className="h-fit rounded-xl border border-gray-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900 lg:sticky lg:top-24">
+        <aside className="h-fit min-w-0 rounded-xl border border-gray-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900 lg:sticky lg:top-24">
           <div className="mb-4 flex items-baseline justify-between gap-3">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Your order</h2>
             {!clientSecret && (
@@ -647,7 +661,7 @@ export default function CheckoutClient() {
                   {clientSecret ? (
                     <p className="text-xs text-gray-500 dark:text-neutral-400">× {item.quantity}</p>
                   ) : (
-                    <div className="mt-1 flex items-center gap-1.5">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <button
                         type="button"
                         aria-label="Decrease quantity"
@@ -681,7 +695,7 @@ export default function CheckoutClient() {
                     </div>
                   )}
                 </div>
-                <span className="text-sm font-medium text-gray-900 dark:text-neutral-100">
+                <span className="shrink-0 whitespace-nowrap text-sm font-medium text-gray-900 tabular-nums dark:text-neutral-100">
                   {money(item.price * item.quantity)}
                 </span>
               </li>
@@ -691,7 +705,7 @@ export default function CheckoutClient() {
           <dl className="space-y-2 border-t border-gray-200 pt-4 text-sm dark:border-neutral-700">
             <Row label="Subtotal" value={money(totals.subtotal)} />
             {totals.discount > 0 && <Row label="Member discount" value={`−${money(totals.discount)}`} accent />}
-            <Row label="Delivery" value={totals.shipping === 0 ? "Free" : money(totals.shipping)} />
+            <Row label="Delivery" value={money(totals.shipping)} />
             <div className="flex justify-between border-t border-gray-200 pt-2 text-base font-bold text-gray-900 dark:border-neutral-700 dark:text-white">
               <dt>Total</dt>
               <dd>{money(totals.total)}</dd>
@@ -770,13 +784,13 @@ function Field({
   wrapperClassName?: string;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <label className={`block ${wrapperClassName ?? ""}`}>
+    <label className={`block min-w-0 ${wrapperClassName ?? ""}`}>
       <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-neutral-200">{label}</span>
       <input
         type="text"
         aria-invalid={error ? true : undefined}
         {...props}
-        className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-500 dark:bg-neutral-800 dark:text-neutral-100 dark:disabled:bg-neutral-900 ${
+        className={`w-full min-w-0 rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 disabled:bg-gray-50 disabled:text-gray-500 dark:bg-neutral-800 dark:text-neutral-100 dark:disabled:bg-neutral-900 ${
           error
             ? "border-red-500 dark:border-red-500"
             : "border-gray-300 dark:border-neutral-700"
