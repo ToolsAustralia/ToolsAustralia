@@ -14,7 +14,7 @@ import { environmentFlags } from "@/lib/environment";
 import { formatNamePart } from "@/utils/display-name";
 import Step1Password from "./Step1Password";
 import Step2Demographics from "./Step2Demographics";
-import Step3EmailVerification from "./Step3EmailVerification";
+import Step3VerifyContact from "./Step3VerifyContact";
 import SuccessScreen from "./SuccessScreen";
 import ActionFooter from "./ActionFooter";
 import ProgressHero from "./ProgressHero";
@@ -24,6 +24,42 @@ interface UserSetupModalProps {
   onClose: () => void;
   onComplete: () => void;
   initialStep?: number; // Allow starting at a specific step (1, 2, or 3)
+}
+
+/** Minimal shape `computeStepsNeeded` reads — a subset of `UserData`. */
+interface StepsInput {
+  hasPassword?: boolean;
+  state?: string;
+  profession?: string;
+  birthdate?: string;
+  isEmailVerified?: boolean;
+  isMobileVerified?: boolean;
+}
+
+/**
+ * Step 3 is satisfied by **either** verified channel — email or mobile.
+ *
+ * Registration is passwordless and step 1 is where the member sets their
+ * password, so the verified channel is the recovery credential for that password.
+ * Which channel it is does not matter; having one does.
+ *
+ * Extracted because this derivation was previously written TWICE — once in the
+ * render `useMemo` and again inline in the open/restore effect. Changing one and
+ * not the other silently desyncs the restored step from the rendered step, so
+ * both now call this.
+ */
+export function computeStepsNeeded(userData: StepsInput | null | undefined): number[] {
+  if (!userData) return [1, 2, 3];
+  const steps: number[] = [];
+  if (!userData.hasPassword) steps.push(1);
+
+  const filled = (v: unknown) => !!(v && String(v).trim().length > 0);
+  if (!filled(userData.state) || !filled(userData.profession) || !filled(userData.birthdate)) {
+    steps.push(2);
+  }
+
+  if (!userData.isEmailVerified && !userData.isMobileVerified) steps.push(3);
+  return steps;
 }
 
 const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComplete, initialStep = 1 }) => {
@@ -44,6 +80,23 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const [showEmailVerification, setShowEmailVerification] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  // Mobile verification state — the second way to satisfy step 3.
+  /** Which channel step 3 is currently showing. Email first: it costs nothing to send. */
+  const [verifyChannel, setVerifyChannel] = useState<"email" | "mobile">("email");
+  const [isMobileVerified, setIsMobileVerified] = useState(false);
+  const [isSendingSms, setIsSendingSms] = useState(false);
+  const [smsCodeSent, setSmsCodeSent] = useState(false);
+  const [smsCode, setSmsCode] = useState("");
+  const [smsError, setSmsError] = useState("");
+  const [smsCooldown, setSmsCooldown] = useState(0);
+  const isSendingSmsRef = useRef(false);
+
+  useEffect(() => {
+    if (smsCooldown <= 0) return;
+    const t = setTimeout(() => setSmsCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [smsCooldown]);
 
   // Email correction state
   const [isEditingEmail, setIsEditingEmail] = useState(false);
@@ -117,17 +170,15 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
   const { refetch, userData, loading: userDataLoading } = useUserContext();
   const { hasReferralCode } = useReferralCode();
 
-  const stepsNeeded = useMemo(() => {
-    if (!userData) return [1, 2, 3];
-    const steps: number[] = [];
-    if (!userData.hasPassword) steps.push(1);
-    const hasState = !!(userData.state && typeof userData.state === "string" && userData.state.trim().length > 0);
-    const hasProfession = !!(userData.profession && typeof userData.profession === "string" && userData.profession.trim().length > 0);
-    const hasBirthdate = !!(userData.birthdate && (typeof userData.birthdate === "string" ? userData.birthdate.trim() : String(userData.birthdate).trim()).length > 0);
-    if (!hasState || !hasProfession || !hasBirthdate) steps.push(2);
-    if (!userData.isEmailVerified) steps.push(3);
-    return steps;
-  }, [userData]);
+  const stepsNeeded = useMemo(() => computeStepsNeeded(userData), [userData]);
+
+  /**
+   * Step 3 is satisfied by either channel — see `computeStepsNeeded`.
+   * Reads the LOCAL flags as well as `userData`, so the step unlocks the instant
+   * a code is accepted rather than waiting for the profile refetch to land.
+   */
+  const hasVerifiedContact =
+    isEmailVerified || isMobileVerified || !!userData?.isEmailVerified || !!userData?.isMobileVerified;
 
   useEffect(() => {
     if (isOpen && userData && stepsNeeded.length === 0 && !userData.profileSetupCompleted) {
@@ -301,17 +352,14 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
       if (userData) {
         const hasState = !!(userData.state && typeof userData.state === "string" && userData.state.trim().length > 0);
-        const hasProfession = !!(userData.profession && typeof userData.profession === "string" && userData.profession.trim().length > 0);
-        const hasBirthdate = !!(userData.birthdate && String(userData.birthdate).trim().length > 0);
-        const isEmailVerified = !!userData.isEmailVerified;
+        const verifiedContact = !!(userData.isEmailVerified || userData.isMobileVerified);
 
-        const steps: number[] = [];
-        if (!userData.hasPassword) steps.push(1);
-        if (!hasState || !hasProfession || !hasBirthdate) steps.push(2);
-        if (!isEmailVerified) steps.push(3);
+        // Same derivation the render uses — shared so the restored step can never
+        // disagree with the rendered one.
+        const steps = computeStepsNeeded(userData);
 
         if (steps.length === 0) {
-          if (userData.profileSetupCompleted && hasState && isEmailVerified) {
+          if (userData.profileSetupCompleted && hasState && verifiedContact) {
             onClose();
             return;
           }
@@ -652,10 +700,8 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
 
   const handleComplete = async (bypassEmailCheck = false) => {
     if (activeStep === 3) {
-      if (environmentFlags.emailVerificationMandatory() && !isEmailVerified && !bypassEmailCheck) {
-        setError(
-          "Email verification is required to complete your account setup. Please verify your email address first."
-        );
+      if (environmentFlags.verifiedContactRequired() && !hasVerifiedContact && !bypassEmailCheck) {
+        setError("Please verify your email or your mobile to finish setting up your account.");
         return;
       }
 
@@ -783,6 +829,67 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
     void handleComplete();
   };
 
+  /** Text a code to the mobile ON FILE. The route reads it from the session. */
+  const handleSendSmsVerification = async () => {
+    if (isSendingSmsRef.current) return;
+    isSendingSmsRef.current = true;
+    setIsSendingSms(true);
+    setSmsError("");
+
+    try {
+      const res = await fetch("/api/auth/send-mobile-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setSmsError(data.error || "We couldn't send a code. Please try again.");
+        if (typeof data.retryAfterSeconds === "number") setSmsCooldown(data.retryAfterSeconds);
+        return;
+      }
+
+      setSmsCodeSent(true);
+      setSmsCooldown(60);
+      setSmsCode("");
+    } catch {
+      setSmsError("Something went wrong. Please check your connection and try again.");
+    } finally {
+      isSendingSmsRef.current = false;
+      setIsSendingSms(false);
+    }
+  };
+
+  const handleVerifySmsCode = async () => {
+    if (smsCode.length !== 6) return;
+    setIsSendingSms(true);
+    setSmsError("");
+
+    try {
+      const res = await fetch("/api/auth/verify-mobile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: smsCode }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setSmsError(data.error || "That code isn't valid. Please request a new one.");
+        return;
+      }
+
+      // Flip the local flag first so the step unlocks immediately; the refetch
+      // then brings `userData` in line.
+      setIsMobileVerified(true);
+      setSmsError("");
+      await refetch();
+    } catch {
+      setSmsError("Something went wrong. Please check your connection and try again.");
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
+
   const handleSendEmailVerification = async () => {
     if (isSendingEmailRef.current) return;
     if (!currentEmail) {
@@ -900,7 +1007,7 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
         !selectedProfession ||
         (selectedProfession === "Other" && !customProfession.trim()) ||
         !selectedBirthdate?.trim())) ||
-    (activeStep === 3 && environmentFlags.emailVerificationMandatory() && !isEmailVerified);
+    (activeStep === 3 && environmentFlags.verifiedContactRequired() && !hasVerifiedContact);
 
   const primaryLabel = isLoading
     ? "Saving..."
@@ -985,14 +1092,19 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
               )}
 
               {activeStep === 3 && (
-                <Step3EmailVerification
-                  isMandatory={environmentFlags.emailVerificationMandatory()}
+                <Step3VerifyContact
+                  isMandatory={environmentFlags.verifiedContactRequired()}
                   hasReferralCode={hasReferralCode}
+                  channel={verifyChannel}
+                  onChannelChange={(c) => {
+                    setVerifyChannel(c);
+                    setSmsError("");
+                  }}
                   currentEmail={currentEmail}
                   isEditingEmail={isEditingEmail}
                   newEmail={newEmail}
                   isUpdatingEmail={isUpdatingEmail}
-                  isEmailVerified={isEmailVerified}
+                  isEmailVerified={isEmailVerified || !!userData?.isEmailVerified}
                   isSendingEmail={isSendingEmail}
                   onStartEdit={() => setIsEditingEmail(true)}
                   onCancelEdit={() => {
@@ -1003,6 +1115,16 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
                   onNewEmailChange={setNewEmail}
                   onUpdateEmail={handleUpdateEmail}
                   onSendEmailVerification={handleSendEmailVerification}
+                  currentMobile={userData?.mobile}
+                  isMobileVerified={isMobileVerified || !!userData?.isMobileVerified}
+                  isSendingSms={isSendingSms}
+                  smsCodeSent={smsCodeSent}
+                  smsCode={smsCode}
+                  smsError={smsError}
+                  smsCooldown={smsCooldown}
+                  onSmsCodeChange={setSmsCode}
+                  onSendSmsVerification={handleSendSmsVerification}
+                  onVerifySmsCode={handleVerifySmsCode}
                 />
               )}
 
@@ -1035,13 +1157,13 @@ const UserSetupModal: React.FC<UserSetupModalProps> = ({ isOpen, onClose, onComp
           userName={formatNamePart(userData?.firstName)}
           onVerificationSuccessAction={handleEmailVerificationSuccess}
           onSkipAction={
-            environmentFlags.emailVerificationMandatory() ? undefined : handleSkipEmailVerification
+            environmentFlags.verifiedContactRequired() ? undefined : handleSkipEmailVerification
           }
           onWrongEmailAction={() => {
             setShowEmailVerification(false);
             setIsEditingEmail(true);
           }}
-          isMandatory={environmentFlags.emailVerificationMandatory()}
+          isMandatory={environmentFlags.verifiedContactRequired()}
         />
       )}
     </ModalContainer>

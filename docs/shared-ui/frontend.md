@@ -1578,7 +1578,7 @@ Currently tagged in this domain: `Header.tsx` (member + affiliate name/email in 
 menu, mobile menu and mobile drawer), `Monogram.tsx` (rendered initials),
 `DashboardHero.tsx` (first name, both breakpoints), `BirthdatePicker.tsx` (the DOB trigger
 label), `SettingsRedesignPayment.tsx` (cardholder name), `PortalTransit.tsx` (member name),
-`Step3EmailVerification.tsx` (echoed email).
+`Step3VerifyContact.tsx` (the echoed email and the echoed mobile).
 
 Three conventions, all load-bearing:
 
@@ -1648,3 +1648,104 @@ type, and from `PrizeShowcase`'s call site, along with the "+ $5,000 CASH" badge
 > that can set it is the **$10,000 cash-only** prize's own `cash-prize` section — so the plate
 > read `$5K` on a `$10,000` prize. It now reads **`$10K`**. Deleting a conditional's *other*
 > branch can silently repoint the branch that remains; check what still reaches it.
+
+## SMS sign-in in `LoginModal` + `ExistingAccountModal` (2026-08-27)
+
+`LoginModal` is the **popup** sign-in. In production it is reachable from exactly one place —
+`MembershipModal` → [`ExistingAccountModal`](../../src/components/modals/ExistingAccountModal/index.tsx)
+→ `LoginModal`, opened when `register` replies `isExistingAccount` — which makes it the surface a
+locked-out member actually hits, since they only re-register *because* they could not sign in.
+(`/login` is the other surface; see [auth/frontend.md](../auth/frontend.md).)
+
+### The mobile-collision dead end this closes
+
+`ExistingAccountModal` accepts `conflictField: "mobile"` and titles itself "Mobile already exists",
+but its Login button was `disabled={!email}` and it rendered `LoginModal` only under `{email && …}`.
+On a **mobile** collision `register` deliberately withholds the matched account's email (enumeration
+guard), so `MembershipModal` falls back to `formData.email` — the address the caller just typed,
+which by definition is not the account's. **Every sign-in from that modal therefore failed by
+construction**: a member holding the correct phone number was shown a door that could not open.
+
+Now `conflictField === "mobile"` plus a `mobile` prop makes the button read **"Sign in with your
+mobile"** and opens `LoginModal` with `initialFlow="sms"`. The mobile is both the only identifier
+that resolves the right account and the one thing the caller certainly has — they just typed it.
+
+### `codeChannel` — a switch, not a second flow
+
+`LoginModal` gained `codeChannel: "email" | "sms"` rather than a parallel SMS panel, so both
+channels reuse the existing six digit-boxes, paste button and keyboard navigation; only the two
+endpoints and the copy differ. Consequences worth knowing before editing:
+
+- The password form offers **"Email me a code"** and — only when a `mobile` prop is supplied —
+  **"Text me a code"**. No `mobile`, no SMS option; there is nothing to send to.
+- The **"Signing in as"** header shows the `mobile` in the SMS flow. Do not "fix" it back to `email`:
+  on a mobile collision that email is the caller's typo, not the account's.
+- Resend is disabled behind a `smsCooldown` countdown seeded to 60s (or to `retryAfterSeconds` from a
+  429), mirroring the server's one-send-per-60s rule so the tap does not simply fail.
+- Both endpoints return the same `{ success, token, user }` shape, so everything after the fetch —
+  `signIn("auto-login")`, `getSession()`, `usePurchaseInvalidation`, Klaviyo `identify` — is shared.
+  Keep it that way; the two channels differ only in how identity is proven.
+
+`MembershipModal` passes `mobile={formData.phone}`: that form names the field `phone`, but it is the
+value posted as `mobile` to `register` (`MembershipModal/index.tsx:1644`).
+
+`LoginPromptModal` is unrelated — a "please sign in" interstitial used by the mini-draw surfaces,
+with no credentials of its own. It was not changed.
+
+## UserSetupModal step 3 — one verified contact channel (2026-08-27)
+
+Step 3 used to be "verify your email". It is now "verify **one** contact channel", and either
+email **or** mobile satisfies it. Design and rationale:
+[2026-08-25-mobile-verification-and-sms-login-design.md](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+`Step3EmailVerification.tsx` is renamed
+[`Step3VerifyContact.tsx`](../../src/components/modals/UserSetupModal/Step3VerifyContact.tsx) —
+the file's job changed, not just its contents, so the name moved with it. The smoke suite
+(`npm run test:user-setup`, still 11 tests) imports the new name.
+
+**The gate is now closed.** The step reads `environmentFlags.verifiedContactRequired()`
+([`src/lib/environment.ts`](../../src/lib/environment.ts)), which returns `true`. It replaces
+`emailVerificationMandatory()`, which was hardcoded `false` — the gate was built and left open,
+so members finished setup with nothing verified at all. Six of its seven call sites are in this
+domain: [`UserSetupModal/index.tsx`](../../src/components/modals/UserSetupModal/index.tsx) ×5 —
+the `handleComplete` guard (line 703), `primaryDisabled` (1010), `Step3VerifyContact`'s
+`isMandatory` (1096) and `EmailVerificationModal`'s `onSkipAction` + `isMandatory` (1160, 1166) —
+plus [`Header.tsx:301`](../../src/components/layout/Header.tsx). The seventh is
+`logEnvironmentInfo` in the flag file itself.
+
+### The channel picker
+
+- **The tab strip renders only when `currentMobile` is set.** No number on file, no tabs — the
+  panel is the email one it has always been.
+- **Email is the default.** `verifyChannel` starts `"email"` because sending one costs nothing;
+  an SMS costs a credit per code, so mobile is the alternative rather than the lead.
+- **Either channel ends the step.** `isEmailVerified || isMobileVerified` collapses the whole
+  panel to a single confirmation banner instead of continuing to offer the other channel.
+- **Endpoints:** `POST /api/auth/send-mobile-verification` (empty body — the destination comes
+  from the session, never the request) then `POST /api/auth/verify-mobile`. Both are documented
+  in [auth/api.md](../auth/api.md).
+- **Resend is countdown-gated.** `smsCooldown` seeds to 60s after a successful send, or to the
+  route's `retryAfterSeconds` on a 429, and ticks down in a `setTimeout` effect. Both the send
+  button and the "Resend code" link stay disabled while it runs, so the tap cannot simply fail.
+
+Both echoed values — the email and the mobile — carry `data-cs-mask`, per the masking rules above.
+
+### `computeStepsNeeded` — one derivation, exported
+
+`computeStepsNeeded(userData)` is exported from
+[`UserSetupModal/index.tsx`](../../src/components/modals/UserSetupModal/index.tsx). It pushes
+step 1 when there is no password, step 2 when state / profession / birthdate is missing, and
+**step 3 only when `!isEmailVerified && !isMobileVerified`**.
+
+It is a standalone exported function because that derivation used to be written **twice** — once
+in the render `useMemo` and once inline in the open/restore effect that picks the starting step.
+Editing one and not the other silently desynced the step the modal restored from the step it
+rendered. Both call sites now go through this function; there is no second copy to forget.
+
+### `hasVerifiedContact` reads local state first
+
+`hasVerifiedContact` ORs the modal's own `isEmailVerified` / `isMobileVerified` flags with
+`userData.isEmailVerified` / `userData.isMobileVerified`. `handleVerifySmsCode` flips the local
+flag *before* awaiting `refetch()`, so the step unlocks the moment the server accepts the code
+rather than after the profile query round-trips. The same value feeds `primaryDisabled`, so the
+footer button enables at that same instant.

@@ -292,13 +292,17 @@ export default function Header({ isFixed = true }: HeaderProps) {
   // Check if user needs setup
   const isSetupRequired = checkSetupRequired(userData);
 
-  // Check if user needs email verification (has password and state but not email verified)
-  // Only show this if email verification is mandatory
-  const needsEmailVerification =
+  // Whether to nag for verification. The requirement is ONE verified channel —
+  // email OR mobile — so this must check both. Checking only `isEmailVerified`
+  // would show "Verify Email" to a member who verified by SMS, opening a setup
+  // modal that immediately self-closes because `computeStepsNeeded` already
+  // considers them done.
+  const needsContactVerification =
     userData &&
     userData.profileSetupCompleted &&
     !userData.isEmailVerified &&
-    environmentFlags.emailVerificationMandatory();
+    !userData.isMobileVerified &&
+    environmentFlags.verifiedContactRequired();
 
   // Function to trigger user setup modal
   const forceShowSetupModal = () => {
@@ -306,7 +310,7 @@ export default function Header({ isFixed = true }: HeaderProps) {
   };
 
   // Function to trigger email verification modal
-  const forceShowEmailVerificationModal = () => {
+  const forceShowVerificationModal = () => {
     requestModal("user-setup", true, { initialStep: 3 }); // true = force show, start at step 3
   };
 
@@ -1097,20 +1101,20 @@ export default function Header({ isFixed = true }: HeaderProps) {
                         </>
                       ) : (
                         <>
-                          {/* Email Verification Option - Show if user has completed profile but not verified email */}
-                          {needsEmailVerification && (
+                          {/* Verification nag — satisfied by EITHER email or mobile */}
+                          {needsContactVerification && (
                             <button
                               onClick={() => {
                                 setIsDesktopUserMenuOpen(false);
-                                forceShowEmailVerificationModal();
+                                forceShowVerificationModal();
                               }}
                               className="block w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors duration-150 font-medium"
                             >
-                              Verify Email
+                              Verify your account
                             </button>
                           )}
                           {/* Complete Profile Option - Show if setup is required and not email verification */}
-                          {isSetupRequired && !needsEmailVerification && (
+                          {isSetupRequired && !needsContactVerification && (
                             <button
                               onClick={() => {
                                 setIsDesktopUserMenuOpen(false);
@@ -1284,23 +1288,23 @@ export default function Header({ isFixed = true }: HeaderProps) {
                       </>
                     ) : (
                       <>
-                        {/* Email Verification Option - Show if user has completed profile but not verified email */}
-                        {needsEmailVerification && (
+                        {/* Verification nag — satisfied by EITHER email or mobile */}
+                        {needsContactVerification && (
                           <button
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
                               setIsMobileUserMenuOpen(false);
-                              forceShowEmailVerificationModal();
+                              forceShowVerificationModal();
                             }}
                             className="block w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors duration-150 font-medium"
                             type="button"
                           >
-                            Verify Email
+                            Verify your account
                           </button>
                         )}
                         {/* Complete Profile Option - Show if setup is required and not email verification */}
-                        {isSetupRequired && !needsEmailVerification && (
+                        {isSetupRequired && !needsContactVerification && (
                           <button
                             onClick={(e) => {
                               e.preventDefault();

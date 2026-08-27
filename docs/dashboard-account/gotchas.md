@@ -95,3 +95,44 @@ purpose, not a side effect of a sidebar fix. The one behavioural difference to w
 
 **If you ever see a sticky element not sticking**, check the computed `overflow` of every
 ancestor **including `body` and `html`** before touching the element itself.
+
+## The dashboard is now `hasEverPaid`-gated, and the flag lives on the JWT (2026-08-27)
+
+`/my-account/**` and `/rewards` are no longer reachable by a signed-in account that has never
+paid — [src/middleware.ts](../../src/middleware.ts) redirects it to `/membership`. Three
+consequences for anyone working in this domain:
+
+- **The gate reads `token.hasEverPaid`, not the database.** It is stamped in the jwt callback
+  ([src/lib/auth.ts](../../src/lib/auth.ts)), so it is only as fresh as the token. A token minted
+  **before** this shipped carries `undefined`, which the rule deliberately lets through (bouncing
+  an existing signed-in member mid-session is worse than letting one request past; the next
+  request carries the stamp). So a never-paid account reaching the dashboard stays reproducible
+  in the wild for a while — that is the gate working as designed, not a hole in it.
+- **The gate and the dashboard's own "guest" state answer different questions.** The gate asks
+  `hasEverPaid` (ever bought anything); the UI asks `dash.acct === "none"` — no *currently
+  active* membership or pack ([useDashboardState.ts](../../src/hooks/useDashboardState.ts)).
+  A lapsed member passes the gate and still gets `DashboardGuestPanel`
+  ([page-client.tsx](../../src/app/(site)/my-account/page-client.tsx)) and the settings identity
+  card's `Guest` badge
+  ([settings/page-client.tsx](../../src/app/(site)/my-account/settings/page-client.tsx)), so
+  neither became dead code — but "guest" on the dashboard now means **lapsed**, not **never
+  paid**. Don't wire new UI to one of the two predicates thinking it is the other.
+- **A one-time pack buyer passes the gate.** `hasEverPaid` counts `processedPayments`,
+  `stripeSubscriptionId`, `oneTimePackages` and `subscription.startDate`
+  ([has-ever-paid.ts](../../src/utils/auth/has-ever-paid.ts)) — a pack buyer with no membership
+  passes the gate, exactly like a cancelled or past-due member.
+
+The gate itself is owned by [security-csp/middleware.md](../security-csp/middleware.md); the rule
+for this domain is [rules.md → R1](./rules.md#r1-auth-gated). Design:
+[2026-08-25-mobile-verification-and-sms-login-design.md](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+## Editing the mobile in Settings does NOT clear `isMobileVerified` (2026-08-27)
+
+The Personal details card's **Mobile number** field posts to `/api/user/update-profile`, which
+sets `user.mobile` and leaves `isMobileVerified` untouched (verified in
+[route.ts](../../src/app/api/user/update-profile/route.ts); `User`'s `pre("save")` hook only
+normalises the number to `+61…`, it resets nothing). So a member who verifies their mobile and
+then edits it keeps the green **Verified** chip against a number nobody ever confirmed — and, once
+SMS login is live, that stale flag is attached to the recovery credential. Anything that treats
+`isMobileVerified` as proof of the number *currently* on file must not read it from this surface
+alone. Same shape as the email field, except email is not editable here.
