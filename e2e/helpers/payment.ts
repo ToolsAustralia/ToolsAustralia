@@ -1,6 +1,8 @@
 import type { Page, TestInfo } from "@playwright/test";
 import mongoose from "mongoose";
+import Stripe from "stripe";
 import { connectE2eDb, entriesForUser, findUserByEmail } from "./db";
+import { resolveE2eEnv } from "../lib/env";
 
 export const CARDS = {
   ok: { number: "4242424242424242", expiry: "12 / 30", cvc: "123" },
@@ -156,4 +158,93 @@ export async function findBenefitsGrantedRef(
   const piMatch = /^BenefitsGranted-(.+)$/.exec(doc._id);
   if (piMatch) return { kind: "pi", id: piMatch[1] };
   throw new Error(`Unrecognized paymentevents _id shape: ${doc._id}`);
+}
+
+/** The ONE route the browser mints a one-time PaymentIntent through (usePaymentIntent.ts). */
+const CREATE_PAYMENT_INTENT_PATH = "/api/stripe/create-payment-intent";
+
+/** One observed call to that route: what identity went up, what object came back. */
+export interface PaymentIntentCreation {
+  /** `userEmail` exactly as the browser sent it. `null` = the field was absent, which is
+   *  the route's "true guest" branch and stamps the literal placeholders. */
+  userEmail: string | null;
+  /** The id the route answered with; `null` when the call errored. */
+  paymentIntentId: string | null;
+}
+
+export interface PaymentIntentCreationLog {
+  /** Await AFTER the purchase has settled: resolves every in-flight body read, in call order. */
+  settle(): Promise<PaymentIntentCreation[]>;
+}
+
+/**
+ * Records every browser-side PaymentIntent creation for the rest of this page's life.
+ *
+ * WHY THIS EXISTS. The pack leg used to infer duplicate-PaymentIntent health from the
+ * entries count alone, and a duplicate only loses the campaign code when the SECOND
+ * object happens to resolve last — so reverting the fix left the leg green about two runs
+ * in three. Counting the creations is not a proxy for the defect, it IS the defect: the
+ * modal must mint exactly ONE object per pack checkout, and that object must carry a real
+ * account rather than the `"guest"` placeholder.
+ *
+ * Install BEFORE the first navigation — a listener attached later misses the pre-warm,
+ * which is the call that used to be duplicated. Body reads are pushed as promises and
+ * awaited in `settle()` so a still-streaming response can never be silently dropped.
+ */
+export function trackPaymentIntentCreations(page: Page): PaymentIntentCreationLog {
+  const pending: Array<Promise<PaymentIntentCreation>> = [];
+  page.on("response", (response) => {
+    const request = response.request();
+    if (request.method() !== "POST") return;
+    let pathname: string;
+    try {
+      pathname = new URL(response.url()).pathname;
+    } catch {
+      return;
+    }
+    if (pathname !== CREATE_PAYMENT_INTENT_PATH) return;
+    pending.push(
+      (async (): Promise<PaymentIntentCreation> => {
+        let userEmail: string | null = null;
+        try {
+          const raw = request.postData();
+          if (raw) {
+            const parsed = JSON.parse(raw) as { userEmail?: unknown };
+            if (typeof parsed.userEmail === "string" && parsed.userEmail.length > 0) {
+              userEmail = parsed.userEmail;
+            }
+          }
+        } catch {
+          // Unparseable body — reported as null, which fails the identity assertion loudly.
+        }
+        let paymentIntentId: string | null = null;
+        try {
+          const body = (await response.json()) as { payment_intent_id?: unknown };
+          if (typeof body.payment_intent_id === "string") paymentIntentId = body.payment_intent_id;
+        } catch {
+          // Errored/aborted call — counts as an observed attempt with no object.
+        }
+        return { userEmail, paymentIntentId };
+      })()
+    );
+  });
+  return { settle: () => Promise.all(pending) };
+}
+
+/**
+ * The PaymentIntent's own metadata, read back from Stripe.
+ *
+ * The DB cannot answer this: the webhook resolves the customer from the Stripe customer
+ * and the email, so a PaymentIntent stamped `userId: "guest"` still produces a correct
+ * grant row. `metadata.userId` / `metadata.userEmail` are the only place the identity
+ * the object was CREATED with survives — and `metadata.campaignCode` is the only place
+ * the attach's answer survives. Test-mode key only; `resolveE2eEnv` re-asserts that.
+ */
+export async function paymentIntentMetadata(paymentIntentId: string): Promise<Record<string, string>> {
+  resolveE2eEnv();
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) throw new Error("STRIPE_SECRET_KEY unset after resolveE2eEnv()");
+  const stripe = new Stripe(secretKey, { apiVersion: "2025-08-27.basil", typescript: true });
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  return paymentIntent.metadata ?? {};
 }

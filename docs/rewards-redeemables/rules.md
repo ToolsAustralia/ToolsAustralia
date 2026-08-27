@@ -117,6 +117,20 @@ Both call sites must stay in lockstep on this predicate: `RedemptionService.rede
 
 ## R9. The four campaign-window truncation sites must agree
 
+> **2026-08-27 — the open-ended `endsAt` sentinel changed NONE of these four sites, deliberately.**
+> A campaign may now carry `endsAt` = `NEVER_EXPIRES_ISSUANCE_DATE` (year 9999) to mean "no minting
+> backstop, issues until an admin disables it" — see
+> [architecture.md](./architecture.md#the-three-campaign-expiry-shapes-and-the-open-ended-sentinel-2026-08-27).
+> Every one of the four sites below already handles it correctly *without* knowing about it, because the
+> sentinel is a real, far-future `endsAt`: site 1's `isCampaignRedeemable` returns true through
+> `personalWindowGoverns` before `endsAt` is ever consulted; site 2's `endsAt >= now` leg matches on a
+> year-9999 date the same as on any other future date; site 3 already substitutes `endsAt: null` for a
+> personal-window campaign, so the ceiling is `now` either way; site 4 is unchanged for the same reason as
+> site 1. **Do not add an `isOpenEndedDate` branch to any of them.** `isOpenEndedDate` is a
+> presentation-layer helper for the admin form and the admin list — a fifth reading of `endsAt` in the
+> redemption path is exactly the drift this rule exists to prevent.
+
+
 A campaign that hands out **personal windows** (`validForHours` set — see `personalWindowGoverns` /
 `isCampaignRedeemable` in [bonus-code-policy.ts](../../src/utils/redeemables/bonus-code-policy.ts))
 stamps each issuance its OWN `expiresAt`. The campaign's own `endsAt` becomes a **minting
@@ -168,3 +182,64 @@ Regression coverage: [`campaign-window.test.ts`](../../src/services/redeemables/
 re-test `isCampaignRedeemable`/`personalWindowGoverns` in isolation (that's
 `test:bonus-code-policy`'s job); it proves each call site actually **consults** those predicates,
 including the purchase-ceiling override and the message reaching the real `POST` handler.
+
+## R10. A duplicate-key error is classified by WHICH index collided, never by campaign mode (2026-08-27)
+
+`RedeemableIssuance` carries two unique indexes — `(campaignId, userId)` and `(campaignId, code)` —
+and `CampaignService.createIssuanceForUser`'s mint is an upsert that can throw `E11000` on either.
+**The handler must read `error.keyPattern` and nothing else.** It used to compute
+`isUserCollision = !needsUniqueCode || keyPattern has "userId"`, whose first disjunct is
+unconditionally `true` in `campaignMode: "global"` — the comment above it stated, in plain English,
+that global mode "cannot collide on `{campaignId,code}` because it writes no code", which was
+exactly wrong (see the index note in [models.md](./models.md#redeemableissuance)). Every code
+collision was therefore reported as a `{campaignId,userId}` race, re-read, found nothing, and
+returned **`already_active` with no issuance**.
+
+Two rules follow, and both are load-bearing:
+
+1. **Classify from `keyPattern`.** `"userId" in keyPattern` ⇒ a genuine concurrent-trigger race.
+   `"code" in keyPattern` with `needsUniqueCode` ⇒ the pre-existing regenerate-and-retry.
+   `"code" in keyPattern` **without** `needsUniqueCode` ⇒ the live index is still `unique + sparse`;
+   log it naming the migration and **throw**. No `keyPattern` at all ⇒ treat it as the conservative
+   case and throw rather than guess.
+2. **`already_active` is only ever returned WITH an issuance.** That outcome is what the issue route
+   maps onto a non-retryable status for Klaviyo, and `mintBonusCodeForTrigger` emails nothing on it —
+   so `already_active` without a row is the value that silently means *"no grant exists, but tell the
+   caller everything is fine."* A `{campaignId,userId}` collision whose re-read finds no winner is a
+   broken invariant, not a race: log and throw, so the route answers `error` — the one status whose
+   retry can still recover the grant.
+
+Regression coverage: `npm run test:global-campaign-enrolment`.
+
+## R11. The Stripe stamp is authoritative; the recorded checkout intent is the recovery (2026-08-27)
+
+`campaignCode` in Stripe metadata is written on the **unpaid** object immediately before the charge
+(R3c) and always wins at grant time. But the request that writes it is capped client-side at 15s and
+the browser charges regardless of how it ends — observed live: the server answered `200 in 14903ms`,
+the browser had already aborted, the card was charged, and the webhook saw no `campaignCode`. Raising
+the cap does not close that; a dropped connection or a closed tab reproduces it at any cap.
+
+So the server records its own copy. `attachCampaignCodeToCheckout` calls
+`CampaignCodeValidationService.recordCheckoutIntent` — writing `checkoutIntentAt` /
+`checkoutIntentTargetId` onto the customer's own issuance — **before** the Stripe round trip, because
+the Stripe round trip is the slow half the browser abandons during. `checkAndRedeemCampaign` then
+consults `resolveCheckoutIntent` **only when the paid object carries no code at all**.
+
+The invariants:
+
+- **The stamp wins.** Apply A → remove → apply B is decided by the stamp, never by the intent.
+- **A removal clears the intent** (`code: null` ⇒ `checkoutIntentAt: null` across the customer's
+  rows), so "apply → remove → pay" cannot recover a code the customer took off. A code the server
+  *refuses* records a clear too.
+- **The intent is a CANDIDATE, never a decision.** `RedemptionService.redeem` still re-applies every
+  eligibility / expiry / already-spent gate, so nothing is granted that the normal path would refuse.
+- **The window expires** (`CHECKOUT_INTENT_WINDOW_MS`, 30 min). That is what stops a later purchase or
+  a renewal invoice auto-redeeming a code the customer never applied to it.
+- **It never blocks the sale.** Both halves swallow their own errors; a failure costs the recovery,
+  never the purchase.
+
+A recovery fires a `console.error` naming the issuance and the Stripe object — it is the alarm that an
+attach was lost, and a rising rate means the attach path needs attention even though the grant landed.
+
+Regression coverage: `npm run test:checkout-intent-recovery` (the service pair) and
+`npm run test:campaign-code-checkout` §7 (the ordering — intent before Stripe).

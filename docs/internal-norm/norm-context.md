@@ -3532,8 +3532,8 @@ PII not exposed: `createdBy` is the opaque admin User._id only — name/email of
     campaignMode: "global" | "unique" | "both",  // global = single shared code; unique = one code per user; both = both modes available
     targetingMode: "all-active-subscribers" | "manual-users" | "csv-users" | "dynamic-segment",
     startsAt: ISO8601,
-    endsAt: ISO8601 | null,                      // null when neverExpires is true
-    neverExpires: boolean,
+    endsAt: ISO8601 | null,                      // ISO 8601, or null when unset. A value in YEAR 9999 is the OPEN-ENDED SENTINEL: the campaign has no minting backstop and keeps issuing until an admin disables it. Treat it as "no end date", not as a real business date — never quote it back as a deadline.
+    neverExpires: boolean,                       // the CUSTOMER's clock: the coupons themselves never stop working. NOT "this campaign runs forever" — that is the open-ended endsAt above. Mutually exclusive with validForHours.
     validForHours?: number,                       // per-customer window in HOURS; when set, each issuance expires exactly validForHours after the instant it was issued (the marketing flow's webhook call), not at campaign end. Mutually exclusive with neverExpires; endsAt still gates minting of NEW issuances.
     isActive: boolean,                           // admin on/off toggle
     code: string,                                // uppercase A-Z0-9 with optional hyphens, 6–32 chars, unique per row

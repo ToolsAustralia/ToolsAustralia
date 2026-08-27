@@ -90,6 +90,56 @@ the pair is rejected at the zod boundary and in the model's `pre("save")`, so ru
 actually contend. The predicate is **imported** from `bonus-code-policy.ts`, never inlined — every
 truncation site in the codebase must agree on what "personal window" means.
 
+### The three campaign expiry shapes, and the open-ended sentinel (2026-08-27)
+
+The three stored fields answer **two different clocks**, and conflating them is what made the admin form
+unreadable:
+
+- **The campaign's clock** — `startsAt` / `endsAt`: how long we keep MINTING the code to new people.
+- **The customer's clock** — `neverExpires` / `validForHours`: how long the person holding a minted
+  issuance has to redeem it.
+
+Exactly three combinations are reachable. `campaignExpiryShape(campaign)` in
+[bonus-code-policy.ts](../../src/utils/redeemables/bonus-code-policy.ts) names them, branching in the SAME
+order as `resolveIssuanceExpiry` so the label and the stamp can never disagree:
+
+| Shape | `endsAt` | `neverExpires` | `validForHours` | Used by |
+|---|---|---|---|---|
+| `fixed-end` | a real date | `false` | unset | `ANZACDAY25`, the normal monthly coupon |
+| `personal-window` | a real date **or the open-ended sentinel** | `false` | `72` | `BACKIN200`, `LOCKIN100`, `EXTRA100` |
+| `never-expires` | unset on create (the service writes the sentinel on update) | `true` | unset | an always-on offer; nothing uses it today |
+
+`campaignExpiryShape` is **display / form only**. Mint decisions keep calling `personalWindowGoverns` and
+`resolveIssuanceExpiry` directly — routing one through the shape helper would create a fourth definition of
+"is this a trigger campaign?", which is the single axis where drift re-opens mass-minting.
+
+**The open-ended sentinel.** `NEVER_EXPIRES_ISSUANCE_DATE` (`9999-12-31T23:59:59.999Z`) now lives in
+`bonus-code-policy.ts` and is re-exported from `CampaignService.ts` (it moved so the admin modal, a client
+component, can emit it without pulling mongoose into the browser bundle). It has **two** jobs, and they are
+on different clocks:
+
+1. The `expiresAt` stamped on an issuance of a `neverExpires` campaign — *the customer's* clock (row 2 of the
+   precedence table above, unchanged).
+2. An `endsAt` meaning **"this campaign has no minting backstop; it issues until an admin disables it"** —
+   *the campaign's* clock. `updateCampaign` has always written exactly this value into `endsAt` when
+   `neverExpires` is set (because `$unset` trips the model's conditionally-required `endsAt`); the admin form
+   now writes the same value deliberately, with `neverExpires: false`, for an always-on trigger campaign.
+
+That combination — `endsAt` = sentinel, `neverExpires: false`, `validForHours: 72` — is what BACKIN200 /
+LOCKIN100 / EXTRA100 carry. It touches **no guard**: `isCampaignLive` passes via `endsAt >= now`, the minting
+`$or` matches on its `endsAt` leg, `isCampaignRedeemable` returns true via `personalWindowGoverns`, and
+`resolveIssuanceExpiry` still stamps `issuedAt + 72h`. The campaign runs forever; every coupon dies in 72
+hours. Pinned by `test:issuance-expiry` ("open-ended backstop … still yields the 72h personal window").
+
+**Detect the sentinel with `isOpenEndedDate(value)`, never with an equality test.** It is a **year threshold**
+(`getUTCFullYear() >= 9999`) on purpose. A `datetime-local` picker parses its value as LOCAL time, so a
+round-trip turns `9999-12-31T23:59:59.999Z` into an instant up to a day away — and west of UTC it rolls into
+year 10000, whose ISO serialization is the expanded `+010000-…` form. An equality test would silently report
+"this campaign has a backstop in the year 9999" and the stored value would drift a little further on every
+save. The admin form therefore also **never binds the sentinel to the picker**: on hydration an open-ended
+`endsAt` clears the picker and unticks the backstop checkbox, and on submit the sentinel is emitted from the
+constant, ignoring whatever the picker holds.
+
 **Field renamed `validForDays` → `validForHours` (2026-08-26, bonus-code-webhook-rework).** The window is
 now an **exact hour count measured from the issuing instant** (see `expiryAfterHours` below), not a count of
 whole Sydney calendar days snapped to 23:59:59.999. The rename is **complete** across all three classes of

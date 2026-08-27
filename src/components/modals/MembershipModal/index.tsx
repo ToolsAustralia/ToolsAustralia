@@ -47,6 +47,8 @@ import { ModalContainer, ModalHeader, ModalContent } from "../ui";
 import { useLoading } from "@/contexts/LoadingContext";
 import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
+// TYPE-ONLY (erased at compile time) — the module itself is server-only.
+import type { CheckoutCampaignTarget } from "@/utils/payment/campaign-code-checkout";
 import { getStripePromise } from "@/lib/stripe-client";
 import { useMemberships } from "@/hooks/useMemberships";
 import { cn } from "@/utils/cn";
@@ -289,6 +291,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const SUBSCRIPTION_CHECKOUT_STALE_MS = 60 * 60 * 1000;
   const subscriptionCreatedRef = useRef<string | null>(null);
   const subscriptionPackageIdRef = useRef<string | null>(null);
+  /**
+   * The `subscriptionRequestId` the SERVER wrote into the pre-warmed
+   * subscription's metadata. It is the possession proof `/api/stripe/attach-campaign-code`
+   * authorizes against, so it must track `subscriptionCreatedRef` exactly: set
+   * wherever that is set (create success AND sessionStorage restore), cleared
+   * wherever that is cleared.
+   */
+  const subscriptionRequestIdRef = useRef<string | null>(null);
+  /**
+   * The code we last successfully WROTE onto the checkout object, or null if we
+   * last cleared it / never wrote. Reset to null whenever a NEW checkout object
+   * is minted or restored — a new object never carries a stamp. This is what
+   * makes "apply A, card declines, remove A, retry" clear the stale A.
+   */
+  const attachedCampaignCodeRef = useRef<string | null>(null);
   const previousSubscriptionToCancelRef = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
   const lastChargedStaticPackageIdRef = useRef<string | null>(null);
@@ -421,7 +438,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   }, [isOpen, isPackageSelectionOpen]);
 
   // Hooks for API integration
-  const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser } = useStripeSubscription();
+  const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser, attachCampaignCode } = useStripeSubscription();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
   const catalogPackageIdForBenefits = useMemo(() => {
     const api = convertToAPIPlan(activePlan, [...subscriptionPackages, ...oneTimePackages]);
@@ -1092,6 +1109,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           setPaymentIntentClientSecret(null);
           subscriptionCreatedRef.current = null;
           subscriptionPackageIdRef.current = null;
+          subscriptionRequestIdRef.current = null;
+          attachedCampaignCodeRef.current = null;
           try {
             sessionStorage.removeItem(SUBSCRIPTION_CHECKOUT_STORAGE_KEY);
           } catch {
@@ -1111,6 +1130,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               setPaymentIntentClientSecret(secretStr);
               subscriptionCreatedRef.current = parsed.subscriptionId;
               subscriptionPackageIdRef.current = currentPackageId;
+              // The restored request id is what makes the pre-confirm campaign-code
+              // attach authorizable after a reload; without it the attach is skipped
+              // and a reloaded checkout silently loses the code again.
+              subscriptionRequestIdRef.current = parsed.subscriptionRequestId ?? null;
+              attachedCampaignCodeRef.current = null;
               return;
             }
           } catch {
@@ -1135,6 +1159,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             setCardFormError(null);
             subscriptionCreatedRef.current = subId;
             subscriptionPackageIdRef.current = packageId || null;
+            subscriptionRequestIdRef.current = subscriptionRequestId;
+            // A brand-new subscription never carries a stamp.
+            attachedCampaignCodeRef.current = null;
             if (res?.data?.userId) userIdRef.current = res.data.userId;
             try {
               sessionStorage.setItem(
@@ -1191,6 +1218,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               referralCode: appliedCouponPayload.referralCode,
               affiliateCode: affiliateCode || undefined,
               promoLinkCode: appliedCouponPayload.promoLinkCode,
+              // BEST-EFFORT ONLY, and usually `undefined`: this pre-warm fires the
+              // moment step 2 mounts, and the coupon box is ON step 2 — the customer
+              // has had no opportunity to type. It is kept because the effect also
+              // re-runs on later deps, so an auto-applied code (the rewards-unlock
+              // path) can legitimately be present. The AUTHORITATIVE write is the
+              // attachCampaignCode call in handleSubmit, immediately before confirm.
               campaignCode: appliedCouponPayload.campaignCode,
             })
               .then((result) => result && onSuccess(result as never))
@@ -1208,6 +1241,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             referralCode: appliedCouponPayload.referralCode,
             affiliateCode: affiliateCode || undefined,
             promoLinkCode: appliedCouponPayload.promoLinkCode,
+            // Best-effort only — see the note on the authenticated pre-warm above.
+            // The authoritative write is attachCampaignCode, just before confirm.
             campaignCode: appliedCouponPayload.campaignCode,
           })
             .then((result) => result && onSuccess(result as never))
@@ -1252,6 +1287,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 setSetupIntentClientSecret(null);
                 setCardFormError(null);
                 lastPaymentIntentAmountRef.current = amountInCents;
+                // A brand-new PaymentIntent never carries a campaignCode stamp.
+                attachedCampaignCodeRef.current = null;
               }
               isCreatingPaymentIntentRef.current = false;
             },
@@ -1315,6 +1352,8 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   setSetupIntentClientSecret(null);
                   setCardFormError(null);
                   lastPaymentIntentAmountRef.current = amountInCents;
+                  // A brand-new PaymentIntent never carries a campaignCode stamp.
+                  attachedCampaignCodeRef.current = null;
                 }
                 isCreatingPaymentIntentRef.current = false;
               },
@@ -1704,23 +1743,44 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           if (isSubscription) {
             setCardFormError(null);
           } else if (amountInCents > 0) {
-            const paymentResult = await createPaymentIntent.mutateAsync({
-              amount: amountInCents,
-              currency: "aud",
-              packageId: packageId || undefined,
-              packageName: packageName,
-            });
+            // OWN THE PRE-WARM MUTEX FOR THE WHOLE ROUND TRIP. `isCreatingPaymentIntentRef`
+            // is the ONLY thing the step-2 pre-warm effect checks. This call used to leave
+            // it false, so the render triggered by `setGuestUserData` / `setCurrentStep(2)`
+            // fired that effect while this request was still in flight and a SECOND
+            // PaymentIntent was created — whichever resolved last became the object the
+            // card was charged against.
+            isCreatingPaymentIntentRef.current = true;
+            try {
+              const paymentResult = await createPaymentIntent.mutateAsync({
+                amount: amountInCents,
+                currency: "aud",
+                packageId: packageId || undefined,
+                packageName: packageName,
+                // WITHOUT THIS the route takes its "true guest" branch and stamps the
+                // literal placeholders `userId: "guest"`, `userEmail: "guest"`
+                // (create-payment-intent/route.ts). `attachCampaignCodeToCheckout` can then
+                // resolve no account, `resolveCodeForCheckout` refuses, and the attach
+                // CLEARS the customer's code — the exact loss this change exists to remove,
+                // on EXTRA100's own audience. `guestUserData` is not readable in this
+                // closure (it was set in the same tick), so read the registration response.
+                userEmail: result.data.email,
+              });
 
-            if (paymentResult.success && paymentResult.client_secret) {
-              setPaymentIntentClientSecret(paymentResult.client_secret);
-              if (paymentResult.payment_intent_id) {
-                setPaymentIntentId(paymentResult.payment_intent_id);
+              if (paymentResult.success && paymentResult.client_secret) {
+                setPaymentIntentClientSecret(paymentResult.client_secret);
+                if (paymentResult.payment_intent_id) {
+                  setPaymentIntentId(paymentResult.payment_intent_id);
+                }
+                setSetupIntentClientSecret(null);
+                setCardFormError(null);
+                lastPaymentIntentAmountRef.current = amountInCents;
+                // A brand-new PaymentIntent never carries a campaignCode stamp.
+                attachedCampaignCodeRef.current = null;
+              } else {
+                throw new Error(paymentResult.error || "Failed to create PaymentIntent");
               }
-              setSetupIntentClientSecret(null);
-              setCardFormError(null);
-              lastPaymentIntentAmountRef.current = amountInCents;
-            } else {
-              throw new Error(paymentResult.error || "Failed to create PaymentIntent");
+            } finally {
+              isCreatingPaymentIntentRef.current = false;
             }
           } else {
             const setupResult = await createSetupIntent.mutateAsync();
@@ -3107,6 +3167,126 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
       lastChargedStaticPackageIdRef.current = packageId;
 
+      // ─────────────────────────────────────────────────────────────────────
+      // AUTHORITATIVE campaign-code write — the ONLY place the customer's
+      // applied code reaches Stripe on the pre-warmed path.
+      //
+      // Everything above ran before the customer could type it: CouponRow lives
+      // on step 2, the same step whose mount pre-warms the subscription /
+      // PaymentIntent. So the object we are about to charge may carry no
+      // campaignCode at all, or a STALE one from an earlier declined attempt.
+      // Write the DESIRED state now, while it is still unpaid.
+      //
+      // NEVER move this below the confirm. `payment_intent.succeeded` /
+      // `invoice.payment_succeeded` are emitted at confirm time and the grant
+      // reads the object as of webhook processing — a post-confirm write is a
+      // race the browser usually loses, and on a redirecting confirm (3-D
+      // Secure) it never runs at all. This single call sits above BOTH confirm
+      // branches (subscription and one-time) deliberately.
+      //
+      // It never blocks the sale: attachCampaignCode cannot throw, caps itself
+      // at 15s, and a failure only logs.
+      const desiredCampaignCode = appliedCouponPayload.campaignCode ?? null;
+      const payingWithSavedMethodNow = !!(useSavedPaymentMethod && selectedPaymentMethod);
+
+      /**
+       * Writes the desired campaign-code state onto ONE unpaid checkout object.
+       *
+       * Called immediately below for the pre-warmed object — and AGAIN by each
+       * decline-and-retry branch, which mints a brand-new PaymentIntent and
+       * confirms THAT one. Those recovery objects never pass through the block
+       * below (they are created after it), so without a second call the retry
+       * charge carries no code at all and falls back to the post-confirm race
+       * this change exists to remove.
+       */
+      const writeCampaignCodeTo = async (target: CheckoutCampaignTarget): Promise<void> => {
+        const attached = await attachCampaignCode({ target, code: desiredCampaignCode });
+        if (attached.success) {
+          attachedCampaignCodeRef.current = attached.campaignCode;
+          return;
+        }
+        // console.error is the ONLY level that survives a production build
+        // (next.config.ts compiler.removeConsole), so both lines below use it —
+        // but they say DIFFERENT things and must never be conflated.
+        if (attached.outcome === "unknown") {
+          // The browser gave up (client cap or a dropped connection) on a request
+          // the SERVER MAY HAVE COMPLETED — observed live: `200 in 8089ms` against
+          // an 8s cap. Claiming a loss here would make the one alarm that means
+          // "a customer was charged without their code" untrustworthy from day one.
+          // Assume the write MAY have landed, so a later retry still clears it.
+          attachedCampaignCodeRef.current = desiredCampaignCode ?? attachedCampaignCodeRef.current;
+          console.error("[campaign-code] attach outcome unknown — server may have written it; charging either way", {
+            target: target.kind,
+            code: desiredCampaignCode,
+            email: isAuthenticated ? userData?.email : guestUserData?.email,
+          });
+          return;
+        }
+        // A DEFINITE refusal from the server. This IS the "charged without the
+        // code" case, so it must carry enough identity to grant by hand.
+        console.error("[campaign-code] attach failed before confirm — charging without it", {
+          target: target.kind,
+          code: desiredCampaignCode,
+          email: isAuthenticated ? userData?.email : guestUserData?.email,
+        });
+      };
+
+      if (
+        // Saved-card doors skip the pre-warm entirely and send the code at create
+        // time (mirrors `canReuseSubscription` below), so the pre-warmed object is
+        // orphaned — attaching to it would be a wasted round trip on a
+        // customer-visible path.
+        !payingWithSavedMethodNow &&
+        // Zero latency cost for the overwhelming majority of checkouts, which
+        // never applied a code. The second clause is what lets "apply → decline →
+        // remove → retry" CLEAR a stamp that is still on the object.
+        (desiredCampaignCode !== null || attachedCampaignCodeRef.current !== null)
+      ) {
+        const isSubscriptionCheckout = activePlan.period === "mo";
+        const piIdForAttach =
+          paymentIntentId ??
+          (paymentIntentClientSecret ? paymentIntentClientSecret.split("_secret_")[0] : null);
+        const campaignCodeTarget: CheckoutCampaignTarget | null =
+          isSubscriptionCheckout && subscriptionCreatedRef.current && subscriptionRequestIdRef.current
+            ? {
+                kind: "subscription",
+                subscriptionId: subscriptionCreatedRef.current,
+                subscriptionRequestId: subscriptionRequestIdRef.current,
+              }
+            : !isSubscriptionCheckout && piIdForAttach && paymentIntentClientSecret
+              ? {
+                  kind: "payment_intent",
+                  paymentIntentId: piIdForAttach,
+                  clientSecret: paymentIntentClientSecret,
+                }
+              : null;
+
+        // No pre-warmed object to stamp: the create calls further down carry the
+        // code on those doors, so skipping here loses nothing.
+        if (campaignCodeTarget) {
+          await writeCampaignCodeTo(campaignCodeTarget);
+        } else if (
+          desiredCampaignCode !== null &&
+          // NARROW ON PURPOSE. A null target is normal and harmless on the doors
+          // that create the object with the code already in it. It is only a loss
+          // when a pre-warmed object EXISTS (and will be reused below by
+          // `canReuseSubscription` / the one-time confirm) but no possession proof
+          // could be built for it — e.g. a sessionStorage blob restored without
+          // `subscriptionRequestId`. That case used to exit with no log at all,
+          // and silence is precisely the property that let the original bug live.
+          (isSubscriptionCheckout
+            ? !!subscriptionCreatedRef.current && !subscriptionRequestIdRef.current
+            : !!paymentIntentClientSecret && !piIdForAttach)
+        ) {
+          console.error("[campaign-code] pre-warmed checkout object has no attachable target — charging without it", {
+            checkout: isSubscriptionCheckout ? "subscription" : "payment_intent",
+            code: desiredCampaignCode,
+            email: isAuthenticated ? userData?.email : guestUserData?.email,
+          });
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       if (
         activePlan.period === "mo" &&
         subscriptionCreatedRef.current &&
@@ -3284,6 +3464,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 (result.error.includes("canceled") && result.error.includes("unexpected_state"))) {
               console.warn("⚠️ PaymentIntent was canceled - automatically creating new PaymentIntent and retrying...");
 
+              // OWN THE PRE-WARM MUTEX FOR THE WHOLE RECOVERY ROUND TRIP. This is the
+              // same omission F-1 fixed at the registration pre-warm, left in place in
+              // both recovery branches. Nulling the client secret below re-opens every
+              // clause of the step-2 pre-warm gate, and `isCreatingPaymentIntentRef` is
+              // the ONLY thing that effect checks — as is the package-change effect.
+              // Left false, the render that follows this null-out minted a SECOND
+              // PaymentIntent while the recovery request was still in flight; it resolved
+              // one render later (and the 800ms settle below all but guaranteed it), so
+              // ITS client secret was the one the remounted Elements provider confirmed,
+              // while the campaign code was stamped on the recovery object this handler
+              // holds. Released in the `finally` on the try below.
+              isCreatingPaymentIntentRef.current = true;
+
               setPaymentIntentClientSecret(null);
               setPaymentIntentId(null);
               setCardFormError(null);
@@ -3327,6 +3520,25 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     throw new Error("Payment form was closed. Please try again.");
                   }
 
+                  // RE-STAMP BEFORE THIS CONFIRM. The authoritative attach above ran
+                  // against the PaymentIntent that was just canceled; this recovery
+                  // object is brand new and carries no campaignCode. It is created
+                  // BETWEEN the attach and its confirm, so the "one attach above every
+                  // confirm" placement grep passes while the charge still loses the code.
+                  attachedCampaignCodeRef.current = null;
+                  if (desiredCampaignCode !== null) {
+                    await writeCampaignCodeTo({
+                      kind: "payment_intent",
+                      // Same fallback as the main block: the id is a prefix of the
+                      // client secret, so a response missing `payment_intent_id`
+                      // still yields an attachable target.
+                      paymentIntentId:
+                        newPaymentIntentResult.payment_intent_id ??
+                        newPaymentIntentResult.client_secret.split("_secret_")[0],
+                      clientSecret: newPaymentIntentResult.client_secret,
+                    });
+                  }
+
                   console.log("🔄 Retrying payment confirmation with new PaymentIntent...");
                   const retryResult = await cardFormRef.current.confirmStripeIntent();
 
@@ -3348,6 +3560,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               } catch (recoveryError) {
                 console.error("❌ Automatic recovery failed:", recoveryError);
                 throw new Error("Payment was interrupted. Please try again - a new payment form has been created.");
+              } finally {
+                // Every exit path releases — success, the early `isSubscription` throw, a
+                // failed create, a failed confirm. A leaked `true` would keep isFormValid()
+                // returning false and disable the submit button for the rest of the session.
+                // By here `paymentIntentClientSecret` is either the recovery object (so the
+                // pre-warm gate stays shut on its own) or still null because recovery failed,
+                // in which case the effect SHOULD mint a fresh one for the reset form — and
+                // its onSuccess clears `attachedCampaignCodeRef`, so the next submit
+                // re-attaches the code.
+                isCreatingPaymentIntentRef.current = false;
               }
             } else {
               if (result.error.includes("canceled") || result.error.includes("unexpected_state")) {
@@ -3417,6 +3639,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 (result.error.includes("canceled") && result.error.includes("unexpected_state"))) {
               console.warn("⚠️ PaymentIntent was canceled - automatically creating new PaymentIntent and retrying...");
 
+              // OWN THE PRE-WARM MUTEX FOR THE WHOLE RECOVERY ROUND TRIP. This is the
+              // same omission F-1 fixed at the registration pre-warm, left in place in
+              // both recovery branches. Nulling the client secret below re-opens every
+              // clause of the step-2 pre-warm gate, and `isCreatingPaymentIntentRef` is
+              // the ONLY thing that effect checks — as is the package-change effect.
+              // Left false, the render that follows this null-out minted a SECOND
+              // PaymentIntent while the recovery request was still in flight; it resolved
+              // one render later (and the 800ms settle below all but guaranteed it), so
+              // ITS client secret was the one the remounted Elements provider confirmed,
+              // while the campaign code was stamped on the recovery object this handler
+              // holds. Released in the `finally` on the try below.
+              isCreatingPaymentIntentRef.current = true;
+
               setPaymentIntentClientSecret(null);
               setPaymentIntentId(null);
               setCardFormError(null);
@@ -3460,6 +3695,25 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     throw new Error("Payment form was closed. Please try again.");
                   }
 
+                  // RE-STAMP BEFORE THIS CONFIRM. The authoritative attach above ran
+                  // against the PaymentIntent that was just canceled; this recovery
+                  // object is brand new and carries no campaignCode. It is created
+                  // BETWEEN the attach and its confirm, so the "one attach above every
+                  // confirm" placement grep passes while the charge still loses the code.
+                  attachedCampaignCodeRef.current = null;
+                  if (desiredCampaignCode !== null) {
+                    await writeCampaignCodeTo({
+                      kind: "payment_intent",
+                      // Same fallback as the main block: the id is a prefix of the
+                      // client secret, so a response missing `payment_intent_id`
+                      // still yields an attachable target.
+                      paymentIntentId:
+                        newPaymentIntentResult.payment_intent_id ??
+                        newPaymentIntentResult.client_secret.split("_secret_")[0],
+                      clientSecret: newPaymentIntentResult.client_secret,
+                    });
+                  }
+
                   console.log("🔄 Retrying payment confirmation with new PaymentIntent...");
                   const retryResult = await cardFormRef.current.confirmStripeIntent();
 
@@ -3481,6 +3735,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               } catch (recoveryError) {
                 console.error("❌ Automatic recovery failed:", recoveryError);
                 throw new Error("Payment was interrupted. Please try again - a new payment form has been created.");
+              } finally {
+                // Every exit path releases — success, the early `isSubscription` throw, a
+                // failed create, a failed confirm. A leaked `true` would keep isFormValid()
+                // returning false and disable the submit button for the rest of the session.
+                // By here `paymentIntentClientSecret` is either the recovery object (so the
+                // pre-warm gate stays shut on its own) or still null because recovery failed,
+                // in which case the effect SHOULD mint a fresh one for the reset form — and
+                // its onSuccess clears `attachedCampaignCodeRef`, so the next submit
+                // re-attaches the code.
+                isCreatingPaymentIntentRef.current = false;
               }
             } else {
               if (result.error.includes("canceled") || result.error.includes("unexpected_state")) {

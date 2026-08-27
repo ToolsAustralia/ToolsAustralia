@@ -516,3 +516,99 @@ payments, external SSO.
 
 **Production is unaffected.** `getBaseUrl()` throws when `NEXT_PUBLIC_APP_URL` is unset in
 production, and it is set there to the real domain. This was purely a local-harness gap.
+
+## `beforeAll`/`afterAll` run once PER WORKER — a shared fixture's teardown races a live sibling
+
+`playwright.config.ts` sets `fullyParallel: true` with default workers, so the tests inside one
+`describe` land in **different worker processes**, and each worker runs the file's `beforeAll` and
+`afterAll` for itself. A hook that deletes shared setup therefore fires while another test is still
+using it.
+
+`bonus-code-journey.spec.ts` hit this exactly: its `afterAll` called
+`removeBonusCodeCampaign(CAMPAIGN_CODE)`, which deleted the campaign **and every issuance minted
+against it**, at roughly t+100s — inside the sibling leg's 180s wait for the grant on the very
+issuance being deleted. The `beforeAll`'s delete-then-insert re-ran per worker and per retry
+(`retries: 1`) with the same effect. Consequence: the red run could not be cleanly attributed to the
+product defect it was measuring, and it would have become a permanent flake generator once fixed.
+
+**Rules:**
+
+- Make shared setup an **idempotent upsert**, never delete-then-insert.
+- **Do not tear down shared fixtures at all.** `run.ts` → `wipeAndSeed` → `dropDatabase()` already
+  gives every run a clean database, so the delete buys nothing. Keep `disconnectE2eDb()`.
+- If a hook genuinely must be once-per-file rather than once-per-worker, the only safe shapes are
+  `describe.configure({ mode: "serial" })` (which also SKIPS later tests when an earlier one fails —
+  usually the wrong trade) or a global setup project.
+
+## Two waits that quietly lie
+
+- **`waitForActiveMembership` never settles for an anchor-24 purchase.** It requires
+  `subscription.status === "active"`. On AEST 25/26/27 the create routes send `trial_end`, and those
+  subscriptions rest at `trialing` — `active` exists only as a transient. Observed: 0/12 rows settled
+  there, 2/12 burned the full 180s. It is shared by three other purchase specs, so it was removed
+  from *this* spec rather than changed underneath them. If you write a new purchase spec, wait on the
+  outcome you actually care about (entries, or the `BenefitsGranted` ledger), not on a status.
+- **A fixed sleep before an absence assertion is a false-PASS generator.** `waitForTimeout(20_000)`
+  then "assert nothing happened" was tuned on one machine; a grant landing at 25s on CI leaves the
+  test GREEN while the rule it guards is broken. Wait on an observable edge first (the
+  `BenefitsGranted` doc appearing), then add a short tail.
+
+## A race-shaped defect can pass against unfixed code — assert the mechanism instead
+
+The one-time-pack leg of `bonus-code-journey.spec.ts` used to measure a race, not a certainty:
+before the 2026-08-27 fix, `create-one-time-purchase` patched the PaymentIntent metadata *after*
+the browser confirmed it, racing the webhook's own fresh retrieve. The webhook usually won. Reverting
+the fix left the leg green **two runs in three** — a suite that passes most of the time against a
+known-broken build cannot gate a launch.
+
+The lesson is not "run it three times". It is **stop inferring health from the outcome and assert
+the mechanism**. That leg now asserts the PaymentIntent COUNT (exactly one object per pack checkout,
+via `trackPaymentIntentCreations` in `e2e/helpers/payment.ts`), that the charged object IS that
+object (`findBenefitsGrantedRef().id`), and the identity + `campaignCode` read off the object's own
+Stripe metadata (`paymentIntentMetadata()`). A duplicate fails the count on every run, whichever
+one happens to win.
+
+Same trap as the fixed sleep above: an intermittent failure looks like a passing test.
+
+## `already_active` from the mint helper is fixture reuse, not a product bug
+
+`mintBonusCodeViaWebhook` returning `outcome: "already_active"` means exactly what it says: that
+customer already holds a live, unredeemed window for that campaign, so `decideRearm` refuses at its
+rule 2 (`expiresAt > now`). One live grant per customer is the rule the feature exists to enforce —
+the endpoint is behaving correctly.
+
+It shows up when the **identity is reused**, and there are two ways to do that:
+
+- Driving the leg with `npx playwright test` instead of `npm run e2e`. `E2E_RUN_ID` is only set by
+  `e2e/run.ts` (`Date.now().toString(36)`), so it falls back to the literal `"dev"` and
+  `purchaseIdentity()` produces the *same* email every time — and nothing dropped the database
+  either, because `wipeAndSeed` also lives in `run.ts`. The 72-hour window from the earlier attempt
+  is still live, so every re-run answers `already_active`.
+- Minting by hand against a **seeded, shared** account. Probing this branch left a live LOCKIN100
+  issuance on `e2e.member@e2e.local` (verified in the e2e database on 2026-08-27: `status: active`,
+  issued 00:43Z, expiring 72h later, never redeemed), which makes every later mint for that address
+  `already_active` for three days. A re-arm cannot clear it either: the cooldown is anchored on
+  `firstIssuedAt`.
+
+A clean `npm run e2e` cannot hit either — a fresh `E2E_RUN_ID` plus `dropDatabase()` means every
+leg mints for a customer that has never existed. To reset by hand, delete that customer's row from
+`redeemableissuances` (or just re-run `npm run e2e`), and never point the mint at `MEMBER`.
+
+## The console watchdog and the campaign-code log lines (2026-08-27)
+
+`CONSOLE_ALLOWLIST` in `e2e/fixtures/test.ts` carries **one** campaign-code entry, and the split is
+deliberate:
+
+- **Allowlisted:** `[campaign-code] attach outcome unknown`. The browser stopped waiting for
+  `/api/stripe/attach-campaign-code` — a client cap or a dropped connection. The server may well have
+  completed: during the fix's own run it answered `200 in 8089ms` on a request the page had already
+  abandoned, having written the code. A dev server's first-hit route compile can eat the budget on its
+  own, so this is harness noise, not a product signal.
+- **NOT allowlisted, and must stay that way:** `[campaign-code] attach failed before confirm` and
+  `[campaign-code] pre-warmed checkout object has no attachable target`. Both mean a customer was
+  charged without their code. Never widen the pattern to `\[campaign-code\]`.
+
+Related: the route answers `200 { success: false }` — not `502`/`500` — for a Stripe or unexpected
+failure, because the watchdog also records **any** same-origin response `>= 500` as a problem and this
+endpoint is non-fatal by contract. See
+[billing-stripe/api.md](../billing-stripe/api.md#post-apistripeattach-campaign-code).
