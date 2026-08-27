@@ -14,6 +14,13 @@ export interface IMonthlyEntryCampaign extends Document {
   startsAt: Date;
   endsAt?: Date;
   neverExpires: boolean;
+  /**
+   * Per-customer window in hours. When set, each issuance expires this many hours
+   * after the instant it was issued (the marketing flow's webhook call), not at the
+   * campaign's endsAt.
+   * Mutually exclusive with neverExpires. Unset => legacy behaviour (copy endsAt).
+   */
+  validForHours?: number;
   isActive: boolean;
   code: string;
   requiresPurchase: boolean;
@@ -87,6 +94,10 @@ const MonthlyEntryCampaignSchema = new Schema<IMonthlyEntryCampaign>(
       type: Boolean,
       default: false,
     },
+    validForHours: {
+      type: Number,
+      min: [1, "validForHours must be at least 1"],
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -153,6 +164,18 @@ MonthlyEntryCampaignSchema.pre("save", function (next) {
     return next(new Error("code is required"));
   }
 
+  // neverExpires and validForHours are mutually exclusive. NOTE: this guard only
+  // covers the create path — updateCampaign uses findByIdAndUpdate(..., { runValidators:
+  // true }), which runs schema validators but does NOT run pre("save") hooks, so an
+  // update can still set both. The Zod refine at the route boundary is only a cheap
+  // early gate that sees a single payload; the authoritative check for updates is
+  // CampaignService.updateCampaign's own merged-state guard, which fetches the existing
+  // document and rejects a MERGED neverExpires/validForHours pair that a partial PUT
+  // would otherwise leave inconsistent.
+  if (this.neverExpires && typeof this.validForHours === "number") {
+    return next(new Error("neverExpires and validForHours are mutually exclusive"));
+  }
+
   next();
 });
 
@@ -164,13 +187,20 @@ if (existingMonthlyEntryCampaignModel) {
   const codePathExists = Boolean(existingMonthlyEntryCampaignModel.schema.path("code"));
   const neverExpiresPathExists = Boolean(existingMonthlyEntryCampaignModel.schema.path("neverExpires"));
   const purchaseRequirementPathExists = Boolean(existingMonthlyEntryCampaignModel.schema.path("purchaseRequirement"));
+  const validForHoursPathExists = Boolean(existingMonthlyEntryCampaignModel.schema.path("validForHours"));
   const endsAtPath = existingMonthlyEntryCampaignModel.schema.path("endsAt") as
     | (mongoose.SchemaType & { isRequired?: boolean | ((this: IMonthlyEntryCampaign) => boolean) })
     | undefined;
   const endsAtIsStaticallyRequired = endsAtPath?.isRequired === true;
 
   // In dev/hot-reload, clear cached model when schema shape is stale.
-  if (!codePathExists || !neverExpiresPathExists || !purchaseRequirementPathExists || endsAtIsStaticallyRequired) {
+  if (
+    !codePathExists ||
+    !neverExpiresPathExists ||
+    !purchaseRequirementPathExists ||
+    !validForHoursPathExists ||
+    endsAtIsStaticallyRequired
+  ) {
     delete mongoose.models.MonthlyEntryCampaign;
   }
 }

@@ -14,6 +14,35 @@
 
 > _TODO: read each handler under [src/app/api/auth/](../../src/app/api/auth/), [src/app/api/user/](../../src/app/api/user/), [src/app/api/users/](../../src/app/api/users/) and document._
 
+### `POST /api/auth/register` — the guest `Started Checkout` emit (2026-08-26)
+
+`fireKlaviyoStartedCheckoutForGuestRegistration(user, validatedData)` in
+[register/route.ts](../../src/app/api/auth/register/route.ts) is the single guest funnel emitter. It is called
+from all four registration outcomes (new user + the three existing-plain-account re-registration paths), so
+`User Registered` and `Started Checkout` stay 1:1. It is gated on a resolvable `packageId` — no package means
+no checkout was started.
+
+**This emit is load-bearing beyond analytics: it is the ENTRY POINT of the guest checkout-start nurture
+flow in Klaviyo**, and that flow is what calls `POST /api/bonus-codes/v1/issue` one step above its discount
+email to mint the customer's `LOCKIN100` bonus code. Delete or narrow this emit and the whole sequence
+stops — silently, with every test in this repo still green.
+
+**The route no longer mints anything.** Between 2026-08-25 and 2026-08-26 this helper also called
+`mintBonusCodeForTrigger(user, "checkout-start")` directly; that was removed. The nurture email lands
+2.5–17 days after registration while the personal window is a fixed 72 hours, so a code minted here had
+already expired by the time the customer read about it. Minting now anchors on the webhook call instead.
+Consequences worth knowing:
+
+- The helper is **sync and returns `void`** again. It was made `async` and awaited at all four call sites
+  purely because the mint was a Mongo write plus an email that a floating promise could lose to a frozen
+  serverless function. With only `trackEventBackground` left inside, there is nothing to await.
+- The route is back to owning **no** bonus-code logic at all — no gate, no `try/catch`, no code literal.
+
+See [rewards-redeemables P7](../rewards-redeemables/patterns.md) for the mint contract. The old **known gap**
+noted here — that the *authenticated* `Started Checkout` emitters are client-side only and therefore could not
+enrol anyone, because components cannot reach Mongo — has dissolved: a Klaviyo flow does not care whether the
+event that entered it came from a browser or a server.
+
 ### `GET /api/users/[id]` + `GET /api/users/[id]/my-account` — explicit wire projections (2026-07-19)
 
 Both routes select the User document with the **additive include-list** `MY_ACCOUNT_USER_FIELDS` from

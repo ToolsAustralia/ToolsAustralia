@@ -15,11 +15,20 @@ const updateCampaignSchema = z.object({
   startsAt: z.string().optional(),
   endsAt: z.string().optional(),
   neverExpires: z.boolean().optional(),
+  validForHours: z.number().int().min(1).nullable().optional(),
   code: z.string().trim().toUpperCase().regex(/^(?=.{6,32}$)[A-Z0-9]+(?:-[A-Z0-9]+)*$/).optional(),
   requiresPurchase: z.boolean().optional(),
   purchaseRequirement: z.enum(["none", "membership", "one-time", "any"]).optional(),
   segmentConfig: monthlyCouponSegmentConfigSchema,
   isActive: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (data.neverExpires && data.validForHours != null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["validForHours"],
+      message: "neverExpires and validForHours are mutually exclusive",
+    });
+  }
 });
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -91,7 +100,10 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     return NextResponse.json({
       success: true,
       data: result,
-      message: result.softDeleted ? "Campaign has issuances and was deactivated instead of deleted" : "Campaign deleted successfully",
+      // Always a soft delete now (see CampaignService.deleteCampaign) — a hard delete
+      // racing a lazily-minted trigger campaign issuance is not safe, so the count-then-delete
+      // branch was removed. `softDeleted` is retained on the response shape for compatibility.
+      message: "Campaign deactivated.",
     });
   } catch (error) {
     console.error("Error deleting campaign:", error);

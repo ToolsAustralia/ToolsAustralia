@@ -30,6 +30,7 @@ import { STRIPE_SUBSCRIPTION_METADATA_IS_RESUBSCRIBE } from "@/utils/payment/str
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { analyzeStripePayErrorForExcessiveRetry } from "@/utils/payment/stripe/stripe-excessive-retry";
 import { createSubscriptionWithIdempotencyRetry } from "@/utils/payment/stripe/createSubscriptionWithIdempotencyRetry";
+import { CampaignCodeValidationService } from "@/services/redeemables/CampaignCodeValidationService";
 // Klaviyo integration handled by webhook for best practices
 
 const createSubscriptionExistingUserRateLimiter = createRateLimiter("create-subscription-existing-user", {
@@ -260,6 +261,18 @@ export async function POST(request: NextRequest) {
       !existingUser.subscription.isActive &&
       existingUser.subscription.lastMonthAccumulatedEntries !== undefined;
 
+    // AUTHORITATIVE campaign-code check. `/api/codes/validate` answers a GUEST
+    // from the campaign window alone (it has no session to key a per-user lookup
+    // on), and step-1 registration in this codebase does not authenticate — so a
+    // customer applying a code right after registering reaches checkout as a
+    // guest and would otherwise see APPLIED, pay, and receive nothing. Here the
+    // user id was resolved by the SERVER, so the per-user check can actually run.
+    // Refusal drops the code and logs; it never fails the purchase.
+    const verifiedCampaignCode = await CampaignCodeValidationService.resolveCodeForCheckout({
+      code: validatedData.campaignCode,
+      userId: existingUser._id?.toString(),
+      context: "create-subscription-existing-user",
+    });
     const userIdForMetadata = existingUser._id?.toString() ?? "";
     const baseMetadata = {
       packageId: validatedData.packageId,
@@ -270,7 +283,7 @@ export async function POST(request: NextRequest) {
       ...(validatedData.packageId && { planId: validatedData.packageId }),
       ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
       ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-      ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
+      ...(verifiedCampaignCode && { campaignCode: verifiedCampaignCode }),
       ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
       ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
       ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),

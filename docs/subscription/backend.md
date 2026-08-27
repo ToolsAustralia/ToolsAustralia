@@ -22,6 +22,7 @@ The single shared cancellation entry point. Used by both the user route (`/api/s
 interface CancelSubscriptionOptions {
   cancelAtPeriodEnd?: boolean;            // default true
   analytics?: { actor: "user" | "admin"; adminUserId?: string };
+  isMemberChurn?: boolean;                // default FALSE — opt-in, see below
 }
 interface CancelSubscriptionResult {
   cancelledImmediately: boolean;
@@ -44,10 +45,25 @@ interface CancelSubscriptionResult {
 7. Mongo update on `user.subscription`: `autoRenew=false`, `cancelledAt=new Date()`, `status`, `endDate` (now if immediate, else stripe end), `isActive` (false if immediate).
 8. Partner-discount queue: `handleSubscriptionQueueUpdate(user, "end")` — *only when cancelling immediately*.
 9. `await user.save()`.
-10. Klaviyo `ensureUserProfileSynced(user)` — non-blocking, errors logged not thrown.
-11. `recordCancellationAnalytics(...)` writes a `MembershipStatusHistory` row — non-blocking.
+10. **The cancel-time Klaviyo emit (added 2026-08-26).** When `isMemberChurn === true`, `emitCancellationRequested(user)` fires `"Subscription Cancellation Requested"` via `klaviyo.trackEventBackground` — fire-and-forget, wrapped in its own try/catch, so a marketing signal can never block or fail a member cancelling. It is emitted **after** `await user.save()` because it carries the *persisted* `cancelledAt` / `endDate`, not the values this run intended to write. The package block comes from a real `getPackageById(subscription.packageId)` lookup through `formatCanonicalPackageData`, so the email can print a genuine tier name; when the stored id does not resolve the event still fires and simply omits the package block (a `console.error` records it). See [tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md#subscription-cancellation-requested-2026-08-26).
 
-**Important:** Cancellation analytics events (the "Subscription Cancelled" Klaviyo / Meta event) are **only emitted from the `customer.subscription.deleted` webhook**, never from this service path, to prevent duplicate events.
+    **No win-back bonus code is minted here (changed 2026-08-26).** Between 2026-08-25 and 2026-08-26 this step called `mintBonusCodeForTrigger(user, "cancel-click")` when the flag was `true`; that block was deleted. The win-back email lands days after the cancellation while the personal window is a fixed 72 hours, so a code minted at the commit had already expired by the time the customer read about it. Minting moved to `POST /api/bonus-codes/v1/issue`, which the Klaviyo win-back flow calls one step above its discount email — the flow this step's event starts. See [rewards-redeemables P7](../rewards-redeemables/patterns.md).
+11. Klaviyo `ensureUserProfileSynced(user)` — non-blocking, errors logged not thrown.
+12. `recordCancellationAnalytics(...)` writes a `MembershipStatusHistory` row — non-blocking.
+
+**Important:** The `"Subscription Cancelled"` Klaviyo event is **only emitted from the `customer.subscription.deleted` webhook**, never from this service path, to prevent duplicate events. Any cancel-time event this service emits must therefore carry a **different** name — never rename one to `"Subscription Cancelled"` or the duplication this rule prevents comes straight back.
+
+**The one named carve-out is `"Subscription Cancellation Requested"`** (step 10 above). It is a different event, with a different name, feeding a different flow, and it is deliberately fired from this service path — it does not duplicate anything. It exists because `"Subscription Cancelled"` only fires when Stripe *deletes* the subscription, which for a cancel-at-period-end cancellation is up to a month after the member clicked cancel and is not guaranteed to arrive at all; a win-back flow needs the click. A Klaviyo segment cannot substitute: on the period-end path `subscription.status` is left unchanged, so the profile still reports `membership_status: "active"` after the post-cancel sync. Recorded as a carve-out in all three copies of the rule — [subscription/rules.md R4](./rules.md), [billing-stripe/rules.md R2](../billing-stripe/rules.md), [tracking/rules.md R2](../tracking/rules.md).
+
+**`isMemberChurn` is opt-in (default `false`)** because this service has three callers and only one of them is churn. Renamed from `mintBonusCode` on 2026-08-26 when minting left this service; it was **not** deleted with the mint, because it is the only thing in the codebase that tells member churn apart from the two non-churn cancellations — exactly the gate the cancel-time marketing signal needs. Deleting it would have silently merged three different situations into one:
+
+| Caller | `isMemberChurn` | Why |
+|--------|------------------|-----|
+| [`/api/stripe/cancel-subscription`](../../src/app/api/stripe/cancel-subscription/route.ts) (member-initiated) | `true` | The member is leaving — this is the win-back moment, and the only caller that emits `"Subscription Cancellation Requested"`. |
+| [`switchTierPastDue.ts`](../../src/services/subscription/switchTierPastDue.ts) | `false` (default) | Cancel-then-resubscribe on a past-due tier switch. The member is *staying*; a tier switch is not churn. |
+| [`/api/admin/users/[id]/cancel-subscription`](../../src/app/api/admin/users/[id]/cancel-subscription/route.ts) | `false` (default) | An admin-initiated cancellation must not silently start a win-back flow and email a customer who never asked to leave. |
+
+The **commit** — not the start of the retention flow — is still the right moment to act on: a member saved by a retention offer never churns. But `subscription.cancelledAt` and the customer's bonus-code window are no longer the same instant; they are days apart, because the window now starts when the flow reaches its discount email. Do not write code that assumes they coincide.
 
 ### `pauseAfterRenewalFailure(subscriptionId)` / `resumeAfterSuccessfulRenewalPayment(subscriptionId)`
 

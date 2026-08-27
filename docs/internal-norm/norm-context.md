@@ -3534,6 +3534,7 @@ PII not exposed: `createdBy` is the opaque admin User._id only — name/email of
     startsAt: ISO8601,
     endsAt: ISO8601 | null,                      // null when neverExpires is true
     neverExpires: boolean,
+    validForHours?: number,                       // per-customer window in HOURS; when set, each issuance expires exactly validForHours after the instant it was issued (the marketing flow's webhook call), not at campaign end. Mutually exclusive with neverExpires; endsAt still gates minting of NEW issuances.
     isActive: boolean,                           // admin on/off toggle
     code: string,                                // uppercase A-Z0-9 with optional hyphens, 6–32 chars, unique per row
     requiresPurchase: boolean,
@@ -3551,7 +3552,8 @@ PII not exposed: `createdBy` is the opaque admin User._id only — name/email of
     },
     createdAt: ISO8601,
     updatedAt: ISO8601,
-    redeemedCount: number                        // count of RedeemableIssuance rows with status === "redeemed" for this campaign
+    redeemedCount: number,                       // count of RedeemableIssuance rows with status === "redeemed" for this campaign
+    issuanceCount: number                        // count of RedeemableIssuance rows for this campaign, ANY status (not just redeemed) — same "already has issuances" signal the admin UI warns on before enabling validForHours, since existing rows are never re-stamped with a new window
   }>,
   count: number                                  // length of data[]
 }
@@ -3563,7 +3565,7 @@ PII not exposed: `segmentConfig.includeUserIds` and `segmentConfig.excludeUserId
 |---|---|---|---|
 | `monthKey` | no | — | "YYYY-MM"; restricts the result set to campaigns with the matching `monthKey`. |
 
-**Data source**: `MonthlyEntryCampaign` collection (full table or `monthKey`-filtered, sorted `monthKey` desc then `createdAt` desc), joined with a `RedeemableIssuance` `$group` aggregate keyed by `campaignId` and filtered to `status === "redeemed"`. Orchestrated by `listCampaignsWithRedemptionCounts` in `src/services/redeemables/MonthlyCouponQueryService.ts` — the same shared helper that the admin route (`GET /api/admin/monthly-coupon/campaign`) calls, so the numbers match by construction.
+**Data source**: `MonthlyEntryCampaign` collection (full table or `monthKey`-filtered, sorted `monthKey` desc then `createdAt` desc), joined with a single `RedeemableIssuance` `$group` aggregate keyed by `campaignId` that computes both `redeemedCount` (status === "redeemed") and `issuanceCount` (any status) in one pass. Orchestrated by `listCampaignsWithRedemptionCounts` in `src/services/redeemables/MonthlyCouponQueryService.ts` — the same shared helper that the admin route (`GET /api/admin/monthly-coupon/campaign`) calls, so the numbers match by construction.
 
 **Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. The underlying admin route currently authenticates via `requireAdminUser` (legacy admin check) rather than `requirePermission` — a separate migration concern; Norm's own gate uses `promos.view` as the explicit grant.
 

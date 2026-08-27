@@ -29,6 +29,8 @@ import {
   getPartnerCatalogAccessPercentForPlanId,
   getPartnerDiscountCatalogSummaryForPackageId,
 } from "@/utils/partner-discounts/partner-catalog-visibility";
+import { formatExpiryLabelAEST } from "@/utils/common/timezone";
+import type { BonusCodeTrigger } from "@/utils/redeemables/bonus-code-policy";
 
 // ============================================================
 // ONBOARDING EVENTS
@@ -441,6 +443,29 @@ export function createOneTimePackagePurchasedEvent(
     entriesGranted: number;
     pointsEarned: number;
     paymentIntentId: string;
+    /**
+     * Whether the buyer already held an ACTIVE membership at the instant of this
+     * purchase — the point-in-time discriminator between "an ACTIVE member
+     * topping up" and "someone with no active membership who bought a pack
+     * instead of joining".
+     *
+     * REQUIRED, and it must be the **pre-grant** value read before
+     * `grantBenefits` runs. This is the SAME `subscription.isActive` predicate as
+     * the live `has_active_subscription` profile property (`klaviyo-helpers.ts`),
+     * frozen at the purchase instant. It fixes STALENESS, not semantics: a
+     * Klaviyo flow reading the live property days later sees whether the customer
+     * is a member THEN, and they may have joined or churned in between — which is
+     * the part nothing downstream can reconstruct. It does NOT discriminate any
+     * better: a paused or past-due member reads `false` here too, and a member
+     * with a scheduled cancellation reads `true`. A flow that needs those three
+     * states apart wants the five-state `membership_status` profile property
+     * (`deriveMembershipStatus`), which is live, not point-in-time.
+     *
+     * This is the sole surviving carrier of a condition that used to live at a
+     * server-side call site (`packageType === "one-time" && !subscription.isActive`)
+     * removed on 2026-08-26 when bonus-code minting moved to the Klaviyo webhook.
+     */
+    hadActiveSubscription: boolean;
   }
 ): KlaviyoEvent {
   return {
@@ -456,6 +481,7 @@ export function createOneTimePackagePurchasedEvent(
       entries_granted: packageData.entriesGranted,
       points_earned: packageData.pointsEarned,
       payment_intent_id: packageData.paymentIntentId,
+      had_active_subscription: packageData.hadActiveSubscription,
       purchase_date: formatDateForKlaviyo(),
       timestamp: formatTimestampForKlaviyo(),
     },
@@ -955,6 +981,120 @@ export function createStartedCheckoutEvent(
       step: checkoutData.step,
       is_authenticated: checkoutData.isAuthenticated,
       started_at: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * Bonus Code Issued — a per-customer bonus-entry code was minted or re-armed.
+ *
+ * THIS EVENT IS OBSERVABILITY, NOT DELIVERY. It does not put the code or the
+ * deadline in front of the customer: the three discount emails carry the code
+ * string hardcoded in the marketing template, and a Klaviyo flow email renders
+ * against its OWN trigger metric (cancel-click / checkout-abandon /
+ * one-time-purchase), so it cannot resolve `expires_at_label` from here. With
+ * no admin screen for bonus codes, this event is the only record that a
+ * customer was issued one and whether the notification went out — which is why
+ * it is kept. See docs/tracking/KLAVIYO_INTEGRATION.md.
+ *
+ * `expiresAt` is a PARAMETER and must be the persisted issuance value. Never
+ * call new Date() for it here: the server enforces the stored instant, so a
+ * recomputed one makes this record disagree with what actually happened, and
+ * that record is what support answers a customer from.
+ *
+ * (Rationale corrected 2026-08-26 on both counts. It used to say "the email
+ * prints this value", and to justify itself with "a whole calendar day across
+ * Sydney midnight" — `expiryAfterHours` replaced the calendar-day model, so
+ * there is no midnight cliff. The rule survives both corrections: a re-arm
+ * MOVES this instant, so a recomputed value can be a whole 72-hour window out.)
+ */
+export function createBonusCodeIssuedEvent(
+  user: IUser,
+  data: { code: string; entriesAmount: number; issuedAt: Date; expiresAt: Date; trigger: BonusCodeTrigger }
+): KlaviyoEvent {
+  return {
+    event: "Bonus Code Issued",
+    customer_properties: getCustomerProperties(user),
+    properties: {
+      user_id: String(user._id),
+      code: data.code,
+      entries_granted: data.entriesAmount,
+      issued_at: data.issuedAt.toISOString(),
+      expires_at: data.expiresAt.toISOString(),
+      expires_at_label: formatExpiryLabelAEST(data.expiresAt),
+      trigger: data.trigger,
+    },
+  };
+}
+
+/**
+ * Subscription Cancellation Requested — the member asked to cancel and the
+ * cancellation was COMMITTED (Stripe updated, `user.save()` landed).
+ *
+ * This is the win-back flow's trigger. It exists because `"Subscription
+ * Cancelled"` fires only from the `customer.subscription.deleted` webhook, which
+ * for a cancel-at-period-end cancellation arrives AT period end — up to a month
+ * after the member actually decided to leave, and not even guaranteed then. A
+ * win-back email needs the click, not the expiry. A Klaviyo segment cannot
+ * substitute either: on the period-end path `subscription.status` is not
+ * changed, so the profile still reports `membership_status: "active"` after the
+ * post-cancel profile sync.
+ *
+ * The name is deliberately distinct from `"Subscription Cancelled"` — see the
+ * named carve-out in `docs/subscription/rules.md` R4 and its two copies.
+ *
+ * Canonical schema (see the section header above): the package block is built by
+ * `formatCanonicalPackageData` from a REAL catalogue lookup done by the caller.
+ * Do NOT copy the legacy `"Subscription Cancelled"` payload — that one hardcodes
+ * `packageName: "Subscription"` and ships the raw package id as both `tier` and
+ * `package_id`, so an email template cannot print a tier name from it.
+ *
+ * Every property here is either canonical or `*_at`, so no `CANONICAL_KEYS`
+ * addition is required.
+ */
+export function createSubscriptionCancellationRequestedEvent(
+  user: IUser,
+  data: {
+    /**
+     * The member's package, resolved from the static catalogue by the CALLER
+     * (`getPackageById(user.subscription.packageId)`).
+     *
+     * `null` when the stored id is absent or no longer resolves. The event still
+     * fires in that case — it is the only trigger the win-back flow has, so
+     * dropping it would silently exclude those members — and simply OMITS the
+     * package block rather than emitting a `"Subscription"` / raw-id sentinel.
+     */
+    packageData: { packageId: string; packageName: string; tier: string; price: number } | null;
+    /**
+     * The PERSISTED `user.subscription.cancelledAt`. Emit this event after
+     * `await user.save()`, never before — an immediate cancel and a period-end
+     * cancel persist different values and the email renders this one.
+     */
+    cancelledAt: Date;
+    /**
+     * The PERSISTED `user.subscription.endDate` — when the member's access
+     * actually stops. `null` when unknown; omitted from the payload rather than
+     * sent as a sentinel.
+     */
+    accessEndsAt: Date | null;
+  }
+): KlaviyoEvent {
+  return {
+    event: "Subscription Cancellation Requested",
+    customer_properties: getCustomerProperties(user),
+    properties: {
+      user_id: user._id.toString(),
+      ...(data.packageData
+        ? formatCanonicalPackageData({
+            packageId: data.packageData.packageId,
+            packageName: data.packageData.packageName,
+            packageType: "membership",
+            tier: data.packageData.tier,
+            price: data.packageData.price,
+          })
+        : {}),
+      cancelled_at: data.cancelledAt.toISOString(),
+      ...(data.accessEndsAt ? { access_ends_at: data.accessEndsAt.toISOString() } : {}),
     },
   };
 }

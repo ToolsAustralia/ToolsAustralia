@@ -22,7 +22,15 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const monthKey = getMonthKey();
 
-    const campaigns = (await CampaignService.getActiveCampaigns()).filter((campaign) => campaign.monthKey === monthKey);
+    // `validForHours` marks a TRIGGER campaign — each customer gets their own window,
+    // minted at their own eligibility moment. A cron mass-mint would stamp every
+    // targeted user with the same deadline and burn their one lifetime grant without
+    // them doing anything. This filter is the FIRST of three locks (the second is the
+    // trigger gate in isUserEligibleForCampaign, the third is the issuedBy === "cron"
+    // refusal in issueCampaignToUsers): it means the cron does not even try.
+    const campaigns = (await CampaignService.getActiveCampaigns()).filter(
+      (campaign) => campaign.monthKey === monthKey && !campaign.validForHours
+    );
     if (!campaigns.length) {
       return NextResponse.json({
         success: true,

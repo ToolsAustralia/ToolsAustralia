@@ -4338,7 +4338,13 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
           affiliateCode = subscription.metadata.affiliateCode;
           webhookLog("info", `✅ Retrieved promoLinkCode from subscription metadata: ${promoLinkCode}`);
         }
-        if (subscription.metadata.campaignCode) {
+        // Same initial-invoice gate as the A/B fields below, for the same reason:
+        // campaignCode is written to SUBSCRIPTION metadata at creation, so it persists
+        // for the life of the subscription. Harmless while a grant is one-shot (the row
+        // is already redeemed), but once a code can be RE-ARMED, a renewal invoice
+        // months later would silently auto-redeem a freshly re-armed grant the customer
+        // never applied.
+        if (isInitialSubscriptionInvoice && subscription.metadata.campaignCode) {
           campaignCode = subscription.metadata.campaignCode;
         }
         // ✅ A/B Testing: Extract experiment assignment from subscription metadata
@@ -4383,7 +4389,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
             webhookLog("info", `✅ Retrieved promoLinkCode from invoice payment_intent: ${promoLinkCode}`);
           }
         }
-        if (!campaignCode && paymentIntent.metadata.campaignCode) {
+        // Same initial-invoice gate as METHOD 1 and as the experimentId read just below.
+        // Belt-and-braces: a renewal's payment intent is Stripe-generated and should carry
+        // no campaignCode of ours, but Stripe's metadata-copying semantics are not something
+        // this repo can prove, and the cost of being wrong is a silently auto-redeemed
+        // re-armed grant. The gate costs nothing on the initial invoice.
+        if (isInitialSubscriptionInvoice && !campaignCode && paymentIntent.metadata.campaignCode) {
           campaignCode = paymentIntent.metadata.campaignCode;
         }
         // ✅ A/B Testing: Extract experiment assignment from payment intent metadata (if not in subscription)
@@ -4415,7 +4426,12 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
           if (promoLinkCode) {
             webhookLog("info", `✅ Retrieved promoLinkCode from charge payment_intent: ${promoLinkCode}`);
           }
-          if (!campaignCode && paymentIntent.metadata.campaignCode) {
+          // Same initial-invoice gate as METHODs 1 and 2 above, for the same
+          // reason: a re-armed grant must not be auto-redeemed by a renewal
+          // invoice the customer never applied a code to. Reachability is nil
+          // today (nothing writes campaignCode into invoice metadata), but
+          // METHOD 2's own comment deliberately refuses to rely on that.
+          if (isInitialSubscriptionInvoice && !campaignCode && paymentIntent.metadata.campaignCode) {
             campaignCode = paymentIntent.metadata.campaignCode;
           }
         }
@@ -4429,7 +4445,10 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
           webhookLog("info", `✅ Retrieved promoLinkCode from invoice metadata: ${promoLinkCode}`);
         }
       }
-      if (!campaignCode && expandedInvoice.metadata?.campaignCode) {
+      // Initial-invoice gated like METHODs 1-3. This one sits OUTSIDE the
+      // `!promoLinkCode` guard above, so without the gate it runs on EVERY
+      // invoice, including every renewal.
+      if (isInitialSubscriptionInvoice && !campaignCode && expandedInvoice.metadata?.campaignCode) {
         campaignCode = expandedInvoice.metadata.campaignCode;
       }
 

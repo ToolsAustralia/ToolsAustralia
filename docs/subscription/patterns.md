@@ -114,9 +114,13 @@ Pass an `analytics` option (`actor: "user" | "admin"`) so the service can record
 
 ## P9. Webhook is the source of truth for analytics events
 
-External tracking events (Klaviyo `Subscription Cancelled`, Meta CAPI, etc.) are emitted **only** from the matching `customer.subscription.*` webhook. API paths only write the local `MembershipStatusHistory` row.
+Lifecycle-state tracking events (Klaviyo `Subscription Cancelled`, etc.) are emitted **only** from the matching `customer.subscription.*` webhook. API paths write the local `MembershipStatusHistory` row and must not emit a second copy of the webhook's event.
 
 This prevents double-counting when both API and webhook fire on the same lifecycle change.
+
+**The pattern is about duplicate STATE events, not about silence.** An API path may emit a **differently-named** event describing an *action the customer just took*, which no webhook can report at the right time. The one instance today is `"Subscription Cancellation Requested"`, fired from `cancelSubscription()` when `isMemberChurn === true` — the cancel-CLICK signal, added 2026-08-26. `"Subscription Cancelled"` only arrives when Stripe deletes the subscription, up to a month later on a cancel-at-period-end cancel. Any such event must be registered as a named carve-out in all three copies of the rule ([rules.md R4](./rules.md), [billing-stripe/rules.md R2](../billing-stripe/rules.md), [tracking/rules.md R2](../tracking/rules.md)).
+
+(There is **no** Meta CAPI cancellation event and never has been — `src/lib/facebook.ts` carries no cancellation emitter. Corrected 2026-08-26; do not add one back on the strength of an older copy of this paragraph.)
 
 ## P10. Dedupe keys on history rows
 
