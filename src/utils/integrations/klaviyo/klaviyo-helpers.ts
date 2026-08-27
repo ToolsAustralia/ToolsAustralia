@@ -10,7 +10,6 @@
 import type { IUser } from "@/models/User";
 import type { KlaviyoProfile } from "@/types/klaviyo";
 import { getStateByCode } from "@/data/australianStates";
-import { getPackageById } from "@/data/membershipPackages";
 import {
   getPartnerCatalogAccessPercentForPlanId,
   getPartnerDiscountCatalogSummaryForPackageId,
@@ -23,64 +22,44 @@ import MajorDraw from "@/models/MajorDraw";
 import TicketEntry from "@/models/TicketEntry";
 import mongoose from "mongoose";
 import { differenceInMonths } from "date-fns";
+import {
+  type UserGrantLedger,
+  emptyGrantLedger,
+  aggregateNetGrantsByUser,
+} from "@/utils/payment/payment-event-net-queries";
+import { isValidPendingUpgrade } from "@/utils/subscription/pending-upgrade";
 
 /**
- * Calculate entry breakdown by source
- * Returns total entries from each purchase type for Klaviyo segmentation
+ * Entry counts by paid source, read from the payment ledger.
+ *
+ * This used to RECONSTRUCT membership entries as
+ * `catalogue.entriesPerMonth x floor(elapsed / 30 days)`. Measured against production on
+ * 2026-08-26 that was wrong for 4,904 of 4,904 active members (understated x5–x14), because
+ * the catalogue cannot see promo multipliers, upgrades that reset `startDate`, or
+ * resubscribes. The ledger records what was actually granted, so we read it.
+ *
+ * Covers PAID sources only. Free grants (referral, promo-link, cancellation-upsell, streak,
+ * bonus-entry-promo) are not here by construction — the all-sources lifetime total is
+ * `user.accumulatedEntries`, projected separately as `accumulated_entries`.
  */
-export function calculateEntryBreakdown(user: IUser): {
+export function calculateEntryBreakdown(
+  user: IUser,
+  ledger: UserGrantLedger
+): {
   memberEntries: number;
   oneTimeEntries: number;
   upsellEntries: number;
   miniDrawEntries: number;
 } {
-  // Calculate member entries from subscription
-  let memberEntries = 0;
-  if (user.subscription?.isActive && user.subscription?.packageId && user.subscription?.startDate) {
-    try {
-      const subscriptionPackage = getPackageById(user.subscription.packageId);
-      if (subscriptionPackage && subscriptionPackage.entriesPerMonth) {
-        const startDate = new Date(user.subscription.startDate);
-        const endDate = user.subscription.endDate ? new Date(user.subscription.endDate) : new Date();
-        const now = new Date();
-
-        // Calculate months between start and end (or now if no end date)
-        const endDateToUse = endDate > now ? now : endDate;
-        const monthsDiff = Math.max(
-          0,
-          Math.floor((endDateToUse.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30))
-        );
-
-        // Add 1 month for the current month if subscription is active
-        const totalMonths = monthsDiff + (user.subscription.isActive ? 1 : 0);
-        memberEntries = subscriptionPackage.entriesPerMonth * totalMonths;
-      }
-    } catch (error) {
-      console.error(`Error calculating member entries for user ${user._id}:`, error);
-    }
-  }
-
-  // Calculate one-time entries
-  const oneTimeEntries = user.oneTimePackages?.reduce((sum, pkg) => sum + (pkg.entriesGranted || 0), 0) || 0;
-
-  // Calculate upsell entries
-  const upsellPurchases = user.upsellPurchases || [];
-  const upsellEntries = upsellPurchases.reduce((sum, purchase) => sum + (purchase.entriesAdded || 0), 0);
-
-  if (upsellPurchases.length > 0 && upsellEntries === 0) {
-    // console.warn(
-    //   `⚠️ User ${user.email} has ${upsellPurchases.length} upsell purchase(s) but total entries is 0. Check entriesAdded values.`
-    // );
-  }
-
-  // Calculate mini-draw entries
-  const miniDrawEntries = user.miniDrawPackages?.reduce((sum, pkg) => sum + (pkg.entriesGranted || 0), 0) || 0;
+  // `user` is retained for call-site symmetry with the other calculate* helpers and for any
+  // future per-user adjustment; every number here comes from the ledger.
+  void user;
 
   return {
-    memberEntries,
-    oneTimeEntries,
-    upsellEntries,
-    miniDrawEntries,
+    memberEntries: ledger.memberEntries,
+    oneTimeEntries: ledger.oneTimeEntries,
+    upsellEntries: ledger.upsellEntries,
+    miniDrawEntries: ledger.miniDrawEntries,
   };
 }
 
@@ -110,12 +89,17 @@ export function hasUserMadePurchase(user: IUser): boolean {
  *                                   Only used if user hasn't made any purchases yet
  * @param targetDraw - Optional cached target draw (for performance optimization in bulk operations)
  * @param cutoffDate - Optional cached cutoff date (for performance optimization in bulk operations)
+ * @param ledger - Optional prefetched paid-grant ledger. Batch callers (the reconciliation
+ *                 sweep) resolve ONE ledger per batch — same caching convention as
+ *                 `targetDraw` / `cutoffDate`. Single-user callers omit it and this function
+ *                 fetches its own with one indexed query.
  */
 export async function userToKlaviyoProfile(
   user: IUser,
   brandInterestFromSignup?: string | null,
   targetDraw?: IMajorDraw,
-  cutoffDate?: Date
+  cutoffDate?: Date,
+  ledger?: UserGrantLedger
 ): Promise<KlaviyoProfile> {
   // ✅ DEBUG: Log user data structure to identify sync issues
   // console.log(`🔍 userToKlaviyoProfile called for ${user.email}:`, {
@@ -148,11 +132,25 @@ export async function userToKlaviyoProfile(
     }
   };
 
+  // Resolve the paid-grant ledger. Batch callers pass one in; single-user callers get their
+  // own via one indexed query on `userId_1_timestamp_-1`.
+  let resolvedLedger = ledger;
+  if (!resolvedLedger) {
+    try {
+      const byUser = await aggregateNetGrantsByUser([user._id]);
+      resolvedLedger = byUser.get(user._id.toString()) ?? emptyGrantLedger();
+    } catch (ledgerError) {
+      // Non-fatal, deliberately: a profile sync must not fail because one aggregation did.
+      // An empty ledger publishes zeros, which the next reconciliation sweep corrects.
+      console.error(`Error loading grant ledger for user ${user._id}:`, ledgerError);
+      resolvedLedger = emptyGrantLedger();
+    }
+  }
+
   // Calculate strategic metrics using helper functions
-  const lifetimeValue = calculateLifetimeValue(user);
+  const lifetimeValue = calculateLifetimeValue(user, resolvedLedger);
   const partnerDiscountStatus = calculatePartnerDiscountStatus(user);
-  const upsellMetrics = calculateUpsellMetrics(user);
-  const entryBreakdown = calculateEntryBreakdown(user);
+  const entryBreakdown = calculateEntryBreakdown(user, resolvedLedger);
 
   // Canonical profile properties (added 2026-05-28 — see "Canonical property names"
   // in docs/tracking/KLAVIYO_INTEGRATION.md). These coexist with legacy properties
@@ -282,7 +280,11 @@ export async function userToKlaviyoProfile(
       past_due_renewal_entries: getRenewalEntriesPreviewForProfile(user) ?? null,
 
       // Subscription lifecycle tracking
-      subscription_has_pending_upgrade: !!user.subscription?.pendingChange,
+      // NOT `!!user.subscription?.pendingChange` — Mongoose materialises that nested object
+      // as `{}`, making the expression permanently true (it was `true` on all 56,360
+      // production profiles while zero users had a real pending upgrade).
+      // See utils/subscription/pending-upgrade.ts.
+      subscription_has_pending_upgrade: isValidPendingUpgrade(user.subscription?.pendingChange),
       subscription_previous_tier:
         user.subscription?.previousSubscription?.packageId &&
         user.subscription.previousSubscription.packageId.trim() !== ""
@@ -306,12 +308,24 @@ export async function userToKlaviyoProfile(
       total_spent: lifetimeValue, // Alias for clarity
 
       // Upsell data
+      // Real: counts actual purchases off `user.upsellPurchases`.
       total_upsells_purchased: (user.upsellPurchases?.length || 0) > 0 ? user.upsellPurchases!.length : 0,
-      upsell_total_shown: upsellMetrics.totalShown,
-      upsell_total_accepted: upsellMetrics.totalAccepted,
-      upsell_total_declined: upsellMetrics.totalDeclined,
-      upsell_conversion_rate: upsellMetrics.conversionRate,
-      upsell_last_interaction: upsellMetrics.lastInteraction,
+
+      // RETIRED 2026-08-26. Their only writer (`POST /api/upsell/track`, called from
+      // `UpsellManager.tsx`) is imported nowhere, so these read 0 for ALL 56,360 users while
+      // 2,290 users had real upsell purchases — a funnel that never recorded anything.
+      //
+      // Explicit `null` CLEARS them in Klaviyo. `undefined` would be stripped by
+      // `cleanProperties` and leave the stale zeros in place, which is worse than removing
+      // them: a zero reads as a measured value. Klaviyo's own guidance is to clean out
+      // properties that are no longer useful.
+      //
+      // Re-enabling upsell funnel data means mounting the tracker; that is separate work.
+      upsell_total_shown: null,
+      upsell_total_accepted: null,
+      upsell_total_declined: null,
+      upsell_conversion_rate: null,
+      upsell_last_interaction: null,
 
       // Referral program
       referral_code: user.referral?.code,
@@ -394,86 +408,20 @@ export async function userToKlaviyoProfile(
 }
 
 /**
- * Calculate user's lifetime value from purchases
- * Includes subscriptions, one-time packages, mini-draws, and upsells
+ * Lifetime spend in dollars, refund-netted, read from the payment ledger.
+ *
+ * The previous implementation summed `catalogue.price x elapsed months` and gated the
+ * subscription portion on `subscription.isActive`, so a figure NAMED lifetime collapsed the
+ * moment a membership lapsed, and was wrong across any upgrade or downgrade.
+ *
+ * NOTE: Klaviyo also computes Historic CLV natively from the `Placed Order` / `Refunded
+ * Order` events this app already sends with `$value`, `Currency` and `Order ID`. Where the
+ * two disagree, KLAVIYO'S NATIVE FIGURE IS THE TIEBREAKER — it is derived from a source
+ * that cannot drift out of sync with what Klaviyo itself sees.
  */
-export function calculateLifetimeValue(user: IUser): number {
-  let total = 0;
-
-  // Add mini-draw package prices (stored in user model)
-  user.miniDrawPackages?.forEach((pkg) => {
-    total += pkg.price || 0;
-  });
-
-  // Add upsell purchase amounts (stored in user model)
-  const upsellPurchases = user.upsellPurchases || [];
-  if (upsellPurchases.length > 0) {
-    upsellPurchases.forEach((purchase) => {
-      const amount = purchase.amountPaid || 0;
-      total += amount;
-      // console.log(`💰 Adding upsell to lifetime value: ${purchase.offerTitle || purchase.offerId} - $${amount}`);
-    });
-  } else {
-    // console.log(
-    //   `⚠️ No upsell purchases found for user ${user.email} (upsellPurchases: ${user.upsellPurchases?.length || 0})`
-    // );
-  }
-
-  // Add subscription prices (need to look up package and calculate based on duration)
-  if (user.subscription?.isActive && user.subscription?.packageId && user.subscription?.startDate) {
-    try {
-      const subscriptionPackage = getPackageById(user.subscription.packageId);
-      if (subscriptionPackage && subscriptionPackage.price) {
-        const startDate = new Date(user.subscription.startDate);
-        const endDate = user.subscription.endDate ? new Date(user.subscription.endDate) : new Date();
-        const now = new Date();
-
-        // Calculate months between start and end (or now if no end date)
-        const endDateToUse = endDate > now ? now : endDate;
-        const monthsDiff = Math.max(
-          0,
-          Math.floor((endDateToUse.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30))
-        );
-
-        // Add 1 month for the current month if subscription is active
-        const totalMonths = monthsDiff + (user.subscription.isActive ? 1 : 0);
-        const subscriptionTotal = subscriptionPackage.price * totalMonths;
-        total += subscriptionTotal;
-        // console.log(
-        //   `💰 Adding subscription to lifetime value: ${subscriptionPackage.name} - $${subscriptionPackage.price}/month × ${totalMonths} months = $${subscriptionTotal}`
-        // );
-      } else {
-        // console.warn(
-        //   `⚠️ Subscription package not found or has no price: ${user.subscription.packageId} for user ${user.email}`
-        // );
-      }
-    } catch (error) {
-      console.error(`Error calculating subscription lifetime value for user ${user._id}:`, error);
-    }
-  } else {
-    // console.log(
-    //   `ℹ️ No active subscription for lifetime value calculation: isActive=${user.subscription?.isActive}, packageId=${user.subscription?.packageId}`
-    // );
-  }
-
-  // Add one-time package prices (need to look up package price)
-  if (user.oneTimePackages && user.oneTimePackages.length > 0) {
-    try {
-      user.oneTimePackages.forEach((pkg) => {
-        if (pkg.packageId) {
-          const oneTimePackage = getPackageById(pkg.packageId);
-          if (oneTimePackage && oneTimePackage.price) {
-            total += oneTimePackage.price;
-          }
-        }
-      });
-    } catch (error) {
-      console.error(`Error calculating one-time package lifetime value for user ${user._id}:`, error);
-    }
-  }
-
-  // console.log(`💰 Total lifetime value calculated for ${user.email}: $${total.toFixed(2)}`);
-  return total;
+export function calculateLifetimeValue(user: IUser, ledger: UserGrantLedger): number {
+  void user;
+  return ledger.netSpend;
 }
 
 /**
@@ -523,34 +471,6 @@ export function calculatePartnerDiscountStatus(user: IUser): {
   };
 }
 
-/**
- * Extract upsell engagement metrics from user
- * Returns upsell stats for Klaviyo segmentation
- */
-export function calculateUpsellMetrics(user: IUser): {
-  totalShown: number;
-  totalAccepted: number;
-  totalDeclined: number;
-  conversionRate: number;
-  lastInteraction?: string;
-} {
-  const stats = user.upsellStats;
-
-  const totalShown = stats?.totalShown || 0;
-  const totalAccepted = stats?.totalAccepted || 0;
-  const totalDeclined = stats?.totalDeclined || 0;
-
-  // Calculate conversion rate (accepted / shown, or 0 if no shows)
-  const conversionRate = totalShown > 0 ? (totalAccepted / totalShown) * 100 : 0;
-
-  return {
-    totalShown,
-    totalAccepted,
-    totalDeclined,
-    conversionRate: Math.round(conversionRate * 100) / 100, // Round to 2 decimal places
-    lastInteraction: stats?.lastInteraction?.toISOString(),
-  };
-}
 
 /**
  * Get last purchase date from user

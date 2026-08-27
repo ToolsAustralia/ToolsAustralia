@@ -158,7 +158,76 @@ function main() {
   // TA rewards-points and TA profile entries — i.e. a confidently wrong answer.
   // Bumped 83 → 85 (2026-08-17): two entries for the optional profile gender field.
   // Bumped 85 → 87 (2026-08-18): blocked-card guidance (temporary card block + whether to wait).
-  assert.strictEqual(entries.length, 87, `Expected 87 FAQ entries, got ${entries.length}`);
+  // Bumped 87 -> 90 (2026-08-25): ids 86-88 — per-customer bonus codes (the personal
+  // deadline, one-per-person / single-use, and refund behaviour). Landed ahead of the
+  // switch-on per CLAUDE.md rule 5c: the moment an admin creates the campaign a customer
+  // can be emailed a code and ask Cobber about it, and an ungrounded Cobber would
+  // improvise legally-constrained copy.
+  // STILL 90 at 2026-08-26 (bonus-code-webhook-rework): ids 86 and 87 were rewritten IN
+  // PLACE for the exact-hours window and the 30-day re-arm cooldown. Editing an answer does
+  // not move the count; only adding or removing an id does.
+  assert.strictEqual(entries.length, 90, `Expected 90 FAQ entries, got ${entries.length}`);
+
+  // 8b-ii. Bonus-code batch (ids 86-88) must exist and must state the personal deadline
+  // and the one-per-person rule — the two facts a customer most often disputes.
+  const bonusExpiry = entries.find((e) => e.id === "86");
+  assert.ok(bonusExpiry !== undefined, "FAQ entry id=86 (bonus-code expiry) must exist");
+  // 2026-08-26 (bonus-code-webhook-rework): this assertion used to REQUIRE the string
+  // "11:59pm Sydney time". That was the calendar-day model, deleted with
+  // endOfDayAESTAfterDays — a code now expires an exact number of hours after it was
+  // issued (72), at whatever time of day that lands on. The assertion is inverted rather
+  // than removed: it was pinning the wrong fact, so the negative leg is what stops the old
+  // sentence being pasted back in. Cobber answers only from grounded knowledge, and a
+  // customer told "11:59pm" who redeems at 6pm on the expiry day is refused by
+  // campaignCodeExpiredMessage naming a different time.
+  assert.ok(
+    bonusExpiry!.answer.includes("72 hours"),
+    "Bonus-code expiry FAQ (id 86) must state the exact-hours window (72 hours from issue), not a calendar-day deadline"
+  );
+  assert.ok(
+    !bonusExpiry!.answer.includes("11:59"),
+    'Bonus-code expiry FAQ (id 86) must NOT promise an 11:59pm cut-off — the window is an exact 72-hour offset and can end at any time of day'
+  );
+  // 2026-08-26, final review: the two assertions above held while the sentence NEXT to the
+  // number was still false. The first rewrite told the customer "the exact date and time is
+  // printed in the email that carries your code — check that email". No email prints it:
+  // expires_at_label is a property of the `Bonus Code Issued` metric WE emit, and a Klaviyo
+  // flow email renders against its OWN trigger metric (cancel-click / checkout-abandon /
+  // one-time-purchase), so the merge tag resolves to empty. The three discount templates
+  // carry the hardcoded code string and no date. With no in-app surface either
+  // (docs/rewards-redeemables/frontend.md, "Known gap"), that sent a customer holding a
+  // 72-hour, one-per-lifetime grant somewhere the answer does not exist. So pin the
+  // DIRECTION as well as the number: no "printed in the email", and a support path offered.
+  // If a flow on the `Bonus Code Issued` metric is ever built, this goes red — which is the
+  // point: the copy change becomes part of that work instead of drifting behind it.
+  //
+  // Pin the DIRECTIVE, not the topic. A first attempt at this guard banned the substring
+  // "printed in the email" and went red against the corrected copy, which legitimately says
+  // the date is NOT printed in the email. What must never come back is the instruction to go
+  // and look there.
+  assert.ok(
+    !/check (that|your|the) email/i.test(bonusExpiry!.answer),
+    "Bonus-code expiry FAQ (id 86) must NOT send the customer to their email for the deadline — the discount templates render against their own trigger metric and cannot resolve expires_at_label, so no email prints it"
+  );
+  assert.ok(
+    bonusExpiry!.answer.includes("/contact"),
+    "Bonus-code expiry FAQ (id 86) must offer a support path — with no email and no page showing the deadline, support reading the issuance row is the ONLY way a customer can learn it before it lapses"
+  );
+  const bonusReuse = entries.find((e) => e.id === "87");
+  assert.ok(bonusReuse !== undefined, "FAQ entry id=87 (bonus-code single use) must exist");
+  // The re-arm cooldown (REARM_COOLDOWN_DAYS = 30) is a customer-visible limit on the
+  // "an expired unused code can come back" promise this entry makes. Without the caveat the
+  // answer overpromises: qualifying again inside the cooldown produces nothing at all.
+  assert.ok(
+    /month/i.test(bonusReuse!.answer),
+    "Bonus-code reuse FAQ (id 87) must qualify the re-issue promise with the ~1-month re-arm cooldown"
+  );
+  const bonusRefund = entries.find((e) => e.id === "88");
+  assert.ok(bonusRefund !== undefined, "FAQ entry id=88 (bonus code after refund) must exist");
+  assert.ok(
+    bonusRefund!.answer.includes("/contact"),
+    "Bonus-code refund FAQ (id 88) must route disputes to the /contact page"
+  );
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).

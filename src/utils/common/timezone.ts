@@ -285,6 +285,47 @@ export function createAESTDateAsUTC(
   return aestDate;
 }
 
+/** AEST vs AEDT abbreviation for an instant. Same Intl technique as :85-88. */
+export function getAESTAbbreviation(utcDate: Date): string {
+  return (
+    new Intl.DateTimeFormat("en-AU", { timeZone: AEST_TIMEZONE, timeZoneName: "short" })
+      .formatToParts(utcDate)
+      .find((p) => p.type === "timeZoneName")?.value ?? "AEST"
+  );
+}
+
+/**
+ * The ONE place an expiry instant is turned into words. Every downstream copy of
+ * a deadline comes from here, so they can never disagree with each other or with
+ * the redemption gate. Three consumers today:
+ *  - `expires_at_label` on the `Bonus Code Issued` Klaviyo event
+ *    (`klaviyo-events.ts`). That event is OBSERVABILITY, not delivery — see
+ *    docs/tracking/KLAVIYO_INTEGRATION.md. **The three discount emails do NOT
+ *    render it**: a flow email renders against its own trigger metric
+ *    (cancel-click / checkout-abandon / one-time-purchase), not ours, so the
+ *    merge tag would come out empty. This JSDoc claimed otherwise until
+ *    2026-08-26; it was a survival of the pre-reversal design.
+ *  - `campaignCodeExpiredMessage` — the checkout/redeem refusal, and the only
+ *    surface that ever shows a customer their exact instant. It fires only
+ *    AFTER the window has lapsed.
+ *  - `RedeemableWalletItem.expiresAtLabel`. Both of its renderers are currently
+ *    unreachable (`/rewards` is behind the rewards pause flag,
+ *    `RewardsFloatingWidget` has been unmounted since the 2026-07 revamp) — see
+ *    docs/rewards-redeemables/frontend.md, "Known gap".
+ *
+ * Never hardcode " AEST": a 72-hour window from 2 Oct 2026 ends in AEDT.
+ * Never hardcode a TIME of day either — expiry windows are an exact offset from
+ * the mint instant, so the label lands wherever that offset falls, and a DST
+ * crossing shifts the wall clock by an hour (test:bonus-code-expiry pins both).
+ * Never use formatDateForKlaviyo (klaviyo-helpers.ts:759) — it is
+ * toLocaleDateString("en-US") with no timeZone option.
+ *
+ * Example: "Monday 5 October 2026, 3:00PM AEDT"
+ */
+export function formatExpiryLabelAEST(utcDate: Date): string {
+  return `${formatInTimeZone(utcDate, AEST_TIMEZONE, "EEEE d MMMM yyyy, h:mma")} ${getAESTAbbreviation(utcDate)}`;
+}
+
 /**
  * Get window "today through 27th" in AEST: start = midnight today, end = 27th 20:00 (8pm AEST/AEDT).
  * Used for "renewing today through 27th" in admin upcoming renewals and projected income.

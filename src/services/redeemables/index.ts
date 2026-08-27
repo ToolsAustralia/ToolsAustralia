@@ -2,6 +2,14 @@ export { CampaignService, getMonthKey, generateUniqueCode } from "./CampaignServ
 export { TargetingService } from "./TargetingService";
 export { CsvImportService } from "./CsvImportService";
 export { RedemptionService } from "./RedemptionService";
+export {
+  CampaignCodeValidationService,
+  campaignCodeExpiredMessage,
+  CAMPAIGN_CODE_ALREADY_REDEEMED_MESSAGE,
+  CAMPAIGN_CODE_NOT_HELD_MESSAGE,
+  CAMPAIGN_CODE_NOT_FOUND_MESSAGE,
+  type CampaignCodeValidation,
+} from "./CampaignCodeValidationService";
 export { RedeemablesWalletService } from "./RedeemablesWalletService";
 export { DrawGrantService } from "./DrawGrantService";
 export { RedemptionAnalyticsService } from "./RedemptionAnalyticsService";

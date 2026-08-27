@@ -34,6 +34,7 @@ export const GET = withNorm(
         startsAt: row.startsAt.toISOString(),
         endsAt: row.endsAt ? row.endsAt.toISOString() : null,
         neverExpires: row.neverExpires,
+        validForHours: row.validForHours,
         isActive: row.isActive,
         code: row.code,
         requiresPurchase: row.requiresPurchase,
@@ -54,6 +55,7 @@ export const GET = withNorm(
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
         redeemedCount: row.redeemedCount,
+        issuanceCount: row.issuanceCount,
       })),
       count: rows.length,
     });

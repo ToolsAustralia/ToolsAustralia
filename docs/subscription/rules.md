@@ -16,7 +16,7 @@ Same helper is used by the cancel API, the subscription webhook, and the anchor-
 
 Regardless of the `cancelAtPeriodEnd` option, when `status === "past_due"` (Stripe or Mongo), `cancelSubscription()` calls `subscriptions.cancel(id)` immediately. There is no period to preserve.
 
-Reference: [CancelSubscriptionService.ts:88-104](../../src/services/subscription/CancelSubscriptionService.ts#L88-L104).
+Reference: [CancelSubscriptionService.ts:167-181](../../src/services/subscription/CancelSubscriptionService.ts#L167-L181).
 
 ### R3. `lastMonthAccumulatedEntries` is preserved across cancel
 
@@ -34,7 +34,15 @@ Full math, worked examples, and the invariant are in [backend.md](./backend.md#e
 
 ### R4. Cancellation analytics events come from the webhook only
 
-The "Subscription Cancelled" Klaviyo / Meta event is emitted **exclusively** from the `customer.subscription.deleted` webhook handler. The cancel API path writes the `MembershipStatusHistory` row but **does not** fire any external tracking event — this prevents duplicate events when both API + webhook fire on the same cancel.
+The `"Subscription Cancelled"` **Klaviyo** event is emitted **exclusively** from the `customer.subscription.deleted` webhook handler (`handleSubscriptionDeleted` calls `klaviyo.trackEventBackground` and nothing else). The cancel API path writes the `MembershipStatusHistory` row but **does not** fire a `"Subscription Cancelled"` event — this prevents duplicate events when both API + webhook fire on the same cancel.
+
+**There is no Meta CAPI cancellation event.** This rule used to say "Klaviyo / Meta"; `src/lib/facebook.ts` has never carried a cancellation emitter. Corrected 2026-08-26 — do not add one back on the strength of this doc.
+
+**Scope, precisely:** the rule bans a *duplicate* `"Subscription Cancelled"`, not every cancel-time emit. A differently-named cancel-time event fired from the service path is a different signal to a different flow and does not duplicate anything.
+
+**Named carve-out (2026-08-26): `"Subscription Cancellation Requested"`.** `cancelSubscription()` emits it from the service path when `isMemberChurn === true`, fire-and-forget, immediately after `await user.save()`. It is the win-back flow's trigger and is **allowed**. It exists because `"Subscription Cancelled"` fires only when Stripe deletes the subscription — for a cancel-at-period-end cancellation that is up to a month after the member clicked cancel, and it early-returns in cases where it never arrives at all. A Klaviyo segment cannot substitute: the period-end path does not change `subscription.status`, so `deriveMembershipStatus` still reports `active` after the post-cancel profile sync. Builder: `createSubscriptionCancellationRequestedEvent` ([klaviyo-events.ts](../../src/utils/integrations/klaviyo/klaviyo-events.ts)); properties documented in [tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md#subscription-cancellation-requested-2026-08-26).
+
+Any **further** such event must be named here, and in the two copies of this rule ([billing-stripe/rules.md](../billing-stripe/rules.md), [tracking/rules.md](../tracking/rules.md)), in the same edit — the three drift otherwise.
 
 ## Stripe reference integrity
 

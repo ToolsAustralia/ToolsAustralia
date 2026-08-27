@@ -57,14 +57,6 @@ export async function POST(request: NextRequest) {
         isActive: true,
         savedPaymentMethods: [],
         upsellPurchases: [],
-        upsellStats: {
-          totalShown: 0,
-          totalAccepted: 0,
-          totalDeclined: 0,
-          totalDismissed: 0,
-          conversionRate: 0,
-          lastInteraction: null,
-        },
         upsellHistory: [],
         miniDrawPackages: [],
       });

@@ -33,6 +33,7 @@ import mongoose from "mongoose";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
+import { CampaignCodeValidationService } from "@/services/redeemables/CampaignCodeValidationService";
 
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -382,6 +383,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // AUTHORITATIVE campaign-code check. `/api/codes/validate` answers a GUEST
+    // from the campaign window alone (it has no session to key a per-user lookup
+    // on), and step-1 registration in this codebase does not authenticate — so a
+    // customer applying a code right after registering reaches checkout as a
+    // guest and would otherwise see APPLIED, pay, and receive nothing. Here the
+    // user id was resolved by the SERVER, so the per-user check can actually run.
+    // Refusal drops the code and logs; it never fails the purchase.
+    const verifiedCampaignCode = await CampaignCodeValidationService.resolveCodeForCheckout({
+      code: validatedData.campaignCode,
+      userId: existingUser._id.toString(),
+      context: "create-one-time-purchase-existing-user",
+    });
+
     // ✅ Use centralized PaymentIntent configuration with 3DS support
     const paymentIntentConfig = createPaymentIntentConfig({
       amount: Math.round(membershipPackage.price * 100), // Convert to cents
@@ -418,7 +432,7 @@ export async function POST(request: NextRequest) {
           : {}),
         ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
         ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-        ...(validatedData.campaignCode && { campaignCode: validatedData.campaignCode }),
+        ...(verifiedCampaignCode && { campaignCode: verifiedCampaignCode }),
         // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
         ...(experimentAssignment && {
           experimentId: experimentAssignment.experimentId,

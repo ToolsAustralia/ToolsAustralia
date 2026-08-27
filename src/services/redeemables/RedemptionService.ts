@@ -5,6 +5,7 @@ import MilestoneIssuance from "@/models/MilestoneIssuance";
 import MilestoneReward from "@/models/MilestoneReward";
 import User from "@/models/User";
 import { hasQualifyingPurchase } from "@/utils/redeemables/purchase-eligibility";
+import { isCampaignRedeemable, personalWindowGoverns } from "@/utils/redeemables/bonus-code-policy";
 import { DrawGrantService } from "./DrawGrantService";
 
 export type RedemptionFailureReason =
@@ -24,6 +25,16 @@ export interface RedemptionResult {
   issuanceId?: string;
   /** Set when redemption succeeds — used for refund ledger / unredeem. */
   redemptionKind?: "monthly-coupon" | "milestone";
+  /**
+   * Set only when `reason === "expired"` — the ACTUAL expiresAt of the issuance
+   * this call matched (RedeemableIssuance or MilestoneIssuance), so a caller can
+   * name the real date without re-deriving it. This service already does the
+   * issuance-identification work (issuanceId, then code as a personal issuance
+   * code / campaign code / milestone reward code) before it can decide
+   * "expired" — surfacing the matched value here means no caller ever needs
+   * its own copy of that lookup. Optional so no existing caller breaks.
+   */
+  expiresAt?: Date;
 }
 
 export class RedemptionService {
@@ -72,7 +83,13 @@ export class RedemptionService {
           code: normalizedCode,
           isActive: true,
           startsAt: { $lte: now },
-          $or: [{ neverExpires: true }, { endsAt: { $gte: now } }],
+          // A personal-window campaign (validForHours set) hands each customer their
+          // own deadline, so its own endsAt is a MINTING backstop, not a redemption
+          // one — without this leg, a campaignMode: "global" issuance (whose row
+          // carries no `code` of its own, so it can ONLY be found through this
+          // by-campaign-code lookup) becomes unreachable the moment endsAt passes,
+          // and the customer is told "invalid_code" instead of the truth.
+          $or: [{ neverExpires: true }, { endsAt: { $gte: now } }, { validForHours: { $gte: 1 } }],
         });
 
         if (!campaign) {
@@ -114,7 +131,7 @@ export class RedemptionService {
         return { success: false, reason: "already_redeemed" };
       }
       if ((milestoneIssuance.expiresAt && milestoneIssuance.expiresAt <= now) || milestoneIssuance.status === "expired") {
-        return { success: false, reason: "expired" };
+        return { success: false, reason: "expired", expiresAt: milestoneIssuance.expiresAt ?? undefined };
       }
 
       const updatedMilestoneIssuance = await MilestoneIssuance.findOneAndUpdate(
@@ -171,11 +188,7 @@ export class RedemptionService {
       return { success: false, reason: "campaign_not_found" };
     }
 
-    const isCampaignInWindow =
-      campaign.isActive &&
-      campaign.startsAt <= now &&
-      (campaign.neverExpires || (campaign.endsAt ? campaign.endsAt >= now : false));
-    if (!isCampaignInWindow) {
+    if (!isCampaignRedeemable(campaign, now)) {
       return { success: false, reason: "campaign_not_active" };
     }
 
@@ -183,8 +196,20 @@ export class RedemptionService {
     // campaign window — not a lifetime entry balance or an old subscription.
     // (Previously `accumulatedEntries === 0` was used as a proxy, which granted
     // "buy to unlock" coupons for free to any past purchaser / active member.)
+    // For a personal-window campaign the qualifying purchase must be allowed to
+    // land any time up to the redemption attempt — passing `endsAt: null` makes
+    // the util's ceiling `now` instead of the campaign's own (possibly long-past)
+    // endsAt. Legacy campaigns are NOT widened: that ceiling was hardened
+    // deliberately (see hasQualifyingPurchase's doc comment).
     const purchaseReq = campaign.purchaseRequirement ?? (campaign.requiresPurchase ? "membership" : "none");
-    if (!hasQualifyingPurchase(user, campaign, purchaseReq, now)) {
+    if (
+      !hasQualifyingPurchase(
+        user,
+        personalWindowGoverns(campaign) ? { startsAt: campaign.startsAt, endsAt: null } : campaign,
+        purchaseReq,
+        now
+      )
+    ) {
       return { success: false, reason: "ineligible" };
     }
 
@@ -192,8 +217,26 @@ export class RedemptionService {
       return { success: false, reason: "already_redeemed" };
     }
 
+    // A refund calls unredeemMonthlyCouponRedemption, which restores
+    // `status: "active"` and $unsets `redeemedAt` — leaving a refunded row
+    // byte-identical to a never-redeemed one APART from `redeemedEverAt`. For a
+    // personal-window campaign that is a money hole, not a cosmetic one: those
+    // campaigns are `purchaseRequirement: "none"` (a cancel-click trigger has no
+    // purchase to qualify on), so hasQualifyingPurchase above returns true
+    // immediately and the customer can re-claim the full grant while holding a
+    // full refund. `redeemedEverAt` is the permanent "this grant is spent"
+    // marker already written with $min below and already read by decideRearm()
+    // on the MINT side; this is the same rule on the REDEEM side.
+    //
+    // Scoped to personalWindowGoverns deliberately: legacy monthly-coupon
+    // campaigns restore a refunded coupon to claimable on purpose, and that
+    // behaviour is untouched here.
+    if (personalWindowGoverns(campaign) && issuance.redeemedEverAt) {
+      return { success: false, reason: "already_redeemed" };
+    }
+
     if (issuance.expiresAt <= now || issuance.status === "expired") {
-      return { success: false, reason: "expired" };
+      return { success: false, reason: "expired", expiresAt: issuance.expiresAt };
     }
 
     const updatedIssuance = await RedeemableIssuance.findOneAndUpdate(
@@ -202,12 +245,20 @@ export class RedemptionService {
         userId: user._id,
         status: "active",
         expiresAt: { $gt: now },
+        // Concurrency backstop for the redeemedEverAt check above — two claims
+        // racing on a refunded row must not both win. Same personal-window
+        // scoping, so the legacy filter is byte-identical to what it was.
+        ...(personalWindowGoverns(campaign) ? { redeemedEverAt: { $exists: false } } : {}),
       },
       {
         $set: {
           status: "redeemed",
           redeemedAt: now,
         },
+        // $min writes the field when absent and preserves the FIRST value when
+        // present — exactly the audit semantics wanted. This is the permanent
+        // "this grant is spent" marker read by decideRearm().
+        $min: { redeemedEverAt: now },
       },
       { new: true }
     );
@@ -275,6 +326,8 @@ export class RedemptionService {
         { _id: issuance._id },
         {
           $set: { status: "active" },
+          // NEVER add redeemedEverAt here — it is the permanent "this grant is
+          // spent" marker that stops a refund resetting a one-per-lifetime code.
           $unset: { redeemedAt: 1 },
         }
       );

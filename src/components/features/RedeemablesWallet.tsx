@@ -168,7 +168,7 @@ export default function RedeemablesWallet({ userId, variant = "dashboard" }: Red
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs sm:text-xs text-gray-500">
                           <span className="inline-flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
-                            {item.neverExpires ? "No expiry" : item.expiresAt ? `Expires ${new Date(item.expiresAt).toLocaleDateString()}` : "No expiry"}
+                            {item.neverExpires ? "No expiry" : item.expiresAtLabel ? `Expires ${item.expiresAtLabel}` : "No expiry"}
                           </span>
                           {item.campaignCode && (
                             <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">{item.campaignCode}</span>

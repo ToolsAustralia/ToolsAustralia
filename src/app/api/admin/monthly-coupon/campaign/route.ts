@@ -20,6 +20,7 @@ const campaignSchema = z.object({
   startsAt: z.string().min(1),
   endsAt: z.string().min(1).optional(),
   neverExpires: z.boolean().optional(),
+  validForHours: z.number().int().min(1).optional(),
   code: z
     .string()
     .trim()
@@ -42,6 +43,14 @@ const campaignSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["segmentConfig", "includeUserIds"],
       message: `targetingMode "${data.targetingMode}" requires at least one user in segmentConfig.includeUserIds`,
+    });
+  }
+
+  if (data.neverExpires && data.validForHours != null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["validForHours"],
+      message: "neverExpires and validForHours are mutually exclusive",
     });
   }
 });
@@ -70,6 +79,7 @@ export async function GET(request: NextRequest) {
         startsAt: row.startsAt,
         endsAt: row.endsAt,
         neverExpires: row.neverExpires,
+        validForHours: row.validForHours,
         isActive: row.isActive,
         code: row.code,
         requiresPurchase: row.requiresPurchase,
@@ -78,6 +88,7 @@ export async function GET(request: NextRequest) {
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         redeemedCount: row.redeemedCount,
+        issuanceCount: row.issuanceCount,
       })),
     });
   } catch (error) {
@@ -123,6 +134,7 @@ export async function POST(request: NextRequest) {
       startsAt: startsAtDate,
       endsAt: endsAtDate,
       neverExpires: payload.neverExpires,
+      validForHours: payload.validForHours,
       code: payload.code,
       requiresPurchase: payload.requiresPurchase,
       purchaseRequirement: payload.purchaseRequirement,

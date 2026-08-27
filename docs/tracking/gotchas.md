@@ -456,3 +456,72 @@ navigations, where the URL has dropped the params but the session is unchanged; 
 **The general trap:** component B reading state that component A writes in an effect is a
 race, and `<Suspense>` makes the ordering non-obvious — tree order is not effect order. If the
 value exists in the URL, read the URL.
+
+## A swallowed Klaviyo failure must never look like a success (2026-08-27)
+
+`syncUserProfileToKlaviyo` swallows its own errors by design — a profile sync must not break
+the caller — so **its boolean return is the only signal that the write actually landed**.
+
+The first version of `KlaviyoProfileReconciliationService` ignored it. `Promise.allSettled` saw
+`fulfilled` for a refused write, `processed` incremented, the watermark advanced past the user,
+and `klaviyoSyncedAt` was stamped as though they had synced. A 401, a 429, a Klaviyo outage, or
+the dev/prod write guard refusing would all have been **invisible** — and the user would never
+be retried. That is precisely the silent-permanent-gap failure this subsystem exists to remove,
+reintroduced inside the thing built to fix it.
+
+The sweep now throws on a `false` return, which routes the user into the `rejected` branch:
+`failed` increments, the watermark holds, and the cron logs. Pinned by
+`npm run test:klaviyo-reconciliation`.
+
+Same contract as `DrawGrantService.grantMonthlyCouponEntries`: **false means "not delivered"**.
+
+## The dev/prod write guard keys on `NODE_ENV`, not `KLAVIYO_MODE` (2026-08-27)
+
+`KLAVIYO_MODE` is a hand-set event-name-prefix setting, and this repo's own `.env.local` ships
+it as `development`. Gating the profile-write guard on it would mean that a stray
+`KLAVIYO_MODE=development` in Vercel refuses **every** profile write in production — silently
+disabling the whole reconciliation sweep while it still reported success.
+
+A safety gate must not be disableable by a cosmetic config var, so the guard keys on
+`NODE_ENV === "production"` (true for any deployed build, false on a developer's machine).
+`KLAVIYO_ALLOW_DEV_PROFILE_WRITES` remains the explicit opt-in for a sanctioned ops run.
+
+## A permanently-failing profile must not pin the sweep (2026-08-27 incident)
+
+**What happened.** One profile (`mike.e.83@…`) returned a hard `400` from Klaviyo:
+
+> The phone number provided either does not exist or is ineligible to receive ChannelType.SMS
+> — `source.pointer: /data/attributes/phone_number`
+
+Their mobile was `+61471993400` — well-formed, and **54,884 other profiles share that exact
+format**. Klaviyo's carrier lookup simply rejects that number.
+
+`nextWatermark` held the cursor on **any** failure. So the sweep hit this user, failed, held,
+and hit them again five minutes later. **The watermark froze for over an hour** and the backlog
+sat at ~29,500 instead of draining. The self-healing retry had become a deadlock — and the
+BACKLOG alert fired every run trying to say so.
+
+**Three fixes, in order of how much they actually help:**
+
+1. **Recover the profile instead of losing it.** `phone_number` is an OPTIONAL attribute; the
+   email, entry counts and membership properties on the same payload were all valid. A 400
+   whose pointer names `phone_number` now triggers ONE retry with the phone omitted, so the
+   customer's marketing data becomes correct and only SMS is lost. Logged loudly so the number
+   gets fixed. (`isPhoneNumberRejection`)
+2. **Classify failures.** `classifyKlaviyoFailure` splits *retryable* (429, 5xx, timeout,
+   socket/network) from *permanent* (hard 4xx). Retryable holds the watermark; permanent does
+   not. An unrecognised shape defaults to **retryable** — needlessly retrying is far cheaper
+   than silently dropping a real customer.
+3. **Guard the opposite trap.** A revoked API key makes EVERY user fail permanently, and
+   marching the cursor through 57,000 users syncing none of them would be worse than stalling.
+   Above `SYSTEMIC_FAILURE_RATIO` (0.5) of a batch failing permanently, the watermark holds —
+   that is configuration, not data.
+
+**Stepping past a failure obliges you to name it.** A permanently-failed user disappears from
+the backlog count (the cursor moved past them) and never gets a `klaviyoSyncedAt`, so the cron's
+`PERMANENT failure(s) stepped over` line — carrying id, email and error — is the only thing
+pointing at them. Without it this fix would have recreated the silent-skip bug it was fixing.
+
+**They still self-heal.** Fixing the underlying data bumps `user.updatedAt`, so the incremental
+sweep picks them up on its own. And once the initial drain completes,
+`{ klaviyoSyncedAt: { $exists: false } }` is the standing query for "never successfully synced".

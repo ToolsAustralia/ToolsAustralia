@@ -219,3 +219,15 @@ facing consequence.
 
 **When a response type and a route disagree, tsc protects nothing.** If you change a purchase
 route's response shape, update the hook's interface in the same edit.
+
+## Three upsell hooks deleted (2026-08-27)
+
+`useUpsellManager`, `useTrackUpsellEvent` and `useUpsellTracking` are gone from
+`useUpsellQueries.ts` and its barrel export. All three served the upsell tracker, which was
+never mounted — see `docs/upsell/gotchas.md`. `useUpsellTracking` additionally called
+`/api/upsell/tracking/${offerId}`, a route that has never existed.
+
+**`usePurchaseUpsell` and `useUpsellPrefetch` are live and were preserved.** `useUpsellOffers`,
+`useUpsellAnalytics`, `useAcceptUpsellOffer` and `useDismissUpsellOffer` now have zero consumers
+(their only caller was `useUpsellManager`) — left in place as they are separate dead code, not
+part of the tracker.

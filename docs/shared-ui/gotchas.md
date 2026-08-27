@@ -1182,3 +1182,12 @@ opened it, not from the boolean alone.
 **Not removed:** `getMiniDrawPackageById` is still passed as the `mini:` resolver to `getReceiptLabelByPackageId`. That is a lookup map, not a branch — harmless, and removing it would change how a shared helper is called.
 
 Mini packs are bought at `/mini-draws/<id>` via `POST /api/mini-draw/purchase`, which is the only route that stamps the `miniDrawId` the webhook needs. See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md).
+
+## `UpsellManager.tsx` deleted (2026-08-27)
+
+`src/components/modals/UpsellManager.tsx` was imported nowhere in the app and has been removed,
+along with `UpsellManagerProps` from `src/types/upsell.ts`. It was the only caller of the upsell
+tracking endpoint — see `docs/upsell/gotchas.md`.
+
+`UpsellOffer` and `SAMPLE_UPSELL_OFFERS` remain in `types/upsell.ts`: the dev modal gallery
+(`src/components/dev/ModalsGalleryClient.tsx`) still uses them.

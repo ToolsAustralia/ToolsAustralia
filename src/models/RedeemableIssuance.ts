@@ -18,6 +18,19 @@ export interface IRedeemableIssuance extends Document {
   issuedAt: Date;
   redeemedAt?: Date;
   expiresAt: Date;
+  /**
+   * Permanent "this grant is spent" marker. Set on first redemption via $min and
+   * NEVER unset — the refund path restores status to "active" and $unsets
+   * redeemedAt, so this is the only thing preventing a
+   * buy -> redeem -> refund -> re-trigger loop from re-granting a one-per-lifetime code.
+   */
+  redeemedEverAt?: Date;
+  /** The customer's FIRST qualification. Preserved across re-arms for audit. */
+  firstIssuedAt?: Date;
+  /** When the "Bonus Code Issued" Klaviyo event was accepted. null = not yet / failed. */
+  notifiedAt?: Date | null;
+  /** Last emit failure reason, for support. null when the last emit succeeded. */
+  notifyError?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -83,6 +96,10 @@ const RedeemableIssuanceSchema = new Schema<IRedeemableIssuance>(
       required: [true, "expiresAt is required"],
       index: true,
     },
+    redeemedEverAt: { type: Date },
+    firstIssuedAt: { type: Date },
+    notifiedAt: { type: Date, default: null },
+    notifyError: { type: String, default: null },
   },
   {
     timestamps: true,
@@ -93,6 +110,20 @@ RedeemableIssuanceSchema.index({ campaignId: 1, userId: 1 }, { unique: true });
 RedeemableIssuanceSchema.index({ campaignId: 1, code: 1 }, { unique: true, sparse: true });
 RedeemableIssuanceSchema.index({ userId: 1, status: 1, expiresAt: 1 });
 RedeemableIssuanceSchema.index({ monthKey: 1, status: 1 });
+
+const existingRedeemableIssuanceModel = mongoose.models.RedeemableIssuance as
+  | mongoose.Model<IRedeemableIssuance>
+  | undefined;
+
+if (existingRedeemableIssuanceModel) {
+  // In dev/hot-reload, clear the cached model when the schema shape is stale.
+  // Mongoose strict mode drops undeclared paths SILENTLY, so a stale cached
+  // model makes these fields look like they simply refuse to persist.
+  const redeemedEverAtPathExists = Boolean(existingRedeemableIssuanceModel.schema.path("redeemedEverAt"));
+  if (!redeemedEverAtPathExists) {
+    delete mongoose.models.RedeemableIssuance;
+  }
+}
 
 const RedeemableIssuance =
   (mongoose.models.RedeemableIssuance as mongoose.Model<IRedeemableIssuance>) ||

@@ -115,6 +115,10 @@ if (signupAttr?.promotionSlug) {
 
 #### Server-side "Invoice Generated" receipt
 
+`trackKlaviyoEvent()` takes the caller's pre-grant `hadActiveSubscription` as a required 5th parameter
+(see the bonus-code section below) and `billingReason` as an explicit `string | undefined` 4th — neither is
+optional, so a new caller cannot silently ship a wrong default.
+
 `trackKlaviyoEvent()` (in `payment-processing.ts`) is the single source of truth for the Klaviyo
 **"Invoice Generated"** customer receipt. It runs inside `processPaymentBenefits` (idempotent,
 always server-side for every charge), so the receipt can never be dropped by a client that navigates
@@ -230,7 +234,72 @@ Test: `npm run test:purchase-event-time`.
 
 `addToMajorDraw`'s `freshEntriesBySource` zero-shape in [payment-processing.ts](../../src/utils/payment/payment-processing.ts) now enumerates the full source-key set (`referral`, `cancellation-upsell`, `promo-link`, and the new `streak` bucket included) so downstream readers never hit a missing key. The `streak` bucket is written only by `DrawGrantService` (rewards-redeemables domain) — payment-path grants never write it.
 
+## No bonus code is minted in `grantBenefits` any more (2026-08-26)
+
+Between 2026-08-25 and 2026-08-26, [payment-processing.ts](../../src/utils/payment/payment-processing.ts)
+minted the `one-time-purchase` per-customer bonus code inside `grantBenefits`, immediately after the
+campaign-redemption block, gated on `packageType === "one-time" && !user.subscription?.isActive`. **That
+block was deleted.**
+
+Why: the nurture email that carries the code lands days after the purchase, while the personal window is a
+fixed 72 hours — so a code minted at purchase had already expired by the time the customer was told about
+it. Minting now happens when Klaviyo calls `POST /api/bonus-codes/v1/issue` from inside the flow, one step
+above the discount email, so the clock starts when the email is about to send. See
+[rewards-redeemables P7](../rewards-redeemables/patterns.md).
+
+What this means for anyone working in `grantBenefits`:
+
+- **The payment path owns no bonus-code logic at all** — no `mintBonusCodeForTrigger` import, no gate, no
+  `IUser` cast for it. (`IUser` is still imported and still used by `addToPartnerDiscountQueue` and
+  `handleSubscriptionQueueUpdate`; the mint's removal did not touch it.)
+- **The one-time-purchase cohort is still reached** — through the Klaviyo events this path already emits.
+  A flow built on those is what calls the endpoint. Do not re-add a server-side mint here.
+- **The gate's discriminator survives as an event property (2026-08-26).** The deleted block's
+  `!user.subscription?.isActive` condition is now carried on the `One-Time Package Purchased` event as
+  `had_active_subscription`, so the Klaviyo flow can apply the same member / non-member split the server
+  used to. It is captured as `hadActiveSubscription` in `processPaymentBenefitsInternal` **immediately
+  before** `grantBenefits` runs and threaded through `trackKlaviyoEvent` as a **required** parameter.
+  Read it pre-grant, not post: today the one-time branch never touches `user.subscription`, so reading it
+  after would give the same answer — but that is an invisible invariant one edit inside
+  `handleOneTimePackage` would break silently, and nothing downstream can rebuild a point-in-time fact.
+  Shape and rationale: [tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md).
+- `checkAndRedeemCampaign` (a customer *spending* a code at checkout) is a different thing entirely and is
+  unchanged — see the next section.
+
+## `checkAndRedeemCampaign`'s failure log is `console.error` (2026-08-25)
+
+`checkAndRedeemCampaign` in [payment-processing.ts](../../src/utils/payment/payment-processing.ts) is deliberately **non-blocking**: a campaign code that fails to redeem must never fail the payment. The consequence is that its "did not grant entries" branch is the **only** trace of a customer who paid and received nothing — the customer sees no error either.
+
+That branch used to log at `console.warn`, which `next.config.ts`'s `compiler.removeConsole` strips from production builds, so in production the scenario was silent in the logs as well as to the customer. It is now `console.error`, which survives. This matters more now that campaign codes are mass-distributed by email and therefore forwardable: `/api/codes/validate` can be asked about a code the caller does not hold, and the checkout modal commits on that answer. (The validate side now refuses a non-holder outright — see [docs/promo/api.md](../promo/api.md) — so this log should stay rare; if it starts firing, something upstream disagrees with `RedemptionService`.)
+
 ## Streak hooks in the payment path (2026-07-15)
 
 - `payment-processing.ts` is the ONLY caller passing `{ allowStreakIssuance: true }` to `MilestoneService.checkAndIssueMilestones` — new streak-months issuances are payment-coupled by construction (the cron/mass evaluator may only re-deliver, never newly issue).
 - `reverseMembershipLedger` ([refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)) now gives back a refunded renewal's streak +1: it atomically flips the matching `MembershipRenewalCycle` row (`userId` + `paymentIntentId` + `billing_reason: subscription_cycle`, `succeeded/recovered → refunded` — the pre-image gate makes replays no-op) and decrements `subscription.streakMonths` with a floor of 0. The milestone issuances granted on that payment were already revoked via `grants.milestoneIssuanceIds` (`milestoneRevoke` step).
+
+## Per-user grant ledger — `aggregateNetGrantsByUser` (2026-08-26)
+
+[`src/utils/payment/payment-event-net-queries.ts`](src/utils/payment/payment-event-net-queries.ts)
+
+```ts
+aggregateNetGrantsByUser(userIds): Promise<Map<string, UserGrantLedger>>
+UserGrantLedger = { memberEntries, oneTimeEntries, upsellEntries, miniDrawEntries, netSpend }
+```
+
+Lifetime **paid** grants per user, refund-netted by the same
+`excludeRefundedBenefitsGrantedStages()` (Option B) the admin revenue breakdown uses, so the
+two figures can never disagree. `netSpend` is in **dollars**, matching the
+`BenefitsGranted.data.price` convention at the top of that file.
+
+- Groups by `(userId, packageType)` in one aggregation; indexed on `userId_1_timestamp_-1`.
+- Users with no grants are **absent** from the Map — callers fall back to `emptyGrantLedger()`.
+- Accepts `string | ObjectId` because `IUser._id` is declared `string` in this codebase.
+- `foldGrantRows` is split out as a pure function so the arithmetic is testable without Mongo
+  (`npm run test:payment-grant-ledger`). The bug it replaces was arithmetic, not I/O.
+
+**Covers paid sources only.** Free grants — referral, promo-link, cancellation-upsell, streak,
+bonus-entry-promo — never produce a `BenefitsGranted` row. The all-sources lifetime total is
+`user.accumulatedEntries`.
+
+Consumed by the Klaviyo profile projection to replace a catalogue reconstruction that was
+wrong for 4,904 of 4,904 active members. See `docs/tracking/KLAVIYO_INTEGRATION.md`.

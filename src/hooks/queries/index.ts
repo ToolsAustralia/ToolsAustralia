@@ -143,11 +143,8 @@ export {
 export {
   useUpsellOffers,
   useUpsellAnalytics,
-  useUpsellTracking,
-  useTrackUpsellEvent,
   useAcceptUpsellOffer,
   useDismissUpsellOffer,
-  useUpsellManager,
   useUpsellPrefetch,
   type UpsellOffer,
   type UpsellAnalytics,

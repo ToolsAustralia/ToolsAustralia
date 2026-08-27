@@ -52,11 +52,18 @@ export interface KlaviyoProfileProperties {
 
   // Upsell data
   total_upsells_purchased: number;
-  upsell_total_shown?: number;
-  upsell_total_accepted?: number;
-  upsell_total_declined?: number;
-  upsell_conversion_rate?: number;
-  upsell_last_interaction?: string;
+  /**
+   * RETIRED 2026-08-26 — always written as `null` to CLEAR them in Klaviyo.
+   *
+   * Their only writer (`POST /api/upsell/track`, called from `UpsellManager.tsx`) is mounted
+   * nowhere, so they read 0 for all 56,360 users while 2,290 had real upsell purchases.
+   * `null` clears; `undefined` is stripped by `cleanProperties` and would leave stale zeros.
+   */
+  upsell_total_shown?: number | null;
+  upsell_total_accepted?: number | null;
+  upsell_total_declined?: number | null;
+  upsell_conversion_rate?: number | null;
+  upsell_last_interaction?: string | null;
 
   // Referral program
   referral_code?: string;
@@ -167,6 +174,14 @@ export interface KlaviyoEvent {
   };
   properties: KlaviyoEventProperties;
   time?: number;
+  /**
+   * Optional idempotency key for the Klaviyo Events API. `"timeout"` is
+   * explicitly retryable (MAX_RETRIES = 5 in src/lib/klaviyo.ts), so an
+   * accepted-but-slow POST can otherwise be delivered multiple times. Omitted
+   * entirely from the outbound payload when unset — never sent as
+   * undefined/null — to keep every existing event byte-identical.
+   */
+  unique_id?: string;
 }
 
 export interface KlaviyoApiResponse {

@@ -2,17 +2,37 @@
 
 ## `RedeemableIssuance`
 
-[src/models/RedeemableIssuance.ts](../../src/models/RedeemableIssuance.ts) — one row per granted redeemable.
+[src/models/RedeemableIssuance.ts](../../src/models/RedeemableIssuance.ts) — one row per granted redeemable, unique per `(campaignId, userId)`.
 
-Key fields (typical):
-- `userId: ObjectId`
-- `campaignId?: ObjectId | drawId?: ObjectId`
-- `redeemableType: string`
-- `status: "active" | "redeemed" | "revoked" | "expired"`
-- `issuedAt`, `redeemedAt?`, `expiresAt?`
-- `idempotencyKey` (unique per `(source, userId)`)
+Fields:
+- `campaignId: ObjectId` (ref `MonthlyEntryCampaign`), `userId: ObjectId` (ref `User`)
+- `monthKey: string` (`YYYY-MM`)
+- `code?: string`
+- `status: "active" | "redeemed" | "expired" | "cancelled"` (default `"active"`)
+- `source: "monthly-coupon"`
+- `entriesAmount: number`
+- `metadata?: { targetingMode?, segmentReason?, issuedBy? }`
+- `issuedAt: Date` (defaults to `Date.now`)
+- `redeemedAt?: Date` — set on redemption, `$unset` by the refund path (restores `status: "active"`).
+- `expiresAt: Date` — **required**, not optional. Every issuance row has an expiry; there is no "never expires" state at the row level (that lives on the campaign via `neverExpires` / `validForHours`, see `MonthlyEntryCampaign` in [docs/draws/models.md](../draws/models.md)).
+- `redeemedEverAt?: Date` — permanent "this grant is spent" marker, set on first redemption. **Never cleared, including by the refund path.** The refund flow restores `status: "active"` and `$unset`s `redeemedAt`, which makes a refunded row look byte-identical to a never-redeemed one on every other field. Without a marker that survives the refund, "one grant per person, ever" would silently degrade into "one grant per refund cycle" — a customer could buy, redeem, refund, and re-trigger to farm the code indefinitely. Read by `decideRearm` in [`src/utils/redeemables/bonus-code-policy.ts`](../../src/utils/redeemables/bonus-code-policy.ts) (rule 1: `redeemedEverAt` set ⇒ outcome `"spent"`, checked before status). Also read on the **redeem** side — `RedemptionService.redeem`, its atomic claim filter, `RedeemablesWalletService.isRedeemableNow` and `CampaignCodeValidationService` all refuse a row carrying it — but **only when `personalWindowGoverns(campaign)`**, so legacy monthly coupons keep their deliberate restore-on-refund behaviour. See [rules.md R3b](./rules.md).
+- `firstIssuedAt?: Date` — the customer's FIRST qualification moment, preserved across re-arms (support/audit trail); distinct from `issuedAt`, which reflects the most recent (re-)issuance. Written by the mint's `$setOnInsert` and **backfilled** by the re-arm with `$min: { firstIssuedAt: existing.issuedAt }` — a legacy row from `issueCampaignToUsers` carries no `firstIssuedAt` at all, and the re-arm overwrites `issuedAt`, so merely omitting the field from the update preserved it for rows this code inserted and destroyed it for those. `$min` writes when absent and keeps the earlier value when present: idempotent and concurrency-safe, the same idiom as `$min: { redeemedEverAt }`. **Also the cooldown anchor**: `decideRearm`'s optional 4th parameter (`REARM_COOLDOWN_DAYS`, default 30) is this exact value — the field was already preserved across every re-arm for support/audit purposes, and the cooldown reuses it rather than adding a second timestamp for the same question ("when was this person first granted this?"). A caller with a legacy row that predates this field is expected to pass `issuedAt` instead; `decideRearm` does not read `issuedAt` itself.
+- `notifiedAt?: Date | null` (default `null`) — when the "Bonus Code Issued" Klaviyo event was accepted. **`null` does NOT by itself mean "not sent"** — read it together with `notifyError` below.
+- `notifyError?: string | null` (default `null`) — the last emit outcome, for support triage. **Two** states: `null` alongside a `notifiedAt` = delivered; a Klaviyo error string = **confirmed** failure (Klaviyo answered, and said no). A row still carrying the untouched post-mint pair `{ notifiedAt: null, notifyError: null }` means the emit has not written yet. _(A third "unconfirmed" state existed while the mint was awaited on the customer's own registration request and was bounded by a 5s wait budget; that budget was removed on 2026-08-26 when issuance moved to the Klaviyo webhook, which blocks no customer request — see [backend.md](./backend.md#mintbonuscodefortrigger--the-production-gate-and-the-returned-outcome). The notify is now awaited in full, so the outcome is always confirmed one way or the other.)_
 
-> _TODO: pull exact schema._
+Indexes: `(campaignId, userId)` unique; `(campaignId, code)` unique + sparse; `(userId, status, expiresAt)`; `(monthKey, status)`.
+
+Has a dev/hot-reload staleness probe (mirrors the one on `MonthlyEntryCampaign`) that clears the cached model when `redeemedEverAt` is missing from the live schema — mongoose `strict` mode drops undeclared paths silently, so without this probe a stale cached model in dev makes the new fields look like they simply refuse to persist.
+
+## `BonusCodeWebhookCall` (added 2026-08-26)
+
+[src/models/BonusCodeWebhookCall.ts](../../src/models/BonusCodeWebhookCall.ts) — one durable row per inbound call to the bonus-code webhook (`POST /api/bonus-codes/v1/issue`, built in a later task). **A row is written for every call: accepted, refused AND errored.** The refused rows are the point — the endpoint's response body is deliberately opaque so it cannot be used as a customer-state oracle, so this collection is the only place a refusal is visible, and a rising rate of `bad_secret` / `user_not_found` rows is how an enumeration sweep against a leaked secret becomes something you can query.
+
+- `outcome` — the full vocabulary is `BONUS_CODE_CALL_OUTCOMES`. The first seven (`minted`, `rearmed`, `already_active`, `spent`, `expired_no_rearm`, `not_applicable`, `error`) are `StampedIssuanceResult["outcome"]` **verbatim**, so a row reads straight against the service that produced it. The rest are route refusals: `misconfigured`, `missing_secret`, `bad_secret`, `not_production`, `invalid_body`, `identity_conflict`, `user_not_found`, `daily_cap`, `kill_switch`.
+- `dayKey` — UTC day (`YYYY-MM-DD`), written with the same `utcDayKey` the budget gate counts on, so the cap window and the audit window cannot drift apart.
+- `ipHash` — **sha256 hex of the client IP. The raw IP is never stored**, and the shared secret never reaches this model in any form (not raw, not hashed, not truncated). No email, no code string, no request body.
+- Indexes: `{ dayKey, outcome }` (the budget count's only query), `{ userId, createdAt: -1 }` (support lookup — the reason the model exists, since no admin screen reads `RedeemableIssuance`), and a **TTL on `createdAt` at 90 days**.
+- **Not `NormCallLog`.** That model requires a `registryKey` and a Norm-tier enum, so reusing it would file a marketing endpoint inside the internal admin gateway and inherit its rule-10 lockstep obligations for no benefit.
 
 ## `MilestoneIssuance`
 

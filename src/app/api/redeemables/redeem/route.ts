@@ -3,6 +3,10 @@ import { z } from "zod";
 import connectDB from "@/lib/mongodb";
 import { requireAuthenticatedUser } from "@/lib/api-auth";
 import { RedemptionService } from "@/services/redeemables";
+import {
+  CAMPAIGN_CODE_ALREADY_REDEEMED_MESSAGE,
+  campaignCodeExpiredMessage,
+} from "@/services/redeemables/CampaignCodeValidationService";
 
 const redeemSchema = z
   .object({
@@ -12,6 +16,47 @@ const redeemSchema = z
   .refine((data) => Boolean(data.code || data.issuanceId), {
     message: "Either code or issuanceId is required",
   });
+
+/**
+ * Human copy for a redemption refusal reason — the raw internal reason string
+ * (e.g. "campaign_not_active") is meaningless to a customer. Rule 11: entries
+ * are always a free inclusion, never framed as bought/sold, and never phrased
+ * with odds/chance/lottery language.
+ *
+ * expiresAtLabel is formatted here from RedemptionService.redeem() result.expiresAt
+ * — the ACTUAL issuance the service matched before deciding "expired". The
+ * service already does the issuance-identification work (issuanceId, then
+ * code as a personal issuance code / campaign code / milestone reward code);
+ * this route must never re-derive that lookup itself, or the two can find
+ * DIFFERENT rows (e.g. a customer holding several MilestoneIssuance rows for
+ * the same reward+user — repeatable milestones are keyed by
+ * {milestoneRewardId, userId, streakGeneration, achievementCycle}, not
+ * {milestoneRewardId, userId} — and disagree on which one expired and when).
+ */
+function humanRefusalMessage(reason: string | undefined, expiresAt?: Date): string {
+  switch (reason) {
+    case "unauthorized":
+      return "Please sign in again to redeem this code.";
+    case "campaign_not_found":
+    case "invalid_code":
+      return "We couldn't find a code that matches. Double-check the code and try again.";
+    case "campaign_not_active":
+      return "This code isn't available for redemption right now.";
+    case "already_redeemed":
+      // Shared with /api/codes/validate — the same refusal used to render two
+      // different sentences depending on which endpoint the customer hit, and
+      // this one was missing the "on" in the expired case below.
+      return CAMPAIGN_CODE_ALREADY_REDEEMED_MESSAGE;
+    case "expired":
+      return expiresAt ? campaignCodeExpiredMessage(expiresAt) : "This code has expired.";
+    case "ineligible":
+      return "This code isn't unlocked on your account yet.";
+    case "concurrency_conflict":
+      return "That code was just redeemed — refresh and try again.";
+    default:
+      return "Redemption failed";
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,7 +87,7 @@ export async function POST(request: NextRequest) {
         concurrency_conflict: 409,
       };
       return NextResponse.json(
-        { success: false, error: result.reason || "Redemption failed" },
+        { success: false, error: humanRefusalMessage(result.reason, result.expiresAt) },
         { status: statusByReason[result.reason || ""] || 400 }
       );
     }
