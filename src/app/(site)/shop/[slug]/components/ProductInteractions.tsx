@@ -680,13 +680,13 @@ export default function ProductInteractions({
             so a typed number can never exceed what is actually in stock.
           */}
           {!isOutOfStock && (
-            <div className="flex shrink-0 items-center rounded-xl border border-token">
+            <div className="flex shrink-0 items-center rounded-lg border border-token">
               <button
                 type="button"
                 onClick={() => handleQuantityChange(-1)}
                 disabled={quantity <= 1}
                 aria-label="Decrease quantity"
-                className="grid h-[42px] w-9 place-items-center rounded-l-xl text-primary-token transition-colors disabled:opacity-40"
+                className="grid h-[38px] w-7 place-items-center rounded-l-lg text-primary-token transition-colors disabled:opacity-40"
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
@@ -696,14 +696,14 @@ export default function ProductInteractions({
                 value={quantity}
                 onChange={(e) => handleQuantityInput(e.target.value)}
                 aria-label="Quantity"
-                className="h-[42px] w-8 border-0 bg-transparent p-0 text-center text-[13px] font-bold text-primary-token outline-none"
+                className="h-[38px] w-6 border-0 bg-transparent p-0 text-center text-[13px] font-bold text-primary-token outline-none"
               />
               <button
                 type="button"
                 onClick={() => handleQuantityChange(1)}
                 disabled={quantity >= maxQuantity}
                 aria-label="Increase quantity"
-                className="grid h-[42px] w-9 place-items-center rounded-r-xl text-primary-token transition-colors disabled:opacity-40"
+                className="grid h-[38px] w-7 place-items-center rounded-r-lg text-primary-token transition-colors disabled:opacity-40"
               >
                 <Plus className="h-3.5 w-3.5" />
               </button>

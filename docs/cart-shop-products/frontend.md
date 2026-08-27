@@ -751,6 +751,26 @@ transit. It routes to the shop rather than re-adding lines — sizes sell out an
 move, and silently filling a cart from a months-old order is a decision made on the
 customer's behalf.
 
+## Order rows carry the product image (2026-08-27)
+
+Everywhere else in the shop a product is a picture first. On this page it was a line
+of text with a quantity chip beside it, which is most of why the page read as
+belonging to a different product from the one it reports on. Each row now leads with
+a 44px thumbnail, and the card takes the shop's own shadow.
+
+The image is **joined, not snapshotted** — unlike `name` and `price`, which are frozen
+at checkout so a rename cannot rewrite order history. An image is the same garment
+either way, so the current one is the right one to show, and storing a copy per line
+would duplicate a URL that already exists. `listOrders` populates `products.product`
+with `select: "images"`: one extra query for the whole page via a single `$in`, not
+one per line.
+
+Every step is optional, because a product deleted since the order still has a line and
+that line must still render — it falls back to a package glyph rather than a gap.
+
+**The quantity chip rides the thumbnail's corner and appears only above one.** Most
+lines are a single unit, and a column of "1" is a column of noise.
+
 ## Checkout address validation (2026-08-25)
 
 Validation is **per field, on blur** — not on submit. Pressing Continue and being told

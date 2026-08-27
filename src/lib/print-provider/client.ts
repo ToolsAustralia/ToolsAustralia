@@ -231,7 +231,30 @@ export async function fetchPrintProviderProduct(providerId: string): Promise<Pri
       // A missing palette costs us swatch colours, not the sync.
     }
   }
+  /**
+   * Swatch colours the supplier's own palette gets wrong.
+   *
+   * The Torquay Hoodie's palette returns `Maroon: #ffffff`. The colour is named
+   * correctly and the garment is genuinely maroon — only the hex is white — so the
+   * product page drew a white swatch for a colour that has no white. Nothing in
+   * our data was wrong: we copy their palette faithfully, which is why hand-fixing
+   * the stored document would have been undone by the next sync.
+   *
+   * Keyed on the normalised colour NAME, so it applies to any product whose blank
+   * carries the same bad entry. Delete a row the day the supplier corrects it —
+   * this is a patch over someone else's data, not a place to style colours.
+   *
+   * The value is an approximation of AS Colour's maroon, not a measured one; we
+   * have no correct figure from them to copy.
+   */
+  const HEX_CORRECTIONS: Record<string, string> = {
+    // Keys are already normalised (uppercase, alphanumeric only) — see `normalise`.
+    MAROON: "#5c1f2c",
+  };
+
   const hexFor = (name: string): string | null => {
+    const correction = HEX_CORRECTIONS[normalise(name)];
+    if (correction) return correction;
     const key = Object.keys(palette).find((k) => normalise(k) === normalise(name));
     return key ? (palette[key]?.colorCode ?? null) : null;
   };

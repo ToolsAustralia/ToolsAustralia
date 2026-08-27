@@ -961,3 +961,22 @@ entries are a free inclusion, never priced).
 There are no product thumbnails: `OrderListRow.items` carries no image and the order-line snapshot
 does not store one, so a thumbnail would cost a join on every row. The quantity chip plus the
 variant line ("Black · L") carries the identification instead.
+
+## Order rows lead with the product image (2026-08-27)
+
+`/my-account/orders` rows previously showed the item name with a quantity chip beside
+it. Every other shop surface leads with a picture, which is most of why this page read
+as a different product from the one it reports on. Each row now opens with a 44px
+`object-contain` thumbnail and the card carries the shop's own shadow.
+
+The image is **joined, not snapshotted.** `name` and `price` are frozen at checkout so a
+catalogue rename cannot rewrite order history; an image is the same garment either way,
+so the current one is correct and storing a per-line copy would duplicate a URL that
+already exists. `listOrders` populates `products.product` with `select: "images"` — one
+`$in` for the whole page, not one query per line.
+
+Every step is optional: a product deleted since the order still has a line, and that
+line must render. It falls back to a package glyph rather than a gap.
+
+**The quantity chip rides the thumbnail's corner and only appears above one** — most
+lines are a single unit, and a column of "1" is a column of noise.

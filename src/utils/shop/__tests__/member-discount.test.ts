@@ -57,7 +57,7 @@ test("a nonsense catalog value can never inflate or invert the total", () => {
 
 // Against the REAL catalog, so a repriced tier or a renamed id fails here rather
 // than silently changing what every member pays.
-test("real catalog: the three subscription tiers are 5 / 10 / 20", () => {
+test("real catalog: the three subscription tiers are 10 / 15 / 25", () => {
   const forId = (id: string) =>
     resolveShopDiscountPercent({ subscription: { isActive: true, packageId: id } }, getPackageById);
   assert.equal(forId("tradie-subscription"), 10, "Tradie");

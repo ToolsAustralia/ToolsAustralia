@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Loader2, Package, Search, ShoppingBag, Ticket, Truck, X } from "lucide-react";
@@ -300,7 +301,7 @@ export default function OrdersPage() {
           return (
             <article
               key={order.id}
-              className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-neutral-800 dark:bg-neutral-900"
+              className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_14px_30px_-22px_rgba(15,23,42,.35)] dark:border-neutral-800 dark:bg-neutral-900 dark:shadow-[0_14px_30px_-18px_rgba(0,0,0,.9)]"
             >
               {/* Header: what it is and where it is. */}
               <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 p-4 dark:border-neutral-800 sm:p-5">
@@ -375,9 +376,39 @@ export default function OrdersPage() {
                     key={i}
                     className="flex items-start justify-between gap-3 text-sm"
                   >
-                    <span className="flex min-w-0 items-start gap-2">
-                      <span className="mt-0.5 inline-flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-md bg-gray-100 px-1 text-[11px] font-bold text-gray-700 dark:bg-neutral-800 dark:text-neutral-200">
-                        {item.quantity}
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      {/*
+                        The thumbnail is what makes this page belong to the shop.
+                        Everywhere else a product is a picture first; here it was a
+                        line of text, which is most of why the page read as a
+                        different product from the one it is reporting on.
+
+                        The quantity chip rides the corner rather than taking its
+                        own column — at one unit, which is most lines, a column of
+                        "1" is a column of noise.
+                      */}
+                      <span className="relative mt-0.5 shrink-0">
+                        <span className="block h-11 w-11 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-neutral-700">
+                          {item.image ? (
+                            <Image
+                              src={item.image}
+                              alt=""
+                              width={44}
+                              height={44}
+                              className="h-full w-full object-contain"
+                              sizes="44px"
+                            />
+                          ) : (
+                            <span className="grid h-full w-full place-items-center">
+                              <Package className="h-4 w-4 text-gray-300 dark:text-neutral-600" />
+                            </span>
+                          )}
+                        </span>
+                        {item.quantity > 1 && (
+                          <span className="absolute -right-1.5 -top-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-gray-900 px-1 text-[10px] font-bold text-white dark:bg-white dark:text-neutral-900">
+                            {item.quantity}
+                          </span>
+                        )}
                       </span>
                       <span className="min-w-0">
                         <span className="block text-gray-900 dark:text-neutral-100">{item.name}</span>

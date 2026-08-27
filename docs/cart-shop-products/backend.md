@@ -600,3 +600,26 @@ tab, the product SEO description, and three Cobber answers. `faqs.test.ts` gaine
 sweep asserting that **no** FAQ promises free delivery — the old guard *required* the
 delivery answer to name a $100 threshold, which is how stale copy survives a rule
 change.
+
+## The supplier's palette can be wrong (2026-08-27)
+
+The Torquay Hoodie rendered a **white swatch** for a colour the garment does not come in.
+Nothing in our data was wrong: TeePrintCentre's blank palette genuinely returns
+`Maroon: #ffffff`, and the sync copies it faithfully.
+
+That is why the fix is **not** a hand-edit of the stored document — colours are
+provider-owned (`printProviderSync`: "the provider knows the garment: name, variants,
+colours, mockups"), so the next sync would have restored the white. `HEX_CORRECTIONS` in
+`src/lib/print-provider/client.ts` repairs the value as it is read, keyed on the
+normalised colour name, so it survives every re-sync. The stored document was repaired
+too, so the page is correct now rather than after the next sync.
+
+Delete a row the day the supplier corrects their palette — this is a patch over someone
+else's data, not a place to style colours. The maroon value approximates AS Colour's; we
+have no correct figure from them to copy.
+
+> **Also worth knowing:** the hoodie's stored `platformProductId`
+> (`38add249ad27437fbde0b5b1663b06ab`) **404s** at the provider. Their listing returns the
+> same product under a longer prefixed id (`00f4r7gtDMCsaEXqYwKGfFOA2pkLH3` + that id), so
+> a re-sync by the stored id would fail. Flagged, not fixed — it needs a decision on
+> whether to re-key stored ids or match on the suffix.
