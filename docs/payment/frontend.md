@@ -82,3 +82,55 @@ This domain provides the *plumbing* (intents, hooks, components). The actual che
 | [src/utils/payment/stripe/error-handled-marker.ts](../../src/utils/payment/stripe/error-handled-marker.ts) | `markErrorHandled(err)` / `isErrorHandled(err)` — tags an Error as "already processed by an inner handler" so outer try/catch blocks in `MembershipModal.handleSubmit` (and similar long async functions) can skip a second `handlePaymentError` call. Prevents duplicate toasts and duplicate auto-log attempts. |
 | [src/utils/payment/stripe/setup-intent-recovery.ts](../../src/utils/payment/stripe/setup-intent-recovery.ts) | Recover from `setup_intent_unexpected_state` (already-succeeded SI). |
 | [src/utils/payment/stripe/payment-intent-recovery.ts](../../src/utils/payment/stripe/payment-intent-recovery.ts) | Recover from `payment_intent_unexpected_state`. |
+
+## `typed-code-at-checkout.ts` — resolving a code the customer never applied
+
+`src/utils/payment/typed-code-at-checkout.ts` is a **client-side** module (no mongoose, no models,
+no Stripe) shared by `MembershipModal` and `SpecialPackagesModal`. Both call it from inside their
+submit handlers so that **pressing Purchase means the same thing as pressing Apply first**.
+
+```ts
+const resolution = await resolveTypedCodeAtCheckout({ code, inviteeUserId, inviteeEmail });
+// -> { status: "none" }
+//  | { status: "resolved", code, type: "referral" | "promo" | "campaign", referrerName?, purchaseRequirement? }
+//  | { status: "refused", code, message }
+//  | { status: "inconclusive", code, reason: "timeout" | "network" | "http" | "shape" }
+```
+
+- It POSTs the same `/api/codes/validate` with `preferType: "auto"`, so the existing three-way
+  classification is preserved — this is **not** "attach a campaign code".
+- `TYPED_CODE_RESOLVE_TIMEOUT_MS` is **8 000 ms**, hard-capped with an `AbortController`. Sized on
+  what that endpoint does (rate-limit check → `connectDB()` → a few reads, **no Stripe round
+  trips**), which is why it gets 8s where `attachTypedCode` needs 15s. It is spent behind the
+  submit button's existing `Processing…` state, and it is **skipped entirely** when the box is empty
+  or already applied — so the added latency exists only for the customer the fix is for.
+- `typedCodeRefusalCopy(resolution, ctaLabel)` assembles the customer-facing line: the problem, then
+  the escape (*"press Purchase again"* / *"tap Buy Now again"* — the surface's real button label).
+  The refusal sentences are the **server's own**, selected by the machine-readable `reason` on the
+  response, never by comparing display strings.
+
+- `evaluatePurchaseRequirementGate({ campaignCode, purchaseRequirement, isSubscriptionPurchase,
+  ctaLabel, previousStop })` → `{ outcome: "allow" }` | `{ outcome: "allow_without_code" }` |
+  `{ outcome: "stop", stop, message }`. A campaign can be configured
+  `purchaseRequirement: "membership"` or `"one-time"`; the code is genuine and simply aimed at a
+  different kind of purchase. `"none"` / `"any"` / absent never stop a sale, and neither does a
+  `campaignCode` of `undefined`.
+
+  **`previousStop` is the load-bearing argument, and it is a PAIRING —
+  `{ code, isSubscriptionPurchase }`, not a bare code.** Pass the surface's `requirementStopRef` and
+  the helper returns `allow_without_code` for a pairing it already stopped this customer on, so the
+  stop obeys the same contract every other stop in this design has: **asked once, at zero cost, and
+  the second press always buys.** Keying it on the pairing is equally load-bearing in the other
+  direction: the stop's own copy tells the customer the code is *for memberships*, so switching to a
+  membership must **re-arm** the gate and honour the code rather than treat it as already refused.
+  That escape is deliberately *structural* rather than a consequence of the caller clearing the right
+  React state in the right order; see gotchas → *"A stop with no way out"* for the shipped bug this
+  shape exists to prevent, and the table there for why a definite refusal (`refusedCodeRef`) is a
+  different kind of memory. Both modals call this one helper so the decision and the sentence cannot
+  drift apart again.
+
+Rule 11 applies to every string it produces and is asserted in
+`npm run test:typed-code-checkout`.
+
+See `docs/payment/gotchas.md` → *"The Apply button was a gate"* for the outcome table, the
+429/500 trap, and the closure-capture trap.

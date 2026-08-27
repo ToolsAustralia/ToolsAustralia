@@ -929,3 +929,75 @@ Worth knowing when reasoning about this domain's privacy surface: `/my-account/s
 `/my-account` — dashboard, profile, draws — **is** recorded. That split is deliberate (logged-in
 member sessions are legitimate retention signal), which is exactly why the per-element masking
 matters here rather than a blanket route exclusion.
+
+## Claimables are NOT member-only — the rewards page gate is split three ways (2026-08-27)
+
+`/my-account/rewards` used to wrap its whole lower half in one condition:
+
+```tsx
+{dash.acct !== "none" && userId && (<RewardsPartnerQueue /><RewardsClaimables /><RewardsMilestones />)}
+```
+
+`dash.acct === "none"` means **not a member and no package**. So a customer in that state saw the
+partner card and then nothing at all — not the claimables section, not even its empty state.
+
+**Two of the three bonus-code cohorts are in exactly that state by definition:** `BACKIN200` targets a
+member who **cancelled**, and `LOCKIN100` targets a guest who **never joined**. They received a
+marketing email carrying their code, opened the app to check it, and the app showed them nothing. Found
+on staging against a real GUEST-badged account.
+
+The gate is now split by what each section actually is:
+
+| Section | Gate | Why |
+|---|---|---|
+| `RewardsPartnerQueue` | `acct !== "none"` | a genuine member feature — showing it to a non-member promises something untrue |
+| `RewardsClaimables` | **`userId` only** | a customer either holds a claimable or does not; membership is irrelevant |
+| `RewardsMilestones` | `acct !== "none"` | the streak ladder — member feature |
+
+**Order is unchanged for members** (queue → claimables → milestones), so nothing regresses for the
+existing population. The component renders its own truthful empty state ("No rewards to claim"), so a
+customer holding nothing loses nothing by seeing it — and the burn stays gated **server-side** by
+`hasQualifyingPurchase` regardless of what the UI shows.
+
+**The dashboard needed the same treatment.** `QuickActionsGrid` — which owns the badged "Redeem" tile,
+the only signal anywhere that a code is waiting — is inside a member-only branch. A guest never saw it.
+`DashboardGuestPanel` now takes a `redeemCount` and renders its own Redeem tile, but **only when the
+count is non-zero** — a guest holding nothing is not shown a claim affordance, and still reaches Rewards
+via the nav tab. The Explore grid reflows to hold the fifth tile without orphaning one (see
+[shared-ui/frontend.md](../shared-ui/frontend.md)). Both surfaces use the same predicate
+(`isRedeemableNow`) and the same query params, so the two counts cannot diverge.
+
+### Show the entries, not the account state (F2, 2026-08-27)
+
+Unhiding the CODE from non-members left the RESULT hidden, which is arguably worse: the claim toast
+became the only place in the app that ever acknowledged the entries.
+
+Walk it. Sarah cancels, claims `BACKIN200`, and 200 free entries genuinely land in the live draw
+(`entriesBySource["bonus-entry-promo"]`). She taps **Dashboard** — the guest panel showed no entry count
+at all and opened with "Membership from $20/mo · packages from $25". She taps **Draws** — `EntryWallet`
+was wrapped in `dash.acct !== "none"`, so it was absent. Nothing anywhere confirmed her entries existed,
+so the honest conclusion was that the claim had failed. A MEMBER claiming the same code always saw it:
+`major-draw-queries.ts` folds `entriesBySource["bonus-entry-promo"]` into `oneTimeEntries`, which
+`EntryWallet` totals. The asymmetry was created by the visibility change, not by the claim.
+
+Both surfaces now gate on the **entries**, which is the smallest predicate that is true — a customer with
+entries has entries whether or not they are a member:
+
+| Surface | Gate |
+|---|---|
+| `/my-account/draws` `EntryWallet` | `dash.acct !== "none" \|\| dash.entries.total > 0` |
+| `/my-account` guest branch | renders the same `EntryWallet` above `DashboardGuestPanel` when `dash.entries.total > 0` |
+
+It is the **same component the member branch renders**, so the number is the same number and there is no
+second definition of "your entries" to drift. `EntryWallet` already handles `acct === "none"` (it is a
+member of `DashboardAccountState`): membership reads 0, the bonus entries land in the One-time bucket,
+and the tier colour falls back to red. The guest sell below it is unchanged — a non-member holding
+entries is still not a member.
+
+**Rule of thumb for any future entry surface:** gate on whether there are entries, never on account
+state. Account state answers "what do we sell them next"; it does not answer "what do they hold".
+
+**This is unrelated to `REWARDS_ENABLED`.** That flag gates the POINTS programme (earn / redeem /
+history, plus the "you earned N points" messaging on every purchase screen) and is deliberately `false`
+in production. The claimables path is not gated by it and must not become gated by it — flipping that
+flag to reveal a coupon would switch the whole points programme back on.

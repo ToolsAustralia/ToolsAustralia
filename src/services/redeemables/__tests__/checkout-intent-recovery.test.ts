@@ -3,7 +3,7 @@
  * apply a code to the purchase they just paid for?", used when the Stripe stamp
  * is missing.
  *
- * WHY IT EXISTS. `attachCampaignCodeToCheckout` stamps `campaignCode` onto the
+ * WHY IT EXISTS. `attachTypedCodeToCheckout` stamps `campaignCode` onto the
  * unpaid Stripe object immediately before the charge, and the browser caps that
  * request at 15s and charges regardless of how it ends. Observed live on this
  * branch: the server answered `200 in 14903ms`, the browser had already aborted,

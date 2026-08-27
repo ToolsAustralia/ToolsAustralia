@@ -416,7 +416,7 @@ rewards-return banner, the header package-detail modal, and the payment-failure 
 MembershipModal. If you add a fifth, point it at `/my-account/membership`, not the dashboard.
 Full before/after table: [dashboard-account/frontend.md](../dashboard-account/frontend.md).
 
-## `useStripeSubscription.attachCampaignCode` — stamping the applied code before the charge (2026-08-27)
+## `useStripeSubscription.attachTypedCode` — stamping the applied code before the charge (2026-08-27)
 
 **The defect this exists to close.** A customer could type a discount code, click Apply, see
 **APPLIED**, pay — and receive nothing. `MembershipModal` pre-warms a Stripe subscription when step 2
@@ -427,9 +427,19 @@ granted nothing. The charge succeeded and nothing logged. The existing teardown 
 pre-warmed subscription when the **package** changes — there was no equivalent for the applied code.
 
 **The shape of the fix.** The code is no longer expected to travel on an object created before the
-customer could type it. `attachCampaignCode` stamps the applied code onto whatever checkout object
-the PURCHASE click is about to charge, via `POST /api/stripe/attach-campaign-code`, which
+customer could type it. `attachTypedCode` stamps the applied code onto whatever checkout object
+the PURCHASE click is about to charge, via `POST /api/stripe/attach-typed-code`, which
 re-validates it server-side (the browser is never trusted for which code applies).
+
+**It carries ALL THREE code types (2026-08-27).** `body.code` is the **raw string the customer
+typed** — never a classification. The server decides whether it is a referral, a promo link or a
+campaign code and stamps the matching metadata key, returning `{ code, slot }`. This is what closes
+the older gap where `referralCode` and `promoLinkCode` rode **only** in a create-subscription body
+and were therefore lost on exactly the doors this seam exists for (`canReuseSubscription`, and the
+guest `subscriptionCreatedRef` branch) — pressing Apply did not rescue them either. Sending an
+unclassified string is what keeps the widening safe: the browser gains no new trust, because it makes
+no claim the server acts on. `slot` is the caller's only trustworthy basis for telling the customer
+a code applied.
 
 Two rules govern the call, and both are load-bearing:
 
@@ -449,9 +459,14 @@ Two rules govern the call, and both are load-bearing:
 - `"refused"` — the server answered and did not write the code. **A customer was charged without
   it**, and the modal's `console.error` for this is the only production signal that says so.
 - `"unknown"` — the client cap fired or the connection dropped. The request may well have been
-  served: the fix's own e2e run recorded `POST /api/stripe/attach-campaign-code 200 in 8089ms`
+  served: the fix's own e2e run recorded `POST /api/stripe/attach-typed-code 200 in 8089ms`
   against the original 8s cap, on a request that **had** written the code. Reporting that as a loss
   makes the alarm above worthless, and it failed the e2e console watchdog on unrelated specs.
+
+  `"unknown"` is also **not** enough to claim the code applied on the success screen. "May have
+  landed" is the right basis for charging anyway; it is the wrong basis for a statement about a
+  money-equivalent perk. Only `"attached"` plus a matching `slot` licenses that claim — see
+  `docs/payment/gotchas.md` → *"Never claim a code applied unless it reached the server"*.
 
 **The cap is 15s, and it was raised from 8s on evidence.** The budget has to cover a rate-limit
 check, `request.json()`, `getServerSession` (a DB hit), `connectDB`, a Stripe retrieve with
@@ -460,7 +475,7 @@ plus three DB reads, on a possibly-cold lambda. The customer has already clicked
 watching a spinner; a few extra seconds is much cheaper than silently losing money-equivalent
 entries. Do not lower it without re-measuring that chain.
 
-**The `import type` is not a style choice.** `@/utils/payment/campaign-code-checkout` is server-only
+**The `import type` is not a style choice.** `@/utils/payment/attach-typed-code` is server-only
 (it reaches the Stripe secret key and the `User` model). `import type` is fully erased at compile
 time, so nothing from it reaches the client bundle. Changing it to a value import would drag server
 code into the browser.

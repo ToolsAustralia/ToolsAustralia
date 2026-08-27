@@ -56,19 +56,39 @@ export async function POST() {
     // retry, instead of silently diverging. `DrawGrantService` is the canonical grant path —
     // it resolves the target draw via `getTargetMajorDraw` (which transitions if needed, reads
     // `status` rather than the legacy `isActive` flag, and routes around a frozen draw) and
-    // returns false when the entries did not land. Its own docblock states the contract this
-    // route previously broke: callers granting an entitlement must treat false as
+    // reports whether the entries landed. Its own docblock states the contract this route
+    // previously broke: callers granting an entitlement must treat anything but "landed" as
     // "not delivered".
-    const granted = await DrawGrantService.grantMonthlyCouponEntries(
+    const grant = await DrawGrantService.grantMonthlyCouponEntries(
       user._id.toString(),
       entriesToAdd,
       "cancellation-upsell"
     );
 
-    if (!granted) {
+    if (grant.status === "unconfirmed") {
+      // The write may have reached the live draw. "Your offer is still available"
+      // would invite a retry that grants the same 100 entries a SECOND time, so
+      // this answer says the opposite. The offer stays unburned deliberately —
+      // a human decides, off the log line below.
+      console.error(
+        `[cancellation-upsell] REDEEM UNCONFIRMED — the draw write could not be verified; ` +
+          `NOT retryable, reconcile by hand for user ${user._id}: ${grant.reason}`
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "We couldn't confirm your free entries landed. We've logged it for our team to check — " +
+            "please don't try again; contact support if you don't see them.",
+        },
+        { status: 500 }
+      );
+    }
+
+    if (grant.status !== "landed") {
       // Loud, and honest to the member. console.error survives production builds.
       console.error(
-        `[cancellation-upsell] REDEEM FAILED — no target draw available; nothing was granted ` +
+        `[cancellation-upsell] REDEEM FAILED — nothing was granted (${grant.reason}) ` +
           `and the offer remains unredeemed for user ${user._id}`
       );
       return NextResponse.json(

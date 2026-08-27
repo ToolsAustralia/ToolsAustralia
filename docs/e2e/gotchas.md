@@ -594,21 +594,38 @@ A clean `npm run e2e` cannot hit either — a fresh `E2E_RUN_ID` plus `dropDatab
 leg mints for a customer that has never existed. To reset by hand, delete that customer's row from
 `redeemableissuances` (or just re-run `npm run e2e`), and never point the mint at `MEMBER`.
 
-## The console watchdog and the campaign-code log lines (2026-08-27)
+## The console watchdog and the typed-code log lines (2026-08-27)
 
-`CONSOLE_ALLOWLIST` in `e2e/fixtures/test.ts` carries **one** campaign-code entry, and the split is
+`CONSOLE_ALLOWLIST` in `e2e/fixtures/test.ts` carries **one** typed-code entry, and the split is
 deliberate:
 
-- **Allowlisted:** `[campaign-code] attach outcome unknown`. The browser stopped waiting for
-  `/api/stripe/attach-campaign-code` — a client cap or a dropped connection. The server may well have
+- **Allowlisted:** `[typed-code] attach outcome unknown`. The browser stopped waiting for
+  `/api/stripe/attach-typed-code` — a client cap or a dropped connection. The server may well have
   completed: during the fix's own run it answered `200 in 8089ms` on a request the page had already
   abandoned, having written the code. A dev server's first-hit route compile can eat the budget on its
   own, so this is harness noise, not a product signal.
-- **NOT allowlisted, and must stay that way:** `[campaign-code] attach failed before confirm` and
-  `[campaign-code] pre-warmed checkout object has no attachable target`. Both mean a customer was
-  charged without their code. Never widen the pattern to `\[campaign-code\]`.
+- **NOT allowlisted, and must stay that way:** `[typed-code] attach failed before confirm` and
+  `[typed-code] pre-warmed checkout object has no attachable target`. Both mean a customer was
+  charged without their code. Never widen the pattern to `\[typed-code\]`.
 
 Related: the route answers `200 { success: false }` — not `502`/`500` — for a Stripe or unexpected
 failure, because the watchdog also records **any** same-origin response `>= 500` as a problem and this
 endpoint is non-fatal by contract. See
-[billing-stripe/api.md](../billing-stripe/api.md#post-apistripeattach-campaign-code).
+[billing-stripe/api.md](../billing-stripe/api.md#post-apistripeattach-typed-code).
+
+## `bonus-code-journey`: the Apply click is the difference between two legs — never normalise it
+
+The spec has two membership legs that are otherwise identical:
+
+- *"minted code: apply at checkout…"* — clicks **Apply**, then PURCHASE.
+- *"minted code TYPED BUT NEVER APPLIED…"* — fills the box and goes **straight** to PURCHASE.
+
+The second leg's missing `getByRole("button", { name: "Apply", exact: true }).click()` **is the
+assertion**. It pins the bug the owner hit on the first real run: the typed code was silently
+discarded, he was charged, and nothing told him. Adding the click back "for consistency", or
+asserting an `APPLIED` badge before the purchase, quietly deletes the only executable proof that the
+purchase-time resolve reaches the charge — a unit test cannot see it, because there is no DOM runner
+in this repo and the Apply-first path was never broken.
+
+Both legs run under `npm run e2e:bonus-code` (grep `"bonus code journey"`). They are not serial and
+use different customers, so either can be red on its own.

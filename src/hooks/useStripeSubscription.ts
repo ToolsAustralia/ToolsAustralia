@@ -3,9 +3,9 @@ import { StripeCardElement } from "@stripe/stripe-js";
 import { getStripePromise } from "@/lib/stripe-client";
 import { useAttribution } from "@/hooks/useAttribution";
 import { completePendingAuthentication } from "@/utils/payment/stripe/complete-pending-authentication";
-// TYPE-ONLY. `campaign-code-checkout` is server-only (Stripe secret key, the User
+// TYPE-ONLY. `attach-typed-code` is server-only (Stripe secret key, the User
 // model); `import type` is fully erased, so nothing from it reaches the bundle.
-import type { CheckoutCampaignTarget } from "@/utils/payment/campaign-code-checkout";
+import type { TypedCodeCheckoutTarget, CheckoutCodeSlot } from "@/utils/payment/attach-typed-code";
 
 /**
  * Subscription creation data for new users
@@ -357,12 +357,20 @@ export function useStripeSubscription() {
    * second as the first makes the one production alarm for this defect
    * untrustworthy, which is the state that hid the original bug.
    */
-  const attachCampaignCode = async (body: {
-    target: CheckoutCampaignTarget;
+  const attachTypedCode = async (body: {
+    target: TypedCodeCheckoutTarget;
+    /** The RAW string the customer typed, or null to clear. The SERVER decides its kind. */
     code: string | null;
   }): Promise<{
     success: boolean;
-    campaignCode: string | null;
+    /** The canonical code the server wrote, or null when it wrote none. */
+    code: string | null;
+    /**
+     * Which metadata key it landed in. This is the ONLY trustworthy basis for
+     * telling the customer a code applied: the browser guessed the type, the
+     * server decided it, and only "attached" plus a slot means it reached Stripe.
+     */
+    slot: CheckoutCodeSlot | null;
     outcome: "attached" | "refused" | "unknown";
   }> => {
     // Hard cap. The customer has already clicked PURCHASE and is watching a
@@ -376,7 +384,7 @@ export function useStripeSubscription() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch("/api/stripe/attach-campaign-code", {
+      const response = await fetch("/api/stripe/attach-typed-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -395,15 +403,19 @@ export function useStripeSubscription() {
         }),
       });
       // The server answered. Whatever it said, it is a definite answer.
-      if (!response.ok) return { success: false, campaignCode: null, outcome: "refused" };
-      const result = (await response.json()) as { success?: boolean; campaignCode?: string | null };
+      if (!response.ok) return { success: false, code: null, slot: null, outcome: "refused" };
+      const result = (await response.json()) as {
+        success?: boolean;
+        code?: string | null;
+        slot?: CheckoutCodeSlot | null;
+      };
       return result?.success === true
-        ? { success: true, campaignCode: result.campaignCode ?? null, outcome: "attached" }
-        : { success: false, campaignCode: null, outcome: "refused" };
+        ? { success: true, code: result.code ?? null, slot: result.slot ?? null, outcome: "attached" }
+        : { success: false, code: null, slot: null, outcome: "refused" };
     } catch {
       // An abort or a dropped connection. The request may already have been
       // served — we simply stopped listening, so this is NOT evidence of loss.
-      return { success: false, campaignCode: null, outcome: "unknown" };
+      return { success: false, code: null, slot: null, outcome: "unknown" };
     } finally {
       clearTimeout(timer);
     }
@@ -470,7 +482,7 @@ export function useStripeSubscription() {
     createOneTimePurchase,
     createSubscriptionExistingUser,
     createOneTimePurchaseExistingUser,
-    attachCampaignCode,
+    attachTypedCode,
     confirmPayment,
     createPaymentMethod,
     loading,

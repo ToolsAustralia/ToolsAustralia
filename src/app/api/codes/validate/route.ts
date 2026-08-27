@@ -68,6 +68,14 @@ type UnifiedValidationResult =
   | {
       success: true;
       valid: false;
+      /**
+       * Machine-readable, mirroring `CampaignCodeValidation.reason`, so a client
+       * can pick its own sentence for the dominant case (a typo, which deserves
+       * the code named back) without comparing display strings — the exact
+       * coupling that service's own comment warns about. Additive: nothing that
+       * read this endpoint before the checkout-time resolve looks at it.
+       */
+      reason: "not_found" | "already_redeemed" | "expired" | "not_held";
       message: string;
     };
 
@@ -89,19 +97,19 @@ async function validateAsReferral(params: {
       data: { referrerName: referralData.referrerName },
     };
   } catch {
-    return { success: true, valid: false, message: "Invalid referral code" };
+    return { success: true, valid: false, reason: "not_found", message: "Invalid referral code" };
   }
 }
 
 async function validateAsPromo(params: { code: string }): Promise<UnifiedValidationResult> {
   const normalizedCode = params.code.trim().toUpperCase();
   if (!PROMO_CODE_REGEX.test(normalizedCode)) {
-    return { success: true, valid: false, message: "Invalid promo code format" };
+    return { success: true, valid: false, reason: "not_found", message: "Invalid promo code format" };
   }
 
   const promoLink = await PromoLink.findActiveByCode(normalizedCode);
   if (!promoLink || promoLink.isExpired()) {
-    return { success: true, valid: false, message: "Invalid promo code" };
+    return { success: true, valid: false, reason: "not_found", message: "Invalid promo code" };
   }
 
   return {
@@ -167,7 +175,7 @@ function toUnifiedResult(result: CampaignCodeValidation): UnifiedValidationResul
       },
     };
   }
-  return { success: true, valid: false, message: result.message };
+  return { success: true, valid: false, reason: result.reason, message: result.message };
 }
 
 export async function POST(request: NextRequest) {
@@ -243,8 +251,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       valid: false,
+      reason: "not_found",
       message: "This code is not valid right now.",
-    });
+    } satisfies UnifiedValidationResult);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

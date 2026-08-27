@@ -149,14 +149,23 @@ draws carry `entriesBySource`-vs-`totalEntries` drift.
 **The fix — draw first, counter second.** The route now calls
 [`DrawGrantService.grantMonthlyCouponEntries`](src/services/redeemables/DrawGrantService.ts),
 the canonical grant path, which resolves the target draw via `getTargetMajorDraw` (transitions
-if needed, reads `status` not `isActive`, routes around a frozen draw) and returns `false` when
-the entries did not land. Only on `true` does the route touch `accumulatedEntries` or burn the
-one-time offer. On `false` it returns **503** with a retryable message and the offer stays
+if needed, reads `status` not `isActive`, routes around a frozen draw) and reports whether the
+entries landed. Only on `landed` does the route touch `accumulatedEntries` or burn the
+one-time offer. On `not_written` it returns **503** with a retryable message and the offer stays
 available. The bespoke `addToMajorDraw` is deleted — business logic does not belong in a route
 handler.
 
 That service's own docblock already stated the contract this route was breaking: *"Callers that
-grant a PAID entitlement must treat false/throw as 'not delivered' and compensate."*
+grant a PAID entitlement must treat anything but 'landed' as 'not delivered' and compensate."*
+
+**A third answer, added 2026-08-27: `unconfirmed`.** `grantMonthlyCouponEntries` now returns a
+three-state `DrawGrantOutcome` instead of a boolean (and never throws) — see
+`docs/rewards-redeemables/gotchas.md` "…and then compensation itself became a double-grant door".
+The distinction matters here too: when the draw write cannot be proven either way, the entries may
+already be in the live draw, so this route must **not** answer "your offer is still available" — that
+sentence invites a retry that would grant the same 100 entries a second time. It answers **500** with
+copy telling the member not to try again and logs `REDEEM UNCONFIRMED` with the reason. The offer is
+deliberately left unburned: a human decides, off that log line.
 
 **Fixed forward only.** The 373 affected members were NOT retroactively granted — the draws
 they redeemed against (Dec–May) are completed and their winners already drawn. List them any

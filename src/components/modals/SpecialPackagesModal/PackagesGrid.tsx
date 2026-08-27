@@ -107,7 +107,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
           <input
             type="text"
             value={couponCode}
-            onChange={(e) => onCouponCodeChange(e.target.value)}
+            onChange={(e) => onCouponCodeChange(e.target.value.toUpperCase())}
             placeholder="Enter coupon code"
             className="flex-1 min-w-0 h-11 px-2 sm:px-3 border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all duration-300 text-sm sm:text-base bg-white text-gray-900 placeholder:text-gray-500 dark:bg-slate-800 dark:border-slate-600 dark:text-gray-100 dark:placeholder:text-gray-400"
           />
@@ -127,7 +127,7 @@ const PackagesGrid: React.FC<PackagesGridProps> = ({
           )}
         </div>
         {couponError && (
-          <p className="mt-2 text-xs text-red-600 dark:text-red-400">{couponError}</p>
+          <p role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">{couponError}</p>
         )}
       </div>
     </>

@@ -51,6 +51,14 @@ a `purchaseRequirement: "none"` grant and enough for the unlock flow (which carr
 the purchase modal without ever showing it), but it cannot answer "what was my code and when does it
 run out?".
 
+**And it was not reachable by the cohorts that hold these codes until 2026-08-27.** The sentence above
+called it "the live surface", which was only true for members: the page wrapped it in
+`dash.acct !== "none"`, so a cancelled member (`BACKIN200`) and a guest who never joined (`LOCKIN100`)
+saw no claimables section at all. That gate is now split — claimables render for any authenticated
+customer, partner queue and milestones stay member-only. See
+[dashboard-account/frontend.md § Claimables are NOT member-only](../dashboard-account/frontend.md).
+The gap this section describes is unchanged: still no code string, still no deadline on screen.
+
 **And no email answers it either — corrected 2026-08-26.** This section used to end "today the
 emailed label is the customer's only copy of the deadline, which is why Cobber ids 86–88 point at
 the email". That was wrong in the same way the top-level docs were. The three discount emails carry

@@ -1191,3 +1191,93 @@ tracking endpoint — see `docs/upsell/gotchas.md`.
 
 `UpsellOffer` and `SAMPLE_UPSELL_OFFERS` remain in `types/upsell.ts`: the dev modal gallery
 (`src/components/dev/ModalsGalleryClient.tsx`) still uses them.
+
+## MembershipModal: `handleSubmit` reads a SETTLED LOCAL, never `appliedCouponPayload`
+
+_Added 2026-08-27 with the "Purchase implies Apply" change._
+
+`handleSubmit` is an async closure. It captured `appliedCouponPayload` — the memo that carries
+`referralCode` / `promoLinkCode` / `campaignCode` — **at render time**. Resolving a typed code
+mid-invocation and calling `setCouponApplied(true)` / `setCouponType(...)` updates the UI on the
+NEXT render; it does **not** change the memo this invocation already holds.
+
+So `handleSubmit` builds a `settledCoupon` local once, immediately after the resolve, and **every**
+downstream read comes from it: the `desiredTypedCode` that feeds the attach seam (and the two
+decline-and-retry re-stamps that close over it), all three create-call bodies, and all seven
+`appendCodeBenefits` calls inside the handler.
+
+`settledCoupon.typedCode` is the **raw string**, unclassified, because the attach seam's server side
+is what classifies it. `settledCoupon.appliedLabel` is the exception to "built once": it is settled
+**last**, by `settleAppliedLabel()`, after the attach has answered — see the third bullet below.
+
+**The failure mode if you forget:** it tests green. Press Apply then Purchase — the path that was
+never broken — and the memo is already correct, so the success screen shows the code and the entries
+land. Only the typed-not-applied path, the one the change exists for, still sends `undefined`.
+There is no DOM runner in this repo; the e2e leg *"minted code TYPED BUT NEVER APPLIED"* in
+`e2e/specs/membership/bonus-code-journey.spec.ts` is the only thing that catches it.
+
+Two related rules:
+
+- **The pre-warm create calls keep reading the memo.** Different function, different moment,
+  best-effort by design. Do not "fix" them to read the local — it does not exist there.
+- **`appendCodeBenefits(benefits, settled)` takes `settled.appliedLabel`, not the payload fields.**
+  `promoLinkCode` falls back to the `?promo=` attribution code even when nothing was typed, and
+  rendering that as "Promo code X applied" would be a new claim on the success screen.
+- **The `settled`-less overload reads `couponApplied` state**, and five call sites in
+  `handlePaymentSuccess` / `handlePaymentProcessingSuccess` use it. So `setCouponApplied(true)` is
+  itself a **claim on the success screen**, not just a row decoration — never set it for a code the
+  charge is not going to carry. This is also why the requirement gate's `allow_without_code` outcome
+  clears `couponApplied` / `couponType`: the resolve re-ran on that press and set them, and leaving
+  them would show a green **APPLIED** beside a code the charge is deliberately dropping.
+- **`settleAppliedLabel()` decides what the success screen may claim, and it runs after the attach.**
+  `appliedLabel` exists only when `attachedCodeSlot === typedCodeType` (the server told us which
+  metadata key it wrote) **or** `codeRidesInCreateBody` (the create call in this submit carries all
+  three fields). An attach outcome of `unknown` does not license it. See
+  `docs/payment/gotchas.md` → *"Never claim a code applied unless it reached the server"*.
+- **A refusal the server has already told us about vetoes the claim — `serverRefusedTypedCode`
+  (fixed 2026-08-27, F3).** `codeRidesInCreateBody` says only WHICH BODY the field left the browser
+  in; it is no evidence the server accepted it, and the create routes re-resolve the code against a
+  server-resolved user and **drop** it when the customer does not hold it
+  (`create-one-time-purchase/route.ts`). The live hole: a customer registers at step 1 — which does
+  **not** authenticate them (CLAUDE.md rule 6) — picks the $25 Apprentice Pack, types `EXTRA100` and
+  presses Purchase without Apply. `/api/codes/validate` has no session, so its campaign leg answers
+  from the campaign window alone and returns `valid: true`. The pre-warmed PaymentIntent carries the
+  email, so the attach resolves the real user, `resolveCodeForCheckout` refuses (`not_held`, or
+  `expired` if their 72h lapsed), and the route answers `200 { success: true, code: null, slot: null }`
+  — `attachedCodeSlot` becomes `null`. But `codeRidesInCreateBody` is unconditionally true for a
+  non-monthly plan, so the success screen still printed *"Campaign code EXTRA100 applied"* for a code
+  the server had explicitly refused. **A 200 carrying no slot, on a request that carried a code, is a
+  DEFINITE refusal** — `writeTypedCodeTo` now records it and `settleAppliedLabel` vetoes the claim
+  regardless of which body the field rode in. It is sticky across a decline-and-retry (the refusal is
+  about the customer and the code, not the checkout object) and cleared only by a later attach that
+  positively names a slot. Note the asymmetry that stays: `outcome: "refused"` (a non-`ok` response —
+  `wrong_state`, `not_authorized`, `stripe_error`) is **not** a refusal of the code and does not veto,
+  because the create body may still deliver it. The label proves acceptance, never delivery.
+
+## Both checkout modals: an early return after the submit lock must release it by hand
+
+`MembershipModal.handleSubmit` and `SpecialPackagesModal.handlePurchase` both take a synchronous
+re-entry lock (`checkoutSubmitLockRef` / `specialPackagePurchaseLockRef`) plus `setIsSubmitting` /
+`setIsProcessing`, and only **later** enter the `try` whose `finally` clears them. Any `return`
+between those two points — the typed-code refusal, the campaign purchase-requirement toast — must
+call the local release helper first, or the purchase button stays dead for the modal's lifetime.
+
+**And every one of those returns must leave a second press that works.** Releasing the lock only
+re-enables the button; if the next press re-enters the same branch off unchanged state, the customer
+has a live button that never buys, which is worse than the code being dropped. Record the stop —
+`refusedCodeRef` for a **definite refusal**, `requirementStopRef` for a **requirement mismatch**,
+which are different kinds of fact and must not share a ref — *and* disarm whatever state would
+re-supply the code. This shipped wrong twice: once as a wall with no escape, once as a stop
+remembered by code alone that silently dropped the grant when the customer did what the stop's own
+copy told them to (switch to a membership). `docs/payment/gotchas.md` → *"A stop with no way out"*.
+
+**And every stop must be VISIBLE on the surface it fires on.** `CouponRow` returns `null` on an
+upsell offer and swaps its input+error slot for a static panel under a valid promo-link, so a message
+written only to `referralError` can land nowhere. `MembershipModal` routes every code stop through
+`showCodeStop()`, which sets the inline error **and** toasts when `couponErrorIsVisible` is false; on
+an upsell it skips the typed-code resolve entirely, since an upsell purchase carries no code fields
+at all and a stop there could only ever be a dead button press.
+
+Equally: the resolve must sit **after** the lock, never before it. Awaiting a multi-second network
+call with the Purchase button still enabled is a double-charge window, which is worse than any code
+being dropped.

@@ -275,6 +275,27 @@ again, and the route now only formats a value it is handed (`route.ts` holds no
 business logic). Rule 11 applies throughout: copy never uses odds/chance/lottery
 language and never frames entries as bought.
 
+**`grant_unavailable` (added 2026-08-27).** A claim that passed every eligibility gate but found no
+Major Draw to grant into. `RedemptionService.landEntriesOrCompensate()` has already reversed
+everything the claim wrote — issuance back to `active`, the `redeemedEverAt` this call stamped
+unset, the wallet `$inc` and the `redemptionHistory` row undone — so the customer still holds their
+one-per-lifetime grant. The route answers **503** (matching `/api/cancellation-upsell/redeem`: the
+request was fine, the draw was not there to receive it) and the copy says both halves — nothing
+landed, and the code is still theirs. Never dress this as a success; that is the exact defect the
+reason exists to prevent. See [gotchas.md](./gotchas.md) — "A claim used to report success while
+granting nothing".
+
+**`grant_unresolved` (added 2026-08-27).** The claim **is** spent and this call could not safely hand
+it back. Two ways in, neither reversible automatically: the draw write could not be proven either way
+(a lost acknowledgement on a `save()` the server may have applied — reversing would re-arm the code
+over entries that may already be in the live draw, and the next claim would grant a second time), or
+the compensation itself failed and the issuance is still `redeemed`. Distinct from
+`grant_unavailable` because that reason *promises* the grant is still held. The route answers **500**,
+not 503: there is nothing to retry, and 503 invites one. Copy says the code has been used and that we
+could not confirm the entries landed — never "your code is still yours". Every occurrence carries a
+`console.error` with the ids needed to reconcile by hand. See [gotchas.md](./gotchas.md) — "…and then
+compensation itself became a double-grant door".
+
 ## Refund integration
 
 The refund-reversal steps for redeemables (`campaignUnredeem`, `milestoneRevoke`) are registered in `buildLedgerReversalSteps` ([src/utils/payment/refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)); [src/utils/payment/reversers/](../../src/utils/payment/reversers/) holds only the generic orchestrator + types. Milestone issuances granted by the refunded payment are revoked — already-redeemed ones are un-redeemed first (entries clawed back) — and a coupon redeemed on the refunded purchase is un-redeemed back to `active`. Only step **failures** surface in `RefundProcessed.data.reversalIssues[]`.

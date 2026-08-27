@@ -30,24 +30,37 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 | POST | `/api/stripe/verify-payment-intent` | Read-only verification of PI state |
 | POST | `/api/stripe/verify-payment-complete` | Higher-level "did this purchase succeed?" check |
 | POST | `/api/stripe/analyze-payment-intent` | Diagnostics endpoint (dev/support) |
-| POST | `/api/stripe/attach-campaign-code` | Stamps the customer's applied bonus-entry code onto the **still-unpaid** checkout object at the PURCHASE click, before `confirmPayment`. See below. |
+| POST | `/api/stripe/attach-typed-code` | Classifies the customer's **raw typed code** server-side and stamps it onto the **still-unpaid** checkout object at the PURCHASE click, before `confirmPayment`. Carries referral, promo-link **and** campaign codes. See below. |
 
-#### `POST /api/stripe/attach-campaign-code`
+#### `POST /api/stripe/attach-typed-code`
 
-Thin handler over `attachCampaignCodeToCheckout` ([payment/backend.md](../payment/backend.md#campaign-code-checkoutts--the-authoritative-campaign-code-write)) — parse, rate-limit, resolve an optional session, delegate, map the typed result.
+> **Renamed 2026-08-27 (was `POST /api/stripe/attach-campaign-code`).** It carries all three
+> code types now, so it is named for what it does — see
+> [payment/backend.md](../payment/backend.md#attach-typed-codets--the-authoritative-typed-code-write).
+>
+> **The old path is kept as a deprecated wire alias** (`src/app/api/stripe/attach-campaign-code/route.ts`,
+> a one-line `export { POST } from "../attach-typed-code/route"`). It is not a fork — zero logic,
+> one implementation — and it exists because a path is a contract between two independently-cached
+> deployables: a browser tab that loaded the **old** bundle before the deploy still POSTs to the old
+> path. A 404 there reads to `attachTypedCode` as a definite `"refused"`, so the sale would still
+> complete but the customer's one-per-lifetime bonus code would be **silently dropped** — the exact
+> failure this seam exists to close. **Delete the alias one release after this ships**, once no live
+> bundle can still point at it.
 
-Body — `code` (`string | null`; `null` CLEARS a stale stamp) plus **exactly one** complete target pair:
+Thin handler over `attachTypedCodeToCheckout` ([payment/backend.md](../payment/backend.md#attach-typed-codets--the-authoritative-typed-code-write)) — parse, rate-limit, resolve an optional session, delegate, map the typed result.
+
+Body — `code` (`string | null`; `null` CLEARS a stale stamp) plus **exactly one** complete target pair. `code` is the **raw string the customer typed**, never a classification: the service decides whether it is a referral, a promo link or a campaign code (same order as `/api/codes/validate`) and validates each leg against an identity taken from the Stripe object's own server-written metadata. That is what makes it safe for the browser to send an unclassified string — it gains no new trust.
 
 | Target | Fields | Possession proof |
 |---|---|---|
 | subscription | `subscriptionId`, `subscriptionRequestId` | the `subscriptionRequestId` **the server itself wrote** into `subscription.metadata` at create |
 | payment intent | `paymentIntentId`, `clientSecret` | Stripe's own `client_secret` capability token |
 
-**Unauthenticated by design**, the same call the sibling `POST /api/codes/validate` makes: guest checkout is the majority of this journey (step-1 registration does not authenticate — CLAUDE.md rule 6), so a session cannot be the gate. A session, when present, is used only as a last-resort identity hint; the user id that the code is re-verified against comes from the Stripe object's own metadata. Rate limited per IP (60/min, bucket `attach-campaign-code`), mirroring `/api/codes/validate`.
+**Unauthenticated by design**, the same call the sibling `POST /api/codes/validate` makes: guest checkout is the majority of this journey (step-1 registration does not authenticate — CLAUDE.md rule 6), so a session cannot be the gate. A session, when present, is used only as a last-resort identity hint; the user id that the code is re-verified against comes from the Stripe object's own metadata. Rate limited per IP (60/min, bucket `attach-typed-code`), mirroring `/api/codes/validate`.
 
 The `clientSecret` is a bearer credential: never logged, never echoed, never included in an error body. The two arms use different proofs because each object already carries one the browser provably holds — adding a third token would be new plumbing across six call sites for no gain.
 
-Responses: `200 { success: true, campaignCode }` (`campaignCode` is `null` when the server refused or cleared the code — that is a **success**, not an error) · `400` validation · `403` proof mismatch · `404` no such object · `409` object already paid · **`200 { success: false }` for a Stripe or unexpected failure**. Failure bodies are deliberately generic. **Callers must treat every failure as non-fatal and charge anyway** — the client helper (`useStripeSubscription().attachCampaignCode`) caps itself at 15s and never throws.
+Responses: `200 { success: true, code, slot }` — `slot` is `"referral" | "promo" | "campaign" | null` and names the metadata key that was written; both are `null` when the server refused or cleared the code, which is a **success**, not an error. `slot` is the only trustworthy basis for telling the customer a code applied (see [payment/gotchas.md](../payment/gotchas.md)) · `400` validation · `403` proof mismatch · `404` no such object · `409` object already paid · **`200 { success: false }` for a Stripe or unexpected failure**. Failure bodies are deliberately generic. **Callers must treat every failure as non-fatal and charge anyway** — the client helper (`useStripeSubscription().attachTypedCode`) caps itself at 15s and never throws.
 
 ⚠️ **A Stripe hiccup here is deliberately NOT a 5xx** (it was `502`/`500` until 2026-08-27). This endpoint is non-fatal by contract, so a transient failure is a normal answer, not a server fault — and the e2e QA watchdog records **any** same-origin response `>= 500` as a problem, so signalling it that way failed whichever unrelated `@purchase` spec happened to be running. The client treats every non-`success` body identically, so the status carries no information it acts on; the diagnosis lives in the server log, which is where it is read. Do not "restore correct status codes" here without also re-reading `e2e/fixtures/test.ts`.
 

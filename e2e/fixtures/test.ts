@@ -7,14 +7,14 @@ const CONSOLE_ALLOWLIST: RegExp[] = [
   /Download the React DevTools/i,
   /\[Fast Refresh\]/i,
   /third-party cookie/i,
-  // The campaign-code attach gave up waiting (client cap / dropped connection).
+  // The typed-code attach gave up waiting (client cap / dropped connection).
   // The server may well have written the code, so this is not evidence of a
   // failure — and a dev server's first-hit route compile can eat the budget on
   // its own. NARROW ON PURPOSE: the sibling line
-  // "[campaign-code] attach failed before confirm" means the server DEFINITELY
+  // "[typed-code] attach failed before confirm" means the server DEFINITELY
   // did not write it, and must keep failing the spec. Never widen this to
-  // \[campaign-code\].
-  /\[campaign-code\] attach outcome unknown/i,
+  // \[typed-code\].
+  /\[typed-code\] attach outcome unknown/i,
 ];
 
 type Fixtures = {
