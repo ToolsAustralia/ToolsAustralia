@@ -50,10 +50,23 @@ export async function GET(request: Request) {
     // console.error, NOT console.log — production builds strip log/info/debug/warn
     // (next.config.ts `compiler.removeConsole`), so a findings line logged any other way is
     // invisible in Vercel. One line each, greppable by prefix.
-    if (result.failed > 0) {
+    // Retryable — the watermark held, so these users are covered again next run.
+    if (result.retryableFailures > 0) {
       console.error(
-        `[reconcile-klaviyo-profiles] ${result.failed} sync failure(s) of ${result.candidates} ` +
-          `candidate(s); watermark HELD at ${result.watermarkAfter} — next run re-covers this window`
+        `[reconcile-klaviyo-profiles] ${result.retryableFailures} RETRYABLE failure(s) of ` +
+          `${result.candidates} candidate(s); watermark HELD at ${result.watermarkAfter} — ` +
+          `next run re-covers this window`
+      );
+    }
+
+    // Permanent — the cursor stepped PAST these so one bad profile cannot pin the sweep.
+    // They must be named here: they are absent from the backlog count (the cursor moved on)
+    // and carry no `klaviyoSyncedAt`, so this line is the only thing pointing at them.
+    if (result.permanentFailures > 0) {
+      console.error(
+        `[reconcile-klaviyo-profiles] ${result.permanentFailures} PERMANENT failure(s) stepped ` +
+          `over (a hard 4xx never succeeds on retry — fix the data). Affected: ` +
+          JSON.stringify(result.permanentlyFailedSample)
       );
     }
 
