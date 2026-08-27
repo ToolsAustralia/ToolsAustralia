@@ -26,6 +26,8 @@ The matcher's negative lookahead excludes `api`, so middleware does not run for 
 - `createRateLimiter` — **per-instance, in-memory** (`globalThis`). Fine for soft limits; used by Norm, error-reports, Stripe create endpoints, promo. **Not** serverless-safe: an attacker spreading requests across Vercel lambda instances dodges it.
 - `createDistributedRateLimiter` — **shared, Mongo-backed** (the `RateLimit` model, TTL-expiring windows). Used by the brute-force-sensitive auth endpoints (`nextauth-credentials`, `auth-register`, `auth-verify-login-code`, `auth-auto-login`). Its `check` is **async** (the others are sync) and it **fails open** — a DB hiccup allows the request rather than locking everyone out. Don't convert the 10+ existing sync callers wholesale; add `await` only where you switch a given endpoint to the distributed variant.
 
+Only the distributed one has **`refund(identifier)`** (added 2026-08-26) — `check()` consumes a token on call, so a caller whose guarded action then fails needs a way to give it back. See architecture.md "`refund(identifier)` on the distributed limiter" and patterns.md P6.
+
 ## Stripe webhook COEP
 
 If you accidentally apply COEP to `/api/stripe/webhook`, server-to-server POSTs from Stripe break. CSP for that route is intentionally relaxed.
@@ -146,3 +148,29 @@ test:csp-inline-hashes` was run after the change and passed.
 **The general rule:** an access list is a *visibility* control, not an authorization one. Before removing a prefix, ask what the block was silently doing besides hiding the page — then put that guard at the endpoint where it belongs.
 
 **Covered by:** `npm run test:staff-route-access` (pins `isEmployeeAccount` for `staff`/`admin`/`customer`/absent).
+
+---
+
+## A fail-OPEN limiter is not a spend cap (2026-08-26)
+
+`createDistributedRateLimiter` **fails open** by design: if Mongo is unreachable, `check()` logs
+and returns `success: true` rather than blocking
+([rateLimiter.ts](../../src/utils/security/rateLimiter.ts), the `catch` at the end of `check`).
+That is the right call when the limiter guards *security* — a store hiccup must never lock every
+member out of login. It reads very differently once the same primitive sits in front of something
+that **costs money**: the SMS gateway spends prepaid credits per message, so during a store
+outage the 3-sends-per-day cap silently becomes no cap at all.
+
+The rule: **a fail-open limiter is a courtesy, not a ceiling.** Anything it fronts that spends
+must also have a hard limit that does not depend on the limiter being reachable — the prepaid
+balance itself, a provider-side cap, and an eligibility gate at the caller (who may request a
+code at all). Never present a fail-open limiter as the spend control in a design doc; say what
+the real ceiling is. Same reasoning inverted for the refund path: `refund()` is best-effort and
+swallows its errors, so worst case a caller loses one token — the failure mode points at
+*less* allowance, never more, which is the safe direction for a fail-open design.
+
+Dev bypass, for the same limiter: OTP send limits are off in development unless
+`SMS_OTP_RATE_LIMIT_IN_DEV=true` forces them on (so the limiter is testable locally at all);
+production always enforces and no env var can disable it —
+[`isOtpRateLimitBypassed`](../../src/utils/auth/mobile-otp.ts). Contrast the generic warning in
+"Rate limit bypass" above.

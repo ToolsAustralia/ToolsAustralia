@@ -91,6 +91,35 @@ export default withAuth(
       return response;
     }
 
+    // Signed in, but never bought anything → the dashboard has nothing to show
+    // them. Send them to the join page instead: that is a conversion surface,
+    // whereas an empty account is just confusing.
+    //
+    // Gated on `hasEverPaid` (see src/utils/auth/has-ever-paid.ts), NOT on
+    // `subscription.isActive` — cancelled, paused and past-due members HAVE paid
+    // and must keep access (past-due members still hold live draw entries). Staff
+    // are already diverted to /admin by the isStaffBlockedPath rule above, and
+    // `isInternalUser` is a second belt.
+    //
+    // `hasEverPaid === undefined` (a token minted before this shipped) is treated
+    // as allowed: bouncing an existing signed-in member mid-session would be worse
+    // than letting one request through, and the next request carries the stamp.
+    if (
+      isProtectedRoute &&
+      token &&
+      token.hasEverPaid === false &&
+      !isInternalUser(token)
+    ) {
+      const response = NextResponse.redirect(new URL("/membership", req.url));
+      if (isProduction && nonce) {
+        buildSecurityHeaders(nonce).forEach(({ key, value }) => {
+          response.headers.set(key, value);
+        });
+        response.headers.set("x-nonce", nonce);
+      }
+      return response;
+    }
+
     // Check admin access for admin routes.
     if (isAdminRoute && (!token || !isInternalUser(token))) {
       const response = NextResponse.redirect(new URL("/", req.url));
