@@ -485,3 +485,43 @@ disabling the whole reconciliation sweep while it still reported success.
 A safety gate must not be disableable by a cosmetic config var, so the guard keys on
 `NODE_ENV === "production"` (true for any deployed build, false on a developer's machine).
 `KLAVIYO_ALLOW_DEV_PROFILE_WRITES` remains the explicit opt-in for a sanctioned ops run.
+
+## A permanently-failing profile must not pin the sweep (2026-08-27 incident)
+
+**What happened.** One profile (`mike.e.83@…`) returned a hard `400` from Klaviyo:
+
+> The phone number provided either does not exist or is ineligible to receive ChannelType.SMS
+> — `source.pointer: /data/attributes/phone_number`
+
+Their mobile was `+61471993400` — well-formed, and **54,884 other profiles share that exact
+format**. Klaviyo's carrier lookup simply rejects that number.
+
+`nextWatermark` held the cursor on **any** failure. So the sweep hit this user, failed, held,
+and hit them again five minutes later. **The watermark froze for over an hour** and the backlog
+sat at ~29,500 instead of draining. The self-healing retry had become a deadlock — and the
+BACKLOG alert fired every run trying to say so.
+
+**Three fixes, in order of how much they actually help:**
+
+1. **Recover the profile instead of losing it.** `phone_number` is an OPTIONAL attribute; the
+   email, entry counts and membership properties on the same payload were all valid. A 400
+   whose pointer names `phone_number` now triggers ONE retry with the phone omitted, so the
+   customer's marketing data becomes correct and only SMS is lost. Logged loudly so the number
+   gets fixed. (`isPhoneNumberRejection`)
+2. **Classify failures.** `classifyKlaviyoFailure` splits *retryable* (429, 5xx, timeout,
+   socket/network) from *permanent* (hard 4xx). Retryable holds the watermark; permanent does
+   not. An unrecognised shape defaults to **retryable** — needlessly retrying is far cheaper
+   than silently dropping a real customer.
+3. **Guard the opposite trap.** A revoked API key makes EVERY user fail permanently, and
+   marching the cursor through 57,000 users syncing none of them would be worse than stalling.
+   Above `SYSTEMIC_FAILURE_RATIO` (0.5) of a batch failing permanently, the watermark holds —
+   that is configuration, not data.
+
+**Stepping past a failure obliges you to name it.** A permanently-failed user disappears from
+the backlog count (the cursor moved past them) and never gets a `klaviyoSyncedAt`, so the cron's
+`PERMANENT failure(s) stepped over` line — carrying id, email and error — is the only thing
+pointing at them. Without it this fix would have recreated the silent-skip bug it was fixing.
+
+**They still self-heal.** Fixing the underlying data bumps `user.updatedAt`, so the incremental
+sweep picks them up on its own. And once the initial drain completes,
+`{ klaviyoSyncedAt: { $exists: false } }` is the standing query for "never successfully synced".

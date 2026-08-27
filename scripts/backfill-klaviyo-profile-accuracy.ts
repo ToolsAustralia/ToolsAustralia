@@ -102,11 +102,11 @@ async function main() {
     cursor = new Date(r.watermarkAfter);
     page++;
     processedTotal += r.processed;
-    failedTotal += r.failed;
+    failedTotal += r.retryableFailures + r.permanentFailures;
 
     fs.appendFileSync(
       AUDIT_PATH,
-      `${new Date().toISOString()},${page},${r.candidates},${r.processed},${r.failed},` +
+      `${new Date().toISOString()},${page},${r.candidates},${r.processed},${r.retryableFailures + r.permanentFailures},` +
         `${r.timeBudgetExhausted},${r.watermarkAfter},${r.durationMs}\n`
     );
 
@@ -115,7 +115,7 @@ async function main() {
     // let the operator investigate rather than hammer Klaviyo.
     if (cursor.getTime() === (before?.getTime() ?? 0)) {
       console.error(
-        `\nPage ${page}: cursor did not advance (${r.failed} failure(s)) — stopping.\n` +
+        `\nPage ${page}: cursor did not advance (${r.retryableFailures + r.permanentFailures} failure(s)) — stopping.\n` +
           `Completed pages are already synced; re-run after investigating.`
       );
       break;

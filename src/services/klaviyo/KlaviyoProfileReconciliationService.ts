@@ -64,11 +64,35 @@ const DEFAULT_LIMIT = 500;
 const MAX_RUN_MS = 45_000;
 
 /**
+ * Thrown per-user so `Promise.allSettled` can carry retryability out of the batch.
+ * A plain Error would lose the distinction and every failure would hold the watermark.
+ */
+class SyncFailure extends Error {
+  constructor(public readonly retryable: boolean, message: string) {
+    super(message);
+    this.name = "SyncFailure";
+  }
+}
+
+/**
  * Above this many users still waiting AFTER a run, report a problem. A healthy backlog is
  * ~0; a number that grows run-over-run means the sweep is not keeping up. Tune after a week
  * of real readings rather than pretending this was guessed correctly first time.
  */
 export const BACKLOG_ALERT_THRESHOLD = 25;
+
+/**
+ * Above this share of permanently-failing users in one batch, treat the cause as SYSTEMIC
+ * (revoked key, wrong revision, account suspended) rather than bad rows — and hold the
+ * watermark instead of marching past the whole population syncing nobody.
+ *
+ * 0.5 is deliberately loose: real data problems are a handful of profiles among hundreds,
+ * while a config failure is ~100%.
+ */
+export const SYSTEMIC_FAILURE_RATIO = 0.5;
+
+/** Most permanently-failed users named in one run's log line. */
+export const PERMANENT_FAILURE_LOG_CAP = 10;
 
 export interface ReconciliationResult {
   mode: "incremental" | "full";
@@ -76,7 +100,17 @@ export interface ReconciliationResult {
   watermarkAfter: string;
   candidates: number;
   processed: number;
-  failed: number;
+  /** Failures that may succeed later — these HOLD the watermark. */
+  retryableFailures: number;
+  /** Failures that will never succeed unchanged — the cursor steps past these. */
+  permanentFailures: number;
+  /**
+   * Who they were. Stepping past a permanent failure without naming it would recreate the
+   * silent-skip bug this whole service exists to remove: they vanish from the backlog count
+   * (the cursor moved past them) and `klaviyoSyncedAt` stays unset with nothing pointing at
+   * them. Capped so one systemic outage cannot flood the log.
+   */
+  permanentlyFailedSample: Array<{ id: string; email?: string; error: string }>;
   /** Users whose `updatedAt` is still beyond the watermark once this run finished. */
   backlogCount: number;
   /**
@@ -93,18 +127,39 @@ export interface ReconciliationResult {
 }
 
 /**
- * Where the watermark lands after a run.
+ * Where the watermark lands after a run. Never moves backwards.
  *
- * Advances ONLY on a fully clean run. Any failure holds position so the next run re-covers
- * the window — that is what turns a transient Klaviyo outage into a delay instead of a silent
- * permanent gap. Never moves backwards.
+ * Three cases, and the distinction between the first two is the whole point:
+ *
+ *  - RETRYABLE failure (429, 5xx, timeout, socket) → HOLD. The next run re-covers the window,
+ *    turning an outage into a delay instead of a silent permanent gap.
+ *  - PERMANENT failure (hard 4xx) → ADVANCE past it. Holding for something that can never
+ *    succeed is not resilience, it is a deadlock — see the 2026-08-27 incident note below.
+ *  - Systemic permanent failure (most of the batch) → HOLD, because that is configuration,
+ *    not data, and marching the cursor through the population would sync nobody.
  */
 export function nextWatermark(
   current: Date,
   batchMaxUpdatedAt: Date | null,
-  failed: number
+  outcome: { retryableFailures: number; permanentFailures: number; processed: number }
 ): Date {
-  if (failed > 0) return current;
+  // A retryable failure anywhere in the batch holds position so the next run re-covers the
+  // window. This is the self-healing property: an outage becomes a delay, not a silent gap.
+  if (outcome.retryableFailures > 0) return current;
+
+  // A PERMANENT failure must NOT hold, or one bad profile pins the cursor forever. On
+  // 2026-08-27 exactly that happened: a single profile returning a hard 400 (SMS-ineligible
+  // phone number) froze the watermark for over an hour while the backlog sat at ~29,500.
+  //
+  // But blanket-advancing is its own trap: a revoked API key makes EVERY user fail
+  // permanently, and marching the cursor through 57,000 users syncing none of them would be
+  // far worse than stalling. So a high permanent-failure RATE is treated as systemic —
+  // config, not data — and holds.
+  const attempted = outcome.processed + outcome.permanentFailures;
+  if (attempted > 0 && outcome.permanentFailures / attempted > SYSTEMIC_FAILURE_RATIO) {
+    return current;
+  }
+
   if (!batchMaxUpdatedAt) return current;
   return batchMaxUpdatedAt.getTime() > current.getTime() ? batchMaxUpdatedAt : current;
 }
@@ -142,9 +197,12 @@ export async function runKlaviyoProfileReconciliation(
     .limit(limit)) as IUser[];
 
   let processed = 0;
-  let failed = 0;
+  let retryableFailures = 0;
+  let permanentFailures = 0;
+  /** Newest updatedAt the cursor may safely move to: synced users AND permanently-failed ones. */
   let batchMaxUpdatedAt: Date | null = null;
   let timeBudgetExhausted = false;
+  const permanentlyFailed: Array<{ id: string; email?: string; error: string }> = [];
 
   // ONE aggregation for the whole batch rather than one per user — the same caching
   // convention `userToKlaviyoProfile` already uses for `targetDraw` / `cutoffDate`.
@@ -164,15 +222,12 @@ export async function runKlaviyoProfileReconciliation(
       batch.map(async (user) => {
         const ledger = ledgers.get(user._id.toString()) ?? emptyGrantLedger();
 
-        // `syncUserProfileToKlaviyo` swallows its own errors and returns false rather than
-        // throwing — so NOT checking this return value would make every failure look like a
-        // success, advance the watermark past the user, and skip them forever. A 401, a 429,
-        // a Klaviyo outage, or the dev/prod write guard refusing would all be invisible.
-        // Throwing here routes the user into the `rejected` branch below, which increments
-        // `failed`, holds the watermark, and logs — i.e. they are retried next run.
-        const synced = await syncUserProfileToKlaviyo(user, undefined, undefined, undefined, ledger);
-        if (!synced) {
-          throw new Error("Klaviyo upsert did not land (see the preceding klaviyo error line)");
+        // `syncUserProfileToKlaviyo` swallows its own errors and reports the outcome in its
+        // return value — NOT checking it would make every failure look like a success and skip
+        // the user forever. `retryable` decides whether the watermark holds for them.
+        const sync = await syncUserProfileToKlaviyo(user, undefined, undefined, undefined, ledger);
+        if (!sync.ok) {
+          throw new SyncFailure(sync.retryable, sync.error ?? "Klaviyo upsert did not land");
         }
 
         // `{ timestamps: false }` is LOAD-BEARING: without it this write bumps `updatedAt`,
@@ -188,17 +243,40 @@ export async function runKlaviyoProfileReconciliation(
 
     for (let j = 0; j < results.length; j++) {
       const outcome = results[j];
-      if (outcome.status === "fulfilled") {
-        processed++;
-        const updatedAt = batch[j].updatedAt;
+      const user = batch[j];
+      const updatedAt = user.updatedAt;
+
+      /** Let the cursor pass this user — they are either done or will never succeed. */
+      const advancePast = () => {
         if (updatedAt && (!batchMaxUpdatedAt || updatedAt > batchMaxUpdatedAt)) {
           batchMaxUpdatedAt = updatedAt;
         }
+      };
+
+      if (outcome.status === "fulfilled") {
+        processed++;
+        advancePast();
+        continue;
+      }
+
+      const reason = outcome.reason;
+      const isPermanent = reason instanceof SyncFailure && !reason.retryable;
+
+      if (isPermanent) {
+        permanentFailures++;
+        permanentlyFailed.push({
+          id: String(user._id),
+          email: user.email,
+          error: (reason as SyncFailure).message,
+        });
+        // Step over it. `klaviyoSyncedAt` stays unset, so the profile remains findable as
+        // never-synced without pinning the cursor for every other user behind it.
+        advancePast();
       } else {
-        failed++;
+        retryableFailures++;
         console.error(
-          `[reconcile-klaviyo-profiles] sync failed for user ${batch[j]._id}:`,
-          outcome.reason
+          `[reconcile-klaviyo-profiles] retryable sync failure for user ${user._id}:`,
+          reason
         );
       }
     }
@@ -208,7 +286,11 @@ export async function runKlaviyoProfileReconciliation(
     }
   }
 
-  const watermarkAfter = nextWatermark(watermarkBefore, batchMaxUpdatedAt, failed);
+  const watermarkAfter = nextWatermark(watermarkBefore, batchMaxUpdatedAt, {
+    retryableFailures,
+    permanentFailures,
+    processed,
+  });
 
   // Persist the watermark only for incremental runs. A `full` run is a repair pass and must
   // never rewind the live cursor.
@@ -224,7 +306,7 @@ export async function runKlaviyoProfileReconciliation(
   }
   state.lastRunAt = new Date();
   state.lastRunProcessed = processed;
-  state.lastRunFailed = failed;
+  state.lastRunFailed = retryableFailures + permanentFailures;
   await state.save();
 
   // Backlog: how many users are still waiting after this run.
@@ -262,7 +344,9 @@ export async function runKlaviyoProfileReconciliation(
     watermarkAfter: watermarkAfter.toISOString(),
     candidates: users.length,
     processed,
-    failed,
+    retryableFailures,
+    permanentFailures,
+    permanentlyFailedSample: permanentlyFailed.slice(0, PERMANENT_FAILURE_LOG_CAP),
     backlogCount,
     entryLedgerDivergentCount,
     timeBudgetExhausted,
