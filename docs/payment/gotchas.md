@@ -388,3 +388,8 @@ attach path is slow and wants attention. See
 **What is NOT covered.** The intent is only recorded for a customer the server can resolve to a real
 account from the checkout object's own metadata. A code applied by someone with no account row could
 never redeem anyway (`resolveCodeForCheckout` refuses it first), so there is nothing to recover.
+## `account-manager` no longer initialises `upsellStats` (2026-08-27)
+
+`createUserAccount` in `src/utils/payment/account-manager.ts` seeded a five-counter
+`upsellStats` object on guest-checkout account creation. The field is deleted from the User
+model — see `docs/upsell/gotchas.md`. `upsellPurchases` / `upsellHistory` are untouched.

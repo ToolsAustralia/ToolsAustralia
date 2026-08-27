@@ -75,3 +75,7 @@ e2e-artifacts/
 # Playwright MCP server scratch output (console logs + page snapshots), written into the repo
 # root whenever a session drives a browser through the MCP tools.
 .playwright-mcp/
+
+# PII export from find:missing-retention-entries (customer emails) — never commit
+missing-retention-entries.csv
+backfill-klaviyo-accuracy-audit.csv

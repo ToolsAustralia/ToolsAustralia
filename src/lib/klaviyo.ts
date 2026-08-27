@@ -30,6 +30,14 @@ import {
 // CONFIGURATION
 // ============================================================
 
+/**
+ * Returned by every profile-MUTATING client method when the dev/prod write guard refuses.
+ *
+ * Exported so callers can distinguish "deliberately blocked in development" from a real
+ * Klaviyo failure — a blocked write is expected local behaviour, not an incident.
+ */
+export const PROFILE_WRITE_BLOCKED_ERROR = "Profile writes blocked outside production";
+
 const getKlaviyoConfig = () => {
   // Trim API key to handle any whitespace issues
   const apiKey = process.env.KLAVIYO_PRIVATE_API_KEY?.trim();
@@ -44,8 +52,15 @@ const getKlaviyoConfig = () => {
   const smsListId = process.env.KLAVIYO_SMS_LIST_ID;
   // Email list ID for subscribing users to email marketing
   const emailListId = process.env.KLAVIYO_EMAIL_LIST_ID;
+  // Dev and production share ONE Klaviyo account. `mode` only prefixes EVENT names
+  // ([DEV] …), so profile writes were unprefixed and indistinguishable from production
+  // ones. Profile MUTATION is therefore refused outside production unless explicitly
+  // opted in. The opt-in exists because the sanctioned backfill is an intentional write
+  // from a developer machine against production — it must be set deliberately for that
+  // run, never defaulted on by a script. See docs/tracking/KLAVIYO_INTEGRATION.md.
+  const allowDevProfileWrites = process.env.KLAVIYO_ALLOW_DEV_PROFILE_WRITES === "true";
 
-  return { apiKey, mode, enabled, nodeEnv, smsListId, emailListId };
+  return { apiKey, mode, enabled, nodeEnv, smsListId, emailListId, allowDevProfileWrites };
 };
 
 // ============================================================
@@ -57,6 +72,7 @@ class KlaviyoClient {
   private baseUrl = "https://a.klaviyo.com/api";
   private mode: "development" | "production";
   private enabled: boolean;
+  private allowDevProfileWrites: boolean;
   private smsListId: string | undefined;
   private emailListId: string | undefined;
 
@@ -78,6 +94,7 @@ class KlaviyoClient {
     this.apiKey = config.apiKey;
     this.mode = config.mode;
     this.enabled = config.enabled;
+    this.allowDevProfileWrites = config.allowDevProfileWrites;
     this.smsListId = config.smsListId;
     this.emailListId = config.emailListId;
 
@@ -145,6 +162,45 @@ class KlaviyoClient {
     }
 
     return true;
+  }
+
+  /**
+   * May this process MUTATE Klaviyo profiles?
+   *
+   * Dev and production share one Klaviyo account, and `mode` only prefixes EVENT names —
+   * profile writes went out unprefixed and indistinguishable from production ones. A local
+   * run reads the dev database, so it cannot corrupt a paying customer's profile (only 8
+   * of 933 dev emails exist in production, all test/staff accounts), but it does push test
+   * profiles into the live marketing account where they land in broad segments.
+   *
+   * Events are deliberately NOT gated — they carry a [DEV] prefix and stay separable.
+   *
+   * Env is re-read on every call, matching `isConfigured()`: ops scripts load dotenv AFTER
+   * this module's singleton is constructed, so a constructor-time snapshot would read the
+   * opt-in as absent and refuse the very backfill it is meant to permit.
+   */
+  private canWriteProfiles(): boolean {
+    // Gate on the REAL deployment signal (`NODE_ENV`), not on `KLAVIYO_MODE`.
+    //
+    // `KLAVIYO_MODE` is an event-name-prefix setting that a human sets by hand, and this repo's
+    // own `.env.local` ships it as "development". If it were also set that way in Vercel, gating
+    // on it would refuse EVERY profile write in production — silently disabling the entire
+    // reconciliation sweep while it still reported success. A safety gate must not be
+    // disableable by a cosmetic config var. `NODE_ENV === "production"` is true for any deployed
+    // build and false on a developer's machine, which is exactly the distinction this guard is
+    // for. The existing constructor already warns when the two disagree.
+    if (process.env.NODE_ENV === "production" || this.mode === "production") return true;
+
+    if (process.env.KLAVIYO_ALLOW_DEV_PROFILE_WRITES === "true" || this.allowDevProfileWrites) {
+      return true;
+    }
+    console.error(
+      "[klaviyo] BLOCKED profile write — KLAVIYO_MODE is not 'production' and " +
+        "KLAVIYO_ALLOW_DEV_PROFILE_WRITES is not 'true'. Dev and prod share one Klaviyo " +
+        "account; this guard keeps local runs out of the live marketing account. Set the " +
+        "flag explicitly for a sanctioned ops backfill."
+    );
+    return false;
   }
 
   /**
@@ -278,6 +334,10 @@ class KlaviyoClient {
   ): Promise<{ success: boolean; jobId?: string; error?: string }> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
+    }
+
+    if (!this.canWriteProfiles()) {
+      return { success: false, error: PROFILE_WRITE_BLOCKED_ERROR };
     }
 
     if (!Array.isArray(profiles) || profiles.length === 0) {
@@ -703,6 +763,10 @@ class KlaviyoClient {
       return { success: false, error: "Klaviyo not configured" };
     }
 
+    if (!this.canWriteProfiles()) {
+      return { success: false, error: PROFILE_WRITE_BLOCKED_ERROR };
+    }
+
     // ✅ CRITICAL FIX: Validate that we have at least one identifier
     if (!profile.email || profile.email.trim() === "") {
       console.error("❌ Klaviyo profile missing required email identifier:", profile);
@@ -960,6 +1024,10 @@ class KlaviyoClient {
       return { success: false, error: "Klaviyo not configured" };
     }
 
+    if (!this.canWriteProfiles()) {
+      return { success: false, error: PROFILE_WRITE_BLOCKED_ERROR };
+    }
+
     // Validate SMS list ID is configured
     if (!this.smsListId) {
       if (this.mode === "development") {
@@ -1160,6 +1228,10 @@ class KlaviyoClient {
       return { success: false, error: "Klaviyo not configured" };
     }
 
+    if (!this.canWriteProfiles()) {
+      return { success: false, error: PROFILE_WRITE_BLOCKED_ERROR };
+    }
+
     // Validate email list ID is configured
     if (!this.emailListId) {
       if (this.mode === "development") {
@@ -1349,6 +1421,10 @@ class KlaviyoClient {
       return { success: false, error: "Klaviyo not configured" };
     }
 
+    if (!this.canWriteProfiles()) {
+      return { success: false, error: PROFILE_WRITE_BLOCKED_ERROR };
+    }
+
     // Validate email
     if (!email || email.trim() === "") {
       console.error("❌ Invalid email for email unsubscribe:", email);
@@ -1437,6 +1513,10 @@ class KlaviyoClient {
       return { success: false, error: "Klaviyo not configured" };
     }
 
+    if (!this.canWriteProfiles()) {
+      return { success: false, error: PROFILE_WRITE_BLOCKED_ERROR };
+    }
+
     // Validate phone number
     if (!phoneNumber || phoneNumber.trim() === "") {
       console.error("❌ Invalid phone number for SMS unsubscribe:", phoneNumber);
@@ -1520,6 +1600,10 @@ class KlaviyoClient {
   async removeFromLists(profileId: string): Promise<{ success: boolean; error?: string }> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
+    }
+
+    if (!this.canWriteProfiles()) {
+      return { success: false, error: PROFILE_WRITE_BLOCKED_ERROR };
     }
 
     // Validate profile ID
@@ -1655,6 +1739,10 @@ class KlaviyoClient {
   ): Promise<{ success: boolean; jobId?: string; error?: string }> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
+    }
+
+    if (!this.canWriteProfiles()) {
+      return { success: false, error: PROFILE_WRITE_BLOCKED_ERROR };
     }
 
     // Validate email
@@ -2034,6 +2122,10 @@ class KlaviyoClient {
   async mergeProfiles(destinationProfileId: string, sourceProfileId: string): Promise<KlaviyoProfileResponse> {
     if (!this.isConfigured()) {
       return { success: false, error: "Klaviyo not configured" };
+    }
+
+    if (!this.canWriteProfiles()) {
+      return { success: false, error: PROFILE_WRITE_BLOCKED_ERROR };
     }
 
     if (!destinationProfileId?.trim() || !sourceProfileId?.trim() || destinationProfileId === sourceProfileId) {

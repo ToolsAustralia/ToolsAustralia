@@ -3,8 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import connectDB from "@/lib/mongodb";
 import User from "@/models/User";
-import MajorDraw from "@/models/MajorDraw";
-import mongoose from "mongoose";
+import { DrawGrantService } from "@/services/redeemables/DrawGrantService";
 import { canOfferCancellationUpsellRedeem } from "@/utils/redeemables/cancellation-upsell-eligibility";
 
 /**
@@ -44,7 +43,46 @@ export async function POST() {
 
     const entriesToAdd = 100;
 
-    // Add entries to user's accumulated entries
+    // ── DRAW FIRST, COUNTER SECOND ────────────────────────────────────────────────────────
+    //
+    // This order is the fix for a defect that ran from 2025-12 to 2026-06 and cost 373 members
+    // the entries they were promised. The route used to increment `accumulatedEntries`, THEN
+    // call a bespoke helper that looked up `MajorDraw.findOne({ isActive: true })` and returned
+    // SILENTLY when that found nothing (a draw-transition window). The member's counter went
+    // up, this endpoint replied "100 free entries successfully added to your account", and no
+    // draw ever received the entries. Of 590 redeemers, 373 were left with nothing in a draw.
+    //
+    // Granting the draw entries first means a failure leaves the member UNCHANGED and able to
+    // retry, instead of silently diverging. `DrawGrantService` is the canonical grant path —
+    // it resolves the target draw via `getTargetMajorDraw` (which transitions if needed, reads
+    // `status` rather than the legacy `isActive` flag, and routes around a frozen draw) and
+    // returns false when the entries did not land. Its own docblock states the contract this
+    // route previously broke: callers granting an entitlement must treat false as
+    // "not delivered".
+    const granted = await DrawGrantService.grantMonthlyCouponEntries(
+      user._id.toString(),
+      entriesToAdd,
+      "cancellation-upsell"
+    );
+
+    if (!granted) {
+      // Loud, and honest to the member. console.error survives production builds.
+      console.error(
+        `[cancellation-upsell] REDEEM FAILED — no target draw available; nothing was granted ` +
+          `and the offer remains unredeemed for user ${user._id}`
+      );
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "We couldn't add your free entries just now — the next giveaway is being set up. " +
+            "Please try again shortly; your offer is still available.",
+        },
+        { status: 503 }
+      );
+    }
+
+    // Entries are in the draw. Only now record them on the member and burn the one-time offer.
     await User.findByIdAndUpdate(
       user._id,
       {
@@ -58,18 +96,6 @@ export async function POST() {
       },
       { new: false }
     );
-
-    // console.log(`🎫 Added ${entriesToAdd} entries to user ${user._id} (cancellation upsell)`);
-
-    // Add entries to major draw
-    await addToMajorDraw(user._id.toString(), {
-      entries: entriesToAdd,
-      packageType: "cancellation-upsell",
-      packageId: "cancellation-upsell-100-entries",
-      packageName: "Cancellation Retention Offer",
-    });
-
-    // console.log(`🎯 Added ${entriesToAdd} entries to major draw for user ${user._id}`);
 
     return NextResponse.json({
       success: true,
@@ -88,112 +114,5 @@ export async function POST() {
       },
       { status: 500 }
     );
-  }
-}
-
-/**
- * Add entries to the active major draw
- * Reuses the same logic as other entry systems
- */
-async function addToMajorDraw(
-  userId: string,
-  packageData: { entries: number; packageType: string; packageId?: string; packageName?: string }
-): Promise<void> {
-  try {
-    // Find the active major draw
-    const activeMajorDraw = await MajorDraw.findOne({ isActive: true });
-    if (!activeMajorDraw) {
-      console.log(`[cancellation-upsell] no active major draw — skipping major-draw entry add`, {
-        userId,
-        entries: packageData.entries,
-      });
-      return;
-    }
-
-    const now = new Date();
-    const userObjectId = new mongoose.Types.ObjectId(userId);
-    const sourceType = packageData.packageType as
-      | "membership"
-      | "one-time-package"
-      | "upsell"
-      | "mini-draw"
-      | "cancellation-upsell";
-
-    console.log(`[cancellation-upsell] adding entries to major draw`, {
-      userId,
-      drawId: activeMajorDraw._id.toString(),
-      drawName: activeMajorDraw.name,
-      sourceType,
-      entries: packageData.entries,
-    });
-
-    // Create entries by source object
-    const entriesBySource: {
-      membership?: number;
-      "one-time-package"?: number;
-      upsell?: number;
-      "mini-draw"?: number;
-      "cancellation-upsell"?: number;
-    } = {
-      membership: 0,
-      "one-time-package": 0,
-      upsell: 0,
-      "mini-draw": 0,
-      "cancellation-upsell": 0,
-    };
-    entriesBySource[sourceType] = packageData.entries;
-
-    // Find existing user entry
-    const existingUserEntry = activeMajorDraw.entries.find(
-      (entry: { userId: { toString(): string } }) => entry.userId.toString() === userId
-    );
-
-    if (existingUserEntry) {
-      // Update existing entry
-      await MajorDraw.updateOne(
-        {
-          _id: activeMajorDraw._id,
-          "entries.userId": userObjectId,
-        },
-        {
-          $inc: {
-            "entries.$.totalEntries": packageData.entries,
-            [`entries.$.entriesBySource.${sourceType}`]: packageData.entries,
-          },
-          $set: {
-            "entries.$.lastUpdatedDate": now,
-          },
-        }
-      );
-      // console.log(`🎯 Updated existing major draw entry for user ${userId} (+${packageData.entries} ${sourceType})`);
-    } else {
-      // Create new entry
-      const newEntry = {
-        userId: userObjectId,
-        totalEntries: packageData.entries,
-        entriesBySource,
-        firstAddedDate: now,
-        lastUpdatedDate: now,
-      };
-
-      await MajorDraw.updateOne({ _id: activeMajorDraw._id }, { $push: { entries: newEntry } });
-      // console.log(`🎯 Created new major draw entry for user ${userId} (+${packageData.entries} ${sourceType})`);
-    }
-
-    // Get updated major draw for total calculation
-    const updatedMajorDraw = await MajorDraw.findById(activeMajorDraw._id);
-    const totalEntries =
-      updatedMajorDraw?.entries.reduce((sum: number, entry: { totalEntries: number }) => sum + entry.totalEntries, 0) ||
-      0;
-
-    // ✅ CRITICAL: Update totalEntries field since updateOne() bypasses pre-save middleware
-    if (updatedMajorDraw && totalEntries !== updatedMajorDraw.totalEntries) {
-      await MajorDraw.updateOne({ _id: activeMajorDraw._id }, { $set: { totalEntries } });
-    }
-
-    // console.log(`🎯 Major draw entries updated for user ${userId} (draw total: ${totalEntries})`);
-  } catch (error) {
-    console.error(`❌ ERROR in addToMajorDraw for cancellation upsell:`, error);
-    // Don't throw - allow redemption to continue even if major draw update fails
   }
 }

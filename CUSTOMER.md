@@ -154,6 +154,7 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 | `mobile` | string (opt) | AU mobile; validated + normalized to `+61…` on save ([User.ts:9](src/models/User.ts#L9), hook [1136-1158](src/models/User.ts#L1136)) | **PII** |
 | `acceptsPromotionalEmail` | boolean (opt) | Klaviyo marketing opt-in; **omitted/undefined ⇒ opted in** ([User.ts:180](src/models/User.ts#L180)) | — |
 | `pendingKlaviyoMergeFromEmail` | string (opt, lowercase) | Old email to merge from in Klaviyo after a verified email change; cleared after merge ([User.ts:156](src/models/User.ts#L156)) | **PII** |
+| `klaviyoSyncedAt` | Date (opt) | When **we** last wrote this customer's Klaviyo marketing profile. Set by the reconciliation sweep with `{ timestamps: false }` so it never bumps `updatedAt`. Internal only — never surfaced to the customer. Added 2026-08-26 (§8-0) | — |
 
 ### 2d. Subscription / membership
 
@@ -239,7 +240,6 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 | `retentionOffersConsumed` | subdoc (opt) | One-time retention flags: `pause30d?`, `discount50_2mo?` ([User.ts:193](src/models/User.ts#L193)) | — |
 | `upsellPurchases[]` | array (opt) | Each: `offerId, offerTitle, entriesAdded, amountPaid, purchaseDate, triggeringPaymentIntentId?` ([User.ts:867-897](src/models/User.ts#L867)). `triggeringPaymentIntentId` keys the per-trigger "one purchase per appearance" upsell dedup ([upsell/purchase/route.ts:203-214](src/app/api/upsell/purchase/route.ts#L203)). **Caveat:** rows written before 2026-07-10 lack it — the field was missing from the schema block and `strict: true` stripped it on write (fixed 2026-07-10), so the dedup only bites on purchases made after the fix. | — |
 | `upsellHistory[]` | array (opt) | Each: `offerId, action, triggerEvent, timestamp` ([User.ts:207-212](src/models/User.ts#L207)) | — |
-| `upsellStats` | subdoc (opt) | `totalShown, totalAccepted, totalDeclined, totalDismissed, conversionRate, lastInteraction` ([User.ts:215-222](src/models/User.ts#L215)) | — |
 | `redemptionHistory[]` | array (opt, def []) | Points-redemption log: `redemptionId?, redemptionType("discount"\|"entry"\|"shipping"\|"package"), packageId?, packageName?, pointsDeducted, value, description, redeemedAt, status("completed"\|"pending"\|"cancelled")` ([User.ts:259-269](src/models/User.ts#L259)) | — |
 
 ### 2j. Timestamps
@@ -670,9 +670,77 @@ record only: nothing new is sent to Klaviyo, Stripe or any other third party.
 
 ---
 
+### The retention offer could silently fail (fixed 2026-08-26)
+
+A member part-way through cancelling is offered **100 free entries** to stay. Between December
+2025 and June 2026 that offer could take the member's acceptance, tell them *"100 free entries
+successfully added to your account"*, raise the entry number shown on their account — and never
+put the entries into a giveaway. It happened whenever the offer was accepted during the window
+when one giveaway was closing and the next had not opened.
+
+**373 of the 590 members who accepted the offer were affected** — they stayed subscribed on a
+promise that did not execute.
+
+The offer now puts the entries into the giveaway **first**, and only then records them on the
+member's account. If no giveaway is open at that moment the member sees *"We couldn't add your
+free entries just now — the next giveaway is being set up. Please try again shortly; your offer
+is still available"*, keeps their one-time offer, and nothing is recorded. Their account can no
+longer show entries they do not hold.
+
+This was **fixed forward only**. The 373 members were not retroactively granted entries: the
+giveaways they accepted against have already been drawn and their winners chosen.
+
 ## 8. Marketing & attribution data captured
 
 What marketing/attribution data we capture about a customer, and which of it **leaves to third parties** (Klaviyo, Meta/TikTok/Snapchat). See [docs/tracking/](docs/tracking/).
+
+### Five dormant upsell fields removed from the customer record (2026-08-27)
+
+The customer record carried five counters meant to describe how they respond to upsell offers —
+how many were shown, accepted, declined, dismissed, and a conversion rate. The thing that was
+supposed to fill them was never switched on, so for **every one of the ~56,900 customers all
+five read zero** since launch. They looked like measured behaviour and were not.
+
+They are removed from the customer record and from what we send to the email platform. Nothing
+a customer can see changes: no page displayed them, and their actual upsell **purchases** —
+which 2,290 customers have — are untouched and still recorded.
+
+### 8-0. What Klaviyo holds about a customer, and when it catches up (2026-08-26)
+
+Klaviyo keeps its own copy of each customer. Our database is the truth; that copy's job is to
+keep up. Two things about it changed.
+
+**It now catches up on its own.** Previously a customer's Klaviyo record only refreshed if
+they happened to trigger one of ~24 scattered "please sync" calls — and every one of those was
+fire-and-forget, so it often never landed. A customer could pay, receive their entries, and
+have Klaviyo still believe they had none. Two customers who bought twenty minutes apart on
+2026-08-25 differed only in that one of them clicked one extra button afterwards; that one's
+record was correct, the other's said **zero entries** and **never entered a giveaway**.
+
+A job now runs **every five minutes**, finds every customer whose record changed since it last
+succeeded, and refreshes them — regardless of which part of the site made the change. This
+also closes five gaps that were never wired up at all: cancellations, admin edits, referral
+rewards, milestone rewards, and redeemed rewards.
+
+**The entry and spend figures are now what actually happened.** Four properties were
+*recalculated* from the price list (`entries per month × months subscribed`) rather than read
+from what we granted. That was wrong for **every single active member** — a Tradie who
+received 150 entries under a promotion was reported as 15. They are now read from the payment
+record. `accumulated_entries` is unchanged and still counts entries from **all** sources
+including free ones; the paid-only figures sit alongside it.
+
+Also corrected: a flag claiming the customer had a **pending upgrade** was `true` on every
+profile in the database while nobody actually had one. And five upsell-engagement properties
+that had been empty for every customer since launch are **removed** from their profile — the
+thing meant to fill them was never switched on.
+
+One new field is held on the customer record: **`klaviyoSyncedAt`**, the time we last wrote
+their marketing profile. It is internal, never shown to the customer, and exists so a record
+that has fallen behind is visible to us instead of silent.
+
+Nothing new about a customer leaves to a third party as a result of this — the same properties
+go to Klaviyo, with correct values, more reliably. See
+[docs/tracking/KLAVIYO_INTEGRATION.md](docs/tracking/KLAVIYO_INTEGRATION.md).
 
 ### 8a. UTM / attribution capture & persistence
 

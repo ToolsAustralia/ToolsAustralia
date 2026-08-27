@@ -84,3 +84,82 @@ assertion; the owner ratified stacking as intended (the `membership/*-50x.webp` 
 `*-100x.webp` artwork variants exist precisely for the stacked 5×/10× promo cases). The
 stale comment is fixed; if stacking policy ever changes, `full-journey.spec.ts`'s
 `upsellEntries = 3 × 10 × promo` expectation is the tripwire.
+
+## The upsell TRACKER is deleted (2026-08-27)
+
+Not to be confused with upsell *purchases*, which are live and unaffected (2,290 users have
+one). What is gone is the engagement-tracking layer that was never switched on.
+
+`UpsellManager.tsx` was imported nowhere in the app. It was the only caller of
+`POST /api/upsell/track`, which was the only writer of `User.upsellStats`. So the whole chain
+ran zero times in production: measured 2026-08-26, **0 of 56,360 users had
+`upsellStats.totalShown > 0`**. Five permanent zeros that read like measured data, and which
+were published to Klaviyo as five profile properties until those were retired.
+
+Deleted:
+
+| | |
+|---|---|
+| `src/components/modals/UpsellManager.tsx` | the unmounted component |
+| `src/app/api/upsell/track/` | its only endpoint |
+| `useUpsellManager`, `useTrackUpsellEvent`, `useUpsellTracking` | the tracking hooks |
+| `UpsellManagerProps` | its props type |
+| `User.upsellStats` | interface + schema + all three initialisation sites |
+
+`useUpsellTracking` was doubly dead — it called `/api/upsell/tracking/${offerId}`, a route that
+has never existed.
+
+**Kept deliberately:** `usePurchaseUpsell` (5 consumers) and `useUpsellPrefetch` (2 consumers)
+are live. `UpsellOffer` and `SAMPLE_UPSELL_OFFERS` stay in `types/upsell.ts` — the dev modal
+gallery uses them.
+
+**Also flagged, not done:** `useUpsellOffers`, `useUpsellAnalytics`, `useAcceptUpsellOffer` and
+`useDismissUpsellOffer` now have zero consumers (their only caller was `useUpsellManager`).
+They are unrelated dead code, not part of the tracker, so they were left alone.
+
+Stored residue is stripped by `npm run migrate:remove-upsell-stats` (`:dry` first). Reviving
+upsell funnel data means building a tracker that is actually mounted.
+
+## The retention offer silently lost 373 members' entries (fixed 2026-08-26)
+
+`POST /api/cancellation-upsell/redeem` grants a one-time 100-entry retention offer to a member
+part-way through cancelling. It used to do two writes **in the wrong order**:
+
+1. `$inc accumulatedEntries: 100` and set `cancellationUpsellRedeemed: true`
+2. a bespoke local `addToMajorDraw()` that resolved the draw with
+   `MajorDraw.findOne({ isActive: true })` and **returned silently** when that found nothing
+
+So during any draw-transition window the member's counter rose, the endpoint replied
+*"100 free entries successfully added to your account"*, and **no draw ever received the
+entries**. Nothing logged at error level; nothing failed.
+
+Measured against production on 2026-08-26:
+
+| | |
+|---|---|
+| members who redeemed the offer | 590 |
+| received their draw entries | 217 |
+| **never received them** | **373** |
+| entries promised and not delivered | **37,300** |
+
+Affected redemptions run **2025-12 → 2026-06** and then stop, matching the window in which the
+legacy `isActive` boolean was unreliable. It is the same window in which the December–May
+draws carry `entriesBySource`-vs-`totalEntries` drift.
+
+**The fix — draw first, counter second.** The route now calls
+[`DrawGrantService.grantMonthlyCouponEntries`](src/services/redeemables/DrawGrantService.ts),
+the canonical grant path, which resolves the target draw via `getTargetMajorDraw` (transitions
+if needed, reads `status` not `isActive`, routes around a frozen draw) and returns `false` when
+the entries did not land. Only on `true` does the route touch `accumulatedEntries` or burn the
+one-time offer. On `false` it returns **503** with a retryable message and the offer stays
+available. The bespoke `addToMajorDraw` is deleted — business logic does not belong in a route
+handler.
+
+That service's own docblock already stated the contract this route was breaking: *"Callers that
+grant a PAID entitlement must treat false/throw as 'not delivered' and compensate."*
+
+**Fixed forward only.** The 373 affected members were NOT retroactively granted — the draws
+they redeemed against (Dec–May) are completed and their winners already drawn. List them any
+time with `npm run find:missing-retention-entries -- --prod [--csv]`.
+
+Ordering is pinned by `npm run test:retention-grant-order`.

@@ -391,6 +391,120 @@ Every other surface that shows the renewal date reads `endDate` live per request
 
 See [docs/PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) for the full downstream-propagation details.
 
+## Profile delivery — the reconciliation sweep is the guarantee, not `ensureUserProfileSynced` (2026-08-26)
+
+**`ensureUserProfileSynced` is best-effort and MUST NOT be relied on for correctness.** It is
+declared `void` and delegates to a fire-and-forget `.catch()`, so the `await` at its ~24 call
+sites is a no-op and the real HTTP request is left detached — on Vercel the function can
+freeze once the webhook returns 200. It stays in place as a fast path; it is not the contract.
+
+The contract is **[`KlaviyoProfileReconciliationService`](src/services/klaviyo/KlaviyoProfileReconciliationService.ts)**,
+driven by [`/api/cron/reconcile-klaviyo-profiles`](src/app/api/cron/reconcile-klaviyo-profiles/route.ts):
+
+```
+users = User.find({ updatedAt: { $gt: watermark } })   // KlaviyoSyncState singleton
+      → prefetch ONE payment ledger for the batch
+      → sync through the existing throttle (8 concurrent / 700ms)
+      → stamp klaviyoSyncedAt with { timestamps: false }
+      → advance the watermark ONLY on a fully clean run
+```
+
+- **Why `updatedAt`.** Mongoose maintains it on every mutation including a raw `$inc`. A
+  customer granted entries at 22:59:17 had `updatedAt = 22:59:18.916`. Keying on it covers
+  paths nobody instrumented — `customer.subscription.deleted`, admin PATCHes without
+  `basicInfo`, referral / milestone / redeemable grants — and paths not yet written.
+- **`{ timestamps: false }` is load-bearing.** Without it, stamping `klaviyoSyncedAt` bumps
+  `updatedAt`, re-dirtying the user so the sweep re-selects them forever.
+- **A failed run does not advance the watermark**, so the next run re-covers the window. A
+  Klaviyo outage becomes a delay, not a silent permanent gap.
+- **`MAX_RUN_MS = 45s`** stops a page before Vercel's `maxDuration = 60` kills it. Measured: a
+  500-user page took 66.6s before this existed, and a killed run would have lost its work AND
+  left the watermark unmoved — re-selecting the same page forever.
+- **Cadence: every 5 minutes**, plus an **hourly** `?mode=full` pass. Klaviyo's own guidance is
+  "at least every 30 minutes (e.g. on a cron)"; the binding rule is that sync frequency must
+  fall inside the shortest flow time delay.
+- **The full pass walks a rotating cursor** (`KlaviyoSyncState.fullPassCursor`), separate from
+  the live watermark so a repair pass can never rewind it. It advances every run and wraps on
+  completion. This is NOT optional: a full pass that restarts from epoch re-syncs the same
+  first page forever — verified, two consecutive runs both began at 1970-01-01 and covered the
+  same 50 users, i.e. 0.6% coverage at 56k profiles. A run covers ~344 users, so a circuit
+  takes ~7 days at 56k and ~27 days at 4x — inside the monthly tick of the one property it
+  exists to refresh (`membership_active_duration_months`). Callers passing `afterUpdatedAt`
+  explicitly (the ops backfill) manage their own cursor and never touch this one.
+- **Scaling shape:** the incremental sweep keys on MUTATION RATE, not profile count — an
+  indexed seek returning only dirty users. Measured throughput is 7.6 users/sec (~344 per
+  45s run) against ~6 mutations per 5 minutes today, so it runs at ~1.7% of capacity with
+  roughly 57x headroom. Profile-count growth lands on the full-pass circuit time, not on the
+  incremental path.
+- **Requires the `updatedAt` index on `User`.** Without it the selector is a full collection
+  scan (56,441 docs examined to return 4).
+
+**Never call the sweep from a payment path.** The Klaviyo client uses a 30s timeout and Stripe
+retries webhooks that do not return a fast 2xx.
+
+## Entry and spend properties come from the payment ledger, not the catalogue (2026-08-26)
+
+`member_entries`, `entries_purchased`, `lifetime_value` and `total_spent` are read from
+`PaymentEvent` via
+[`aggregateNetGrantsByUser`](src/utils/payment/payment-event-net-queries.ts), refund-netted
+with the same `excludeRefundedBenefitsGrantedStages()` the admin revenue breakdown uses.
+
+They previously **reconstructed** membership entries as
+`catalogue.entriesPerMonth × floor(elapsed / 30 days)`. Measured against production, that was
+wrong for **4,904 of 4,904 active members** (understated ×5–×14), because the catalogue cannot
+see promo multipliers, upgrades that reset `startDate`, or resubscribes.
+
+| property | source | note |
+|---|---|---|
+| `member_entries` | `PaymentEvent` membership grants | paid only |
+| `entries_purchased` | sum of the four package types | paid only |
+| `lifetime_value` / `total_spent` | `PaymentEvent.data.price` | dollars, refund-netted |
+| `accumulated_entries` | `user.accumulatedEntries` | **all** sources incl. free grants |
+| `current_draw_entries` | the draw's own entry row | unchanged |
+
+**Klaviyo's native Historic CLV is the tiebreaker for revenue.** Klaviyo computes it from the
+`Placed Order` / `Refunded Order` events this app already sends with `$value`, `Currency` and
+`Order ID` — a source that cannot drift out of sync with what Klaviyo itself sees. If our
+`lifetime_value` and Klaviyo's CLV disagree, believe Klaviyo's.
+
+⚠️ **`entries_purchased` is an INTERNAL segment key only.** CLAUDE.md rule 11 and BUSINESS.md §1
+hold that entries are never sold — they are a free inclusion with a membership or pack. Never
+put this property name in customer-facing copy or an email merge tag.
+
+## Retired properties — clear with `null`, never `undefined` (2026-08-26)
+
+The five `upsell_*` properties (`upsell_total_shown`, `_accepted`, `_declined`,
+`_conversion_rate`, `_last_interaction`) are **retired** and written as explicit `null`.
+
+Their only writer (`POST /api/upsell/track`, called from `UpsellManager.tsx`) is imported
+nowhere, so they read `0` for all 56,360 users while 2,290 had real upsell purchases — a
+funnel that never recorded anything. `total_upsells_purchased` is unaffected; it counts
+`user.upsellPurchases` and is real.
+
+**`undefined` cannot clear a Klaviyo property** — `cleanProperties` strips it, leaving the
+stale value in place. Only an explicit `null` clears. Reviving upsell funnel data means
+mounting the tracker; that is separate work.
+
+## Dev and production share ONE Klaviyo account (2026-08-26)
+
+`KLAVIYO_MODE` only prefixes **event** names with `[DEV]`; profile writes went out unprefixed.
+Confirmed in the production account: **24 `[DEV]`-prefixed metrics**, newest 5 days old, and
+**four `[DEV]`-named flows are live**.
+
+All nine profile-MUTATING client methods (`upsertProfile`, `bulkImportProfiles`,
+`mergeProfiles`, `deleteProfile`, `removeFromLists`, the two subscribe and two unsubscribe
+methods) now refuse unless `mode === "production"` **or**
+`KLAVIYO_ALLOW_DEV_PROFILE_WRITES === "true"`, returning `PROFILE_WRITE_BLOCKED_ERROR`. Events
+are deliberately NOT gated — they carry `[DEV]` and stay separable.
+
+**Severity, stated accurately:** a local run reads the *dev* database, and only 8 of its 933
+emails exist in production — all test/staff accounts, **zero paying customers**. So this
+prevents test-profile pollution of the live marketing account and puts a deliberate gate on
+the `--prod` ops path; it was never protecting real customers from corruption.
+
+The env is re-read on every call (matching `isConfigured()`) because ops scripts load dotenv
+*after* this module's singleton is constructed.
+
 ## Common bugs to watch for
 
 - **Building revenue events by hand** instead of using `buildRevenueProperties` — easy to typo `$value` as `value`, breaking revenue reporting.
@@ -399,6 +513,9 @@ See [docs/PAST_DUE_REANCHOR.md](../PAST_DUE_REANCHOR.md) for the full downstream
 - **Firing `Placed Order` from both client and server for the same purchase** — risks double-counting revenue if order IDs differ. The current architecture fires `Placed Order` only server-side from `grantBenefits`.
 - **Not passing the customer's email** — Klaviyo can't attach the event to a profile, revenue shows as anonymous.
 - **Sending camelCase keys to Klaviyo** — creates duplicate `firstName` / `lastName` / `userId` / `productId` shadow properties alongside the snake_case standard fields. Any flow filter or merge tag set up against one variant silently ignores the other. The `KlaviyoIdentifyParams` and `KlaviyoEventParams` interfaces enforce snake_case for new code; existing assets are audited via `npm run find:klaviyo-legacy-fields`.
+- **Giving a PROFILE property the same name as an EVENT property.** Klaviyo: *"If a profile property has the same name as event data on your account, you will not be able to segment on the event data or view it in drop-downs."* Diffed 2026-08-26 — all 153 event keys vs every profile property, no collisions. Re-check before adding any property name. (The event namespace already forks `entries_added` / `entries_gained` / `entries_granted` for one idea; don't add a fourth.)
+- **Truthiness-checking a Mongoose NESTED object.** `subscription.pendingChange` has all-optional sub-fields, so Mongoose materialises it as `{}` and `!!{}` is `true` — `subscription_has_pending_upgrade` was a hardcoded `true` on all 56,360 profiles while zero users had a real pending upgrade. Use [`isValidPendingUpgrade`](src/utils/subscription/pending-upgrade.ts), which checks the payload. `tsc` cannot catch this class of bug; `npm run test:pending-upgrade` pins it.
+- **Reading Klaviyo's own `updated` timestamp to detect a stale sync.** It moves when Klaviyo runs predictive analytics — two sampled profiles shared an identical `updated` with no write from us. Use `user.klaviyoSyncedAt`, which records when *we* last wrote.
 
 ## References
 

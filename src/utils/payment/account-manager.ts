@@ -183,14 +183,6 @@ export async function createUserFromPaymentMetadata(
       savedPaymentMethods: savedPaymentMethodData ? [savedPaymentMethodData] : [],
       profileSetupCompleted: false,
       upsellPurchases: [],
-      upsellStats: {
-        totalShown: 0,
-        totalAccepted: 0,
-        totalDeclined: 0,
-        totalDismissed: 0,
-        conversionRate: 0,
-        lastInteraction: null,
-      },
       upsellHistory: [],
       miniDrawPackages: [],
     });

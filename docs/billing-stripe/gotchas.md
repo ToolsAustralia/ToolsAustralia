@@ -822,3 +822,18 @@ Since 2026-08-27 the customer's bonus-entry `campaignCode` is written onto the c
 That stamp lands before the confirm, so a fresh retrieve always sees it. Switching either handler to the event payload — or to `parent.subscription_details.metadata`, which is a snapshot of the same thing — reintroduces the exact production defect that fix closed: **the customer sees APPLIED, is charged, and receives nothing, with no error logged anywhere.**
 
 If you are optimizing these calls, the invariant to preserve is "read the object's metadata as of the moment the grant runs", not "avoid a retrieve". Regression cover: `npm run e2e:bonus-code` (all three legs) plus `npm run test:campaign-code-checkout`. See [payment/gotchas.md](../payment/gotchas.md#the-applied-discount-code-was-thrown-away-at-checkout-fixed-2026-08-27).
+## `isValidPendingUpgrade` now delegates to a shared predicate (2026-08-26)
+
+`stripe-webhook-handlers/index.ts` used to own a private `isValidPendingUpgrade` type guard.
+The same check is needed by the Klaviyo profile projection, and `utils/` may not import from
+`services/`, so the logic moved to
+[`src/utils/subscription/pending-upgrade.ts`](src/utils/subscription/pending-upgrade.ts).
+
+The handler keeps a **thin typed wrapper** of the same name that delegates to it — purely to
+preserve the `change is PendingUpgradeChange` narrowing its four call sites rely on. No
+behaviour changed, and no call site was edited.
+
+Why it matters beyond DRY: `subscription.pendingChange` is a Mongoose **nested object**, so it
+materialises as `{}` and a truthiness check is permanently `true`. That bug had already shipped
+to Klaviyo (`subscription_has_pending_upgrade` was `true` on all 56,360 profiles). One shared
+implementation means it can only be fixed once. Pinned by `npm run test:pending-upgrade`.

@@ -57,3 +57,23 @@ carries over, the MCP server grants nothing extra.
 
 Contentsquare's Free tier includes 300 tool calls/month, so this keeps working after the paid
 trial ends.
+
+## Debug routes reported a permanently-true `hasPendingChange` (2026-08-26)
+
+`/api/debug/subscription-status`, `/api/debug/clear-pending-change` and
+`/api/debug/test-downgrade-flow` each reported `!!user.subscription?.pendingChange`.
+
+`subscription.pendingChange` is a Mongoose **nested object** with all-optional sub-fields, so
+Mongoose materialises it as `{}` and `!!{}` is `true`. These routes therefore told anyone
+debugging that every user had a pending change — including anyone debugging *that very bug*.
+Zero production users actually have one.
+
+All three now use the shared
+[`isValidPendingUpgrade`](src/utils/subscription/pending-upgrade.ts), which checks the payload
+rather than the object's existence. Same root cause as the Klaviyo
+`subscription_has_pending_upgrade` fix; see `docs/subscription/models.md`.
+
+## `klaviyo-user-sync` test route no longer seeds `upsellStats` (2026-08-27)
+
+`src/app/api/test/klaviyo-user-sync/route.ts` built its throwaway user with a five-counter
+`upsellStats` object. The field is deleted from the User model — see `docs/upsell/gotchas.md`.
