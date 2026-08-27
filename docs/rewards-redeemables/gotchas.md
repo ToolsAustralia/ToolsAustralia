@@ -406,3 +406,16 @@ CSV bulk import is admin-triggered. For very large lists (>10k users), consider 
 ## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).
+
+## `DrawGrantService` now covers the retention offer (2026-08-26)
+
+`DrawGrantSourceKey` gained `"cancellation-upsell"`, so the 100-entry retention offer at
+`/api/cancellation-upsell/redeem` grants through the canonical path instead of a bespoke
+helper that looked the draw up with the legacy `isActive` boolean and failed silently. That
+helper cost 373 members 37,300 promised entries between 2025-12 and 2026-06 — see
+`docs/upsell/gotchas.md`.
+
+The lesson the service's docblock already carried is worth restating: **`grantMonthlyCouponEntries`
+returns `false` when the entries did not land in a draw.** Any caller granting an entitlement
+must treat `false` as "not delivered" — never record it on the member, never tell the member it
+worked, and never burn a one-time offer on it.

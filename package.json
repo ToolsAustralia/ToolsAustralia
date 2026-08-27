@@ -478,6 +478,8 @@
     "migrate:promo-analytics-cleanup:prod": "tsx scripts/migrations/2026-07-31-promo-analytics-cleanup.ts --production --apply",
     "harvest:partner-instore-artwork": "tsx scripts/harvest-partner-instore-artwork.ts",
     "test:excessive-retry-cooldown": "tsx src/server/admin/__tests__/excessiveRetryCooldown.test.ts",
+    "find:missing-retention-entries": "tsx scripts/find-missing-retention-entries.ts",
+    "test:retention-grant-order": "tsx src/services/redeemables/__tests__/retention-offer-grant-order.test.ts",
     "test:payment-grant-ledger": "tsx src/utils/payment/__tests__/payment-event-grant-ledger.test.ts",
     "test:klaviyo-projection": "tsx src/utils/integrations/klaviyo/__tests__/klaviyo-profile-projection.test.ts",
     "test:pending-upgrade": "tsx src/utils/subscription/__tests__/pending-upgrade.test.ts",

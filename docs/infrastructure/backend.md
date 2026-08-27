@@ -130,3 +130,18 @@ Idempotent. Exit 0 clean / 1 fatal / 2 partial.
 **Safety gate:** it counts `upsellStats.totalShown > 0` first and **refuses to run** if any
 user carries real tracking data, so it cannot silently discard something that turned out to be
 live. Verified against production 2026-08-27: 0 of 56,882 users had any, 56,882 to strip.
+
+## `find:missing-retention-entries` (2026-08-26)
+
+Read-only report of members who redeemed the 100-entry cancellation retention offer but never
+received the draw entries it promised, caused by a silent-skip defect in the redeem route
+(see `docs/upsell/gotchas.md`).
+
+```bash
+npm run find:missing-retention-entries -- --prod        # summary + first 15
+npm run find:missing-retention-entries -- --prod --csv  # full list to CSV
+```
+
+Reports totals, a breakdown by redemption month, and (with `--csv`) the full list. Exit 0 when
+none found, 2 when affected members exist. **The CSV contains customer emails — treat as PII and
+do not commit it.**
