@@ -80,6 +80,19 @@ cannot see it because the handler's return type and the Zod schema are independe
 The 2026-07-31 promo-analytics rewrite would have shipped exactly that (`crossVisits` required,
 repository no longer returning it) if the schema had not moved in lockstep.
 
+### The reverse direction is SILENT, not a 500 (2026-08-17)
+
+A field the handler returns but the `responseSchema` does **not** declare is **stripped**, not
+rejected — Zod object schemas default to strip. So this failure mode has no 500, no log line, and
+no smoke-test signal: Norm simply never sees the key, and an operator reading Norm's answer cannot
+tell a missing field from a zero one. G9's exit-code fix does not cover it.
+
+Worked example: `EntriesBySourceSchema` (`src/lib/internal-norm/schemas/major-draw.ts`) gained
+`shop: z.number()` alongside the service-side widening. Without that line the new bucket would have
+vanished from `/v1/major-draw/participants` output while every smoke test stayed green. The rule:
+when a projected shape gains a field, **grep the Norm schema for it** — passing smoke tests prove
+nothing about added keys.
+
 ## eslint/rules/index.js now hosts non-Norm rules too (2026-07-19)
 
 The local ESLint plugin registered as `internal-norm` gained `no-eager-stripe` (a payment-perf guardrail — see docs/payment/gotchas.md). The plugin NAMESPACE no longer implies Norm-only content; if more general rules accumulate, renaming the namespace (e.g. `local-rules`) is a sanctioned future cleanup — coordinate with every `eslint.config.mjs` reference when doing so.

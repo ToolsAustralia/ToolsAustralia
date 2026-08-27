@@ -20,6 +20,14 @@ export interface Product {
   category: string;
   subcategory?: string;
   stock: number;
+  /**
+   * Print-to-order items hold stock 0 permanently. The listing card needs this to
+   * avoid rendering them as "Sold Out" — the API returns the whole document, so the
+   * value was always on the wire; only the type omitted it.
+   */
+  trackInventory?: boolean;
+  /** Free entries included with one unit — see CLAUDE.md rule 11 (never sold). */
+  includedEntries?: number;
   isActive: boolean;
   isFeatured: boolean;
   rating: number;
@@ -34,8 +42,22 @@ export interface Product {
 export interface ProductFilters extends Record<string, unknown> {
   category?: string[];
   brand?: string[];
+  /**
+   * Apparel facets, matched against `variants[]` rather than a top-level field — a
+   * product qualifies when one active variant carries every selected facet.
+   *
+   * Singular to match the API param and the `variants[].size` / `variants[].colour`
+   * fields they filter on, the same way `brand` here feeds the shop's `brands`
+   * selection. Each value is appended separately, so the endpoint reads them with
+   * getAll().
+   */
+  size?: string[];
+  colour?: string[];
   priceRange?: [number, number];
   search?: string;
+  /** "true" when set — see the products route for why both read existing fields. */
+  hasEntries?: string;
+  readyToShip?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
   page?: number;
@@ -180,6 +202,46 @@ export const useProductCategories = () => {
   });
 };
 
+export interface ShopFacetValue {
+  name: string;
+  count: number;
+}
+
+export interface ShopFacets {
+  categories: ShopFacetValue[];
+  brands: ShopFacetValue[];
+  sizes: ShopFacetValue[];
+  colours: ShopFacetValue[];
+  priceRange: { minPrice: number; maxPrice: number };
+}
+
+/**
+ * Shop filter facets, derived from the catalogue rather than hard-coded.
+ *
+ * The filter rail used to ship three literal arrays — eight tool categories, five
+ * tool brands, and a "Tool Style" list of DIY / Heavy Duty — with no connection to
+ * any product. The shop sells apparel, so every one of those facets returned zero
+ * results and the things a customer would actually filter by (size, colour) were
+ * absent entirely.
+ *
+ * Deriving them means the rail is always true: it shows Apparel and Tools Australia
+ * today, and would grow by itself if the catalogue ever did. Nothing to keep in sync.
+ *
+ * NOTE: this deliberately does NOT reuse `useProductCategories` above — that hook is
+ * typed `{ success, data: ProductCategory[] }`, which is not what
+ * /api/products/categories returns. Its shape has never matched the endpoint.
+ */
+export const useShopFacets = () => {
+  return useQuery<ShopFacets>({
+    queryKey: [...queryKeys.products.categories, "facets"],
+    queryFn: async () => apiGet<ShopFacets>("/api/products/categories"),
+    // Facets change only when the catalogue does, so this is deliberately long —
+    // it is one request shared by the desktop rail and the mobile drawer.
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+};
+
 export const useBestsellers = (limit: number = 8) => {
   return useQuery({
     queryKey: queryKeys.products.bestsellers,
@@ -244,16 +306,53 @@ export const useProductAnalytics = (productId?: string) => {
   });
 };
 
+/** A review as the public endpoint serves it. The reviewer's user id never leaves the server. */
+export interface ProductReview {
+  rating: number;
+  comment?: string;
+  createdAt?: string;
+}
+
+/**
+ * Whether the viewer may post a review of this product, decided server-side from
+ * their paid orders. `already_reviewed` is kept distinct from `not_eligible`
+ * because a buyer who has already written one has to be told it was kept.
+ */
+export type ProductReviewEligibility = "eligible" | "already_reviewed" | "not_eligible";
+
+export interface ProductReviewsResponse {
+  reviews: ProductReview[];
+  averageRating: number;
+  totalReviews: number;
+  reviewEligibility: ProductReviewEligibility;
+}
+
+export interface AddProductReviewResponse {
+  review: ProductReview;
+  averageRating: number;
+  totalReviews: number;
+}
+
+export interface ProductReviewInput {
+  rating: number;
+  comment?: string;
+}
+
+/**
+ * NOTE: this was typed `{ success, data }` and returned `response.data`, which the
+ * endpoint has never sent — every call resolved to undefined. The shape below is
+ * what /api/products/reviews/[id] actually returns.
+ */
 export const useProductReviews = (productId?: string) => {
   return useQuery({
     queryKey: queryKeys.products.reviews(productId!),
-    queryFn: async () => {
-      const response = await apiGet<{ success: boolean; data: unknown[] }>(`/api/products/reviews/${productId}`);
-      return response.data;
-    },
+    queryFn: async () => apiGet<ProductReviewsResponse>(`/api/products/reviews/${productId}`),
     enabled: !!productId,
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes
+    // Deliberately short: `reviewEligibility` is per-viewer, so a long window
+    // would keep showing a form to someone who has just used it, or hide one from
+    // a customer whose order was marked paid a moment ago.
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 };
 
@@ -262,22 +361,19 @@ export const useAddProductReview = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ productId, review }: { productId: string; review: unknown }) => {
-      const response = await apiPost<{ success: boolean; data: unknown }>(`/api/products/reviews/${productId}`, review);
-      return response.data;
-    },
+    mutationFn: async ({ productId, review }: { productId: string; review: ProductReviewInput }) =>
+      apiPost<AddProductReviewResponse>(`/api/products/reviews/${productId}`, review),
     onSuccess: (data, variables) => {
-      // Invalidate product reviews
+      // Refetches the list AND the viewer's eligibility, which has just changed to
+      // "already_reviewed".
       queryClient.invalidateQueries({ queryKey: queryKeys.products.reviews(variables.productId) });
 
-      // Update product rating in cache
+      // Only `rating` is patched into the cached product. The old code also wrote
+      // `reviewCount` from the response — a field neither the endpoint nor the
+      // Product schema has ever carried, so it wrote undefined over the cache.
       queryClient.setQueryData(queryKeys.products.detail(variables.productId), (old: unknown) => {
-        if (old && typeof old === "object" && data && typeof data === "object") {
-          return {
-            ...old,
-            rating: (data as { rating: number }).rating,
-            reviewCount: (data as { reviewCount: number }).reviewCount,
-          };
+        if (old && typeof old === "object") {
+          return { ...old, rating: data.averageRating };
         }
         return old;
       });

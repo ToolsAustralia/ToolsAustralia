@@ -930,6 +930,57 @@ Worth knowing when reasoning about this domain's privacy surface: `/my-account/s
 member sessions are legitimate retention signal), which is exactly why the per-element masking
 matters here rather than a blanket route exclusion.
 
+## `/my-account/orders` answers "where is my order?" first (2026-08-21)
+
+[`orders/page-client.tsx`](../../src/app/(site)/my-account/orders/page-client.tsx) leads each card
+with a three-step **progress strip** — Being made → On its way → Delivered — because that is the
+question the page is opened to answer. It sits above the line items, not under them.
+
+Two states are deliberately **not** on the strip:
+
+- **`pending`** is a few seconds while the Stripe webhook lands, not a stage of fulfilment. Drawing
+  it as a step implies the customer is waiting on something they can act on.
+- **`cancelled`** is an exit from the journey, not a position on it. A strip with no progress reads
+  as a stalled order rather than one that never entered the journey.
+
+`completed` maps to the last step. Each status also carries a one-line `STATUS_DETAIL` in the
+customer's terms — "Being made" begs the question it does not answer, so the detail line says the
+garment is printed to order.
+
+**The total's label follows the order's state**, matching the checkout success page: `pending` →
+"Order total", `cancelled` → "Refund issued", everything else → "Total paid". Hard-coding "Total
+paid" claimed a payment that had not settled and contradicted the refund the same card announced two
+lines above. When `shippingCost > 0` the card adds "incl. $N postage" so the total reconciles with
+the items listed above it — see [cart-shop-products/backend.md](../cart-shop-products/backend.md)
+for why that field is on the list projection.
+
+The entries badge renders **only above zero**. Merchandise entries currently ship dark at
+`includedEntries: 0`, and "0 free entries" states a promise we are not making (CLAUDE.md rule 11 —
+entries are a free inclusion, never priced).
+
+There are no product thumbnails: `OrderListRow.items` carries no image and the order-line snapshot
+does not store one, so a thumbnail would cost a join on every row. The quantity chip plus the
+variant line ("Black · L") carries the identification instead.
+
+## Order rows lead with the product image (2026-08-27)
+
+`/my-account/orders` rows previously showed the item name with a quantity chip beside
+it. Every other shop surface leads with a picture, which is most of why this page read
+as a different product from the one it reports on. Each row now opens with a 44px
+`object-contain` thumbnail and the card carries the shop's own shadow.
+
+The image is **joined, not snapshotted.** `name` and `price` are frozen at checkout so a
+catalogue rename cannot rewrite order history; an image is the same garment either way,
+so the current one is correct and storing a per-line copy would duplicate a URL that
+already exists. `listOrders` populates `products.product` with `select: "images"` — one
+`$in` for the whole page, not one query per line.
+
+Every step is optional: a product deleted since the order still has a line, and that
+line must render. It falls back to a package glyph rather than a gap.
+
+**The quantity chip rides the thumbnail's corner and only appears above one** — most
+lines are a single unit, and a column of "1" is a column of noise.
+
 ## Settings → Profile: contact-verification card (2026-08-27)
 
 The single "Email verification" banner at the top of
@@ -969,3 +1020,4 @@ Both are now declared and nothing new goes over the wire.
 `src/components/modals/SettingsModal/ProfileTab.tsx` is a **different** component with its own
 email-only verified chip; it is reachable today only from the dev modals gallery and was not part
 of this change. Don't mistake it for this file.
+

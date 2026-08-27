@@ -12,7 +12,9 @@ interface ProductItem {
   images: string[];
   brand: string;
   stock: number;
-  reviews?: number;
+  /** Reviews as stored — an array. The count is reviewCount. */
+  reviews?: { rating: number }[];
+  reviewCount?: number;
   rating?: number;
 }
 

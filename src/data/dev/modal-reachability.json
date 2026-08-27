@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-08-27T02:20:22.630Z",
+  "generatedAt": "2026-08-27T05:50:37.795Z",
   "method": "Transitive imports from Next.js app entry files (page, layout, route, loading, error, template, default, not-found, global-error, middleware, instrumentation). Does not evaluate dynamic non-literal imports or runtime-only usage.",
-  "entrySeedCount": 511,
-  "reachableSrcFileCount": 1967,
-  "modalInventoryCount": 52,
-  "reachableModalCount": 50,
+  "entrySeedCount": 524,
+  "reachableSrcFileCount": 2021,
+  "modalInventoryCount": 53,
+  "reachableModalCount": 51,
   "unreachableModalCount": 2,
   "modals": [
     {
@@ -41,6 +41,10 @@
     },
     {
       "path": "src/components/admin/facebook-ads-health/FacebookAdsHealthSettingsModal.tsx",
+      "reachable": true
+    },
+    {
+      "path": "src/components/admin/OrderDetailModal.tsx",
       "reachable": true
     },
     {

@@ -1100,6 +1100,41 @@ docs/shared-ui/tailwind-conventions.md §10.
 
 Also: `FloatingCountdownBanner` (a landing-path component) migrated framer-motion `motion.*` → LazyMotion `m.*`. See docs/shared-ui/patterns.md P7.
 
+## One layout per section, and the mobile design won (2026-08-20)
+
+`GiveawayDetails` (How It Works), `PartnerBenefitsPromoSection` (Become a Member) and `PromoFAQs`
+each shipped **two complete implementations** — one below `lg`, one above — selected by
+`lg:hidden` / `hidden lg:*`. The desktop halves are deleted; the former mobile design now renders
+at every width, capped and centred so it reads as a column rather than stretching.
+
+They were not two views of one design. They diverged in substance:
+
+| Section | What differed |
+| --- | --- |
+| How It Works | A numbered 1-2-3 rail plus a compact fact grid, against a six-card logistics grid. Different information architecture entirely |
+| Become a Member | Different headline copy ("A Membership's Free Entries Accumulate Every Month" vs "Your Entries Accumulate. Every Month They Grow."), different benefit sets, different CTAs |
+| FAQ | The accordion closed on an "Ask Cobber" row; the desktop `FAQSection` simply stopped |
+
+So the page a customer described on a phone was not the page a colleague saw on a laptop, and
+every copy change had to be made twice or silently diverge.
+
+**Why the mobile design won each time, beyond it being the newer handoff:**
+
+- **How It Works** — the rail reads as a *sequence* (pick, land, drawn), which is the question a
+  first-time visitor is actually asking. The six-card grid presented six equal facts with no order.
+- **Become a Member** — it opens on the accumulation chart, which is the single idea that makes a
+  subscription make sense, and its four stat tiles say what the desktop bullet list said in a
+  quarter of the words.
+- **FAQ** — the "Ask Cobber" row. A FAQ's most important state is the one where it did not answer
+  you, and only one of the two layouts had an answer for it.
+
+Deleting the desktop halves left a lot of dead code behind — `details`, `BENEFITS`, `TIERS`,
+`EXTRA_ICONS`, and nine unused icon imports across the three files. All removed rather than
+`_`-prefixed, per `docs/UNUSED-VARS-CONVENTIONS.md`.
+
+**A note for whoever tests this:** `PartnerBenefitsPromoSection` renders only for signed-out
+visitors and members without an active subscription (`shouldShow`). Checking it while signed in as
+an active member shows nothing, which looks exactly like having broken it.
 ### Spotlight and ComboRail after the cash-bonus removal (2026-08-28, draw 10)
 
 `COMBO_CASH_BONUS` is **gone** from `gallery-spotlight-model.ts`; `CASH_ONLY_AMOUNT` ($10,000) stays.

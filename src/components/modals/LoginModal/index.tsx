@@ -26,6 +26,17 @@ interface LoginModalProps {
   mobile?: string;
   /** Open straight into the SMS flow. Requires `mobile`. */
   initialFlow?: "password" | "sms";
+  /**
+   * Where to send them once signed in.
+   *
+   * Defaults to the dashboard, which is right when signing in IS the errand.
+   * Pass `null` when it is not — signing in to finish buying something, for
+   * instance, where being thrown to /my-account abandons the product they
+   * were on and the cart they were building.
+   */
+  redirectTo?: string | null;
+  /** Fires after the session is live, before any navigation. */
+  onSignedIn?: () => void;
 }
 
 // Google Icon Component
@@ -52,8 +63,26 @@ function GoogleIcon() {
   );
 }
 
-const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email, mobile, initialFlow = "password" }) => {
+const LoginModal: React.FC<LoginModalProps> = ({
+  isOpen,
+  onClose,
+  email,
+  mobile,
+  initialFlow = "password",
+  redirectTo,
+  onSignedIn,
+}) => {
   const router = useRouter();
+
+  // Single place that decides where a successful sign-in lands, so the four
+  // success paths (password, Google popup, emailed code, already-signed-in)
+  // cannot drift apart.
+  const finishSignIn = React.useCallback(() => {
+    onSignedIn?.();
+    if (redirectTo === null) return; // stay exactly where we are
+    router.push(redirectTo ?? "/my-account");
+    router.refresh();
+  }, [onSignedIn, redirectTo, router]);
   const { data: session, status } = useSession();
   const { isStaff } = usePermissions();
   const invalidateForUser = usePurchaseInvalidation();
@@ -110,11 +139,12 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email, mobile,
   useEffect(() => {
     if (!isOpen) return;
     if (status === "authenticated" && session) {
-      const dest = isStaff ? "/admin" : "/my-account";
+      if (redirectTo === null) { onClose(); return; }
+      const dest = isStaff ? "/admin" : redirectTo ?? "/my-account";
       router.push(dest);
       onClose();
     }
-  }, [isOpen, status, session, isStaff, router, onClose]);
+  }, [isOpen, status, session, isStaff, router, onClose, redirectTo]);
 
   // Clear error when a valid 6-digit code is entered
   useEffect(() => {
@@ -175,8 +205,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email, mobile,
           }
         }
         // Redirect will happen via useEffect
-        router.push("/my-account");
-        router.refresh();
+        finishSignIn();
       }
     } catch (error) {
       console.error("Login error:", error);
@@ -232,8 +261,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email, mobile,
               }
             }
             // Redirect will happen via useEffect
-            router.push("/my-account");
-            router.refresh();
+            finishSignIn();
           } else if (attempts >= maxAttempts) {
             clearInterval(checkSession);
             setError("Authentication may have completed. Please refresh the page or try again.");
@@ -346,8 +374,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email, mobile,
               });
 
               // Success - redirect will happen via useEffect
-              router.push("/my-account");
-              router.refresh();
+              finishSignIn();
             } else {
               // If auto-login fails (e.g., no active membership), show password field
               setNeedsEmailVerification(false);
@@ -602,8 +629,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email, mobile,
             });
           }
 
-          router.push("/my-account");
-          router.refresh();
+          finishSignIn();
         } else {
           // result.error is a machine code (e.g. "CredentialsSignin"), not
           // display copy — map it instead of rendering it raw.

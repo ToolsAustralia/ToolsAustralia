@@ -33,6 +33,22 @@ export async function GET() {
       { $sort: { count: -1 } },
     ]);
 
+    // Variant facets. Apparel is chosen by size and colour, so these are the two
+    // things a merchandise shopper actually filters by — and unlike the hard-coded
+    // "Tool Style" list they used to sit beside, every value here is one a product
+    // genuinely has. Only ACTIVE variants count: an inactive size must not be
+    // offered as a filter that returns nothing.
+    const variantFacet = (field: "size" | "colour") =>
+      Product.aggregate([
+        { $match: { isActive: true } },
+        { $unwind: "$variants" },
+        { $match: { "variants.isActive": { $ne: false }, [`variants.${field}`]: { $nin: [null, ""] } } },
+        { $group: { _id: `$variants.${field}`, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]);
+
+    const [sizes, colours] = await Promise.all([variantFacet("size"), variantFacet("colour")]);
+
     // Get price range
     const priceRange = await Product.aggregate([
       { $match: { isActive: true } },
@@ -55,6 +71,22 @@ export async function GET() {
           name: brand._id,
           count: brand.count,
         })),
+        // Sizes sort by GARMENT ORDER, not by popularity. Frequency ordering put a
+        // rail in front of customers reading "S, M, L, XS, XL", which reads as broken
+        // even though every value is correct. Anything unrecognised (a numeric or
+        // one-off size) keeps its frequency position at the end.
+        sizes: [...sizes]
+          .map((v) => ({ name: v._id as string, count: v.count as number }))
+          .sort((a, b) => {
+            const order = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL", "4XL", "5XL"];
+            const ia = order.indexOf(a.name.toUpperCase());
+            const ib = order.indexOf(b.name.toUpperCase());
+            if (ia === -1 && ib === -1) return b.count - a.count;
+            if (ia === -1) return 1;
+            if (ib === -1) return -1;
+            return ia - ib;
+          }),
+        colours: colours.map((v) => ({ name: v._id as string, count: v.count as number })),
         priceRange: priceRange[0] || { minPrice: 0, maxPrice: 0 },
       },
       {

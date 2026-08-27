@@ -67,6 +67,29 @@ export async function aggregateRevenueForDay(
     const pid = (ev as { paymentIntentId?: string }).paymentIntentId;
     if (pid && refundedPaymentIntentIds.has(pid)) continue;
 
+    // Merchandise is excluded from ad-revenue analytics entirely. Two reasons, and
+    // the second is the one that breaks the page:
+    //
+    //   1. A merch price is not comparable to a package price — it carries shipping
+    //      and GST, which no other packageType does. Folding it into ROAS silently
+    //      changes what the number means.
+    //   2. classifyRevenueBucket() returns null for "shop" (snapshotSchema.ts), so
+    //      the row is dropped from `buckets` and from `total` — while the platform
+    //      accumulation below runs "regardless of bucket classification". Left
+    //      alone, merch money inflates per-platform newRevenue, conversions and
+    //      TRUE ROAS while being absent from the headline, and the breakdown stops
+    //      reconciling with the total it sits under.
+    //
+    // Giving merchandise its own revenue bucket is a reasonable alternative, but it
+    // is an analytics decision (does merch belong in ad ROAS?), not a bug fix —
+    // so this excludes rather than invents a bucket.
+    // Merchandise IS headline revenue — it has its own bucket below and lands in
+    // `total`. It is deliberately NOT in the ads/ROAS numerator: a merch total carries
+    // shipping and is not comparable to a package price, and nobody buys a hoodie off a
+    // giveaway ad. Skipping ONLY the per-platform block (rather than the whole row, as
+    // this did until 2026-08-21) keeps the breakdown reconciling with the total above it.
+    const isShop = (ev as { packageType?: string }).packageType === "shop";
+
     const price = (ev as { data?: { price?: number } }).data?.price ?? 0;
 
     // Platform accumulation: runs for ALL non-refunded rows, regardless of bucket classification.
@@ -84,7 +107,9 @@ export async function aggregateRevenueForDay(
     const isRenewal =
       (ev as { packageType?: string }).packageType === "membership" &&
       (ev as { data?: { billingReason?: string } }).data?.billingReason === "subscription_cycle";
-    if (isRenewal) {
+    if (isShop) {
+      // deliberately no per-platform accumulation — see the note above
+    } else if (isRenewal) {
       byPlatform[platform].renewalRevenue += price;
       // renewals are NOT ads revenue: excluded from newRevenue, conversions, byConfidence
     } else {

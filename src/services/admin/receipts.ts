@@ -116,7 +116,12 @@ async function resolveSearchUserIds(
   };
 }
 
-/** `PaymentEvent.packageType` enum, in full. */
+/**
+ * The `PaymentEvent.packageType` values this ledger reads — deliberately NOT the full model
+ * enum, which also carries "shop". A shop sale writes BOTH a PaymentEvent (packageType
+ * "shop", in `finalizeShopOrder`) AND an `Order`, and Receipts already counts that sale from
+ * `Order` as "shop-order". Listing "shop" here would count the same sale twice.
+ */
 const PAYMENT_EVENT_PACKAGE_TYPES = ["membership", "one-time", "mini-draw", "upsell"];
 
 /**

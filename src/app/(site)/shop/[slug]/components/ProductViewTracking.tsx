@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePixelTracking } from "@/hooks/usePixelTracking";
 import { useKlaviyoTracking } from "@/hooks/useKlaviyoTracking";
 import { useUserContext } from "@/contexts/UserContext";
@@ -19,8 +19,20 @@ interface ProductViewTrackingProps {
 }
 
 /**
- * Client component to track ViewContent event when user views a product detail page
- * This fires once when the component mounts (user views the product page)
+ * Fire ViewContent once per product view, to Meta (browser + CAPI), TikTok and
+ * Klaviyo.
+ *
+ * ONCE is the whole point. `isAuthenticated` is in the effect's dependency list
+ * because the payload carries `user_type`, and it flips false -> true the moment
+ * the session resolves. That re-ran the effect, so every signed-in member
+ * produced TWO ViewContent events for one page view — one tagged guest, one
+ * tagged member — each with its own event id, so deduplication could not collapse
+ * them. The ref guard keys on the product id, matching the convention in
+ * usePromoPageTracking.
+ *
+ * The cost is that `user_type` reflects session state at first commit, which for
+ * a member can read as guest. That is strictly better than double-counting, and
+ * the server mirror resolves real identity from the session anyway.
  */
 export default function ProductViewTracking({ product }: ProductViewTrackingProps) {
   const { trackViewContent } = usePixelTracking();
@@ -28,7 +40,13 @@ export default function ProductViewTracking({ product }: ProductViewTrackingProp
   const { isAuthenticated } = useUserContext();
   const pathname = usePathname();
 
+  // Survives the re-render that a resolving session causes.
+  const trackedProductIdRef = useRef<string | null>(null);
+
   useEffect(() => {
+    if (trackedProductIdRef.current === product._id) return;
+    trackedProductIdRef.current = product._id;
+
     // Extract page metadata and user type for enhanced tracking
     const pageMetadata = extractPageMetadata(
       pathname,

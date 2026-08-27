@@ -6,11 +6,14 @@ import { z } from "zod";
 import { Types } from "mongoose";
 import { requireAuthenticatedUserDoc } from "@/lib/api-auth";
 import { requireSameOrigin } from "@/utils/security/requireSameOrigin";
+import { priceCart, dollarsToCents, toDollarSummary } from "@/utils/shop/pricing";
 
 // Define the cart item type from the User model
 type CartItem = {
   type: "product" | "ticket";
   productId?: Types.ObjectId;
+  /** Chosen variant. Two lines can share a productId and differ only by this. */
+  sku?: string;
   miniDrawId?: Types.ObjectId;
   quantity: number;
   price?: number;
@@ -49,6 +52,7 @@ const updateCartSchema = z
   .object({
     type: z.enum(["product", "ticket"]),
     productId: z.string().min(1).optional(),
+    sku: z.string().trim().min(1).max(64).optional(),
     miniDrawId: z.string().min(1).optional(),
     quantity: z.number().int().min(0),
   })
@@ -63,14 +67,29 @@ const updateCartSchema = z
     }
   );
 
-// Helper function to find cart item
-function findCartItem(cart: CartItem[], type: "product" | "ticket", id: string): number {
+/**
+ * Find one cart line.
+ *
+ * A product line's identity is `(productId, sku)`, not productId alone — the
+ * same tee in Black L and Navy XL are two lines sharing a productId. Matching
+ * on productId only meant the quantity buttons edited whichever variant
+ * happened to sit first in the array, so a customer nudging Navy XL up to 2
+ * silently changed their Black L instead.
+ *
+ * A request WITHOUT a sku matches only a line without one, i.e. a product with
+ * no variants. That mirrors DELETE /api/cart, which already got this right.
+ */
+function findCartItem(
+  cart: CartItem[],
+  type: "product" | "ticket",
+  id: string,
+  sku?: string
+): number {
   return cart.findIndex((item: CartItem) => {
     if (type === "product") {
-      return item.type === "product" && item.productId?.toString() === id;
-    } else {
-      return item.type === "ticket" && item.miniDrawId?.toString() === id;
+      return item.type === "product" && item.productId?.toString() === id && item.sku === sku;
     }
+    return item.type === "ticket" && item.miniDrawId?.toString() === id;
   });
 }
 
@@ -87,7 +106,7 @@ export async function PUT(request: NextRequest) {
     const validatedData = updateCartSchema.parse(body);
 
     const id = validatedData.type === "product" ? validatedData.productId! : validatedData.miniDrawId!;
-    const itemIndex = findCartItem(user.cart, validatedData.type, id);
+    const itemIndex = findCartItem(user.cart, validatedData.type, id, validatedData.sku);
 
     if (itemIndex === -1) {
       return NextResponse.json(
@@ -146,22 +165,20 @@ export async function PUT(request: NextRequest) {
       miniDraw: item.miniDraw,
     }));
 
-    // Calculate summary
-    const subtotal = transformedItems.reduce((total, item) => total + item.price * item.quantity, 0);
-    const tax = subtotal * 0.1;
-    const shipping = subtotal >= 100 ? 0 : 10;
-    const totalAmount = subtotal + tax + shipping;
-    const totalItems = transformedItems.reduce((count, item) => count + item.quantity, 0);
+    // Prices are GST-INCLUSIVE. This route carried its own copy of the money
+    // math and added 10% on top of an already-inclusive price, so a cart quoted
+    // here disagreed with the same cart quoted by /api/cart/summary.
+    const totals = priceCart(
+      transformedItems.map((item) => ({
+        priceCents: dollarsToCents(item.price),
+        quantity: item.quantity,
+      }))
+    );
 
     const response = {
       items: transformedItems,
       summary: {
-        totalItems,
-        totalAmount,
-        subtotal,
-        tax,
-        shipping,
-        discount: 0,
+        ...toDollarSummary(totals),
         membershipDiscount: 0,
         partnerDiscount: 0,
       },

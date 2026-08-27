@@ -264,3 +264,15 @@ the feature renders **no link at all** rather than a broken one — see
 [`src/app/globals.css`](../../src/app/globals.css) has a device-tier CSS token block at the bottom (`--ta-blur`, `--ta-shadow-card[-hover]`, `--ta-card-hover-y`, `--ta-transition-dur`, `--ta-marquee-state`) keyed off `html[data-tier="…"]`, plus `@media (prefers-reduced-motion)` / `(prefers-reduced-transparency)` overrides, an iOS Safari `-webkit-backdrop-filter` mirror for any `[class*="backdrop-blur"]`, and a `@media print` block hiding `[data-tracking-pixel]` / `[data-floating-widget]` / sticky headers. Behaviour and consumption rules live in [shared-ui/patterns.md](../shared-ui/patterns.md#site-wide-interaction-smoothness--phase-1-2026-05-09).
 
 [`src/app/providers.tsx`](../../src/app/providers.tsx) mounts `<MotionConfig reducedMotion="user">` and `<DeviceTierProvider />` once at the root so per-page consumers don't have to. Provider composition order is documented in [client-state/frontend.md](../client-state/frontend.md#root-providers-2026-05-09).
+
+## `.next-e2e/` (2026-08-21)
+
+Gitignored alongside `.next/`. The e2e harness compiles there instead of sharing the
+dev build cache — see `docs/e2e/gotchas.md`.
+
+## `.next-e2e/` is lint-ignored too (2026-08-25)
+
+Splitting the e2e build into its own `distDir` gitignored the directory but not the
+eslint ignore list, so one e2e run put ~22,000 problems from compiled output into
+`npm run lint`. Baseline is 77 warnings, 0 errors — if a lint run reports thousands,
+suspect a build directory before suspecting the code.

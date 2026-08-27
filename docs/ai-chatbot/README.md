@@ -193,6 +193,12 @@ is honest-but-unavailable rather than silently fake.
 **Tests:** `npm run test:chat-service` covers member-email-from-session, unresolvable email,
 throwing lookup, and the anonymous path (no lookup, still asks).
 
+## Shop discount percentages (2026-08-25)
+
+Two FAQ answers quote the ladder verbatim. Raised to Tradie 10%, Foreman 15%, Boss 25%
+and the knowledge pack rebuilt (`npm run build:chat-knowledge-pack`); `test:chat-faqs`
+passes at 89 entries. Both answers still state free delivery over $100 — correct today,
+but see `docs/cart-shop-products/backend.md` on the unresolved threshold question.
 ## Gender field coverage (2026-08-17)
 
 Two FAQ entries (ids `82`, `83`) cover the optional profile gender field: whether it can be left blank or removed, and what it is used for. Corpus count assertion in `src/data/__tests__/faqs.test.ts` bumped **83 → 85**.
@@ -222,7 +228,7 @@ get into my email" routing to SMS sign-in — and its "Update profile" line now 
 date of birth, mobile, email*. Both are navigation-only and explicitly forbid stating whether a
 given member is verified.
 
-> **The pack has a hard token ceiling and these additions hit it.** `npm run test:knowledge-pack`
+> **The pack has a hard token ceiling and these additions hit it.** `npm run test:chat-knowledge`
 > caps the pack at 15,200 tokens and its comment says not to raise it again. The first draft came
 > in at 15,372; the copy was **trimmed back to 15,198** rather than bumping the ceiling. Budget for
 > that when adding here — and note the test previously had no npm script (added 2026-08-27), so

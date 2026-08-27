@@ -13,10 +13,12 @@ import BrandLogoCard from "@/components/ui/BrandLogoCard";
  * One mini-draw card. Extracted from MiniDrawManagement (which was 935 lines and
  * carried this as a private component) so the page reads as a page.
  *
- * ACTION SET — deliberately four, not the design's two. The design's footer
- * shows only `Winner` + delete, but `CSV` export and `Edit winner & testimony`
- * both exist today and are used on draw night. A visual target is not a licence
- * to delete working tools, so all four ship (plan decision 5).
+ * ACTION SET — deliberately six, not the design's two. The design's footer shows only
+ * `Winner` + delete, but `CSV` export and `Edit winner & testimony` both exist today and
+ * are used on draw night. A visual target is not a licence to delete working tools, so
+ * all of them ship (plan decision 5). `View` (opens the live mini-draw page, matching the
+ * product cards) and `People` (the entrant roster, gated on `miniDraws.viewParticipants`)
+ * were added on separate branches and both land here — hence six, not four.
  */
 export interface MiniDrawCardDraw {
   _id: string;
@@ -206,6 +208,25 @@ export default function MiniDrawCard({
                   <span className="truncate">Winner</span>
                 </button>
               )}
+              {/*
+                Opens the live mini-draw page in a new tab — the same "View" affordance
+                the product cards carry, so the two admin surfaces behave alike.
+
+                stopPropagation matters here specifically: the whole card is a click
+                target that opens the edit modal, so without it the link fires AND the
+                modal opens behind the new tab.
+              */}
+              <a
+                href={`/mini-draws/${draw._id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className={cardAction}
+                title="Open the live mini draw page in a new tab"
+              >
+                <ExternalLink className="h-[13px] w-[13px] shrink-0 text-[var(--text2)]" />
+                <span className="truncate">View</span>
+              </a>
               {onViewParticipants && (
                 <button
                   type="button"

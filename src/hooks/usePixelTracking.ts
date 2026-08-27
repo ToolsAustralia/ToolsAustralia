@@ -113,8 +113,17 @@ export function usePixelTracking() {
     metaCustomData: Record<string, unknown>,
     platforms: ("facebook" | "tiktok")[] = ["facebook", "tiktok"],
     userData?: MirrorUserData,
+    /**
+     * A STABLE id for events that can legitimately fire more than once for the
+     * same real-world action, so the platform collapses the repeats instead of
+     * counting them.
+     *
+     * Omit it and a fresh UUID is minted per fire, which is right for events
+     * where every fire IS a distinct action (a page view, a search).
+     */
+    stableEventId?: string,
   ): void => {
-    const eventId = generateMirrorEventId(eventName);
+    const eventId = stableEventId ?? generateMirrorEventId(eventName);
 
     // Normalize Meta-format custom_data into the canonical shape once, reused by the
     // TikTok pixel and the server mirror so both surfaces carry identical parameters.
@@ -172,8 +181,25 @@ export function usePixelTracking() {
   }, []);
 
   // Initiate checkout — hybrid Pixel + CAPI/Events API via shared event_id (FB + TikTok)
+  /**
+   * Initiate checkout — hybrid Pixel + CAPI via a shared event_id.
+   *
+   * When `params.order_id` is present the event id is DERIVED FROM IT rather than
+   * randomly generated. The shop checkout is idempotent — a repeat submit of the
+   * same cart resumes the same order and returns the same orderNumber — but a
+   * per-fire UUID meant Meta and TikTok still counted each submit as a separate
+   * checkout, so a customer refreshing the card step understated
+   * checkout→purchase conversion exactly as before the fix.
+   */
   const trackInitiateCheckout = useCallback((params: PixelEventParams, platforms?: ("facebook" | "tiktok")[], userData?: MirrorUserData) => {
-    fireFunnelEvent("InitiateCheckout", buildMetaCustomData(params, { content_type: "product" }), platforms, userData);
+    const orderId = typeof params.order_id === "string" ? params.order_id : undefined;
+    fireFunnelEvent(
+      "InitiateCheckout",
+      buildMetaCustomData(params, { content_type: "product" }),
+      platforms,
+      userData,
+      orderId ? `initiatecheckout_${orderId}` : undefined,
+    );
   }, []);
 
   // View content — hybrid Pixel + CAPI/Events API. Custom params (content_category, content_name,

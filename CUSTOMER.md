@@ -197,9 +197,41 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 | `accumulatedEntries` | number (def 0) | Total entries ever received ([User.ts:129](src/models/User.ts#L129)) | — |
 | `entryWallet` | number (def 0) | **Deprecated — kept at 0** ([User.ts:130](src/models/User.ts#L130)) | — |
 | `rewardsPoints` | number (def 0) | Points earned from purchases (legacy; see §7d) ([User.ts:131](src/models/User.ts#L131)) | — |
-| `cart[]` | array | Cart items, `type: "product" \| "ticket"` with `productId?` / `miniDrawId?`, `quantity`, `price?` ([User.ts:136-142](src/models/User.ts#L136)) | — |
+| `cart[]` | array | Cart items, `type: "product" \| "ticket"` with `productId?` / `miniDrawId?`, **`sku?`**, `quantity`, `price?` ([User.ts:136-142](src/models/User.ts#L136)). **`sku` added 2026-08-17**: a product line's identity is now `(productId, sku)`, not `productId` alone — two sizes of the same garment are two lines, and removing one does not remove the other. Absent on ticket items and on product lines added before variants existed; those keep their previous behaviour exactly. Not exposed to the browser — `cart` is excluded from the `MY_ACCOUNT_USER_FIELDS` wire projection (see caveats above). | — |
 
 > **Major-draw entries are NOT on `User`.** They were removed; the single source of truth is `MajorDraw.entries` ([User.ts:133,752](src/models/User.ts#L133)). See [BUSINESS.md §3](BUSINESS.md).
+
+**Merchandise is a fourth way a customer can hold entries (2026-08-17).** Buying an eligible shop
+item credits free entries into the **Major Draw only** — never a Mini Draw — under the source key
+`entriesBySource.shop`. What the customer receives is
+`includedEntries × quantity × the item's own multiplier`.
+
+**That multiplier belongs to the shop, not to the packs (2026-08-20).** An admin sets it per
+product, per category, or shop-wide, and it defaults to 1× — the entries the product advertises,
+unmultiplied. A one-time pack promo does **not** change what a garment grants. The number the
+product page shows and the number the customer actually receives resolve from the same config,
+so they cannot disagree.
+
+Three customer-visible consequences worth knowing:
+
+- **Entries are granted to every buyer**, including SA/ACT residents and anyone whose birthdate we
+  do not hold. There is no eligibility check at point of sale — exclusion is applied by the draw
+  export when a winner is selected, exactly as it is for every other entry source. A customer in an
+  excluded state can therefore buy the garment and see the entries, and is excluded only from
+  winner selection.
+- **Returning one item from a multi-item order does not remove entries.** They are withdrawn only
+  if the whole order is refunded. Stated in `/terms` §3d, §5.2 and §17.
+- **An account is required to buy** — `Order.user` is mandatory, so there is no guest checkout in
+  the shop. A guest must register before paying, which is also what gives the entries somewhere to
+  attach.
+
+**Currently switched off.** Every product ships at `includedEntries: 0` pending a trade-promotion
+permit variation, and nothing renders on a product page at 0 — so no customer is promised entries
+until it is enabled.
+
+The order itself records `Order.entriesGranted`: **absent** means the grant has not run (in
+flight, or failed and awaiting the reconcile cron); **0** means it ran and the order was worth no
+entries. Support needs that distinction.
 
 ### 2f. Saved payment methods (PCI note)
 
@@ -217,6 +249,12 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 | `partnerDiscountConsent` | object (opt, **no default**) | **New 2026-07-31.** The customer's recorded agreement to share their details with the rewards portal: `scopeVersion, acceptedAt, fields[]`. `fields[]` is what they actually **saw** when they agreed — the legal artefact. **Absent = never consented** (fail-closed); a `scopeVersion` older than the current one also re-prompts, which is how "we ask again if what we share changes" is enforced. Re-consent overwrites, so this is current state, not history. | — |
 | `referral` | subdoc (opt) | This user's code: `code` (unique sparse index), `successfulConversions` (def 0), `totalEntriesAwarded` (def 0) ([User.ts:224-228](src/models/User.ts#L224)) | — |
 | `affiliateReferral` | subdoc (opt) | Link to the Affiliate who referred this user: `affiliateId (ref Affiliate), affiliateCode, referredAt, firstPurchaseCompleted (def false), membershipTied (def false)` ([User.ts:232-238](src/models/User.ts#L232)) | — |
+
+**Shop discount (live 2026-08-17; ladder raised 2026-08-25).** A member's tier carries a shop
+discount — Tradie 10%, Foreman 15%, Boss 25% — resolved by `resolveShopDiscountPercent` and applied at checkout before shipping
+is assessed. It is not stored on `User`; it is derived from the active subscription tier at
+purchase time, so it follows upgrades, downgrades and lapses automatically. It was hidden from the
+tier benefit lists while the shop was pre-launch and is now shown.
 
 ### 2h. Attribution / marketing snapshot
 
@@ -819,6 +857,32 @@ All `/my-account/*` routes require a signed-in session; an unauthenticated visit
 > **Fixed 2026-07-20 (latent):** the my-account payload's `insights.totalSpent`, recent-order count, `recentOrders[]`, and active-mini-draw count were **always empty / `0`** because two DB queries matched zero docs (orders queried a phantom `userId` field; the model owner field is `user` — and active draws filtered on a phantom `MiniDraw.endDate`). These derived values (exposed via `useUserStats`) now hold the customer's **real** data. *(No customer-facing surface renders these insights today — this corrects the payload/derived data, not a visible screen.)* Caveat: `insights.totalSpent` sums `totalAmount` over the **10 most recent orders regardless of status** (includes cancelled/pending, capped at 10) — it is **not** true lifetime spend; a future surface must not treat it as accurate LTV. See [dashboard-account/gotchas.md](docs/dashboard-account/gotchas.md).
 
 **How the Membership surface (`/my-account/membership`) frames free entries.** A member's **base** tier rate is the recurring, per-cycle number ("15 / 40 / 100 free entries **/ mo**" for Tradie / Foreman / Boss); on renewal it is **added** to their accumulated total (the Carry-forward rule — [BUSINESS.md §3e](BUSINESS.md)), never reset and **never re-multiplied** by an active promo. So the current-plan card shows the base rate plus an accumulation hint — "*Free entries accumulate each month — {N} land on your renewal, {date}*" (N = the same accumulated renewal grant the Dashboard shows) — and an **ⓘ** that re-opens the one-time `SubscriptionExplainerModal` (the accumulation chart) on demand. A promo **multiplier (e.g. 10×) is a one-time grant applied only at join / resubscribe / upgrade**, so the "Change your tier" list shows upgrade/join targets as "**{boosted}** free entries **to start**" (not "/ mo"), while the member's **current** tier shows its base "/ mo" — matching the upgrade preview's "N to start + base per cycle after".
+
+**Order history (`/my-account/orders`).** A customer's own shop orders, scoped server-side to their session id — the route pins `userId` from the session and never from a query parameter, so it can only ever return their own. Each order leads with a three-step **progress strip** (Being made → On its way → Delivered) because "where is my order" is the question the page exists to answer; `pending` and `cancelled` show no strip, since neither is a position on that journey. Print-to-order turnaround means "Being made" is a real wait, so each status carries a plain-language line saying so. **No delivery date is ever promised** — none is stored, and supplier turnaround is unconfirmed. Each line now leads with the **product's own image**, joined live from the catalogue rather than snapshotted with the name and price — the picture of a garment does not change when it is renamed, and a line whose product has since been deleted still renders, falling back to a placeholder glyph.
+
+A `pending` order stays visible for **one hour** and is then hidden from the customer's own list (`PENDING_GRACE_MS`): a real payment resolves in seconds, so anything still pending was abandoned at the card step and would otherwise sit in their history looking like a second purchase. Staff still see it.
+
+**The money label follows the order's actual state**, on both this page and the checkout success page: `pending` → "Order total", `cancelled` → "Refund issued", otherwise "Total paid". A customer is never told they paid for something that has not been captured, or that money is still theirs after it has been refunded. "Refund issued" rather than "Refunded" is deliberate — the cancel path attempts the refund and swallows a failure, so it is the intent and not a guarantee. GST is shown as **inside** the total (Australian tax-invoice requirement), never added to it.
+
+**Free entries on a shop order are shown only above zero.** Merchandise entries currently ship dark at `includedEntries: 0`; "0 free entries" would state a promise we are not making. What is displayed is `entriesGranted` — what the webhook actually granted — not a recomputation, so a later multiplier change cannot restate a customer's history.
+**A refresh at the card step no longer creates a second order (fixed 2026-08-21).** Submitting
+the delivery form used to mint a NEW order and a NEW Stripe PaymentIntent every time, so a
+customer who refreshed while the card form was open ended up with two orders in their history
+for one purchase — and the abandoned attempt sat in Stripe as an Incomplete payment. Nobody was
+double-charged (only one intent is ever confirmed), but the customer saw a phantom second
+order. A repeat submit of the same cart now RESUMES the existing order and its payment,
+including when the customer refreshed specifically to correct their address — the address is
+updated on the same order rather than opening another one.
+
+**A declined card now closes the order** rather than leaving it "Awaiting payment" forever. The
+failure handler was writing a status the database does not permit, so the write was rejected
+and every declined shop payment left a stranded order in the customer's history.
+
+**`insights.totalSpent` and per-user order counts now count PAID orders only.** They previously
+summed every order row regardless of status, so an abandoned checkout — or one of the
+duplicates above — inflated a customer's own spend figure and consumed one of the ten
+`recentOrders` slots. Order HISTORY still shows cancelled and pending orders; it is the
+statistics that no longer count attempts as purchases.
 
 **Reaching Cobber (the AI support assistant):** everywhere on the site a customer opens Cobber via the **floating chat bubble** (`SupportChatWidget`, bottom corner). On `/my-account` that bubble is **suppressed** and the dashboard's **"Ask Cobber" support card** ("Start a chat", in the Support sheet / `/my-account/support`) is the single entry point instead — so members see one clear way to start a chat, not two. Both open the same chat panel. **Guest vs member access** is controlled by `CHAT_ALLOW_GUEST_GENERATIVE` (hCaptcha is deferred). **Off (default):** anonymous visitors get free **FAQ answers** + a "sign in to chat" nudge for anything the FAQ can't cover; **signed-in members get the full AI assistant**. **On (chosen launch posture):** anonymous visitors also get **full AI answers** — routed to the cheaper **Gemini** model (members keep the admin-toggled provider), guarded by the per-IP rate limit + daily budget. Either way members get the full bot. See [ai-chatbot/merge-to-main.md § 4g](docs/ai-chatbot/merge-to-main.md).
 

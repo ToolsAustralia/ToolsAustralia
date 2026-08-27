@@ -70,7 +70,7 @@ function buildMembershipSection(): string {
   const rows = subs
     .map((t) => {
       const partnerPct = partnerPercentFromFeatures(t.features) ?? "—";
-      const shop = t.shopDiscountPercent != null ? `${t.shopDiscountPercent}% (coming soon)` : "—";
+      const shop = t.shopDiscountPercent != null ? `${t.shopDiscountPercent}%` : "—";
       return `| ${t.name} | $${t.price}/month | ${t.entriesPerMonth} entries/month | ${partnerPct} of catalogue | ${shop} |`;
     })
     .join("\n");
@@ -220,7 +220,7 @@ function buildDrawMechanicsSection(): string {
 - **Carry-forward:** subscription entries accumulate while the subscription is active. One-time pack entries are scoped to the cycle they were purchased in.
 - **Cancellation mid-cycle:** entries already earned in the current cycle remain valid and stay in the pool. Membership fees are **non-refundable** once purchased; there is no refund for the unused portion of a cancelled period (your rights under Australian Consumer Law are preserved).
 - **Referrals:** when a referred friend makes their first purchase, **both parties receive 100 bonus entries** into the current Major Draw.
-- **Rewards** points are temporarily paused; the **member shop** is coming soon.
+- **Rewards** points are temporarily paused. The **member shop** is live at /shop: members get their tier's shop discount at checkout, shipping is free on orders of $100 or more and a $10 flat rate below that, and an account is required to check out.
 - Why the 24th? Renewing on the 24th leaves a few days before the 27th draw, so a failed renewal payment can be fixed in time for your entries to count. [from BUSINESS.md]`;
 }
 

@@ -8,6 +8,67 @@
 > deliberately keeps a static `@/config/prizes` import (admin-chunk only, never in the landing
 > graph). See [config-and-data architecture](../config-and-data/architecture.md) "Prize catalog split".
 
+## Shop group — Products / Orders / Entry Multipliers (2026-08-20)
+
+Shop is its **own sidebar group**, not a tab inside Operations. It was one Products tab until
+2026-08-20, by which point it stacked five unrelated panels in a single scroll: the printer
+sync, the catalogue, the entry-multiplier control, the fulfilment queue and the full order
+history.
+
+Split by **job**, not by data type — which is why Orders holds two panels that look similar
+but answer different questions:
+
+| Tab | id | Panels | The job |
+| --- | --- | --- | --- |
+| Products | `products` | `PrintProviderSync`, `ProductManagement` | Stock the shelf — pull a garment from the printer, price it, publish it |
+| Orders | `shop-orders` | `FulfilmentQueue`, `OrdersManagement` | Get it made and shipped, then find it again afterwards |
+| Entry Multipliers | `shop-multipliers` | `ShopEntryMultiplierPanel` | Tune what a purchase grants during a promo |
+
+All three are gated on `shop.view`; write actions inside each still check `shop.edit`
+separately, so a read-only role sees the pages without the buttons.
+
+**`products` deliberately keeps its id** even though its siblings are `shop-`prefixed. It is an
+existing URL and an existing permission pairing; renaming it would break bookmarks and buy
+nothing. A new reader should not take the inconsistency as a naming rule to copy — new shop
+tabs get the `shop-` prefix.
+
+**Why the fulfilment queue and the order history sit together rather than apart:** the queue
+lists only what is still waiting to be sent. Support's actual question is usually about an
+order that has *already* shipped, so the searchable history has to be one scroll away, not one
+tab away.
+
+### Products tab (2026-08-17)
+
+Shop catalog management — the first admin surface for `Product`. Lives under
+**Shop → Products**, gated on `shop.view`.
+
+| File | Role |
+|---|---|
+| [ProductManagement.tsx](../../src/components/admin/ProductManagement.tsx) | List panel: cards, feedback banner, per-row action lock |
+| [AdminProductModal.tsx](../../src/components/modals/AdminProductModal.tsx) | Create / edit form incl. the repeatable variant editor |
+
+Follows `MilestoneRewardsPanel` exactly — plain `fetch` + `useState`/`useCallback`, **not**
+TanStack Query, a `feedback` banner rather than toasts, `actionProductId` to disable one row's
+buttons mid-request, and a sibling `Admin*Modal`. Match that panel, not the TanStack ones, if
+you extend this.
+
+**Three things that are deliberate, not accidents:**
+
+1. **Price and "Free entries included" sit side by side in the form.** They are authored
+   independently — an entry count must never be derived from price (rule 11) — so a repricing
+   edit has to show both in one glance, or the two drift apart silently. This is the drift
+   mitigation named in the entries spec.
+2. **`trackInventory` defaults OFF in the create form** even though the schema default is
+   `true`. New products here are print-to-order merch; a stocked product is the exception. The
+   stock field only appears when the box is ticked.
+3. **Edit/Delete buttons are hidden via `usePermissions().has(...)`, not just gated server-side**
+   — per [rules.md](rules.md) R6, staff without the permission should never click into a 403.
+   The tab itself is filtered out of the sidebar by `requires: "shop.view"`.
+
+The modal refuses to submit while an image is still a `File` rather than a Cloudinary URL —
+`ImageUpload` uploads on drop, so a pending upload would otherwise be dropped from the payload
+on save.
+
 ## Repeat Purchases tab (2026-07-09)
 
 `repeat-purchases` — a new **Analytics** group tab (`RepeatPurchaseAnalytics`, `src/components/admin/RepeatPurchaseAnalytics.tsx`), gated by `pageAnalytics.view`. Measures one-time-package buyers who came back and bought again (the one-time equivalent of renewal analytics). Structure mirrors `AllPlatformsManagement`: a right-aligned `AdminDateRangeToolbar` (default `all-time`; cohort filter = first-purchase date) → a 6-tile `MetricCard` KPI grid (one-time buyers / repeat buyers / repeat rate / median days to return / repeat revenue / became members) → a `BarList` of first→second-purchase gap buckets + a "return rate by window" table (matured denominators) → a Users `Card` with a `Segmented` (All / Returned / Not yet returned) + bucket chips + `DataTable` whose User cell is a `ClickableUserDisplay` opening the shared User Detail modal. Loading = `MetricCard` skeletons + pulse bars; empty/error = inline messages. All styling is paired light/`dark:` Tailwind from the `@/components/admin/ui` kit (no chart library). Registered in `adminTabs.ts` (Analytics group), rendered + subtitled in `AdminPage.tsx`, and added to `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` so the date dropdown portals into the mobile header. Data via `useRepeatPurchaseSummary` / `useRepeatPurchaseUsers` (see [client-state](../client-state/patterns.md)).
@@ -1475,6 +1536,254 @@ newest-draw-first and Upcoming soonest-first — the only orders those screens a
 the dropdown cost toolbar width without earning it. `sortBy` / `sortOrder` are still sent to
 the API, fixed as `DEFAULT_SORT_BY` / `DEFAULT_SORT_ORDER` in each container.
 
+## Product variants — size-run quick add (2026-08-17)
+
+`AdminProductModal` adds apparel variants a size **run** at a time: pick a colour, tick the
+sizes, and rows are generated with a consistent SKU (`STAP-TEE-BLK-L`, derived from the product
+name and colour). Re-running it for a second colour keeps everything already entered and skips
+SKUs that already exist.
+
+It replaced hand-typing one row per size. A tee in five sizes meant five near-identical rows and
+getting the SKU pattern right five times — slow, and the easiest place in the form to typo.
+
+### What each variant field actually controls
+
+| Field | Owned by | Consequence of getting it wrong |
+|---|---|---|
+| `sku` | **Us.** Identifies the line on an order and the receipt; the cart keys a product line on `(productId, sku)` | Two sizes collapse into one cart line, or a duplicate is rejected on save |
+| `size` / `colour` | **Us**, but constrained by what the print provider stocks | These are what the customer picks on the product page **and** what the shop's Size/Colour filter rail is built from — an empty colour means the product never appears under a colour filter |
+| `gtin` | **The print provider.** Their catalogue decides which blanks exist | **An incorrect GTIN prints the wrong garment.** Check it against their catalogue rather than guessing. Blank is safe — it is only needed to submit an order for printing |
+
+### Where merchandise actually comes from
+
+Worth stating because it is easy to assume the reverse: **products are authored here, not
+imported from the print provider.** Name, price, images, description, included entries and which
+size/colour combinations to sell all live in our catalogue. The provider's role is fulfilment —
+we send them an order referencing a **GTIN** plus artwork we host.
+
+So the provider's catalogue constrains *which colours are possible*; it does not supply the
+product page. Changing a colour offering is an admin edit here (add or deactivate a variant),
+not a sync. See [print-provider-fulfilment spec](../superpowers/specs/2026-08-17-print-provider-fulfilment-design.md)
+— note that spec records the order API as unreachable, which was true when written and was
+corrected on 2026-08-20: order submission is available on the provider's GraphQL surface. Either
+way it never blocked authoring or selling, only automated order submission.
+
+## Send to printer — the fulfilment queue (2026-08-17)
+
+`FulfilmentQueue` sits under the catalogue on the **Products** tab. It is the manual hand-off to
+the print provider. It was built because the provider's order API appeared unreachable — every
+GraphQL path 404'd while our key authenticated fine.
+
+**That is no longer true (2026-08-20).** The provider resolved the 404 and confirmed order
+creation lives on GraphQL (`createOrder` / `createOrderFromGtin`) behind a second key,
+`RIVERR_GRAPHQL_API_KEY`, with `RIVERR_SHOP_ID` now populated. An API adapter would sit behind
+the same service boundary this queue uses, so replacing the manual step changes
+`fulfilmentExport.ts` and not this screen. **Until that adapter exists and has been tested,
+CSV remains the real path** — nothing below has changed.
+
+The loop: **Download CSV → upload it on their site → Mark as sent.**
+
+### Download and Mark are two buttons, deliberately
+
+Marking on download would hide a paid order from the next export whenever a download failed or
+was cancelled — a garment that silently never gets printed. Making the admin confirm the upload
+actually happened trades that for a possible double upload, which is visible and recoverable.
+
+`Mark as sent` stamps `submittedAt`, which is what the export filter excludes on, so it is the
+guard against printing the same garment twice. It asks for confirmation because a reprint costs a
+real garment and real freight, and it is gated on `shop.edit` (the download only needs
+`shop.view`) and audited server-side.
+
+### Missing GTINs are surfaced before the download
+
+A variant with no `gtin` exports with an empty `product_id`, which the provider cannot match. The
+panel counts those lines and names the first eight, so the gap is fixed in Products *before* the
+upload rather than discovered as a rejected file on their site. The order is still exported —
+withholding a paid order silently is the worse failure.
+
+### What it does not do
+
+Tracking does not come back automatically. "Ship through the app" means labels are created on
+their side; nothing tells this database an order shipped, so status stays `processing` until
+someone updates it. That is the next gap to close if this workflow stays.
+
+## Tracking numbers close the CSV loop (2026-08-17)
+
+The `Orders` panel takes a tracking number inline per row. `PATCH /api/admin/shop/orders`
+persists it and **flips the status to `shipped` automatically** when a tracking number arrives
+without an explicit status — a human who has just pasted a tracking number should not have to
+remember a second field for the customer to see the right thing.
+
+This closes the gap the CSV fulfilment path leaves open. The print provider creates labels on
+their side and nothing tells this database the parcel moved, so without it an order sits at
+`processing` forever and the customer is never told it shipped. The number then renders on the
+customer's own order page.
+
+Audited (`requirePermissionWithAudit`, `shop.edit`) because it is what a customer sees, and "who
+marked this shipped" is a real support question.
+
+Draft values are held per order id in local state, so typing in one row never disturbs another
+mid-edit.
+
+## Orders in the dashboard nav
+
+`/my-account/orders` is in `DASHBOARD_NAV` with `desktopOnly: true`.
+
+The mobile bottom bar is a fixed five-item layout built around a raised centre item; a sixth
+entry does not fit and squeezing one in degrades every other tap target. So the sidebar shows it
+on desktop, and mobile reaches it from a Package button in `DashboardHero` beside Settings —
+exactly the pattern Settings itself already uses for a route that is not in the bar. The button is
+hidden for guests, who have no orders and would land on an empty page.
+
+`BottomNav` filters `desktopOnly` items out; `DeskNav` renders the full list.
+
+## Shop orders: detail, refund, and the Stripe id (2026-08-19)
+
+`OrdersManagement` used to declare its own local `OrderRow` type. That duplicate
+is why adding `paymentIntentId` to the service projection changed nothing — the
+field was serialised on every admin page and thrown away. It now imports
+`OrderListItem` from `orderQueries`, so a field added to the service reaches the
+UI without a second edit.
+
+`OrderDetailModal` carries the detail view and the refund flow. Refund is gated
+`shop.delete` on both sides — the same permission
+`POST /api/admin/shop/orders/refund` enforces, so a staff member who cannot
+refund never sees a button that will 403.
+
+**Full-vs-partial comes from the server.** The modal used to infer it from what
+it asked for, but a "partial" refund typed at exactly the order total IS a full
+refund in `refundShopOrder`, and cancels the order out of the fulfilment queue.
+The response now carries `wasFull` and the modal reports that, so staff are never
+told an order is still live when it has just been cancelled.
+
+**Known gap:** the delivery address is still not visible. `listOrders` projects
+only `shippingAddress.firstName` and `.lastName`, so once an order is stamped
+submitted — which removes it from the fulfilment CSV — nothing in admin can
+answer "where was this sent?". Closing it means adding the rest of
+`shippingAddress` to the `isAdminSurface` branch of the projection; the modal's
+Delivery section is already built and says plainly what is missing rather than
+rendering a blank that reads as a data fault.
+
+## Merchandise entry multiplier panel (2026-08-20)
+
+`components/admin/ShopEntryMultiplierPanel.tsx`, the whole of **Shop → Entry Multipliers**.
+
+**All three tiers are editable on this one page** — whole shop, per category, and per product —
+and they save together on one button through one endpoint. The per-product ceiling *also*
+appears on each product's edit form, which is the natural place to set it while editing that
+product; the list here exists so an admin can see every ceiling at once rather than opening
+eight modals to find out which products are capped.
+
+Saving all tiers through a single `PUT` is deliberate: writing product ceilings through the
+product routes instead would mean one request per changed row, and a partial failure would
+leave the page showing ceilings that were never written.
+
+Controls are [`SelectMenu`](../../src/components/ui/SelectMenu.tsx), the repo's custom dropdown,
+not a native `<select>` — matching every other admin surface. It has no `disabled` prop, so a
+read-only admin (`shop.view` without `shop.edit`) gets the resolved value as plain text rather
+than a dropdown that silently refuses to do anything.
+
+It has a page to itself because it is a promo-shaped decision rather than a catalogue edit,
+and it applies across the whole shop rather than to any one product. (The **per-product**
+ceiling is a field on the product modal instead, next to `includedEntries`, because that one
+genuinely is a per-product decision.)
+
+Sets a **ceiling** on the promo multiplier for merchandise, shop-wide or per category (the
+per-product one lives on the product modal). Merchandise inherits the one-time pack multiplier;
+a ceiling can only hold it *below* that, never lift it above — which is what keeps a garment from
+becoming a cheaper route into a draw than the packs, and why three tiers of control are safe
+rather than three ways to get it wrong.
+
+Categories are **offered from the catalogue, never typed**. `Product.category` is free text with
+no enum and the data is already forked (`"Apparel"` beside `"power-tools"`), so a hand-typed key
+would silently match nothing. The select's blank option is "No ceiling", and saving a blank
+removes the row — a panel that can add a ceiling but not remove one is worse than no panel.
+
+Reads `shop.view`, writes `shop.edit`; the save button is hidden without the latter.
+
+## Destructive actions use ConfirmationModal, never window.confirm (2026-08-20)
+
+`ProductManagement` (delete) and `FulfilmentQueue` (mark-as-sent, undo) asked through
+`window.confirm`. That dialog is chrome-styled — it renders "localhost:3000 says", ignores the
+admin theme entirely, and **blocks the JS thread** while open. It also cannot say *which* row is
+about to go, which matters on a list that renders a Delete button per product.
+
+They now use [`ConfirmationModal`](../../src/components/modals/ConfirmationModal.tsx).
+
+**The porting trap:** `window.confirm` returns a boolean *inline*, so the handler could ask and act
+in one function. A real modal cannot. Each pending action moves into state (`pendingDelete`,
+`pendingAction`), the button only opens the modal, and the handler runs from `onConfirm` — it no
+longer asks at all.
+
+Type choice is deliberate: product delete is `type="delete"`; the fulfilment actions are
+`type="warning"`, because neither destroys anything. Marking as sent moves orders out of the queue
+(reversible via Undo) and Undo puts one back — the risk is a **duplicate print**, not a loss, and
+the copy says so.
+
+**Still outstanding:** roughly ten other admin components still call native `confirm()` — A/B
+testing, affiliates, alternating multipliers, bonus-entry promos, error reports. Out of scope for
+the shop work; listed here so the inconsistency is known rather than discovered.
+
+## Products: search, filters and drag reordering (2026-08-20)
+
+Ported from `MiniDrawManagement`, which already had all three — same `@dnd-kit` sensors, same
+reorder-mode toggle with save/cancel, same client-side filtering.
+
+**Search covers name, brand, category AND sku.** The sku matters most in practice: an admin
+looking up a product usually has it from an order line or the printer's CSV, not the display name.
+
+**Reorder mode is disabled while filtered**, and the button says why on hover. Positions are saved
+as 1..N over the list being shown, so dragging a filtered subset would silently reposition every
+row the admin cannot see. Entering reorder mode also hides the filter bar, and `visibleProducts`
+falls back to the unfiltered list as a second guard.
+
+**The drag handle is a separate control, not the whole card.** Product cards carry Edit /
+Deactivate / Delete buttons, and a card-wide drag listener swallows their clicks.
+
+`SortableProductRow` is declared at module scope: a component defined during render is a new type
+every render, which would remount every card mid-drag.
+
+Nothing is written until **Save order**; Cancel refetches, so the server stays the source of truth.
+
+## Entry Multipliers — rates, not ceilings (2026-08-20)
+
+Supersedes the ceiling description above. **Merchandise no longer inherits the one-time pack
+multiplier**, so the panel sets the merch rate outright rather than capping an inherited one.
+
+Same three tiers, same one-button save, same normalised category keys. What changed is the
+meaning: a value here IS the multiplier, and the default is 1× rather than "whatever the promo
+is doing".
+
+**The panel no longer protects the pricing ladder.** Under the ceiling design it was impossible
+to set merch above the pack rate. Now it is a number an admin types, so a rate that makes a
+garment better value per entry than a pack is reachable. Worth a warning in this panel; there
+is not one yet.
+
+## Editing a 383-variant garment (2026-08-20)
+
+`AdminProductModal` grouped every variant into one flat list. The Staple Tee carries **383
+variants** — 51 colours by roughly 7 sizes — which mounted about 1,900 form controls and made the
+modal unusable on staging.
+
+Variants are now **grouped by colour, one group open at a time**, because the colour is the unit
+an admin actually edits: a garment is stocked as a colour with a size run. A collapsed group is a
+single summary button (`Black · 7 sizes · 7 active`), so the cost is 51 buttons rather than 383
+forms. Measured after the change: **14 mounted inputs**, 49 with a group expanded.
+
+A search box appears above 6 groups and matches **colour or SKU** — an admin arrives holding one
+or the other, usually the SKU off an order line.
+
+**Grouping is a display concern only.** Each row keeps its `index` in the flat `variants` array,
+because that index is what `updateVariant` and `removeVariant` address. Reordering the array to
+match the grouping would silently rewrite which variant an in-flight edit lands on. Verified by
+editing one SKU inside a searched, expanded group and reading the document back: exactly one row
+changed, it was the right one (Vapour / XS), and every other group was intact.
+
+## Shop, not Merchandise (2026-08-21)
+
+`ShopEntryMultiplierPanel`'s heading now reads **Shop entry multiplier**, and the
+activity feed logs `Shop order (SHOP-…)`. See `docs/cart-shop-products/backend.md`
+for the full rename and why already-written `PaymentEvent`s keep the old string.
 ## Mini draws: view participants in place, and jump to the live page (2026-08-13)
 
 Two additions to the `/admin/mini-draws` card, both answering questions staff previously had to

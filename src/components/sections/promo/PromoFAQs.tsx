@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { ChevronRight } from "lucide-react";
 
-import { FAQSection, FAQItem } from "@/components/ui";
+import { FAQItem } from "@/components/ui";
 import { usePromoTheme } from "@/stores/usePromoThemeStore";
 import { openSupportChat } from "@/lib/support-chat/widget-events";
 import { COBBER_AVATAR } from "@/components/support-chat/cobberAccent";
@@ -65,26 +65,34 @@ const faqs: FAQItem[] = [
 ];
 
 /**
- * Mobile accordion (design handoff, 2026-08-13).
+ * The promotions FAQ, at every width (design handoff 2026-08-13; promoted from
+ * mobile-only 2026-08-20).
  *
- * The shared `FAQSection` is built for a wide, centred column — on a phone its card
- * chrome and category header ate most of the fold before the first question. This is the
- * same corpus in a flat, edge-to-edge list, closed by an "Ask Cobber" row so the dead end
- * of "my question isn't here" lands on the support chat instead of nothing.
+ * There used to be two: this flat accordion below `lg`, and the shared
+ * `FAQSection` above it. They rendered the same nine questions with different
+ * chrome, different spacing and — because only one of them carried it — a
+ * different ending: the accordion closes on an "Ask Cobber" row so "my question
+ * isn't here" lands on support, and the desktop version simply stopped.
  *
- * Cobber opens through `openSupportChat()` (the shared window-event contract) rather than
- * a second chat implementation — one panel, one chat state, wherever it is opened from.
+ * That row is the reason this layout won rather than the wider one. A FAQ's most
+ * important state is the one where it did not answer you.
+ *
+ * Cobber opens through `openSupportChat()` (the shared window-event contract)
+ * rather than a second chat implementation — one panel, one chat state, wherever
+ * it is opened from.
  */
-function PromoFAQsMobile() {
+function PromoFAQsList() {
   const theme = usePromoTheme();
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
-    <section className="bg-white px-3.5 py-6 dark:bg-neutral-950 lg:hidden">
+    // max-w-3xl and centred above the phone: the list is edge-to-edge by design,
+    // but a question sitting on a 1440px rule reads as a divider rather than a row.
+    <section className="mx-auto max-w-3xl bg-white px-3.5 py-6 dark:bg-neutral-950 sm:px-5 lg:py-14">
       {/* Same title the desktop `FAQSection` uses, so the two layouts don't name the same
           section differently. It replaced the handoff's "Questions / Everything you're
           probably wondering", which spent three lines and the top of the fold. */}
-      <h2 className="font-sans text-[22px] font-extrabold leading-[1.15] tracking-[-0.01em] text-gray-900 dark:text-white">
+      <h2 className="font-sans text-[22px] font-extrabold leading-[1.15] tracking-[-0.01em] text-gray-900 dark:text-white sm:text-[26px] lg:text-[30px]">
         Frequently Asked Questions
       </h2>
 
@@ -157,21 +165,7 @@ function PromoFAQsMobile() {
 }
 
 export default function PromoFAQs() {
-  const theme = usePromoTheme();
-  return (
-    <>
-      <PromoFAQsMobile />
-      <div className="hidden lg:block">
-        <FAQSection
-          title="Frequently Asked Questions"
-          faqs={faqs}
-          showCategoryFilter={false}
-          variant="red"
-          iconColorHex={theme.primary}
-          maxWidth="4xl"
-          className="py-10 sm:py-14 lg:py-20"
-        />
-      </div>
-    </>
-  );
+  // One layout, so a copy change lands once and the page a customer describes on
+  // a phone is the page a colleague sees on a laptop.
+  return <PromoFAQsList />;
 }

@@ -66,6 +66,7 @@ export default async function MajorGiveawayTermsPage() {
     "Purchase an eligible One-Time Package (Apprentice, Tradie, Foreman, Boss, or Power Pack) during the promotion period.",
     "Maintain an active Tradie, Foreman, or Boss membership package.",
     "Redeem accumulated reward points for entry packages when available.",
+    "Purchase an eligible merchandise item from the Tools Australia shop. Qualifying items include a stated number of free entries at no additional cost; the entries are an inclusion with the item and are not sold separately.",
   ];
   /**
    * DERIVED from the prize catalog — never hand-listed.
@@ -198,6 +199,11 @@ export default async function MajorGiveawayTermsPage() {
                 <ul className="list-inside list-disc space-y-2 text-gray-300">
                   <li>One-Time Package entries credit immediately once payment settles or reward points redeem.</li>
                   <li>Membership packages accumulate entries monthly per tier.</li>
+                  <li>
+                    Free entries included with a merchandise purchase credit immediately once payment settles. Where an
+                    individual item from a multi-item order is returned or exchanged, entries already credited remain
+                    valid; entries are withdrawn only where the entire order is refunded.
+                  </li>
                   <li>Entries are valid only for the specified Major Giveaway unless otherwise stated.</li>
                   <li>Package benefits run concurrently when holding multiple packages; days do not pause or stack.</li>
                   <li>

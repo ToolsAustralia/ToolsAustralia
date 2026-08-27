@@ -138,7 +138,19 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "15",
       question: "Is the online shop available?",
       answer:
-        "Our member shop is coming soon. When it launches, members will receive a shop discount based on their tier — Tradie 5%, Foreman 10%, Boss 20%. We will announce the launch date to all members.",
+        "Yes — you can browse and buy from the shop at [/shop](/shop). Members get a discount based on tier: Tradie 10%, Foreman 15%, Boss 25%, applied automatically at checkout. Delivery is a flat $10 on every order, with no minimum to reach. You'll need an account to check out, so your order and delivery details stay attached to you.",
+      category: "REWARDS",
+    },
+    {
+      id: "88",
+      question: "Do I get free entries when I buy merchandise?",
+      // Deliberately conditional ("where an item includes"). Entries on merchandise
+      // are gated on a trade-promotion permit variation and ship switched off, so
+      // this must read true BOTH before and after they are enabled. Do not rewrite
+      // it into a flat promise until the permit is confirmed — and if the answer is
+      // no, this entry stays correct as written.
+      answer:
+        "Where a shop item includes free entries, the number is shown right on the product page before you buy, and again on your order confirmation. The entries are a free inclusion with the item — you're buying the product itself, never the entries. Any included entries go into the monthly major prize draw and are credited as soon as your payment clears. If a promotion is running, the product page shows the boosted total before you check out. See [/terms](/terms) for the full conditions.",
       category: "REWARDS",
     },
 
@@ -311,7 +323,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "36",
       question: "Do your prices include GST?",
       answer:
-        "All prices are shown in Australian dollars. Entries into our draws are GST-free, so your membership and pack tax invoices show a GST amount of $0.00. (When our member shop launches, physical products in the shop will include 10% GST.) For anything specific about a tax invoice, [contact us](/contact).",
+        "All prices are shown in Australian dollars, GST included — the 10% is already inside the price and is never added on top at checkout. Entries into our draws are GST-free, so your membership and pack tax invoices show a GST amount of $0.00. Shop orders do carry GST: the 10% is already inside the price on the product page, and your checkout summary and order confirmation email report it as the \"Includes GST\" share of what you paid (delivery sits inside that figure too). For anything specific about a tax invoice, [contact us](/contact).",
       category: "PAYMENTS",
     },
     {
@@ -375,7 +387,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       category: "ALL QUESTIONS",
     },
     {
-      id: "88",
+      id: "94",
       question: "I never got my SMS code",
       answer:
         "Codes go **only to the Australian mobile on your account** — if that number is wrong, use email or [contact us](/contact). They last **10 minutes**; up to **3 a day**, a minute apart. Never bought a membership or pack? No code is sent — join from the [membership page](/membership) first.",
@@ -722,6 +734,53 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       answer:
         "The [Major Giveaway terms](/competition-term-majordraw) rule out three situations: requests lodged after the draw has already been conducted, change-of-mind once your free entries have been allocated, and duplicate or incorrect package claims with no verifiable technical evidence. Not winning is never grounds for a refund on its own — but genuine technical errors or system failures before the draw are, as is anything Australian Consumer Law requires. If you think one of those applies to you, [contact us](/contact) and a human will review it.",
       category: "PAYMENTS",
+    },
+
+    // ── MERCHANDISE SHOP (2026-08-19) ────────────────────────────────────────
+    // The shop went live with only two grounded entries (15 = it exists + the
+    // money, 88 = entries on an item), so "where is my order" — the question a
+    // shop gets more than any other — had no answer at all, and Cobber is
+    // forbidden from inventing one. Every figure below is imported-in-spirit from
+    // the code that produces it: the status words are `STATUS_LABEL` in
+    // src/app/(site)/my-account/orders/page-client.tsx, the delivery rule is
+    // `priceCart` (src/utils/shop/pricing.ts) reading SHOP_CONFIG, and the
+    // returns wording matches the Shipping & Returns tab on the product page.
+    // No delivery ETA is quoted anywhere: print turnaround is supplier-dependent
+    // and unconfirmed, so a number here would be a guess told to a paying customer.
+    {
+      id: "89",
+      question: "Where's my order — how do I track it?",
+      answer:
+        "Every order you've placed is in [My Account → Orders](/my-account/orders) when you're signed in, newest first, with what you ordered and the size and colour you picked. Each one carries a status: **Awaiting payment**, **Being made**, **On its way**, **Delivered**, **Complete** or **Cancelled** — and once it's with the courier, the tracking number shows on that order. You'll also get a confirmation email as soon as your payment clears. I can't see your account from here, so I can't look an order up for you — if something looks wrong there, [contact us](/contact) with your order number.",
+      category: "REWARDS",
+    },
+    {
+      id: "90",
+      question: "How long will my shop order take, and why does it say \"Made to order\"?",
+      answer:
+        "Each garment is printed after you order it, in the colour and size you chose — nothing sits in a warehouse waiting, so \"Made to order\" is normal and never means sold out. That printing step is why it takes longer to reach you than something picked off a shelf, and we'd rather not quote a delivery date we can't stand behind. Your order reads **Being made** while it's in production and **On its way** once it's shipped, with the tracking number on it — both on [My Account → Orders](/my-account/orders).",
+      category: "REWARDS",
+    },
+    {
+      id: "91",
+      question: "How much is delivery, and do you ship outside Australia?",
+      answer:
+        "Delivery is a flat $10 on every order — there's no minimum spend to reach and no threshold to work out, so the delivery line is the same whatever's in your cart and whatever your member discount is. Checkout shows it before you pay. We deliver within Australia only: the checkout address form takes the eight Australian states and territories, so we can't send an order overseas at this stage.",
+      category: "REWARDS",
+    },
+    {
+      id: "92",
+      question: "My order arrived faulty, damaged or wrong — what do I do?",
+      answer:
+        "[Contact us](/contact) with your order number and a photo, and we'll replace it or refund it — return postage is on us. If the print itself cracks or peels in ordinary wear and washing, tell us and we'll sort that out too. The one thing we can't do is a change-of-mind return: each garment is printed to order in your chosen colour and size, so there's no way to resell it — worth double-checking your size before you order. None of this limits your rights under Australian Consumer Law.",
+      category: "REWARDS",
+    },
+    {
+      id: "93",
+      question: "Does my membership discount apply in the shop, and does a one-time pack count?",
+      answer:
+        "Yes — while your membership is active your shop discount comes off automatically at checkout (Tradie 10%, Foreman 15%, Boss 25%), across the whole shop, with no code to enter. It's a membership benefit only: one-time packs and Mini Packs carry no shop discount, and a membership that's paused, past due or cancelled doesn't discount either — settling a past-due payment switches it straight back on. Your tier is on [My Account → Membership](/my-account/membership).",
+      category: "REWARDS",
     },
   ];
 }

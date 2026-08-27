@@ -58,6 +58,8 @@ export interface IMajorDraw extends Document {
       "promo-link"?: number;
       /** Membership Streak milestone auto-grants (P2). */
       streak?: number;
+      /** Free entries included with a merchandise purchase (never sold — CLAUDE.md rule 11). */
+      shop?: number;
     };
     firstAddedDate: Date; // When user first got entries
     lastUpdatedDate: Date; // When entries were last updated
@@ -267,6 +269,15 @@ const MajorDrawSchema = new Schema<IMajorDraw>(
             type: Number,
             default: 0,
             min: [0, "Streak entries cannot be negative"],
+          },
+          // Free entries included with a merchandise purchase. The customer buys
+          // the garment; the entries are an unpriced inclusion (CLAUDE.md rule 11).
+          // Granted from the shop webhook via addToMajorDraw — a .save() path, so
+          // this key is load-bearing exactly like the two above it.
+          shop: {
+            type: Number,
+            default: 0,
+            min: [0, "Shop entries cannot be negative"],
           },
         },
         firstAddedDate: {

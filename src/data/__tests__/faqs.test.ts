@@ -163,7 +163,43 @@ function main() {
   // called our own page an "external link" it could not read, because the page was in neither
   // [key-pages] nor the knowledge pack. id 12 was CORRECTED (not added) in the same change, so
   // it does not move the count.
-  assert.strictEqual(entries.length, 90, `Expected 90 FAQ entries, got ${entries.length}`);
+  // 89 (draw 10) + 6 (merchandise shop, staging) + 1 (SMS code, draw 10) = 96.
+  //
+  // Both sides independently claimed id 88: the shop batch authored 88-93, and the SMS
+  // work authored a single 88. Renumbering the ONE SMS entry to 94 was cheaper than
+  // renumbering six shop entries, and it keeps staging's id-89 / id-91 guards below valid
+  // without edits. Nothing outside the corpus referenced 88, so the move is inert.
+  //
+  // NOTE: ids 77 and 78 each appear TWICE. That is PRE-EXISTING — both duplicates are in
+  // the merge base — so 96 entries carry 94 distinct ids. Not introduced here, and not
+  // fixed here either; a lookup by those ids silently returns only the first match.
+  assert.strictEqual(entries.length, 96, `Expected 96 FAQ entries, got ${entries.length}`);
+
+  // 8d. Merchandise-shop batch (ids 89-93). The order-tracking entry is the reason the
+  // batch exists, so it must route to the page that actually answers it — /my-account
+  // alone lands the customer on a dashboard with no orders on it.
+  const orderTracking = entries.find((e) => e.id === "89");
+  assert.ok(orderTracking !== undefined, "FAQ entry id=89 (where's my order) must exist");
+  assert.ok(
+    orderTracking!.answer.includes("/my-account/orders"),
+    "Order-tracking FAQ (id 89) must route to /my-account/orders, not the dashboard"
+  );
+  // Delivery is a flat $10 on every order (priceCart, SHOP_CONFIG) — there is no
+  // threshold as of 2026-08-25. This guard used to REQUIRE the answer to name a $100
+  // free-delivery threshold, which is how stale copy survives a rule change: the
+  // assertion held the old promise in place. It now pins the opposite.
+  const deliveryFee = entries.find((e) => e.id === "91");
+  assert.ok(deliveryFee !== undefined, "FAQ entry id=91 (delivery cost) must exist");
+  assert.ok(
+    deliveryFee!.answer.includes("$10"),
+    "Delivery FAQ (id 91) must state the $10 flat rate"
+  );
+  for (const e of entries) {
+    assert.ok(
+      !/free (delivery|shipping)|free on orders/i.test(e.answer),
+      `FAQ id=${e.id} promises free delivery, which no cart can produce`
+    );
+  }
 
   // 8c. Membership Streak batch (ids 69-71) must exist, use free-entry framing, and
   // never frame the streak as something you BUY (rule 11: kept by KEEPING membership).

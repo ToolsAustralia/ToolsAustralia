@@ -212,6 +212,40 @@ Enforcement: Cobber's FAQ corpus is guarded by `npm run test:chat-faqs` (bans th
 
 **Voice:** `docs/BRAND_VOICE.md` is the style layer on top of this rule — how customer-facing copy should *sound* (distilled from the ad scripts that ran), plus a say-this-not-that table of rule-11-safe rewrites. Read it before writing or reviewing customer strings. It is rule-11 clean; the raw ad-script PDFs it came from are **not** (they contain `odds` and pervasive "chance to win"), so quote from the doc, never from the PDFs.
 
+### 12. Specs — recon before spec, spec before plan, plan before code
+
+**Any feature past a single file gets a spec before a plan before code.**
+
+**Recon first: read the code, never trust our own docs as behaviour.** `docs/` and
+`BUSINESS.md` record *intent*, and intent drifts. If a doc says a code path exists, open the
+file and confirm it — if it does not exist, say so in the spec and label the doc as design
+intent. (This has already bitten: `docs/cart-shop-products/backend.md` and its rule R3 both
+assert "Orders are written by the Stripe webhook"; no such code path exists.)
+
+**Every claim carries provenance and a `file:line`:**
+
+| Tag | Means |
+| --- | --- |
+| `verified` | I ran it or read the code. Output or `file:line` shown. |
+| `documented` | Someone wrote it down. Not tested against reality. |
+| `assumed` | Neither. State what would confirm it and who can. |
+
+Anything left unlabelled will be read as `verified` — that is how a spec gets implemented
+against a code path nobody built. **Prove absence with a control search** and report both
+results ("zero hits for `webhook|HMAC` across 123 pages; control search for `graphql` hit
+123/123") — an unqualified "there are no webhooks" is a guess wearing a fact's clothes.
+
+Specs live in `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`. Keep the **spec** (decisions
++ verified facts, changes only when a decision is reversed) separate from the **plan** (tasks,
+churns daily), or the stable half rots alongside the volatile one.
+
+**Follow [`.claude/skills/spec-writing/SKILL.md`](.claude/skills/spec-writing/SKILL.md)** for the
+required section order, the threading-checklist and test-mapping rules, and the done-check.
+Sections 1 (Problem and done) and 2 (Decisions) go to the user for sign-off **before** anything
+below them is written.
+
+This rule is not hook-enforced. You're expected to apply it on your own.
+
 ## Commands
 
 Dev/build use **Turbopack**. Both `dev` and `build` first run `prebuild`/`predev` which regenerates the upsell image manifest via `scripts/build-upsell-image-manifest.ts` — if you add/change files under the upsell image directories, that script must succeed before the app will start.
@@ -567,6 +601,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "docs": "docs/cart-shop-products/",
       "paths": [
         "src/app/(site)/shop/**",
+        "src/components/shop/**",
         "src/app/(site)/checkout/**",
         "src/app/(site)/purchase-success/**",
         "src/app/api/cart/**",
@@ -574,10 +609,20 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/api/orders/**",
         "src/models/Product.ts",
         "src/models/Order.ts",
+        "src/models/ShopEntryMultiplierConfig.ts",
+        "src/types/product.ts",
+        "src/services/shop/**",
+        "src/lib/print-provider/**",
+        "src/stores/useProductColourStore.ts",
+        "src/utils/shop/**",
+        "src/config/shop.ts",
+        "src/app/api/shop/**",
+        "src/app/api/admin/products/**",
+        "src/app/api/admin/shop/**",
         "src/contexts/CartContext.tsx",
         "src/hooks/usePurchaseInvalidation.ts"
       ],
-      "lastVerified": "2026-08-07"
+      "lastVerified": "2026-08-20"
     },
     "error-reporting": {
       "docs": "docs/error-reporting/",
@@ -615,6 +660,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/lib/permissions.ts",
         "src/lib/permission-descriptions.ts",
         "src/lib/__tests__/permissions.test.ts",
+        "src/lib/__tests__/api-auth-permissions.test.ts",
         "src/hooks/usePermissions.ts",
         "src/models/Role.ts",
         "scripts/migrate-seed-staff-roles.ts",
@@ -647,6 +693,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/components/admin/TikTokAdsManagement.tsx",
         "src/components/admin/SnapchatAdsManagement.tsx",
         "src/lib/facebook.ts",
+        "src/lib/__tests__/facebook.test.ts",
         "src/lib/facebook-env.ts",
         "src/lib/facebook-marketing.ts",
         "src/lib/tiktok.ts",

@@ -334,3 +334,45 @@ DPI, dark mode, VML backgrounds, alt text) · Campaign Monitor (CSS/web-fonts/wi
 responsive) · tabular.email (`mso-line-height-rule`) · Microsoft Learn (new Outlook migration — classic Word
 engine supported through ~2029, **not** 2026) · Postmark (MPP) · Suped (Gmail clipping) · official
 Gmail/Klaviyo/SendGrid (Twilio) docs · MJML / Maizzle docs.
+
+## Line items are not label/value pairs (2026-08-21)
+
+`infoTable` sets its left column as 10.5px mono UPPERCASE in a fixed **42%** column.
+That is right for `SUPPLIER`, `ABN`, `SUBTOTAL` — short field names beside a value.
+It is wrong for a product name, and all three shop emails were pushing product names
+through it.
+
+Measured on a 320px viewport, `3 × Tools Australia Heavy Duty Workwear Tee (Black · XL)`
+rendered as a **94px-tall, five-line stack of capitals in a 113px column**, with the
+price sitting alone in the wide half. The variant was parenthesised into the name, so
+the one detail a customer scans for — which colour and size did I buy — was the part
+squeezed hardest.
+
+`lineItemsTable` inverts the columns: the **name** takes the room, the money column
+shrinks to its content (`white-space:nowrap`, `tabular-nums`), and the variant drops to
+its own muted line. Quantity moves beside the price as `× 3`, where it reads as part of
+the arithmetic instead of as part of the product's name.
+
+The two components now have **incompatible shapes** (`{name, variant, quantity, amount}`
+vs `{label, value, emphasis}`), so passing one's rows to the other is a compile error.
+That is the whole reason not to give them a shared row type.
+
+`infoTable` also gained `emphasis`, used on **Total paid**. It was set identically to
+Subtotal and Delivery — the one number a customer opens an invoice to check had no more
+weight than the rest of the ledger.
+
+## Full-bleed on phones (2026-08-21)
+
+The outer wrapper carried `padding:32px 12px` at every width. On a 320px screen those
+gutters cost 24px, and the card's min-content pushed the document to **340px against a
+320px window** — a sideways-scrolling invoice.
+
+The mobile media query now zeroes the horizontal padding (`.page-pad`) and drops the
+card's side borders and corner radius, so the card reaches both edges. Verified after:
+314px document on a 320px window, 375px on a 390px window, no horizontal scroll at
+either. Full-bleed is also simply what a phone email looks like; the rounded floating
+card is a desktop affordance.
+
+**When adding a component, check it at 320px.** Every defect above was invisible at
+600px and none of them were reachable by reading the source — the label column looks
+perfectly reasonable at desktop width.

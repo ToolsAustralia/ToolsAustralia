@@ -169,3 +169,15 @@ so asserting no `ManageSheet`/`ReferFriendModal` chunk URL appears before first 
 timing-independent version of the same guarantee. `/api/stripe/payment-methods` itself is
 exercised unstubbed once ManageSheet opens (see billing-stripe/gotchas.md for the dangling-
 `stripeCustomerId` → 200-empty hardening that makes that safe against the seeded member).
+
+## `/shop` joined the legal-copy scan (2026-08-17)
+
+`e2e/specs/marketing/legal-copy.spec.ts` scans rendered body text for gambling and sold-entry
+vocabulary (CLAUDE.md rule 11). Its `PAGES` list did **not** include `/shop`.
+
+That mattered once merchandise started carrying free entries: a per-entry price written on a
+product page would have passed every automated guard in the repo, purely because this list did
+not mention the route. The regexes were never the gap — the page list was.
+
+When a new customer-facing surface ships, add it to `PAGES` in the same change. A page nobody
+scans is indistinguishable from a page with no violations.

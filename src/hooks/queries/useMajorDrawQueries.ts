@@ -66,6 +66,8 @@ export interface UserMajorDrawStats {
   oneTimeEntries: number;
   /** Membership Streak milestone free entries — own bucket (never in oneTime). */
   streakEntries?: number;
+  /** Merchandise free entries — own bucket, never folded into oneTimeEntries. */
+  shopEntries?: number;
   currentDrawEntries: number;
   totalDrawsEntered: number;
   entriesByPackage: Array<{

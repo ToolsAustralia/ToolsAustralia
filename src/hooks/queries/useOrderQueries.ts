@@ -12,56 +12,96 @@ import { usePurchaseInvalidation } from "@/hooks/usePurchaseInvalidation";
 
 // Types
 export interface OrderItem {
-  productId: string;
+  /**
+   * The schema field is `product` — an ObjectId ref, populated to an object by
+   * the order read routes. It is NOT `productId`; both order reads populated
+   * that non-existent path until 2026-08-17 and would have thrown on the first
+   * real order.
+   */
+  product?: { _id: string; name: string; images: string[]; brand: string } | string;
+  /** Chosen variant, snapshotted at purchase — this is what the printer makes. */
+  sku?: string;
+  /** Product name, snapshotted so a later catalog rename cannot rewrite history. */
+  name?: string;
   quantity: number;
   price: number;
-  product?: {
-    _id: string;
-    name: string;
-    images: string[];
-    brand: string;
-  };
+  /**
+   * The chosen variant, snapshotted alongside the sku. Rendered as
+   * `[colour, size]` joined — the same order `listOrders` builds its `variant`
+   * string in, so one order reads identically on the success page and in the
+   * order history.
+   */
+  size?: string;
+  colour?: string;
+  /**
+   * Free entries included with ONE unit, snapshotted at purchase.
+   *
+   * Present on the document but not the payout: what was actually granted is
+   * `entriesGranted` on the order. Read that for anything customer-facing, or a
+   * change to the multiplier after the fact would restate history.
+   */
+  includedEntries?: number;
 }
 
+/**
+ * The client view of an Order.
+ *
+ * This interface used to be a fiction — it declared `items`, `paymentStatus`,
+ * `paymentMethod`, `billingAddress`, `estimatedDelivery` and a `"refunded"`
+ * status, none of which exist on `src/models/Order.ts`. Nothing caught it
+ * because no Order had ever been written. It now mirrors the real schema; if you
+ * add a field here, add it to the model first.
+ */
 export interface Order {
   _id: string;
   orderNumber: string;
-  userId: string;
-  items: OrderItem[];
+  /** Line items. The schema field is `products`, NOT `items`. */
+  products: OrderItem[];
   totalAmount: number;
   subtotal: number;
-  tax: number;
-  shipping: number;
-  discount: number;
-  status: "pending" | "processing" | "shipped" | "delivered" | "cancelled" | "refunded";
-  paymentStatus: "pending" | "paid" | "failed" | "refunded";
-  shippingAddress: {
-    firstName: string;
-    lastName: string;
-    address: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
+  /** GST already INSIDE totalAmount — never add it. */
+  gstAmount: number;
+  shippingCost: number;
+  appliedDiscounts?: { type: string; amount: number; description: string }[];
+  status: "pending" | "processing" | "shipped" | "delivered" | "cancelled" | "completed";
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    addressLine1?: string;
+    /** @deprecated legacy single-line address on pre-2026-08 orders. */
+    address?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    deliveryInstructions?: string;
   };
-  billingAddress?: {
-    firstName: string;
-    lastName: string;
-    address: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    country: string;
-  };
-  paymentMethod?: {
-    type: string;
-    last4?: string;
-    brand?: string;
-  };
+  paymentIntentId?: string;
   trackingNumber?: string;
-  estimatedDelivery?: string;
+  notes?: string;
+  /**
+   * Free entries actually granted for this order, written once by the webhook.
+   *
+   * Absent or `0` is the normal state while merchandise entries ship dark at
+   * `includedEntries: 0`, so a surface must render this only above zero rather
+   * than announcing "0 free entries" — a promise we are not currently making.
+   */
+  entriesGranted?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * An order is paid once the webhook has moved it off `pending`.
+ *
+ * There is no `paymentStatus` field — payment state is inferred from `status`,
+ * which is the only thing the webhook writes.
+ */
+export function isOrderPaid(order: Pick<Order, "status">): boolean {
+  return order.status !== "pending" && order.status !== "cancelled";
 }
 
 export interface OrderFilters extends Record<string, unknown> {
@@ -75,7 +115,48 @@ export interface OrderFilters extends Record<string, unknown> {
   limit?: number;
 }
 
+/**
+ * A row from the ORDER LIST — not a full order document.
+ *
+ * `/api/orders` returns a lean projection built by `listOrders`, deliberately: an
+ * unprojected list once shipped every Product document and every address on every
+ * row. Use `useOrder(id)` when the whole document is genuinely needed.
+ */
+export interface OrderListRow {
+  id: string;
+  orderNumber: string;
+  status: Order["status"];
+  createdAt: string;
+  totalAmount: number;
+  itemCount: number;
+  categories: string[];
+  /** Admin surfaces only — omitted from a customer's own list. */
+  customerName?: string;
+  entriesGranted?: number;
+  /** Postage on this order, so a row's total reconciles with its own lines. */
+  shippingCost?: number;
+  submittedAt?: string;
+  trackingNumber?: string;
+  items: {
+    name: string;
+    sku?: string;
+    variant?: string;
+    quantity: number;
+    price: number;
+    /** Joined from the referenced product, not snapshotted — see orderQueries. */
+    image?: string;
+  }[];
+}
+
 export interface OrderResponse {
+  orders: OrderListRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
+
+/** @deprecated Legacy paginated envelope. Nothing returns this shape any more. */
+export interface LegacyOrderResponse {
   orders: Order[];
   pagination: {
     currentPage: number;
@@ -90,7 +171,6 @@ export interface OrderResponse {
 export interface CreateOrderData {
   items: OrderItem[];
   shippingAddress: Order["shippingAddress"];
-  billingAddress?: Order["billingAddress"];
   paymentMethodId?: string;
   couponCode?: string;
 }
@@ -161,7 +241,9 @@ export const useInfiniteOrders = (userId?: string, filters: OrderFilters = {}) =
     },
     initialPageParam: 1,
     getNextPageParam: (lastPage) => {
-      return lastPage.pagination.hasNextPage ? lastPage.pagination.currentPage + 1 : undefined;
+      // The route returns { page, totalPages }, not a pagination envelope — the old
+      // shape was never what /api/orders sent.
+      return lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined;
     },
     enabled: !!userId,
     staleTime: 2 * 60 * 1000,

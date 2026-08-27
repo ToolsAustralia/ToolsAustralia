@@ -4,15 +4,20 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
-## The knowledge-pack token ceiling — raised twice, and why it is still a standing debt (2026-08-26)
+## The knowledge-pack token ceiling — raised three times now (2026-08-27)
 
 `npm run test:chat-knowledge` asserts the generated pack stays under a **ceiling** on approx tokens
-(`text.length / 4`). Current state: ceiling **15,200**, pack **~15,123** — under, with roughly **77
-tokens of headroom**. The next FAQ addition will breach it.
+(`text.length / 4`). Current state: ceiling **16,400**, pack **~16,160** — roughly **240 tokens**
+of headroom, which the next FAQ will eat.
+
+The 2026-08-27 raise (15,200 -> 16,400) bought nothing new by itself: it is the arithmetic of two
+independently-shipped feature sets merging — draw 10 (competition-terms section + refund FAQs) and
+staging (six merchandise-shop entries). A merge is the wrong moment to decide which of two sets of
+customer answers to delete, so the number moved instead.
 
 History, because the pattern matters more than the numbers: the ceiling was **12,000**, was breached
 at 12,540, was raised to **14,000** on 2026-08-11, was breached again at 14,067 on `main` (e762dcda,
-blocked-card guidance), and was raised to **15,200** on 2026-08-24 for draw 10. Twice now the guard
+blocked-card guidance), and was raised to **15,200** on 2026-08-24 for draw 10, then to **16,400** on 2026-08-27 merging staging. Twice now the guard
 went red on `main` for content that was **not** nice-to-have, and twice the number moved. **A ceiling
 that is raised every time it binds is not a budget — it is a changelog.**
 
@@ -548,6 +553,26 @@ The other direction still holds: a bottom-anchored **non-modal** bar (the mini-d
 [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
 lifts Cobber clear of it instead. Modal → out-rank it; persistent chrome → dodge it.
 
+## The knowledge-pack builder had its own "coming soon" claims (2026-08-17)
+
+Fixing the FAQ corpus is not enough. `scripts/build-chat-knowledge-pack.ts` writes prose of its
+own straight into the generated pack the LLM is grounded on, and it held two stale shop claims
+that no FAQ edit would have touched:
+
+- the membership-tiers table rendered the shop discount as `` `${pct}% (coming soon)` ``
+- a bullet reading "the **member shop** is coming soon"
+
+Both are corrected. **When a feature's status changes, grep the builder as well as the corpus** —
+`grep -rn "coming soon" scripts/build-chat-knowledge-pack.ts`.
+
+### Editing prose inside the builder's template literals
+
+Those strings live inside JS template literals. A backtick in replacement text **terminates the
+literal** and breaks the build with errors pointing at unrelated lines — `` `/shop` `` did exactly
+that here. Write plain prose (`/shop`, not `` `/shop` ``) and avoid `${`.
+
+Verify with `npm run build:chat-knowledge-pack` (it runs in `prebuild`/`predev`, so a break stops
+the app from starting) and then `npm run test:chat-faqs`.
 ## Blocked-card advice: never lead with "just wait"
 
 Cobber's system prompt is **byte-stable** (for prompt caching) and injects **no date** — it has no way

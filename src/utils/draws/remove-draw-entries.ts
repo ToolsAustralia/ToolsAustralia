@@ -21,10 +21,17 @@ type MajorDrawSourceType =
   | "one-time-package"
   | "upsell"
   | "mini-draw"
+  // Pre-existing drift, fixed here rather than left next to a new key: the
+  // comment above claims this matches the schema, and it did not — "referral"
+  // has been a MajorDraw bucket since before the shop work. Type-level only
+  // (the runtime $inc builds its path from a template literal), so this makes
+  // an untrue comment true without changing behaviour.
+  | "referral"
   | "bonus-entry-promo"
   | "promo-link"
   | "cancellation-upsell"
-  | "streak";
+  | "streak"
+  | "shop";
 
 /**
  * Source types for mini draw entries

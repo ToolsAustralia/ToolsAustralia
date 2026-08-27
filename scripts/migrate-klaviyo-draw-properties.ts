@@ -36,6 +36,7 @@ import User, { IUser } from "../src/models/User";
 import MajorDraw from "../src/models/MajorDraw";
 import mongoose from "mongoose";
 import { syncUserProfileToKlaviyo } from "../src/utils/integrations/klaviyo/klaviyo-profile-sync";
+import type { DrawSpecificProperties } from "../src/utils/integrations/klaviyo/klaviyo-draw-calculator";
 
 /**
  * Error categories for better error tracking
@@ -57,7 +58,9 @@ interface MigrationStats {
   entriesCount: Map<number, number>; // entries -> number of users
   sampleValidations: Array<{
     email: string;
-    calculated: any;
+    /** The Klaviyo draw properties as calculated for this user. Structural rather
+     *  than the source type, which is only dynamically imported at the call site. */
+    calculated: DrawSpecificProperties | null;
     synced: boolean;
   }>;
 }

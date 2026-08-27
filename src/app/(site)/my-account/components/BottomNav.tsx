@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Gift, Ticket, CreditCard, MessageCircle, type LucideIcon } from "lucide-react";
+import { LayoutDashboard, Gift, Ticket, CreditCard, MessageCircle, Package, ShoppingBag, type LucideIcon } from "lucide-react";
 import { cn } from "@/utils/cn";
 import { useDashboardSheetStore } from "@/stores/useDashboardSheetStore";
 import { usePartnerCatalogueSpotlight, SpotlightDot, rewardsTabPulseKey } from "./PartnerCatalogueSpotlight";
@@ -15,6 +15,14 @@ export interface DashboardNavItem {
   icon: LucideIcon;
   /** Raised center FAB (Draws) in the mobile bottom nav. */
   center?: boolean;
+  /**
+   * Shown in the desktop sidebar only. The mobile bottom bar is a fixed five-item
+   * layout built around a raised centre item — a sixth entry does not fit, and
+   * squeezing one in degrades every other target. Secondary destinations follow the
+   * same pattern Settings already does: sidebar entry on desktop, a direct link
+   * from the dashboard on mobile.
+   */
+  desktopOnly?: boolean;
 }
 
 /** Shared dashboard navigation model — consumed by BottomNav (mobile) + DeskNav (desktop). */
@@ -24,6 +32,11 @@ export const DASHBOARD_NAV: DashboardNavItem[] = [
   { id: "draws", label: "Draws", href: "/my-account/draws", icon: Ticket, center: true },
   { id: "account-membership", label: "Membership", href: "/my-account/membership", icon: CreditCard },
   { id: "support", label: "Support", href: "/my-account/support", icon: MessageCircle },
+  { id: "orders", label: "Orders", href: "/my-account/orders", icon: Package, desktopOnly: true },
+  // The only item that leaves /my-account, and deliberately so: a member had no route
+  // to the shop from the dashboard at all. `isNavItemActive` prefix-matches, and no
+  // dashboard route begins with /shop, so this never renders as the active tab.
+  { id: "shop", label: "Shop", href: "/shop", icon: ShoppingBag, desktopOnly: true },
 ];
 
 /** Exact match for the dashboard home, prefix match for every sub-route. */
@@ -47,7 +60,7 @@ export default function BottomNav() {
       aria-label="Dashboard"
     >
       <div className="grid grid-cols-5 items-end">
-        {DASHBOARD_NAV.map((item) => {
+        {DASHBOARD_NAV.filter((item) => !item.desktopOnly).map((item) => {
           const Icon = item.icon;
           const active = isNavItemActive(pathname, item.href);
 

@@ -18,6 +18,7 @@ import {
   prizePanel,
   spacer,
   infoTable,
+  lineItemsTable,
   messageBlock,
   bodyText,
   bodyHeading,
@@ -399,6 +400,292 @@ export function createReferralRewardEmailTemplate(
   return renderBrandEmail({
     title: 'Referral reward earned',
     preheader: `You and ${safeFriend} both scored ${entries} free entries.`,
+    contentHtml: content,
+  });
+}
+
+/**
+ * The supplier identity an Australian tax invoice has to name.
+ *
+ * A supplier must give a proof of transaction for any sale over $75, and on
+ * request below it. A document is only a *tax invoice* if it is identifiable as
+ * one and carries the seller's identity and ABN — without those, a business
+ * buyer cannot claim the GST it already shows. Kept next to the one template that
+ * needs it; the wider licence/notification identity lives in
+ * `src/constants/legal.ts`, which does not yet hold the entity or the ABN.
+ */
+const TAX_INVOICE_SUPPLIER = {
+  legalName: 'Tools Australia Pty Ltd',
+  abn: '54 690 397 061',
+} as const;
+
+/**
+ * Order confirmation for a merchandise purchase — and the customer's invoice.
+ *
+ * WORDING (2026-08-21): the customer-facing strings say "Order confirmed" and
+ * "Invoice", not "Tax invoice", at the owner's direction. Nothing about the
+ * DOCUMENT changed — the supplier identity, ABN, issue date and the GST line are all
+ * still here, and those are what let it serve as a tax invoice. Only the label moved.
+ *
+ * Sent from the Stripe webhook once the order is actually paid — never from the
+ * checkout page, which a customer can leave before the payment settles.
+ *
+ * This is the ONLY document the customer gets, so it has to be all three things
+ * at once: confirmation, receipt and tax invoice. That is why the supplier block
+ * below is not decoration — drop it and the GST line becomes unclaimable.
+ *
+ * `freeEntries` is rendered ONLY when > 0. Merchandise ships with entries switched
+ * off pending a permit variation, and a "0 free entries" line would state a promise
+ * we are not making. Per CLAUDE.md rule 11 entries are a free INCLUSION with the
+ * garment — never sold, never priced per unit — so this says "includes", and there
+ * is no per-entry figure anywhere in it.
+ */
+export function createShopOrderConfirmationTemplate(params: {
+  firstName: string;
+  orderNumber: string;
+  items: { name: string; variant?: string; quantity: number; lineTotal: string }[];
+  subtotal: string;
+  discount?: string;
+  shipping: string;
+  total: string;
+  gst: string;
+  freeEntries?: number;
+  shippingAddress: string;
+  orderUrl: string;
+  /** Date the invoice was issued. Defaults to now — see below. */
+  issuedAt?: Date | string;
+}): string {
+  const safeName = escapeHtml(params.firstName || 'mate');
+  const safeOrder = escapeHtml(params.orderNumber);
+
+  // A tax invoice must show the date it was issued. This email IS the invoice and
+  // is rendered at the moment it goes out, so "now" is the accurate default; a
+  // caller re-sending an old order should pass that order's own date instead.
+  const issuedDate = new Date(params.issuedAt ?? Date.now()).toLocaleDateString('en-AU', {
+    dateStyle: 'medium',
+    timeZone: 'Australia/Sydney',
+  });
+
+  const itemLines = params.items.map((i) => ({
+    name: escapeHtml(i.name),
+    variant: i.variant ? escapeHtml(i.variant) : undefined,
+    quantity: i.quantity,
+    amount: escapeHtml(i.lineTotal),
+  }));
+
+  const moneyRows = [
+    { label: 'Subtotal', value: escapeHtml(params.subtotal) },
+    ...(params.discount ? [{ label: 'Member discount', value: escapeHtml(params.discount) }] : []),
+    { label: 'Delivery', value: escapeHtml(params.shipping) },
+    { label: 'Total paid', value: escapeHtml(params.total), emphasis: true },
+    // Australian tax invoices must show the GST component. It is INSIDE the total,
+    // never added to it.
+    { label: 'Includes GST', value: escapeHtml(params.gst) },
+  ];
+
+  const content =
+    chip('Order confirmed') +
+    spacer(14) +
+    heading(`Thanks, ${safeName}`) +
+    spacer(16) +
+    lede(
+      `We've got your order <strong>${safeOrder}</strong> and it's on its way to being made. Your items are printed to order, so give us a little time before they ship.`
+    ) +
+    spacer(24) +
+    bodyHeading('Invoice') +
+    infoTable([
+      { label: 'Supplier', value: TAX_INVOICE_SUPPLIER.legalName },
+      { label: 'ABN', value: TAX_INVOICE_SUPPLIER.abn },
+      { label: 'Order number', value: safeOrder },
+      { label: 'Date issued', value: issuedDate },
+    ]) +
+    spacer(22) +
+    bodyHeading('What you ordered') +
+    // Two tables, not one. Line items and money totals are different kinds of row
+    // and were sharing a component that could only be right for one of them.
+    lineItemsTable(itemLines) +
+    spacer(10) +
+    infoTable(moneyRows) +
+    spacer(22) +
+    (params.freeEntries && params.freeEntries > 0
+      ? entriesCallout({
+          label: 'Included with your order',
+          value: `${params.freeEntries} free ${params.freeEntries === 1 ? 'entry' : 'entries'}`,
+          caption: "Into this month's major prize draw — already credited to your account.",
+        }) + spacer(22)
+      : '') +
+    bodyHeading('Delivering to') +
+    // The caller joins the address with newlines, and plain escapeHtml drops them —
+    // which collapsed name, street, suburb and country onto one run-on line on the
+    // document a customer may have to hand to their bookkeeper.
+    bodyText(escapeHtmlPreserveNewlines(params.shippingAddress)) +
+    spacer(24) +
+    button({ href: params.orderUrl, label: 'View your order', variant: 'red', width: 260 }) +
+    spacer(18) +
+    // This promise is kept by `sendShopOrderShipped`, which fires the one time an
+    // order crosses into "shipped". It was cut once, while nothing sent that email —
+    // so if the dispatch notice is ever removed, cut this sentence with it. A
+    // customer waiting on an email that never arrives is a support ticket.
+    //
+    // It promises the email, NOT a tracking number: an order can be marked shipped
+    // with no tracking, and the dispatch notice omits the number when there is none.
+    note(
+      "We'll email you when it ships. You can follow your order any time under My Account too — if anything looks wrong, reply to this email and we'll sort it."
+    );
+
+  return renderBrandEmail({
+    title: `Order confirmed — ${safeOrder}`,
+    preheader: `Order ${safeOrder} confirmed — we're getting it made. Your invoice is inside.`,
+    contentHtml: content,
+  });
+}
+
+/**
+ * Dispatch notice for a merchandise order.
+ *
+ * The confirmation email used to promise "we'll email you when it ships" and that
+ * line had to be cut, because nothing sent one. This is that email, so the promise
+ * can be made again truthfully.
+ *
+ * Deliberately NOT a second invoice. No totals, no GST, no entries — the
+ * confirmation is the tax invoice and the only place any of that belongs. A dollar
+ * figure on a dispatch notice reads as a second charge.
+ *
+ * `trackingNumber` is OPTIONAL and its row is omitted entirely when absent: the
+ * admin can mark an order shipped without one, and an empty "Tracking: —" row
+ * invites the exact reply it was meant to prevent. Nothing here links to a carrier
+ * either — an order stores a bare number with no carrier beside it, so a tracking
+ * URL would be a guess. My Account shows the same bare number this does.
+ */
+export function createShopOrderShippedTemplate(params: {
+  firstName: string;
+  orderNumber: string;
+  items: { name: string; variant?: string; quantity: number }[];
+  trackingNumber?: string;
+  shippingAddress: string;
+  orderUrl: string;
+}): string {
+  const safeName = escapeHtml(params.firstName || 'mate');
+  const safeOrder = escapeHtml(params.orderNumber);
+  const tracking = params.trackingNumber?.trim();
+
+  const itemLines = params.items.map((i) => ({
+    name: escapeHtml(i.name),
+    variant: i.variant ? escapeHtml(i.variant) : undefined,
+    quantity: i.quantity,
+    // Deliberately blank, not a price: the confirmation is the invoice, and a
+    // dollar figure on a dispatch notice reads as a second charge.
+    amount: '',
+  }));
+
+  const content =
+    // "On its way" is the word My Account already puts on a shipped order. Two
+    // names for one state is how a customer ends up asking whether "dispatched"
+    // and "on its way" are different things.
+    chip('On its way') +
+    spacer(14) +
+    heading(`Packed and shipped, ${safeName}`) +
+    spacer(16) +
+    lede(
+      `Order <strong>${safeOrder}</strong> has been dispatched and is on its way to you.`
+    ) +
+    spacer(24) +
+    bodyHeading("What's on its way") +
+    lineItemsTable(itemLines) +
+    spacer(10) +
+    infoTable([
+      { label: 'Order number', value: safeOrder },
+      ...(tracking ? [{ label: 'Tracking number', value: escapeHtml(tracking) }] : []),
+    ]) +
+    spacer(22) +
+    bodyHeading('Delivering to') +
+    // The caller joins the address with newlines, and plain escapeHtml drops them —
+    // which would collapse name, street, suburb and country onto one run-on line.
+    bodyText(escapeHtmlPreserveNewlines(params.shippingAddress)) +
+    spacer(24) +
+    button({ href: params.orderUrl, label: 'View your orders', variant: 'red', width: 260 }) +
+    spacer(18) +
+    note(
+      tracking
+        ? "A tracking number can take a day or so to start updating after the parcel is collected. It's on your order under My Account too. If anything looks wrong, reply to this email and we'll sort it."
+        : "Your order stays under My Account any time. If anything looks wrong, reply to this email and we'll sort it."
+    );
+
+  return renderBrandEmail({
+    title: `Your order ${safeOrder} is on its way`,
+    preheader: tracking
+      ? `Order ${safeOrder} has shipped — your tracking number is inside.`
+      : `Order ${safeOrder} has shipped and is on its way to you.`,
+    contentHtml: content,
+  });
+}
+
+/**
+ * A merchandise order that was cancelled and refunded.
+ *
+ * WHY THIS EXISTS: stock is taken AFTER payment, because a print-to-order catalogue
+ * mostly has none to take. That makes "paid, but we cannot supply it" a real branch —
+ * `finalizeShopOrder` refunds and marks the order `cancelled`. Until this template,
+ * that branch sent NOTHING: the customer paid, watched the money leave, and heard
+ * nothing at all. The same silence applied to a staff-initiated refund.
+ *
+ * Deliberately money-light. It states that a refund was ISSUED, never that it has
+ * landed — `finalizeShopOrder` wraps `stripe.refunds.create` in a catch that only
+ * logs and marks the order cancelled regardless, so the refund is the intent and not
+ * a guarantee. Telling someone their money "has been returned" when the call failed
+ * is worse than telling them it is on its way.
+ */
+export function createShopOrderRefundedTemplate(params: {
+  firstName: string;
+  orderNumber: string;
+  items: { name: string; variant?: string; quantity: number }[];
+  refundAmount: string;
+  /** Why it was cancelled, in the customer's terms. Keep it short and plain. */
+  reason: string;
+  orderUrl: string;
+  supportEmail: string;
+}): string {
+  const safeName = escapeHtml(params.firstName || 'mate');
+  const safeOrder = escapeHtml(params.orderNumber);
+
+  const itemLines = params.items.map((i) => ({
+    name: escapeHtml(i.name),
+    variant: i.variant ? escapeHtml(i.variant) : undefined,
+    quantity: i.quantity,
+    // No per-line money: the refund is quoted once, as a total, in the lede above.
+    // Repeating figures beside each line invites the reader to add them up and
+    // arrive at a different number.
+    amount: '',
+  }));
+
+  const content =
+    chip('Cancelled') +
+    spacer(14) +
+    heading(`We've refunded this one, ${safeName}`) +
+    spacer(16) +
+    lede(
+      `Order <strong>${safeOrder}</strong> has been cancelled and a refund of ` +
+        `<strong>${escapeHtml(params.refundAmount)}</strong> has been issued.`
+    ) +
+    spacer(24) +
+    bodyHeading('Why') +
+    bodyText(escapeHtml(params.reason)) +
+    spacer(22) +
+    bodyHeading("What was on the order") +
+    lineItemsTable(itemLines) +
+    spacer(10) +
+    infoTable([{ label: 'Order number', value: safeOrder }]) +
+    spacer(24) +
+    button({ href: params.orderUrl, label: 'View your orders', variant: 'red', width: 260 }) +
+    spacer(18) +
+    note(
+      `Refunds usually take a few business days to appear on your statement, depending on your bank. ` +
+        `If it hasn't turned up after that, reply to this email or contact us at ${escapeHtml(params.supportEmail)} and we'll chase it up.`
+    );
+
+  return renderBrandEmail({
+    title: `Order ${safeOrder} cancelled and refunded`,
+    preheader: `We couldn't fulfil order ${safeOrder}, so we've refunded it.`,
     contentHtml: content,
   });
 }
