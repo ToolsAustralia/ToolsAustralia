@@ -4,7 +4,9 @@ import MilestoneIssuance from "@/models/MilestoneIssuance";
 import MilestoneReward from "@/models/MilestoneReward";
 import User from "@/models/User";
 import { hasQualifyingPurchase } from "@/utils/redeemables/purchase-eligibility";
-import { CampaignService } from "./CampaignService";
+import { personalWindowGoverns } from "@/utils/redeemables/bonus-code-policy";
+import { formatExpiryLabelAEST } from "@/utils/common/timezone";
+import { CampaignService, LEGACY_MISSING_EXPIRY } from "./CampaignService";
 
 export interface RedeemableWalletItem {
   issuanceId: string;
@@ -24,6 +26,23 @@ export interface RedeemableWalletItem {
   neverExpires?: boolean;
   source: "monthly-coupon" | "milestone";
   isRedeemableNow: boolean;
+  /**
+   * The one customer-facing expiry string (formatExpiryLabelAEST) — the single
+   * server-side formatter every copy of a deadline comes from. Components must
+   * display this, never derive a date string from `expiresAt` themselves
+   * (that's viewer-locale dependent and can disagree with the instant the
+   * server enforces at redemption).
+   *
+   * Corrected 2026-08-26: this said "the same function the Klaviyo email
+   * renders". No email renders it — the three discount templates carry the
+   * hardcoded code string only, because a Klaviyo flow email renders against
+   * its OWN trigger metric and cannot read `expires_at_label` off the
+   * `Bonus Code Issued` event. Note also that neither component consuming this
+   * field is currently reachable by a customer (`/rewards` is behind the
+   * rewards pause flag, `RewardsFloatingWidget` is unmounted) — see
+   * docs/rewards-redeemables/frontend.md, "Known gap".
+   */
+  expiresAtLabel: string;
 }
 
 export interface RedeemableWalletResponse {
@@ -62,8 +81,15 @@ export class RedeemablesWalletService {
     ]);
 
     const campaignIds = redeemableIssuances.map((i) => i.campaignId);
+    // isActive and validForHours MUST be selected: isActive gates isRedeemableNow
+    // below (a deactivated campaign must not show an enabled Claim button the
+    // server then refuses) and validForHours feeds personalWindowGoverns for the
+    // expiry-label fallback. A .select() omission here silently defeats both —
+    // the fields read back as `undefined`, not a type error.
     const campaigns = await MonthlyEntryCampaign.find({ _id: { $in: campaignIds } })
-      .select("name displayLabel requiresPurchase purchaseRequirement code neverExpires startsAt endsAt")
+      .select(
+        "name displayLabel requiresPurchase purchaseRequirement code neverExpires startsAt endsAt validForHours isActive"
+      )
       .lean();
     const campaignMap = new Map(campaigns.map((campaign) => [campaign._id.toString(), campaign]));
 
@@ -78,10 +104,52 @@ export class RedeemablesWalletService {
       const purchaseRequirement: PurchaseRequirement =
         campaign?.purchaseRequirement ?? (campaign?.requiresPurchase ? "membership" : "none");
       // A purchase-gated coupon is only claimable once the qualifying purchase
-      // exists — same predicate the redeem endpoint enforces.
+      // exists — same predicate the redeem endpoint enforces, including the
+      // personal-window ceiling override (see RedemptionService.redeem): a
+      // campaign whose own endsAt is a minting backstop must not also cap how
+      // late the qualifying purchase is allowed to land.
       const meetsPurchaseRequirement =
         purchaseRequirement === "none" ||
-        (campaign ? hasQualifyingPurchase(purchaseUser ?? {}, campaign, purchaseRequirement, now) : true);
+        (campaign
+          ? hasQualifyingPurchase(
+              purchaseUser ?? {},
+              personalWindowGoverns(campaign) ? { startsAt: campaign.startsAt, endsAt: null } : campaign,
+              purchaseRequirement,
+              now
+            )
+          : true);
+      // A personal-window campaign (validForHours set) hands this customer their
+      // OWN deadline — the issuance's real expiresAt — regardless of the
+      // campaign's own neverExpires flag (mutually exclusive at the model
+      // level, but an orphaned/missing campaign must not be trusted either).
+      // Fall back to the issuance's own value: never render "No expiry" for a
+      // coupon that actually has a real per-customer deadline.
+      const isPersonalWindow = campaign ? personalWindowGoverns(campaign) : false;
+      const neverExpires = isPersonalWindow ? false : (campaign?.neverExpires ?? false);
+      // `expiresAt` is `required` on the model, but issueCampaignToUsers has
+      // always upserted WITHOUT validators, so a production row can lack it —
+      // which is exactly why CampaignService needed LEGACY_MISSING_EXPIRY.
+      // getUserWallet has no per-item try/catch and /api/redeemables turns a
+      // throw into a 500, so an unguarded formatExpiryLabelAEST here would let
+      // ONE malformed row empty the customer's entire wallet. Reads as long
+      // expired, matching the mint side's interpretation of the same shape.
+      const resolvedExpiresAt = issuance.expiresAt ?? LEGACY_MISSING_EXPIRY;
+      // DISPLAY status, which can differ from the stored one. A refund restores
+      // `status: "active"` and $unsets `redeemedAt`, so a spent-then-refunded
+      // personal-window grant keeps a future expiresAt and would otherwise sit in
+      // the CLAIMABLE tab rendering as a live "Active" pill with no button — a
+      // broken button, above an "Expires <date>" line that is no longer
+      // meaningful. It also made Cobber's FAQ 88 ("it is not returned to your
+      // account") false on screen.
+      //
+      // Projecting "redeemed" fixes all of it in one place: the card reads
+      // "Redeemed", and because BOTH list filters below key on this status the
+      // row also moves out of "claimable" into "past", where a spent grant
+      // belongs. The stored row is untouched — this is presentation only, and
+      // the authoritative refusals still live in RedemptionService /
+      // CampaignCodeValidationService (see rules.md R3b).
+      const displayStatus =
+        isPersonalWindow && issuance.redeemedEverAt ? ("redeemed" as const) : issuance.status;
       return {
         issuanceId: issuance._id.toString(),
         campaignId: issuance.campaignId.toString(),
@@ -89,23 +157,40 @@ export class RedeemablesWalletService {
         code: issuance.code,
         campaignCode: campaign?.code,
         entriesAmount: issuance.entriesAmount,
-        status: issuance.status,
+        status: displayStatus,
         issuedAt: issuance.issuedAt,
         redeemedAt: issuance.redeemedAt,
-        expiresAt: issuance.expiresAt,
+        expiresAt: resolvedExpiresAt,
         campaignName: campaign?.name,
         displayLabel: campaign?.displayLabel,
         purchaseRequirement,
-        neverExpires: campaign?.neverExpires ?? false,
+        neverExpires,
         source: "monthly-coupon",
+        expiresAtLabel: formatExpiryLabelAEST(resolvedExpiresAt),
+        // A deactivated or orphaned campaign must not show an enabled Claim
+        // button that the server then refuses (isCampaignRedeemable requires
+        // isActive too) — require the campaign to exist and be active here.
+        //
+        // `!issuance.redeemedEverAt` under a personal window mirrors the gate
+        // RedemptionService.redeem now enforces: a refund restores status to
+        // "active" and $unsets redeemedAt, so without this the wallet would
+        // render an ENABLED Claim button on a grant the server will refuse —
+        // and, before that gate existed, would actually re-grant. Legacy
+        // monthly-coupon campaigns keep today's restore-on-refund behaviour.
         isRedeemableNow:
-          issuance.status === "active" && issuance.expiresAt > now && meetsPurchaseRequirement,
+          issuance.status === "active" &&
+          resolvedExpiresAt > now &&
+          meetsPurchaseRequirement &&
+          campaign != null &&
+          campaign.isActive !== false &&
+          !(isPersonalWindow && issuance.redeemedEverAt),
       };
     });
 
     const milestoneItems: RedeemableWalletItem[] = milestoneIssuances.map((issuance) => {
       const reward = milestoneRewardMap.get(issuance.milestoneRewardId.toString());
       const isExpiredByDate = Boolean(issuance.expiresAt && issuance.expiresAt <= now);
+      const resolvedExpiresAt = issuance.expiresAt || new Date("9999-12-31T23:59:59.999Z");
       return {
         issuanceId: issuance._id.toString(),
         rewardId: issuance.milestoneRewardId.toString(),
@@ -116,12 +201,13 @@ export class RedeemablesWalletService {
         status: issuance.status,
         issuedAt: issuance.issuedAt,
         redeemedAt: issuance.redeemedAt,
-        expiresAt: issuance.expiresAt || new Date("9999-12-31T23:59:59.999Z"),
+        expiresAt: resolvedExpiresAt,
         campaignName: reward?.name,
         displayLabel: reward?.displayLabel,
         purchaseRequirement: "none",
         neverExpires: reward?.neverExpires ?? false,
         source: "milestone",
+        expiresAtLabel: formatExpiryLabelAEST(resolvedExpiresAt),
         isRedeemableNow: issuance.status === "active" && !isExpiredByDate,
       };
     });

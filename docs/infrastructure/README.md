@@ -10,6 +10,20 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 
 > `.env.example` — `NEXT_PUBLIC_CONTENTSQUARE_ID` (added 2026-07-22) is the **inverse** of the streak flag above: production-only, blank everywhere else. It replaces a tag id previously hardcoded into `src/app/layout.tsx`'s Contentsquare `<Script>` (no env gate — loaded for every visitor in every environment); blank now renders nothing (mirrors `GoogleTagManager`'s `!gtmId` no-op). See [docs/tracking/rules.md R8](../tracking/rules.md).
 
+> `.env.example` — `BONUS_CODE_WEBHOOK_SECRET`, `BONUS_CODE_DAILY_MINT_CAP`, `BONUS_CODE_KILL_SWITCH`
+> (added 2026-08-26) guard the inbound bonus-code webhook, which **mints codes that grant real
+> prize-draw entries**. Treat the secret as a payment credential: **scope it to Vercel's Production
+> environment only** (a preview deploy plus the secret would otherwise mint into the shared
+> production database). It is a **comma-separated** list so rotation can overlap; each entry must be
+> ≥ 16 characters or it is ignored. All three fail **closed**: an unset/too-short secret refuses
+> every call with `500 misconfigured` (NOT the `if (!cronSecret) return true` idiom in
+> `src/app/api/cron/monthly-redeemables-issuance/route.ts`), and a DB outage while reading the cap
+> blocks minting rather than uncapping it. Unset cap → 500/UTC-day; an explicit `0` blocks all
+> minting; `BONUS_CODE_KILL_SWITCH=true` is the break-glass. Declared **blank on purpose** in
+> `.env.local` on dev machines, so nothing can mint locally. See
+> [docs/rewards-redeemables/backend.md](../rewards-redeemables/backend.md) and
+> [gotchas.md](../rewards-redeemables/gotchas.md).
+
 > `.env.example` — `STRIPE_RATE_LIMIT_GLOBAL_PER_SECOND` and `STRIPE_RATE_LIMIT_ENDPOINT_PER_SECOND`
 > (added 2026-08-24) tune the client-side token bucket in front of the Stripe singleton
 > (`src/lib/stripe-rate-limiter.ts`). Both are declared **BLANK on purpose** and should be left

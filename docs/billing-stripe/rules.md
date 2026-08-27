@@ -8,7 +8,15 @@ Stripe retries webhook deliveries. Every handler must check `ProcessedStripeEven
 
 ### R2. The webhook is the only emitter of cancellation tracking events
 
-Klaviyo `Subscription Cancelled`, Meta CAPI cancellation, etc. fire **only** from `customer.subscription.deleted`. API paths write the local `MembershipStatusHistory` row but must not emit external tracking events. Otherwise dual-emission on every cancel.
+Klaviyo `Subscription Cancelled` fires **only** from `customer.subscription.deleted`. API paths write the local `MembershipStatusHistory` row but must not emit a second `Subscription Cancelled`. Otherwise dual-emission on every cancel.
+
+**There is no Meta CAPI cancellation event** — this rule used to name one; `src/lib/facebook.ts` has never carried a cancellation emitter, and `handleSubscriptionDeleted` calls only `klaviyo.trackEventBackground`. Corrected 2026-08-26.
+
+**Scope:** the ban is on duplicating `Subscription Cancelled`, not on every cancel-time emit. A differently-named cancel-time event from the service path is a different signal to a different flow.
+
+**Named carve-out (2026-08-26): `Subscription Cancellation Requested`.** Emitted from `cancelSubscription()` when `isMemberChurn === true` (only `/api/stripe/cancel-subscription` passes it), fire-and-forget, after `await user.save()`. It is the win-back flow's trigger and is **allowed** — `Subscription Cancelled` fires only when Stripe deletes the subscription, up to a month later on a cancel-at-period-end cancel, so it is useless as a win-back trigger. Full property table in [tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md#subscription-cancellation-requested-2026-08-26).
+
+Name any **further** such event as an explicit carve-out here and in the two other copies of this rule ([subscription/rules.md](../subscription/rules.md#r4-cancellation-analytics-events-come-from-the-webhook-only), [tracking/rules.md](../tracking/rules.md)) in the same edit.
 
 ### R3. Resume pause-collection BEFORE applying benefits — but only if it IS paused
 

@@ -20,6 +20,26 @@ export interface RedeemableWalletItem {
   neverExpires?: boolean;
   source: "monthly-coupon" | "milestone";
   isRedeemableNow: boolean;
+  /**
+   * The one customer-facing expiry string, pre-formatted server-side in AEST
+   * via formatExpiryLabelAEST — the single formatter every copy of a deadline
+   * comes from. Never derive a display date from `expiresAt` client-side: that
+   * renders in the viewer's own locale/timezone and can disagree with the
+   * instant the server actually enforces at redemption.
+   *
+   * (Corrected 2026-08-26: this said "the same function the Klaviyo email
+   * uses". No customer email prints a bonus-code deadline — a Klaviyo flow
+   * email renders against its own trigger metric, so the discount templates
+   * cannot read `expires_at_label` off the `Bonus Code Issued` event we emit.
+   * The rule is unchanged; the thing it must not disagree with is the
+   * redemption gate, not an email.)
+   *
+   * Optional here even though RedeemableWalletItem on the SERVICE side
+   * (RedeemablesWalletService.ts) declares it required and always populates
+   * it — deliberate defensive typing for a value crossing an HTTP boundary,
+   * matching every other field on this client-side response type.
+   */
+  expiresAtLabel?: string;
 }
 
 export interface RedeemablesWalletResponse {
@@ -37,6 +57,9 @@ export interface RedeemablesStatusResponse {
     monthKey: string;
     name: string;
     campaignMode: "global" | "unique" | "both";
+    // Present only when the caller holds an issuance for this campaign — see
+    // the visibility rule on activeCampaigns below.
+    code?: string;
     startsAt: string;
     endsAt?: string;
     neverExpires?: boolean;
@@ -47,7 +70,9 @@ export interface RedeemablesStatusResponse {
     name: string;
     displayLabel?: string;
     campaignMode: "global" | "unique" | "both";
-    code: string;
+    // A code is present ONLY when the caller holds an issuance for this
+    // campaign — never sent to a customer who has not qualified for it.
+    code?: string;
     purchaseRequirement: "none" | "membership" | "one-time" | "any";
     startsAt: string;
     endsAt?: string;

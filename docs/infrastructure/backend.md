@@ -14,6 +14,17 @@ Known crons:
 
 Cron routes should authenticate via a shared secret (env var) before running, otherwise anyone can trigger cron logic by hitting the endpoint.
 
+### `/api/cron/monthly-redeemables-issuance` — trigger campaigns are excluded (2026-08-25)
+
+The campaign selection is `campaign.monthKey === monthKey && !campaign.validForHours`.
+
+`validForHours` marks a **trigger campaign**: each customer gets their own expiry window, minted one customer at
+a time when the Klaviyo flow for their eligibility moment calls `POST /api/bonus-codes/v1/issue`. A cron
+mass-mint would stamp the
+entire targeted audience with one shared deadline and burn every one-per-lifetime grant with no customer action
+and no email. `CampaignService` already refuses cron mass-mints defensively; this filter is the **second lock**,
+so the cron does not even attempt one. Legacy (non-`validForHours`) campaigns are unaffected.
+
 ## Upload / Images
 
 `/api/upload/` — produce signed Cloudinary upload URLs. Server signs with Cloudinary API secret; client uploads directly to Cloudinary.

@@ -126,6 +126,13 @@ function isPlainAccount(user: IUser | null): boolean {
  * Not gated on consent — this is a committed action (registration submitted),
  * not browsing behaviour. Klaviyo's marketing-list subscription gates email
  * sends separately.
+ *
+ * This event is the ENTRY POINT of the guest checkout-start nurture flow in
+ * Klaviyo. That flow is what later calls `POST /api/bonus-codes/v1/issue`, one
+ * step ahead of its discount email, to mint the customer's bonus code — so the
+ * emit must keep firing on every register path even though nothing here mints.
+ * Everything inside is fire-and-forget, so the helper is sync and returns
+ * `void`; there is nothing for a caller to await.
  */
 function fireKlaviyoStartedCheckoutForGuestRegistration(
   user: IUser,

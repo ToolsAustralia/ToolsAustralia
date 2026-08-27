@@ -1,5 +1,78 @@
 # Rewards-Redeemables — Frontend
 
+## Wallet items carry a server-formatted expiry label (2026-08-25)
+
+`RedeemableWalletItem.expiresAtLabel` (from `RedeemablesWalletService`) is the
+one customer-facing expiry string — `formatExpiryLabelAEST(issuance.expiresAt)`,
+the same function that formats `expires_at_label` on the `Bonus Code Issued`
+Klaviyo metric and the checkout `campaignCodeExpiredMessage` refusal. (Until
+2026-08-26 this line said "the same function the Klaviyo email renders". The
+discount emails render no deadline — see the known gap below.) The wallet components
+(`RedeemablesWallet.tsx`, `RewardsFloatingWidget.tsx` — [shared-ui
+domain](../shared-ui/), see
+[frontend.md](../shared-ui/frontend.md)) and the `useRedeemablesQueries.ts` hook
+types ([client-state domain](../client-state/), see
+[frontend.md](../client-state/frontend.md)) were updated to consume it instead
+of formatting `expiresAt` client-side. Full rationale (locale-dependent date bug,
+the code-visibility rule on `/api/redeemables/status`, and the `isRedeemableNow`
+tightening) is in
+[backend.md](./backend.md#customer-facing-code-visibility-and-expiry-label-task-10-2026-08-25).
+
+### The label reads at an arbitrary time of day now, and that is correct (2026-08-26)
+
+`expiresAtLabel` used to be `…, 11:59PM AEST` on every single row, because the deleted
+`endOfDayAESTAfterDays` snapped every bonus-code expiry to the end of a Sydney calendar day. A
+personal window is now an exact hour offset from the issuing instant (`expiryAfterHours`), so the
+label lands wherever that falls — `"Monday 5 October 2026, 3:00PM AEDT"` is a real value. Both
+renderers say `Expires {expiresAtLabel}`, which stays correct with no code change.
+
+Two things not to do to it:
+
+- **Do not shorten it to a bare date.** The customer can be inside the right calendar day and still
+  be past the deadline, and this label is the only place they are told which.
+- **Do not replace it with a client-side countdown.** `RedeemablesWalletService.ts:29-35` states the
+  contract: components display the server's string and never derive one, precisely so no two copies
+  of a deadline — the app, the `Bonus Code Issued` metric, the checkout refusal — can disagree with
+  each other or with what redemption enforces. A countdown may be added *alongside* it, never instead.
+
+### Known gap — no customer-reachable surface shows a bonus code or its deadline (2026-08-26)
+
+Stated plainly because the top-level docs asserted the opposite until this date. The two components
+that render a campaign code **and** `expiresAtLabel` are:
+
+- `RedeemablesWallet.tsx` — mounted **only** on `/rewards`, which early-returns "Rewards Are
+  Temporarily Paused" whenever `rewardsEnabled()` is false (BUSINESS.md §8a — it defaults off).
+- `RewardsFloatingWidget.tsx` — **unmounted since the 2026-07 dashboard revamp**, referenced by no
+  page.
+
+The live surface, `RewardsClaimables` on `/my-account/rewards`, renders `label(item)`, the entries
+amount and a Claim / unlock button — **no code string and no expiry date**. That is enough to redeem
+a `purchaseRequirement: "none"` grant and enough for the unlock flow (which carries the code into
+the purchase modal without ever showing it), but it cannot answer "what was my code and when does it
+run out?".
+
+**And no email answers it either — corrected 2026-08-26.** This section used to end "today the
+emailed label is the customer's only copy of the deadline, which is why Cobber ids 86–88 point at
+the email". That was wrong in the same way the top-level docs were. The three discount emails carry
+the **code string**, hardcoded in the template, and nothing else: `expires_at_label` is a property of
+the `Bonus Code Issued` metric *we* emit, and a flow email renders against its own trigger metric, so
+the merge tag resolves to nothing. So the honest position is:
+
+- **Before the window lapses**, a customer has **no** way to learn their deadline. Not a page, not an
+  email. Support reads it off the `RedeemableIssuance` row.
+- **After it lapses**, and only then, `campaignCodeExpiredMessage` names the exact instant at
+  checkout to a signed-in caller.
+- Cobber id 86 now says exactly that and offers `[contact us](/contact)`; the systemPrompt ACCOUNT
+  SELF-SERVICE MAP carries the matching "there is no page for this" bullet.
+
+This is a **build**, not a copy fix, and it is deliberately not in the bonus-code webhook rework.
+Whoever closes it should surface `campaignCode` + `expiresAtLabel` on `RewardsClaimables` (both
+fields are already on `RedeemableWalletItem` and already reach the client) and then update
+BUSINESS.md §7d, CUSTOMER.md §7d, Cobber ids 86–88 and the self-service-map bullet in the same
+change. The cheaper alternative — a separate Klaviyo flow on the `Bonus Code Issued` metric, which
+is the one place `expires_at_label` resolves — is written up in
+[gotchas.md](./gotchas.md) launch step 4; it also needs the id-86 copy updated.
+
 ## Locked-coupon unlock flow — purchase with the code carried (2026-07-06)
 
 A **purchase-required coupon the user does NOT yet qualify for** (`isRedeemableNow: false`,
@@ -122,3 +195,19 @@ The `discountNavNudgeSeen_` prefix is registered in
 [docs/auth/gotchas.md](../auth/gotchas.md). Consumed by
 [`useNavNudges`](../../src/hooks/useNavNudges.ts); behaviour and the news-vs-status distinction
 are documented in [docs/shared-ui/frontend.md](../shared-ui/frontend.md).
+
+## Refunded personal-window coupons render as "Redeemed" (2026-08-25)
+
+`RedeemablesWalletService` projects a **display** status that can differ from the stored one: a
+personal-window issuance carrying `redeemedEverAt` is reported as `status: "redeemed"` even though
+the stored row is `active` (the refund path restores `active` and `$unset`s `redeemedAt`).
+
+This is presentation only and lives entirely in the service — **no component change, and no new
+field on `RedeemableWalletItem`**. Without it the refunded card keeps a future `expiresAt` and a
+stored `active` status, so `RedeemablesWallet.tsx` renders it in the CLAIMABLE tab as a grey
+"Active" pill with a clock icon and no button, above an "Expires <date>" line — it reads as a broken
+button. Because both wallet list filters (`claimable` / `past`) key on the same status, the
+projection also moves the row into **past**, which is where a spent grant belongs.
+
+The authoritative refusals remain server-side (`RedemptionService`, `CampaignCodeValidationService`);
+see [rules.md R3b](./rules.md). Pinned by `npm run test:bonus-code-mint` §6.

@@ -120,6 +120,7 @@
     "test:one-time-drawer-packages": "tsx src/utils/membership/__tests__/select-one-time-drawer-packages.test.ts",
     "test:find-recoverable-subscription": "tsx src/services/subscription/__tests__/find-recoverable-subscription.test.ts",
     "test:cancel-incomplete-subscription": "tsx src/services/subscription/__tests__/cancel-incomplete-subscription.test.ts",
+    "test:cancel-churn-emit": "tsx src/services/subscription/__tests__/cancel-subscription-churn-emit.test.ts",
     "test:http-rejection-severity": "tsx src/utils/error-reporting/__tests__/http-rejection-severity.test.ts",
     "test:payment-decline-severity": "tsx src/utils/error-reporting/__tests__/payment-decline-severity.test.ts",
     "test:webhook-queue-backoff": "tsx src/services/stripe-webhook-queue/__tests__/backoff.test.ts",
@@ -488,7 +489,17 @@
     "sync:klaviyo-profiles-bulk": "tsx scripts/sync-klaviyo-profiles-bulk.ts",
     "migrate:klaviyo-draw-properties": "tsx scripts/migrate-klaviyo-draw-properties.ts",
     "migrate:remove-upsell-stats": "tsx scripts/migrate-remove-upsell-stats.ts",
-    "migrate:remove-upsell-stats:dry": "tsx scripts/migrate-remove-upsell-stats.ts --dry-run"
+    "migrate:remove-upsell-stats:dry": "tsx scripts/migrate-remove-upsell-stats.ts --dry-run",
+    "test:bonus-code-expiry": "tsx src/utils/redeemables/__tests__/expiry-hours.test.ts",
+    "test:bonus-code-policy": "tsx src/utils/redeemables/__tests__/bonus-code-policy.test.ts",
+    "test:issuance-expiry": "tsx src/services/redeemables/__tests__/issuance-expiry.test.ts",
+    "test:campaign-window": "tsx src/services/redeemables/__tests__/campaign-window.test.ts",
+    "test:campaign-code-metadata": "tsx src/app/api/stripe/__tests__/campaign-code-metadata.test.ts",
+    "test:trigger-eligibility": "tsx src/services/redeemables/__tests__/trigger-eligibility.test.ts",
+    "test:bonus-code-mint": "tsx src/services/redeemables/__tests__/bonus-code-mint.test.ts",
+    "test:campaign-enrolment": "tsx src/services/redeemables/__tests__/campaign-enrolment.test.ts",
+    "test:bonus-code-webhook": "tsx src/services/redeemables/__tests__/bonus-code-webhook.test.ts",
+    "test:code-visibility": "tsx src/app/api/redeemables/status/__tests__/code-visibility.test.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",
