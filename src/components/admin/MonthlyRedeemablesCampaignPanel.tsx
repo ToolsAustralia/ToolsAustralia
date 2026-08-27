@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Eye, Gift, Loader2, Pencil, Plus, Power, Trash2, X } from "lucide-react";
 import AdminMonthlyRedeemablesModal from "@/components/modals/AdminMonthlyRedeemablesModal";
 import type { MonthlyRedeemableSegmentConfig } from "@/components/modals/AdminMonthlyRedeemablesModal";
-import { personalWindowGoverns } from "@/utils/redeemables/bonus-code-policy";
+import { isOpenEndedDate, personalWindowGoverns } from "@/utils/redeemables/bonus-code-policy";
 
 interface MonthlyCampaignListItem {
   id: string;
@@ -55,14 +55,21 @@ function formatDateTime(value: string) {
  * Shared "how does this campaign expire" label, reused at every expiry display site so an
  * operator can tell a fixed-end campaign from a rolling per-customer window at a glance.
  * `endsAt` still shows for a validForHours campaign — it's the minting backstop, not the
- * redemption deadline (see personalWindowGoverns / resolveIssuanceExpiry).
+ * redemption deadline (see personalWindowGoverns / resolveIssuanceExpiry) — unless it is
+ * the open-ended sentinel, in which case there is no backstop to print at all.
+ *
+ * The `neverExpires` test stays FIRST on purpose. It reads backwards against
+ * resolveIssuanceExpiry's precedence only if the mutual-exclusion guard is ever deleted;
+ * it is not, in all six places, so the pair can never coexist and the order can never lie.
  */
 function renderExpiryLabel(campaign: Pick<MonthlyCampaignListItem, "neverExpires" | "validForHours" | "endsAt">) {
   if (campaign.neverExpires) return "Never Expires";
   if (personalWindowGoverns({ validForHours: campaign.validForHours })) {
-    return `${campaign.validForHours}-hour window per customer (backstop ${formatDateTime(campaign.endsAt || "")})`;
+    return isOpenEndedDate(campaign.endsAt)
+      ? `${campaign.validForHours}-hour window per customer · issuing until switched off`
+      : `${campaign.validForHours}-hour window per customer (stops issuing ${formatDateTime(campaign.endsAt || "")})`;
   }
-  return formatDateTime(campaign.endsAt || "");
+  return isOpenEndedDate(campaign.endsAt) ? "Issuing until switched off" : formatDateTime(campaign.endsAt || "");
 }
 
 export default function MonthlyRedeemablesCampaignPanel() {
@@ -282,7 +289,7 @@ export default function MonthlyRedeemablesCampaignPanel() {
                     <div className="mt-2 text-xs text-gray-600 dark:text-neutral-400">
                       <p className="truncate">{campaign.targetingMode}</p>
                       <p className="mt-1">Start: {formatDateTime(campaign.startsAt)}</p>
-                      <p>End: {renderExpiryLabel(campaign)}</p>
+                      <p>Expiry: {renderExpiryLabel(campaign)}</p>
                       {campaign.neverExpires && (
                         <p className="mt-1 font-medium text-indigo-700 dark:text-indigo-300">No expiration</p>
                       )}

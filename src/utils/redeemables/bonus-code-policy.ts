@@ -139,6 +139,57 @@ export function personalWindowGoverns(campaign: { validForHours?: number | null 
 }
 
 /**
+ * The far-future `endsAt` a campaign carries when it has NO minting backstop —
+ * "keeps issuing until an admin switches it off". Also the issuance expiry stamped
+ * for a `neverExpires` campaign. Not a magic number invented here: `updateCampaign`
+ * has always written exactly this into `endsAt` when `neverExpires` is set, because
+ * `$unset` trips the model's conditionally-required `endsAt`.
+ *
+ * Lives in this pure module (rather than in CampaignService, where it was declared
+ * until 2026-08-27) so the admin modal — a client component — can emit it without
+ * dragging mongoose and the models into the browser bundle.
+ */
+export const NEVER_EXPIRES_ISSUANCE_DATE = new Date("9999-12-31T23:59:59.999Z");
+
+/**
+ * True when a campaign's `endsAt` is the open-ended sentinel — i.e. it has no
+ * minting backstop and keeps issuing until an admin disables it.
+ *
+ * A YEAR THRESHOLD, deliberately, not an equality test. The admin form binds
+ * `endsAt` to a `datetime-local` input, whose value is parsed as LOCAL time: a
+ * round-trip through the picker in Sydney turns `9999-12-31T23:59:59.999Z` into
+ * `9999-12-31T12:59:00.000Z`, and west of UTC it rolls into year 10000. Equality
+ * would silently report "this campaign has a backstop in the year 9999".
+ */
+export function isOpenEndedDate(value: Date | string | null | undefined): boolean {
+  if (!value) return false;
+  const date = value instanceof Date ? value : new Date(value);
+  return !Number.isNaN(date.getTime()) && date.getUTCFullYear() >= 9999;
+}
+
+/** The three shapes a campaign's expiry can take. Display / form only — see below. */
+export type CampaignExpiryShape = "fixed-end" | "personal-window" | "never-expires";
+
+/**
+ * Name the branch `resolveIssuanceExpiry` will actually take, for the admin form and
+ * the admin list. The branch ORDER is that function's precedence chain verbatim, which
+ * is what keeps the two from drifting (pinned by test:bonus-code-policy).
+ *
+ * DISPLAY / FORM ONLY. The mint path must keep calling `personalWindowGoverns` and
+ * `resolveIssuanceExpiry` directly — routing a mint decision through this would create
+ * a fourth definition of "is this a trigger campaign?", which is the one axis where
+ * drift re-opens mass-minting.
+ */
+export function campaignExpiryShape(campaign: {
+  neverExpires?: boolean | null;
+  validForHours?: number | null;
+}): CampaignExpiryShape {
+  if (personalWindowGoverns(campaign)) return "personal-window";
+  if (campaign.neverExpires) return "never-expires";
+  return "fixed-end";
+}
+
+/**
  * Whether a campaign is open for REDEMPTION right now.
  *
  * isActive and startsAt always gate. endsAt gates only for legacy campaigns:

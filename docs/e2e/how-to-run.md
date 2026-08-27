@@ -32,6 +32,7 @@
 | `npm run e2e:smoke` | `--grep @smoke` — fast, non-mutating specs only (marketing, auth, account/admin boundary, registration bridge, legal-copy guard). This is the tag to reach for during normal development iteration. |
 | `npm run e2e:purchase` | `--grep @purchase` — the real-Stripe money-path suite (subscribe, one-time, decline, idempotency, webhook replay). Sequences per browser project automatically. Requires the Stripe CLI prerequisite above. |
 | `npm run e2e:proof` | `--proof` — sets `E2E_PROOF=1`, switches the Playwright profile to `workers: 1, retries: 0, video: "on", slowMo: 200`, and runs `e2e/proof/post.ts` afterward to produce narrated `.mp4` bundles. Always pass `--grep @demo` (see proof-mode.md) — running proof mode over the whole suite is slow (1 worker) and most specs carry no narration. |
+| `npm run e2e:bonus-code` | `--grep "bonus code journey" --project chromium-desktop` — the per-customer bonus-entry code journey (mint → apply at checkout → real payment → entries land), plus its negative sibling. Requires the same Stripe CLI prerequisite as any `@purchase` run. See "The bonus-code mint runner" below. |
 | `npm run e2e:env` | `--env-only` — boots the server + seed + webhook forwarder and **holds the process open** (does not run any tests) until you Ctrl+C or kill it. This is the MCP/codegen authoring bridge — see below. |
 | `npm run e2e:ui` | Passes `--ui` through to `playwright test` — opens Playwright's interactive UI mode against the orchestrator-booted server (same env/seed/webhook guarantees as any other run). |
 | `npm run e2e:report` | `playwright show-report e2e-artifacts/report` — opens the HTML report from the last run. |
@@ -105,6 +106,40 @@ visual baselines — and purchase legs run spec files in parallel within a leg, 
 spec-scoped insert/delete can leak mid-purchase. The journey spec therefore self-skips
 unless `E2E_PROMO` is set (visible skip reason in every ordinary run), and journey mode
 scopes itself to this one spec on one browser.
+
+## The bonus-code mint runner (`e2e/lib/mint-bonus-code.ts`)
+
+`POST /api/bonus-codes/v1/issue` answers **403** unless `process.env.VERCEL_ENV === "production"`,
+and `mintBonusCodeForTrigger` repeats the same assertion ahead of the mint itself. That gate is
+load-bearing — it is what stops a preview deploy burning a real customer's one-per-lifetime grant
+(`docs/rewards-redeemables/gotchas.md`, launch order) — so it is **never** weakened, and
+`e2e/lib/env.ts` deliberately does **not** put `VERCEL_ENV` in the server overlay: that would make
+every spec in the run share a server claiming to be production.
+
+Instead, exactly one short-lived process identifies as production. `mintBonusCodeViaWebhook()`
+(`e2e/helpers/bonus-code.ts`) spawns `node node_modules/tsx/dist/cli.mjs e2e/lib/mint-bonus-code.ts`,
+which `require`s the real route handler and fires a real `NextRequest` at it. Everything dangerous
+dies with that process; nothing leaks into the Playwright worker, the dev server, or a sibling spec.
+
+Three things about it that are not optional:
+
+- **Klaviyo is braked three times.** A developer `.env.local` carries a REAL `pk_` key with
+  `KLAVIYO_ENABLED=true`, and `klaviyo.trackEvent` has no mode gate — only `isConfigured()`. The
+  runner swaps `@/lib/klaviyo` in `require.cache` before anything can load the real client,
+  **verifies the swap by object identity** before `VERCEL_ENV` is ever set, and forces
+  `KLAVIYO_ENABLED=false`. Remove any one and an e2e run emits real marketing events at real
+  profiles. (The spec asserts `klaviyoEmits === 1`, so the notify step is proven to have run *and*
+  to have hit the stub.)
+- **The database guard runs in the child too.** The URI comes from `resolveE2eEnv()`, so the process
+  refuses to start unless `E2E_MONGODB_URI` is set, differs from `MONGODB_URI`, and names a database
+  containing "e2e". Never build a connection string by hand here.
+- **`require`, not `await import`; and `node` + tsx's CLI, not `npx`.** Under tsx a dynamic import
+  goes through the ESM loader and bypasses `require.cache`, so the handler would resolve the REAL
+  Klaviyo client. And spawning through `npx` on win32 needs `shell: true`, whose cmd.exe layer
+  `child.kill()` cannot reach through and which holds the stdio pipes open past the grandchild's
+  exit — the first run of this spec hung for its full 120s timeout with the mint already succeeded
+  and printed. The helper now resolves on the `E2E_MINT_RESULT` marker line rather than on process
+  exit, and the child calls `process.exit(0)` after disconnecting.
 
 ## Testing a deployed environment (staging)
 

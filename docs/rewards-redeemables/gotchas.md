@@ -175,13 +175,28 @@ fails at checkout with "Invalid campaign code". The flow is now the LAST thing p
 1. **Deploy the endpoint to production** with `BONUS_CODE_WEBHOOK_SECRET` set — scoped to Vercel's
    **Production** environment only, so a preview deploy cannot mint into the production database
    even if someone points one at it.
-2. **Create the campaign(s)** in Admin → Monthly Coupons: `code` (must match
-   [`BONUS_CODE_BY_TRIGGER`](../../src/config/bonusCodes.ts)), `validForHours: 72`, `entriesAmount`,
-   `purchaseRequirement`, targeting. Cancel-click must be `purchaseRequirement: "none"` — there is no
-   purchase to qualify on. **If you set `validForHours` to anything other than 72, update Cobber FAQ
-   id 86 in the same change** — it tells customers "a fixed 72 hours", and `test:chat-faqs` asserts
-   that wording against the copy, not against any campaign row, so a mismatch ships green and Cobber
-   states a deadline the server does not enforce.
+2. **Create the campaign(s)** in Admin → Monthly Coupons. Under **"How this coupon ends"** pick
+   **"Each customer gets their own countdown"** — that is the `personal-window` shape, and picking it is
+   what sets `validForHours` (the mass-mint defence marker, see trap 6b). Then:
+   - **Hours each customer gets: `72`** (prefilled).
+   - **Leave "Stop issuing new codes on a date" UNTICKED.** The form then stores `endsAt` =
+     `NEVER_EXPIRES_ISSUANCE_DATE` with `neverExpires: false`, which means "no minting backstop — issues
+     until an admin hits Disable on the campaign card". Do **not** tick "No deadline at all" (that is
+     `neverExpires: true` and makes the *coupons* immortal — the opposite of the 72 hours) and do not
+     hand-type a far-future date. The panel shows this shape as
+     `72-hour window per customer · issuing until switched off`.
+   - `code` must match [`BONUS_CODE_BY_TRIGGER`](../../src/config/bonusCodes.ts) exactly — the form warns
+     (non-blocking) when it does not. `entriesAmount`, `purchaseRequirement`, targeting as before;
+     cancel-click must be `purchaseRequirement: "none"`, there is no purchase to qualify on.
+
+   **If you set the hours to anything other than 72, update Cobber FAQ id 86 in the same change** — it
+   tells customers "a fixed 72 hours", and `test:chat-faqs` asserts that wording against the copy, not
+   against any campaign row, so a mismatch ships green and Cobber states a deadline the server does not
+   enforce. The form shows an inline caution for exactly this.
+
+   `scripts/seed-bonus-code-campaigns.ts` creates the same three rows in the same shape (dry-run by
+   default) if you would rather script it — it reads the codes straight out of the config module so they
+   cannot drift, at the cost of the StaffActivity audit trail the admin UI gives you.
 3. **Smoke-test the endpoint in production, against the REAL campaign.** The production gate sits
    ahead of the MINT, deliberately (see P7 rule 3b), so this path **cannot** be rehearsed on a
    preview deploy or locally — this smoke test is the first genuine execution the code ever gets.
@@ -231,6 +246,24 @@ fails at checkout with "Invalid campaign code". The flow is now the LAST thing p
 
    Run this **before** step 4. The mint emits `Bonus Code Issued`, so once a flow is listening on
    that metric your smoke test becomes a live send.
+
+3b. **A Klaviyo metric does not exist until the first event of that name arrives — and one of the
+   three triggers is BRAND NEW.** `Subscription Cancellation Requested` ships with this branch and
+   has **never been sent to Klaviyo**, so it is not in the account's metric list and marketing
+   **cannot select it as a flow trigger yet**. The dropdown only offers metrics Klaviyo has already
+   received. So the cancel-click / BACKIN200 flow has an extra prerequisite the other two do not:
+   after deploy, one member-initiated cancellation has to actually fire (the staff-account smoke
+   test in step 3 is the cheapest way — cancel a staff membership through `/my-account`, not through
+   the admin route, which deliberately does NOT emit it). Confirm the metric appears in Klaviyo
+   before telling marketing to build that flow, or they will report the trigger as missing and the
+   launch stalls on a question nobody can answer from the Klaviyo UI.
+
+   The other two triggers already exist in the account: `Started Checkout` and
+   `One-Time Package Purchased` have been emitting for months. **`Subscription Cancelled` is NOT the
+   cancel-click trigger** — it fires from `customer.subscription.deleted`, which for a
+   cancel-at-period-end arrives at period END, up to a month after the member decided to leave. See
+   [docs/tracking/KLAVIYO_INTEGRATION.md](../tracking/KLAVIYO_INTEGRATION.md) "Subscription
+   Cancellation Requested".
 
 4. **Only then does marketing publish the flows.** Each flow calls
    `POST /api/bonus-codes/v1/issue` one step above its discount email. **The email carries the code

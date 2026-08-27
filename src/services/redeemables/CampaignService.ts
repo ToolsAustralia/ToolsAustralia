@@ -6,13 +6,20 @@ import User from "@/models/User";
 import { loadTopMajorDrawPercentileUserIds } from "@/utils/redeemables/topMajorDrawPercentile";
 import {
   BonusCodeTrigger,
+  NEVER_EXPIRES_ISSUANCE_DATE,
   RearmOutcome,
   decideRearm,
   expiryAfterHours,
   personalWindowGoverns,
 } from "@/utils/redeemables/bonus-code-policy";
 
-export const NEVER_EXPIRES_ISSUANCE_DATE = new Date("9999-12-31T23:59:59.999Z");
+/**
+ * Re-exported, not redeclared. The constant now lives in the pure policy module so the
+ * admin modal (a client component) can emit it without pulling mongoose into the bundle;
+ * this re-export keeps every existing `from "@/services/redeemables/CampaignService"`
+ * importer working against a single definition.
+ */
+export { NEVER_EXPIRES_ISSUANCE_DATE };
 
 /** Stand-in for a legacy row that was persisted without an `expiresAt`. Reads as long expired. */
 export const LEGACY_MISSING_EXPIRY = new Date(0);
@@ -748,13 +755,21 @@ export class CampaignService {
           (error as { code?: number }).code === 11000;
         if (!isDuplicate) throw error;
 
-        // WHICH unique index collided decides the handling. Two exist:
-        // {campaignId,userId} and {campaignId,code}.
-        // The driver always sets keyPattern on E11000. And in global mode there is
-        // no per-user code at all, so {campaignId,userId} is the only index that
-        // can possibly collide.
+        // WHICH unique index collided decides the handling, read from the
+        // driver's `keyPattern` and NEVER inferred from `needsUniqueCode`. Two
+        // unique indexes exist: {campaignId,userId} and {campaignId,code}.
+        //
+        // This used to read `!needsUniqueCode || keyPattern has "userId"`, whose
+        // first disjunct is unconditionally TRUE in global mode. The comment
+        // above it asserted, in plain English, that global mode cannot collide on
+        // {campaignId,code} because it writes no code — which was exactly wrong.
+        // The old index was compound + SPARSE, and a compound sparse index
+        // indexes any document holding at least one key, so every code-less row
+        // was indexed as (campaignId, null); customer #2 into a global campaign
+        // threw E11000 on campaignId_1_code_1 and this branch reported it as a
+        // {campaignId,userId} race. See the index docblock on the model.
         const keyPattern = (error as { keyPattern?: Record<string, number> }).keyPattern;
-        const isUserCollision = !needsUniqueCode || Boolean(keyPattern && "userId" in keyPattern);
+        const isUserCollision = Boolean(keyPattern && "userId" in keyPattern);
 
         if (isUserCollision) {
           // A concurrent trigger won. NOT an error — re-read so the caller still
@@ -762,11 +777,41 @@ export class CampaignService {
           const winner = await RedeemableIssuance.findOne({ campaignId, userId })
             .select("_id code entriesAmount issuedAt expiresAt")
             .lean();
-          return winner ? { outcome: "already_active", issuance: stamp(winner) } : { outcome: "already_active" };
+          // `already_active` WITHOUT an issuance is the value that silently means
+          // "no grant exists, but tell the customer everything is fine" — the
+          // route maps it to a non-retryable status and the notifier emails
+          // nothing. Only ever return it when a row is genuinely there; a
+          // {campaignId,userId} collision with no row to hand back is a broken
+          // invariant, not a race, so surface it as `error` (retryable).
+          if (winner) return { outcome: "already_active", issuance: stamp(winner) };
+          console.error("[bonus-code] E11000 on {campaignId,userId} but no row to hand back", {
+            campaignId: String(campaignId),
+            userId: String(userId),
+          });
+          throw error;
         }
 
-        // {campaignId,code} collision — the pre-existing regenerate-and-retry.
-        if (attempt === 2) throw error;
+        // {campaignId,code} collided (or the driver gave us no keyPattern to
+        // classify with — same conservative handling either way).
+        if (needsUniqueCode) {
+          // The pre-existing regenerate-and-retry: our generated code hit an
+          // existing one. A fresh code on the next attempt clears it.
+          if (attempt === 2) throw error;
+          continue;
+        }
+
+        // Global mode writes no `code` at all, so this collision can only mean
+        // the LIVE index is still the old unique+sparse compound one and this
+        // campaign already holds a code-less row for a DIFFERENT customer.
+        // Never silently swallow it — throwing maps to `error` on the issue
+        // route, which is the one status whose retry can still recover the grant.
+        console.error(
+          "[bonus-code] E11000 on {campaignId,code} in global mode — the live campaignId_1_code_1 " +
+            "index is still unique+sparse and admits ONE code-less row per campaign. " +
+            "Run: npm run migrate:issuance-partial-code-index",
+          { campaignId: String(campaignId), userId: String(userId), keyPattern }
+        );
+        throw error;
       }
     }
 

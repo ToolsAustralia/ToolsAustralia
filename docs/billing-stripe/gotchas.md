@@ -813,6 +813,15 @@ npm run backfill:missing-renewal-grants:prod:dry     # read-only; exit 2 means g
 
 **What actually fires on this path** (checked, because "grant through the normal path" sounds louder than it is): for `billingReason === "subscription_cycle"` the Meta CAPI Purchase is explicitly skipped (`payment-processing.ts:1462-1466`), the Klaviyo membership event is a `break` (`:1720-1726`), "Invoice Generated" is skipped, and there is no TikTok call. What does fire: Klaviyo "Placed Order" (`isRenewal: true`), Klaviyo profile sync, the milestone check, and the partner-discount queue update.
 
+## The webhook's FRESH retrieves are load-bearing — never read the frozen event payload
+
+`handleInvoicePaymentSucceeded` re-retrieves the invoice from Stripe (`stripe.invoices.retrieve(invoiceId, { expand: [...] })`) and `handlePaymentSuccess` re-retrieves the PaymentIntent (`stripe.paymentIntents.retrieve(paymentIntent.id, { expand: [...] })`) instead of using `event.data.object`. Both look like an easy "one fewer API call" saving. **They are not.**
+
+Since 2026-08-27 the customer's bonus-entry `campaignCode` is written onto the checkout object at the PURCHASE click — after the coupon box has been filled, immediately before `confirmPayment` (`src/utils/payment/campaign-code-checkout.ts`). It **cannot** be written any earlier: the coupon box lives on the same modal step whose mount already pre-warmed the subscription / PaymentIntent, so at pre-warm time the code does not exist yet.
+
+That stamp lands before the confirm, so a fresh retrieve always sees it. Switching either handler to the event payload — or to `parent.subscription_details.metadata`, which is a snapshot of the same thing — reintroduces the exact production defect that fix closed: **the customer sees APPLIED, is charged, and receives nothing, with no error logged anywhere.**
+
+If you are optimizing these calls, the invariant to preserve is "read the object's metadata as of the moment the grant runs", not "avoid a retrieve". Regression cover: `npm run e2e:bonus-code` (all three legs) plus `npm run test:campaign-code-checkout`. See [payment/gotchas.md](../payment/gotchas.md#the-applied-discount-code-was-thrown-away-at-checkout-fixed-2026-08-27).
 ## `isValidPendingUpgrade` now delegates to a shared predicate (2026-08-26)
 
 `stripe-webhook-handlers/index.ts` used to own a private `isValidPendingUpgrade` type guard.

@@ -451,6 +451,12 @@ async function handlePaymentSuccess(
 
     // ✅ CRITICAL: Retrieve fresh PaymentIntent to get latest metadata
     // The webhook event might have stale data if metadata was updated after confirmation
+    //
+    // ⚠️ DO NOT replace this with the event payload. Same reason as the invoice
+    // handler below: the one-time pack's `campaignCode` is stamped onto this
+    // PaymentIntent at the PURCHASE click, before confirm
+    // (`src/utils/payment/campaign-code-checkout.ts`). Reading the frozen event
+    // instead would drop it silently. See docs/billing-stripe/gotchas.md.
     let freshPaymentIntent: Stripe.PaymentIntent;
     try {
       freshPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
@@ -3586,6 +3592,15 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
     // ✅ CRITICAL: Retrieve invoice fresh from Stripe with expansions
     // Webhook events don't always include all fields expanded, so we need to retrieve it fresh
     // This ensures we have access to subscription, payment_intent, and charge fields
+    //
+    // ⚠️ DO NOT "optimize" this into reading the event payload (or
+    // `parent.subscription_details.metadata`). The FRESHNESS is load-bearing:
+    // `campaignCode` is written onto the subscription at the PURCHASE click, just
+    // before confirm (`src/utils/payment/campaign-code-checkout.ts`), because the
+    // coupon box only exists on the step whose mount already pre-warmed the
+    // subscription. A stale read here silently returns the "customer applied a
+    // code, paid, and got nothing" defect fixed on 2026-08-27, with no error
+    // anywhere. See docs/billing-stripe/gotchas.md.
     const expandedInvoice = await stripe.invoices.retrieve(invoiceId, {
       // Basil (2025-08-27): invoices no longer carry top-level payment_intent/charge —
       // they live under payments.data[].payment. Keep legacy keys for older API safety.

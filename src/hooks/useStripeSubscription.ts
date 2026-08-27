@@ -3,6 +3,9 @@ import { StripeCardElement } from "@stripe/stripe-js";
 import { getStripePromise } from "@/lib/stripe-client";
 import { useAttribution } from "@/hooks/useAttribution";
 import { completePendingAuthentication } from "@/utils/payment/stripe/complete-pending-authentication";
+// TYPE-ONLY. `campaign-code-checkout` is server-only (Stripe secret key, the User
+// model); `import type` is fully erased, so nothing from it reaches the bundle.
+import type { CheckoutCampaignTarget } from "@/utils/payment/campaign-code-checkout";
 
 /**
  * Subscription creation data for new users
@@ -332,6 +335,80 @@ export function useStripeSubscription() {
     }
   };
 
+  /**
+   * Stamps the customer's applied campaign code onto the checkout object the
+   * PURCHASE click is about to charge.
+   *
+   * MUST be awaited BEFORE `confirmStripeIntent()`. The webhook reads the code
+   * off the object as of the moment payment succeeded, so a write after the
+   * confirm is a race the browser usually loses — and on a redirecting confirm
+   * (3-D Secure) it never happens at all.
+   *
+   * NEVER THROWS, and never blocks the sale. The caller charges either way, and
+   * a genuine holder keeps the unspent issuance in their rewards wallet.
+   * Blocking a membership sale because a bonus lookup timed out is the worse
+   * trade — the entries are recoverable, the sale is not.
+   *
+   * `outcome` exists because those failures are NOT equivalent to whoever reads
+   * the logs. `"refused"` means the server answered and did not write the code:
+   * a customer was charged without it. `"unknown"` means we stopped listening —
+   * the request may well have succeeded (observed live: the server answered
+   * `200 in 8089ms` against an 8s cap, having written the code). Reporting the
+   * second as the first makes the one production alarm for this defect
+   * untrustworthy, which is the state that hid the original bug.
+   */
+  const attachCampaignCode = async (body: {
+    target: CheckoutCampaignTarget;
+    code: string | null;
+  }): Promise<{
+    success: boolean;
+    campaignCode: string | null;
+    outcome: "attached" | "refused" | "unknown";
+  }> => {
+    // Hard cap. The customer has already clicked PURCHASE and is watching a
+    // spinner, so a few extra seconds is far cheaper than silently losing
+    // money-equivalent entries — but it still must not stall checkout forever.
+    // 15s is sized on what the server actually does: rate-limit check ->
+    // request.json() -> getServerSession (DB) -> connectDB -> Stripe retrieve
+    // with expand -> User.findOne -> two campaign/issuance reads -> Stripe
+    // update. Two Stripe round trips plus three DB reads on a cold lambda does
+    // not fit in 8s under load.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch("/api/stripe/attach-campaign-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        signal: controller.signal,
+        body: JSON.stringify({
+          code: body.code,
+          ...(body.target.kind === "subscription"
+            ? {
+                subscriptionId: body.target.subscriptionId,
+                subscriptionRequestId: body.target.subscriptionRequestId,
+              }
+            : {
+                paymentIntentId: body.target.paymentIntentId,
+                clientSecret: body.target.clientSecret,
+              }),
+        }),
+      });
+      // The server answered. Whatever it said, it is a definite answer.
+      if (!response.ok) return { success: false, campaignCode: null, outcome: "refused" };
+      const result = (await response.json()) as { success?: boolean; campaignCode?: string | null };
+      return result?.success === true
+        ? { success: true, campaignCode: result.campaignCode ?? null, outcome: "attached" }
+        : { success: false, campaignCode: null, outcome: "refused" };
+    } catch {
+      // An abort or a dropped connection. The request may already have been
+      // served — we simply stopped listening, so this is NOT evidence of loss.
+      return { success: false, campaignCode: null, outcome: "unknown" };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   const confirmPayment = async (clientSecret: string, paymentMethod: string) => {
     try {
       const stripe = await getStripePromise();
@@ -393,6 +470,7 @@ export function useStripeSubscription() {
     createOneTimePurchase,
     createSubscriptionExistingUser,
     createOneTimePurchaseExistingUser,
+    attachCampaignCode,
     confirmPayment,
     createPaymentMethod,
     loading,

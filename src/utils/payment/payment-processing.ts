@@ -31,6 +31,7 @@ import { getUserActiveExperimentAssignment } from "@/utils/ab-testing/get-user-e
 import type { AttributionParams } from "@/types/tracking";
 import { PromoRedemptionService } from "@/services/promo/PromoRedemptionService";
 import { RedemptionService } from "@/services/redeemables/RedemptionService";
+import { CampaignCodeValidationService } from "@/services/redeemables/CampaignCodeValidationService";
 import { MilestoneService } from "@/services/milestones";
 import { createEmptyGrants, benefitsGrantedEventId } from "@/types/payment-ledger";
 import type { SubscriptionCalculationType } from "@/types/payment-ledger";
@@ -1049,8 +1050,41 @@ async function checkAndRedeemCampaign(
   issuanceId?: string;
   redemptionKind?: "monthly-coupon" | "milestone";
 } | null> {
-  const code = paymentMetadata?.campaignCode;
-  if (!code) return null;
+  // The Stripe stamp is authoritative and always wins. It is written on an
+  // unpaid object immediately before the charge, so if it is here it reflects
+  // exactly what the customer had applied at the PURCHASE click.
+  let code = paymentMetadata?.campaignCode;
+  let recoveredFromIntent = false;
+
+  if (!code) {
+    // NO STAMP. Before concluding the customer applied nothing, ask our own
+    // records. The attach request that writes the stamp is capped client-side at
+    // 15s and the browser charges regardless of the outcome — observed live at
+    // `200 in 14903ms`, i.e. the server answered, the browser had already given
+    // up, and the webhook saw no code. That window cannot be closed by raising
+    // the cap (a dropped connection or a closed tab does the same thing), so it
+    // is closed here instead: the server wrote down that this customer applied
+    // this code seconds ago, and this is where that is redeemed.
+    //
+    // This is a CANDIDATE only. RedemptionService.redeem below re-applies every
+    // eligibility / expiry / already-spent gate, so nothing is granted here that
+    // the normal path would have refused.
+    const intent = await CampaignCodeValidationService.resolveCheckoutIntent({
+      userId: user._id.toString(),
+    });
+    if (!intent) return null;
+    code = intent.code;
+    recoveredFromIntent = true;
+    // console.error because it is the only level a production build keeps, and
+    // this line is the alarm that an attach was lost — the grant still lands,
+    // but the attach path needs looking at if it fires regularly.
+    console.error("⚠️ [CAMPAIGN] No campaignCode on the paid object — recovering from the recorded checkout intent", {
+      userId: user._id.toString(),
+      code,
+      issuanceId: intent.issuanceId,
+      intentTargetId: intent.intentTargetId,
+    });
+  }
 
   try {
     const result = await RedemptionService.redeem({
@@ -1063,6 +1097,10 @@ async function checkAndRedeemCampaign(
         userId: user._id.toString(),
         code,
         entriesGranted: result.entriesGranted,
+        // true = the Stripe stamp was missing and this grant was recovered from
+        // the recorded checkout intent. Under the old behaviour this purchase
+        // would have granted nothing.
+        recoveredFromIntent,
       });
       return {
         entriesGranted: result.entriesGranted,

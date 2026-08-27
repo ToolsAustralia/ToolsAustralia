@@ -85,3 +85,67 @@ User-facing pay-now flow for failed renewals:
 - **Recovery lock**: `recovery/recovery-claim.ts` (`acquireRecoveryClaim` / `releaseRecoveryClaim`) — the per-subscription [`RecoveryClaim`](../../src/models/RecoveryClaim.ts) mutex (`_id: "recover:<subscriptionId>"`, 120s reclaim window, 300s TTL backstop) that serializes stranded recovery across member + admin pay paths. See [admin backend — Idempotency model](../admin/backend.md#idempotency-model).
 - **Cleanup / queries**: `payment-cleanup.ts`, `payment-event-net-queries.ts`
 - **Cross-feature calculators**: `upsell-entries-calculator.ts`, `upsell-promo-multiplier.ts`
+
+## Where the bonus-entry code joins a payment
+
+The bonus-entry campaign code is not part of either intent flow above — it is a
+**metadata stamp** applied to whichever object is about to be charged, at the
+last possible moment before the charge:
+
+```
+step 2 mounts ──► pre-warm (subscription | PaymentIntent)   ← no code exists yet
+                            │                                 (coupon box is on
+                            │                                  THIS step)
+customer types code, Apply  │
+                            ▼
+PURCHASE click ──► attachCampaignCodeToCheckout()  ← server re-verifies, stamps
+                            │                        the UNPAID object
+                            ▼
+                    confirmPayment()  ← Stripe emits ...payment_succeeded
+                            │
+                            ▼
+          webhook FRESH-retrieves the object and reads metadata.campaignCode
+```
+
+The ordering is the whole design: stamp before the confirm, never after. See
+[backend.md](./backend.md#campaign-code-checkoutts--the-authoritative-campaign-code-write)
+and [gotchas.md](./gotchas.md).
+
+### The recovery leg: a recorded checkout intent (2026-08-27)
+
+The stamp above is written by a request the **browser abandons**. `attachCampaignCode`
+(`useStripeSubscription.ts`) caps it at 15s and the modal charges regardless of the outcome — the
+"never block the sale" contract, which is right. But it left one open window, and it was observed
+live rather than theorised: the server answered `200 in 14903ms`, the browser had already aborted,
+the card was charged, and the webhook logged no `campaignCode`. The customer paid and the entries
+did not land.
+
+Raising the cap does not fix that — it moves it, and it cannot help a dropped connection or a tab
+closed mid-spinner. The asymmetry is what fixes it: **the server knows whether the customer asked
+for the code; the browser does not.** So the server writes its own record, and the outcome stops
+depending on a client-side race being won:
+
+```
+PURCHASE click ──► attachCampaignCodeToCheckout()
+                     │
+                     ├─ 1. retrieve · authorize · state · identity · re-verify
+                     ├─ 2. recordCheckoutIntent()   ← OUR DB. fast, before the slow half.
+                     │                                checkoutIntentAt / checkoutIntentTargetId
+                     └─ 3. stripe.{subscriptions|paymentIntents}.update(metadata)   ← the slow half
+                                    │
+      browser may abort anywhere from here ─────────────► confirmPayment() charges anyway
+                                    ▼
+       webhook ──► checkAndRedeemCampaign()
+                     ├─ metadata.campaignCode present  ─► redeem it (unchanged, authoritative)
+                     └─ ABSENT ─► resolveCheckoutIntent() ─► redeem the candidate it names
+```
+
+Step 2 sits **before** step 3 deliberately: a record written only on the Stripe write's success
+would be missing in exactly the cases it exists for. The ordering is asserted, not assumed —
+`npm run test:campaign-code-checkout` §7 pins `["intent", "stripe"]`.
+
+The intent is a **candidate, not a decision**: `RedemptionService.redeem` re-applies every
+eligibility, expiry and already-spent gate, so the recovery can never grant something the normal
+path would refuse. Removing a code clears the intent, and it expires after 30 minutes so it cannot
+reach a later purchase or a renewal invoice. Full invariants in
+[docs/rewards-redeemables/rules.md R11](../rewards-redeemables/rules.md).

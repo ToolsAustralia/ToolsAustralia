@@ -49,6 +49,33 @@ build via the script's pinned totals; a genuine catalogue update means conscious
 `EXPECTED_TOTAL`/`EXPECTED_CUMULATIVE`), `test:unlock-packages`, and `test:portal-return` (tsx
 regression tests for `src/utils/partner-discounts/{unlock-packages,portal-return}.ts`).
 
+## Package scripts — `seed:bonus-code-campaigns` (2026-08-27)
+
+`scripts/seed-bonus-code-campaigns.ts` creates the three per-customer bonus-code campaigns the Klaviyo
+flow webhook mints against (BACKIN200 / LOCKIN100 / EXTRA100 — feature docs in
+[docs/rewards-redeemables/](../rewards-redeemables/gotchas.md)).
+
+- `npm run seed:bonus-code-campaigns:dry` — dry run (also the bare script's default).
+- `npm run seed:bonus-code-campaigns` — writes. Add `--prod` to target production.
+
+**Why a script when the admin UI can do this.** It reads the codes straight out of
+`src/config/bonusCodes.ts`, so `code` cannot drift from what the marketing email hardcodes — the one
+silent failure in the whole feature (a mismatch means the endpoint answers `200`, the email sends, and
+every customer's code is refused at checkout with nothing alerting). The admin UI is otherwise the
+better route: it carries the `StaffActivity` audit trail this script does not.
+
+**`endsAt` is the open-ended sentinel, not a dated backstop (changed 2026-08-27).** It used to default
+to "5 years out" and instruct a human to put a calendar note on 2031 — when that date passed, minting
+would have stopped silently while the flow kept emailing. It now writes `NEVER_EXPIRES_ISSUANCE_DATE`
+(`9999-12-31T23:59:59.999Z`) with `neverExpires: false`, meaning "no minting backstop; issues until an
+admin disables it in Admin → Monthly Coupons". `neverExpires` stays **false** on purpose: that flag is
+the *customer's* clock and would make the coupons themselves immortal — these expire in 72 hours. The
+`--ends-at=` override and its `resolveEndsAt()` helper were deleted with the landmine.
+
+Idempotent: `MonthlyEntryCampaign.code` is uniquely indexed, an existing campaign is reported and left
+completely untouched, and the script never updates or deletes. Exit codes: `0` ok · `1` fatal · `2`
+completed with errors.
+
 ## Zod helpers
 
 [src/lib/zod/](../../src/lib/zod/) — shared schemas (e.g. ObjectId validator, common request shapes). Use these instead of duplicating validation logic across handlers.
@@ -65,6 +92,49 @@ regression tests for `src/utils/partner-discounts/{unlock-packages,portal-return
 
 [src/utils/webhook/](../../src/utils/webhook/) — generic webhook helpers (signature verification, payload parsing, retry handling). Stripe webhook is handled in [billing-stripe](../billing-stripe/).
 
+## `RedeemableIssuance` (campaignId, code): sparse → partial (2026-08-27)
+
+`scripts/migrations/2026-08-27-redeemable-issuance-partial-code-index.ts`
+
+```bash
+npm run migrate:issuance-partial-code-index:dry        # local, dry (default)
+npm run migrate:issuance-partial-code-index            # local, apply
+npm run migrate:issuance-partial-code-index:prod:dry   # PRODUCTION, dry
+npm run migrate:issuance-partial-code-index:prod       # PRODUCTION, apply
+```
+
+Replaces `redeemableissuances.campaignId_1_code_1` — `unique + sparse` — with the same key as
+`unique + partialFilterExpression: { code: { $exists: true } }`.
+
+**Why it is a migration and not just the `schema.index()` change.** MongoDB does not re-option an
+index that already exists: a `createIndex` with the same key and different options is either ignored
+or an `IndexOptionsConflict`. The declaration on `src/models/RedeemableIssuance.ts` therefore only
+helps **fresh** databases. Every existing environment needs the old index dropped and the new one
+built. Full reasoning for the index itself in
+[docs/rewards-redeemables/models.md](../rewards-redeemables/models.md#redeemableissuance) — in short,
+a compound *sparse* index indexed code-less rows as `(campaignId, null)`, so a
+`campaignMode: "global"` campaign could enrol exactly one customer, ever.
+
+**Drop-then-create, and it has to be.** Building the replacement under a temporary name first — so
+the unique guard is never absent — is not possible: Mongo refuses a second index with the same key
+and the same options under a different name (`IndexOptionsConflict`, code 85; hit on the first run of
+this script against dev, which is why the script now does it this way). There is a sub-second window
+with `(campaignId, code)` unguarded. Acceptable: the only writer of a per-user `code` is
+`generateUniqueCode`, whose output is random per call and which already retries on collision, and
+this runs as a deliberate ops action rather than under load.
+
+**Behaviour.** Dry-run by default; `--apply` writes; `--prod` targets production via
+`connectOpsDb`/`PROD_MONGODB_URI`. Prints up-front counts (total / code-bearing / code-less, plus
+code-less rows per campaign — every campaign reads `n=1` while the bug is live, because a second was
+never insertable), the full index list before and after, adaptive progress lines, and a final
+summary. **Pre-flight refuses** (exit 2, nothing written) if the code-bearing rows contain a
+duplicate `(campaignId, code)` pair, because the recreate would fail and leave the collection with no
+uniqueness guard on codes at all. Idempotent — a collection already carrying the partial index exits
+0 untouched, and a run interrupted part-way is simply re-runnable (it drops **every** index on the
+key, so a leftover temporary one from an older run is cleaned up too).
+
+**Exit codes:** `0` applied or already correct · `2` refused by a pre-flight check, or the swap did
+not reach the expected end state · `3` fatal.
 ## `reconcile-klaviyo-profiles` cron (2026-08-26)
 
 Two schedules on one route

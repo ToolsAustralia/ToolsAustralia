@@ -18,15 +18,20 @@ returns `validForHours` (per-customer window, in HOURS from the issuing instant)
 - A shared `renderExpiryLabel()` helper renders at all three expiry display sites (the mobile
   card, the desktop table's Window column, and the desktop name-column subtext) so an operator
   can tell a fixed-end campaign from a rolling one at a glance:
-  `{n}-hour window per customer (backstop {formatted endsAt})` when `validForHours` is set
+  `{n}-hour window per customer (stops issuing {formatted endsAt})` when `validForHours` is set
   (checked via the imported `personalWindowGoverns` predicate from
   `src/utils/redeemables/bonus-code-policy.ts` — never re-derived inline), else the existing
-  `neverExpires` / `formatDateTime(endsAt)` behavior, byte-identical to before this change.
+  `neverExpires` / `formatDateTime(endsAt)` behavior. **Reworded 2026-08-27** ("backstop" → "stops
+  issuing") and given an open-ended branch — see [the two-clocks section
+  below](#monthly-coupon-campaigns--the-expiry-column-reads-two-clocks-2026-08-27). The mobile
+  card's line prefix also changed from `End:` to `Expiry:`, because the value is no longer always
+  a date.
 - Delete is now always a soft delete (`isActive: false`) server-side — the confirm copy was
   updated to say so plainly rather than the old "if issuances exist" hedge.
 
-The create/edit form itself is `AdminMonthlyRedeemablesModal` — see
-[shared-ui/frontend.md](../shared-ui/frontend.md#adminmonthlyredeemablesmodal--validforhours-2026-08-25-renamed-from-validfordays-2026-08-26)
+The create/edit form itself is `AdminMonthlyRedeemablesModal` — **rebuilt 2026-08-27 around one
+question ("How this coupon ends") with three shapes**; see
+[shared-ui/frontend.md](../shared-ui/frontend.md#adminmonthlyredeemablesmodal--how-this-coupon-ends-rewritten-2026-08-27)
 (it lives under `src/components/modals/**`, which the Domain Manifest routes to `shared-ui`, not
 `admin`, despite being admin-only).
 
@@ -1861,3 +1866,34 @@ Superseding the "previous calendar month" benchmark described above.
 **Each ad now shows the landing URL it bought.** A brand drill-down unions several URLs into one ad list — the modal header said "5 landing URLs" but nothing told you which ad used which, the one thing the table is for. `canonicalUrl` now travels `SpendByUrlAggregationService` → `getSpendByUrlDetailFormatted` → `groupSpendByUrlDetailRowsByCampaign` → `CampaignTreeTable`, shown as the path only (the origin is identical on every row) with the full URL in `title`. ⚠️ The formatter uses an **explicit include-list**, so a field added upstream is silently dropped unless it is named there too.
 
 **Labels:** the `built-prize` basis now reads **"By prize"** — the internal value is unchanged, per the backend-term/UI-term split. The **NEW MEMB %** progress bar was removed: a share-of-total across five brands is read by comparing the numbers down the column, and the bar only added visual weight to the widest column.
+
+## Monthly coupon campaigns — the expiry column reads TWO clocks (2026-08-27)
+
+`MonthlyRedeemablesCampaignPanel` renders one "Expiry" label per campaign, and the value it prints
+comes from two different clocks that the underlying fields do not distinguish:
+
+- **The campaign's clock** — `endsAt` / `neverExpires`: how long we keep handing the code out to
+  *new* people.
+- **The customer's clock** — `validForHours`: how long *that one person* has once the code lands in
+  their account.
+
+`renderExpiryLabel` therefore has three branches, in `resolveIssuanceExpiry`'s precedence order:
+
+| Campaign shape | Label |
+|---|---|
+| `neverExpires` | "Never Expires" (the mobile card adds a separate "No expiration" line below it) |
+| `validForHours` set, `endsAt` = the open-ended sentinel | "{n}-hour window per customer · issuing until switched off" |
+| `validForHours` set, real `endsAt` | "{n}-hour window per customer (stops issuing {date})" |
+| neither | the `endsAt` date, or "Issuing until switched off" when it is the sentinel |
+
+**The open-ended sentinel is detected by `isOpenEndedDate`, a YEAR THRESHOLD — never an equality
+test** (`src/utils/redeemables/bonus-code-policy.ts`). The admin form binds `endsAt` to a
+`datetime-local` input whose value is parsed as **local** time, so a round-trip through the picker in
+Sydney turns `9999-12-31T23:59:59.999Z` into `9999-12-31T12:59:00.000Z` — and west of UTC it rolls
+into year 10000. An equality check would then silently print "stops issuing 31 Dec 9999" on a
+campaign that has no backstop at all.
+
+**The `neverExpires` branch stays first.** It only reads backwards against `resolveIssuanceExpiry`'s
+precedence if the `neverExpires` / `validForHours` mutual-exclusion guard is deleted — and that guard
+exists in six places and is not being removed, so the pair can never coexist and the order can never
+lie. If a future change ever does remove it, this branch order must be revisited in the same edit.

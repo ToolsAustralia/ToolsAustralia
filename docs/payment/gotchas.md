@@ -252,6 +252,142 @@ Three separate traps, all of which had to be fixed together — see `reportDrawC
 
 ⚠️ **When adding any server-side error report, check the argument count first.** A two-argument call compiles, type-checks, lints, and does nothing.
 
+## The applied discount code was thrown away at checkout (fixed 2026-08-27)
+
+### In plain English — and why a discount-code bug touches the payment records at all
+
+**What a PaymentIntent is.** Before a customer's card is charged, Stripe creates a record of the
+attempt — who is paying, how much, and a small bag of notes we can attach to it. The card is charged
+against that record. It exists, unpaid, for the whole time the customer is filling in their details.
+
+**The discount code has always ridden in that bag of notes.** That is not new and it is not a choice
+this fix made. It is the only thing that travels from the customer's browser to the moment Stripe
+tells our server "this payment succeeded" — and that moment is when we work out what to give them.
+If the code is not in the notes at that instant, nothing gives them their entries, because nothing
+else knows a code was ever involved.
+
+**So the bug was never about the code being wrong. It was about the code being written at the wrong
+TIME.** We built the payment record the moment the customer reached the payment step — before they
+could possibly have typed a code, because the code box is on that same step. For memberships we then
+charged that same record and never went back. For one-off packs we did go back and add the code, but
+only *after* the card had already been charged, which is a race against Stripe telling us about it.
+
+**What the fix changes.** One field, on a record that has not been paid yet, at the last moment
+before the charge. We do not create a payment record, cancel one, change an amount, or move a billing
+date — the things that can cause Stripe to raise a second invoice. That was checked line by line
+against the pre-flight list in `docs/PAST_DUE_REANCHOR.md` and cleared: metadata-only writes cannot
+spawn an invoice.
+
+**Why the duplicate-payment-record problem showed up now.** It was already there. The app has always
+sometimes created two payment records a fraction of a second apart — one from the registration step
+and one from the payment step — and charged whichever finished last. Nobody noticed, because nothing
+depended on *which* one won. Now the customer's discount code rides on one of them, so the coin flip
+became visible. **This fix did not introduce that race; it made an existing one matter.** Both halves
+are closed here (the mutex now covers the registration handler and both card-decline retry paths), so
+exactly one record is created per checkout and it always carries a real customer identity.
+
+**Symptom:** a customer typed a bonus-entry code into the checkout box, saw **APPLIED**, paid, and received nothing. No entries, no error, nothing in the logs. Live in production until 2026-08-27.
+
+**Cause — two different ones, one shape.** `MembershipModal` pre-warms the checkout object the instant step 2 mounts (`create-subscription(-existing-user)` for a membership, `create-payment-intent` for a pack). The coupon box is rendered on **that same step**, so at pre-warm time the customer has had no opportunity to type. Then:
+
+- **Membership.** The PURCHASE handler takes the `subscriptionCreatedRef` reuse branch and sends no `campaignCode` at all. The subscription that gets charged carries none, the webhook's `metadata.campaignCode` read finds nothing, `checkAndRedeemCampaign` early-returns on an absent code. **Deterministic.**
+- **One-time pack (guest).** `create-one-time-purchase` *does* resolve the code — but patches the PaymentIntent metadata **after** the browser already confirmed it. That races `handlePaymentSuccess`'s fresh `paymentIntents.retrieve`, which usually wins. **A race, which is worse than a deterministic bug: it looks green in some test runs.** Under `redirect: "if_required"`, a confirm that navigates away means the patch never runs at all.
+
+**Fix:** one awaited call to `attachCampaignCodeToCheckout` (via `POST /api/stripe/attach-campaign-code`) in `handleSubmit`, placed **above every** `confirmStripeIntent()` branch, immediately after `lastChargedStaticPackageIdRef.current = packageId`. See [backend.md](./backend.md#campaign-code-checkoutts--the-authoritative-campaign-code-write).
+
+**The three ways to reintroduce it:**
+
+1. **Move the attach below a confirm, or into one branch.** Putting it inside the subscription branch turns `npm run e2e:bonus-code`'s membership leg green while the pack leg stays broken — and the pack leg, being a race, will *sometimes pass anyway*. Mechanical check: `grep -n "attachCampaignCode({" src/components/modals/MembershipModal/index.tsx` must return exactly one line, and its number must be lower than every line from `grep -n "confirmStripeIntent()"` in the same file.
+2. **Make the webhook read the frozen event payload** instead of its fresh `invoices.retrieve` / `paymentIntents.retrieve`. That freshness is now load-bearing — see [billing-stripe/gotchas.md](../billing-stripe/gotchas.md).
+3. **Narrow the state guard back to `incomplete` only.** On the anchor days (AEST 25/26/27) these subscriptions are created `trialing`, so an `incomplete`-only guard makes the whole fix a silent no-op on three days of every month.
+
+**Deliberately NOT done:** the code is never written by tearing down and recreating the pre-warmed subscription. The coupon box and the card form are on the same step, so "type card, then apply code" is a normal order — recreating invalidates the invoice PaymentIntent, remounts Elements and **wipes a card the customer already typed**, and leaves one `incomplete_expired` husk per application.
+
+**Two holes found by review AFTER the first fix landed, both now closed — and both worth knowing about, because each one silently un-fixes the thing above.**
+
+**1. The guest pack PaymentIntent had no identity, and there were two of them.** `handleRegistration` in `MembershipModal` creates the one-time PaymentIntent itself and used to pass **no `userEmail`** — every other call site passes one. Without it, `create-payment-intent` takes its "true guest" branch and stamps the literal placeholders `userId: "guest"`, `userEmail: "guest"`. `resolveOwnerUserId` skips both (they are in `NON_IDENTITY_USER_IDS` / the explicit `"guest"` email exclusion), `resolveCodeForCheckout` refuses with *"no resolved account for this purchase"*, and the attach writes `campaignCode: ""` — it **clears** the customer's code. Worse, that call did not set `isCreatingPaymentIntentRef`, the only mutex the step-2 pre-warm honours, so a **second** PaymentIntent (this one carrying the email) was created a tick later and whichever resolved last was the one charged. A real object: `pi_3U8uJYQxMEki11tJ0clg0b2W`, Apprentice Pack, `userId: "guest"`, `userEmail: "guest"`. **This was EXTRA100's entire audience.** Fixed by passing `userEmail: result.data.email` and holding the mutex across the whole round trip. Pinned by section 5b of `npm run test:campaign-code-checkout`.
+
+**2. The client cap fired on requests the server had completed.** The helper aborted at 8s; the server was observed answering `200 in 8089ms` **having written the code**, while the browser logged the "charged without it" line. Three costs: the one production alarm for this defect cried wolf; the e2e console watchdog failed unrelated specs; and if an abort lands *before* the Stripe update the code really is lost. The cap is now 15s and the helper returns `outcome: "attached" | "refused" | "unknown"` so a definite refusal and a give-up are logged as different things. **Never collapse those two back into one log line** — that is exactly the "we cannot tell" state that hid the original bug.
+
+**Still open (not this fix):** the resubscribe/renew flow (`SubscriptionManagementModal` → `/api/stripe/renew-subscription`) has no coupon input and no `campaignCode` field at all, so a win-back code cannot be redeemed there. Not a silent loss (the customer is never shown APPLIED), but it defeats that campaign.
+
+## The rule this belongs to: a pre-warmed payment object + a code box = this bug, every time (2026-08-27)
+
+The incident above is one instance of a shape. Written down so the next surface does not rediscover it.
+
+**THE RULE.** A discount code reaches the grant **only** through the metadata on the Stripe object as
+it stands at the instant Stripe reports the payment succeeded. So:
+
+> **If a checkout surface creates its Stripe object BEFORE the customer can type a code, that code
+> will be lost unless something writes it onto the object again before the charge.**
+
+No amount of validating, applying, or showing APPLIED changes that. The customer sees success on
+every screen and receives nothing.
+
+**Every surface that takes a code, and why only one broke.** Audited 2026-08-27 — re-audit when
+adding a fifth.
+
+| Surface | Code input | Creates its Stripe object | Verdict |
+|---|---|---|---|
+| `MembershipModal` (`CouponRow`, rendered inside `PaymentStep`) | yes | **on step-2 mount — before the code box is reachable** | the bug; fixed by `attachCampaignCode` |
+| `SpecialPackagesModal` (`PackagesGrid`) | yes | inside the purchase handler, **after** the code is collected (`create-one-time-purchase-existing-user` always mints a fresh PaymentIntent with the code already in metadata, `confirm: true`) | structurally safe |
+| `RedeemablesWallet` | yes | **never — no Stripe object at all**; the code goes straight to the redeem API, which grants entries server-side | not a payment path, cannot have this bug |
+| `my-account/rewards` | hosts the wallet, no input of its own | — | n/a |
+
+**`SpecialPackagesModal` is safe for a reason, not by luck, and the reason is fragile.** It is a
+saved-card one-click purchase, so it never mounts the Payment Element that `MembershipModal`
+pre-warms for. **Give it a Payment Element — for new cards, say — and it inherits this bug the same
+day**, because `attachCampaignCode` is wired only into `MembershipModal` via `useStripeSubscription`.
+
+**So, before you add either half of the pair, check the other:**
+
+- **Adding a code box to a surface?** Find where that surface creates its Stripe object. If it is
+  created before the box can be reached, wire `attachCampaignCode` in above every confirm branch.
+- **Adding a pre-warm / Payment Element to a surface that already takes a code?** Same wire, same
+  place. The pre-warm is what breaks it, not the code box.
+- **Adding a new payment route?** It must accept `campaignCode`, and it must resolve it through
+  `CampaignCodeValidationService.resolveCodeForCheckout` — never trust the client's string.
+
+**The wallet is why this hid for months.** A code has TWO independent redemption routes: checkout
+entry, and a direct claim from the rewards wallet. `ANZACDAY25` redeemed 437 of 749 issuances through
+the wallet while checkout entry was broken, so the aggregate looked healthy. **A campaign's redemption
+count does not tell you whether checkout works** — if a campaign's codes are only ever delivered by
+email (as the three bonus codes are, with no wallet surface live), checkout entry is the only route
+and there is no second number to hide behind.
+
+## The 15-second attach cap loses the code, and it was observed live (fixed 2026-08-27)
+
+**Symptom.** A customer applies a discount code, sees APPLIED, clicks PURCHASE, is charged — and the
+webhook grants no bonus entries. In the acceptance run that caught it the attach answered
+`200 in 14903ms` against the client's 15000ms cap: the server had done the work, the browser had
+already aborted, `attachCampaignCode` reported `"unknown"`, `confirmPayment` charged anyway, and the
+`invoice.payment_succeeded` handler logged `Original metadata` with no `campaignCode`. The margin
+between the cap and the observed server latency under load was about 100ms.
+
+**Why raising the cap is not the fix.** It moves the boundary; it does not remove it. A dropped
+connection, a backgrounded tab or a closed browser reproduces the same loss at any cap, and a longer
+cap makes a genuinely hung request stall a customer who is watching a spinner. The "never block the
+sale" contract is correct and stays.
+
+**What actually fixes it.** The server knows whether the customer asked for the code; the browser
+does not. `attachCampaignCodeToCheckout` now writes `checkoutIntentAt` / `checkoutIntentTargetId`
+onto the customer's own `RedeemableIssuance` **before** the Stripe round trip — the slow half the
+browser abandons during — and `checkAndRedeemCampaign` reads it back when the paid object carries no
+`campaignCode`. The grant is recovered after the fact from a record that survives the client hanging
+up. The issuance was never marked redeemed in the old failure either, so the customer already kept a
+working code; what they lost was the entries on the purchase they had just made, and that is what
+this recovers.
+
+**What to watch.** A recovery emits
+`⚠️ [CAMPAIGN] No campaignCode on the paid object — recovering from the recorded checkout intent`
+(`console.error`, so it survives the production build). The grant lands — but a rising rate means the
+attach path is slow and wants attention. See
+[architecture.md](./architecture.md#the-recovery-leg-a-recorded-checkout-intent-2026-08-27) and
+[docs/rewards-redeemables/rules.md R11](../rewards-redeemables/rules.md).
+
+**What is NOT covered.** The intent is only recorded for a customer the server can resolve to a real
+account from the checkout object's own metadata. A code applied by someone with no account row could
+never redeem anyway (`resolveCodeForCheckout` refuses it first), so there is nothing to recover.
 ## `account-manager` no longer initialises `upsellStats` (2026-08-27)
 
 `createUserAccount` in `src/utils/payment/account-manager.ts` seeded a five-counter

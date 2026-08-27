@@ -45,7 +45,10 @@ const MonthlyCampaignRowSchema = z.object({
   campaignMode: z.enum(CAMPAIGN_MODES),
   targetingMode: z.enum(TARGETING_MODES),
   startsAt: z.string(), // ISO 8601
-  endsAt: z.string().nullable(), // ISO 8601 or null (neverExpires)
+  // ISO 8601, or null when unset. A value in year 9999 is the OPEN-ENDED sentinel:
+  // the campaign has no minting backstop and keeps issuing until an admin disables
+  // it. Treat it as "no end date", not as a real business date.
+  endsAt: z.string().nullable(),
   neverExpires: z.boolean(),
   // Per-customer window in HOURS; when set, each issuance expires exactly validForHours
   // after the instant it was issued (the marketing flow's webhook call), not at campaign
