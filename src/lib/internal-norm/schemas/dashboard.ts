@@ -34,6 +34,9 @@ export const NormDashboardStatsSchema = z.object({
       additionalOneTimePurchase: RevenueBucketSchema,
       miniDraw: RevenueBucketSchema,
       upsell: RevenueBucketSchema,
+      shop: RevenueBucketSchema.describe(
+        "Merchandise. Headline revenue, deliberately excluded from the ads/ROAS numerator."
+      ),
     }),
   }),
   majorDraw: z.object({
@@ -136,6 +139,7 @@ const NormRecentActivityTypeSchema = z.enum([
   "one_time_purchase",
   "draw_complete",
   "high_value_order",
+  "shop_order",
   "system_alert",
   "membership_upgrade",
   "subscription_past_due",
@@ -186,6 +190,7 @@ const NormRevenueDetailsCategorySchema = z.enum([
   "additional-one-time",
   "mini-draw",
   "upsell",
+  "shop",
 ]);
 
 const NormRevenueDetailsPurchaseSchema = z.object({
@@ -229,6 +234,8 @@ export const NormRevenueDetailsSchema = z.object({
 // ─── dashboard.revenue-details.by-platform ───────────────────────────────────
 // Per-platform acquisition revenue split by source category + PII-safe buyer list.
 
+// Merchandise is deliberately ABSENT: this is the per-platform acquisition/ROAS
+// drill-down, and merch is excluded from the ads numerator (see revenueAggregator).
 const NormAcquisitionCategorySchema = z.enum([
   "membership-purchase",
   "one-time-purchase",

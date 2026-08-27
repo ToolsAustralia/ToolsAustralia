@@ -243,3 +243,32 @@ Each guard below exists because its absence was a live footgun, not for symmetry
 **Exit codes:** `0` clean · `2` gaps found (dry-run) or per-row errors/skips/SIGINT-abort (apply) · `3` fatal or a guard refused · `1` unhandled.
 
 **Why it also reads Stripe.** The Mongo join alone has a structural blind spot — `MembershipRenewalCycle` is written by the same handler that failed, after its first Stripe call, and only for `billing_reason=subscription_cycle`. A second pass lists paid Stripe invoices in the window and checks each against `PaymentEvent`, which is the only anchor that cannot lie by omission. Pass 2 is report-only; non-cycle invoices have different entry maths and are never auto-granted. Disable with `--no-stripe-check` (the script then says the count may understate the damage).
+
+## `check:brand-wordmarks` — the doctor for prize-lane brand wordmarks (2026-08-24)
+
+New npm script → [`scripts/check-brand-wordmarks.mjs`](../../scripts/check-brand-wordmarks.mjs),
+the doctor for the prize-lane brand wordmarks in `public/images/brands/name/`.
+
+```bash
+npm run check:brand-wordmarks            # report only — writes nothing
+npm run check:brand-wordmarks -- --fix   # crop each viewBox to its ink bounds
+```
+
+Report-only by default, in line with **P5** (operational scripts are dry-run by default). Exit
+codes follow the `check:*` convention: **0** clean, **1** a mark carries more than 6% dead canvas
+(actionable — re-run with `--fix`), **2** unexpected error. Like `check:env` it is read-only unless
+explicitly told otherwise, and it never touches path geometry — only the `viewBox` (and any declared
+`width`/`height`), so the artwork stays bit-identical.
+
+**Why it exists:** the prize builder fits every wordmark with `contain`, so transparent padding baked
+into a mark's `viewBox` silently shrinks *that brand only*. Five marks had been exported onto a shared
+700×200 sheet carrying 58–72% dead canvas, and the per-brand scale values in
+`prize-selection/constants.ts` had quietly become padding compensation. The script measures each mark's
+aspect and cap-height ratio and prints the `markScale` / `wordmarkScale` values both reels should use,
+so those stay derived instead of hand-tuned. Full rationale in
+[shared-ui/frontend.md](../shared-ui/frontend.md) and [promo/frontend.md](../promo/frontend.md).
+
+> Unlike the other `check:*` scripts this one is **not** wired into `predev` — it reads and rasterises
+> ten SVGs, which is too slow for every dev boot. Run it by hand whenever a brand mark is added or
+> re-exported. It is `.mjs` and depends only on `sharp` (already a Next dependency), so it needs no
+> `tsx`.

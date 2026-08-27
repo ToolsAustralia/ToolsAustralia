@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { z } from "zod";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 
 const productImportSchema = z.object({
   name: z.string().min(1),
@@ -27,6 +28,9 @@ const importSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const guard = await requirePermissionWithAudit("shop.edit", request, { resourceType: "product" });
+  if (guard instanceof NextResponse) return guard;
+
   try {
     await connectDB();
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { z } from "zod";
+import { requirePermissionWithAudit } from "@/lib/audit-log";
 
 const deleteByDateRangeSchema = z.object({
   startDate: z.string().datetime(),
@@ -9,6 +10,9 @@ const deleteByDateRangeSchema = z.object({
 });
 
 export async function DELETE(request: NextRequest) {
+  const guard = await requirePermissionWithAudit("shop.delete", request, { resourceType: "product" });
+  if (guard instanceof NextResponse) return guard;
+
   try {
     await connectDB();
 

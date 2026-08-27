@@ -85,6 +85,18 @@ const config: Config = {
           dark: "#065255",
         },
         "premium-gold": "#D4AF37",
+        // Shop semantics (2026-08-25 merch redesign). Two axes the badge system
+        // needs that no existing token covers: the saving teal that marks money
+        // back, and the member gold that marks a tier benefit. Both carry an ink
+        // pair because they are fills behind text, not text colours.
+        shop: {
+          save: "#0FB3C4",
+          "save-ink": "#04262A",
+          "save-text": "#0E7490",
+          "save-text-dark": "#22D3EE",
+          gold: "#F5C542",
+          "gold-ink": "#3A2C00",
+        },
         // Membership tier semantic colors — used by Cancellation/Renewal/Downgrade
         // modals and MembershipSection for tradie/foreman/boss theming via cva().
         "brand-tier": {

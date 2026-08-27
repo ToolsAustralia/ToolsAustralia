@@ -366,6 +366,18 @@ The `upsellPurchases` array on `User` (upsell-domain data, but it lives on this 
 
 New optional embedded record on [User.ts](../../src/models/User.ts): `{ scopeVersion, acceptedAt, fields[] }` — the customer's agreement to share their details with the MyRewards partner portal. **No default**: absent means "never consented", the fail-closed state the SSO gate relies on. Owned by the **partner** domain — schema rationale and the re-consent/scope-version mechanism are in [docs/partner/models.md](../partner/models.md); the rules that keep it honest are [docs/partner/rules.md R4–R6](../partner/rules.md). No subscription behaviour changed.
 
+## `User.cart[].sku` (2026-08-17)
+
+The cart subdocument gained an optional `sku` — the chosen product variant. It is part of a
+product line's identity: `(productId, sku)`, not `productId` alone, so two sizes of the same
+garment are two lines and removing one does not remove the other.
+
+Absent on ticket items and on product lines added before variants existed; both keep their
+previous behaviour exactly. It **must** stay declared on the schema — Mongoose `strict: true`
+silently drops unknown keys on save, which would lose the customer's size with no error.
+
+Cart mechanics live in [docs/cart-shop-products/api.md](../cart-shop-products/api.md); this
+note exists because the field is on `User`, which this domain owns.
 ### `User.gender` (added 2026-08-17)
 
 `gender?: "male" | "female"` — **optional**, validated by a validator rather than a Mongoose `enum` so an empty string passes (same treatment as `state` and `mobile`, where `""` means "not provided" rather than invalid). Stored lowercase via `lowercase: true`.
@@ -374,6 +386,32 @@ New optional embedded record on [User.ts](../../src/models/User.ts): `{ scopeVer
 
 No migration was needed (absent = unset). Captured optionally in `UserSetupModal` step 2 (never gates "Continue") and editable at `/my-account/settings`; also added to `MY_ACCOUNT_USER_FIELDS` so it reaches the client.
 
+### `User.smsOtpHash` (added 2026-08-27)
+
+`smsOtpHash?: string` — the live store for an in-flight SMS one-time code, alongside the existing
+`smsOtpExpires` / `smsOtpAttempts`. It holds an **HMAC-SHA256 digest keyed with `NEXTAUTH_SECRET`**,
+never the code itself ([`hashOtpCode`](../../src/utils/auth/mobile-otp.ts)).
+
+**Why a keyed hash and not a plain digest.** There are only 10^6 possible six-digit codes, so a bare
+SHA-256 column could be rainbow-tabled against every live OTP in milliseconds by anyone who could
+read the collection. Keying with a secret that exists only in the environment means a database leak
+alone reveals nothing.
+
+**`smsOtpCode` is now deprecated and unread.** It held the code in **plaintext** for the deleted
+`send-otp` / `verify-otp` / `passwordless-login` routes. It stays on the schema only because the
+admin "resend SMS verification" action still writes it — an action whose gateway call is commented
+out while it returns success, so it currently texts nobody. Both the field and that action go when
+it is rebuilt; nothing else reads either.
+
+Written and cleared by [`/api/auth/send-mobile-login-code`](../../src/app/api/auth/send-mobile-login-code/route.ts)
+and [`/api/auth/verify-mobile-login`](../../src/app/api/auth/verify-mobile-login/route.ts) — cleared
+on success, on expiry, on attempt exhaustion, and on a gateway failure (a code the member never
+received must not sit there consuming their five verify attempts). No migration needed: absent =
+no code in flight. Not added to `MY_ACCOUNT_USER_FIELDS` — it must never reach the client.
+
+Verifying a code also sets `isMobileVerified`, because for SMS the code went to the number already
+on the account: returning it proves control of that number. See
+[auth/api.md](../auth/api.md#sms-sign-in--send-mobile-login-code--verify-mobile-login-2026-08-27).
 ## `pendingChange` is a Mongoose NESTED object — never truthiness-check it (2026-08-26)
 
 `User.subscription.pendingChange` declares all sub-fields optional, so **Mongoose materialises

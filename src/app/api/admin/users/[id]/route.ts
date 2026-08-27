@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PAID_ORDER_STATUSES } from "@/services/shop/orderQueries";
 import { requirePermissionWithAudit } from "@/lib/audit-log";
 import connectDB from "@/lib/mongodb";
 import User, { IUser } from "@/models/User";
@@ -399,8 +400,12 @@ async function buildAdminUserProfile(userId: string) {
     )
     .reduce((sum, event) => sum + (event.data?.price || 0), 0);
 
-  const totalOrders = orders.length;
-  const totalOrderValue = orders.reduce((sum, order) => sum + order.totalAmount, 0);
+  // PAID only — `orders` is the unfiltered list (kept, because the order HISTORY panel
+  // legitimately shows pending and cancelled rows). These two are STATISTICS, and an
+  // abandoned checkout is not a purchase.
+  const paidOrders = orders.filter((o) => PAID_ORDER_STATUSES.includes(o.status));
+  const totalOrders = paidOrders.length;
+  const totalOrderValue = paidOrders.reduce((sum, order) => sum + order.totalAmount, 0);
 
   const miniDrawIds = (user.miniDrawParticipation || [])
     .map((participation) => participation.miniDrawId?.toString())

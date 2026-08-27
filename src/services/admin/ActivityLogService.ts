@@ -29,6 +29,8 @@ export type ActivityLogItemType =
   | "upsell_accepted"
   | "draw_complete"
   | "high_value_order"
+  /** A merchandise order from the shop. */
+  | "shop_order"
   | "system_alert"
   | "membership_upgrade"
   | "subscription_past_due"
@@ -315,6 +317,15 @@ export async function getActivityLog(input: ActivityLogInput): Promise<ActivityL
     } else if (payment.packageType === "upsell") {
       action = `Accepted upsell: ${packageName}`;
       type = "upsell_accepted";
+    } else if (payment.packageType === "shop") {
+      // `packageId` is the ORDER NUMBER for a shop payment (finalizeShopOrder passes
+      // order.orderNumber), which is the identifier staff search by.
+      // "Shop order", not "Ordered merchandise": Shop is the name of the source
+      // everywhere else staff see it — the revenue buckets, the entry wallet, the
+      // nav — and a second word for one thing makes a reader ask whether they are
+      // two different things.
+      action = `Shop order (${payment.packageId ?? packageName})`;
+      type = "shop_order";
     } else if (payment.packageType === "mini-draw") {
       const miniDrawId = paymentData?.miniDrawId as string | undefined;
       const entries = (paymentData?.entries as number | undefined) ?? 0;
@@ -326,9 +337,11 @@ export async function getActivityLog(input: ActivityLogInput): Promise<ActivityL
       type = "one_time_purchase";
     }
 
-    // An accepted upsell is more informative than the generic high-value flag,
-    // so let upsell_accepted take precedence over the >= $300 override.
-    if (amount >= 300 && type !== "upsell_accepted") {
+    // An accepted upsell is more informative than the generic high-value flag, so it
+    // takes precedence over the >= $300 override — and so does a shop order, for the
+    // same reason: "High-value purchase: Ordered merchandise (SHOP-…)" buries the one
+    // fact that makes the row actionable behind a label that says less.
+    if (amount >= 300 && type !== "upsell_accepted" && type !== "shop_order") {
       type = "high_value_order";
       action = `High-value purchase: ${action} - $${amount}`;
     }

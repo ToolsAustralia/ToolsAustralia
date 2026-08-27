@@ -92,7 +92,7 @@ Two **ghost states** ride on top of the enum without being in it: `pendingChange
 |---|---|---|
 | Acquisition / attribution | UTM + click-IDs captured; converting platform resolved at purchase | §8a, §8b · [docs/tracking/](docs/tracking/) |
 | Register (guest bridge) | Step-1 register creates a passwordless guest — **no login, no membership**. Registering with an existing guest's email/mobile updates that plain account; registering with a **staff/admin** email/mobile is rejected (`400`, "please log in") — privileged accounts are never created or mutated via public register (marker: `roleId`/`userType`, not `role`) | §4a, §4b · [docs/auth/gotchas.md](docs/auth/gotchas.md) |
-| Login | password / email sign-in code / Google / post-payment auto-login (a scaffolded **SMS** sign-in code also exists but is **not live** — no SMS provider configured; when enabled, `send-otp` delivers the code only to the mobile **on file** for the account, never a number supplied in the request — see [docs/auth/gotchas.md](docs/auth/gotchas.md)) | §4c–§4f |
+| Login | password / email sign-in code / Google / post-payment auto-login / **SMS sign-in code** (added 2026-08-27). SMS is surfaced on `/login` as *"Can't access your email? Sign in with your mobile"* — the recovery path for a member whose email is wrong or unverified, for whom every other route back in goes through an inbox they cannot read. It resolves the account **by mobile** and texts that same number, so a caller can never redirect another account's code; it is gated on having ever paid, capped at 3 codes/day with a 60s cooldown, and completing it also sets `isMobileVerified` (proving control of the number *is* verification). Ships **dark** until `SMS_ENABLED=true`. The old scaffold (`send-otp`, `verify-otp`, `passwordless-login`) was deleted 2026-08-26 — unreachable in production, and `passwordless-login` delivered the code to a **request-supplied** number. See [docs/auth/gotchas.md](docs/auth/gotchas.md) and [the design spec](docs/superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md). | §4c–§4f |
 | First payment & activation | Full price at signup; webhook grants membership. Card declines return a 400 with the decline reason, and checkout shows short per-decline-code guidance (e.g. "Not enough funds on this card. Try another card."); sensitive codes (lost/stolen/fraud) get a generic "card declined" message | §5.1 · [BUSINESS.md §9, §10g](BUSINESS.md) · [payment-error-messages.ts](src/utils/payment/stripe/payment-error-messages.ts) |
 | Post-purchase setup | UserSetupModal captures profession/state/DOB (all required) **+ gender (optional, never gates "Continue")** + email-verify prompt | [BUSINESS.md §10g](BUSINESS.md) · [docs/USER_SETUP_MODAL.md](docs/USER_SETUP_MODAL.md) |
 | Upsell offer | Post-success offer; per-trigger dedup | §2i · [docs/upsell/](docs/upsell/) · [BUSINESS.md §5](BUSINESS.md) |
@@ -143,7 +143,7 @@ Every field below lives on the `User` Mongoose model ([src/models/User.ts](src/m
 | `isMobileVerified` | boolean (opt, def false) | Mobile verified flag ([User.ts:146](src/models/User.ts#L146)) | — |
 | `emailVerificationToken` / `mobileVerificationToken` | string (opt) | Verification tokens ([User.ts:147-148](src/models/User.ts#L147)) | **Sensitive** |
 | `emailVerificationCode` / `…Expires` / `…Attempts` | string / Date / number | 6-char email code + expiry + attempt counter ([User.ts:151-153](src/models/User.ts#L151)) | **Sensitive** (code) |
-| `smsOtpCode` / `…Expires` / `…Attempts` | string / Date / number | SMS OTP for passwordless auth ([User.ts:159-161](src/models/User.ts#L159)) | **Sensitive** (code) |
+| `smsOtpCode` / `…Expires` / `…Attempts` | string / Date / number | **Vestigial since 2026-08-26.** Held a *plaintext* SMS OTP for the deleted passwordless-auth routes. Only the admin "resend SMS verification" action still writes them — and that action sends no message (its gateway call is commented out while it returns success). Scheduled for replacement: the new policy stores an **HMAC-SHA256 digest keyed with `NEXTAUTH_SECRET`**, never the code ([mobile-otp.ts](src/utils/auth/mobile-otp.ts)). ([User.ts:159-161](src/models/User.ts#L159)) | **Sensitive** (code) |
 | `loginCode` / `…Expires` / `…Attempts` | string / Date / number | Emailed passwordless sign-in code ([User.ts:164-166](src/models/User.ts#L164)) | **Sensitive** (code) |
 | `passwordResetToken` / `passwordResetExpires` | string / Date | Single-use reset token + expiry ([User.ts:169-170](src/models/User.ts#L169)) | **Sensitive** (token) |
 
@@ -198,9 +198,41 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 | `accumulatedEntries` | number (def 0) | Total entries ever received ([User.ts:129](src/models/User.ts#L129)) | — |
 | `entryWallet` | number (def 0) | **Deprecated — kept at 0** ([User.ts:130](src/models/User.ts#L130)) | — |
 | `rewardsPoints` | number (def 0) | Points earned from purchases (legacy; see §7d) ([User.ts:131](src/models/User.ts#L131)) | — |
-| `cart[]` | array | Cart items, `type: "product" \| "ticket"` with `productId?` / `miniDrawId?`, `quantity`, `price?` ([User.ts:136-142](src/models/User.ts#L136)) | — |
+| `cart[]` | array | Cart items, `type: "product" \| "ticket"` with `productId?` / `miniDrawId?`, **`sku?`**, `quantity`, `price?` ([User.ts:136-142](src/models/User.ts#L136)). **`sku` added 2026-08-17**: a product line's identity is now `(productId, sku)`, not `productId` alone — two sizes of the same garment are two lines, and removing one does not remove the other. Absent on ticket items and on product lines added before variants existed; those keep their previous behaviour exactly. Not exposed to the browser — `cart` is excluded from the `MY_ACCOUNT_USER_FIELDS` wire projection (see caveats above). | — |
 
 > **Major-draw entries are NOT on `User`.** They were removed; the single source of truth is `MajorDraw.entries` ([User.ts:133,752](src/models/User.ts#L133)). See [BUSINESS.md §3](BUSINESS.md).
+
+**Merchandise is a fourth way a customer can hold entries (2026-08-17).** Buying an eligible shop
+item credits free entries into the **Major Draw only** — never a Mini Draw — under the source key
+`entriesBySource.shop`. What the customer receives is
+`includedEntries × quantity × the item's own multiplier`.
+
+**That multiplier belongs to the shop, not to the packs (2026-08-20).** An admin sets it per
+product, per category, or shop-wide, and it defaults to 1× — the entries the product advertises,
+unmultiplied. A one-time pack promo does **not** change what a garment grants. The number the
+product page shows and the number the customer actually receives resolve from the same config,
+so they cannot disagree.
+
+Three customer-visible consequences worth knowing:
+
+- **Entries are granted to every buyer**, including SA/ACT residents and anyone whose birthdate we
+  do not hold. There is no eligibility check at point of sale — exclusion is applied by the draw
+  export when a winner is selected, exactly as it is for every other entry source. A customer in an
+  excluded state can therefore buy the garment and see the entries, and is excluded only from
+  winner selection.
+- **Returning one item from a multi-item order does not remove entries.** They are withdrawn only
+  if the whole order is refunded. Stated in `/terms` §3d, §5.2 and §17.
+- **An account is required to buy** — `Order.user` is mandatory, so there is no guest checkout in
+  the shop. A guest must register before paying, which is also what gives the entries somewhere to
+  attach.
+
+**Currently switched off.** Every product ships at `includedEntries: 0` pending a trade-promotion
+permit variation, and nothing renders on a product page at 0 — so no customer is promised entries
+until it is enabled.
+
+The order itself records `Order.entriesGranted`: **absent** means the grant has not run (in
+flight, or failed and awaiting the reconcile cron); **0** means it ran and the order was worth no
+entries. Support needs that distinction.
 
 ### 2f. Saved payment methods (PCI note)
 
@@ -218,6 +250,12 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 | `partnerDiscountConsent` | object (opt, **no default**) | **New 2026-07-31.** The customer's recorded agreement to share their details with the rewards portal: `scopeVersion, acceptedAt, fields[]`. `fields[]` is what they actually **saw** when they agreed — the legal artefact. **Absent = never consented** (fail-closed); a `scopeVersion` older than the current one also re-prompts, which is how "we ask again if what we share changes" is enforced. Re-consent overwrites, so this is current state, not history. | — |
 | `referral` | subdoc (opt) | This user's code: `code` (unique sparse index), `successfulConversions` (def 0), `totalEntriesAwarded` (def 0) ([User.ts:224-228](src/models/User.ts#L224)) | — |
 | `affiliateReferral` | subdoc (opt) | Link to the Affiliate who referred this user: `affiliateId (ref Affiliate), affiliateCode, referredAt, firstPurchaseCompleted (def false), membershipTied (def false)` ([User.ts:232-238](src/models/User.ts#L232)) | — |
+
+**Shop discount (live 2026-08-17; ladder raised 2026-08-25).** A member's tier carries a shop
+discount — Tradie 10%, Foreman 15%, Boss 25% — resolved by `resolveShopDiscountPercent` and applied at checkout before shipping
+is assessed. It is not stored on `User`; it is derived from the active subscription tier at
+purchase time, so it follows upgrades, downgrades and lapses automatically. It was hidden from the
+tier benefit lists while the shop was pre-launch and is now shown.
 
 ### 2h. Attribution / marketing snapshot
 
@@ -359,11 +397,47 @@ back. New-account branches still assign directly — there is nothing to preserv
 | **Email + password** | `LoginModal` → `signIn("credentials")`; the provider looks up the user and `bcrypt.compare`s the password. **Passwordless users (no `password`) cannot use this provider** — `authorize` returns `null` ([auth.ts:56-135](src/lib/auth.ts#L56)). |
 | **Email sign-in code (passwordless)** | "Send code to sign in instead" → `POST /api/auth/send-login-code` then `POST /api/auth/verify-login-code`, which returns a bridge `token` consumed by `signIn("auto-login", { token })`. This is how no-password customers log in ([LoginModal/index.tsx:464-556](src/components/modals/LoginModal/index.tsx#L464)). |
 | **Google OAuth** | `signIn("google")` via popup. The `signIn` callback **rejects Google sign-in for emails with no existing account** (`return false`) — new users must register the normal way first. On success it sets `isEmailVerified = true` ([auth.ts:373-399](src/lib/auth.ts#L373)). |
+| **SMS sign-in code** (2026-08-27) | *"Can't access your email? Sign in with your mobile"* on [`/login`](src/app/login/page-client.tsx) → `POST /api/auth/send-mobile-login-code` then `POST /api/auth/verify-mobile-login`, returning the same bridge `token` consumed by `signIn("auto-login", { token })`. **Resolves the account BY MOBILE** and texts that number — the request carries no other identifier, so there is no {account, deliver-here} pair to manipulate. Gated on [`hasEverPaid`](src/utils/auth/has-ever-paid.ts) **before** the gateway is called (44,445 never-paid accounts hold a mobile; each send costs a credit). 3 codes/day, 60s cooldown, 10-minute expiry, 5 verify attempts — rate limiting is off in development unless `SMS_OTP_RATE_LIMIT_IN_DEV=true`. Success sets `isMobileVerified`. Inert until `SMS_ENABLED=true`. |
 | **Post-payment auto-login** | `/api/auth/auto-login` (payment-proof) → `signIn("auto-login")` — converts a paying guest into a session ([MembershipModal/index.tsx:2448-2477](src/components/modals/MembershipModal/index.tsx#L2448)). |
 
-**Deactivated accounts (`User.isActive: false`) are rejected at login on every path (2026-07-09).** Credentials `authorize` throws `ACCOUNT_DEACTIVATED` (checked **after** password validation so account status is only revealed to a valid credential holder) and both login UIs surface "This account has been deactivated. Please contact an administrator."; the email sign-in-code path rejects at `verify-login-code` (403 + the same message, after the OTP is validated); Google's `signIn` callback returns `false` (AccessDenied); the auto-login provider re-checks `isActive` in the DB before accepting any bridge token and throws the same `ACCOUNT_DEACTIVATED`; and the jwt callback refuses to mint a first token for an inactive account. Previously login *succeeded* and the session-refresh guard killed the token seconds later — an unexplained login→auto-logout loop (hit by removed staff, admin-deactivated accounts, and invited staff who set a password via the public reset flow without completing `/staff-setup`).
+**Deactivated accounts (`User.isActive: false`) are rejected at login on every path (2026-07-09).** Credentials `authorize` throws `ACCOUNT_DEACTIVATED` (checked **after** password validation so account status is only revealed to a valid credential holder) and both login UIs surface "This account has been deactivated. Please contact an administrator."; the email sign-in-code path rejects at `verify-login-code` (403 + the same message, after the OTP is validated); the SMS path rejects at `verify-mobile-login` the same way — **after** the code is validated, so status is revealed only to whoever holds the number (the send route says nothing at all, see below); Google's `signIn` callback returns `false` (AccessDenied); the auto-login provider re-checks `isActive` in the DB before accepting any bridge token and throws the same `ACCOUNT_DEACTIVATED`; and the jwt callback refuses to mint a first token for an inactive account. Previously login *succeeded* and the session-refresh guard killed the token seconds later — an unexplained login→auto-logout loop (hit by removed staff, admin-deactivated accounts, and invited staff who set a password via the public reset flow without completing `/staff-setup`).
 
 After a successful login the client reads the fresh id via `getSession()`, invalidates user-scoped caches via `usePurchaseInvalidation`, then `router.push("/my-account")` + `router.refresh()`.
+
+### 4c-bis. Verified contact channel — required since 2026-08-27
+
+**Every member must finish profile setup holding at least ONE verified contact channel — email
+**or** mobile.** They choose which; email is offered first because it costs nothing to send.
+
+**Why it exists.** Registration is passwordless, and step 1 of the post-purchase setup modal is
+where the member chooses their password. The verified channel is the **recovery credential** for
+that password. Before this, a member who mistyped their email had *no* self-service way back in —
+`/reset-password` mails a link to the address on file, the emailed sign-in code requires
+`isEmailVerified`, and the verify-email bridge needs that same inbox. All three dead-end on an
+inbox they cannot read.
+
+| | |
+|---|---|
+| Where it is asked | Setup step 3 ([`Step3VerifyContact`](src/components/modals/UserSetupModal/Step3VerifyContact.tsx)), after purchase and after the upsell |
+| Where it can be done later | [My Account → Settings](src/app/(site)/my-account/components/settings/ProfileTab.tsx) — each channel shows its own Verified/Unverified state with a Verify button |
+| The switch | `environmentFlags.verifiedContactRequired()` — replaced `emailVerificationMandatory()`, which was hardcoded `false`, so the gate had been built and left off |
+| What it does **not** affect | Entries, draw eligibility, pricing, purchases. It gates completing setup, nothing else. |
+| Existing members | Only asked when the setup modal appears (`profileSetupCompleted` false). Members who already completed setup are not retro-gated. |
+
+Verifying a mobile is the same act as signing in by SMS — the code goes to the number already on
+the account, so returning it proves control of it. Members who use SMS login therefore become
+mobile-verified without a separate step.
+
+### 4c-ter. Dashboard access requires a purchase (2026-08-27)
+
+A signed-in member who has **never paid** is redirected from `/my-account` and `/rewards` to
+`/membership` by [`src/middleware.ts`](src/middleware.ts). They keep their session and can still
+buy, claim a promo or use a referral link — only the dashboard is gated, because it has nothing to
+show them.
+
+Gated on [`hasEverPaid`](src/utils/auth/has-ever-paid.ts) — **ever** paid, not currently active.
+Cancelled, paused and past-due members keep full access; past-due members in particular still hold
+live draw entries and can win. Staff are diverted to `/admin` before this check.
 
 ### 4d. Email verification — what it actually gates
 
@@ -911,6 +985,32 @@ All `/my-account/*` routes require a signed-in session; an unauthenticated visit
 > **Fixed 2026-07-20 (latent):** the my-account payload's `insights.totalSpent`, recent-order count, `recentOrders[]`, and active-mini-draw count were **always empty / `0`** because two DB queries matched zero docs (orders queried a phantom `userId` field; the model owner field is `user` — and active draws filtered on a phantom `MiniDraw.endDate`). These derived values (exposed via `useUserStats`) now hold the customer's **real** data. *(No customer-facing surface renders these insights today — this corrects the payload/derived data, not a visible screen.)* Caveat: `insights.totalSpent` sums `totalAmount` over the **10 most recent orders regardless of status** (includes cancelled/pending, capped at 10) — it is **not** true lifetime spend; a future surface must not treat it as accurate LTV. See [dashboard-account/gotchas.md](docs/dashboard-account/gotchas.md).
 
 **How the Membership surface (`/my-account/membership`) frames free entries.** A member's **base** tier rate is the recurring, per-cycle number ("15 / 40 / 100 free entries **/ mo**" for Tradie / Foreman / Boss); on renewal it is **added** to their accumulated total (the Carry-forward rule — [BUSINESS.md §3e](BUSINESS.md)), never reset and **never re-multiplied** by an active promo. So the current-plan card shows the base rate plus an accumulation hint — "*Free entries accumulate each month — {N} land on your renewal, {date}*" (N = the same accumulated renewal grant the Dashboard shows) — and an **ⓘ** that re-opens the one-time `SubscriptionExplainerModal` (the accumulation chart) on demand. A promo **multiplier (e.g. 10×) is a one-time grant applied only at join / resubscribe / upgrade**, so the "Change your tier" list shows upgrade/join targets as "**{boosted}** free entries **to start**" (not "/ mo"), while the member's **current** tier shows its base "/ mo" — matching the upgrade preview's "N to start + base per cycle after".
+
+**Order history (`/my-account/orders`).** A customer's own shop orders, scoped server-side to their session id — the route pins `userId` from the session and never from a query parameter, so it can only ever return their own. Each order leads with a three-step **progress strip** (Being made → On its way → Delivered) because "where is my order" is the question the page exists to answer; `pending` and `cancelled` show no strip, since neither is a position on that journey. Print-to-order turnaround means "Being made" is a real wait, so each status carries a plain-language line saying so. **No delivery date is ever promised** — none is stored, and supplier turnaround is unconfirmed. Each line now leads with the **product's own image**, joined live from the catalogue rather than snapshotted with the name and price — the picture of a garment does not change when it is renamed, and a line whose product has since been deleted still renders, falling back to a placeholder glyph.
+
+A `pending` order stays visible for **one hour** and is then hidden from the customer's own list (`PENDING_GRACE_MS`): a real payment resolves in seconds, so anything still pending was abandoned at the card step and would otherwise sit in their history looking like a second purchase. Staff still see it.
+
+**The money label follows the order's actual state**, on both this page and the checkout success page: `pending` → "Order total", `cancelled` → "Refund issued", otherwise "Total paid". A customer is never told they paid for something that has not been captured, or that money is still theirs after it has been refunded. "Refund issued" rather than "Refunded" is deliberate — the cancel path attempts the refund and swallows a failure, so it is the intent and not a guarantee. GST is shown as **inside** the total (Australian tax-invoice requirement), never added to it.
+
+**Free entries on a shop order are shown only above zero.** Merchandise entries currently ship dark at `includedEntries: 0`; "0 free entries" would state a promise we are not making. What is displayed is `entriesGranted` — what the webhook actually granted — not a recomputation, so a later multiplier change cannot restate a customer's history.
+**A refresh at the card step no longer creates a second order (fixed 2026-08-21).** Submitting
+the delivery form used to mint a NEW order and a NEW Stripe PaymentIntent every time, so a
+customer who refreshed while the card form was open ended up with two orders in their history
+for one purchase — and the abandoned attempt sat in Stripe as an Incomplete payment. Nobody was
+double-charged (only one intent is ever confirmed), but the customer saw a phantom second
+order. A repeat submit of the same cart now RESUMES the existing order and its payment,
+including when the customer refreshed specifically to correct their address — the address is
+updated on the same order rather than opening another one.
+
+**A declined card now closes the order** rather than leaving it "Awaiting payment" forever. The
+failure handler was writing a status the database does not permit, so the write was rejected
+and every declined shop payment left a stranded order in the customer's history.
+
+**`insights.totalSpent` and per-user order counts now count PAID orders only.** They previously
+summed every order row regardless of status, so an abandoned checkout — or one of the
+duplicates above — inflated a customer's own spend figure and consumed one of the ten
+`recentOrders` slots. Order HISTORY still shows cancelled and pending orders; it is the
+statistics that no longer count attempts as purchases.
 
 **Reaching Cobber (the AI support assistant):** everywhere on the site a customer opens Cobber via the **floating chat bubble** (`SupportChatWidget`, bottom corner). On `/my-account` that bubble is **suppressed** and the dashboard's **"Ask Cobber" support card** ("Start a chat", in the Support sheet / `/my-account/support`) is the single entry point instead — so members see one clear way to start a chat, not two. Both open the same chat panel. **Guest vs member access** is controlled by `CHAT_ALLOW_GUEST_GENERATIVE` (hCaptcha is deferred). **Off (default):** anonymous visitors get free **FAQ answers** + a "sign in to chat" nudge for anything the FAQ can't cover; **signed-in members get the full AI assistant**. **On (chosen launch posture):** anonymous visitors also get **full AI answers** — routed to the cheaper **Gemini** model (members keep the admin-toggled provider), guarded by the per-IP rate limit + daily budget. Either way members get the full bot. See [ai-chatbot/merge-to-main.md § 4g](docs/ai-chatbot/merge-to-main.md).
 

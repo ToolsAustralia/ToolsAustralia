@@ -1,0 +1,206 @@
+import Stripe from "stripe";
+import { sendShopOrderRefunded } from "@/services/shop/sendOrderRefunded";
+import { stripe } from "@/lib/stripe";
+import Order, { type IOrder } from "@/models/Order";
+
+/**
+ * Refund a merchandise order.
+ *
+ * Merch is print-to-order, so refunds should be rare by construction — nothing is
+ * dispatched from stock and there is no change-of-mind return. This exists for the
+ * cases that are not optional: a garment arrives faulty or wrong, a print is bad, a
+ * parcel is lost. Handling those by hand in the Stripe dashboard is what created the
+ * gap this closes — a dashboard refund moves the money and tells this database
+ * nothing, so the order stays `processing`, stays in the fulfilment queue, and gets
+ * printed and posted to someone who already has their money back.
+ *
+ * ORDER OF OPERATIONS IS DELIBERATE:
+ *
+ *   1. Read the order and refuse the states that must not be refunded
+ *   2. Refund in Stripe — the money moves first
+ *   3. Only then write our own status
+ *
+ * Money first, because a local status written before a failed refund is a lie that
+ * removes the order from the queue while the customer is still out of pocket. If
+ * step 3 fails after step 2 succeeded, the refund still happened and the note on the
+ * order is the recovery trail; the reverse ordering has no recovery at all.
+ *
+ * Entries are NOT reversed here. That belongs to the existing refund-reversal path,
+ * which runs from the Stripe refund webhook against the BenefitsGranted PaymentEvent
+ * and already handles every package type. Reversing them here as well would
+ * double-subtract. Merchandise ships at `includedEntries: 0` today, so nothing is
+ * granted to reverse — but the note matters for the day the permit lands.
+ */
+
+export type RefundShopOrderStatus =
+  | "refunded"
+  | "order_not_found"
+  | "not_refundable"
+  | "already_refunded"
+  | "no_payment"
+  | "stripe_failed"
+  /**
+   * Stripe refunded, our own write did not land. The customer HAS their money
+   * and the order still reads as live, so the caller must surface this loudly
+   * rather than reporting a clean refund.
+   */
+  | "local_write_failed";
+
+export interface RefundShopOrderResult {
+  status: RefundShopOrderStatus;
+  orderNumber?: string;
+  /** Cents actually refunded, as Stripe reports it. */
+  amountRefunded?: number;
+  /**
+   * Whether this refund cancelled the order.
+   *
+   * Returned rather than left for the caller to infer from what it asked for: a
+   * "partial" refund entered at exactly the order total IS a full refund here and
+   * cancels the order, so a caller reasoning from its own request would tell staff
+   * the order is still live when it has just left the fulfilment queue.
+   */
+  wasFull?: boolean;
+  error?: string;
+}
+
+/** Statuses a refund may be issued from. */
+const REFUNDABLE: readonly IOrder["status"][] = ["processing", "shipped", "delivered", "completed"];
+
+export async function refundShopOrder(params: {
+  orderId: string;
+  /** Cents. Omit for a full refund. */
+  amountCents?: number;
+  /** Free text recorded on the order, e.g. "arrived with a cracked print". */
+  reason?: string;
+  /** Staff user id, for the note. The audit row is written by the route. */
+  actorId?: string;
+}): Promise<RefundShopOrderResult> {
+  const order = await Order.findById(params.orderId);
+  if (!order) return { status: "order_not_found" };
+
+  if (order.status === "cancelled") {
+    // The stock-loss path already refunds and sets cancelled. Refunding again would
+    // attempt a second refund against the same PaymentIntent.
+    return { status: "already_refunded", orderNumber: order.orderNumber };
+  }
+  if (!REFUNDABLE.includes(order.status)) {
+    // `pending` is unpaid — there is nothing to give back.
+    return { status: "not_refundable", orderNumber: order.orderNumber };
+  }
+  if (!order.paymentIntentId) {
+    return { status: "no_payment", orderNumber: order.orderNumber };
+  }
+
+  let refund: Stripe.Refund;
+  try {
+    refund = await stripe.refunds.create({
+      payment_intent: order.paymentIntentId,
+      ...(params.amountCents ? { amount: params.amountCents } : {}),
+      reason: "requested_by_customer",
+      metadata: {
+        reason: params.reason ?? "shop_refund",
+        orderNumber: order.orderNumber,
+        ...(params.actorId ? { actorId: params.actorId } : {}),
+      },
+    });
+  } catch (err) {
+    // Loud: the customer is expecting their money and only a human can resolve it.
+    console.error("[shop] refund failed", {
+      orderNumber: order.orderNumber,
+      paymentIntentId: order.paymentIntentId,
+      err,
+    });
+    return {
+      status: "stripe_failed",
+      orderNumber: order.orderNumber,
+      error: err instanceof Error ? err.message : "Stripe refused the refund",
+    };
+  }
+
+  // A partial refund leaves the order live — the customer still has the garment and
+  // it may still need dispatching. Only a FULL refund cancels it, which is what
+  // takes it out of the fulfilment queue.
+  //
+  // Fullness is cumulative, read back from Stripe, not computed from this one
+  // request. Two partials of $60 and $40 against a $100 order each look partial in
+  // isolation, so the order would stay `processing` — the only status the
+  // fulfilment CSV selects — and be printed and posted to someone who has every
+  // dollar back. Nothing on the Order records refunded amounts, so Stripe is the
+  // only place that knows.
+  const totalCents = Math.round(order.totalAmount * 100);
+  let refundedToDateCents = refund.amount;
+  try {
+    const all = await stripe.refunds.list({ payment_intent: order.paymentIntentId, limit: 100 });
+    refundedToDateCents = all.data.reduce((sum, r) => sum + (r.amount ?? 0), 0);
+  } catch (err) {
+    // Fall back to this refund alone. That can under-report and leave the order
+    // live, which is the safe direction: a live order is visible and fixable, a
+    // wrongly-cancelled one silently is not.
+    console.error("[shop] could not read the refund history; treating this refund alone", {
+      orderNumber: order.orderNumber,
+      err,
+    });
+  }
+  const isFull = refundedToDateCents >= totalCents;
+  // `notes` is capped at 500 characters by the schema, and both the route and the
+  // admin textarea accept a 500-character reason — so an ordinary maximum-length
+  // reason produced a 521-character note, Mongoose refused the whole document, and
+  // the swallowed catch below still returned success. The order kept `processing`,
+  // stayed in the print queue, and was made and posted to a refunded customer.
+  // Truncate to fit rather than lose the write.
+  const NOTES_MAX = 500;
+  const prefix = `Refunded ${(refund.amount / 100).toFixed(2)} AUD`;
+  const note = params.reason ? `${prefix} — ${params.reason}` : prefix;
+  const combined = order.notes ? `${order.notes}\n${note}` : note;
+  // Keep the NEWEST note: a second refund on an order that already carries one
+  // would otherwise overflow long before the reason reaches its own limit.
+  order.notes =
+    combined.length <= NOTES_MAX ? combined : combined.slice(combined.length - NOTES_MAX);
+  if (isFull) order.status = "cancelled";
+
+  try {
+    await order.save();
+  } catch (err) {
+    // The money is already back with the customer and our record did not move, so
+    // the order still reads as live and printable. That is NOT a successful refund
+    // and must not be reported as one — the caller turns this into a 502 so staff
+    // know to check the order themselves.
+    console.error("[shop] REFUND SUCCEEDED BUT THE ORDER COULD NOT BE UPDATED", {
+      orderNumber: order.orderNumber,
+      refundId: refund.id,
+      amountRefunded: refund.amount,
+      err,
+    });
+    return {
+      status: "local_write_failed",
+      orderNumber: order.orderNumber,
+      amountRefunded: refund.amount,
+      wasFull: isFull,
+      error:
+        "The refund went through in Stripe but this order could not be updated. " +
+        "It may still be in the print queue — check it before anything ships.",
+    };
+  }
+
+  // Tell the customer. A staff refund was as silent as the stock-loss one — the
+  // money went back and nothing explained why. Best-effort: the refund has already
+  // succeeded and the record is written, so an email problem must not turn a
+  // completed refund into a reported failure.
+  if (isFull) {
+    await sendShopOrderRefunded(
+      order,
+      params.reason?.trim()
+        ? params.reason.trim()
+        : "We cancelled this order and sent your money back."
+    ).catch((err) => {
+      console.error("[shop] refund email failed", { orderNumber: order.orderNumber, err });
+    });
+  }
+
+  return {
+    status: "refunded",
+    orderNumber: order.orderNumber,
+    amountRefunded: refund.amount,
+    wasFull: isFull,
+  };
+}

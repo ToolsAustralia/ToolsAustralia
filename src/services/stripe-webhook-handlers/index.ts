@@ -79,6 +79,7 @@ import {
   retrieveStripeSubscription,
   shouldAdoptPaidSubscriptionOverStored,
 } from "@/services/subscription/SubscriptionReferenceService";
+import { finalizeShopOrder } from "@/services/shop/finalizeShopOrder";
 
 /**
  * Optimized logging system with environment-aware verbosity
@@ -930,7 +931,37 @@ async function handlePaymentSuccess(
     }
 
     // Process ONLY non-subscription payments (explicit types)
-    if (paymentType === "upsell") {
+    if (paymentType === "shop") {
+      // Marks the order paid, takes stock, clears the cart, and credits the free
+      // entries included with the garment. Without this branch the dispatcher's
+      // final `else` silently skips the event and a paid order never leaves
+      // `pending`.
+      //
+      // Merchandise inherits the ONE-TIME pack multiplier — deliberately, so the
+      // two move together and merch can never become better value per entry than
+      // the packs during a promo. Resolved here rather than inside the service
+      // because this helper (with its `?? 1` and catch → 1) already lives in this
+      // file and is what the one-time path uses; a copy in the shop service would
+      // be the third of an identical wrapper.
+      webhookLog("info", `Processing shop payment: ${paymentIntent.id}`);
+      // NO promo multiplier is resolved for merchandise. It carries its own,
+      // set in admin and resolved inside finalizeShopOrder from the same config
+      // the product page reads (owner decision 2026-08-20 — merch no longer
+      // inherits the one-time pack rate). Passing one here would be dead weight
+      // that reads like the inheritance is still wired up.
+      // Click ids recovered from metadata, so the server Purchase is attributable.
+      const result = await finalizeShopOrder(paymentIntent, {
+
+        requestContext: extractRequestContextFromMetadata(paymentIntent.metadata),
+      });
+      webhookLog(
+        "info",
+        `Shop payment ${result.status}: ${result.orderNumber ?? "unknown order"} · ${
+          result.entriesGranted ?? "no"
+        } entries`
+      );
+      return result.status === "fulfilled" || result.status === "already_processed";
+    } else if (paymentType === "upsell") {
       webhookLog("info", `Processing upsell payment: ${paymentIntent.id}`);
       await handleUpsellWebhook(user, paymentIntent, eventCreatedUnixSeconds);
     } else if (paymentType === "mini-draw") {
@@ -1660,12 +1691,30 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
       return;
     }
 
-    // Update order status if it exists
-    const order = await Order.findOne({ paymentIntentId: paymentIntent.id });
-    if (order) {
-      order.status = "failed";
-      await order.save();
-    }
+    /*
+      Retire the order on a failed payment.
+
+      This used to assign `status = "failed"`, which is NOT a member of the enum on
+      models/Order.ts (`pending | processing | shipped | delivered | cancelled |
+      completed`). Mongoose validates enums on save(), so the write threw, the throw
+      was swallowed by this handler's outer catch, and every declined card left its
+      order stuck at `pending` FOREVER — a second, independent source of the orphan
+      pending rows that pollute admin counts. It also meant the one code path meant to
+      clean up after a failed payment never ran.
+
+      `cancelled` is reused rather than adding a status: it already covers the
+      stock-loss auto-refund and the full-refund path, and adding a seventh value
+      would mean touching the enum, the admin status filter and every consumer. The
+      reason lives in `notes`, which is what a human reads to tell the three apart.
+
+      findOneAndUpdate gated on `status: "pending"` is the race guard — the same one
+      markPaid uses — so a late failure webhook can never clobber an order the success
+      webhook has already moved to `processing`.
+    */
+    await Order.findOneAndUpdate(
+      { paymentIntentId: paymentIntent.id, status: "pending" },
+      { status: "cancelled", notes: "Payment failed" }
+    );
 
     // Extract payment type and details from metadata
     // Determine payment type: if has invoice, it's a subscription; otherwise check metadata

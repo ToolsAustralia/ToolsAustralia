@@ -4,18 +4,15 @@ import connectDB from "@/lib/mongodb";
 import {
   getRevenueDetails,
   resolveRevenueDetailsRange,
+  REVENUE_DETAILS_CATEGORIES,
   type RevenueDetailsCategory,
   type RevenueDetailsDateRange,
 } from "@/services/admin/dashboardSlices";
 
-const VALID_CATEGORIES: RevenueDetailsCategory[] = [
-  "membership-purchase",
-  "membership-renewal",
-  "one-time-purchase",
-  "additional-one-time",
-  "mini-draw",
-  "upsell",
-];
+// Imported, never re-typed. A local copy annotated `RevenueDetailsCategory[]` accepts
+// a SUBSET without complaint, which is how `shop` reached the union, the service and
+// the UI while this allowlist still rejected it with a 400.
+const VALID_CATEGORIES: readonly RevenueDetailsCategory[] = REVENUE_DETAILS_CATEGORIES;
 
 /**
  * GET /api/admin/dashboard/revenue-details

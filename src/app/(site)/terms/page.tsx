@@ -94,7 +94,7 @@ export default function TermsPage() {
           <section id="membership-types" className="space-y-4 rounded-xl bg-slate-900/60 p-6 shadow-lg shadow-black/10">
             <h2 className="text-2xl font-semibold text-white">3. Membership Types and Packages</h2>
             <p className="text-gray-300">
-              Tools Australia offers three distinct product categories that provide entries into trade promotions and
+              Tools Australia offers four distinct product categories that provide entries into trade promotions and
               giveaways:
             </p>
             <div className="space-y-4 text-gray-300">
@@ -147,6 +147,34 @@ export default function TermsPage() {
                   </li>
                 </ul>
               </div>
+              <div>
+                <h3 className="text-xl font-semibold text-white">d. Merchandise:</h3>
+                <ul className="list-inside list-disc space-y-2">
+                  <li>
+                    Physical goods (apparel and related items) purchased from the Tools Australia shop. The product
+                    purchased is the item itself
+                  </li>
+                  <li>
+                    Eligible items include a stated number of free entries into Major Giveaway Competitions at no
+                    additional cost. Entries are an inclusion with the item and are not sold separately or priced
+                    individually
+                  </li>
+                  <li>
+                    The number of free entries included is displayed on the product page at time of purchase and
+                    confirmed via email
+                  </li>
+                  <li>Entries credited immediately upon payment</li>
+                  <li>Merchandise entries do NOT provide entries to Mini Draw competitions</li>
+                  <li>
+                    Where a promotional multiplier is in effect, the multiplied total is shown on the product page
+                    before purchase
+                  </li>
+                  <li>
+                    Returning or exchanging an individual item does not remove entries already credited. Entries are
+                    reversed only where the entire order is refunded
+                  </li>
+                </ul>
+              </div>
             </div>
             <p className="text-gray-300">
               <strong>Package Details:</strong> Entry numbers, pricing, and benefits for each package type are displayed
@@ -155,7 +183,7 @@ export default function TermsPage() {
             <p className="text-gray-300">
               <strong>Important:</strong> One-Time Packages provide entries to Major Giveaway competitions only. Mini
               Packs provide entries exclusively to the specific Mini Draw competition selected at time of purchase.
-              Membership Packages provide ongoing monthly entries that apply to Major Giveaway competitions only.
+              Membership Packages provide ongoing monthly entries that apply to Major Giveaway competitions only. Merchandise items that include free entries apply those entries to Major Giveaway competitions only.
               Purchase confirmations clearly specify the number of entries and applicable competition periods.
             </p>
           </section>
@@ -199,6 +227,11 @@ export default function TermsPage() {
                     Mini Packs: Entries exclusively to the specific Mini Draw competition selected at time of purchase
                     only
                   </li>
+                  <li>
+                    Merchandise: Eligible shop items include free entries into Major Giveaway competitions at no
+                    additional cost. The entries are an inclusion with the item purchased; they are not sold and are
+                    not priced individually
+                  </li>
                 </ul>
                 <p className="mt-2">
                   <strong>Partner Discount Hierarchy:</strong> If a user holding a Membership Package purchases a
@@ -212,11 +245,16 @@ export default function TermsPage() {
                 <ul className="list-inside list-disc space-y-2">
                   <li>Entry limits specified in each competition&apos;s terms and conditions</li>
                   <li>
-                    Mini Draws have a capped entry threshold based solely on Mini Pack entries sold. Once the maximum
-                    entry threshold for a Mini Draw is reached, Mini Pack purchases for that specific Mini Draw are
-                    disabled and the draw is conducted
+                    Mini Draws have a capped entry threshold, counting only the free entries included with Mini Pack
+                    purchases. Once the maximum entry threshold for a Mini Draw is reached, Mini Pack purchases for
+                    that specific Mini Draw are disabled and the draw is conducted
                   </li>
                   <li>Maximum entries per member may apply as specified in competition-specific terms.</li>
+                  <li>
+                    Where a merchandise order containing more than one item is partially refunded or an individual item
+                    is returned or exchanged, entries already credited for that order remain valid. Entries are
+                    withdrawn only where the entire order is refunded
+                  </li>
                 </ul>
               </div>
               <div>
@@ -547,12 +585,17 @@ export default function TermsPage() {
               <li>You meet eligibility requirements</li>
               <li>
                 You understand One-Time Packages provide entries to Major Giveaway competitions only, Mini Packs provide
-                entries to the specific Mini Draw competition purchased only, and Membership Packages provide ongoing
-                monthly entries to Major Giveaway competitions only
+                entries to the specific Mini Draw competition purchased only, Membership Packages provide ongoing
+                monthly entries to Major Giveaway competitions only, and eligible Merchandise items include free
+                entries to Major Giveaway competitions only
               </li>
               <li>
                 You understand Membership Package entries are accumulated monthly and apply to Major Giveaway
                 competitions only, and specifically exclude all Mini Draw entries.
+              </li>
+              <li>
+                You understand free entries included with Merchandise are an inclusion with the item purchased, are
+                never sold separately, and remain valid if an individual item from a multi-item order is returned
               </li>
               <li>You are responsible for maintaining accurate contact details</li>
             </ul>

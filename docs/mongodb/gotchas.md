@@ -27,6 +27,31 @@ itself is dropped by `scripts/migrations/2026-07-31-promo-analytics-cleanup.ts`
 no-op). Until that runs against an environment, the index is still live there and still paying
 write amplification on the highest-write collection in the app.
 
+## `major-draw-queries.ts` sums `entriesBySource` twice, by hand (2026-08-17)
+
+[`major-draw-queries.ts`](../../src/utils/database/queries/major-draw-queries.ts) derives
+`oneTimeEntries` by **hardcoding an addition over named `entriesBySource` keys** — and it does so in
+**two byte-identical blocks**, one in `getUserMajorDrawStats` and one in
+`getUserCurrentMajorDrawStats`. There is no shared helper and no key iteration, so a new bucket
+added to only one block, or to neither, compiles clean and silently under-reports. (The
+`entriesByPackage` list beside them *does* iterate `Object.entries(...)`, so it picks up new buckets
+for free — which is exactly why the hand-written sums are easy to forget.)
+
+The load-bearing invariant is that `oneTimeEntries + membership + streak` agrees with
+`userEntry.totalEntries`, which is read straight off the document rather than recomputed. A bucket
+missing from the sum makes the wallet's breakdown not add up to the total beside it — a discrepancy
+users notice before we do.
+
+Grouping rule: every **non-membership, non-streak** source folds into `oneTimeEntries`
+(`one-time-package`, `upsell`, `mini-draw`, `referral`, `bonus-entry-promo`, `cancellation-upsell`,
+`promo-link`, and now `shop`). `streak` stays a distinct bucket so the wallet can render it as its
+own line. The `shop` addition (merchandise orders) followed that rule rather than claiming a new
+bucket — note that **nothing writes a `shop` entry yet**, so the term contributes 0 on every row
+today; it is wired ahead of a grant that is gated on a trade-promotion permit variation.
+
+When adding a bucket: update **both** blocks, keep them identical, and confirm the sum still
+reconciles with `totalEntries`.
+
 ## Aggregation cost
 
 Heavy aggregations on hot-path requests can starve the pool. Consider:

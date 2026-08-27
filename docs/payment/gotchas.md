@@ -47,6 +47,10 @@ Rules for this block:
 
 For the legacy fallback path (originalEvent has no `grants.drawGrants` — pre-ledger event), `removeMajorDrawEntries` is intentionally called without a `drawId` because none is available. The function logs `[refund-reversal] no drawGrants ledger — falling back to legacy walk` so these cases are visible during local `stripe listen` debugging.
 
+**The legacy walk's `source` ternary needs an arm per `packageType` (2026-08-17).** In that fallback the source key is picked by a ternary chain whose final `: "mini-draw"` is a **fallback, not a match** — any `packageType` not explicitly named above it lands there. So when `packageType: "shop"` was introduced, a merchandise refund would have removed entries from the user's **`mini-draw`** bucket, via the drawId-less multi-draw walk: the over-removal pattern above, aimed at the wrong source. `shop` now has an explicit arm; add one for every new `packageType`, because the default is silently wrong rather than merely imprecise. (Nothing produces `packageType: "shop"` yet — see [backend.md](./backend.md) — so this is a trap disarmed ahead of the grant, not a fixed production bug.)
+
+The inline `row.sourceKey as …` union in the ledger path was completed in the same change (6 keys → 10: `referral`, `cancellation-upsell`, `streak`, `shop`). It is an unchecked `as` on a `string` field, so it gates nothing at runtime — it is documentation, and it had drifted three keys behind the schema. Don't read it as a guarantee.
+
 ## Refund reversal must pass `invoiceId` to the affiliate reversal
 
 `processRefundReversal` resolves both the real `paymentIntentId` and (for
@@ -213,6 +217,48 @@ Reporting is best-effort and never masks the payment error. The route no longer 
 **If you add another purchase entry point, call this helper.** `success: true` from a purchase
 route does not mean the money moved.
 
+## `processPaymentBenefits`' failure path was invisible in production (fixed 2026-08-17)
+
+Every `console.error` in the `catch` of `processPaymentBenefitsInternal` had been commented out.
+The only surviving write was `fs.appendFileSync(process.cwd() + "/webhook-debug.log", …)` — and
+**that filesystem is read-only on Vercel**, so the append threw, its own catch swallowed it, and
+the single line that reached production logs was `"Failed to write to log file"`. The actual
+reason a grant failed was unobtainable in production, for every payment type, for as long as this
+was in place.
+
+The file write was **deleted rather than repaired**: it never worked in the environment that
+matters and was actively masking the real error. `fs` and `path` imports went with it — they had
+no other use in the file. Failures now emit a real `console.error` with message, stack,
+`paymentIntentId`, `userId`, `packageType`, `packageId`, `entries`, `processedBy` and attempt
+number.
+
+`console.error` is deliberate: `next.config.ts` `removeConsole` strips `log`/`info`/`debug`/`warn`
+from production builds but keeps `error`. A `console.warn` here would have been just as invisible.
+
+## Merchandise is exempt from three things that look like they should apply to it
+
+All three are `packageType === "shop"` guards in `payment-processing.ts`, and all three are
+decisions rather than oversights:
+
+- **`checkMajorDrawActiveForNewPurchases`** — exempt, alongside subscription renewals. That gate
+  exists to stop someone *buying into* a draw that is closing, and every gated path is **also**
+  blocked up-front at checkout so the customer never pays. Shop checkout has no pre-gate and must
+  not gain one; a hoodie has to stay buyable during the freeze. Without the exemption the shop
+  takes the money, ships the garment, and returns `GATES_CLOSED` — granting nothing, with no
+  rollback and no retry. `getTargetMajorDraw()` already routes freeze-window entries to the next
+  queued draw, which is the wanted behaviour, and this gate would stop it being reached.
+- **`MilestoneService.checkAndIssueMilestones({ allowStreakIssuance })`** — `false` for shop. The
+  invariant that flag protects is *"a member must never gain draw entries in a month they paid
+  nothing"*, and it is coupled to a paid **membership** invoice, not to any payment. A t-shirt is a
+  payment; it is not a month of membership. Leaving it `true` would let an ex-member with a stale
+  `streakMonths` counter buy merch and be issued streak entries for months they never paid for.
+- **`$addToSet: { processedPayments }`** — skipped for shop. This array is **not** the idempotency
+  gate (`isPaymentProcessed()` reads `PaymentEvent` `BenefitsGranted-{pi}`, and shop has its own
+  gate in `ShopOrderService.markPaid`). Its only functional readers treat a non-empty array as
+  *"this customer has already bought something"*: `lib/referral.ts:160` refuses a referral code to
+  anyone with `length > 0`, and the first-purchase referral reward fires only at `count === 1`.
+  Appending a t-shirt would permanently bar that customer from ever redeeming a referral code, and
+  rob their referrer of the reward on the membership they buy later.
 ## Excessive-retry block: customer copy
 
 When Stripe blocks a card with `outcome.reason === "previously_declined_do_not_retry"`, the member
@@ -252,6 +298,75 @@ Three separate traps, all of which had to be fixed together — see `reportDrawC
 
 ⚠️ **When adding any server-side error report, check the argument count first.** A two-argument call compiles, type-checks, lints, and does nothing.
 
+## Resolved — a 3DS buyer finished paying and stayed logged out (2026-08-27)
+
+3DS/SCA sends the buyer to their bank and Stripe brings them back to `return_url`. That round trip
+destroys every bit of in-page React state — **including the `guestUserData` bridge** that carries a
+guest from checkout into profile setup. The success landing therefore had nothing to identify the
+payer with, and no code path signed them in: they completed the purchase and stayed logged out,
+never reaching profile setup, never setting a password, never verifying a contact channel.
+Registration is passwordless, so that is terminal — this is the cohort with no self-service route
+back into their own account.
+
+The fix, in [`use3DSRedirectHandler.ts`](../../src/hooks/use3DSRedirectHandler.ts), is
+`establishSessionFromPayment(clientSecret)` on `succeeded` → `POST`
+[`/api/auth/session-from-payment`](../../src/app/api/auth/session-from-payment/route.ts) →
+`signIn("auto-login", { token })`. The route takes **only** the redirect's client secret and derives
+the user from the PaymentIntent's customer, so the client asserts no identity; it is documented in
+[auth/api.md](../auth/api.md) and specified in
+[2026-08-25 mobile verification and SMS login](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+**Best-effort and silent, on purpose.** The payment already succeeded. Awaiting the exchange,
+surfacing its error, or logging it as a payment failure would turn a sign-in hiccup into "your
+payment failed" on the screen that has just taken the customer's money. Failure degrades to exactly
+the pre-fix behaviour — success page, logged out — with the email / SMS sign-in paths still open.
+Encoded as [R13](./rules.md#r13); the full contract is in
+[frontend.md](./frontend.md#3ds-session-establishment).
+
+**The `202` retry is the webhook race, not a flaky network.** A one-time buyer who never registered
+has no `User` document until the Stripe webhook creates one, so the route answers
+`202 { pending: true }` rather than failing someone who has genuinely paid. The hook re-POSTs on
+`[0, 1500, 3000, 5000]` ms. Every other non-`ok` status is terminal and returns immediately —
+retrying a 403 (client-secret mismatch) or a 409 (intent not `succeeded`, or no customer on the
+intent) cannot change the answer.
+
+**Still on `auto-login`: the three in-modal `MembershipModal` purchase paths.** Not an oversight —
+bundling that migration would have put a working purchase path at risk of a fault in a brand-new
+route. Once `session-from-payment` has run in production, delete `auto-login` and point all four
+call sites here.
+
+## Three payment paths created accounts with an unchecked mobile (guarded 2026-08-27)
+
+`User.mobile` is now a login identifier and carries a `unique` index. Three paths create accounts
+with a mobile and **none of them checked uniqueness**:
+
+- [`account-manager.ts`](../../src/utils/payment/account-manager.ts) (Stripe webhook — the buyer who never registered)
+- [`user-subscription-utils.ts`](../../src/utils/payment/user-subscription-utils.ts)
+- [`/api/stripe/create-subscription`](../../src/app/api/stripe/create-subscription/route.ts)
+
+Under the unique index a collision is an **`E11000` thrown inside account creation for someone who
+has already been charged** — the worst possible place to surface a data-integrity error. The
+customer's money moves and their account never appears.
+
+All three now route the value through
+[`claimMobileForNewUser()`](../../src/utils/auth/claim-mobile.ts): if the number is already on
+another account, the new account is created **without** it and the collision is logged with
+`console.error` (which survives the production console strip). The customer keeps their purchase,
+their entries and their account; they add a mobile later from Settings, where the check is friendly
+and interactive.
+
+**Do not "improve" this into a hard failure or a silent steal from the other account.** A phone
+number is recoverable. A broken checkout is not.
+
+> **Ordering:** this guard must be deployed **before** `migrate:unique-mobile-index` runs against
+> production. Until it is, the index turns a rare data collision into a failed purchase. The
+> normalise migration has no such constraint — it is safe to run against the old code, and in fact
+> makes `register`'s existing duplicate check work correctly.
+## `account-manager` no longer initialises `upsellStats` (2026-08-27)
+
+`createUserAccount` in `src/utils/payment/account-manager.ts` seeded a five-counter
+`upsellStats` object on guest-checkout account creation. The field is deleted from the User
+model — see `docs/upsell/gotchas.md`. `upsellPurchases` / `upsellHistory` are untouched.
 ## The applied discount code was thrown away at checkout (fixed 2026-08-27)
 
 ### In plain English — and why a discount-code bug touches the payment records at all
@@ -388,8 +503,3 @@ attach path is slow and wants attention. See
 **What is NOT covered.** The intent is only recorded for a customer the server can resolve to a real
 account from the checkout object's own metadata. A code applied by someone with no account row could
 never redeem anyway (`resolveCodeForCheckout` refuses it first), so there is nothing to recover.
-## `account-manager` no longer initialises `upsellStats` (2026-08-27)
-
-`createUserAccount` in `src/utils/payment/account-manager.ts` seeded a five-counter
-`upsellStats` object on guest-checkout account creation. The field is deleted from the User
-model — see `docs/upsell/gotchas.md`. `upsellPurchases` / `upsellHistory` are untouched.

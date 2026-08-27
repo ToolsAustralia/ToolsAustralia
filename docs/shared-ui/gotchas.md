@@ -1,5 +1,37 @@
 # Shared UI — Gotchas
 
+## `MajorDrawSection` deleted — 1,726 lines nothing could reach (2026-08-26)
+
+Removed [src/components/sections/MajorDrawSection.tsx](../../src/components/sections/MajorDrawSection.tsx)
+and, with it, the three exports in `prize-brand-colors.ts` that existed only to serve it
+(`getPrizeBrandColors`, `getBrandBorderColor`, `getBrandGlowColor`, plus their private helpers
+`TOOLS_AUSTRALIA_RED` and `buildBrandColorsFromTheme`). That file went 208 → 82 lines.
+
+**How deadness was established**, because "looks unused" is not enough for 1,726 lines:
+
+- It has exactly **one export**, a `default`. A default export can only arrive by
+  `from ".../MajorDrawSection"`, so there is no named-import or `export *` path to miss.
+- A repo-wide search for the identifier returns only **this file, and one comment** in
+  `prize-selection/utils.ts`. No static import, no `dynamic()`, no `lazy()`, no barrel
+  re-export — `components/sections/` has no `index.ts` to hide one.
+- Nothing in `e2e/` or `scripts/` names it.
+
+**Why it lingered.** It was a near-twin of `PrizeShowcase`, and the docs kept scheduling work on
+it — a decomposition-backlog entry (score 4.5), a Swiper→Embla migration it did receive, an
+outstanding "convert three raster checkout badges" TODO. Live-looking maintenance history is
+exactly what stops anyone asking whether a file renders at all.
+
+**The cost of leaving it.** It carried twelve `"$5000 Cash Prize"` strings — a prize component
+draw 10 removed. Dead code does not just sit there: it turns up in every grep for the thing you
+are trying to purge and has to be re-triaged each time, and it is one careless import away from
+becoming a live surface that makes a stale legal claim.
+
+**Still dead, deliberately left:** `modals/ui/ModalFooter` has no importer either, but it is
+re-exported from `modals/ui/index.ts`, which makes removing it a public-API change rather than a
+cleanup. Its prop type `PrizeBrandColors` is why that interface survives the trim above.
+
+---
+
 ## `useSearchParams()` + `<Suspense fallback={null}>` = a section that ships as zero height (fixed 2026-07-27)
 
 `/promotions/*` measured **CLS 1.1689** on a throttled 390×844 phone profile (0.4352 unthrottled) —
@@ -1161,6 +1193,73 @@ both keep toggling in each direction. Moving the pointer away still closes it vi
 either.** A click must mean "open" or "keep", never "undo what hover just did" — decide from what
 opened it, not from the boolean alone.
 
+## Three tiers paint a DIFFERENT tier's colour — remap in one place (2026-08-21)
+
+Membership Tradie renders the one-time Foreman scheme (electric cyan), one-time Boss
+renders the membership Foreman scheme (DeWalt yellow), and membership Boss renders the
+one-time Power scheme (electric red). Deliberate art direction, so no two adjacent cards
+in either tab repeat a colour.
+
+`getRemappedPackageScheme(planId, isMembershipTab)` in `packageCardSurface.ts` is the one
+place that knows this. **Import it rather than calling a scheme getter directly.**
+
+Anything that skipped the remap drifted. The header's `MembershipBadge` called
+`getMembershipSectionColorScheme` and rendered membership Tradie as `#5ca9ec` while its own
+card rendered `#00E5FF` — and because that function returns the **same** value for
+`tradie-subscription` and `tradie-pack`, the badge read as the one-time pack's colour to
+anyone comparing them.
+
+> It returns a whole **scheme**, not just an accent, and that distinction is load-bearing:
+> the badge paints `badgeStyle.background` and falls back to the accent only when that is
+> absent. A first fix remapped only `accentHex` and left the badge **filled from one tier
+> and outlined from another** — visibly unchanged, because the fill is what you see.
+> Verified by reading the computed background back, not by reasoning about the code.
+---
+
+## Two draw-10 misses that `tsc` and a text search both slept through (2026-08-26)
+
+### 1. `/membership` kept a $5,000 headline, because the number was never written as `$5,000`
+
+`MembershipPrizeChooser.tsx` renders a large amber figure with a caption under it. The figure was:
+
+```ts
+const amount = isCash ? 10000 : 5000;
+const amountCap = isCash ? "paid straight to your bank account" : "cash on top of the gear";
+```
+
+A repo-wide grep for `$5,000` cannot see that — the string is **composed at render time** from a
+bare integer and a `toLocaleString()` format. Nor did the draw-10 Playwright guard catch it: that
+spec walks `/promotions`, and this lives on `/membership`.
+
+The setup lane now shows its **tool count** (a real number off the toolset registry, so a seventh
+toolset moves it) rather than a dollar figure, because a tool combination no longer has one. The
+block is guarded on `toolCount !== null` — an unparseable slug would otherwise render a confident
+"0 tools".
+
+**The lesson: a money claim is not always a string.** When removing a price or a prize component,
+grep the bare number (`5000`) near `cash`/`bonus`/`amount`, not just the formatted form.
+
+### 2. A new brand's theme was unreachable, and every branch still type-checked
+
+STIHL was added to `COLOR_KEYS`, `LANDING_PAGE_BRAND`, `SCHEMES` and `BRAND_GRADIENTS` in
+[packageColorScheme.ts](../../src/utils/package-colors/packageColorScheme.ts) — but not to
+`slugToPromoTierPlanId()`, the hand-written `if` ladder that turns a slug into a `COLOR_KEYS`.
+Result: `stihl-orange` was **defined but unreachable**. Three STIHL slugs fell past every
+`startsWith` test to the `milwaukee-red` default, and `stihl-kincrome` matched the
+`includes("kincrome")` line and came back **blue**.
+
+`tsc` is blind to this — every branch returns a valid `COLOR_KEYS`, so the ladder is total by
+construction and simply never mentions the new brand. The live consumers are
+`usePromoThemeStore` (the promo landing theme) and the login brand rotator, so four landing pages
+shipped in the wrong brand colour.
+
+**Two rules fall out.** (a) Put a new brand's `startsWith` test **above** the `includes()`
+fallbacks — below them, `stihl-kincrome` is swallowed by the kincrome rule. (b) After adding a
+brand, *execute* the resolver over its real slugs and read the output; do not infer from the fact
+that the registries compile. `docs/config-and-data/patterns.md` used to list this file under
+"derives automatically — NO edit needed", which is precisely how the gap got in; it has been
+corrected.
+
 ---
 
 ## MembershipModal: the mini-pack branches were dead and are now removed (2026-08-20)
@@ -1183,6 +1282,66 @@ opened it, not from the boolean alone.
 
 Mini packs are bought at `/mini-draws/<id>` via `POST /api/mini-draw/purchase`, which is the only route that stamps the `miniDrawId` the webhook needs. See [billing-stripe/gotchas.md](../billing-stripe/gotchas.md).
 
+## `ExistingAccountModal`'s mobile branch offered a login that could never succeed (fixed 2026-08-27)
+
+The modal already supported `conflictField: "mobile"` and titled itself "Mobile already exists" —
+so it *looked* finished. But its Login button was `disabled={!email}`, and `LoginModal` was rendered
+only under `{email && …}`. Meanwhile `register` **deliberately withholds** the matched account's
+email on a mobile match (enumeration guard — disclosing it would leak a customer's address to anyone
+who guessed their number), so `MembershipModal` falls back to `formData.email`: the address the
+caller just typed.
+
+On a mobile collision the modal therefore opened a password form addressed to an email with **no
+account behind it**. Not a flaky failure — a structural one: no credential the member possessed
+could have worked. And the population hitting it is precisely the one least able to recover, since
+people re-register *because* they cannot sign in.
+
+**Fix:** `conflictField === "mobile"` + a `mobile` prop now routes to SMS sign-in
+(`initialFlow="sms"`), using the number the caller just typed — the only identifier that resolves
+the right account. `canRecover` replaces `!email` as the button's gate.
+
+**Transferable lesson:** a branch can be fully implemented, correctly labelled, and still be
+unreachable-by-construction because a *different* module withholds the data it needs. The
+enumeration guard in `register` and the `disabled={!email}` in this modal were each individually
+correct; the dead end only exists in the seam between them. When adding a `conflictField`-style
+variant, trace what the server actually returns for that variant — not what the prop names imply
+it might.
+
+## UserSetupModal: the step-3 derivation was written twice (fixed 2026-08-27)
+
+`stepsNeeded` was computed in the render `useMemo` **and** again inline in the open/restore
+effect that chooses the starting step index. Two copies of one rule: edit either and the step the
+modal restores from `sessionStorage` disagrees with the step it renders, with no error anywhere.
+
+Both now call the exported `computeStepsNeeded(userData)` in
+[`UserSetupModal/index.tsx`](../../src/components/modals/UserSetupModal/index.tsx) — see
+[frontend.md](./frontend.md) § UserSetupModal step 3. **If you add a fourth step, add it there and
+nowhere else.**
+
+The same section covers the other half of this: `hasVerifiedContact` ORs the modal's local
+`isEmailVerified` / `isMobileVerified` flags with `userData`, because waiting on `refetch()` left
+the footer button disabled for a beat after the server had already accepted the code.
+
+## `Header`'s "Verify Email" item was renamed, not re-widened (2026-08-27)
+
+The `verifiedContactRequired()` rename went through
+[`Header.tsx:297-301`](../../src/components/layout/Header.tsx), but the condition it guards did
+not: `needsEmailVerification` is still `profileSetupCompleted && !userData.isEmailVerified &&
+environmentFlags.verifiedContactRequired()`. It never consults `isMobileVerified`.
+
+So a member who satisfied step 3 **by mobile** still sees a red "Verify Email" item in the account
+menu (both the desktop user menu and the mobile one). Clicking it calls
+`forceShowEmailVerificationModal`, i.e. `requestModal("user-setup", true, { initialStep: 3 })`,
+and the modal immediately closes itself again: `computeStepsNeeded` returns
+`[]` for them, and the open/restore effect's `profileSetupCompleted && hasState && verifiedContact`
+branch calls `onClose()`. A door that opens onto nothing, for the one population the mobile channel
+was added to serve.
+
+It also suppresses the "Complete Profile" item beside it, which is gated on
+`isSetupRequired && !needsEmailVerification`.
+
+Widening the condition to `!(isEmailVerified || isMobileVerified)` is the fix; it is **not** applied
+yet. Traced in the code, not observed in a browser.
 ## `UpsellManager.tsx` deleted (2026-08-27)
 
 `src/components/modals/UpsellManager.tsx` was imported nowhere in the app and has been removed,

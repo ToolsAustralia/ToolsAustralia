@@ -11,7 +11,15 @@
 import type { RevenueDetailsCategory } from "@/services/admin/dashboardSlices";
 
 /**
- * The dashboard's six revenue categories, extended with the shop.
+ * The dashboard's six NON-shop revenue categories, extended with the shop ledger's own.
+ *
+ * ⚠️ `RevenueDetailsCategory` ALSO carries a "shop" member of its own (added alongside the
+ * shop's dashboard drill-down, which reads `PaymentEvent.packageType === "shop"`). Receipts
+ * does NOT use it: shop revenue reaches this ledger from the `Order` collection as
+ * "shop-order", and the payment-event side deliberately excludes packageType "shop" (see
+ * `PAYMENT_EVENT_PACKAGE_TYPES` in the service) so one sale cannot be counted twice. The
+ * `Exclude` is what keeps the two vocabularies apart — without it this union silently gains
+ * a second, unlabelled shop category and `RECEIPT_CATEGORY_LABELS` stops compiling.
  *
  * Deliberately an EXTENSION rather than a widening of `RevenueDetailsCategory` itself:
  * `getRevenueDetails` and `classifyRevenueBucket` switch exhaustively on that type, so
@@ -20,7 +28,7 @@ import type { RevenueDetailsCategory } from "@/services/admin/dashboardSlices";
  * (`import type` is erased at compile time, so naming the service's type here costs the
  * client bundle nothing.)
  */
-export type ReceiptCategory = RevenueDetailsCategory | "shop-order";
+export type ReceiptCategory = Exclude<RevenueDetailsCategory, "shop"> | "shop-order";
 
 export const RECEIPT_CATEGORIES: ReceiptCategory[] = [
   "membership-purchase",

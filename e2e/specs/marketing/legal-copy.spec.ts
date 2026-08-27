@@ -34,6 +34,11 @@ const PAGES = [
   "/membership",
   "/membership?utm_campaign=rewards-return&offer_id=1064993",
   "/mini-draws",
+  // The shop sells a garment whose entries are a free inclusion, so it carries the
+  // same rule-11 exposure as every page above — and it was NOT scanned until
+  // 2026-08-17. A per-entry price written on a product page would have passed
+  // every automated guard in the repo purely because this list did not mention it.
+  "/shop",
 ];
 
 test.describe("legal copy guard @smoke", () => {

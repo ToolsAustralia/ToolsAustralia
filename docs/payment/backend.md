@@ -33,7 +33,7 @@ Reached over HTTP via `POST /api/stripe/attach-campaign-code` ([billing-stripe/a
 
 | File | Purpose |
 |---|---|
-| `payment-processing.ts` | `grantBenefits()`, `processPaymentBenefits()` — the success path that writes `BenefitsGranted` ledger rows. Also hosts `trackKlaviyoEvent()`, which emits the customer receipt ("Invoice Generated") **server-side** for every charge, and fires the server-side Meta CAPI **Purchase** with `event_time` = Stripe charge time (both below). |
+| `payment-processing.ts` | `grantBenefits()`, `processPaymentBenefits()` — the success path that writes `BenefitsGranted` ledger rows. Also hosts `trackKlaviyoEvent()`, which emits the customer receipt ("Invoice Generated") **server-side** for every package charge, and fires the server-side Meta CAPI **Purchase** with `event_time` = Stripe charge time (both below). Both deliberately skip `packageType: "shop"` — see the Merchandise section at the end of this file. |
 | `payment-status.ts` | Status-derivation helpers (paid / failed / pending classification). |
 | `ledger-helpers.ts` | Shared helpers for reading/writing `data.grants`. |
 
@@ -248,7 +248,7 @@ Test: `npm run test:purchase-event-time`.
 
 ## Major-draw fresh-row shape (Streak P2 touch, 2026-07-07)
 
-`addToMajorDraw`'s `freshEntriesBySource` zero-shape in [payment-processing.ts](../../src/utils/payment/payment-processing.ts) now enumerates the full source-key set (`referral`, `cancellation-upsell`, `promo-link`, and the new `streak` bucket included) so downstream readers never hit a missing key. The `streak` bucket is written only by `DrawGrantService` (rewards-redeemables domain) — payment-path grants never write it.
+`addToMajorDraw`'s `freshEntriesBySource` zero-shape in [payment-processing.ts](../../src/utils/payment/payment-processing.ts) now enumerates the full source-key set (`referral`, `cancellation-upsell`, `promo-link`, `streak`, and — since 2026-08-17 — `shop`) so downstream readers never hit a missing key. The `streak` bucket is written only by `DrawGrantService` (rewards-redeemables domain) — payment-path grants never write it. The `shop` bucket is not written by anything yet (see Merchandise, below).
 
 ## No bonus code is minted in `grantBenefits` any more (2026-08-26)
 
@@ -293,6 +293,24 @@ That branch used to log at `console.warn`, which `next.config.ts`'s `compiler.re
 - `payment-processing.ts` is the ONLY caller passing `{ allowStreakIssuance: true }` to `MilestoneService.checkAndIssueMilestones` — new streak-months issuances are payment-coupled by construction (the cron/mass evaluator may only re-deliver, never newly issue).
 - `reverseMembershipLedger` ([refund-ledger-reversal.ts](../../src/utils/payment/refund-ledger-reversal.ts)) now gives back a refunded renewal's streak +1: it atomically flips the matching `MembershipRenewalCycle` row (`userId` + `paymentIntentId` + `billing_reason: subscription_cycle`, `succeeded/recovered → refunded` — the pre-image gate makes replays no-op) and decrements `subscription.streakMonths` with a floor of 0. The milestone issuances granted on that payment were already revoked via `grants.milestoneIssuanceIds` (`milestoneRevoke` step).
 
+## Merchandise — `packageType: "shop"` is wired but nothing produces it yet (2026-08-17)
+
+The `packageType` union widened to `"one-time" | "membership" | "upsell" | "mini-draw" | "shop"` at six sites in [payment-processing.ts](../../src/utils/payment/payment-processing.ts) (`processPaymentBenefits`, `processPaymentBenefitsInternal`, `checkAndApplyBonusEntryPromo`, `checkAndApplyPromoLink`, `grantBenefits`, `trackKlaviyoEvent`). `addToMajorDraw` gained a `case "shop": sourceType = "shop"` plus a `shop: 0` slot in `freshEntriesBySource`, and the MajorDraw schema gained the matching bucket ([draws/gotchas.md](../draws/gotchas.md#entriesbysource-must-include-every-source-key-the-schema-lists)).
+
+**No caller passes `"shop"` today — the change is inert at runtime.** The merchandise grant itself is a later task, gated on a trade-promotion permit variation; the type/schema plumbing landed first so the grant can't be written against a bucket Mongoose would silently drop. Don't read this section as "merch entries are live".
+
+Four **deliberate** early-outs, not omissions:
+
+| Site | Behaviour for `shop` | Why |
+|---|---|---|
+| `checkAndApplyBonusEntryPromo` | returns `0` **before** the unchecked `as` cast | The cast below it launders any value into `"membership" \| "one-time" \| "mini-draw"`. Guarding **above** the cast keeps `"shop"` out of the promo vocabulary entirely instead of relying on a downstream arm to catch it. See the correction note below. |
+| `checkAndApplyPromoLink` | returns `{ bonusEntries: 0 }`, listed alongside `mini-draw`/`upsell` | Promo links are a package mechanic. Without the arm, a merch sale reaches `PromoRedemptionService.redeem()` with **both** `isMembershipPurchase` and `isOneTimePurchase` false — an undefined case. Revisit if promo codes should ever apply to merchandise. |
+| `trackKlaviyoEvent` | returns early | Every payload below it is built from `packageId` / `packageName` / `entriesGranted` / `pointsEarned`; a t-shirt has none of those, so it would arrive as `"Unknown Package"` and pollute revenue metrics with a fake package. Order-shaped shop revenue events (order number, line items, sizes) belong on the shop path — an open question, not a silent drop. |
+| CAPI Purchase block in `grantBenefits` | `if (!isRenewal && packageData.packageType !== "shop")` | The shop already fires a **browser** Purchase pixel from the checkout success page, deduped on `orderNumber` ([`CheckoutSuccessClient.tsx`](<../../src/app/(site)/checkout/success/components/CheckoutSuccessClient.tsx>) → `purchase-pixel-fired-storage`). Firing the server half here would use a **different** event id (`paymentIntentId`), so Meta could not dedup the pair and every merch sale would be counted twice. Server-side CAPI for shop belongs on the shop path, sharing the browser's `orderNumber` event id. |
+
+The CAPI condition is written inline rather than via a `const isShopOrder` so TypeScript narrows `packageData.packageType` inside the block — the tracking payload's union is the 4-member one, and a boolean const does not carry the narrowing.
+
+**Correction — the `checkAndApplyBonusEntryPromo` guard's own code comment overstates its danger.** The comment above `if (packageType === "shop") return 0;` claims an unguarded `"shop"` would "fall through the `promoType` ternary to `mini-packages` — a merch sale silently reading a mini-draw promo, with no error anywhere". That is **not** what the code does: the ternary (`payment-processing.ts` lines 870-877) ends in `: null`, and the very next block is `if (!promoType) { console.warn(…); return 0; }`. An unguarded `"shop"` would therefore return `0` **with** a warning — the same outcome, not a silent mis-read. Keep the guard (it states intent, avoids a spurious warn, and stays correct if anyone later gives that ternary a fallback arm), but don't repeat the comment's rationale as fact. Verified against the source; the comment has not been changed here — this doc refresh does not touch code.
 ## Per-user grant ledger — `aggregateNetGrantsByUser` (2026-08-26)
 
 [`src/utils/payment/payment-event-net-queries.ts`](src/utils/payment/payment-event-net-queries.ts)

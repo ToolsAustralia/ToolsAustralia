@@ -21,6 +21,7 @@ export function classifyRevenueBucket(args: {
   }
   if (packageType === "mini-draw") return "miniDraw";
   if (packageType === "upsell") return "upsell";
+  if (packageType === "shop") return "shop";
   if (packageType === "one-time") {
     if ((packageId ?? "").startsWith("additional-")) return "additionalOneTimePurchase";
     return "oneTimePurchase"; // includes the legacy fallback for unknown patterns

@@ -11,7 +11,7 @@ const WinnerEmailPreview: React.FC = () => {
   const emailHtml = useMemo(
     () =>
       mounted
-        ? createWinnerEmailTemplate("John", "Milwaukee M18 Combo + $5,000 Cash", "https://toolsaustralia.com.au/winners")
+        ? createWinnerEmailTemplate("John", "Milwaukee M18 Combo + PACKOUT Storage", "https://toolsaustralia.com.au/winners")
         : "",
     [mounted]
   );

@@ -7,6 +7,7 @@
 // numbers by construction. Framework-agnostic — no Request / NextResponse types.
 
 import mongoose from "mongoose";
+import { PAID_ORDER_STATUSES } from "@/services/shop/orderQueries";
 import User from "@/models/User";
 import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
@@ -777,7 +778,13 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
   // Order count — keep this as count only so the service stays light.
   // (Admin route loads the full Order list; Norm only needs the count.)
   const { default: Order } = await import("@/models/Order");
-  const orders = (await Order.find({ user: userObjectId })
+  // PAID only. Counting every row reported an abandoned checkout as a purchase — the
+  // duplicate-order bug made one $90.95 purchase read as totalOrders 2 / totalOrderValue
+  // $181.90, to staff AND to Norm, whose schema describes these as order counts.
+  const orders = (await Order.find({
+    user: userObjectId,
+    status: { $in: PAID_ORDER_STATUSES },
+  })
     .select("totalAmount")
     .lean()) as unknown as Array<{ totalAmount?: number }>;
   const totalOrders = orders.length;

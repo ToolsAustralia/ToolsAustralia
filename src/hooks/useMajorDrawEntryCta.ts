@@ -87,7 +87,7 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
               promoMultiplier > 1 ? ` (${promoMultiplier}X PROMO!)` : ""
             }`,
           },
-          // { text: "10% Off Shop purchases" }, // Temporarily disabled - Shop coming soon
+          { text: "15% Off Shop purchases" },
           { text: "75% Access to Partner Discounts" },
           { text: "Mini Draws" },
         ],

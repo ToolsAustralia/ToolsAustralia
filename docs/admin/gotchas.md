@@ -427,6 +427,36 @@ Caught on localhost, where the dev DB has ad spend but little attributed revenue
 
 The skip test now includes `spend > 0`. Pinned by `npm run test:advertising-card-model` ("spend-with-no-return still renders"). When adding a new reason a row should exist, extend that condition — never assume revenue implies presence.
 
+## A runtime allowlist that `tsc` cannot keep in sync (2026-08-21)
+
+Adding `shop` to `RevenueDetailsCategory` did **not** add it to the API route's
+hand-maintained `VALID_CATEGORIES` array — so the drill-down modal 400'd and rendered a
+permanent "Loading revenue details…" spinner.
+
+**Why the compiler was silent:** the array was annotated `RevenueDetailsCategory[]`, and a
+**subset** satisfies that type perfectly. The annotation says "these are valid values", not
+"all of them".
+
+Fixed at the root: `REVENUE_DETAILS_CATEGORIES` is now a `const` array and the type is
+derived from it (`(typeof …)[number]`). The route imports the array. Anywhere else needing
+a runtime membership test must import it too, rather than re-typing the list.
+
+Three other copies of this list exist and were checked in the same pass — the Norm
+revenue-details enum (updated), the Norm by-platform enum and `ACQUISITION_CATEGORY_META`
+(both deliberately **exclude** shop, because they are the ads/ROAS drill-down).
+
+## A wide table can push the whole page sideways (2026-08-21)
+
+`OrdersManagement` and `FulfilmentQueue` both wrap their table in `overflow-x-auto` with a
+`min-w-[…]`, which is correct — yet the admin page still scrolled horizontally on a phone.
+
+The cause is upstream: a flex/grid child defaults to `min-width: auto`, so it **refuses to
+shrink below its content**. The scroll container therefore sized itself to the 1140px
+table and pushed the card — and the page — wider than the viewport. `min-w-0` on the card
+root restores the ability to shrink, so the scrolling happens where it was designed to.
+
+If a table is correctly wrapped and the page still scrolls sideways, look at the
+ancestors, not the wrapper.
 ## Sorting the mini-draw grid would have corrupted the lineup order (2026-08-13)
 
 Caught while adding sort to `/admin/mini-draws`, and it applies to any drag-ordered
@@ -478,6 +508,47 @@ That 10s ceiling is **smaller than `connectDB`'s own failure path**: `serverSele
 
 ⚠️ **Still worth measuring:** the snapshot cron writes a **90-day sliding window**, while MER's window opens earlier. Any day without a snapshot is recomputed **live**, which includes an untimed Meta Graph call (`fetchFacebookInsights` passes no `AbortSignal`; `outboundAgent` sets only a connect timeout, so undici's 300s header/body defaults stand). If MER is still slow after this, check `dashboardstatsdailysnapshots` coverage first and run `backfill:dashboard-stats-snapshots`.
 
+## The user search crashed on any regex metacharacter (fixed 2026-08-27)
+
+`buildUserFilter` dropped the admin's raw search term straight into `$regex` for the email /
+firstName / lastName / full-name clauses. A term containing a metacharacter was therefore compiled
+as a **pattern**, not a literal — and an *invalid* one makes MongoDB **throw**, so the whole query
+500s instead of returning no rows.
+
+Terms that broke it, all of them things an admin would plausibly type:
+
+| Term | Why |
+|---|---|
+| `+61412345678` | leading `+` → *"quantifier does not follow a repeatable item"* |
+| `(02) 1234` | unbalanced group |
+| `someone+tools@gmail.com` | plus-addressing is common, and this is a **customer's real email** |
+
+Fixed by `escapeRegex()` in [userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts),
+applied to all four clauses. It also removes a catastrophic-backtracking surface, since the term
+previously reached the engine verbatim.
+
+Found while adding mobile search — the new code was fine (digits only), but typing a phone number
+into the box was precisely what exposed the old clauses.
+
+## Admin user search now matches mobile numbers (2026-08-27)
+
+The search box covers **name, email and mobile**. Mobile matching is not a plain regex on the typed
+string, because that would fail more often than it worked:
+
+- **Storage is mixed.** Canonical is `+61412345678`, but rows written before the model's
+  `pre("save")` hook — or by an `updateOne`, which bypasses it — still hold `0412345678`. As of
+  2026-08-27 that was ~2,900 rows, shrinking as members' accounts get re-saved. See
+  `migrate:normalise-mobiles`.
+- **Admins type whatever they were given** — `0412 345 678`, `+61412345678`, `(04) 1234 5678`.
+
+So the term is reduced to the **national number** (trunk `0` / country `61` stripped), which is a
+substring of *both* stored forms — one regex finds the member either way. A complete number
+additionally gets an exact-equality clause, which the `mobile` index answers without scanning.
+
+The mobile branch only runs when the term is **phone-shaped** (`/^[\d\s+()-]{4,}$/` — digits and
+the punctuation people type, no letters). Without that guard a name like `john2024` would search
+`2024` against every mobile and return noise. Verified against production across all six
+storage × format combinations.
 ## Admin engagement score lost its upsell component (2026-08-27)
 
 Both engagement scorers (`GET /api/admin/users/[id]` and

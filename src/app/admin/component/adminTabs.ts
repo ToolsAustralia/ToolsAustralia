@@ -18,18 +18,22 @@ import {
   Bug,
   ClipboardList,
   FileText as FileTextIcon,
+  Gauge,
   FlaskConical,
   Gift,
   Layers,
   LayoutDashboard,
   LineChart,
   Mail,
+  Package,
   Megaphone,
   MessageSquare,
   Receipt,
   Repeat,
   ScrollText,
   Shield,
+  ShoppingBag,
+  ShoppingCart,
   TrendingUp,
   Trophy,
   UserCheck,
@@ -105,6 +109,25 @@ export const ADMIN_TAB_GROUPS: AdminTabGroup[] = [
       { id: "submissions", label: "Submissions", icon: FileTextIcon, requires: "submissions.view" },
       { id: "error-reports", label: "Error Reports", icon: Bug, requires: "errorReports.view" },
       { id: "activity-log", label: "Activity Log", icon: ScrollText, requires: "settings.view" },
+    ],
+  },
+  // Shop is its own group rather than one crowded Operations tab. The single
+  // Products page had grown to five panels — printer sync, catalogue, the entry
+  // multiplier, the fulfilment queue and the full order history — which is a lot
+  // of unrelated work stacked in one scroll. Splitting by JOB (stock it / ship
+  // it / tune what it grants) also lets each page grow without crowding the
+  // others.
+  //
+  // `products` keeps its id: it is an existing URL and permission pairing, and
+  // renaming it would break bookmarks for no benefit.
+  {
+    id: "shop",
+    label: "Shop",
+    groupIcon: ShoppingBag,
+    tabs: [
+      { id: "products", label: "Products", icon: Package, requires: "shop.view" },
+      { id: "shop-orders", label: "Orders", icon: ShoppingCart, requires: "shop.view" },
+      { id: "shop-multipliers", label: "Entry Multipliers", icon: Gauge, requires: "shop.view" },
     ],
   },
   {

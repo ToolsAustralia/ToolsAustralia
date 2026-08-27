@@ -1,3 +1,6 @@
+/* eslint-disable react-hooks/rules-of-hooks -- Playwright's fixture continuation
+   parameter is named `use`, which the React hooks rule reads as a hook called
+   outside a component. Same directive, same reason, as purchase-decline.spec.ts. */
 import { test as base, expect } from "@playwright/test";
 import { createLoginableUser, disconnectE2eDb, MEMBER } from "../helpers/db";
 import { makeDemo, type Demo } from "./demo";

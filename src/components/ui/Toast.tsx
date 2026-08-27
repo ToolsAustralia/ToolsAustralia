@@ -1,5 +1,7 @@
 "use client";
 
+import { usePathname } from "next/navigation";
+
 /**
  * Enhanced Toast Notification System
  *
@@ -76,7 +78,9 @@ export const ToastContext = createContext<ToastContextType>({
  * Individual Toast Component
  * Renders a single toast notification with animations and auto-dismiss functionality
  */
-const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
+const Toast: React.FC<
+  ToastProps & { onRemove: () => void; index: number; bottomLeft?: boolean }
+> = ({
   type,
   title,
   message,
@@ -84,6 +88,8 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
   action,
   onRemove,
   index,
+  /** Set by the container from the route — decides which way the toast enters. */
+  bottomLeft = false,
   reportable = false,
   errorContext,
   onReportProblem,
@@ -251,8 +257,18 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
 
   return (
     <div
-      className={`max-w-[calc(100vw-1rem)] sm:max-w-sm w-full transform transition-all ease-in-out ${
-        visible ? "translate-x-0 opacity-100 scale-100" : "translate-x-full opacity-0 scale-95"
+      /*
+        The entrance follows the corner. A bottom-anchored toast RISES into place;
+        a top-right one slides in from the right as it always has. Playing the
+        right-hand slide from the bottom left reads as the toast crossing the page
+        to get where it is going.
+      */
+      className={`w-full max-w-[calc(100vw-1rem)] transform transition-all ease-out sm:max-w-sm ${
+        visible
+          ? "translate-x-0 translate-y-0 opacity-100 scale-100"
+          : bottomLeft
+            ? "translate-y-3 opacity-0 scale-95"
+            : "translate-x-full opacity-0 scale-95"
       }`}
       style={{
         transitionDuration: `${TOAST_TRANSITION_MS}ms`,
@@ -282,19 +298,6 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
               </p>
             )}
 
-            {/* Optional Action Button */}
-            {action && (
-              <button
-                onClick={() => {
-                  action.onClick();
-                  handleClose();
-                }}
-                className="mt-1 sm:mt-2 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
-              >
-                {action.label}
-              </button>
-            )}
-
             {/* Report Problem Button (only for error toasts with reportable=true) */}
             {type === "error" && reportable && errorContext && onReportProblem && (
               <button
@@ -309,6 +312,30 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
               </button>
             )}
           </div>
+
+          {/*
+            THE ACTION IS A BUTTON, ON THE RIGHT.
+
+            It was a blue text link stacked under the message, where it read as part
+            of the copy rather than the thing to press — and on the add-to-cart toast
+            that link IS the point: adding used to be a dead end and this is the route
+            out of it. A solid control on the right is the difference between a
+            notification and an offer.
+
+            Outside the content column so a long product name cannot push it out of
+            reach, and shrink-0 so it never compresses.
+          */}
+          {action && (
+            <button
+              onClick={() => {
+                action.onClick();
+                handleClose();
+              }}
+              className="ml-auto mt-0.5 inline-flex h-8 shrink-0 items-center rounded-lg bg-red-600 px-3 text-xs font-bold text-white transition-colors hover:bg-red-700 sm:h-[34px] sm:px-4 sm:text-[13px]"
+            >
+              {action.label}
+            </button>
+          )}
 
           {/* Close Button - Increased size on mobile for easier tapping */}
           <button
@@ -326,7 +353,23 @@ const Toast: React.FC<ToastProps & { onRemove: () => void; index: number }> = ({
 
 /**
  * Toast Container Component
- * Renders all active toasts in a stacked layout at the top-right corner
+ * Renders all active toasts in a stack.
+ *
+ * TOP RIGHT everywhere, BOTTOM LEFT on the shop.
+ *
+ * The shop is the one surface whose toast carries an action worth pressing — the
+ * add-to-cart "View cart" — so it wants to sit near the goods rather than up by
+ * the header. Bottom LEFT rather than right because the bottom right is Cobber's
+ * corner, and a toast there lands on top of the support bubble.
+ *
+ * Everywhere else keeps the top-right position it has always had: those toasts are
+ * mostly errors and confirmations, they are read and dismissed, and moving every
+ * one of them to chase a shop interaction would be a site-wide change to fix a
+ * single page.
+ *
+ * When bottom-anchored the newest sits closest to the edge (`flex-col-reverse`) —
+ * the eye starts at the edge, so the most recent message should be the first it
+ * reaches. Top-anchored keeps the original order for the same reason.
  *
  * Note: onRemove is a client-side callback (not a Server Action) since this
  * is a "use client" component. The linter warning can be safely ignored.
@@ -340,14 +383,34 @@ export const ToastContainer: React.FC<{
   const MAX_VISIBLE_TOASTS = 5;
   const visibleToasts = toasts.slice(0, MAX_VISIBLE_TOASTS);
 
+  // Route-scoped, not a prop: the provider is mounted once at the app root, so a
+  // prop would have to be threaded from a layout that knows nothing about which
+  // page is rendering. Covers /shop and every product page beneath it.
+  const pathname = usePathname();
+  const bottomLeft = pathname?.startsWith("/shop") ?? false;
+
   return (
-    <div className="fixed top-1 right-1 sm:top-4 sm:right-4 pointer-events-none max-w-[calc(100vw-0.5rem)] sm:max-w-md" style={{ zIndex: Z_INDEX.TOAST_LOADING }}>
-      <div className="flex flex-col gap-1 sm:gap-2 pointer-events-auto">
+    <div
+      className={cn(
+        "pointer-events-none fixed",
+        bottomLeft
+          ? "inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-6 sm:left-6 sm:max-w-md"
+          : "right-1 top-1 max-w-[calc(100vw-0.5rem)] sm:right-4 sm:top-4 sm:max-w-md"
+      )}
+      style={{ zIndex: Z_INDEX.TOAST_LOADING }}
+    >
+      <div
+        className={cn(
+          "pointer-events-auto flex gap-1 sm:gap-2",
+          bottomLeft ? "flex-col-reverse" : "flex-col"
+        )}
+      >
         {visibleToasts.map((toast, index) => (
           <Toast
             key={toast.id}
             {...toast}
             index={index}
+            bottomLeft={bottomLeft}
             onRemove={() => onRemove(toast.id)}
             onReportProblem={onReportProblem}
           />

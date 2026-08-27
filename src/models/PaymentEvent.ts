@@ -13,7 +13,7 @@ export interface IPaymentEvent extends Document {
     | "RefundPartial"
     | "BenefitsReversed";
   userId: mongoose.Types.ObjectId;
-  packageType: "one-time" | "membership" | "upsell" | "mini-draw";
+  packageType: "one-time" | "membership" | "upsell" | "mini-draw" | "shop";
   packageId?: string;
   packageName?: string;
   data: {
@@ -73,7 +73,10 @@ const PaymentEventSchema = new Schema<IPaymentEvent>(
     packageType: {
       type: String,
       required: true,
-      enum: ["one-time", "membership", "upsell", "mini-draw"],
+      // Keep in lockstep with the IPaymentEvent union above. Widening only the
+      // interface leaves tsc green and throws a Mongoose ValidationError on save;
+      // widening only the enum leaves tsc rejecting the write.
+      enum: ["one-time", "membership", "upsell", "mini-draw", "shop"],
     },
     packageId: {
       type: String,

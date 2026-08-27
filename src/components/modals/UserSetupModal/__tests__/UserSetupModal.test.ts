@@ -22,7 +22,7 @@ import * as React from "react";
 import { renderToString } from "react-dom/server";
 import Step1Password from "../Step1Password";
 import Step2Demographics from "../Step2Demographics";
-import Step3EmailVerification from "../Step3EmailVerification";
+import Step3VerifyContact from "../Step3VerifyContact";
 import SuccessScreen from "../SuccessScreen";
 import ActionFooter from "../ActionFooter";
 
@@ -147,9 +147,9 @@ test("Step2Demographics — SA ineligibility notice", () => {
   assert.ok(html.includes("SA and ACT"));
 });
 
-test("Step3EmailVerification — mandatory + not verified", () => {
+test("Step3VerifyContact — mandatory + not verified", () => {
   const html = renderToString(
-    React.createElement(Step3EmailVerification, {
+    React.createElement(Step3VerifyContact, {
       isMandatory: true,
       hasReferralCode: true,
       currentEmail: "user@example.com",
@@ -163,6 +163,17 @@ test("Step3EmailVerification — mandatory + not verified", () => {
       onNewEmailChange: noop,
       onUpdateEmail: noop,
       onSendEmailVerification: noop,
+      channel: "email" as const,
+      onChannelChange: noop,
+      isMobileVerified: false,
+      isSendingSms: false,
+      smsCodeSent: false,
+      smsCode: "",
+      smsError: "",
+      smsCooldown: 0,
+      onSmsCodeChange: noop,
+      onSendSmsVerification: noop,
+      onVerifySmsCode: noop,
     })
   );
   assert.ok(html.includes("user@example.com"));
@@ -170,9 +181,9 @@ test("Step3EmailVerification — mandatory + not verified", () => {
   assert.ok(/Send verification code/i.test(html));
 });
 
-test("Step3EmailVerification — verified", () => {
+test("Step3VerifyContact — verified", () => {
   const html = renderToString(
-    React.createElement(Step3EmailVerification, {
+    React.createElement(Step3VerifyContact, {
       isMandatory: false,
       hasReferralCode: false,
       currentEmail: "user@example.com",
@@ -186,14 +197,25 @@ test("Step3EmailVerification — verified", () => {
       onNewEmailChange: noop,
       onUpdateEmail: noop,
       onSendEmailVerification: noop,
+      channel: "email" as const,
+      onChannelChange: noop,
+      isMobileVerified: false,
+      isSendingSms: false,
+      smsCodeSent: false,
+      smsCode: "",
+      smsError: "",
+      smsCooldown: 0,
+      onSmsCodeChange: noop,
+      onSendSmsVerification: noop,
+      onVerifySmsCode: noop,
     })
   );
   assert.ok(html.includes("Email verified"));
 });
 
-test("Step3EmailVerification — editing email", () => {
+test("Step3VerifyContact — editing email", () => {
   const html = renderToString(
-    React.createElement(Step3EmailVerification, {
+    React.createElement(Step3VerifyContact, {
       isMandatory: true,
       hasReferralCode: false,
       currentEmail: "old@example.com",
@@ -207,6 +229,17 @@ test("Step3EmailVerification — editing email", () => {
       onNewEmailChange: noop,
       onUpdateEmail: noop,
       onSendEmailVerification: noop,
+      channel: "email" as const,
+      onChannelChange: noop,
+      isMobileVerified: false,
+      isSendingSms: false,
+      smsCodeSent: false,
+      smsCode: "",
+      smsError: "",
+      smsCooldown: 0,
+      onSmsCodeChange: noop,
+      onSendSmsVerification: noop,
+      onVerifySmsCode: noop,
     })
   );
   // After visual polish: copy is "Update & verify". Accept any case + escaped variant.

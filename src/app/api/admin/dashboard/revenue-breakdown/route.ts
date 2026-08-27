@@ -19,6 +19,10 @@ export interface ChartData {
   // without a refetch. Omitted (undefined) on points with no renewal revenue.
   membershipRenewals?: number;
   miniDraw: number; // Mini-draw packages
+  // Merchandise. Its own series since 2026-08-21 — before that, shop wrote no
+  // PaymentEvent at all, and once it did the `else` branch below would have swept it
+  // into `oneTime` and labelled hoodies as one-time entry packages.
+  shop: number;
   total: number;
 }
 
@@ -170,6 +174,8 @@ export async function GET(request: NextRequest) {
             date: assignedDraw.name,
             dateKey: assignedDraw.activationDate.toISOString(),
             oneTime: 0,
+
+            shop: 0,
             memberships: 0,
             miniDraw: 0,
             total: 0,
@@ -186,6 +192,8 @@ export async function GET(request: NextRequest) {
           }
         } else if (event.packageType === "mini-draw") {
           periodData.miniDraw += price;
+        } else if (event.packageType === "shop") {
+          periodData.shop += price;
         } else {
           periodData.oneTime += price;
         }
@@ -200,6 +208,8 @@ export async function GET(request: NextRequest) {
             date: draw.name,
             dateKey: draw.activationDate.toISOString(),
             oneTime: 0,
+
+            shop: 0,
             memberships: 0,
             miniDraw: 0,
             total: 0,
@@ -245,6 +255,8 @@ export async function GET(request: NextRequest) {
           date: label,
           dateKey: key, // Store ISO date string for filtering
           oneTime: 0,
+
+          shop: 0,
           memberships: 0,
           miniDraw: 0,
           total: 0,
@@ -261,8 +273,10 @@ export async function GET(request: NextRequest) {
         }
       } else if (event.packageType === "mini-draw") {
         periodData.miniDraw += price;
+      } else if (event.packageType === "shop") {
+        periodData.shop += price;
       } else {
-        // One-time packages and upsells (not mini-draw)
+        // One-time packages and upsells (not mini-draw, not merchandise)
         periodData.oneTime += price;
       }
 
@@ -297,6 +311,8 @@ export async function GET(request: NextRequest) {
               date: formatInTimeZone(dayStart, AEST_TIMEZONE, "MMM d"),
               dateKey: key,
               oneTime: 0,
+
+              shop: 0,
               memberships: 0,
               miniDraw: 0,
               total: 0,
@@ -329,6 +345,8 @@ export async function GET(request: NextRequest) {
               date: formatInTimeZone(monthStart, AEST_TIMEZONE, "MMM yyyy"),
               dateKey: key,
               oneTime: 0,
+
+              shop: 0,
               memberships: 0,
               miniDraw: 0,
               total: 0,
@@ -356,6 +374,8 @@ export async function GET(request: NextRequest) {
               date: formatInTimeZone(yearStart, AEST_TIMEZONE, "yyyy"),
               dateKey: key,
               oneTime: 0,
+
+              shop: 0,
               memberships: 0,
               miniDraw: 0,
               total: 0,
@@ -383,6 +403,7 @@ export async function GET(request: NextRequest) {
     const membershipsTotal = chartData.reduce((sum, d) => sum + d.memberships, 0);
     const membershipRenewalsTotal = chartData.reduce((sum, d) => sum + (d.membershipRenewals ?? 0), 0);
     const miniDrawTotal = chartData.reduce((sum, d) => sum + d.miniDraw, 0);
+    const shopTotal = chartData.reduce((sum, d) => sum + d.shop, 0);
 
     // Calculate growth (compare last period to previous period)
     const lastPeriod = chartData[chartData.length - 1]?.total || 0;
@@ -401,6 +422,7 @@ export async function GET(request: NextRequest) {
           memberships: membershipsTotal,
           membershipRenewals: membershipRenewalsTotal,
           miniDraw: miniDrawTotal,
+          shop: shopTotal,
         },
         growthRate,
         period,

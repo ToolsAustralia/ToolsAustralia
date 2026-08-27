@@ -29,7 +29,6 @@ import type { PrizeSelection } from "@/components/sections/promo/prize-selection
 import {
   CASH_ONLY_AMOUNT,
   COMBINATION_COUNT,
-  COMBO_CASH_BONUS,
   DEFAULT_SELECTION,
   getSpotlightView,
   isComboSelected,
@@ -123,23 +122,30 @@ run("an unknown selection falls back to real registry records rather than crashi
 console.log("\nView derivation");
 /* -------------------------------------------------------------------------- */
 
-run("a tool combination reads <Toolset> × <Toolbox> and carries the cash bonus", () => {
+run("a tool combination reads <Toolset> × <Toolbox> and carries NO cash claim", () => {
   const view = getSpotlightView({ toolset: "makita", toolbox: "kincrome", isCash: false });
   assert.equal(view.title, "Makita × Kincrome");
   assert.equal(view.tag, "Live preview");
-  assert.equal(view.cashFlag, `+ ${COMBO_CASH_BONUS} cash`);
+  // Draw 10 removed the $5,000 combo bonus. The flag must be ABSENT, not an empty
+  // string — SpotlightPreview renders the green pill only when it is non-null.
+  assert.equal(view.cashFlag, null);
   assert.equal(view.accent, TOOLSETS.find((s) => s.id === "makita")!.accent);
   assert.equal(view.description, `${toolsetKitLine(TOOLSETS.find((s) => s.id === "makita")!)} · 470 Piece Kincrome Toolbox`);
 });
 
-run("stat tiles report the toolset's tool count, the toolbox brand and the bonus", () => {
+run("stat tiles report the toolset's tool count and toolbox brand, with no cash tile", () => {
   for (const selection of ALL_COMBOS) {
     const { toolset, toolbox } = resolveSelection(selection);
-    const [tools, storage, cash] = getSpotlightView(selection).stats;
+    const stats = getSpotlightView(selection).stats;
+    const [tools, storage] = stats;
     assert.equal(tools.value, `${toolset.toolCount} tools`);
     assert.equal(storage.value, toolbox.brandName);
-    assert.equal(cash.value, COMBO_CASH_BONUS);
-    assert.equal(cash.isCash, true);
+    // A tool combination has no cash component since draw 10 — two tiles, no cash tile.
+    assert.equal(stats.length, 2);
+    assert.equal(
+      stats.some((s) => s.isCash),
+      false
+    );
   }
 });
 
@@ -238,10 +244,11 @@ run("no derived copy uses gambling or per-entry-pricing language", () => {
     "purchase entries",
     "entry pack",
   ];
-  const strings: string[] = [COMBO_CASH_BONUS, CASH_ONLY_AMOUNT];
+  const strings: string[] = [CASH_ONLY_AMOUNT];
   for (const selection of [...ALL_COMBOS, CASH_SELECTION]) {
     const view = getSpotlightView(selection);
-    strings.push(view.title, view.description, view.tag, view.cashFlag, view.imageAlt);
+    strings.push(view.title, view.description, view.tag, view.imageAlt);
+    if (view.cashFlag) strings.push(view.cashFlag);
     for (const stat of view.stats) strings.push(stat.label, stat.value);
   }
   for (const toolset of TOOLSETS) strings.push(toolsetKitLine(toolset));

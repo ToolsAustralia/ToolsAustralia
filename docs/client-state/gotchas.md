@@ -220,6 +220,15 @@ facing consequence.
 **When a response type and a route disagree, tsc protects nothing.** If you change a purchase
 route's response shape, update the hook's interface in the same edit.
 
+## `hasEverPaid` is on the JWT, not on the session (2026-08-27)
+
+`token.hasEverPaid` gates `/my-account` and `/rewards` in
+[middleware.ts](../../src/middleware.ts), but the `session` callback never copies it onto
+`session.user` — `useSession()` cannot see it, and `UserData` cannot honestly reproduce it
+(`processedPayments` is off the wire by design). So a client gate on "has this member ever bought
+anything" is a second, disagreeing predicate, not a mirror of the server one. Widen the session
+shape if you need it client-side. Full note:
+[architecture.md](./architecture.md#jwt-haseverpaid-is-a-server-side-gate-2026-08-27).
 ## Three upsell hooks deleted (2026-08-27)
 
 `useUpsellManager`, `useTrackUpsellEvent` and `useUpsellTracking` are gone from

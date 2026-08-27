@@ -8,6 +8,21 @@ import { isToolsetLandingSlug, type ToolsetLandingSlug } from "@/config/promo-la
 const BANNER_BASE_PATH = "/images/banners/multiplier";
 
 /**
+ * Toolsets that actually have a branded multiplier-banner folder on disk.
+ *
+ * Being a landing slug is NOT enough. `getMultiplierBannerImagePaths` returns
+ * `[branded, generic]` as an ordered `src` + `onError` chain, so a brand with no folder still
+ * renders — but only after the browser takes a **400 from `/_next/image`** on every banner load.
+ *
+ * That had already been happening for HiKOKI since draw 9: it joined `TOOLSET_LANDING_SLUGS`
+ * without banner art, and the old code returned it unconditionally. STIHL would have repeated it.
+ * Gating on real art makes both fall straight to the generic banner with no failed request.
+ *
+ * Add a brand here in the SAME change that adds `public/images/banners/multiplier/<brand>/`.
+ */
+const BRANDS_WITH_BANNER_ART = new Set<ToolsetLandingSlug>(["dewalt", "makita", "milwaukee", "ryobi"]);
+
+/**
  * Same toolset detection as static promo banner brand folders, but **no default brand**:
  * `null` means use generic (unbranded) multiplier art.
  */
@@ -15,16 +30,16 @@ export function resolveMultiplierBannerBrandFolder(
   slug: string | null | undefined,
   toolsetSlug: string | null | undefined
 ): ToolsetLandingSlug | null {
-  if (toolsetSlug && isToolsetLandingSlug(toolsetSlug)) {
-    return toolsetSlug;
-  }
-  if (slug) {
-    const first = slug.split("-")[0]?.toLowerCase();
-    if (first && isToolsetLandingSlug(first)) {
-      return first as ToolsetLandingSlug;
+  const candidate = (() => {
+    if (toolsetSlug && isToolsetLandingSlug(toolsetSlug)) return toolsetSlug;
+    if (slug) {
+      const first = slug.split("-")[0]?.toLowerCase();
+      if (first && isToolsetLandingSlug(first)) return first as ToolsetLandingSlug;
     }
-  }
-  return null;
+    return null;
+  })();
+
+  return candidate && BRANDS_WITH_BANNER_ART.has(candidate) ? candidate : null;
 }
 
 /**

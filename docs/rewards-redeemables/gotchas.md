@@ -436,6 +436,23 @@ Wrong eligibility → user sees offer they don't qualify for, or doesn't see one
 
 CSV bulk import is admin-triggered. For very large lists (>10k users), consider chunked processing. _TODO: confirm whether chunking is implemented or if the route times out at scale._
 
+## `DrawGrantService` writes a `shop: 0` it can never grant — 2026-08-17
+
+The fresh-row `entriesBySource` literal in
+[`DrawGrantService.ts`](../../src/services/redeemables/DrawGrantService.ts) includes `shop: 0`, but
+`DrawGrantSourceKey` is still `"bonus-entry-promo" | "streak"` — **deliberately not widened**. This
+service never grants merchandise entries; the zero exists only so a brand-new participant row
+carries every bucket, otherwise the first reader of that row hits a missing key.
+
+Do not "tidy" the apparent inconsistency by adding `"shop"` to `DrawGrantSourceKey`. That would let
+a caller pass `"shop"` into `grantMonthlyCouponEntries`, which is not how merchandise entries are
+meant to be issued. Nothing produces a `shop` entry anywhere today — the grant is a later task
+gated on a trade-promotion permit variation.
+
+The mirror-image list of buckets also lives in `MajorDrawService.zeroEntriesBySource()` (admin) and
+`EntriesBySourceSchema` (Norm); a new bucket needs all three, plus the `oneTimeEntries` sums in
+`major-draw-queries.ts`.
+
 ## Terminology: `isAdditional` (was `isMemberOnly`) — 2026-07-01
 
 The package flag `isMemberOnly` was renamed to **`isAdditional`** across the codebase. It marks packages that require *additional-package access* — an **active subscription OR current major-draw entries** (see `hasAdditionalPackageAccess`), which is broader than subscribers; it was never truly "member-only". The internal `-member` UI id-suffix (a row disambiguator) is intentionally unchanged. Full rationale: [subscription/gotchas.md](../subscription/gotchas.md).

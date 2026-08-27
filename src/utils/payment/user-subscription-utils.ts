@@ -9,6 +9,8 @@ import User, { type IUser } from "@/models/User";
 import bcrypt from "bcryptjs";
 import type mongoose from "mongoose";
 
+import { claimMobileForNewUser } from "@/utils/auth/claim-mobile";
+
 interface UserData {
   email: string;
   firstName: string;
@@ -67,7 +69,7 @@ export async function createOrUpdateSubscriptionUser(
     lastName: userData.lastName,
     email: userData.email,
     password: hashedPassword, // Will be undefined for passwordless users
-    mobile: cleanedMobile,
+    mobile: await claimMobileForNewUser(cleanedMobile, "user-subscription-utils"),
     role: "user",
     stripeCustomerId: subscriptionData.customerId,
     stripeSubscriptionId: subscriptionData.subscriptionId,

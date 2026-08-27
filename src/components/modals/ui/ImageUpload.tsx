@@ -17,6 +17,12 @@ interface ImageUploadProps {
   accept?: string;
   disabled?: boolean;
   uploadToCloudinary?: boolean; // New prop to enable Cloudinary upload
+  /**
+   * Upload the file untransformed. For print-ready artwork, where the default
+   * 1200px limit and q_auto/f_auto would destroy the resolution and the
+   * transparent background the printer needs.
+   */
+  preserveOriginal?: boolean;
   storeLocally?: boolean; // New prop to store files locally until submit
 }
 
@@ -40,6 +46,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   accept = "image/*",
   disabled = false,
   uploadToCloudinary = true,
+  preserveOriginal = false,
   storeLocally = false,
 }) => {
   const [dragActive, setDragActive] = useState(false);
@@ -48,11 +55,15 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Upload to Cloudinary via secure API endpoint
-  const uploadToCloudinaryAPI = async (file: File, folder: string = "major-draws"): Promise<string> => {
+  // Upload to Cloudinary via secure API endpoint.
+  // Memoised because it now closes over preserveOriginal, so the callbacks below
+  // must depend on it rather than on a function identity that changes every render.
+  const uploadToCloudinaryAPI = useCallback(
+    async (file: File, folder: string = "major-draws"): Promise<string> => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder", folder);
+    if (preserveOriginal) formData.append("preserveOriginal", "true");
 
     const response = await fetch("/api/upload/cloudinary", {
       method: "POST",
@@ -66,7 +77,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
     const data = await response.json();
     return data.url;
-  };
+    },
+    [preserveOriginal]
+  );
 
   // Handle Cloudinary upload with progress
   const handleCloudinaryUpload = useCallback(
@@ -122,7 +135,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
         setTimeout(() => setUploadProgress([]), 3000);
       }
     },
-    [images, onImagesChange]
+    [images, onImagesChange, uploadToCloudinaryAPI]
   );
 
   // Update previews when images change
@@ -226,7 +239,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
         onImagesChange(updatedImages);
       }
     },
-    [images, maxImages, maxFileSize, onImagesChange, disabled, uploadToCloudinary, storeLocally, handleCloudinaryUpload]
+    [images, maxImages, maxFileSize, onImagesChange, disabled, uploadToCloudinary, storeLocally, handleCloudinaryUpload, uploadToCloudinaryAPI]
   );
 
   // Handle drop event

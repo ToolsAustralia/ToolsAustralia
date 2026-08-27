@@ -3,7 +3,7 @@
  *
  * These are the URL/slug helpers only; the prize builder's presentation derivations live
  * in `prize-builder-model.ts` and its brand data in `constants.ts`. Consumed by
- * `PrizeShowcase` and `MajorDrawSection`.
+ * `PrizeShowcase`. (`MajorDrawSection` was the other consumer until it was deleted as dead code on 2026-08-26.)
  */
 
 import {

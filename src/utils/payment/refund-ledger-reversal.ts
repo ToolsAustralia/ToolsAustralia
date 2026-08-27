@@ -102,13 +102,22 @@ function buildLedgerReversalSteps(
                 await removeMajorDrawEntries(
                   userId,
                   row.entries,
+                  // An unchecked `as` on a `string` field, so this list gates
+                  // nothing at runtime — it is documentation. It had drifted
+                  // three keys behind the schema (referral, cancellation-upsell,
+                  // streak); completed here so it stops reading like a guarantee
+                  // it never provided.
                   row.sourceKey as
                     | "membership"
                     | "one-time-package"
                     | "upsell"
                     | "mini-draw"
+                    | "referral"
                     | "bonus-entry-promo"
-                    | "promo-link",
+                    | "promo-link"
+                    | "cancellation-upsell"
+                    | "streak"
+                    | "shop",
                   row.drawId
                 );
               } else {
@@ -140,6 +149,11 @@ function buildLedgerReversalSteps(
           });
           const entries = originalEvent.data.entries || 0;
           if (entries > 0) {
+            // The final `: "mini-draw"` is a FALLBACK, not a match — any packageType
+            // not named above lands there and is removed from the wrong bucket via
+            // the drawId-less multi-draw walk, the documented over-removal pattern
+            // (docs/draws/gotchas.md). "shop" therefore needs an explicit arm; it is
+            // not optional politeness.
             const source =
               packageType === "membership"
                 ? "membership"
@@ -147,6 +161,8 @@ function buildLedgerReversalSteps(
                 ? "one-time-package"
                 : packageType === "upsell"
                 ? "upsell"
+                : packageType === "shop"
+                ? "shop"
                 : "mini-draw";
             if (packageType === "mini-draw") {
               const md = originalEvent.data.miniDrawId as string | undefined;

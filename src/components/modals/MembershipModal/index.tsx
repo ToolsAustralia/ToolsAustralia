@@ -5136,6 +5136,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         }}
         conflictField={existingAccountConflictField}
         email={existingAccountEmail || formData.email}
+        // The mobile they just typed. On a mobile collision this is the ONLY
+        // identifier that resolves the right account — `existingAccountEmail` is
+        // deliberately withheld by `register` there, so the email above is theirs,
+        // not the account's, and every email-based sign-in path dead-ends.
+        // (this form calls it `phone`; it is the value posted as `mobile` at :1644)
+        mobile={formData.phone}
       />
 
       {/* Payment Processing Screen */}

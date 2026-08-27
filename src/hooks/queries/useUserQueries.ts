@@ -23,6 +23,24 @@ export interface UserData {
   profession?: string;
   birthdate?: string; // ISO date string
   profileSetupCompleted?: boolean;
+  /**
+   * Delivery address from the customer's last COMPLETED shop order, used to prefill
+   * checkout. Written only by finalizeShopOrder on a paid order.
+   *
+   * Distinct from `state` above, which is draw eligibility, not a postal address.
+   */
+  shippingAddress?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    country?: string;
+    deliveryInstructions?: string;
+  };
   subscription?: {
     packageId: string;
     isActive: boolean;
@@ -69,6 +87,12 @@ export interface UserData {
   rewardsPoints: number;
   accumulatedEntries: number;
   isEmailVerified: boolean;
+  /**
+   * Already shipped over the wire by `MY_ACCOUNT_USER_FIELDS`, but was missing
+   * from this interface — so no client gate could read mobile-verification state.
+   * Either this or `isEmailVerified` satisfies the setup requirement.
+   */
+  isMobileVerified?: boolean;
   hasPassword?: boolean;
   isActive: boolean;
   createdAt: string;
