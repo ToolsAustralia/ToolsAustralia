@@ -477,3 +477,45 @@ That 10s ceiling is **smaller than `connectDB`'s own failure path**: `serverSele
 **Deliberately NOT done:** no new indexes. MER's draw lookup is already served by `{status:1, activationDate:-1}`, and the five-field index `distinctUserCounts.ts` asks for would be permanent write amplification on the hottest collection bought for a query now removed from this path. No MER snapshot model either — after the two fixes each draw is one indexed `find` on a unique index, and caching that is machinery for no measured win.
 
 ⚠️ **Still worth measuring:** the snapshot cron writes a **90-day sliding window**, while MER's window opens earlier. Any day without a snapshot is recomputed **live**, which includes an untimed Meta Graph call (`fetchFacebookInsights` passes no `AbortSignal`; `outboundAgent` sets only a connect timeout, so undici's 300s header/body defaults stand). If MER is still slow after this, check `dashboardstatsdailysnapshots` coverage first and run `backfill:dashboard-stats-snapshots`.
+
+## The user search crashed on any regex metacharacter (fixed 2026-08-27)
+
+`buildUserFilter` dropped the admin's raw search term straight into `$regex` for the email /
+firstName / lastName / full-name clauses. A term containing a metacharacter was therefore compiled
+as a **pattern**, not a literal — and an *invalid* one makes MongoDB **throw**, so the whole query
+500s instead of returning no rows.
+
+Terms that broke it, all of them things an admin would plausibly type:
+
+| Term | Why |
+|---|---|
+| `+61412345678` | leading `+` → *"quantifier does not follow a repeatable item"* |
+| `(02) 1234` | unbalanced group |
+| `someone+tools@gmail.com` | plus-addressing is common, and this is a **customer's real email** |
+
+Fixed by `escapeRegex()` in [userFilterBuilder.ts](../../src/utils/admin/userFilterBuilder.ts),
+applied to all four clauses. It also removes a catastrophic-backtracking surface, since the term
+previously reached the engine verbatim.
+
+Found while adding mobile search — the new code was fine (digits only), but typing a phone number
+into the box was precisely what exposed the old clauses.
+
+## Admin user search now matches mobile numbers (2026-08-27)
+
+The search box covers **name, email and mobile**. Mobile matching is not a plain regex on the typed
+string, because that would fail more often than it worked:
+
+- **Storage is mixed.** Canonical is `+61412345678`, but rows written before the model's
+  `pre("save")` hook — or by an `updateOne`, which bypasses it — still hold `0412345678`. As of
+  2026-08-27 that was ~2,900 rows, shrinking as members' accounts get re-saved. See
+  `migrate:normalise-mobiles`.
+- **Admins type whatever they were given** — `0412 345 678`, `+61412345678`, `(04) 1234 5678`.
+
+So the term is reduced to the **national number** (trunk `0` / country `61` stripped), which is a
+substring of *both* stored forms — one regex finds the member either way. A complete number
+additionally gets an exact-equality clause, which the `mobile` index answers without scanning.
+
+The mobile branch only runs when the term is **phone-shaped** (`/^[\d\s+()-]{4,}$/` — digits and
+the punctuation people type, no letters). Without that guard a name like `john2024` would search
+`2024` against every mobile and return noise. Verified against production across all six
+storage × format combinations.
