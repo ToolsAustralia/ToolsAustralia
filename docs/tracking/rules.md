@@ -134,6 +134,48 @@ ArtificialPageview / HistoryChange entry means the double-count is back — disa
 the Tag Configurator rather than deleting the client-side push. Incident detail:
 [gotchas.md](./gotchas.md#contentsquare-double-counted-every-spa-navigation-tag-side-cstc--client-push-2026-08-07).
 
+## R9 — Shop Purchase fires from `finalizeShopOrder`, keyed on `orderNumber`
+
+Merchandise is the one payment type whose canonical Purchase does **not** come
+from `processPaymentBenefits`.
+
+**Why it is excluded there.** Every other server emitter keys its event id on
+`paymentIntentId`, while the shop's browser fire on `/checkout/success` keys on
+`orderNumber`. Two different ids for one sale means Meta cannot dedup them and
+every merch order is counted twice. That guard in `payment-processing.ts` stays.
+
+**Why not hung off `processPaymentBenefits` at all.** It returns early while
+`includedEntries` is 0 — which is every merch order today, and will stay so until
+the permit variation lands. Hanging Purchase there means **no merch sale is ever
+reported**.
+
+So it lives on the fulfilled path of `finalizeShopOrder`, keyed on
+`order.orderNumber` to match the browser half. That placement is also what makes
+it fire exactly once:
+
+| Case | Outcome |
+| --- | --- |
+| First delivery | `markPaid` matches, fulfilled path runs, Purchase emits once |
+| Redelivered webhook | `markPaid` returns null, the `already_processed` branch returns before the emit |
+| Stock lost after payment | Refunded and returned above the emit — a refunded order reports no Purchase |
+| Belt and braces | Both halves key on `orderNumber`, so Meta merges within its window |
+
+**Klaviyo gets an order-shaped `Placed Order`**, not the package-shaped one.
+`trackShopPlacedOrder` sends the frozen revenue keys (`$value`, `Currency`,
+`Order ID`, `items[]`) plus `order_type: "shop"` as the discriminator, and
+deliberately omits `package_type` / `package_id` / `package_name` — those would
+write "Unknown Package" into Klaviyo on every merch sale.
+
+⚠️ **Klaviyo dashboard follow-up:** any existing flow or segment filtering
+`Placed Order` on `package_type` will not match merchandise orders. That is a
+dashboard decision, not a code one.
+
+**Click ids ride through Stripe metadata.** The webhook has no cookies, so
+`/api/shop/checkout` stashes `capi_fbc` / `capi_fbp` / `capi_ttclid` / `capi_ttp`
+/ ip / ua on the PaymentIntent, exactly as the one-time and mini-draw routes do,
+and the webhook reads them back with `extractRequestContextFromMetadata`. Without
+that hand-off the server Purchase reaches Meta and TikTok with no click id and
+cannot be attributed at all.
 ## R-GE. Meta `ge` (gender) — all sites or none, and omit when unknown
 
 `User.gender` is an **optional** field holding only `"male"` / `"female"`. It feeds Meta's Advanced Matching `ge` parameter, whose spec is *"single lowercase letter, `f` or `m`, if unknown, leave blank"* — so the value hashed is the **letter**, never our stored word.

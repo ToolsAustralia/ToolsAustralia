@@ -555,6 +555,7 @@ export interface MajorDrawParticipantSafe {
     "cancellation-upsell": number;
     "promo-link": number;
     streak: number;
+    shop: number;
   };
   firstAddedDate: string;   // ISO 8601 UTC
   lastUpdatedDate: string;  // ISO 8601 UTC
@@ -596,6 +597,7 @@ function zeroEntriesBySource(): MajorDrawParticipantSafe["entriesBySource"] {
     "cancellation-upsell": 0,
     "promo-link": 0,
     streak: 0,
+    shop: 0,
   };
 }
 

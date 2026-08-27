@@ -242,6 +242,13 @@ export class DashboardStatsService {
       purchaseCount: snapshotRead.revenue.buckets.upsell.purchaseCount,
       userCount: snapshotRead.revenue.buckets.upsell.userCount,
     };
+    // Merchandise. Its own bucket since snapshot source version 4 — before that,
+    // shop money existed nowhere in this pipeline at all.
+    const shopData = {
+      revenue: snapshotRead.revenue.buckets.shop.revenue,
+      purchaseCount: snapshotRead.revenue.buckets.shop.purchaseCount,
+      userCount: snapshotRead.revenue.buckets.shop.userCount,
+    };
 
     // ========================================
     // MAJOR DRAW STATISTICS
@@ -652,6 +659,11 @@ export class DashboardStatsService {
             purchaseCount: upsellData.purchaseCount,
             userCount: upsellData.userCount,
             ...(revenueBreakdownTrends.upsell && { trend: revenueBreakdownTrends.upsell }),
+          },
+          shop: {
+            revenue: shopData.revenue,
+            purchaseCount: shopData.purchaseCount,
+            userCount: shopData.userCount,
           },
         },
       },

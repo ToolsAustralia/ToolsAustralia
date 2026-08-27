@@ -1,6 +1,7 @@
 "use client";
 
-import nextDynamic from "next/dynamic";
+import nextDynamic from "next/dynamic";
+import { useSidebar } from "@/contexts/SidebarContext";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import ChatBubbleButton from "./ChatBubbleButton";
@@ -64,6 +65,17 @@ export default function SupportChatWidgetMount({
   // still opens via OPEN_SUPPORT_CHAT_EVENT.
   const onDashboard = pathname?.startsWith("/my-account") ?? false;
 
+  /**
+   * The floating bubble also yields to the cart drawer and the mobile menu.
+   *
+   * The robot sits bottom-right at a z above page content, which is exactly where the
+   * cart drawer puts its "Continue Shopping" button — so it covered the control and
+   * ate the tap. Same reasoning as the /my-account suppression above: when another
+   * surface owns the screen, Cobber is not the affordance in front of the customer.
+   */
+  const { isCartOpen, isMobileMenuOpen } = useSidebar();
+  const sideDrawerOpen = isCartOpen || isMobileMenuOpen;
+
   useEffect(() => {
     let cancelled = false;
     // No cache:"no-store" — the route serves public s-maxage=60; honoring the CDN/browser
@@ -95,7 +107,7 @@ export default function SupportChatWidgetMount({
 
   return (
     <>
-      {!onDashboard && (
+      {!onDashboard && !sideDrawerOpen && (
         <ChatBubbleButton
           side={side}
           open={open}

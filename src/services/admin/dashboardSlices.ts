@@ -3,7 +3,6 @@ import PaymentEvent from "@/models/PaymentEvent";
 import MajorDraw from "@/models/MajorDraw";
 import MiniDraw from "@/models/MiniDraw";
 import Winner from "@/models/Winner";
-import Order from "@/models/Order";
 import ReferralEvent from "@/models/ReferralEvent";
 import mongoose from "mongoose";
 import { getPackageById } from "@/data/membershipPackages";
@@ -505,37 +504,19 @@ export async function getRecentActivities(input: { page: number; limit: number }
     });
   });
 
-  // High-value orders
-  const recentOrders = await Order.find({ totalAmount: { $gte: 200 } })
-    .sort({ createdAt: -1 })
-    .limit(30)
-    .populate("user", "firstName lastName");
+  /*
+    The Order-based "high-value order" feed was DELETED (2026-08-21).
 
-  recentOrders.forEach((order) => {
-    let user: { firstName: string; lastName: string } | null = null;
-    const populatedUser = order.user as unknown;
-    if (
-      populatedUser &&
-      typeof populatedUser === "object" &&
-      "firstName" in populatedUser &&
-      "lastName" in populatedUser
-    ) {
-      user = populatedUser as { firstName: string; lastName: string };
-    }
-    const timeAgo = getTimeAgo(order.createdAt);
+    It read `Order.find({ totalAmount: { $gte: 200 } })` with NO status filter and
+    rendered every row as `status: "success"` with the words "Purchased $X worth of
+    tools" — so an abandoned checkout, or a duplicate created by a refresh at the
+    card step, appeared to staff AND to Norm as a completed high-value purchase with
+    money attached, and inflated `totalActivities` alongside it.
 
-    activities.push({
-      id: `order-${order._id}`,
-      type: "high_value_order",
-      user: user ? `${user.firstName} ${user.lastName}` : "Unknown User",
-      firstName: user?.firstName || null,
-      action: `Purchased $${order.totalAmount} worth of tools`,
-      time: timeAgo,
-      status: "success",
-      amount: order.totalAmount,
-      timestamp: order.createdAt,
-    });
-  });
+    Shop purchases now reach both activity surfaces through the PaymentEvent-based
+    ActivityLogService, which only ever sees orders that were actually paid. One
+    source, so the dashboard card, the Activity Log page and Norm cannot disagree.
+  */
 
   activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
@@ -551,13 +532,30 @@ export async function getRecentActivities(input: { page: number; limit: number }
 
 // ─── Revenue details ─────────────────────────────────────────────────────────
 
-export type RevenueDetailsCategory =
-  | "membership-purchase"
-  | "membership-renewal"
-  | "one-time-purchase"
-  | "additional-one-time"
-  | "mini-draw"
-  | "upsell";
+/**
+ * Every revenue category the drill-down can be asked for.
+ *
+ * A CONST ARRAY, with the type derived from it — not a bare union with the list
+ * re-typed wherever a runtime check is needed. The API route kept its own
+ * hand-maintained `VALID_CATEGORIES` allowlist, and adding `shop` to the union did
+ * NOT add it there: the array was annotated `RevenueDetailsCategory[]`, and a SUBSET
+ * satisfies that type perfectly, so tsc had nothing to complain about. The result was
+ * a 400 the modal rendered as a permanent "Loading revenue details…" spinner.
+ *
+ * Import this array anywhere a runtime membership test is needed, so a new category
+ * cannot be half-added again.
+ */
+export const REVENUE_DETAILS_CATEGORIES = [
+  "membership-purchase",
+  "membership-renewal",
+  "one-time-purchase",
+  "additional-one-time",
+  "mini-draw",
+  "upsell",
+  "shop",
+] as const;
+
+export type RevenueDetailsCategory = (typeof REVENUE_DETAILS_CATEGORIES)[number];
 
 export type RevenueDetailsDateRange =
   | "today"
@@ -746,6 +744,8 @@ export async function getRevenueDetails(input: RevenueDetailsInput): Promise<Rev
     eventQuery.packageType = "mini-draw";
   } else if (category === "upsell") {
     eventQuery.packageType = "upsell";
+  } else if (category === "shop") {
+    eventQuery.packageType = "shop";
   }
 
   const paymentEventsRaw = await fetchNetBenefitsGrantedWithMatch(eventQuery, {

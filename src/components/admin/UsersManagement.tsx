@@ -536,7 +536,7 @@ export default function UsersManagement() {
             <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-neutral-500 group-focus-within:text-red-600 dark:group-focus-within:text-red-400 transition-colors w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
             <input
               type="text"
-              placeholder="Search users..."
+              placeholder="Search name, email or mobile..."
               value={filters.search || ""}
               onChange={(e) => updateFilter("search", e.target.value)}
               className="w-full min-w-0 pl-8 sm:pl-10 lg:pl-12 pr-3 sm:pr-4 py-1.5 sm:py-2 lg:py-2.5 border-2 border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-red-500/50 focus:border-red-500 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white text-xs sm:text-sm lg:text-base shadow-sm hover:shadow-md transition-all duration-200 placeholder:text-gray-400 dark:placeholder:text-neutral-500"

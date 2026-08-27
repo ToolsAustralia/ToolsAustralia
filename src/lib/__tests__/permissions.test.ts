@@ -26,7 +26,10 @@ const test = (name: string, fn: () => void) => {
 
 test("AREAS matches AREA_ACTIONS keys exactly", () => {
   assert.deepEqual(AREAS, Object.keys(AREA_ACTIONS));
-  assert.equal(AREAS.length, 17);
+  // Bump deliberately when an area is added. 18 as of 2026-08-26 - `shop` (gates the
+  // previously-unauthenticated /api/products admin + destructive routes) and `receipts`
+  // (the revenue ledger) were added on separate branches and both land in this merge.
+  assert.equal(AREAS.length, 18);
 });
 
 test("every area declares at least a 'view' action", () => {

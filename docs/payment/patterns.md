@@ -36,7 +36,7 @@ Store **only** Stripe `pm_xxx` strings on the User document. Never expanded Paym
 
 ## P5. 3DS via the hook, never inline
 
-`use3DSRedirectHandler` encapsulates the entire post-3DS flow (URL parsing, server verification, state reconciliation). Don't reimplement in components. Don't trust URL params for success — always poll server-side.
+`use3DSRedirectHandler` encapsulates the entire post-3DS flow (URL parsing, server verification, state reconciliation). Don't reimplement in components. Don't trust URL params for success — always poll server-side. Since 2026-08-27 it also exchanges the client secret for a session on `succeeded` ([frontend.md](./frontend.md#3ds-session-establishment)), so a hand-rolled redirect handler now silently loses the buyer's sign-in as well as the status reconciliation.
 
 ## P6. Failed-invoice selection helper, not `latest_invoice`
 

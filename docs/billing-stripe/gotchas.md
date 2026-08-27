@@ -702,6 +702,23 @@ The package flag `isMemberOnly` was renamed to **`isAdditional`** across the cod
 
 `src/lib/stripe-client.ts` imports `loadStripe` from the `/pure` entry — the DEFAULT `@stripe/stripe-js` entry injects https://js.stripe.com on mere import, which shipped Stripe to 100 % of guests when the modal chunk evaluated. Import `loadStripe` nowhere else (lint: `internal-norm/no-eager-stripe`); call `getStripePromise()` lazily inside components/handlers. Note: with `/pure`, Stripe's fraud-signal collection starts at first `getStripePromise()` call (payment-surface mount) instead of page load — intended.
 
+## A shop payment now reaches `processPaymentBenefits` (2026-08-17)
+
+`stripe-webhook-handlers/index.ts` previously documented the opposite — *"Shop orders grant NO
+entries and deliberately do not touch processPaymentBenefits"*. That is no longer true: the shop
+branch resolves the one-time promo multiplier and passes it to `finalizeShopOrder`, which grants
+the order's free entries after fulfilment.
+
+The consequence worth knowing when reading this file: **once a shop grant succeeds it writes a
+`BenefitsGranted-{pi}` PaymentEvent, so every later redelivery of that `payment_intent.succeeded`
+short-circuits at `isPaymentProcessed()` before reaching the shop branch at all.** That is why
+the grant is sequenced last inside `finalizeShopOrder` and why its `already_processed` path
+retries the grant instead of returning early — see
+[cart-shop-products/backend.md](../cart-shop-products/backend.md).
+
+Shop PaymentIntent metadata now also carries `userEmail`. It was the only payment type without
+it, and the webhook's user-resolution fallback needs it; without it an unmatched
+`stripeCustomerId` lost the order silently.
 ## Adaptive Acceptance blocks are NOT overridable by the Radar allow list
 
 **Confirmed by Stripe support, 2026-08-17.** `outcome.type === "blocked"` covers several
@@ -837,3 +854,12 @@ Why it matters beyond DRY: `subscription.pendingChange` is a Mongoose **nested o
 materialises as `{}` and a truthiness check is permanently `true`. That bug had already shipped
 to Klaviyo (`subscription_has_pending_upgrade` was `true` on all 56,360 profiles). One shared
 implementation means it can only be fixed once. Pinned by `npm run test:pending-upgrade`.
+## The webhook's FRESH retrieves are load-bearing — never read the frozen event payload
+
+`handleInvoicePaymentSucceeded` re-retrieves the invoice from Stripe (`stripe.invoices.retrieve(invoiceId, { expand: [...] })`) and `handlePaymentSuccess` re-retrieves the PaymentIntent (`stripe.paymentIntents.retrieve(paymentIntent.id, { expand: [...] })`) instead of using `event.data.object`. Both look like an easy "one fewer API call" saving. **They are not.**
+
+Since 2026-08-27 the customer's bonus-entry `campaignCode` is written onto the checkout object at the PURCHASE click — after the coupon box has been filled, immediately before `confirmPayment` (`src/utils/payment/campaign-code-checkout.ts`). It **cannot** be written any earlier: the coupon box lives on the same modal step whose mount already pre-warmed the subscription / PaymentIntent, so at pre-warm time the code does not exist yet.
+
+That stamp lands before the confirm, so a fresh retrieve always sees it. Switching either handler to the event payload — or to `parent.subscription_details.metadata`, which is a snapshot of the same thing — reintroduces the exact production defect that fix closed: **the customer sees APPLIED, is charged, and receives nothing, with no error logged anywhere.**
+
+If you are optimizing these calls, the invariant to preserve is "read the object's metadata as of the moment the grant runs", not "avoid a retrieve". Regression cover: `npm run e2e:bonus-code` (all three legs) plus `npm run test:campaign-code-checkout`. See [payment/gotchas.md](../payment/gotchas.md#the-applied-discount-code-was-thrown-away-at-checkout-fixed-2026-08-27).

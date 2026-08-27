@@ -72,6 +72,20 @@ export const createRateLimiter = (bucketKey: string, options: RateLimiterOptions
 
 type DistributedRateLimiter = {
   check: (identifier: string) => Promise<RateLimiterResult>;
+  /**
+   * Give back a token consumed by `check()` when the guarded action did not
+   * actually happen (e.g. the SMS gateway failed, so no credit was spent and no
+   * code was delivered).
+   *
+   * Needed because `check()` consumes on call — there is no "peek". Without a
+   * refund, a transient downstream failure permanently eats one of the caller's
+   * allowance, which matters a lot on a small budget like 3 SMS/day.
+   *
+   * Only ever decrements a LIVE window and never below zero, so a stray refund
+   * cannot mint allowance. Best-effort and silent: a failed refund must never
+   * fail the request the caller is already handling.
+   */
+  refund: (identifier: string) => Promise<void>;
 };
 
 /**
@@ -131,6 +145,28 @@ export const createDistributedRateLimiter = (
         // Fail OPEN: never block legitimate auth because the limiter store hiccuped.
         console.error("Distributed rate limiter error (failing open):", err);
         return { success: true, remaining: options.maxRequests, retryAfterSeconds: 0 };
+      }
+    },
+
+    refund: async (identifier: string): Promise<void> => {
+      const key = `${bucketKey}:${identifier}`;
+      try {
+        const [{ default: connectDB }, { default: RateLimit }] = await Promise.all([
+          import("@/lib/mongodb"),
+          import("@/models/RateLimit"),
+        ]);
+        await connectDB();
+        // `count: { $gt: 0 }` stops a double refund going negative (which would
+        // hand out free allowance); `resetAt: { $gt: now }` stops a late refund
+        // resurrecting an expired window.
+        await RateLimit.updateOne(
+          { _id: key, count: { $gt: 0 }, resetAt: { $gt: new Date() } },
+          { $inc: { count: -1 } }
+        );
+      } catch (err) {
+        // Best-effort only. The caller is already handling a failure; losing one
+        // token is strictly better than throwing a second error on top of it.
+        console.error("Distributed rate limiter refund failed (ignored):", err);
       }
     },
   };

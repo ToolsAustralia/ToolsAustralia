@@ -21,7 +21,7 @@ export type ToolboxBrand = "milwaukee" | "kincrome" | "sidchrome" | "gearwrench"
 export type ToolboxType = ToolboxBrand | "cash";
 
 /** Power toolset brand keys */
-export type ToolsetType = "milwaukee" | "dewalt" | "makita" | "ryobi" | "hikoki";
+export type ToolsetType = "milwaukee" | "dewalt" | "makita" | "ryobi" | "hikoki" | "stihl";
 
 /**
  * A toolbox the winner can pick (reel 1).
@@ -67,16 +67,25 @@ export interface ToolboxOption {
   /** Mask paint colour per theme so the wordmark reads on both card surfaces. */
   markColor: { light: string; dark: string };
   /**
-   * Per-brand size of the mask box inside the mark plate, tuned so the three marks read
-   * at the same **letter** size — NOT the same box size.
+   * Per-brand size of the mask box inside the mark plate, tuned so the marks read at the
+   * same **letter** size — NOT the same box size.
    *
-   * Milwaukee is a 2.23:1 stacked lockup (script over a lightning bolt); Kincrome is 5.76:1
-   * and Sidchrome 4.38:1 single-line wordmarks. Sized to a common box height, Milwaukee's
-   * letters render about half the size of the others — which is exactly what "Milwaukee looks
-   * unfairly small" was. Milwaukee therefore takes the full plate (1.0) and the two wide
-   * wordmarks are scaled back to match its letter height. Levelling DOWN keeps every mark
-   * inside the plate: bringing Milwaukee up instead would need ~1.4x, overflowing into the
-   * piece-count eyebrow above it.
+   * DERIVED, not eyeballed. With `mask-size: contain` the painted height is
+   * `scale x min(plateH, plateW / aspect)`, and the letters are `capFrac` of that — where
+   * `capFrac` is the share of the mark's height its main letter band occupies. So:
+   *
+   *     scale = targetCap / (min(plateH, plateW / aspect) x capFrac)
+   *
+   * Draw 10 re-derived all four against a 13px target on the 156x30 desktop plate. The
+   * lockups differ enormously — Sidchrome's wordmark sits inside a spanner outline that eats
+   * 58% of its height (capFrac 0.42), Milwaukee's script sits above a lightning bolt (0.523),
+   * while Kincrome is almost pure letterform (0.98). Sized to a common box they ranged 7.3px
+   * to 14.4px, a 1.97x spread; they now land within 0.1px of each other.
+   *
+   * This replaces the old "level everything DOWN to Milwaukee" rule, which only held while
+   * every mark carried 58-72% dead canvas padding. The SVGs are now cropped to their ink
+   * (`viewBox` = real glyph bounds), so scale means the same thing for every brand and
+   * Sidchrome no longer has to be shrunk to compensate for a padded export.
    */
   markScale: number;
   /** Renders the red "New" badge — first draw this toolbox appears in. */
@@ -137,8 +146,11 @@ export const TOOLBOXES: readonly ToolboxOption[] = [
     // EXACTLY the fill of `brands/name/milwaukeeText.svg`, which the Milwaukee toolset
     // card renders directly below this one — same brand, same screen, so they must be
     // the same red. (The handoff's washed `#ff5a5a` dark variant read salmon next to it.)
-    markColor: { light: "#c92a28", dark: "#c92a28" },
-    markScale: 1,
+    // Draw 10: moved `#c92a28` → `#F72D2C` in lockstep with the refreshed wordmark art.
+    // `test:prize-builder` reads the SVG's first fill and asserts this pair matches it,
+    // so the two can never drift again.
+    markColor: { light: "#F72D2C", dark: "#F72D2C" },
+    markScale: 0.82,
   },
   {
     id: "kincrome",
@@ -155,7 +167,7 @@ export const TOOLBOXES: readonly ToolboxOption[] = [
     // perceptually much darker than the two reds, so the deep official blue disappears
     // against `#191b21`.
     markColor: { light: "#0047BB", dark: "#4A7ED4" },
-    markScale: 0.62,
+    markScale: 0.49,
   },
   {
     id: "sidchrome",
@@ -171,7 +183,7 @@ export const TOOLBOXES: readonly ToolboxOption[] = [
     // true red at the same perceived weight as the Milwaukee mark, so the two red brands
     // sit consistently beside each other, and the card's ring/glow/wordmark all agree.
     markColor: { light: "#d21f2a", dark: "#d21f2a" },
-    markScale: 0.72,
+    markScale: 1.03,
   },
   {
     id: "gearwrench",
@@ -193,7 +205,7 @@ export const TOOLBOXES: readonly ToolboxOption[] = [
     // GearWrench renders PLATELESS and its cropped lockup is 9.6:1 — far wider than
     // Kincrome's 5.76:1 — so that levelling maths doesn't carry over. This is the handoff's
     // value, confirmed against the rendered card rather than derived.
-    markScale: 0.9,
+    markScale: 0.96,
     isNew: true,
   },
 ] as const;
@@ -210,7 +222,7 @@ export const TOOLSETS: readonly ToolsetOption[] = [
     accent: "#ee0000",
     image: "/images/majordraws/milwaukee-set/MILWAUKEE.webp",
     wordmark: "/images/brands/name/milwaukeeText.svg",
-    wordmarkScale: 1.32,
+    wordmarkScale: 1.14,
   },
   {
     id: "dewalt",
@@ -222,7 +234,7 @@ export const TOOLSETS: readonly ToolsetOption[] = [
     accent: "#febd17",
     image: "/images/majordraws/dewalt-set/DEWALT.webp",
     wordmark: "/images/brands/name/dewaltText.svg",
-    wordmarkScale: 0.92,
+    wordmarkScale: 0.79,
   },
   {
     id: "makita",
@@ -234,7 +246,7 @@ export const TOOLSETS: readonly ToolsetOption[] = [
     accent: "#00b8c2",
     image: "/images/majordraws/makita-set/MAKITA.webp",
     wordmark: "/images/brands/name/makitaText.svg",
-    wordmarkScale: 1.05,
+    wordmarkScale: 0.99,
   },
   {
     id: "ryobi",
@@ -246,7 +258,7 @@ export const TOOLSETS: readonly ToolsetOption[] = [
     accent: "#8aa300",
     image: "/images/majordraws/ryobi-set/RYOBI.webp",
     wordmark: "/images/brands/name/ryobiText.svg",
-    wordmarkScale: 1.12,
+    wordmarkScale: 0.63,
   },
   {
     id: "hikoki",
@@ -258,7 +270,23 @@ export const TOOLSETS: readonly ToolsetOption[] = [
     accent: "#0aa06e",
     image: "/images/majordraws/hikoki-set/HIKOKI.webp",
     wordmark: "/images/brands/name/hikokiText.svg",
-    wordmarkScale: 0.9,
+    wordmarkScale: 0.62,
+    // `isNew` moved to STIHL for draw 10 — HiKOKI joined in draw 9 and is no longer new.
+  },
+  {
+    id: "stihl",
+    name: "STIHL",
+    // Outdoor power equipment, not a cordless drill kit — the four petrol tools plus six
+    // AS/AP-system cordless tools, so the kit label counts the TOOLS, matching every other lane.
+    kitLabel: "10pc outdoor kit",
+    storageLabel: "AP battery kit",
+    cardLabel: "10pc Kit + AP Battery Kit",
+    toolCount: 10,
+    // STIHL orange, sampled from the supplied draw-10 wordmark art (`stihlText.svg`).
+    accent: "#f46717",
+    image: "/images/majordraws/stihl-set/STIHL.webp",
+    wordmark: "/images/brands/name/stihlText.svg",
+    wordmarkScale: 0.64,
     isNew: true,
   },
 ] as const;

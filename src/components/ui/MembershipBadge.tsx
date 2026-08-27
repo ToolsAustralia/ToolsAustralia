@@ -2,10 +2,8 @@
 
 import Image from "next/image";
 import { getPackageIconByName, getPackageIconWrapperScaleClass, type PackageIconData } from "@/utils/images/package-icons";
-import {
-  getMembershipSectionColorScheme,
-  derivePlanIdFromPackage,
-} from "@/utils/package-colors/packageColorScheme";
+import { derivePlanIdFromPackage } from "@/utils/package-colors/packageColorScheme";
+import { getRemappedPackageScheme } from "@/utils/package-colors/packageCardSurface";
 import { cn } from "@/utils/cn";
 
 // Type alias for consistency with existing code
@@ -121,7 +119,31 @@ export default function MembershipBadge({
   const planId = derivePlanIdFromPackage(packageData, finalMembershipType);
   const iconScaleClass = getPackageIconWrapperScaleClass(planId, "badge");
   const isMembershipTab = finalMembershipType === "subscription";
-  const colorScheme = getMembershipSectionColorScheme(planId, isMembershipTab);
+  /*
+    The SCHEME comes from the shared remapper, not from a getter directly.
+
+    Three tiers deliberately paint a different tier's colour so no two adjacent cards
+    repeat one. This badge skipped those remaps and rendered membership Tradie as
+    #5ca9ec while its own card rendered #00E5FF — and since
+    getMembershipSectionColorScheme returns the SAME value for tradie-subscription and
+    tradie-pack, it read as the one-time pack's colour.
+
+    It has to be the whole scheme, not just the accent: the fill below comes from
+    `badgeStyle.background`, so remapping the accent alone left the badge filled from
+    one tier and outlined from another.
+  */
+  const colorScheme = getRemappedPackageScheme(planId, isMembershipTab);
+  /*
+    The accent comes from the SHARED resolver, not from the scheme above.
+
+    Three tiers deliberately paint a different tier's colour so no two adjacent cards
+    repeat one, and this badge was skipping those remaps: membership Tradie rendered
+    #5ca9ec here while its own card rendered #00E5FF. Worse,
+    getMembershipSectionColorScheme returns the SAME value for tradie-subscription and
+    tradie-pack, so the badge read as the one-time pack's colour to anyone comparing
+    the two.
+  */
+  const accentHex = colorScheme.accentHex;
   const badgeStyle = colorScheme.badgeStyle ?? {};
 
   // Get badge text
@@ -135,12 +157,12 @@ export default function MembershipBadge({
   const fullBadgeStyle = badgeStyle.background
     ? {
         ...badgeStyle,
-        border: `2px solid ${colorScheme.accentHex}${colorScheme.cardBorderOpacity || "CC"}`,
+        border: `2px solid ${accentHex}${colorScheme.cardBorderOpacity || "CC"}`,
       }
     : {
-        background: colorScheme.accentHex,
-        border: `2px solid ${colorScheme.accentHex}`,
-        boxShadow: `0 0 20px ${colorScheme.accentHex}66`,
+        background: accentHex,
+        border: `2px solid ${accentHex}`,
+        boxShadow: `0 0 20px ${accentHex}66`,
       };
   return (
     <Wrapper
@@ -166,8 +188,15 @@ export default function MembershipBadge({
         </div>
       )}
 
-      {/* Badge Text */}
-      <span>{badgeText}</span>
+      {/*
+        ICON ONLY on a phone.
+
+        The header is the tightest row on the site, and the tier is already legible from
+        the icon and its colour — the word costs horizontal space that the cart and
+        account controls need more. It stays in the accessible name via sr-only, so a
+        screen reader still announces the tier rather than an unlabelled image.
+      */}
+      <span className="sr-only sm:not-sr-only">{badgeText}</span>
     </Wrapper>
   );
 }

@@ -22,6 +22,7 @@ interface ProfileTabProps {
     lastName: string;
     email: string;
     isEmailVerified?: boolean;
+    isMobileVerified?: boolean;
     mobile?: string;
     state?: string;
     profession?: string;
@@ -128,53 +129,90 @@ export default function ProfileTab({ user }: ProfileTabProps) {
 
   return (
     <div className="space-y-5">
-      {/* Email verification banner */}
-      <div
-        className={cn(
-          "flex items-center gap-3 rounded-2xl border p-4 shadow-sm",
-          user.isEmailVerified
-            ? "border-token bg-surface"
-            : "border-amber-300/60 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20",
-        )}
-      >
-        <span
-          className={cn(
-            "grid h-10 w-10 shrink-0 place-items-center rounded-xl",
-            user.isEmailVerified
-              ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"
-              : "bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400",
-          )}
-        >
-          {user.isEmailVerified ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-primary-token dark:text-white">{user.email}</p>
+      {/* Contact verification — email AND mobile.
+          Either one satisfies the account requirement (it is the recovery
+          credential for the password set at signup), so the outer banner reads
+          "at least one", while each row still shows its own state and offers its
+          own Verify. Both buttons open setup step 3, which now carries the
+          channel picker. */}
+      {(() => {
+        const emailVerified = !!user.isEmailVerified;
+        const mobileVerified = !!user.isMobileVerified;
+        const anyVerified = emailVerified || mobileVerified;
+
+        const row = (
+          key: string,
+          label: string,
+          value: string | undefined,
+          verified: boolean,
+          missingHint: string,
+        ) => (
+          <div key={key} className="flex items-center gap-3">
             <span
               className={cn(
-                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-                user.isEmailVerified
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
-                  : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+                "grid h-9 w-9 shrink-0 place-items-center rounded-xl",
+                verified
+                  ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"
+                  : "bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400",
               )}
             >
-              {user.isEmailVerified ? "Verified" : "Unverified"}
+              {verified ? <ShieldCheck className="h-4.5 w-4.5" /> : <AlertTriangle className="h-4.5 w-4.5" />}
             </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-sm font-semibold text-primary-token dark:text-white">
+                  {value || <span className="text-muted-token italic">No {label.toLowerCase()} on file</span>}
+                </p>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                    verified
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
+                  )}
+                >
+                  {verified ? "Verified" : "Unverified"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-token">{verified ? `Your ${label.toLowerCase()} is confirmed.` : missingHint}</p>
+            </div>
+            {!verified && value && (
+              <button
+                type="button"
+                onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
+                className="shrink-0 rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+              >
+                Verify
+              </button>
+            )}
           </div>
-          <p className="text-xs text-muted-token">
-            {user.isEmailVerified ? "Your email is confirmed." : "Confirm your email to secure your account."}
-          </p>
-        </div>
-        {!user.isEmailVerified && (
-          <button
-            type="button"
-            onClick={() => requestModal("user-setup", true, { initialStep: 3 })}
-            className="shrink-0 rounded-full bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+        );
+
+        return (
+          <div
+            className={cn(
+              "space-y-4 rounded-2xl border p-4 shadow-sm",
+              anyVerified
+                ? "border-token bg-surface"
+                : "border-amber-300/60 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20",
+            )}
           >
-            Verify
-          </button>
-        )}
-      </div>
+            {!anyVerified && (
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                Verify your email or your mobile — it&apos;s how you get back in if you forget your password.
+              </p>
+            )}
+            {row("email", "Email", user.email, emailVerified, "Confirm your email to secure your account.")}
+            {row(
+              "mobile",
+              "Mobile",
+              user.mobile,
+              mobileVerified,
+              "Confirm your mobile so you can sign in by text.",
+            )}
+          </div>
+        );
+      })()}
 
       {/* Personal details */}
       <div className={cn("rounded-2xl border bg-surface p-5 shadow-sm", missing.length > 0 ? "border-amber-300/60" : "border-token")}>

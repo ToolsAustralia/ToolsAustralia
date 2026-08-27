@@ -58,9 +58,26 @@ Full architecture is documented in [billing-stripe/architecture.md#refund-revers
 
 When Stripe requires 3DS (Strong Customer Authentication), the user is redirected to the bank's challenge page. After confirming, Stripe redirects to our `return_url` with the PaymentIntent id appended.
 
-[src/hooks/use3DSRedirectHandler.ts](../../src/hooks/use3DSRedirectHandler.ts) detects the PI in the URL, calls `/api/stripe/verify-payment-complete`, and reconciles the page state (success / failure / pending).
+[src/hooks/use3DSRedirectHandler.ts](../../src/hooks/use3DSRedirectHandler.ts) reads `payment_intent_client_secret` from the query string, re-reads the intent from Stripe with `stripe.retrievePaymentIntent(clientSecret)` — never the URL's `redirect_status`, see [R7](./rules.md#r7) — and maps its status onto `PaymentStatus` (`succeeded` / `processing` / `requires_action` / `failed`). Its only consumer is [`PaymentSuccessHandler`](../../src/components/payment/PaymentSuccessHandler.tsx), which the four success landings mount: `checkout/success`, `purchase-success`, `mini-draw-success`, `upsell-success`. (`/api/stripe/verify-payment-complete` still exists but has no client caller as of 2026-08-27.)
 
-> _TODO: read use3DSRedirectHandler.ts and document the exact return-URL format, status states, and the success/failure routing._
+### Signing the 3DS buyer in (2026-08-27)
+
+On `succeeded` the hook also fires `establishSessionFromPayment(clientSecret)`:
+
+```
+succeeded
+   │
+   ▼
+POST /api/auth/session-from-payment      ── 202 {pending:true} ──► retry [0, 1.5s, 3s, 5s]
+   (redirect client secret, nothing else)
+   │  { token }
+   ▼
+signIn("auto-login", { token })
+```
+
+The route derives the user from the PaymentIntent's customer — the client names no account at all — and is owned by [auth](../auth/): reference in [auth/api.md](../auth/api.md), source at [src/app/api/auth/session-from-payment/route.ts](../../src/app/api/auth/session-from-payment/route.ts). Design: [2026-08-25 mobile verification and SMS login](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+Fire-and-forget by design. The full contract (silent failure, what is retried, what is terminal) is in [frontend.md](./frontend.md#3ds-session-establishment); the invariant is [R13](./rules.md#r13); the bug it closes is in [gotchas.md](./gotchas.md#resolved--a-3ds-buyer-finished-paying-and-stayed-logged-out-2026-08-27).
 
 ## Failed-invoice retry
 

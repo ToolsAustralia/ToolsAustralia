@@ -57,6 +57,113 @@ export const SIDCHROME_SCMT11402_TOOL_KIT: PrizeSpecItem = {
   ],
 };
 
+
+/**
+ * STIHL outdoor power equipment — draw 10.
+ *
+ * Descriptions and specifications are taken from stihl.com.au and verified figure by figure
+ * (docs/config-and-data/stihl-prize-products.md). Where STIHL AU publishes no figure — the
+ * ASA 20's weight, the HS 45's tank capacity, the AP 300 S's voltage — the line is absent
+ * ON PURPOSE. AU specs differ from US/EU listings, so never backfill one from overseas.
+ */
+export const STIHL_PETROL_TOOLS: PrizeSpecItem[] = [
+  {
+    name: "STIHL MS 391 FarmBoss® Petrol Chainsaw",
+    model: "MS 391",
+    description:
+      "Petrol chainsaw built for farm work, landscaping, firewood and construction timber, supplied with a 20\" bar. Runs a STIHL 2-MIX engine with a decompression valve to ease starting and side-mounted chain tensioning.",
+    specifications: ["Power: 3.3 kW", "Power-to-weight ratio: 1.9 kg/kW", "Displacement: 64.1 cm³", "Guide bar: 50 cm / 20\""],
+  },
+  {
+    name: "STIHL FS 91 R Petrol Brushcutter",
+    model: "FS 91 R",
+    description:
+      "Loop-handle petrol brushcutter on a rigid drive shaft with STIHL's 4-MIX engine, suited to working in confined spaces. Supplied with the AutoCut C 26-2 mowing head and a double-shoulder harness.",
+    specifications: ["Displacement: 28.4 cm³", "Power: 0.95 kW", "Weight without fuel: 5.5 kg", "Length without cutting tool: 180 cm", "Cutting circle: 420 mm", "Cutting attachment: AutoCut C 26-2", "Tank capacity: 0.71 L"],
+    includes: ["AutoCut C 26-2 mowing head", "Double-shoulder harness"],
+  },
+  {
+    name: "STIHL BG 86 Petrol Blower",
+    model: "BG 86",
+    description:
+      "Handheld petrol blower with a STIHL 2-MIX two-stroke engine, running either a round nozzle or a flat nozzle for a wide air stream. An HD2 filter handles dusty work.",
+    specifications: ["Displacement: 27.2 cm³", "Weight without fuel: 4.4 kg", "Blowing force, round nozzle: 15 N", "Air throughput, round nozzle: 755 m³/h", "Air throughput, flat nozzle: 620 m³/h", "Max. air velocity, flat nozzle: 89 m/s"],
+  },
+  {
+    name: "STIHL HS 45 Petrol Hedge Trimmer",
+    model: "HS 45, 600 mm",
+    description:
+      "Petrol hedge trimmer for shrubs and chest-height hedges, with double-sided blades shaped to cut horizontally, vertically and into corners. Single-lever operation and a manual fuel pump shorten starting.",
+    specifications: ["Displacement: 27.2 cm³", "Power: 0.75 kW", "Stroke rate: 4000 r/min", "Cutting length: 60 cm", "Tooth spacing: 30 mm", "Weight without fuel: 5.1 kg"],
+  },
+];
+
+export const STIHL_CORDLESS_TOOLS: PrizeSpecItem[] = [
+  {
+    name: "STIHL RMA 353 V Battery Lawn Mower",
+    model: "RMA 353 V",
+    description:
+      "Self-propelled 51 cm battery mower on a brushless motor and STIHL's 36 V AP system. Vario drive sets walking speed at the handlebar, and clippings can be caught, mulched, or discharged to the side or rear.",
+    specifications: ["Cutting width: 51 cm", "Cutting height: 25–100 mm, 8-stage central adjustment", "Drive speed: 1.5–4.5 km/h", "Grass catcher: 60 L", "Weight without battery: 29 kg", "Rated speed: 3200 r/min", "IP rating: IPX4"],
+  },
+  {
+    name: "STIHL GTA 26 Battery Pruner Kit",
+    model: "GTA 26",
+    description:
+      "Compact handheld battery pruner on STIHL's AS system for pruning trees and shrubs and shredding green cuttings. Supplied as a kit, ready to work, with tool-free chain changes.",
+    specifications: ["Cordless system: AS", "Bar length: 10 cm", "Chain pitch: 1/4\"P", "Weight without battery: 1.1 kg", "Up to 70 cuts per AS 2 charge"],
+    includes: ["AS 2 lithium-ion battery", "AL 1 charger", "Rollomatic Light guide bar", "1/4\" PM3 saw chain, 10 cm", "Multioil Bio, 50 ml"],
+  },
+  {
+    name: "STIHL RCA 20 Battery Pressure Washer",
+    model: "RCA 20",
+    description:
+      "Handheld cordless pressure washer on the AS battery system. It draws water from a bucket or the supplied transport container, so it runs with no power point and no tap connection.",
+    specifications: ["Cordless system: AS", "Operating pressure: 22 bar", "Max. pressure: 24 bar", "Water throughput: 140–230 L/h", "Max. water feed temperature: 40 °C", "Weight: 1.3 kg"],
+    includes: ["4-in-1 nozzle", "Spray lance extension", "Vacuum hoses with filter", "Water transport container", "Cleaning agent spray set", "Storage bag"],
+  },
+  {
+    name: "STIHL KOA 20 Battery Air Inflator",
+    model: "KOA 20",
+    description:
+      "Cordless compressor on the AS battery system that inflates car, bicycle and trailer tyres and both inflates and deflates gear such as sports balls and inflatable boats. A digital display sets the target pressure and the pump stops itself when it is reached.",
+    specifications: ["Cordless system: AS", "Max. pressure, high-pressure pump: 10.3 bar (150 psi)", "Max. air flow, volume pump: 360 L/min", "Hose length: 605 mm", "Weight: 1.5 kg"],
+    includes: ["Pressure hose", "Volume hose", "Valve adapters (stored on the unit)"],
+  },
+  {
+    name: "STIHL SEA 20 Battery Handheld Vacuum",
+    model: "SEA 20",
+    description:
+      "Compact cordless handheld vacuum on the AS battery system for dry clean-ups around the house and in the car. Its two-stage filter can be cleaned and reused, and a lock-on lever keeps it running continuously.",
+    specifications: ["Cordless system: AS", "Container volume: 0.8 L", "Volumetric flow at turbine: 20 L/s", "Weight without battery: 1.1 kg", "Up to 14 min per AS 2 charge"],
+    includes: ["AS 2 lithium-ion battery", "AL 1 charger", "Crevice nozzle", "Coarse dirt nozzle", "Vacuum hose", "Extension tube", "Paper filter", "Filter basket", "Storage bag"],
+  },
+  {
+    name: "STIHL ASA 20 Battery Secateurs",
+    model: "ASA 20",
+    description:
+      "Battery secateurs on the compact AS system, pruning trees, shrubs and plants with far less force than hand shears. Two selectable blade opening widths, and an OLED display showing charge, opening width and the running cut count.",
+    specifications: ["Cordless system: AS", "Maximum cutting diameter: 25 mm", "Up to 2,000 cuts per AS 2 charge", "Two blade opening widths", "OLED display"],
+    includes: ["Blade guard", "Integrated on-board tool"],
+  },
+];
+
+export const STIHL_POWER_SYSTEM: PrizeSpecItem[] = [
+  {
+    name: "STIHL AP 300 S Battery with Bluetooth (×2)",
+    model: "AP 300 S",
+    description:
+      "Two lithium-ion batteries from STIHL's professional AP System. Bluetooth links them to STIHL connected so energy use, daily runtime and battery health can be tracked, and they charge on any STIHL AL charger.",
+    specifications: ["Battery power: 281 Wh", "Weight: 1.8 kg each", "Four-LED charge indicator", "IPX4 rated", "Supports POWER BOOST"],
+  },
+  {
+    name: "STIHL AL 301 Quick Charger",
+    model: "AL 301",
+    description:
+      "Mains quick charger that works with every battery in the STIHL AK, AP and AR systems. It eases back to a gentle current from about 80% charge, and the cable rewinds into the housing for wall mounting.",
+    specifications: ["Rated voltage: 220–240 V", "Compatible with AK, AP and AR system batteries", "Wall-mountable with retractable cable"],
+  },
+];
 export const MILWAUKEE_POWER_TOOLS: PrizeSpecItem[] = [
   {
     name: "MILWAUKEE 18V FUEL™ 13mm Hammer Drill/Driver",
@@ -1415,7 +1522,24 @@ export const HIKOKI_POWER_SYSTEM: PrizeSpecItem[] = [
 // ============================================================================
 const GEARWRENCH_CONTENTS_DIR = "/images/majordraws/toolbox/gearwrench";
 
+const STIHL_SET_DIR = "/images/majordraws/stihl-set";
+
 const SPEC_ITEM_IMAGE_BY_NAME: Record<string, string> = {
+  // STIHL (draw 10) — every item in the STIHL prize has its own photo, so its Petrol,
+  // Cordless and Power System tabs never fall back to the dashed placeholder. The AP 300 S
+  // and AL 301 share one frame because the shoot photographed them together.
+  "STIHL MS 391 FarmBoss® Petrol Chainsaw": `${STIHL_SET_DIR}/stihl-ms-391-farm-boss-chainsaw.webp`,
+  "STIHL FS 91 R Petrol Brushcutter": `${STIHL_SET_DIR}/stihl-fs-91-r-z-brushcutter.webp`,
+  "STIHL BG 86 Petrol Blower": `${STIHL_SET_DIR}/stihl-bg-86-handheld-blower.webp`,
+  "STIHL HS 45 Petrol Hedge Trimmer": `${STIHL_SET_DIR}/stihl-hs-45-hedge-trimmer.webp`,
+  "STIHL RMA 353 V Battery Lawn Mower": `${STIHL_SET_DIR}/stihl-rma-353-v-cordless-lawn-mower.webp`,
+  "STIHL GTA 26 Battery Pruner Kit": `${STIHL_SET_DIR}/stihl-gta-26-garden-pruner.webp`,
+  "STIHL RCA 20 Battery Pressure Washer": `${STIHL_SET_DIR}/stihl-rca-20-battery-pressure-washer.webp`,
+  "STIHL KOA 20 Battery Air Inflator": `${STIHL_SET_DIR}/stihl-koa-20-air-inflator.webp`,
+  "STIHL SEA 20 Battery Handheld Vacuum": `${STIHL_SET_DIR}/stihl-sea-20-cordless-handheld-vacuum.webp`,
+  "STIHL ASA 20 Battery Secateurs": `${STIHL_SET_DIR}/stihl-asa-20-cordless-pruning-shears.webp`,
+  "STIHL AP 300 S Battery with Bluetooth (×2)": `${STIHL_SET_DIR}/stihl-al-301-charger-and-ap-300-s-battery.webp`,
+  "STIHL AL 301 Quick Charger": `${STIHL_SET_DIR}/stihl-al-301-charger-and-ap-300-s-battery.webp`,
   // GearWrench toolbox + what's inside it — /images/majordraws/toolbox/ and .../toolbox/gearwrench/
   "GEARWRENCH 288 Piece Tool Set & Mobile Workstation": "/images/majordraws/toolbox/gearwrenchTB.webp",
   '90pc 1/4", 3/8" & 1/2" Drive Metric & SAE Socket Set in EVA Tray': `${GEARWRENCH_CONTENTS_DIR}/gearwrench-metric-and-sae-socket-set-eva-tray.webp`,
@@ -1558,6 +1682,10 @@ function applySpecItemImages(items: PrizeSpecItem[]): void {
   // GearWrench (draw 9) — the toolbox itself PLUS its 13 trays, so the Storage tab shows
   // what's actually inside the 288 pieces rather than one card for the whole box.
   GEARWRENCH_TOOLBOX_STORAGE,
+  // STIHL (draw 10) — all three arrays, so every STIHL item gets its photo.
+  STIHL_PETROL_TOOLS,
+  STIHL_CORDLESS_TOOLS,
+  STIHL_POWER_SYSTEM,
 ].forEach(applySpecItemImages);
 
 // ============================================================================
@@ -1996,12 +2124,12 @@ function fromSummary(
 export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   {
     slug: "milwaukee-sidchrome",
-    label: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
+    label: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroHeading: "Sidchrome Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
     heroSubheading:
-      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Sidchrome SCMT11402 356-piece workshop tower.",
     summary:
-      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet.",
     detailedDescription:
       "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs, then transport and organise everything with the Milwaukee PACKOUT™ 8-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
     prizeValueLabel: "$35,000+ Value",
@@ -2072,12 +2200,12 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "dewalt-sidchrome",
-    label: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+    label: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroHeading: "Sidchrome Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
     heroSubheading:
-      "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Sidchrome SCMT11402 356-piece toolkit plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Sidchrome SCMT11402 356-piece toolkit.",
     summary:
-      "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, and a 356-piece Sidchrome toolkit plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, and a 356-piece Sidchrome toolkit.",
     detailedDescription:
       "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries and dual-port charging. Transport and organize with the DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system featuring rolling boxes, organisers, soft tote bag, and cross-platform adapter. Complete your workshop with the Sidchrome 356-piece professional hand-tool kit.",
     prizeValueLabel: "$30,000+ Value",
@@ -2145,14 +2273,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "makita-sidchrome",
-    label: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+    label: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroHeading: "Sidchrome Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
     heroSubheading:
-      "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
+      "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Sidchrome SCMT11402 356-piece workshop tower.",
     summary:
-      "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.",
+      "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Sidchrome SCMT11402 356-piece storage cabinet.",
     detailedDescription:
-      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging. Transport and organize with the Makita MAKTRAK™ 7-piece mobile storage system featuring rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage. Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging. Transport and organize with the Makita MAKTRAK™ 7-piece mobile storage system featuring rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet stocked with precision hand tools, foam inlays, and mobile workshop storage.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/makita-set/makita-sidchrome.webp",
     gallery: [
@@ -2220,14 +2348,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "milwaukee-milwaukee",
-    label: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
+    label: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
+    heroHeading: "Milwaukee Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
     heroSubheading:
-      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage system and Milwaukee 56\" High Capacity Combination tool storage.",
     summary:
-      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage.",
     detailedDescription:
-      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 8-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 8-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip.",
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukee-milwaukee.webp",
     gallery: [
@@ -2261,11 +2389,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         title: "REDLITHIUM™ Power System",
         description: "High-output 5.0Ah packs keep every skin running.",
       },
-      {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
-      },
     ],
     specSections: [
       {
@@ -2296,14 +2419,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "dewalt-milwaukee",
-    label: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+    label: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
+    heroHeading: "Milwaukee Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
     heroSubheading:
-      "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and Milwaukee 56\" High Capacity Combination tool storage.",
     summary:
-      "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, premium Milwaukee tool storage, and comprehensive power tool collection plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, premium Milwaukee tool storage, and comprehensive power tool collection.",
     detailedDescription:
-      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries and dual-port charging. Transport and organize with the DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system featuring rolling boxes, organisers, soft tote bag, and cross-platform adapter. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries and dual-port charging. Transport and organize with the DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system featuring rolling boxes, organisers, soft tote bag, and cross-platform adapter. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/dewalt-set/dewalt-milwaukee.webp",
     gallery: [
@@ -2338,11 +2461,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         title: "High-Capacity Power",
         description: "FlexVolt + XR batteries with twin-port fast charging.",
       },
-      {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
-      },
     ],
     specSections: [
       {
@@ -2373,14 +2491,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "makita-milwaukee",
-    label: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+    label: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
+    heroHeading: "Milwaukee Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
     heroSubheading:
-      "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and Milwaukee 56\" High Capacity Combination tool storage.",
     summary:
-      "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.",
+      "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the Milwaukee 56\" High Capacity Combination tool storage.",
     detailedDescription:
-      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging. Transport and organize with the Makita MAKTRAK™ 7-piece mobile storage system featuring rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip. Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging. Transport and organize with the Makita MAKTRAK™ 7-piece mobile storage system featuring rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage with 18 gauge construction, 68KG soft close drawer slides, electronic lock, and 4-outlet/2USB power strip.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/makita-set/makita-milwaukee.webp",
     gallery: [
@@ -2411,11 +2529,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         icon: "Battery",
         title: "LXT Power System",
         description: "High-capacity 5.0Ah packs with rapid dual-port charging.",
-      },
-      {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
       },
     ],
     specSections: [
@@ -2448,14 +2561,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "ryobi-sidchrome",
-    label: `Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash`,
-    heroHeading: `Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash`,
+    label: `Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units`,
+    heroHeading: `Sidchrome Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units`,
     heroSubheading:
-      `Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.`,
+      `Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Sidchrome SCMT11402 356-piece workshop tower.`,
     summary:
-      `Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet plus $5000 cash.`,
+      `Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Sidchrome SCMT11402 356-piece storage cabinet.`,
     detailedDescription:
-      `Win the ultimate Ryobi 18V ONE+ toolkit featuring 19 power and garden tools including the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V Brushless Lawn Mower. Power everything with ONE+ HP 5Ah batteries. Transport and organize with the Ryobi LINK™ 3-piece rolling storage set, wall mountable cabinet, and 15-piece wall storage kit. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet. Plus $5000 cash.`,
+      `Win the ultimate Ryobi 18V ONE+ toolkit featuring 19 power and garden tools including the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V Brushless Lawn Mower. Power everything with ONE+ HP 5Ah batteries. Transport and organize with the Ryobi LINK™ 3-piece rolling storage set, wall mountable cabinet, and 15-piece wall storage kit. Complete your workshop with the Sidchrome SCMT11402 356-piece cabinet.`,
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobi-sidchrome.webp",
     gallery: [
@@ -2530,14 +2643,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "ryobi-milwaukee",
-    label: `Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash`,
-    heroHeading: `Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash`,
+    label: `Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units`,
+    heroHeading: `Milwaukee Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units`,
     heroSubheading:
-      `Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
+      `Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and Milwaukee 56\" High Capacity Combination tool storage.`,
     summary:
-      `Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage plus $5000 cash.`,
+      `Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the Milwaukee 56\" High Capacity Combination tool storage.`,
     detailedDescription:
-      `Win the ultimate Ryobi 18V ONE+ toolkit featuring 19 power and garden tools including the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V Brushless Lawn Mower. Power everything with ONE+ HP 5Ah batteries. Transport and organize with the Ryobi LINK™ 3-piece rolling storage set, wall mountable cabinet, and 15-piece wall storage kit. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage. Plus $5000 cash.`,
+      `Win the ultimate Ryobi 18V ONE+ toolkit featuring 19 power and garden tools including the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V Brushless Lawn Mower. Power everything with ONE+ HP 5Ah batteries. Transport and organize with the Ryobi LINK™ 3-piece rolling storage set, wall mountable cabinet, and 15-piece wall storage kit. Complete your workshop with the Milwaukee 56\" High Capacity Combination tool storage.`,
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobi-milwaukee.webp",
     gallery: [
@@ -2577,11 +2690,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         title: "ONE+ Power System",
         description: "18V ONE+ batteries power 200+ tools across the range.",
       },
-      {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
-      },
     ],
     specSections: [
       {
@@ -2612,15 +2720,15 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "milwaukee-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
+    label: "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
     heroHeading:
-      "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System, $5000 cash",
+      "Kincrome CONTOUR® Toolbox, Milwaukee 13pc Power Tool Kit + Milwaukee Packout 8pc Modular System",
     heroSubheading:
-      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage and KINCROME CONTOUR® 470pc 17-drawer workshop kit plus $5000 cash.",
+      "Complete Milwaukee 18V FUEL™ professional toolkit with Milwaukee PACKOUT™ 8pc modular storage and KINCROME CONTOUR® 470pc 17-drawer workshop kit.",
     summary:
-      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage, and the KINCROME CONTOUR® workshop chest & trolley plus $5000 cash.",
+      "Milwaukee 18V FUEL™ power tools, REDLITHIUM™ battery ecosystem, Milwaukee PACKOUT™ 8pc modular storage, and the KINCROME CONTOUR® workshop chest & trolley.",
     detailedDescription:
-      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 8-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823) with premium storage and trade-ready features. Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Milwaukee 18V FUEL™ professional toolkit featuring 13 premium cordless power tools including a hammer drill, impact driver, angle grinder, jigsaw, reciprocating saw, circular saw, oscillating multi-tool, jobsite speaker, compact battery light, blower, mid-torque impact wrench, random orbital sander, and pruning saw. Keep every skin running with Milwaukee REDLITHIUM™ 5.0Ah battery packs. Transport and organize with the Milwaukee PACKOUT™ 8-piece modular storage system featuring rolling tool box, large and standard tool boxes, organisers, and tool bag. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823) with premium storage and trade-ready features.",
     prizeValueLabel: "$35,000+ Value",
     cardBackgroundImage: "/images/majordraws/milwaukee-set/milwaukee-kincrome.webp",
     gallery: [
@@ -2654,11 +2762,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         title: "REDLITHIUM™ Power System",
         description: "High-output 5.0Ah packs keep every skin running.",
       },
-      {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
-      },
     ],
     specSections: [
       {
@@ -2690,15 +2793,15 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "dewalt-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+    label: "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
     heroHeading:
-      "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage, $5000 cash",
+      "Kincrome CONTOUR® Toolbox, DeWalt 14pc Power Tool Kit + DeWalt Tough System 2.0 Mobile Storage",
     heroSubheading:
-      "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and KINCROME CONTOUR® 470pc workshop kit plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt and XR cordless range with DeWalt TOUGHSYSTEM® 2.0 mobile storage and KINCROME CONTOUR® 470pc workshop kit.",
     summary:
-      "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, KINCROME CONTOUR® workshop storage, and comprehensive power tool collection plus $5000 cash.",
+      "Heavy-duty DeWalt FlexVolt cordless lineup, TOUGHSYSTEM® 2.0 mobile storage, KINCROME CONTOUR® workshop storage, and comprehensive power tool collection.",
     detailedDescription:
-      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries and dual-port charging. Transport and organize with the DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system featuring rolling boxes, organisers, soft tote bag, and cross-platform adapter. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823). Plus, take home $5000 cold hard cash.",
+      "Build your dream site setup with DeWalt's FlexVolt and XR cordless range spanning hammer drills, impact drivers, rotary hammers, saws, grinders, dust control, and lighting. Keep everything powered with high-capacity FlexVolt batteries and dual-port charging. Transport and organize with the DeWalt TOUGHSYSTEM® 2.0 7-piece mobile storage system featuring rolling boxes, organisers, soft tote bag, and cross-platform adapter. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823).",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/dewalt-set/dewalt-kincrome.webp",
     gallery: [
@@ -2737,11 +2840,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         title: "High-Capacity Power",
         description: "FlexVolt + XR batteries with twin-port fast charging.",
       },
-      {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
-      },
     ],
     specSections: [
       {
@@ -2773,15 +2871,15 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "makita-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+    label: "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
     heroHeading:
-      "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage, $5000 cash",
+      "Kincrome CONTOUR® Toolbox, Makita 15pc Power Tool Kit + Makita MAKTRAK 7pc Mobile Storage",
     heroSubheading:
-      "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and KINCROME CONTOUR® 470pc workshop kit plus $5000 cash.",
+      "Complete Makita 18V LXT brushless professional toolkit with Makita MAKTRAK™ 7pc mobile storage and KINCROME CONTOUR® 470pc workshop kit.",
     summary:
-      "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the KINCROME CONTOUR® workshop kit plus $5000 cash.",
+      "Makita 18V LXT brushless power tools, MAKTRAK™ 7pc mobile storage system, and the KINCROME CONTOUR® workshop kit.",
     detailedDescription:
-      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging. Transport and organize with the Makita MAKTRAK™ 7-piece mobile storage system featuring rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823). Plus, take home $5000 cold hard cash.",
+      "Win the ultimate Makita 18V LXT professional toolkit featuring 15 premium cordless power tools including a hammer drill, impact driver, angle grinder, rotary hammer, circular saw, reciprocating saw, multi-tool, impact wrench, random orbital sander, stick vacuum, jigsaw, planer, blower, jobsite radio, and long-distance flashlight. Keep every tool running with Makita LXT 5.0Ah battery packs and rapid dual-port charging. Transport and organize with the Makita MAKTRAK™ 7-piece mobile storage system featuring rolling tool chest, extra large, large, and medium tool boxes, plus deep and low profile organisers. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823).",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/makita-set/makita-kincrome.webp",
     gallery: [
@@ -2812,11 +2910,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         icon: "Battery",
         title: "LXT Power System",
         description: "High-capacity 5.0Ah packs with rapid dual-port charging.",
-      },
-      {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
       },
     ],
     specSections: [
@@ -2850,14 +2943,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "ryobi-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
-    heroHeading: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units, $5000 cash",
+    label: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
+    heroHeading: "Kincrome CONTOUR® Toolbox, Ryobi 19pc Power Tool Kit + Ryobi LINK Storage Units",
     heroSubheading:
-      "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and KINCROME CONTOUR® 470pc workshop kit plus $5000 cash.",
+      "Complete Ryobi 18V ONE+ toolkit with Ryobi LINK™ modular storage system and KINCROME CONTOUR® 470pc workshop kit.",
     summary:
-      "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the KINCROME CONTOUR® workshop kit plus $5000 cash.",
+      "Ryobi 18V ONE+ power and garden tools, LINK™ modular storage system, and the KINCROME CONTOUR® workshop kit.",
     detailedDescription:
-      "Win the ultimate Ryobi 18V ONE+ toolkit featuring 19 power and garden tools including the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V Brushless Lawn Mower. Power everything with ONE+ HP 5Ah batteries. Transport and organize with the Ryobi LINK™ 3-piece rolling storage set, wall mountable cabinet, and 15-piece wall storage kit. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823). Plus $5000 cash.",
+      "Win the ultimate Ryobi 18V ONE+ toolkit featuring 19 power and garden tools including the 12-piece 4Ah kit (drill, impact driver, grinder, circular saw, recip saw, sander, multi-tool, vac, blower, inflator, flashlight, radio), plus Line Trimmer & Blower kit, 254mm Sliding Mitre Saw, Jigsaw, Compact Fan, 55cm Hedge Trimmer, and 36V Brushless Lawn Mower. Power everything with ONE+ HP 5Ah batteries. Transport and organize with the Ryobi LINK™ 3-piece rolling storage set, wall mountable cabinet, and 15-piece wall storage kit. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823).",
     prizeValueLabel: "$25,000+ Value",
     cardBackgroundImage: "/images/majordraws/ryobi-set/ryobi-kincrome.webp",
     gallery: [
@@ -2897,11 +2990,6 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
         title: "ONE+ Power System",
         description: "18V ONE+ batteries power 200+ tools across the range.",
       },
-      {
-        icon: "DollarSign",
-        title: "$5000 Cash Bonus",
-        description: "Cold hard cash included with your prize.",
-      },
     ],
     specSections: [
       {
@@ -2933,14 +3021,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "hikoki-sidchrome",
-    label: "Sidchrome Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroHeading: "Sidchrome Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
+    label: "Sidchrome Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroHeading: "Sidchrome Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
     heroSubheading:
-      "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the Sidchrome SCMT11402 356-piece workshop tower plus $5000 cash.",
+      "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the Sidchrome SCMT11402 356-piece workshop tower.",
     summary:
-      "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the Sidchrome SCMT11402 356-piece cabinet plus $5000 cash.",
+      "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the Sidchrome SCMT11402 356-piece cabinet.",
     detailedDescription:
-      "Win the complete HiKOKI 15-piece cordless kit on the 36V/18V MultiVolt platform. The 13-piece Mega Combo brings a brushless driver drill, 1/4\" impact driver, two impact wrenches (1/2\" and 3/4\" high-torque), reciprocating saw, 185mm circular saw, SDS-Plus rotary hammer, 125mm angle grinder, oscillating multi-tool, top-handle jigsaw, blower/vacuum, cordless grease gun and a Bluetooth DAB+ jobsite radio — plus a 90mm framing nailer and a 15-gauge finishing nailer. Powered by five BSL36A18X MultiVolt batteries with two UC18YSL3 rapid chargers, and stored in the IP65-rated HiKOKI Multi Cruiser 3-piece stackable tool box set. Complete your workshop with the Sidchrome SCMT11402 356-piece tool kit & storage cabinet. Plus $5000 cold hard cash.",
+      "Win the complete HiKOKI 15-piece cordless kit on the 36V/18V MultiVolt platform. The 13-piece Mega Combo brings a brushless driver drill, 1/4\" impact driver, two impact wrenches (1/2\" and 3/4\" high-torque), reciprocating saw, 185mm circular saw, SDS-Plus rotary hammer, 125mm angle grinder, oscillating multi-tool, top-handle jigsaw, blower/vacuum, cordless grease gun and a Bluetooth DAB+ jobsite radio — plus a 90mm framing nailer and a 15-gauge finishing nailer. Powered by five BSL36A18X MultiVolt batteries with two UC18YSL3 rapid chargers, and stored in the IP65-rated HiKOKI Multi Cruiser 3-piece stackable tool box set. Complete your workshop with the Sidchrome SCMT11402 356-piece tool kit & storage cabinet.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/hikoki-set/hikoki-sidchrome.webp",
     gallery: [
@@ -3010,14 +3098,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "hikoki-milwaukee",
-    label: "Milwaukee Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroHeading: "Milwaukee Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
+    label: "Milwaukee Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroHeading: "Milwaukee Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
     heroSubheading:
-      "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the Milwaukee 56\" high-capacity tool storage chest plus $5000 cash.",
+      "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the Milwaukee 56\" high-capacity tool storage chest.",
     summary:
-      "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the Milwaukee 56\" high-capacity combination storage plus $5000 cash.",
+      "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the Milwaukee 56\" high-capacity combination storage.",
     detailedDescription:
-      "Win the complete HiKOKI 15-piece cordless kit on the 36V/18V MultiVolt platform. The 13-piece Mega Combo brings a brushless driver drill, 1/4\" impact driver, two impact wrenches (1/2\" and 3/4\" high-torque), reciprocating saw, 185mm circular saw, SDS-Plus rotary hammer, 125mm angle grinder, oscillating multi-tool, top-handle jigsaw, blower/vacuum, cordless grease gun and a Bluetooth DAB+ jobsite radio — plus a 90mm framing nailer and a 15-gauge finishing nailer. Powered by five BSL36A18X MultiVolt batteries with two UC18YSL3 rapid chargers, and stored in the IP65-rated HiKOKI Multi Cruiser 3-piece stackable tool box set. Complete your setup with the Milwaukee 56\" High Capacity Combination steel tool storage. Plus $5000 cold hard cash.",
+      "Win the complete HiKOKI 15-piece cordless kit on the 36V/18V MultiVolt platform. The 13-piece Mega Combo brings a brushless driver drill, 1/4\" impact driver, two impact wrenches (1/2\" and 3/4\" high-torque), reciprocating saw, 185mm circular saw, SDS-Plus rotary hammer, 125mm angle grinder, oscillating multi-tool, top-handle jigsaw, blower/vacuum, cordless grease gun and a Bluetooth DAB+ jobsite radio — plus a 90mm framing nailer and a 15-gauge finishing nailer. Powered by five BSL36A18X MultiVolt batteries with two UC18YSL3 rapid chargers, and stored in the IP65-rated HiKOKI Multi Cruiser 3-piece stackable tool box set. Complete your setup with the Milwaukee 56\" High Capacity Combination steel tool storage.",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/hikoki-set/hikoki-milwaukee.webp",
     gallery: [
@@ -3087,14 +3175,14 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   },
   {
     slug: "hikoki-kincrome",
-    label: "Kincrome CONTOUR® Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
-    heroHeading: "Kincrome CONTOUR® Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage, $5000 cash",
+    label: "Kincrome CONTOUR® Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
+    heroHeading: "Kincrome CONTOUR® Toolbox, HiKOKI 15pc Power Tool Kit + HiKOKI Multi Cruiser Storage",
     heroSubheading:
-      "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the KINCROME CONTOUR® 470pc 17-drawer workshop kit plus $5000 cash.",
+      "Complete HiKOKI 36V/18V MultiVolt 15-piece cordless kit with the HiKOKI Multi Cruiser 3-piece storage set and the KINCROME CONTOUR® 470pc 17-drawer workshop kit.",
     summary:
-      "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the KINCROME CONTOUR® workshop chest & trolley plus $5000 cash.",
+      "HiKOKI MultiVolt brushless power tools and nailers, the IP65 Multi Cruiser storage system, and the KINCROME CONTOUR® workshop chest & trolley.",
     detailedDescription:
-      "Win the complete HiKOKI 15-piece cordless kit on the 36V/18V MultiVolt platform. The 13-piece Mega Combo brings a brushless driver drill, 1/4\" impact driver, two impact wrenches (1/2\" and 3/4\" high-torque), reciprocating saw, 185mm circular saw, SDS-Plus rotary hammer, 125mm angle grinder, oscillating multi-tool, top-handle jigsaw, blower/vacuum, cordless grease gun and a Bluetooth DAB+ jobsite radio — plus a 90mm framing nailer and a 15-gauge finishing nailer. Powered by five BSL36A18X MultiVolt batteries with two UC18YSL3 rapid chargers, and stored in the IP65-rated HiKOKI Multi Cruiser 3-piece stackable tool box set. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823). Plus $5000 cold hard cash.",
+      "Win the complete HiKOKI 15-piece cordless kit on the 36V/18V MultiVolt platform. The 13-piece Mega Combo brings a brushless driver drill, 1/4\" impact driver, two impact wrenches (1/2\" and 3/4\" high-torque), reciprocating saw, 185mm circular saw, SDS-Plus rotary hammer, 125mm angle grinder, oscillating multi-tool, top-handle jigsaw, blower/vacuum, cordless grease gun and a Bluetooth DAB+ jobsite radio — plus a 90mm framing nailer and a 15-gauge finishing nailer. Powered by five BSL36A18X MultiVolt batteries with two UC18YSL3 rapid chargers, and stored in the IP65-rated HiKOKI Multi Cruiser 3-piece stackable tool box set. Complete your workshop with the KINCROME CONTOUR® 470-piece 17-drawer (42\") workshop kit (P1823).",
     prizeValueLabel: "$30,000+ Value",
     cardBackgroundImage: "/images/majordraws/hikoki-set/hikoki-kincrome.webp",
     gallery: [
@@ -3167,7 +3255,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   // Order matters: the drift guard asserts both catalogs list slugs in the SAME order.
   fromSummary("milwaukee-gearwrench", {
     detailedDescription:
-      "Win the complete Milwaukee 18V FUEL™ 13-piece professional kit — hammer drill/driver, impact driver, angle grinder, jigsaw, HACKZALL™, circular saw, multi-tool, mid-torque impact wrench, orbital sander, HATCHET™ pruning saw, blower, jobsite speaker and work light — running on the REDLITHIUM™ battery system, with the Milwaukee PACKOUT™ 8-piece modular storage system. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation: foam-organised drawers, a full work top and heavy-duty castors. Plus $5000 cold hard cash.",
+      "Win the complete Milwaukee 18V FUEL™ 13-piece professional kit — hammer drill/driver, impact driver, angle grinder, jigsaw, HACKZALL™, circular saw, multi-tool, mid-torque impact wrench, orbital sander, HATCHET™ pruning saw, blower, jobsite speaker and work light — running on the REDLITHIUM™ battery system, with the Milwaukee PACKOUT™ 8-piece modular storage system. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation: foam-organised drawers, a full work top and heavy-duty castors.",
     specSections: [
       { id: "power-tools", label: "Power Tools", summary: "13-piece Milwaukee 18V FUEL™ brushless collection.", items: MILWAUKEE_POWER_TOOLS },
       { id: "power-system", label: "Power System", summary: "REDLITHIUM™ 5.0Ah packs keep every skin running.", items: MILWAUKEE_POWER_SYSTEM },
@@ -3177,7 +3265,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   }),
   fromSummary("dewalt-gearwrench", {
     detailedDescription:
-      "Win the heavy-duty DeWalt 14-piece cordless lineup spanning the 18V XR and 54V FlexVolt platforms — premium hammer drill, 3-speed impact driver, high-torque impact wrench, planer, jigsaw, multi-tool, circular saw, angle grinder, SDS-Plus rotary hammer, reciprocating saw, TSTAK jobsite radio, blower, L-class vacuum and orbital sander — with FlexVolt and XR batteries, dual-port fast charging and TOUGHSYSTEM® 2.0 mobile storage. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation. Plus $5000 cold hard cash.",
+      "Win the heavy-duty DeWalt 14-piece cordless lineup spanning the 18V XR and 54V FlexVolt platforms — premium hammer drill, 3-speed impact driver, high-torque impact wrench, planer, jigsaw, multi-tool, circular saw, angle grinder, SDS-Plus rotary hammer, reciprocating saw, TSTAK jobsite radio, blower, L-class vacuum and orbital sander — with FlexVolt and XR batteries, dual-port fast charging and TOUGHSYSTEM® 2.0 mobile storage. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation.",
     specSections: [
       { id: "power-tools", label: "Power Tools", summary: "14-piece DeWalt XR + FlexVolt cordless lineup.", items: DEWALT_SIDCHROME_POWER_TOOLS },
       { id: "power-system", label: "Power System", summary: "FlexVolt 9.0Ah + XR 5.0Ah packs with dual-port fast charging.", items: DEWALT_SIDCHROME_POWER_SYSTEM },
@@ -3187,7 +3275,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   }),
   fromSummary("makita-gearwrench", {
     detailedDescription:
-      "Win the complete Makita 18V LXT brushless 15-piece kit — heavy-duty hammer driver drill, 4-stage impact driver, paddle-switch angle grinder, SDS-Plus rotary hammer, circular saw, recipro saw, multi-tool, 1/2\" impact wrench, orbital sander, stick vacuum, jigsaw, AWS planer and more — on the LXT power system with rapid dual-port charging, plus the MAKTRAK™ 7-piece mobile storage system. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation. Plus $5000 cold hard cash.",
+      "Win the complete Makita 18V LXT brushless 15-piece kit — heavy-duty hammer driver drill, 4-stage impact driver, paddle-switch angle grinder, SDS-Plus rotary hammer, circular saw, recipro saw, multi-tool, 1/2\" impact wrench, orbital sander, stick vacuum, jigsaw, AWS planer and more — on the LXT power system with rapid dual-port charging, plus the MAKTRAK™ 7-piece mobile storage system. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation.",
     specSections: [
       { id: "power-tools", label: "Power Tools", summary: "15-piece Makita 18V LXT brushless collection.", items: MAKITA_SIDCHROME_POWER_TOOLS },
       { id: "power-system", label: "Power System", summary: "High-capacity LXT 5.0Ah packs with rapid dual-port charging.", items: MAKITA_SIDCHROME_POWER_SYSTEM },
@@ -3197,7 +3285,7 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   }),
   fromSummary("ryobi-gearwrench", {
     detailedDescription:
-      "Win the custom Ryobi 18V ONE+ 19-piece kit — a 12-piece 4.0Ah power tool combo plus a 36V brushless lawn mower, line trimmer, blower, hedge trimmer, sliding mitre saw, jigsaw, caulking gun, Bluetooth radio and compact fan — all on the ONE+ battery platform that powers 200+ tools, with LINK™ modular wall storage. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation. Plus $5000 cold hard cash.",
+      "Win the custom Ryobi 18V ONE+ 19-piece kit — a 12-piece 4.0Ah power tool combo plus a 36V brushless lawn mower, line trimmer, blower, hedge trimmer, sliding mitre saw, jigsaw, caulking gun, Bluetooth radio and compact fan — all on the ONE+ battery platform that powers 200+ tools, with LINK™ modular wall storage. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation.",
     specSections: [
       { id: "power-tools", label: "Power Tools", summary: "19-piece Ryobi 18V ONE+ power and garden collection.", items: RYOBI_POWER_TOOLS },
       { id: "power-system", label: "Power System", summary: "ONE+ batteries and chargers across the 200+ tool range.", items: RYOBI_POWER_SYSTEM },
@@ -3207,11 +3295,54 @@ export const PRIZE_CATALOG: PrizeCatalogEntry[] = [
   }),
   fromSummary("hikoki-gearwrench", {
     detailedDescription:
-      "Win the complete HiKOKI 15-piece cordless kit on the 36V/18V MultiVolt platform — a 13-piece Mega Combo (driver drill, impact driver, two impact wrenches, recipro saw, circular saw, rotary hammer, angle grinder, multi-tool, jigsaw, blower/vacuum, grease gun and DAB+ jobsite radio) plus framing and finishing nailers — powered by five BSL36A18X batteries with two rapid chargers, stored in the IP65 Multi Cruiser 3-piece set. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation. Plus $5000 cold hard cash.",
+      "Win the complete HiKOKI 15-piece cordless kit on the 36V/18V MultiVolt platform — a 13-piece Mega Combo (driver drill, impact driver, two impact wrenches, recipro saw, circular saw, rotary hammer, angle grinder, multi-tool, jigsaw, blower/vacuum, grease gun and DAB+ jobsite radio) plus framing and finishing nailers — powered by five BSL36A18X batteries with two rapid chargers, stored in the IP65 Multi Cruiser 3-piece set. Paired with the GEARWRENCH 288-piece tool set in its wide mobile workstation.",
     specSections: [
       { id: "power-tools", label: "Power Tools", summary: "13pc MultiVolt Mega Combo plus framing and finishing nailers.", items: HIKOKI_POWER_TOOLS },
       { id: "power-system", label: "Power System", summary: "Five BSL36A18X MultiVolt batteries and two UC18YSL3 rapid chargers.", items: HIKOKI_POWER_SYSTEM },
       { id: "modular-storage", label: "Multi Cruiser Storage", summary: "IP65 3-piece stackable rolling tool box set.", items: HIKOKI_CRUISER_STORAGE },
+      { id: "storage", label: "Tool Storage", summary: "GEARWRENCH 288-piece tool set & mobile workstation.", items: GEARWRENCH_TOOLBOX_STORAGE },
+    ],
+  }),
+  // ── STIHL, the sixth toolset (draw 10) ─────────────────────────────────────────────────
+  // Shared fields come from prize-summaries via fromSummary(); only the deep half lives here.
+  // Order matters: the drift guard asserts both catalogs list slugs in the SAME order.
+  fromSummary("stihl-sidchrome", {
+    detailedDescription:
+      "Win STIHL's outdoor power line-up — the MS 391 FarmBoss chainsaw with a 20\" bar, the FS 91 R loop-handle brushcutter, the BG 86 blower and the HS 45 hedge trimmer on petrol, plus the self-propelled RMA 353 V battery mower, the GTA 26 pruner, the RCA 20 pressure washer, the KOA 20 air inflator, the SEA 20 handheld vacuum and the ASA 20 secateurs. Two AP 300 S batteries and an AL 301 quick charger power the AP-system gear. Paired with the Sidchrome SCMT11402 356-piece tool kit & storage cabinet.",
+    specSections: [
+      { id: "petrol-tools", label: "Petrol Tools", summary: "Chainsaw, brushcutter, blower and hedge trimmer.", items: STIHL_PETROL_TOOLS },
+      { id: "cordless-tools", label: "Cordless Tools", summary: "Mower, pruner, pressure washer, inflator, vacuum and secateurs.", items: STIHL_CORDLESS_TOOLS },
+      { id: "power-system", label: "Power System", summary: "Two AP 300 S batteries and the AL 301 quick charger.", items: STIHL_POWER_SYSTEM },
+      { id: "storage", label: "Tool Storage", summary: "Sidchrome SCMT11402 356-piece tool kit & storage cabinet.", items: MILWAUKEE_WORKSHOP_STORAGE },
+    ],
+  }),
+  fromSummary("stihl-kincrome", {
+    detailedDescription:
+      "Win STIHL's outdoor power line-up — the MS 391 FarmBoss chainsaw with a 20\" bar, the FS 91 R loop-handle brushcutter, the BG 86 blower and the HS 45 hedge trimmer on petrol, plus the self-propelled RMA 353 V battery mower, the GTA 26 pruner, the RCA 20 pressure washer, the KOA 20 air inflator, the SEA 20 handheld vacuum and the ASA 20 secateurs. Two AP 300 S batteries and an AL 301 quick charger power the AP-system gear. Paired with the KINCROME CONTOUR® 470pc 17-drawer workshop kit.",
+    specSections: [
+      { id: "petrol-tools", label: "Petrol Tools", summary: "Chainsaw, brushcutter, blower and hedge trimmer.", items: STIHL_PETROL_TOOLS },
+      { id: "cordless-tools", label: "Cordless Tools", summary: "Mower, pruner, pressure washer, inflator, vacuum and secateurs.", items: STIHL_CORDLESS_TOOLS },
+      { id: "power-system", label: "Power System", summary: "Two AP 300 S batteries and the AL 301 quick charger.", items: STIHL_POWER_SYSTEM },
+      { id: "storage", label: "Tool Storage", summary: "KINCROME CONTOUR® 470pc 17-drawer workshop kit.", items: KINCROME_TOOLBOX_STORAGE },
+    ],
+  }),
+  fromSummary("stihl-milwaukee", {
+    detailedDescription:
+      "Win STIHL's outdoor power line-up — the MS 391 FarmBoss chainsaw with a 20\" bar, the FS 91 R loop-handle brushcutter, the BG 86 blower and the HS 45 hedge trimmer on petrol, plus the self-propelled RMA 353 V battery mower, the GTA 26 pruner, the RCA 20 pressure washer, the KOA 20 air inflator, the SEA 20 handheld vacuum and the ASA 20 secateurs. Two AP 300 S batteries and an AL 301 quick charger power the AP-system gear. Paired with the Milwaukee 56\" high-capacity combination tool storage.",
+    specSections: [
+      { id: "petrol-tools", label: "Petrol Tools", summary: "Chainsaw, brushcutter, blower and hedge trimmer.", items: STIHL_PETROL_TOOLS },
+      { id: "cordless-tools", label: "Cordless Tools", summary: "Mower, pruner, pressure washer, inflator, vacuum and secateurs.", items: STIHL_CORDLESS_TOOLS },
+      { id: "power-system", label: "Power System", summary: "Two AP 300 S batteries and the AL 301 quick charger.", items: STIHL_POWER_SYSTEM },
+      { id: "storage", label: "Tool Storage", summary: "Milwaukee 56\" high-capacity combination tool storage.", items: MILWAUKEE_TOOLBOX_STORAGE },
+    ],
+  }),
+  fromSummary("stihl-gearwrench", {
+    detailedDescription:
+      "Win STIHL's outdoor power line-up — the MS 391 FarmBoss chainsaw with a 20\" bar, the FS 91 R loop-handle brushcutter, the BG 86 blower and the HS 45 hedge trimmer on petrol, plus the self-propelled RMA 353 V battery mower, the GTA 26 pruner, the RCA 20 pressure washer, the KOA 20 air inflator, the SEA 20 handheld vacuum and the ASA 20 secateurs. Two AP 300 S batteries and an AL 301 quick charger power the AP-system gear. Paired with the GEARWRENCH 288-piece tool set & mobile workstation.",
+    specSections: [
+      { id: "petrol-tools", label: "Petrol Tools", summary: "Chainsaw, brushcutter, blower and hedge trimmer.", items: STIHL_PETROL_TOOLS },
+      { id: "cordless-tools", label: "Cordless Tools", summary: "Mower, pruner, pressure washer, inflator, vacuum and secateurs.", items: STIHL_CORDLESS_TOOLS },
+      { id: "power-system", label: "Power System", summary: "Two AP 300 S batteries and the AL 301 quick charger.", items: STIHL_POWER_SYSTEM },
       { id: "storage", label: "Tool Storage", summary: "GEARWRENCH 288-piece tool set & mobile workstation.", items: GEARWRENCH_TOOLBOX_STORAGE },
     ],
   }),

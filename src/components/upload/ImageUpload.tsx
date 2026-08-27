@@ -1,6 +1,11 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
+import {
+  PRODUCT_IMAGE_ACCEPT,
+  PRODUCT_IMAGE_FORMAT_LABEL,
+  PRODUCT_IMAGE_MIME_TYPES,
+} from "@/constants/product-images";
 import Image from "next/image";
 import { Upload, X, Image as ImageIcon, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/utils/cn";
@@ -10,7 +15,7 @@ interface ImageUploadProps {
   onError?: (error: string) => void;
   maxFiles?: number;
   maxSize?: number; // in MB
-  acceptedTypes?: string[];
+  acceptedTypes?: readonly string[];
   className?: string;
   disabled?: boolean;
   label?: string;
@@ -32,13 +37,13 @@ export default function ImageUpload({
   onError,
   maxFiles = 5,
   maxSize = 10,
-  acceptedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"],
+  acceptedTypes = PRODUCT_IMAGE_MIME_TYPES,
   className = "",
   disabled = false,
   label,
   required = false,
   error,
-  accept = "image/*",
+  accept = PRODUCT_IMAGE_ACCEPT,
 }: ImageUploadProps) {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -47,7 +52,8 @@ export default function ImageUpload({
   const validateFile = useCallback(
     (file: File): string | null => {
       if (!acceptedTypes.includes(file.type)) {
-        return `File type not supported. Please use: ${acceptedTypes.join(", ")}`;
+        // The MIME list is for the machine; a person needs format NAMES.
+        return `File type not supported. Please upload ${PRODUCT_IMAGE_FORMAT_LABEL}.`;
       }
 
       if (file.size > maxSize * 1024 * 1024) {

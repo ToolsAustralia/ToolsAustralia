@@ -37,8 +37,20 @@ export function getFaqEntries(): FaqEntry[] {
     {
       id: "3",
       question: "How long does shipping take?",
+      /*
+        Rewritten 2026-08-27. The previous answer promised three things the shop
+        cannot do: express shipping at 1-2 business days (there is one flat rate
+        and no express tier — SHOP_CONFIG carries only flatShippingRateCents),
+        international shipping at 7-14 days (the checkout address form accepts
+        only the eight Australian states), and a 3-5 business day standard that
+        nothing substantiates.
+
+        It predated the shop. Kept in step with the grounded answers in
+        supportChatFaqs.ts so Cobber and this page cannot give a customer two
+        different stories about the same order.
+      */
       answer:
-        "Standard shipping takes 3-5 business days within Australia. Express shipping is available for 1-2 business days. International shipping takes 7-14 business days depending on the destination.",
+        "Most of our merchandise is printed after you order it, so there's a production step before anything ships — that's why it takes longer to reach you than something picked off a shelf, and we'd rather not quote a delivery date we can't stand behind. Your order reads Being made while it's in production and On its way once it's with the courier, with the tracking number on it — both in My Account → Orders. Delivery is a flat $10 on every order, with no minimum spend to reach. We deliver within Australia only at this stage.",
       category: "SHOPPING",
     },
     {

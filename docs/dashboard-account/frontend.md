@@ -31,7 +31,7 @@
 > the unlock-coupon membership branch, home `onBecomeMember` + the plan-less `openMembershipModal` event
 > branch, and the membership page's guest CTAs (whose modal render was also missing the config pass-through).
 > `getHeavyDutyPack()` is NOT a substitute default — it returns a one-time pack for entry-holders, mislabeling
-> a "Become a member" tap. Landing note: `MajorDrawSection` self-defends at render
+> a "Become a member" tap. Landing note: `MajorDrawSection` self-defended at render (component deleted 2026-08-26)
 > (`selectedPlan || getHeavyDutyPack()`); `MembershipSection`'s plan-less listener branch still bare-opens
 > (pre-existing, A/B-configured surface — flagged, not touched).
 
@@ -1001,3 +1001,94 @@ state. Account state answers "what do we sell them next"; it does not answer "wh
 history, plus the "you earned N points" messaging on every purchase screen) and is deliberately `false`
 in production. The claimables path is not gated by it and must not become gated by it — flipping that
 flag to reveal a coupon would switch the whole points programme back on.
+## `/my-account/orders` answers "where is my order?" first (2026-08-21)
+
+[`orders/page-client.tsx`](../../src/app/(site)/my-account/orders/page-client.tsx) leads each card
+with a three-step **progress strip** — Being made → On its way → Delivered — because that is the
+question the page is opened to answer. It sits above the line items, not under them.
+
+Two states are deliberately **not** on the strip:
+
+- **`pending`** is a few seconds while the Stripe webhook lands, not a stage of fulfilment. Drawing
+  it as a step implies the customer is waiting on something they can act on.
+- **`cancelled`** is an exit from the journey, not a position on it. A strip with no progress reads
+  as a stalled order rather than one that never entered the journey.
+
+`completed` maps to the last step. Each status also carries a one-line `STATUS_DETAIL` in the
+customer's terms — "Being made" begs the question it does not answer, so the detail line says the
+garment is printed to order.
+
+**The total's label follows the order's state**, matching the checkout success page: `pending` →
+"Order total", `cancelled` → "Refund issued", everything else → "Total paid". Hard-coding "Total
+paid" claimed a payment that had not settled and contradicted the refund the same card announced two
+lines above. When `shippingCost > 0` the card adds "incl. $N postage" so the total reconciles with
+the items listed above it — see [cart-shop-products/backend.md](../cart-shop-products/backend.md)
+for why that field is on the list projection.
+
+The entries badge renders **only above zero**. Merchandise entries currently ship dark at
+`includedEntries: 0`, and "0 free entries" states a promise we are not making (CLAUDE.md rule 11 —
+entries are a free inclusion, never priced).
+
+There are no product thumbnails: `OrderListRow.items` carries no image and the order-line snapshot
+does not store one, so a thumbnail would cost a join on every row. The quantity chip plus the
+variant line ("Black · L") carries the identification instead.
+
+## Order rows lead with the product image (2026-08-27)
+
+`/my-account/orders` rows previously showed the item name with a quantity chip beside
+it. Every other shop surface leads with a picture, which is most of why this page read
+as a different product from the one it reports on. Each row now opens with a 44px
+`object-contain` thumbnail and the card carries the shop's own shadow.
+
+The image is **joined, not snapshotted.** `name` and `price` are frozen at checkout so a
+catalogue rename cannot rewrite order history; an image is the same garment either way,
+so the current one is correct and storing a per-line copy would duplicate a URL that
+already exists. `listOrders` populates `products.product` with `select: "images"` — one
+`$in` for the whole page, not one query per line.
+
+Every step is optional: a product deleted since the order still has a line, and that
+line must render. It falls back to a package glyph rather than a gap.
+
+**The quantity chip rides the thumbnail's corner and only appears above one** — most
+lines are a single unit, and a column of "1" is a column of noise.
+
+## Settings → Profile: contact-verification card (2026-08-27)
+
+The single "Email verification" banner at the top of
+[`ProfileTab.tsx`](../../src/app/(site)/my-account/components/settings/ProfileTab.tsx) is now a
+**two-row contact-verification card** — one row for email, one for mobile. Rationale:
+[2026-08-25-mobile-verification-and-sms-login-design.md](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+- **Each row owns its own state** — `ShieldCheck` / `AlertTriangle` icon, a **Verified /
+  Unverified** chip, and its own hint line. The two channels are independent and routinely
+  disagree.
+- **Two Verify buttons, one destination.** Both call
+  `requestModal("user-setup", true, { initialStep: 3 })` — setup step 3, which is no longer
+  email-only but a channel picker
+  ([`Step3VerifyContact.tsx`](../../src/components/modals/UserSetupModal/Step3VerifyContact.tsx),
+  documented in [shared-ui/frontend.md](../shared-ui/frontend.md)). A row renders its button only
+  when it is unverified **and** has a value — with no number on file there is nothing to send a
+  code to.
+- **The outer banner is amber only when NEITHER channel is verified**, and the "Verify your email
+  or your mobile…" line appears only in that case. Either channel satisfies the account
+  requirement, so verifying one flips the whole card to neutral (`border-token bg-surface`) while
+  the other row keeps its own Unverified chip. Don't re-derive the banner tone from
+  `isEmailVerified` alone.
+- **A member with no number still gets the mobile row** — italic "No mobile on file" in place of
+  the value, Unverified chip, no button. The place to add one is the **Mobile number** field in
+  the Personal details card directly below.
+
+### Where `isMobileVerified` comes from
+
+`ProfileTabProps.user` gained `isMobileVerified?: boolean`. No call site changed:
+[`settings/page-client.tsx`](../../src/app/(site)/my-account/settings/page-client.tsx) passes the
+whole `accountData.user`, and `isMobileVerified` was **already** in `MY_ACCOUNT_USER_FIELDS`
+([my-account-projection.ts](../../src/utils/dashboard/my-account-projection.ts)) — it was simply
+undeclared on the client `UserData` interface
+([useUserQueries.ts](../../src/hooks/queries/useUserQueries.ts)), so no client gate could read it.
+Both are now declared and nothing new goes over the wire.
+
+`src/components/modals/SettingsModal/ProfileTab.tsx` is a **different** component with its own
+email-only verified chip; it is reachable today only from the dev modals gallery and was not part
+of this change. Don't mistake it for this file.
+

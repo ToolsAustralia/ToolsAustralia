@@ -449,6 +449,21 @@ Some services under `src/services/admin/` expose secondary "projection" methods 
 - **Admin streak visibility (2026-07-15, owner-requested):** the user-detail route + `UserAdminQueryService` (list AND detail) project `subscription.streakMonths` (+ `streakGeneration` on detail); `UserDetailModal`'s Current Subscription grid shows a "Membership Streak" cell (flame + `N renewals`, `· gen G` when > 1); the users page has a **Streak filter** (1+/2+/4+/6+/8+/10+/12+ (Founding) / No streak) wired through the shared `buildUserFilter` (`streak` param: `"none"` = missing-or-0, numeric = `$gte` on `subscription.streakMonths`) so the list, the CSV/XLSX export, and Norm's export counts all honour it; the export field registry gained `subscription.streakMonths` ("Membership Streak (renewals)"). Norm lockstep done in the same change: `users` list + `users/[id]` schemas/routes carry `streakMonths` (+ `streakGeneration` on detail), manifest rebuilt, both routes smoke-tested 200.
 - **Known admin gaps (deliberate, P4 scope):** the user-detail entries-by-source breakdowns do not list the streak bucket, the users LIST table has no streak column (filter + detail modal only), and there is no manual streak-adjustment tool (support uses the repair script `backfill:membership-streaks`).
 
+### Merchandise (`shop`) entry bucket (2026-08-17)
+
+`MajorDrawParticipantSafe.entriesBySource` and `zeroEntriesBySource()` in
+[`MajorDrawService.ts`](../../src/services/admin/MajorDrawService.ts) both gained a `shop` bucket —
+free entries included with a merchandise order. The two are **tsc-linked**: `zeroEntriesBySource()`
+is typed as the interface's `entriesBySource`, so a key added to one without the other fails
+`type-check`. They cannot drift.
+
+**Nothing grants this source yet.** The bucket is declared so every participant row carries it (and
+so the Norm mirror `major-draw.participants` projects it rather than silently dropping the key —
+see [internal-norm/gotchas.md](../internal-norm/gotchas.md)), but no code path writes a `shop`
+entry. Every admin participants row reads `shop: 0` today; the grant is a later task gated on a
+trade-promotion permit variation. Do not present merchandise entries as a live earning path in
+admin UI or CS scripts until that lands.
+
 ### Signups per acquisition platform (2026-07-24)
 
 [`src/services/admin/signupsByPlatform.ts`](../../src/services/admin/signupsByPlatform.ts) — `getSignupsByPlatform(startDate, endDate)` counts accounts created in the window, grouped by acquisition platform, for the Advertising card's per-platform **signup** figure (the companion to revenue/conversions: how many *accounts* a channel created, not just how much revenue it converted).
@@ -503,6 +518,108 @@ So `/ad/get/` is a **mandatory bridge**, not a fallback — it is the only endpo
 
 **Run it:** `npm run sync:tiktok-destinations:dry` (reports coverage, distinct landing paths, the packages-focus tally and the multi-URL count without writing), then `npm run sync:tiktok-destinations`. The run **fails below 50% coverage** — a silent drop to zero is exactly what a changed id bridge looks like, and it would otherwise present as "no TikTok URL data" rather than as an error. First live run: **31/31 ads, 100%, 3 distinct landing paths, 0 multi-URL ads.**
 
+## Merchandise is excluded from ad-revenue analytics (`revenueAggregator.ts`, 2026-08-17)
+
+Rows with `packageType: "shop"` `continue` out of the loop in
+[revenueAggregator.ts](../../src/services/admin/dashboard-stats/revenueAggregator.ts) before any
+accumulation.
+
+This is not a preference — it was a **defect regardless of the business answer**. Platform
+accumulation (`byPlatform[…].newRevenue += price`, `conversions += 1`) runs for all non-refunded
+rows *"regardless of bucket classification"*, while `classifyRevenueBucket()`
+([snapshotSchema.ts](../../src/services/admin/dashboard-stats/snapshotSchema.ts)) returns `null`
+for an unrecognised `packageType` and the row is dropped from `buckets` **and** from `total`. Left
+alone, merch money would inflate per-platform new revenue, conversion counts and TRUE ROAS while
+being absent from the headline — so the platform breakdown would silently stop reconciling with
+the total it sits beneath.
+
+There is a second reason to keep it out: a merch price includes **shipping and GST**, which no
+package price does, so it is not comparable to the other rows in a ROAS figure.
+
+Giving merchandise its own revenue bucket is a defensible alternative, but that is an analytics
+decision (does merch belong in ad ROAS at all?) rather than a bug fix — hence exclusion rather
+than an invented bucket. **Still open and deliberately not decided in code:**
+`aggregateNetRevenueSum` / `aggregateNetSalesCount`
+([payment-event-net-queries.ts](../../src/utils/payment/payment-event-net-queries.ts)) have no
+`packageType` filter and feed A/B experiment revenue and daily user metrics. Nothing stops
+reconciling there either way, so it is a genuine product question. `packageType` is stored on each
+row, so history can be re-split after the fact whichever way it is answered.
+
+## Merchandise revenue and shop activity (2026-08-21)
+
+### The bucket
+
+`shop` is now a `RevenueBucketKey`, classified by `classifyRevenueBucket` off
+`packageType === "shop"`, and `DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION` went **3 → 4**.
+Snapshots written at version 3 have no `shop` bucket and **under-report the headline total
+for any day with merch sales** — re-run `backfill:dashboard-stats-snapshots` over the
+shop's live window, then `verify:dashboard-stats-drift`.
+
+Before this, shop money existed nowhere in the pipeline: `finalizeShopOrder` returned
+before writing a PaymentEvent for any zero-entry order, which is every merch order (see
+[cart-shop-products/backend.md](../cart-shop-products/backend.md)).
+
+### The deliberate asymmetry: headline yes, ROAS no
+
+`revenueAggregator` used to `continue` on a shop row, dropping it entirely. It now skips
+**only** the per-platform accumulation block:
+
+- Merch **is** in its own bucket and in `total` — it is income and the owner counts it.
+- Merch is **not** in `byPlatform` (`newRevenue`, `conversions`, `byConfidence`) — a merch
+  total carries shipping and is not comparable to a package price, and nobody buys a
+  hoodie off a giveaway ad. Letting it in would inflate TRUE ROAS.
+
+That makes `sum(byPlatform) === total` **no longer an identity**. The correct one is
+`sum(byPlatform) + buckets.shop.revenue === total`, and `test:dashboard-stats-aggregator`
+asserts it in that form so it still catches a leak in either direction. The same exclusion
+is applied to `PaymentEventRepository.aggregateRevenueByHourAndPlatform`
+(`packageType: { $ne: "shop" }`), which feeds the same per-platform view.
+
+GST is **not** netted for merch, matching every other package type — shop reports
+GST-inclusive gross. The genuine incomparability with package revenue is shipping, not GST.
+
+Surfaces moved in lockstep: `DashboardStatsService` (`shopData` → `revenue.breakdown.shop`),
+`RevenueBreakdownCard` (a "Merchandise" row), `RevenueDetailsCategory` +
+`getRevenueDetails`, `RevenueCategory` + the detail modal's label map, and the
+`revenue-breakdown` chart route — which needed an **explicit** `shop` arm, because its
+`else` branch would otherwise have swept merch into `oneTime` and labelled hoodies as
+one-time entry packages.
+
+### Shop orders in the activity feed
+
+Both activity surfaces — the Overview "Recent activity / Live event stream" card and the
+Activity Log tab — are fed by **one** function, `getActivityLog()` in `ActivityLogService`,
+via `useActivityLogInfinite`. Shop orders were added there, as type `shop_order`, labelled
+`Ordered merchandise (SHOP-…)`; `packageId` on a shop PaymentEvent is the order number,
+which is what staff search by.
+
+`shop_order` is **exempt from the ≥ $300 "High-value purchase:" relabel**, for the same
+reason `upsell_accepted` is: the relabel buries the one fact that makes the row actionable.
+
+The separate, **unfiltered** `Order.find({ totalAmount: { $gte: 200 } })` feed in
+`dashboardSlices.getRecentActivities` was **deleted**. It had no status filter and rendered
+every row as `status: "success"` with "Purchased $X worth of tools", so an abandoned
+checkout — or a duplicate from the refresh bug — appeared to staff *and to Norm* as a
+completed high-value purchase with money attached, and inflated `totalActivities` alongside
+it. One source now, so the card, the page and Norm cannot disagree.
+
+### Counting surfaces now filter on paid statuses
+
+`PAID_ORDER_STATUSES` (`processing | shipped | delivered | completed`) is exported from
+`services/shop/orderQueries.ts` — one name for a list that had been re-typed inline in at
+least three places. Anything reporting a **count** or a **total** to a human filters on it:
+
+| Surface | Was |
+| --- | --- |
+| `UserAdminQueryService` `totalOrders` / `totalOrderValue` (admin + Norm) | every row |
+| `/api/admin/users/[id]` and `features/admin/users/server/queries.ts` statistics | every row |
+| `/api/users/[id]/my-account` `insights.totalSpent` | every row |
+
+The order **history** lists stay unfiltered — a customer and staff should both still see a
+cancelled order. It is the statistics that must not count attempts as purchases.
+
+> Careful with the my-account one: `my-account-projection.test.ts` pins the literal shape of
+> that filter with a regex requiring `user:` to be the **first** key. Keep it first.
 ## Per-invoice attempt cap (proactive)
 
 `chargeWorklistItem` refuses to submit the same invoice to Stripe more than once every

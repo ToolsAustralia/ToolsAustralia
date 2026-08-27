@@ -1,14 +1,37 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronUp, Search, SlidersHorizontal, X } from "lucide-react";
-import sliderStyles from "./product-filters.module.css";
+import { useMemo } from "react";
+import { useShopFacets } from "@/hooks/queries/useProductQueries";
+import { SlidersHorizontal, Ticket, Truck } from "lucide-react";
+import { cn } from "@/utils/cn";
 
-interface FilterState {
+/**
+ * The shop's Refine panel — one component for the desktop rail and the mobile sheet.
+ *
+ * EVERY FACET IS DERIVED from the catalogue (`useShopFacets` →
+ * /api/products/categories), never hard-coded. This file once declared eight tool
+ * categories, five tool brands and a "Tool Style" list as literal arrays with no
+ * connection to any product, so most of the rail returned zero results and the
+ * things a customer would actually filter by were missing entirely.
+ *
+ * The counts beside each category come from the same aggregation, which is what
+ * lets a row say "2 products" without a second request — and what stops the rail
+ * ever offering a value that returns nothing.
+ */
+
+export interface FilterState {
   category: string[];
+  /** `[min, max]`. Max at or above the catalogue ceiling means "Any". */
   priceRange: [number, number];
   brands: string[];
-  styles: string[];
+  /** Apparel sizes (variants[].size) — replaced the meaningless "Tool Style" facet. */
+  sizes: string[];
+  /** Apparel colours (variants[].colour). */
+  colours: string[];
+  /** Show only: products that include free entries (includedEntries > 0). */
+  hasEntries: boolean;
+  /** Show only: stock-tracked products with units on hand, i.e. dispatchable today. */
+  readyToShip: boolean;
 }
 
 interface ProductFiltersProps {
@@ -17,382 +40,214 @@ interface ProductFiltersProps {
   isMobile?: boolean;
 }
 
-const categories = [
-  "Power Tools",
-  "Hand Tools",
-  "Safety Equipment",
-  "Measuring Tools",
-  "Cutting Tools",
-  "Fastening Tools",
-  "Automotive Tools",
-  "Garden Tools",
-];
-
-const brands = ["DeWalt", "Makita", "Milwaukee", "Kincrome", "Sidchrome"];
-const styles = ["Professional", "DIY", "Industrial", "Compact", "Heavy Duty"];
+/** Floor of the price slider. The ceiling is the catalogue's own top price. */
 const MIN_PRICE = 0;
-const MAX_PRICE = 500;
+
+/**
+ * "No maximum" — the slider's Any position.
+ *
+ * A sentinel rather than a number, because the real ceiling is whatever the
+ * catalogue's dearest product costs and that changes when stock does. The old
+ * code compared against a literal 500 in five places; when a $899 tool chest was
+ * added, every one of them silently treated "Any" as "under $500" and the chest
+ * became unreachable from a slider that looked fully open.
+ */
+export const PRICE_NO_MAX = Number.MAX_SAFE_INTEGER;
 
 export default function ProductFilters({ selectedFilters, onFilterChange, isMobile = false }: ProductFiltersProps) {
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    category: true,
-    price: true,
-    brands: true,
-    style: true,
-  });
-  const [categorySearch, setCategorySearch] = useState("");
-  const [brandSearch, setBrandSearch] = useState("");
-  const [styleSearch, setStyleSearch] = useState("");
+  const { data: facets } = useShopFacets();
 
-  const toggleSection = (section: string) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
-  };
+  const categories = useMemo(() => facets?.categories ?? [], [facets]);
+  const brands = useMemo(() => facets?.brands ?? [], [facets]);
 
-  const handleCategoryToggle = (category: string) => {
-    const newCategories = selectedFilters.category.includes(category)
-      ? selectedFilters.category.filter((c) => c !== category)
-      : [...selectedFilters.category, category];
-    onFilterChange?.({ category: newCategories });
-  };
+  /**
+   * The ceiling is the dearest thing in the catalogue, rounded up to a round
+   * number — not a constant.
+   *
+   * A hard-coded $500 max silently excluded every product above it: the slider
+   * looked fully open at its right end while a $899 tool chest could not be
+   * reached at all. Deriving it means the range always covers what is for sale.
+   */
+  const ceiling = useMemo(() => {
+    const top = facets?.priceRange?.maxPrice ?? 0;
+    if (!Number.isFinite(top) || top <= 0) return 500;
+    return Math.ceil(top / 50) * 50;
+  }, [facets]);
 
-  const handleBrandToggle = (brand: string) => {
-    const newBrands = selectedFilters.brands.includes(brand)
-      ? selectedFilters.brands.filter((b) => b !== brand)
-      : [...selectedFilters.brands, brand];
-    onFilterChange?.({ brands: newBrands });
-  };
+  const currentMax = Math.min(selectedFilters.priceRange[1], ceiling);
+  const isAnyPrice = currentMax >= ceiling;
 
-  const handleStyleToggle = (style: string) => {
-    const newStyles = selectedFilters.styles.includes(style)
-      ? selectedFilters.styles.filter((s) => s !== style)
-      : [...selectedFilters.styles, style];
-    onFilterChange?.({ styles: newStyles });
-  };
+  const toggleIn = (list: string[], value: string) =>
+    list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
-  const handlePriceRangeChange = (min: number, max: number) => {
-    const boundedMin = Math.max(MIN_PRICE, Math.min(min, MAX_PRICE));
-    const boundedMax = Math.max(MIN_PRICE, Math.min(max, MAX_PRICE));
-    const adjustedMin = Math.min(boundedMin, boundedMax);
-    const adjustedMax = Math.max(boundedMin, boundedMax);
-    onFilterChange?.({ priceRange: [adjustedMin, adjustedMax] });
-  };
-
-  const clearAllFilters = () => {
-    onFilterChange?.({
-      category: [],
-      priceRange: [MIN_PRICE, MAX_PRICE],
-      brands: [],
-      styles: [],
-    });
-  };
-
-  const activeFiltersCount =
-    selectedFilters.category.length +
-    selectedFilters.brands.length +
-    selectedFilters.styles.length +
-    (selectedFilters.priceRange[0] > MIN_PRICE || selectedFilters.priceRange[1] < MAX_PRICE ? 1 : 0);
-  const hasActiveFilters = activeFiltersCount > 0;
-
-  const filteredCategories = useMemo(
-    () => categories.filter((item) => item.toLowerCase().includes(categorySearch.toLowerCase().trim())),
-    [categorySearch]
-  );
-  const filteredBrands = useMemo(
-    () => brands.filter((item) => item.toLowerCase().includes(brandSearch.toLowerCase().trim())),
-    [brandSearch]
-  );
-  const filteredStyles = useMemo(
-    () => styles.filter((item) => item.toLowerCase().includes(styleSearch.toLowerCase().trim())),
-    [styleSearch]
-  );
-
-  const filterButtonClass = (isSelected: boolean) =>
-    `flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm transition-all ${
-      isSelected
-        ? "border-red-600/35 bg-red-600/5 text-gray-900 dark:bg-gradient-to-r dark:from-red-600 dark:to-red-400 dark:border-transparent dark:text-white shadow-[0_4px_14px_rgba(238,0,0,0.08)] dark:shadow-md"
-        : "border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800/70 text-gray-700 dark:text-neutral-200 hover:border-gray-300 dark:hover:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-800"
-    }`;
-
-  const selectionMarkClass = (isSelected: boolean) =>
-    `inline-flex h-5 w-5 items-center justify-center rounded-full border ${
-      isSelected
-        ? "border-red-600 bg-red-600 text-white dark:border-white/30 dark:bg-white/20 dark:text-white"
-        : "border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-transparent"
-    }`;
+  const sectionLabel = "text-[10.5px] font-extrabold uppercase tracking-[.1em] text-gray-400 dark:text-neutral-500";
 
   return (
-    <div className="space-y-4">
-      {!isMobile && (
-        <div className="rounded-2xl border border-gray-200 dark:border-red-900/35 bg-gradient-to-b from-white to-gray-50/80 dark:from-neutral-900 dark:to-neutral-900 p-4 shadow-sm dark:shadow-lg">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-600/10 text-red-600">
-                <SlidersHorizontal className="h-4 w-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Refine Products</h3>
-                <p className="text-xs text-gray-500 dark:text-neutral-400">
-                  {hasActiveFilters ? `${activeFiltersCount} active filter(s)` : "All products"}
-                </p>
-              </div>
-            </div>
-            {hasActiveFilters && (
+    <div className={cn("flex flex-col gap-5", isMobile ? "pb-4" : "")}>
+      {/* Header — names the panel and what is currently in view. */}
+      <div className="flex items-center gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-red-600/10 text-red-600">
+          <SlidersHorizontal className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-[15px] font-extrabold leading-tight text-gray-900 dark:text-white">Refine</div>
+          <div className="truncate text-[11.5px] text-gray-500 dark:text-neutral-400">
+            {selectedFilters.category.length === 0
+              ? "All products"
+              : selectedFilters.category.join(", ")}
+          </div>
+        </div>
+      </div>
+
+      {/* CATEGORY — a card per category, with its own count. */}
+      {categories.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className={sectionLabel}>Category</span>
+          {categories.map((c) => {
+            const on = selectedFilters.category.includes(c.name);
+            return (
               <button
-                onClick={clearAllFilters}
-                className="inline-flex items-center gap-1 rounded-full border border-red-200 dark:border-red-900/50 bg-white dark:bg-neutral-900 px-3 py-1 text-xs font-semibold text-red-600 dark:text-red-400 transition-colors hover:bg-red-50 dark:hover:bg-red-950/30"
+                key={c.name}
+                type="button"
+                onClick={() => onFilterChange?.({ category: toggleIn(selectedFilters.category, c.name) })}
+                aria-pressed={on}
+                className={cn(
+                  "flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors",
+                  on
+                    ? "border-red-600 bg-red-600/5"
+                    : "border-gray-200 bg-gray-50 hover:border-gray-300 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
+                )}
               >
-                <X className="h-3.5 w-3.5" />
-                Clear
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-bold text-gray-900 dark:text-white">{c.name}</span>
+                  <span className="block text-[11px] text-gray-500 dark:text-neutral-400">
+                    {c.count} {c.count === 1 ? "product" : "products"}
+                  </span>
+                </span>
+                <span
+                  className={cn(
+                    "grid h-4 w-4 shrink-0 place-items-center rounded-full border",
+                    on ? "border-red-600" : "border-gray-300 dark:border-neutral-600"
+                  )}
+                >
+                  {on && <span className="h-2 w-2 rounded-full bg-red-600" />}
+                </span>
               </button>
-            )}
+            );
+          })}
+        </div>
+      )}
+
+      {/* MAX PRICE — one handle, because a floor is a filter nobody reaches for. */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className={sectionLabel}>Max price</span>
+          <span className="text-[12.5px] font-extrabold text-gray-900 dark:text-white">
+            {isAnyPrice ? "Any" : `$${currentMax}`}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={MIN_PRICE}
+          max={ceiling}
+          step={10}
+          value={currentMax}
+          onChange={(e) => onFilterChange?.({ priceRange: [MIN_PRICE, Number(e.target.value)] })}
+          aria-label="Maximum price"
+          className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-gray-200 accent-red-600 dark:bg-neutral-800"
+        />
+      </div>
+
+      {/* BRAND — chips, multi-select. */}
+      {brands.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className={sectionLabel}>Brand</span>
+          <div className="flex flex-wrap gap-2">
+            {brands.map((b) => {
+              const on = selectedFilters.brands.includes(b.name);
+              return (
+                <button
+                  key={b.name}
+                  type="button"
+                  onClick={() => onFilterChange?.({ brands: toggleIn(selectedFilters.brands, b.name) })}
+                  aria-pressed={on}
+                  className={cn(
+                    "h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors",
+                    on
+                      ? "border-red-600 bg-red-600 text-white"
+                      : "border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+                  )}
+                >
+                  {b.name}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
-      <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-4 shadow-sm dark:shadow-lg">
-        {(isMobile || hasActiveFilters) && (
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Filters</h3>
-            {hasActiveFilters && (
-              <button
-                onClick={clearAllFilters}
-                className="text-xs font-semibold text-red-600 dark:text-red-400 transition-colors hover:text-[#c70000] dark:hover:text-red-300"
+      {/*
+        SHOW ONLY.
+
+        Both toggles read fields the catalogue already carries. A third —
+        "Member exclusives" — is in the design but NOT here: `Product` has no
+        member-only field, so the control would filter on nothing. Rendering a
+        switch that changes no results is worse than leaving the row out; it needs
+        a model field and an admin toggle first.
+      */}
+      <div className="flex flex-col gap-2">
+        <span className={sectionLabel}>Show only</span>
+        {(
+          [
+            {
+              key: "hasEntries" as const,
+              label: "Has free entries",
+              Icon: Ticket,
+              tint: "bg-red-600/10 text-red-600",
+            },
+            {
+              key: "readyToShip" as const,
+              label: "Ready to ship",
+              Icon: Truck,
+              tint: "bg-green-500/10 text-green-600 dark:text-green-400",
+            },
+          ]
+        ).map(({ key, label, Icon, tint }) => {
+          const on = selectedFilters[key];
+          return (
+            <button
+              key={key}
+              type="button"
+              role="switch"
+              aria-checked={on}
+              onClick={() => onFilterChange?.({ [key]: !on } as Partial<FilterState>)}
+              className={cn(
+                "flex items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-colors",
+                on
+                  ? "border-red-600 bg-red-600/5"
+                  : "border-gray-200 bg-gray-50 hover:border-gray-300 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
+              )}
+            >
+              <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg", tint)}>
+                <Icon className="h-3.5 w-3.5" />
+              </span>
+              <span className="flex-1 text-left text-[12.5px] font-bold text-gray-900 dark:text-white">{label}</span>
+              <span
+                className={cn(
+                  "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                  on ? "bg-red-600" : "bg-gray-300 dark:bg-neutral-700"
+                )}
               >
-                Clear all
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="mb-4 border-b border-gray-100 dark:border-neutral-800 pb-3">
-          <button
-            type="button"
-            onClick={() => toggleSection("category")}
-            className="flex w-full items-center justify-between rounded-lg px-1 -mx-1 py-1 text-left transition-colors hover:bg-red-50/70 dark:hover:bg-neutral-800"
-          >
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">Category</span>
-            {expandedSections.category ? (
-              <ChevronUp className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-            )}
-          </button>
-          {expandedSections.category && (
-            <div className="mt-3 space-y-2">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={categorySearch}
-                  onChange={(e) => setCategorySearch(e.target.value)}
-                  placeholder="Search categories..."
-                  className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-950 py-2.5 pl-9 pr-3 text-sm text-gray-800 dark:text-neutral-100 outline-none transition-all focus:border-red-600/40 focus:bg-white dark:focus:bg-neutral-900 focus:ring-2 focus:ring-red-600/10"
+                <span
+                  className={cn(
+                    "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform",
+                    on ? "translate-x-[1.125rem]" : "translate-x-0.5"
+                  )}
                 />
-              </div>
-              {filteredCategories.length > 0 ? (
-                filteredCategories.map((category) => {
-                  const isSelected = selectedFilters.category.includes(category);
-                  return (
-                    <button
-                      key={category}
-                      type="button"
-                      onClick={() => handleCategoryToggle(category)}
-                      className={filterButtonClass(isSelected)}
-                    >
-                      <span className="font-medium">{category}</span>
-                      <span className={selectionMarkClass(isSelected)}>
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="rounded-xl border border-dashed border-gray-300 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-800/50 px-3 py-4 text-center text-sm text-gray-500 dark:text-neutral-400">
-                  No categories match your search.
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="mb-4 border-b border-gray-100 dark:border-neutral-800 pb-3">
-          <button
-            type="button"
-            onClick={() => toggleSection("price")}
-            className="flex w-full items-center justify-between rounded-lg px-1 -mx-1 py-1 text-left transition-colors hover:bg-red-50/70 dark:hover:bg-neutral-800"
-          >
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">Price Range</span>
-            {expandedSections.price ? (
-              <ChevronUp className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-            )}
-          </button>
-          {expandedSections.price && (
-            <div className="mt-3 space-y-4">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-neutral-400">Min</label>
-                  <input
-                    type="number"
-                    min={MIN_PRICE}
-                    max={MAX_PRICE}
-                    value={selectedFilters.priceRange[0]}
-                    onChange={(e) => handlePriceRangeChange(Number(e.target.value), selectedFilters.priceRange[1])}
-                    className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800/80 px-3 py-2 text-sm text-gray-800 dark:text-neutral-100 outline-none transition-all focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-neutral-400">Max</label>
-                  <input
-                    type="number"
-                    min={MIN_PRICE}
-                    max={MAX_PRICE}
-                    value={selectedFilters.priceRange[1]}
-                    onChange={(e) => handlePriceRangeChange(selectedFilters.priceRange[0], Number(e.target.value))}
-                    className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800/80 px-3 py-2 text-sm text-gray-800 dark:text-neutral-100 outline-none transition-all focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
-                  />
-                </div>
-              </div>
-              <div className="relative h-2 rounded-full bg-gray-200 dark:bg-neutral-700">
-                <div
-                  className="absolute h-2 rounded-full bg-gradient-to-r from-red-600 to-[#c70000]"
-                  style={{
-                    left: `${(selectedFilters.priceRange[0] / MAX_PRICE) * 100}%`,
-                    width: `${((selectedFilters.priceRange[1] - selectedFilters.priceRange[0]) / MAX_PRICE) * 100}%`,
-                  }}
-                />
-                <input
-                  type="range"
-                  min={MIN_PRICE}
-                  max={MAX_PRICE}
-                  value={selectedFilters.priceRange[0]}
-                  onChange={(e) => handlePriceRangeChange(Number(e.target.value), selectedFilters.priceRange[1])}
-                  className={`${sliderStyles.sliderThumb} absolute h-2 w-full cursor-pointer appearance-none bg-transparent`}
-                />
-                <input
-                  type="range"
-                  min={MIN_PRICE}
-                  max={MAX_PRICE}
-                  value={selectedFilters.priceRange[1]}
-                  onChange={(e) => handlePriceRangeChange(selectedFilters.priceRange[0], Number(e.target.value))}
-                  className={`${sliderStyles.sliderThumb} absolute h-2 w-full cursor-pointer appearance-none bg-transparent`}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="mb-4 border-b border-gray-100 dark:border-neutral-800 pb-3">
-          <button
-            type="button"
-            onClick={() => toggleSection("brands")}
-            className="flex w-full items-center justify-between rounded-lg px-1 -mx-1 py-1 text-left transition-colors hover:bg-red-50/70 dark:hover:bg-neutral-800"
-          >
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">Brands</span>
-            {expandedSections.brands ? (
-              <ChevronUp className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-            )}
-          </button>
-          {expandedSections.brands && (
-            <div className="mt-3 space-y-2">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-neutral-500" />
-                <input
-                  type="text"
-                  value={brandSearch}
-                  onChange={(e) => setBrandSearch(e.target.value)}
-                  placeholder="Search brands..."
-                  className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/80 py-2.5 pl-9 pr-3 text-sm text-gray-800 dark:text-neutral-100 outline-none transition-all focus:border-red-600/40 focus:bg-white dark:focus:bg-neutral-800 focus:ring-2 focus:ring-red-600/10"
-                />
-              </div>
-              {filteredBrands.length > 0 ? (
-                filteredBrands.map((brand) => {
-                  const isSelected = selectedFilters.brands.includes(brand);
-                  return (
-                    <button
-                      key={brand}
-                      type="button"
-                      onClick={() => handleBrandToggle(brand)}
-                      className={filterButtonClass(isSelected)}
-                    >
-                      <span className="font-medium">{brand}</span>
-                      <span className={selectionMarkClass(isSelected)}>
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="rounded-xl border border-dashed border-gray-300 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-800/50 px-3 py-4 text-center text-sm text-gray-500 dark:text-neutral-400">
-                  No brands match your search.
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <button
-            type="button"
-            onClick={() => toggleSection("style")}
-            className="flex w-full items-center justify-between rounded-lg px-1 -mx-1 py-1 text-left transition-colors hover:bg-red-50/70 dark:hover:bg-neutral-800"
-          >
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">Tool Style</span>
-            {expandedSections.style ? (
-              <ChevronUp className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-gray-500 dark:text-neutral-400" />
-            )}
-          </button>
-          {expandedSections.style && (
-            <div className="mt-3 space-y-2">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-neutral-500" />
-                <input
-                  type="text"
-                  value={styleSearch}
-                  onChange={(e) => setStyleSearch(e.target.value)}
-                  placeholder="Search styles..."
-                  className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/80 py-2.5 pl-9 pr-3 text-sm text-gray-800 dark:text-neutral-100 outline-none transition-all focus:border-red-600/40 focus:bg-white dark:focus:bg-neutral-800 focus:ring-2 focus:ring-red-600/10"
-                />
-              </div>
-              {filteredStyles.length > 0 ? (
-                filteredStyles.map((style) => {
-                  const isSelected = selectedFilters.styles.includes(style);
-                  return (
-                    <button
-                      key={style}
-                      type="button"
-                      onClick={() => handleStyleToggle(style)}
-                      className={filterButtonClass(isSelected)}
-                    >
-                      <span className="font-medium">{style}</span>
-                      <span className={selectionMarkClass(isSelected)}>
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="rounded-xl border border-dashed border-gray-300 dark:border-neutral-600 bg-gray-50 dark:bg-neutral-800/50 px-3 py-4 text-center text-sm text-gray-500 dark:text-neutral-400">
-                  No styles match your search.
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {hasActiveFilters && (
-          <div className="mt-4 rounded-xl border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/60 p-3">
-            <p className="text-sm text-gray-600 dark:text-neutral-400">{activeFiltersCount} filter(s) applied</p>
-          </div>
-        )}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

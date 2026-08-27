@@ -8,7 +8,7 @@
 import type Stripe from "stripe";
 import { getBaseUrl } from "@/utils/url/get-base-url";
 
-export type PaymentType = "subscription" | "one-time" | "upsell" | "mini-draw";
+export type PaymentType = "subscription" | "one-time" | "upsell" | "mini-draw" | "shop";
 
 export interface PaymentIntentConfigOptions {
   amount: number; // Amount in cents
@@ -36,6 +36,7 @@ export function getReturnUrlForPaymentType(paymentType: PaymentType): string {
     "one-time": `${baseUrl}/purchase-success`,
     upsell: `${baseUrl}/upsell-success`,
     "mini-draw": `${baseUrl}/mini-draw-success`,
+    shop: `${baseUrl}/checkout/success`,
   };
 
   return returnUrls[paymentType];
@@ -60,6 +61,7 @@ export function getReturnUrlForPaymentTypeClient(paymentType: PaymentType): stri
     "one-time": `${baseUrl}/purchase-success`,
     upsell: `${baseUrl}/upsell-success`,
     "mini-draw": `${baseUrl}/mini-draw-success`,
+    shop: `${baseUrl}/checkout/success`,
   };
 
   return returnUrls[paymentType];

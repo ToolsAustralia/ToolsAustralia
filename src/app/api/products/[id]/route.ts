@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import Product from "@/models/Product";
 import { Types } from "mongoose";
+import { PUBLIC_PRODUCT_EXCLUDE } from "@/utils/shop/public-product-fields";
 
 // Next.js ISR configuration
 export const revalidate = 60; // Revalidate every 60 seconds (ISR)
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Invalid product ID" }, { status: 400 });
     }
 
-    const product = await Product.findById(id).lean();
+    const product = await Product.findById(id).select(PUBLIC_PRODUCT_EXCLUDE).lean();
 
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });

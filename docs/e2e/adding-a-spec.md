@@ -316,3 +316,26 @@ here to catch the difference.
 
 When you write a leg like this, say so loudly in the spec's own comment, or the next person will
 "tidy" the two legs into one. It is registered under the existing `npm run e2e:bonus-code` grep.
+## Shop catalogue spec (2026-08-17) — two harness traps it hit
+
+[`e2e/specs/admin/shop-catalogue.spec.ts`](../../e2e/specs/admin/shop-catalogue.spec.ts) covers
+Phase 1 of the shop catalogue: admin create-with-variants, permission denial, and the
+storefront variant picker reaching the cart. Two things cost a debugging cycle each.
+
+**1. Do not `page.goto("/admin")` unless the dashboard is the thing under test.** Loading it
+fires `GET /api/admin/analytics/spend-by-url`, which **500s in the seeded e2e environment**, and
+the QA watchdog fixture fails any test that observes a 500 — including one whose own assertions
+all passed. The catalogue contract is asserted through `request` only, so it never renders the
+dashboard. There is consequently **no UI test for the Products tab**; restore one when that
+route is fixed.
+
+**2. Never assert a transient UI state.** The first version waited for the "Added to Cart!"
+label, which `ProductInteractions` resets after 2 seconds on a `setTimeout`. Chromium won the
+race; mobile WebKit did not. Assert the **durable** outcome instead — here, polling
+`GET /api/cart` until the variant `sku` appears, which is also the thing that actually matters
+(without it the printer cannot be told which size to make).
+
+The interactive click-through is scoped to `chromium-desktop`, consistent with
+[a11y-baseline.md](a11y-baseline.md#L44); mobile-WebKit clicks against the shared `next dev`
+server are a known flake here (see `prize-build-url-params.spec.ts:141`). The API-level
+assertions still run on every project.

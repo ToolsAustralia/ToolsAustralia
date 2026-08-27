@@ -189,3 +189,20 @@ The resolved metadata (`attr_platform`, `attr_confidence`, and related keys from
 The ledger writer (`processPaymentBenefits`, in the [payment](../payment/backend.md) domain) then persists `convertingPlatform` / `attributionConfidence` / `isRenewal` onto the `BenefitsGranted` row, falling back to a UTM-based resolve only when no edge decision was stamped.
 
 **`attr_packages_focus` (added 2026-07-17):** the webhook's `extractAttributionFromMetadata` also reads back the landing-URL packages-focus marker stamped by `buildAttributionMetadata` (`attr_packages_focus`, only ever `"one-time"`, validated `=== "one-time"` on read) and forwards it inside `sessionAttribution.packages_focus`. See [docs/tracking/backend.md](../tracking/backend.md) for the full capture pipeline; the ledger write is documented in [docs/payment/backend.md](../payment/backend.md).
+
+## Shop payments no longer resolve a promo multiplier (2026-08-20)
+
+The `paymentType === "shop"` branch of the Stripe webhook used to call
+`getActivePromoMultiplier("one-time")` and pass the result into `finalizeShopOrder`, because
+merchandise inherited the one-time pack rate.
+
+Merchandise now carries its own multiplier, resolved inside the shop service from
+`ShopEntryMultiplierConfig` — see [cart-shop-products/backend.md](../cart-shop-products/backend.md).
+The webhook resolves nothing for shop payments and `finalizeShopOrder` no longer accepts a rate.
+
+The parameter was **removed rather than left unused**. A dead argument named "promo multiplier"
+sitting on the shop path is exactly how the inheritance gets quietly reinstated by someone
+wiring it back up because it looked like it belonged there.
+
+The other branches are unaffected: membership, one-time and mini-draw payments still resolve
+their promo multipliers through the same helper as before.

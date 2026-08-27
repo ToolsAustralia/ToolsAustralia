@@ -14,6 +14,8 @@ export type DashboardEntryDisplay = {
   oneTimeEntries: number;
   /** Membership Streak milestone free entries (own gold bucket, never in oneTime). */
   streakEntries: number;
+  /** Merchandise free entries — own bucket, never in oneTime. */
+  shopEntries: number;
 };
 
 /**
@@ -22,7 +24,7 @@ export type DashboardEntryDisplay = {
  */
 export function useDashboardEntryDisplay(
   stats:
-    | { currentDrawEntries?: number; membershipEntries?: number; oneTimeEntries?: number; streakEntries?: number }
+    | { currentDrawEntries?: number; membershipEntries?: number; oneTimeEntries?: number; streakEntries?: number; shopEntries?: number }
     | null
     | undefined,
   options: { isDrawCompleted: boolean }
@@ -46,11 +48,13 @@ export function useDashboardEntryDisplay(
   // Streak entries never change from an in-flight purchase, so they are always
   // live — the pre-purchase hold only freezes the buckets a purchase mutates.
   const liveStreak = options.isDrawCompleted ? 0 : (stats?.streakEntries ?? 0);
+  const liveShop = options.isDrawCompleted ? 0 : (stats?.shopEntries ?? 0);
   const live: DashboardEntryDisplay = {
     currentDrawEntries: stats?.currentDrawEntries ?? 0,
     membershipEntries: liveMembership,
     oneTimeEntries: stats?.oneTimeEntries ?? 0,
     streakEntries: liveStreak,
+    shopEntries: liveShop,
   };
 
   if (hold) {
@@ -59,6 +63,7 @@ export function useDashboardEntryDisplay(
       membershipEntries: options.isDrawCompleted ? 0 : hold.membershipEntries,
       oneTimeEntries: hold.oneTimeEntries,
       streakEntries: liveStreak,
+      shopEntries: liveShop,
     };
   }
 

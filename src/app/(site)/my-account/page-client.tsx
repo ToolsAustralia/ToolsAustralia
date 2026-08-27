@@ -336,6 +336,7 @@ export default function MyAccountPage() {
         partnerAccessExpiryLabel={dash.partnerAccessExpiryLabel}
         profileComplete={Boolean(user.profileSetupCompleted && user.birthdate)}
         onOpenSettings={() => router.push("/my-account/settings")}
+        onOpenOrders={() => router.push("/my-account/orders")}
         onPartnerPortal={partnerDiscountSsoEnabled() ? partnerSso.start : undefined}
         onBecomeMember={() => router.push("/my-account/membership")}
         onUpdatePayment={onResolvePayment}
@@ -393,7 +394,7 @@ export default function MyAccountPage() {
               <DashboardAlertRibbon acct={dash.acct} />
               <EntryWallet
                 acct={dash.acct}
-                entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime, streak: dash.entries.streak }}
+                entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime, streak: dash.entries.streak, shop: dash.entries.shop }}
                 tierHex={dash.tierHex}
                 drawName={dash.drawName}
                 drawDateIso={dash.drawDateIso}

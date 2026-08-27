@@ -13,7 +13,7 @@ Tools Australia is a **membership-driven giveaway and rewards platform** for Aus
 3. **Taking an upsell** after any purchase (50–60% off, with a category-specific entries multiplier — membership 10×, one-time/additional 2×, mini 1×; see §5).
 4. **Referring a friend**, **using an affiliate link**, or **participating in promos**.
 
-On top of the giveaway loop, members unlock **tiered partner discounts** — **two separate programmes**: our own 7 direct partner brands, plus the **1,833-offer iGoDirect/MyRewards catalogue** reached through the partner portal (SSO **live in production as of 2026-07-31**). Once the shop launches, members also get **shop discounts** (5–20%).
+On top of the giveaway loop, members unlock **tiered partner discounts** — **two separate programmes**: our own 7 direct partner brands, plus the **1,833-offer iGoDirect/MyRewards catalogue** reached through the partner portal (SSO **live in production as of 2026-07-31**). Once the shop launches, members also get **shop discounts** (10–25%).
 
 The platform is a Next.js 15 + MongoDB + Stripe + NextAuth stack on Vercel. The hard architectural rules live in [CLAUDE.md](CLAUDE.md).
 
@@ -29,11 +29,76 @@ There are **three families** of packages:
 
 | Tier    | Price   | Entries / month | Partner-discount access | Shop discount* |
 | ------- | ------- | --------------- | ----------------------- | -------------- |
-| Tradie  | $20/mo  | 15              | 50% of catalog          | 5%             |
-| Foreman | $40/mo  | 40              | 75% of catalog          | 10%            |
-| Boss    | $80/mo  | 100             | 100% of catalog         | 20%            |
+| Tradie  | $20/mo  | 15              | 50% of catalog          | 10%            |
+| Foreman | $40/mo  | 40              | 75% of catalog          | 15%            |
+| Boss    | $80/mo  | 100             | 100% of catalog         | 25%            |
 
-\* Shop discount is built into the data model but **commented out as "Shop coming soon"** until the shop launches.
+\* Shop discount is **live** — applied at checkout by `resolveShopDiscountPercent` and shown in each tier's benefit list. It was hidden while the shop was pre-launch.
+
+**Raised from 5 / 10 / 20 to 10 / 15 / 25 on 2026-08-25.** Every comparable Australian
+rewards club — Alluxe, GLTCHD and LMCT+ — runs 10 / 15 / 25, so the old ladder was below
+market at every tier on the exact benefit the shop launches with. The deeper discount is
+funded by the ticket, not absorbed: see the Merch Pricing Proposal for the per-garment
+costing, and §2a note below for the prices that hold each tier's profit flat.
+
+### 2a-i. Merchandise (shop)
+
+The shop sells physical goods (apparel). The **item is the product**; where an item carries
+`includedEntries > 0`, those entries are a **free inclusion** with it — never sold, never priced
+per entry (rule 11).
+
+| Fact | Value |
+| ---- | ----- |
+| Shipping | **$10 flat on every order** — no threshold, no minimum (`SHOP_CONFIG`, integer cents). The $100 free-delivery threshold was removed 2026-08-25 |
+| GST | **Inside** the total, never added — `total / 11` is the GST component |
+| Member discount | The tier's shop % (Tradie 10 / Foreman 15 / Boss 25), applied before shipping is assessed |
+| Checkout | **Account required** — `Order.user` is mandatory, so there is no guest checkout |
+| Entry pool | **Major Draw only.** Merchandise never grants Mini Draw entries |
+| Entry multiplier | Merchandise carries its **own** multiplier, set in admin — per product, per category, or shop-wide (most specific wins), defaulting to 1×. It does **not** inherit the one-time pack multiplier, so a pack promo does not change what a garment grants. Nothing structurally prevents a merch rate that beats the packs on value per entry; that is now a pricing decision, not a code guarantee |
+| Draw eligibility | Entries are granted to **every** buyer. SA/ACT exclusion is applied by the draw export at winner selection, not at point of sale |
+| Partial refund | Entries already credited **stay**; they are withdrawn only if the whole order is refunded (stated in `/terms` §3d, §5.2 and §17) |
+
+#### How a merch order actually ships
+
+Three separate money flows, easy to conflate:
+
+| Flow | Who pays whom | Status |
+| --- | --- | --- |
+| **Customer → us** | Full order total **at checkout**, via Stripe — goods + GST + shipping ($10, always). | Live. **There is no COD anywhere**; the order is not created as paid until Stripe confirms. |
+| **Us → print provider** | They print, buy the shipping label and send the parcel **direct to the customer**, then bill us for print + freight. | Model confirmed by their upload form; **their rate card and billing terms are still unanswered** (open dependency). |
+| **Provider ↔ customer** | **Nothing.** The customer never transacts with them and is never asked for freight. | By design. |
+
+This is **dropshipping**: the customer buys from Tools Australia and receives a parcel the printer
+sent. Their bulk-upload form offers three shipping modes — *Ship through the app* (they create the
+label), *Outside labels* (we supply carrier + tracking), and *3rd party shipping account* (billed to
+our own carrier account). The template in use is the **app-shipping** one, which carries no shipping
+columns at all — consistent with them buying the label.
+
+**We set the customer-facing fee; they set what they charge us. Nothing reconciles the two.** The
+$10 / free-over-$100 was set before any real freight invoice existed, so it is a pricing decision to
+revisit once invoices arrive, not a pass-through. Two consequences worth naming:
+
+- **Tracking does not come back automatically.** Labels are created on their side and nothing tells
+  our database an order shipped, so order status stays `processing` until a human updates it.
+- **The parcel is branded by the sender, not by us.** Packing-slip and return-address presentation
+  is theirs unless configured otherwise — worth confirming before launch.
+
+**Entries on merchandise are switched OFF at launch.** Every product ships at
+`includedEntries: 0` pending a **trade-promotion permit variation** for a fourth entry method.
+The code path is live; the promise is not made, and nothing renders on a product page at 0.
+Turning it on is an admin edit, not a deploy.
+
+**Merchandise has its OWN entry multiplier (2026-08-20).** It does **not** inherit the one-time
+pack multiplier — a 10× pack weekend leaves garment entries untouched. An admin sets the merch
+rate directly at whichever level fits: one product (product modal), a category, or shop-wide
+(Admin → Shop → *Entry Multipliers*). Most specific wins; with nothing set the rate is 1×, i.e.
+exactly the entries the product advertises.
+
+This reverses the earlier design, in which merch inherited the pack rate and an admin could only
+cap it lower. That version made it *structurally impossible* for merchandise to be better value
+per entry than a pack. **That protection is gone.** Nothing in the code now stops a merch rate
+that undercuts the packs — it is a pricing decision someone makes deliberately. Inert until
+entries are switched on.
 
 Partner access for subscriptions is **lifecycle-gated** — active while the subscription is active, not a fixed window (`partnerDiscountDays: 0`). It re-enables the moment a paused or past-due subscription returns to good standing.
 
@@ -129,23 +194,22 @@ Tiers 4–8 of the original 8-tier flat ladder (`mini-pack-4` … `mini-pack-8`,
 
 The current monthly Major Draw prize is **fully customizable by the winner**. After being announced on Facebook Live (§3a), the winner picks **one** of:
 
-**Option A — Power tool kit + workshop storage + $5,000 cash bonus** (most common). Two independent picks, plus a bundled cash bonus:
+**Option A — Power tool kit + workshop storage** (most common). Two independent picks:
 
-1. **Power tool brand** — Milwaukee, DeWalt, Makita, Ryobi, or HiKOKI.
+1. **Power tool brand** — Milwaukee, DeWalt, Makita, Ryobi, HiKOKI, or STIHL.
 2. **Workshop storage** — one of:
    - Sidchrome SCMT11402 **356-piece** tool kit & lockable roller cabinet.
    - Milwaukee 56" High-Capacity Combination Tool Storage (steel construction, electronic lock).
    - Kincrome CONTOUR® **470-piece** 17-drawer workshop kit (P1823).
    - GEARWRENCH **288-piece** tool set & mobile workstation (foam-inlaid drawers, full work top, heavy-duty castors).
-3. **$5,000 cash bonus** — bundled into every combo on top of the tools (each combo's display label, via `getPrizeLabel`, ends in "+ $5,000 Cash" in [src/config/prizes.ts](src/config/prizes.ts); 13 of the 20 combos also carry an explicit "$5000 Cash Bonus" highlight — the four Sidchrome-storage variants and the three non-GearWrench HiKOKI variants do not).
 
-That's a 5 × 4 grid = **20 power-tool × storage combinations** (each + $5,000 cash), each rendered as its own `PrizeCatalogEntry` with full specs, hero gallery, and highlight copy. (HiKOKI is the 5th toolset, added June 2026 — a 15-piece 36V/18V MultiVolt kit: a 13-piece Mega Combo plus framing + finishing nailers, bundled with its own HiKOKI Multi Cruiser 3-piece storage system. GEARWRENCH is the 4th toolbox, added July 2026 for draw 9 — it pairs with all five toolsets, so it added 5 combos in one go.)
+That's a 6 × 4 grid = **24 power-tool × storage combinations** (tools only — no cash on top), each rendered as its own `PrizeCatalogEntry` with full specs, hero gallery, and highlight copy. (HiKOKI is the 5th toolset, added June 2026 — a 15-piece 36V/18V MultiVolt kit: a 13-piece Mega Combo plus framing + finishing nailers, bundled with its own HiKOKI Multi Cruiser 3-piece storage system. GEARWRENCH is the 4th toolbox, added July 2026 for draw 9 — it paired with all five toolsets then, adding 5 combos in one go — six pairings now, with STIHL.)
 
-**Option B — Cash instead of tools.** A single **$10,000 AUD tax-free cash** prize (`prizeValueLabel: "$10,000 Cash"`) — no equipment, "no tools, no hassle, just $10,000 straight to your bank account." There is **no $5,000 standalone cash tier** and no standard/upgraded distinction; the $5,000 figure only appears as the cash *bonus* bundled into Option A's tool combos.
+**Option B — Cash instead of tools.** A single **$10,000 AUD tax-free cash** prize (`prizeValueLabel: "$10,000 Cash"`) — no equipment, "no tools, no hassle, just $10,000 straight to your bank account." This is now the **only** cash in the prize: since draw 10 (2026-08-28) a tool combination carries no cash bonus at all. There is no standalone $5,000 tier and no standard/upgraded distinction.
 
-The cash option lives as the 21st (last) `PrizeCatalogEntry` (`slug: "cash-prize"`).
+The cash option lives as the 25th (last) `PrizeCatalogEntry` (`slug: "cash-prize"`).
 
-**Why this is in the doc.** Each promo landing page (§11) pins a specific prize combination as its hero — so the prize catalog isn't only what the winner picks, it's also what the campaign sells. The 5×4 grid + cash means the same monthly draw can be marketed with very different copy (e.g. a Milwaukee-focused landing for Milwaukee fans vs a Sidchrome-storage-focused landing for cabinet-shop tradies) without changing the underlying draw.
+**Why this is in the doc.** Each promo landing page (§11) pins a specific prize combination as its hero — so the prize catalog isn't only what the winner picks, it's also what the campaign sells. The 6 × 4 grid + cash means the same monthly draw can be marketed with very different copy (e.g. a Milwaukee-focused landing for Milwaukee fans vs a Sidchrome-storage-focused landing for cabinet-shop tradies) without changing the underlying draw.
 
 **Winner contact & claim — partially in code, mostly operational.** When the winner is selected:
 
@@ -157,9 +221,74 @@ The cash option lives as the 21st (last) `PrizeCatalogEntry` (`slug: "cash-prize
 
 > _Asset note (2026-07-22, no catalog change):_ the three toolbox renders already used by the prize picker (`toolbox/{milwaukee,kincrome,sidchrome}TB.webp`) were wired into `SPEC_ITEM_IMAGE_BY_NAME`, and the workshop/toolbox storage arrays were added to `applySpecItemImages` so the mapping actually reaches them. The specs modal Storage tab previously drew a "photo coming soon" placeholder for the toolbox — the single biggest item in the prize — while the same art sat on screen one section above. Presentational only: no combo, cash tier, price or copy changed.
 
-> _Catalog change (2026-07-27, draw 9):_ **GEARWRENCH 288-piece tool set & mobile workstation** was added as the **fourth workshop-storage option**, pairing with all five toolsets — so the grid went 5×3=15 → **5×4=20** tool combos, and `PRIZE_CATALOG` / `PRIZE_SUMMARIES` went 16 → **21** entries (the cash option stays last). Cash bonus is unchanged at **$5,000** per combo, and Option B is unchanged at **$10,000**. The five new entries carry the explicit "$5000 Cash Bonus" highlight. Their composite "toolset + toolbox" combo renders were photographed and shipped on 2026-07-28 for **four of the five** — Milwaukee, DeWalt, Makita and HiKOKI — each carrying `cardBackgroundImage` + a combo gallery hero at `{toolset}-set/{toolset}-gearwrench.webp`.
+> _Catalog change (2026-07-27, draw 9):_ **GEARWRENCH 288-piece tool set & mobile workstation** was added as the **fourth workshop-storage option**, pairing with all five toolsets — so the grid went 5×3=15 → **5×4=20** tool combos, and `PRIZE_CATALOG` / `PRIZE_SUMMARIES` went 16 → **21** entries (the cash option stays last). Cash bonus *was* unchanged at **$5,000** per combo at that time (removed entirely in draw 10 — see the 2026-08-28 entry below), and Option B is unchanged at **$10,000**. The five new entries carry the explicit "$5000 Cash Bonus" highlight. Their composite "toolset + toolbox" combo renders were photographed and shipped on 2026-07-28 for **four of the five** — Milwaukee, DeWalt, Makita and HiKOKI — each carrying `cardBackgroundImage` + a combo gallery hero at `{toolset}-set/{toolset}-gearwrench.webp`.
 
 > _Artwork completed (2026-08-06):_ **Ryobi × GearWrench is now shot and wired**, so **all 20 combinations carry their own composite render** and none is on a fallback. `ryobi-set/ryobi-gearwrench.webp` (1600×1200, matching the other 19) is its `cardBackgroundImage` + `gallery[0]`. Until this edit the entry still pointed at the standalone `toolbox/gearwrenchTB.webp` — a 1000×1000 square of the bare toolbox with no Ryobi tools in shot — which was visible to customers as one odd, under-sized frame in the `/membership` prize carousel. `COMBOS_AWAITING_COMBO_ART` in `prize-builder-model.ts` was already empty, so the per-COMBINATION "combo photo coming" fallback is now unused by any live combo; keep the mechanism, it is what a future toolbox/toolset addition lands behind.
+
+> _Prize change (2026-08-28, draw 10):_ the **$5,000 cash bonus was removed from every tool
+> combination**. Option A is now **tools only**; Option B (the **$10,000** tax-free cash opt-out)
+> is unchanged and is the only cash left in the prize. This stripped the bonus from all 20
+> `label` / `heroHeading` / `heroSubheading` / `summary` / `SHORT_PRIZE_LABELS` strings and the 21
+> `$5000 Cash Bonus` highlight objects across `prize-summaries.ts` + `prizes.ts`, deleted the
+> synthetic "$5,000 Cash" tab the specifications modal used to append to every non-cash prize,
+> and dropped the cash flag + cash stat tile from the /promotions spotlight.
+>
+> **Every customer-facing surface that named the $5,000 is gone, and the list was longer than it
+> looked.** Beyond the catalogue copy above, the prize builder carried its own INDEPENDENT set —
+> a green `+ $5,000 CASH INCLUDED` pill on the combination hero, a `$5,000 cash` chip in the
+> contents strip, the `· plus $5,000 cash` tail on the combination subtitle, the "Plus $5,000
+> cash" lead copy above the reels, and a `showCashFlag` field on `ComboPresentation` driving it.
+> Those survived the first pass and were only caught by opening the page. A test was also
+> asserting the claim (`"bundle mode advertises the $5,000 bonus"`) and passing the whole time;
+> it is now inverted into a guard that no `$5,000` / `$5K` string may appear in the card at all.
+> Verified in a browser: **zero** `$5,000` mentions on a rendered combination page, `$10,000`
+> intact. Detail in [docs/promo/frontend.md](docs/promo/frontend.md).
+>
+> Two things did **not** change and are deliberate: the per-combo `prizeValueLabel` bands
+> (`$25,000+` / `$30,000+` / `$35,000+ Value`) still bake in the old $5,000 — they are consumed
+> **admin-only** today, so they are not a public claim, but they are the figure a permit filing
+> would derive from and need re-banding before they reach a customer surface. And the
+> **Total Prize Pool** line was removed from `/competition-term-majordraw` outright rather than
+> restated (owner decision) — see the permit caveat in `docs/subscription/gotchas.md`.
+>
+> That page's prize list is now **DERIVED from `PRIZE_SUMMARIES`** instead of hand-listed. It had
+> silently drifted: it advertised 6 combinations while the site offered 20, so Kincrome,
+> GearWrench, Ryobi and HiKOKI were winnable but absent from the legal terms.
+>
+> **The artwork was re-exported, not just the copy.** The $5,000 was *rasterised into the
+> photography*, not only written in it: the landing heroes baked `& $5K CASH` into the
+> sub-headline and every composite combo render showed the model holding a fan of cash. No code
+> change can edit a bitmap, so the art itself was replaced — 160 stale stills and 480 stale clips
+> deleted, base landing heroes re-exported for all 24 combinations (light/dark × desktop/mobile),
+> and the combo renders re-shot with the model holding no cash. **Still outstanding:** only the
+> `drawn-tomorrow` / `drawn-tonight` countdown tier, which has not been re-exported yet — the
+> `@demo` specs that walk that tier are skipped until it lands.
+
+> _Catalog change (2026-08-28, draw 10):_ **STIHL** joined as the **sixth power toolset** — the
+> first outdoor-power brand in the prize, and the first that is not a cordless drill/driver kit.
+> The grid went 5×4=20 → **6×4=24** tool combos, and `PRIZE_CATALOG` / `PRIZE_SUMMARIES` went
+> 21 → **25** entries (cash stays last). The **"New" badge moved off HiKOKI onto STIHL**;
+> GEARWRENCH keeps its toolbox badge.
+>
+> The STIHL prize is **10 tools**: four petrol (MS 391 FarmBoss chainsaw with a 20" bar,
+> FS 91 R loop-handle brushcutter, BG 86 blower, HS 45 600mm hedge trimmer) and six cordless
+> (RMA 353 V self-propelled mower, GTA 26 pruner, RCA 20 pressure washer, KOA 20 air inflator,
+> SEA 20 handheld vacuum, ASA 20 secateurs), plus **2× AP 300 S batteries and an AL 301 charger**.
+>
+> **Two supplier questions are still open and they change what a winner receives.** STIHL's own
+> part numbers say the RCA 20, KOA 20, ASA 20 and the RMA 353 V mower are all **skin only** — no
+> battery, no charger. The supplied AP 300 S pair + AL 301 power the **mower** (AP system); the
+> AS-system tools take a different battery family (AS 2 + AL 1). Only the GTA 26 — and, on the
+> part number given, the SEA 20 — are kits. Verified product data and every discrepancy is in
+> [docs/config-and-data/stihl-prize-products.md](docs/config-and-data/stihl-prize-products.md).
+>
+> **Artwork status:** the four `stihl-*` combo renders, the `STIHL.webp` reel card and all 11
+> individual tool shots shipped, and STIHL is the **only** brand whose every spec item carries a
+> photo. Its **landing hero art shipped too** (2026-08-26) — 16 stills + 16 mp4 + 16 webm covering
+> all four toolbox pairings in light and dark, desktop and mobile — so `/promotions/stihl` serves
+> STIHL's own hero rather than the evergreen fallback, and `KNOWN_GAPS` in
+> `scripts/check-landing-hero-assets.mjs` is now **empty** for the first time.
+
 
 ### 3d. Anchor-day-24 alignment
 
@@ -620,13 +749,38 @@ This is the **customer-facing** counterpart to §9e's admin past-due tool — th
 
 > **Note** — this past-due *renewal recovery* (force-charge the existing overdue invoice) is a different code path from the §10i *reactivation* of a `canceled` subscription, even though both surface "reactivated" copy.
 
-### 10f. Email verification — what it actually gates
+### 10f. Contact verification — what it actually gates
 
-[src/app/api/auth/send-login-code/route.ts](src/app/api/auth/send-login-code/route.ts) is the **only hard gate**: passwordless email-code sign-in rejects unverified users with "Please verify your email first…".
+**Updated 2026-08-27.** Members must now finish profile setup holding **at least one verified
+contact channel — email OR mobile**, their choice. It is the recovery credential for the password
+they set in that same step: registration is passwordless, and before this a member who mistyped
+their email had *no* self-service route back in (reset links, emailed sign-in codes and the
+verify-email bridge all require the inbox they cannot read). Switch:
+`environmentFlags.verifiedContactRequired()`, which replaced `emailVerificationMandatory()` — the
+latter was hardcoded `false`, so the gate had been built and left off.
 
-Everywhere else, email verification is **either a nag** (badge in header / Settings / `UserSetupModal`) or **an audience filter** (campaign and redeemable targeting defaults to `requiresEmailVerified: true` in [`CampaignService`](src/services/redeemables/CampaignService.ts) and [`TargetingService`](src/services/redeemables/TargetingService.ts) — unverified users are silently excluded from campaign sends rather than blocked from purchases). **Exception:** a §7d trigger campaign waives it — those codes are minted at a moment the customer created (cancel, purchase, guest checkout-start), and `checkout-start` fires seconds after registration, before anyone could have actioned a verification email.
+Two hard gates now exist:
+- **Completing profile setup** — needs one verified channel (either one).
+- **Passwordless email-code sign-in** ([send-login-code](src/app/api/auth/send-login-code/route.ts)) — still specifically requires a verified *email*. **SMS sign-in is the alternative** and needs no inbox at all; see §10f-bis.
 
-**Not gated** by verification: cancellation, withdrawing entries, purchases, subscription management. Side effect: changing the email resets the flag; Google OAuth auto-verifies.
+Elsewhere, email verification remains **a nag** (header / Settings / `UserSetupModal`) or **an audience filter** (campaign and redeemable targeting defaults to `requiresEmailVerified: true` in [`CampaignService`](src/services/redeemables/CampaignService.ts) / [`TargetingService`](src/services/redeemables/TargetingService.ts) — as of the 2026-08-26 audit that silently excluded **1,406 active subscribers**, 28.9% of them). **Exception:** a §7d trigger campaign waives it — those codes are minted at a moment the customer created (cancel, purchase, guest checkout-start), and `checkout-start` fires seconds after registration, before anyone could have actioned a verification email.
+
+**Not gated** by verification: cancellation, withdrawing entries, purchases, subscription management. Side effects: changing the email resets the flag; Google OAuth auto-verifies; and **completing an SMS sign-in verifies the mobile** (the code goes to the number already on file, so returning it proves control of it).
+
+### 10f-bis. SMS sign-in and the dashboard gate (2026-08-27)
+
+**SMS sign-in.** `/login` and `LoginModal` both offer a 6-digit code texted to the mobile on the
+account, over the Australian gateway **Mobile Message** (~3¢/message; Twilio was evaluated and
+rejected at ~4.7× the cost — see the [design spec](docs/superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md) §7). It resolves the account **by mobile**, so the request can never
+name one account and redirect its code elsewhere. 3 codes/day, 60s apart, 10-minute expiry, and it
+refuses anyone who has never purchased — 44,445 never-paid accounts hold a mobile, and every send
+costs a credit. Ships inert until `SMS_ENABLED=true`.
+
+**Dashboard access.** A signed-in member who has never paid is redirected from `/my-account` and
+`/rewards` to `/membership`. Gated on [`hasEverPaid`](src/utils/auth/has-ever-paid.ts) — **ever**
+paid, never "currently active": cancelled, paused and past-due members keep access, and past-due
+members in particular still hold live entries and can win. They keep their session and can still
+buy; only the dashboard is gated.
 
 ### 10g. Welcome / first-purchase activation
 
@@ -804,6 +958,38 @@ Source of truth: [docs/tracking/](docs/tracking/).
 - **Klaviyo**: page tracker, script loader, transactional handoffs (`src/lib/klaviyo.ts`).
 - **UTM persistence**: `useUTMPersistence` (`src/hooks/useUTMPersistence.ts`) → `src/utils/tracking/` (`utm-helpers.ts` / `utm-storage.ts` / `attribution-cookie.ts`) — sessionStorage plus first-touch and last-touch attribution cookies. `src/lib/utm/` holds only the Meta Ads Manager UTM template conventions (`META_ADS_UTM_TEMPLATE`), no persistence logic.
 
+### 14b-i. Merchandise is counted as revenue (2026-08-21)
+
+**Shop orders now contribute to reported revenue.** They previously contributed nothing at
+all: `finalizeShopOrder` returned before `processPaymentBenefits` whenever an order was worth
+no free entries, and that function is also what writes the `BenefitsGranted` PaymentEvent —
+the single authoritative revenue source in this codebase. Since `Product.includedEntries`
+defaults to `0`, that early return fired on **every merch order ever placed**, so merchandise
+income was invisible to the dashboard, the daily snapshot and Norm.
+
+Merchandise is **headline revenue but deliberately NOT ads revenue**:
+
+- It has its own `shop` revenue bucket, appears as **Merchandise** on the Overview revenue
+  breakdown, is drillable in the revenue-details panel, and is exposed to Norm.
+- It is **excluded from per-platform acquisition revenue and therefore from TRUE ROAS**. A
+  merch total carries shipping and is not comparable to a package price, and nobody buys a
+  hoodie off a giveaway ad. So `sum(byPlatform) + shop === total`, not `sum(byPlatform) ===
+  total`.
+- GST is **not** netted, matching every other package type — shop reports GST-inclusive gross.
+
+**Shop purchases also appear in the admin activity feed** (type `shop_order`, labelled
+"Ordered merchandise (SHOP-…)") on both the Overview card and the Activity Log page, from the
+same PaymentEvent-based source so the two cannot disagree.
+
+Operationally: the dashboard snapshot **source version moved 3 → 4**. Days snapshotted at v3
+hold no shop bucket and under-report the headline total until
+`backfill:dashboard-stats-snapshots` is re-run over the shop's live window.
+
+> The same change removed an **unfiltered** `Order`-based high-value feed that reported
+> abandoned checkouts as completed purchases, and added a paid-status filter to every admin
+> and customer surface that COUNTS or SUMS orders. Order counts and per-user spend figures
+> will therefore read lower than before — they are now purchases rather than attempts.
+
 ### 14b. Ad-platform analytics — server-side revenue live, ad-spend sync partial
 
 > **Channels currently running (as of 2026-07):** the only live **paid** ad channel is **Meta / Facebook Ads**; the live **owned** channels are **Klaviyo email + SMS**. **TikTok Ads is launching soon** — its pixel/CAPI + per-ad spend code is complete and creds-gated (goes live when the TikTok env creds are set). _Status 2026-07-29 — **TikTok Marketing API is LIVE.** The developer app was approved with all four scopes, an advertiser access token was generated and verified against advertiser 7561254031700557840, and the first real sync landed **86 ad×day rows / 31 ads** (30-day window: **$1,305.45 spend · 45 TikTok-reported purchases · $1,024.93 TikTok-reported value · 0.79× platform ROAS**). Verification found two of three hard-coded metric assumptions were WRONG and fixed them: the purchase-value metric `total_complete_payment_value` does not exist (value is derived from `value_per_complete_payment × complete_payment`, cross-checked to 99.95% against TikTok’s own ROAS), and `conversion` is the ad group’s optimization event, not purchases — it read ~300× high, so the purchase count is `complete_payment`. Currency (AUD) and timezone (Australia/Sydney) were confirmed correct. Stored figures match the live API to the cent (`npm run verify:tiktok-readpath`). **Remaining to go live in production:** put the token in Vercel + the main folder’s .env.local, then run `npm run seed:tiktok-insights -- --days=60` against production._ **Google Ads is not in use** (the `google` platform slot is reserved for a future `gclid` capture; no Google spend/clicks flow today), and **Snapchat** is pixel-only. So today, a converting platform of `meta`, `klaviyo_email`, or `klaviyo_sms` covers essentially all *attributable* revenue; TikTok begins contributing once it launches.
@@ -841,7 +1027,7 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **A/B testing** — full first-party framework. Services, components, hooks, repositories, models, `/api/ab-testing` routes. See [docs/ab-testing/](docs/ab-testing/).
 - **Email** — SendGrid for transactional (code-as-source in `src/lib/email/`), Klaviyo for marketing (paste-ready HTML in `email-templates/klaviyo/`), preview UI at `/email-preview`, SMS via `src/lib/sms.ts` (Twilio).
 - **Admin dashboard** — user management, payments, draws, promos, error reports, partner applications, Stripe webhook queue, dashboard stats daily snapshots (+ cycle-anchored Renewal Rate KPI), charge-past-due tool, blocked transactions / allowlist, demographic/age + profession-cleanup metrics, plus the **Analytics tab group** (All Platforms, Facebook Ads incl. **Facebook Ads Health** §14b, TikTok Ads, Snapchat Ads, Klaviyo, Page Analytics, Cancellation Flow, **Repeat Purchases** — one-time-pack reconversion analytics: repeat rate, first→second-purchase gap buckets (same-day → 180d+), became-members count; refund-netted, excludes upsells/mini-draws/renewals; users drill-down with clickable bucket filters + CSV export; summary mirrored read-only to Norm as `analytics.repeat-purchases` — and A/B Testing). See [docs/admin/](docs/admin/).
-- **Staff roles & permissions (RBAC)** — admin access is no longer an all-or-nothing flag. Each user carries a `userType` of `customer` / `staff` / `admin` plus an optional `roleId` ([src/models/User.ts](src/models/User.ts)). Permissions are a hardcoded catalog of **50 actions across 17 areas** ([`src/lib/permissions.ts`](src/lib/permissions.ts) `AREA_ACTIONS`) — money-moving and irreversible actions (`users.charge`, `users.refund`, `users.cancelSubscription`, `users.delete`, `majorDraw.selectWinner`, `affiliates.processPayout`) are each their own permission, so a role can grant edit access without granting them. Permissions bundle into named roles ([src/models/Role.ts](src/models/Role.ts)); admin is the implicit super-role, while custom staff roles (e.g. an Ads Manager) get a filtered admin panel and are walled off from customer-purchase flows. Routes are gated via `requirePermission()` rather than ad-hoc `role === "admin"` checks. **Two catalog notes (2026-07-31):** the three Page Analytics routes moved from `promos.view` to `pageAnalytics.view` so the API matches the tab's own gate — latent, not breaking, since production holds only Admin, Manager and Customer Support (there is **no Ads Manager role in production** despite the seed template) and both Admin and Manager held `promos.view`. And the inert `promoAnalytics.view` permission was **retired entirely** — it was checked by zero routes and gated zero tabs, so an owner could have revoked it believing it locked down promo analytics with no effect. Retirement ran in the required order on 2026-07-31: `npm run migrate:promo-analytics-cleanup[:prod]` stripped the string from stored roles in both clusters first (`Role` validation rejects unknown permission strings, so the reverse order would break role saves), then the catalog entry, its `PERMISSION_META` row and the `Ads Manager` seed bundle were removed. **Customer PII is a separate grant from the customer list (2026-08-13):** `users.view` used to gate both the roster *and* the detail modal behind it, so any role that could browse customers could also read every customer's email, mobile, address and payment history. The modal's reads now require a new **`users.viewDetail`** (`GET /api/admin/users/[id]`, plus the modal-only `payment-events`, `deletion-summary` and `charge-past-due` previews, and the matching Norm registry entries); `users.view` is now list-only. This makes a **triage role** possible — browse and search the customer list, resolve nothing personal — which the catalog previously could not express. Because a new catalog action is **not** auto-granted to existing custom roles, `npm run migrate:backfill-users-view-detail` grants `users.viewDetail` to every role that already held `users.view`, so the split ships as a **no-op** and is then narrowed deliberately per role in Settings → Roles. See [docs/auth/roles.md](docs/auth/roles.md) and [docs/auth/permissions-catalog.md](docs/auth/permissions-catalog.md). **Mini-draw entrant PII is likewise its own grant (2026-08-13):** `miniDraws.view` used to gate the draw list *and* `GET /api/admin/mini-draw/[id]/export` — a CSV/Excel dump of every entrant's name, email, mobile and state. A new **`miniDraws.viewParticipants`** now gates that export **and** the new in-app participants roster (`GET /api/admin/mini-draw/[id]/participants`), which lets staff check who entered without downloading a spreadsheet of live customer data; `miniDraws.view` is now lineup-only. The two reads move together permanently — they return identical data and differ only in pagination. Shipped with `npm run migrate:backfill-mini-draws-participants` so, as with `users.viewDetail`, the carve-out lands as a no-op for existing roles and is narrowed deliberately afterwards. The Norm `mini-draw.export` entry deliberately stays on `miniDraws.view`: its projection is aggregate-only (participant counts + per-state breakdown, no per-user PII). **The revenue ledger is its own area too (2026-08-17):** a new admin **Receipts** tab (Billing group) lists every payment the business has received — membership purchases and renewals, one-time and additional packs, mini draws, upsells, and shop orders once the shop launches — each row joined to the customer who paid, its refund state, and a link to the Stripe object behind it. It is an internal reporting view only: it reads existing `PaymentEvent` / `Order` data and changes no pricing, entry, draw or billing rule. Rather than reuse the `settings.view` its Billing-group neighbours share, it adds **`receipts.view`** (the tab + `GET /api/admin/receipts`) and **`receipts.export`** (the CSV, marked dangerous) — because a complete revenue history joined to customer names and emails is exactly the kind of surface this catalog already carves out, and downloading it as a file is a distinct risk from reading it on screen. Shipped with `npm run migrate:backfill-receipts-view` so, as with `users.viewDetail` and `miniDraws.viewParticipants`, the new grant lands as a no-op for roles that could already see the Billing group; `receipts.export` is deliberately NOT backfilled and is handed out per role in Settings → Roles. Its totals are net of refunds and reconcile exactly with the existing dashboard revenue figures (the only difference being that Receipts includes membership renewals, which the dashboard's *acquisition* revenue excludes). It **is** mirrored to Norm (`GET /v1/receipts`, gated on `receipts.view`), and that mirror carries a deliberate exception to the usual PII boundary: it returns the customer's **email** alongside firstName + opaque userId, where every other Norm read stops at firstName. That was an explicit owner decision on 2026-08-17 so a named customer's payment history is answerable in one call; last name and the Stripe customer id are still withheld. It is recorded in the schema, in `docs/internal-norm/norm-context.md` and here so it stays a visible choice rather than quiet drift. See [docs/admin/receipts.md](docs/admin/receipts.md). This is the same role-based system the Internal Norm bullet (below) relies on to secure the external-AI gateway.
+- **Staff roles & permissions (RBAC)** — admin access is no longer an all-or-nothing flag. Each user carries a `userType` of `customer` / `staff` / `admin` plus an optional `roleId` ([src/models/User.ts](src/models/User.ts)). Permissions are a hardcoded catalog of **53 actions across 18 areas** ([`src/lib/permissions.ts`](src/lib/permissions.ts) `AREA_ACTIONS`) — money-moving and irreversible actions (`users.charge`, `users.refund`, `users.cancelSubscription`, `users.delete`, `majorDraw.selectWinner`, `affiliates.processPayout`) are each their own permission, so a role can grant edit access without granting them. Permissions bundle into named roles ([src/models/Role.ts](src/models/Role.ts)); admin is the implicit super-role, while custom staff roles (e.g. an Ads Manager) get a filtered admin panel and are walled off from customer-purchase flows. Routes are gated via `requirePermission()` rather than ad-hoc `role === "admin"` checks. **Two catalog notes (2026-07-31):** the three Page Analytics routes moved from `promos.view` to `pageAnalytics.view` so the API matches the tab's own gate — latent, not breaking, since production holds only Admin, Manager and Customer Support (there is **no Ads Manager role in production** despite the seed template) and both Admin and Manager held `promos.view`. And the inert `promoAnalytics.view` permission was **retired entirely** — it was checked by zero routes and gated zero tabs, so an owner could have revoked it believing it locked down promo analytics with no effect. Retirement ran in the required order on 2026-07-31: `npm run migrate:promo-analytics-cleanup[:prod]` stripped the string from stored roles in both clusters first (`Role` validation rejects unknown permission strings, so the reverse order would break role saves), then the catalog entry, its `PERMISSION_META` row and the `Ads Manager` seed bundle were removed. **Customer PII is a separate grant from the customer list (2026-08-13):** `users.view` used to gate both the roster *and* the detail modal behind it, so any role that could browse customers could also read every customer's email, mobile, address and payment history. The modal's reads now require a new **`users.viewDetail`** (`GET /api/admin/users/[id]`, plus the modal-only `payment-events`, `deletion-summary` and `charge-past-due` previews, and the matching Norm registry entries); `users.view` is now list-only. This makes a **triage role** possible — browse and search the customer list, resolve nothing personal — which the catalog previously could not express. Because a new catalog action is **not** auto-granted to existing custom roles, `npm run migrate:backfill-users-view-detail` grants `users.viewDetail` to every role that already held `users.view`, so the split ships as a **no-op** and is then narrowed deliberately per role in Settings → Roles. See [docs/auth/roles.md](docs/auth/roles.md) and [docs/auth/permissions-catalog.md](docs/auth/permissions-catalog.md). **Mini-draw entrant PII is likewise its own grant (2026-08-13):** `miniDraws.view` used to gate the draw list *and* `GET /api/admin/mini-draw/[id]/export` — a CSV/Excel dump of every entrant's name, email, mobile and state. A new **`miniDraws.viewParticipants`** now gates that export **and** the new in-app participants roster (`GET /api/admin/mini-draw/[id]/participants`), which lets staff check who entered without downloading a spreadsheet of live customer data; `miniDraws.view` is now lineup-only. The two reads move together permanently — they return identical data and differ only in pagination. Shipped with `npm run migrate:backfill-mini-draws-participants` so, as with `users.viewDetail`, the carve-out lands as a no-op for existing roles and is narrowed deliberately afterwards. The Norm `mini-draw.export` entry deliberately stays on `miniDraws.view`: its projection is aggregate-only (participant counts + per-state breakdown, no per-user PII). **The revenue ledger is its own area too (2026-08-17):** a new admin **Receipts** tab (Billing group) lists every payment the business has received — membership purchases and renewals, one-time and additional packs, mini draws, upsells, and shop orders once the shop launches — each row joined to the customer who paid, its refund state, and a link to the Stripe object behind it. It is an internal reporting view only: it reads existing `PaymentEvent` / `Order` data and changes no pricing, entry, draw or billing rule. Rather than reuse the `settings.view` its Billing-group neighbours share, it adds **`receipts.view`** (the tab + `GET /api/admin/receipts`) and **`receipts.export`** (the CSV, marked dangerous) — because a complete revenue history joined to customer names and emails is exactly the kind of surface this catalog already carves out, and downloading it as a file is a distinct risk from reading it on screen. Shipped with `npm run migrate:backfill-receipts-view` so, as with `users.viewDetail` and `miniDraws.viewParticipants`, the new grant lands as a no-op for roles that could already see the Billing group; `receipts.export` is deliberately NOT backfilled and is handed out per role in Settings → Roles. Its totals are net of refunds and reconcile exactly with the existing dashboard revenue figures (the only difference being that Receipts includes membership renewals, which the dashboard's *acquisition* revenue excludes). It **is** mirrored to Norm (`GET /v1/receipts`, gated on `receipts.view`), and that mirror carries a deliberate exception to the usual PII boundary: it returns the customer's **email** alongside firstName + opaque userId, where every other Norm read stops at firstName. That was an explicit owner decision on 2026-08-17 so a named customer's payment history is answerable in one call; last name and the Stripe customer id are still withheld. It is recorded in the schema, in `docs/internal-norm/norm-context.md` and here so it stays a visible choice rather than quiet drift. See [docs/admin/receipts.md](docs/admin/receipts.md). **New `shop` area (2026-08-17):** the product-catalog API shipped with **no authentication and no CSRF on any of its 32 routes** — including `DELETE /api/products/delete-all` (an anonymous `Product.deleteMany({})`), `POST /api/products/import`, and ten `delete-by-*` bulk routes. It was inert only because the catalog is empty; seeding merchandise would have made it a one-request catalog wipe and a stored-content injection vector on a public page. All 23 admin/destructive handlers are now gated by `requirePermissionWithAudit` on the new **`shop.view` / `shop.edit` / `shop.delete`** permissions (delete split out so a catalog editor does not implicitly hold the bulk-destruction routes); the eight storefront reads (list, detail, search, categories, featured, bestsellers, new arrivals, related) stay public by design. `POST /api/products/reviews/[id]` additionally moved to customer session + `requireSameOrigin` and now takes identity from the session — it previously accepted `userName`/`userEmail` in the request body, so anyone could post a review under anyone's name. This is the same role-based system the Internal Norm bullet (below) relies on to secure the external-AI gateway.
 - **Staff invite + audit** — owner/admins invite a team member by email + role (`POST /api/admin/staff`, gated by `settings.edit`), which creates an inactive user with a single-use invite token (7-day TTL) and sends a SendGrid invite email; the invitee sets a password at the public `/staff-setup/[token]` page. Removal reverts the user to `customer`, clears `roleId`, and forces sign-out — the row is kept for audit, never deleted — and a **removed staffer can be re-invited under any role** (the invite converts the inactive former-staff row back into a pending staff invite; active accounts and never-staff customers can't be converted; 2026-07-09). Admins can also **edit a staff member's display name** from the Team page. Every meaningful staff mutation (and every blocked 403 attempt by a logged-in staffer) is recorded in the **`StaffActivity`** audit log via `requirePermissionWithAudit` (wired into 60+ admin routes incl. force-charge, refund reversal, cancel-subscription, winner selection), snapshotting actor email/role-name + action/method/path/resource/status, with a 180-day TTL. Surfaced behind the `audit.view` permission (incl. a per-user "Staff actions" tab). Distinct from the Stripe allowlist audit (§12a/§12c).
 - **Internal Norm API** — HMAC-signed HTTP namespace at `/api/internal/norm/v1/*` exposing **read-only** admin data to an external AI assistant ("Norm") running on a Mac mini server — ~95 endpoints spanning ROAS + dashboard stats, revenue/metrics analytics, users (search, export, payment events, past-due previews), major & mini draws, winners, promos + promo analytics, Klaviyo, A/B testing, affiliates, error reports, allowlist, Stripe webhook queue, monthly coupons, and the staff activity log. The endpoint registry ([`src/lib/internal-norm/classification.ts`](src/lib/internal-norm/classification.ts)) also defines a four-tier action model (`read` / `write_safe` / `trigger_norm_confirm` / `trigger_human_approve`) that pre-classifies future write actions (A/B-test edits, winner selection, past-due charges), but **no write/trigger endpoint is wired yet** — every live handler is a read. Governed by the role-based permissions system above (Norm runs as its own service user + Role). See [docs/internal-norm/](docs/internal-norm/).
 - **Error reporting** — first-party `ErrorReport` Mongo model + admin routes. Do not bolt on a parallel logger. See [docs/error-reporting/](docs/error-reporting/).
@@ -906,3 +1092,5 @@ The platform doesn't only ship transactional email through SendGrid — it also 
 - **Gap period** — the **~3h 30min between draw end (8:30 PM) and next-draw activation (12:00 AM)** when no draw has `status: "active"`. New-entry purchases are blocked; renewals route to the next draw via `getTargetMajorDraw`'s explicit gap branch.
 - **Ledger pattern** — `PaymentEvent` records of benefit grants/reversals, so refunds can replay the ledger backward.
 - **Past-due** — subscription state when Stripe has failed to collect; recoverable via the admin tool or auto-recovery on next successful charge.
+
+<!-- 2026-08-21: staff-facing shop labels unified on "Shop" (no business fact changed; see docs/cart-shop-products/backend.md). -->

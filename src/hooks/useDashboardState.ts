@@ -45,7 +45,7 @@ export interface DashboardStateResult {
   multiplier: number;
   /** Whether the user gets 50%-off Additional packages (members / current-draw entrants). */
   hasAdditionalAccess: boolean;
-  entries: { total: number; membership: number; oneTime: number; streak: number };
+  entries: { total: number; membership: number; oneTime: number; streak: number; shop: number };
   /** Partner-catalogue access % for the hero ring (0 when locked). */
   partnerAccessPct: number;
   /** One-time time-gated access label, e.g. "5 days" / "24hr" (null otherwise). */
@@ -115,7 +115,7 @@ export function useDashboardState(): DashboardStateResult {
         stateTheme: getDashboardStateTheme("none"),
         multiplier: oneTimeMultiplier && oneTimeMultiplier > 0 ? oneTimeMultiplier : 1,
         hasAdditionalAccess: false,
-        entries: { total: 0, membership: 0, oneTime: 0, streak: 0 },
+        entries: { total: 0, membership: 0, oneTime: 0, streak: 0, shop: 0 },
         partnerAccessPct: 0,
         partnerAccessExpiryLabel: null,
         streakMonths: null,
@@ -256,6 +256,7 @@ export function useDashboardState(): DashboardStateResult {
         membership: entriesDisplay.membershipEntries,
         oneTime: entriesDisplay.oneTimeEntries,
         streak: entriesDisplay.streakEntries,
+        shop: entriesDisplay.shopEntries,
       },
       partnerAccessPct,
       partnerAccessExpiryLabel,
@@ -283,6 +284,7 @@ export function useDashboardState(): DashboardStateResult {
     entriesDisplay.membershipEntries,
     entriesDisplay.oneTimeEntries,
     entriesDisplay.streakEntries,
+    entriesDisplay.shopEntries,
     currentMajorDraw,
   ]);
 }

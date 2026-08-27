@@ -91,6 +91,7 @@ export default function ActivityLogManagement() {
               <option value="cancellation_offer_accepted">Cancellation Offers Accepted</option>
               <option value="draw_complete">Draw Completions</option>
               <option value="high_value_order">High-Value Orders</option>
+              <option value="shop_order">Shop Orders</option>
               <option value="admin_role_update">Staff Updates</option>
               <option value="affiliate_payout">Affiliate Payouts</option>
             </select>

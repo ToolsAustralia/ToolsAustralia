@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { PRODUCT_IMAGE_MIME_TYPES, PRODUCT_IMAGE_FORMAT_LABEL } from "@/constants/product-images";
 import { uploadImageToCloudinary, uploadMultipleImages } from "@/lib/cloudinary";
 import { z } from "zod";
 
@@ -29,12 +30,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate file types
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    const allowedTypes = PRODUCT_IMAGE_MIME_TYPES;
     const invalidFiles = files.filter((file) => !allowedTypes.includes(file.type));
 
     if (invalidFiles.length > 0) {
       return NextResponse.json(
-        { error: "Invalid file type. Only JPEG, PNG, and WebP images are allowed." },
+        { error: `Invalid file type. Please upload ${PRODUCT_IMAGE_FORMAT_LABEL}.` },
         { status: 400 }
       );
     }
@@ -100,10 +101,10 @@ export async function PUT(request: NextRequest) {
     }
 
     // Validate file type
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    const allowedTypes = PRODUCT_IMAGE_MIME_TYPES;
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: "Invalid file type. Only JPEG, PNG, and WebP images are allowed." },
+        { error: `Invalid file type. Please upload ${PRODUCT_IMAGE_FORMAT_LABEL}.` },
         { status: 400 }
       );
     }

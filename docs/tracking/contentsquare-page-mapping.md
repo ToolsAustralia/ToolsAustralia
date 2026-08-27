@@ -49,32 +49,33 @@ Build top to bottom. The last three are catch-alls and **will** raise a conflict
 | 4 | Promo landing — Makita | OFFERS & SERVICES | matches exactly | `/promotions/makita` | ” | ✅ |
 | 5 | Promo landing — Milwaukee | OFFERS & SERVICES | matches exactly | `/promotions/milwaukee` | ” | ✅ |
 | 6 | Promo landing — Ryobi | OFFERS & SERVICES | matches exactly | `/promotions/ryobi` | ” | ✅ |
-| 7 | Promotions — index | CATEGORY | matches exactly | `/promotions` | Prize gallery listing the combos | ✅ |
-| 8 | **Prize detail** | PRODUCT | matches regex | `^/promotions/[^/]+-[^/]+$` | 21 prize pages (5 toolsets × 4 toolboxes + `cash-prize`). Also where `/promotion` redirects. **Highest-traffic group on the site** | ✅ |
-| 9 | Membership | OFFERS & SERVICES | matches exactly | `/membership` | Tier/pricing page; purchase happens in a modal, not a route | ✅ |
-| 10 | Mini draws — list | CATEGORY | matches exactly | `/mini-draws` | Mini-pack listing | ✅ |
-| 11 | Mini draws — detail | PRODUCT | matches regex | `^/mini-draws/[^/]+$` | Individual mini draw | ✅ |
-| 12 | Shop — listing | CATEGORY | matches regex | `^/shop(/brand/[^/]+)?$` | Shop index + brand listings. Catalogue is empty so it renders "Coming Soon" — but it **is** in nav, footer and home chips, so it gets real traffic | ✅ traffic, no products |
-| 13 | ⚠ Shop — product | PRODUCT | matches regex | `^/shop/[^/]+$` | Product detail. `notFound()` on the empty catalogue | **Zero** until shop launches |
-| 14 | ⚠ Purchase success | CONFIRMATION | matches regex | `^/(purchase-success\|checkout/success\|mini-draw-success\|upsell-success)` | All four are Stripe `return_url`s only — nothing links or pushes to them. Only a **subscription 3DS challenge** actually lands here | **Near-zero** by design |
-| 15 | Account — dashboard | MY ACCOUNT | matches exactly | `/my-account` | Member dashboard; post-login destination | ✅ |
-| 16 | Account — draws | MY ACCOUNT | matches exactly | `/my-account/draws` | Member's entries / draw history | ✅ |
-| 17 | Account — membership | MY ACCOUNT | matches exactly | `/my-account/membership` | Plan management; cancellation is modal-driven | ✅ |
-| 18 | Account — rewards | MY ACCOUNT | matches exactly | `/my-account/rewards` | Rewards tab (`/my-account/benefits` 307s here) | ✅ |
-| 19 | Account — rewards catalogue | MY ACCOUNT | matches exactly | `/my-account/rewards/catalogue` | Partner-discount catalogue browse | ✅ |
-| 20 | ⚠ Account — settings | MY ACCOUNT | matches exactly | `/my-account/settings` | **Canary.** In `EXCLUDED_TRACKING_PREFIXES`, so our tracker never sends a pageview | **Zero expected** |
-| 21 | Account — support | HELP / SUPPORT | matches exactly | `/my-account/support` | In-account support surface | ✅ |
-| 22 | Partner discount | OFFERS & SERVICES | matches exactly | `/discount` | Member partner-discount surface; in nav with a "new" dot | ✅ |
-| 23 | ⚠ Rewards (public) | OFFERS & SERVICES | matches exactly | `/rewards` | Auth-gated **and** flag-gated (`REWARDS_ENABLED=false`); nav link hidden; renders a paused message | **Zero** while flag off |
-| 24 | Become a partner (B2B) | FORM | matches exactly | `/partner` | **B2B lead form** — "Become a Partner". *Not* a member perk | ✅ |
-| 25 | Portal transit | OFFERS & SERVICES | matches exactly | `/portal-transit` | `noindex` interstitial during partner-portal SSO hand-off | ✅ rare |
-| 26 | Draw results & winners | PRESS / NEWS | matches regex | `^/(draw-results\|winners)` | Past results and winner stories | ✅ |
-| 27 | Auth | FORM | matches regex | `^/(login\|reset-password\|oauth-redirect\|staff-setup)` | Login navigates for real, then pushes `/my-account` | ✅ |
-| 28 | Help & support | HELP / SUPPORT | matches regex | `^/(faq\|contact)` | Public help surfaces | ✅ |
-| 29 | Legal & policy | INFORMATION / LEGALS | matches regex | `^/(privacy\|terms\|competition-term-majordraw)` | Policy + competition terms | ✅ |
-| 30 | ⚠ Internal — should be empty | OTHERS | matches regex | `^/(admin\|affiliate\|dev\|test-pixels\|email-preview)` | **Canary** — all in `EXCLUDED_TRACKING_PREFIXES` | **Zero expected** |
-| 31 | ⚠ Promotions — unclassified | OTHERS | starts with | `/promotions` | **Canary** — a `/promotions/*` slug with no hyphen that is not one of the five toolsets | **Zero expected** |
-| 32 | Account — other | MY ACCOUNT | starts with | `/my-account` | Catch-all for future sub-pages | ✅ |
+| 7 | Promo landing — STIHL | OFFERS & SERVICES | matches exactly | `/promotions/stihl` | ” (added draw 10, 2026-08-28 — the sixth toolset) | ✅ |
+| 8 | Promotions — index | CATEGORY | matches exactly | `/promotions` | Prize gallery listing the combos | ✅ |
+| 9 | **Prize detail** | PRODUCT | matches regex | `^/promotions/[^/]+-[^/]+$` | 25 prize pages (6 toolsets × 4 toolboxes + `cash-prize`). Also where `/promotion` redirects. **Highest-traffic group on the site** | ✅ |
+| 10 | Membership | OFFERS & SERVICES | matches exactly | `/membership` | Tier/pricing page; purchase happens in a modal, not a route | ✅ |
+| 11 | Mini draws — list | CATEGORY | matches exactly | `/mini-draws` | Mini-pack listing | ✅ |
+| 12 | Mini draws — detail | PRODUCT | matches regex | `^/mini-draws/[^/]+$` | Individual mini draw | ✅ |
+| 13 | Shop — listing | CATEGORY | matches regex | `^/shop(/brand/[^/]+)?$` | Shop index + brand listings. Catalogue is empty so it renders "Coming Soon" — but it **is** in nav, footer and home chips, so it gets real traffic | ✅ traffic, no products |
+| 14 | ⚠ Shop — product | PRODUCT | matches regex | `^/shop/[^/]+$` | Product detail. `notFound()` on the empty catalogue | **Zero** until shop launches |
+| 15 | ⚠ Purchase success | CONFIRMATION | matches regex | `^/(purchase-success\|checkout/success\|mini-draw-success\|upsell-success)` | All four are Stripe `return_url`s only — nothing links or pushes to them. Only a **subscription 3DS challenge** actually lands here | **Near-zero** by design |
+| 16 | Account — dashboard | MY ACCOUNT | matches exactly | `/my-account` | Member dashboard; post-login destination | ✅ |
+| 17 | Account — draws | MY ACCOUNT | matches exactly | `/my-account/draws` | Member's entries / draw history | ✅ |
+| 18 | Account — membership | MY ACCOUNT | matches exactly | `/my-account/membership` | Plan management; cancellation is modal-driven | ✅ |
+| 19 | Account — rewards | MY ACCOUNT | matches exactly | `/my-account/rewards` | Rewards tab (`/my-account/benefits` 307s here) | ✅ |
+| 20 | Account — rewards catalogue | MY ACCOUNT | matches exactly | `/my-account/rewards/catalogue` | Partner-discount catalogue browse | ✅ |
+| 21 | ⚠ Account — settings | MY ACCOUNT | matches exactly | `/my-account/settings` | **Canary.** In `EXCLUDED_TRACKING_PREFIXES`, so our tracker never sends a pageview | **Zero expected** |
+| 22 | Account — support | HELP / SUPPORT | matches exactly | `/my-account/support` | In-account support surface | ✅ |
+| 23 | Partner discount | OFFERS & SERVICES | matches exactly | `/discount` | Member partner-discount surface; in nav with a "new" dot | ✅ |
+| 24 | ⚠ Rewards (public) | OFFERS & SERVICES | matches exactly | `/rewards` | Auth-gated **and** flag-gated (`REWARDS_ENABLED=false`); nav link hidden; renders a paused message | **Zero** while flag off |
+| 25 | Become a partner (B2B) | FORM | matches exactly | `/partner` | **B2B lead form** — "Become a Partner". *Not* a member perk | ✅ |
+| 26 | Portal transit | OFFERS & SERVICES | matches exactly | `/portal-transit` | `noindex` interstitial during partner-portal SSO hand-off | ✅ rare |
+| 27 | Draw results & winners | PRESS / NEWS | matches regex | `^/(draw-results\|winners)` | Past results and winner stories | ✅ |
+| 28 | Auth | FORM | matches regex | `^/(login\|reset-password\|oauth-redirect\|staff-setup)` | Login navigates for real, then pushes `/my-account` | ✅ |
+| 29 | Help & support | HELP / SUPPORT | matches regex | `^/(faq\|contact)` | Public help surfaces | ✅ |
+| 30 | Legal & policy | INFORMATION / LEGALS | matches regex | `^/(privacy\|terms\|competition-term-majordraw)` | Policy + competition terms | ✅ |
+| 31 | ⚠ Internal — should be empty | OTHERS | matches regex | `^/(admin\|affiliate\|dev\|test-pixels\|email-preview)` | **Canary** — all in `EXCLUDED_TRACKING_PREFIXES` | **Zero expected** |
+| 32 | ⚠ Promotions — unclassified | OTHERS | starts with | `/promotions` | **Canary** — a `/promotions/*` slug with no hyphen that is not one of the six toolsets | **Zero expected** |
+| 33 | Account — other | MY ACCOUNT | starts with | `/my-account` | Catch-all for future sub-pages | ✅ |
 
 ## Routes that are NOT pages — deliberately absent
 
@@ -93,7 +94,7 @@ There is also **no `/cart` and no `/checkout` index** — the cart is a Header s
 
 Two templates live under `/promotions/` and must not share a group:
 
-- **Toolset landings** — the five static routes in `TOOLSET_LANDING_SLUGS`
+- **Toolset landings** — the six static routes in `TOOLSET_LANDING_SLUGS`
   ([promo-landing-slugs.ts](../../src/config/promo-landing-slugs.ts)). Split individually because
   Page Comparator compares page *groups*, and "does Makita beat Milwaukee" is the question paid
   traffic raises.

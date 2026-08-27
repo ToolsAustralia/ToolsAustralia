@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 
 import Link from "next/link";
 
-import { Eye, EyeOff, Shield, Star, Gift, Zap, Ticket, type LucideIcon } from "lucide-react";
+import { Eye, EyeOff, Shield, Star, Gift, Zap, Ticket, Smartphone, ArrowLeft, type LucideIcon } from "lucide-react";
 
 import Image from "next/image";
 
@@ -107,10 +107,10 @@ function SquareCheckbox({
   );
 }
 
-// Rotating Toolset Card — cycles Milwaukee → DeWalt → Makita → Ryobi every 3.5s.
+// Rotating Toolset Card — cycles Milwaukee → DeWalt → Makita → Ryobi → HiKOKI → STIHL every 3.5s.
 // Card surface tints to the active brand so Ryobi's lime brand never sits on white.
 
-const TOOLSETS = ["milwaukee", "dewalt", "makita", "ryobi", "hikoki"] as const;
+const TOOLSETS = ["milwaukee", "dewalt", "makita", "ryobi", "hikoki", "stihl"] as const;
 type ToolsetKey = (typeof TOOLSETS)[number];
 
 const KIT_PIECE_COUNT_LABEL: Record<ToolsetKey, string> = {
@@ -119,6 +119,7 @@ const KIT_PIECE_COUNT_LABEL: Record<ToolsetKey, string> = {
   makita: "15 PIECE KIT",
   ryobi: "19 PIECE KIT",
   hikoki: "15 PIECE KIT",
+  stihl: "10 PIECE KIT",
 };
 
 const TOOLSET_DISPLAY_NAME: Record<ToolsetKey, string> = {
@@ -127,6 +128,7 @@ const TOOLSET_DISPLAY_NAME: Record<ToolsetKey, string> = {
   makita: "Makita",
   ryobi: "Ryobi",
   hikoki: "HiKOKI",
+  stihl: "STIHL",
 };
 
 // Same brand color-key mapping the prize builder uses (prize-selection/constants.ts).
@@ -135,6 +137,7 @@ function getToolsetColorKey(toolset: ToolsetKey): string {
   if (toolset === "dewalt") return "dewalt-yellow";
   if (toolset === "makita") return "makita-teal";
   if (toolset === "hikoki") return "hikoki-green";
+  if (toolset === "stihl") return "stihl-orange";
   return "ryobi-green";
 }
 
@@ -145,6 +148,7 @@ const TINT_ALPHA_LIGHT: Record<ToolsetKey, number> = {
   makita: 0.1,
   ryobi: 0.12,
   hikoki: 0.1,
+  stihl: 0.1,
 };
 const TINT_ALPHA_DARK: Record<ToolsetKey, number> = {
   milwaukee: 0.18,
@@ -152,6 +156,7 @@ const TINT_ALPHA_DARK: Record<ToolsetKey, number> = {
   makita: 0.16,
   ryobi: 0.18,
   hikoki: 0.16,
+  stihl: 0.16,
 };
 
 // Animated badge content paired 1:1 with each brand — chip swaps in sync with the toolset.
@@ -162,6 +167,7 @@ const BADGE_CONFIG: Record<ToolsetKey, { icon: LucideIcon; title: string; subtit
   makita: { icon: Gift, title: "Membership", subtitle: "Exclusive Offers" },
   ryobi: { icon: Zap, title: "Major Draw", subtitle: "Live Every 27th" },
   hikoki: { icon: Ticket, title: "Free Entries", subtitle: "Into Every Draw" },
+  stihl: { icon: Gift, title: "New This Draw", subtitle: "STIHL Outdoor Power" },
 };
 
 const ROTATION_INTERVAL_MS = 3500;
@@ -416,6 +422,24 @@ function LoginPageContent() {
 
   const [error, setError] = useState("");
 
+  // ── SMS sign-in ────────────────────────────────────────────────────────────
+  // The recovery path for a member whose email is wrong or unverified: the
+  // password form and "Forgot password?" both dead-end for them, because every
+  // other route back in goes through an inbox they cannot read.
+  const [smsStep, setSmsStep] = useState<"off" | "mobile" | "code">("off");
+  const [smsMobile, setSmsMobile] = useState("");
+  const [smsCode, setSmsCode] = useState("");
+  const [smsBusy, setSmsBusy] = useState(false);
+  const [smsError, setSmsError] = useState("");
+  /** Seconds until a resend is allowed; drives the countdown on the button. */
+  const [smsCooldown, setSmsCooldown] = useState(0);
+
+  useEffect(() => {
+    if (smsCooldown <= 0) return;
+    const timer = setTimeout(() => setSmsCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [smsCooldown]);
+
   const router = useRouter();
 
   const { data: session, status } = useSession();
@@ -662,6 +686,86 @@ function LoginPageContent() {
     }
   };
 
+  /**
+   * Request an SMS sign-in code.
+   *
+   * The response is deliberately uniform — it does not say whether the number has
+   * an account (mobile numbers are enumerable, so a distinguishable reply would
+   * make this a customer-list oracle). So we always advance to the code step and
+   * show what the server said, rather than branching on whether a code was sent.
+   */
+  const handleSendSmsCode = async () => {
+    setSmsBusy(true);
+    setSmsError("");
+
+    try {
+      const res = await fetch("/api/auth/send-mobile-login-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobile: smsMobile }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setSmsError(data.error || "We couldn't send a code. Please try again.");
+        // A 429 carries the wait; start the countdown so the button self-heals.
+        if (typeof data.retryAfterSeconds === "number") setSmsCooldown(data.retryAfterSeconds);
+        return;
+      }
+
+      setSmsStep("code");
+      setSmsCooldown(60);
+    } catch {
+      setSmsError("Something went wrong. Please check your connection and try again.");
+    } finally {
+      setSmsBusy(false);
+    }
+  };
+
+  /** Verify the code, then exchange the bridge token for a session. */
+  const handleVerifySmsCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSmsBusy(true);
+    setSmsError("");
+
+    try {
+      const res = await fetch("/api/auth/verify-mobile-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobile: smsMobile, code: smsCode }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.token) {
+        setSmsError(data.error || "That code isn't valid. Please request a new one.");
+        return;
+      }
+
+      // Same bridge the emailed-code path uses: a 15-minute JWT swapped for the
+      // real session by the NextAuth `auto-login` provider.
+      const result = await signIn("auto-login", { token: data.token, redirect: false });
+      if (result?.error) {
+        setSmsError(
+          result.error === "ACCOUNT_DEACTIVATED"
+            ? "This account has been deactivated. Please contact an administrator."
+            : "We couldn't complete sign-in. Please try again."
+        );
+        return;
+      }
+      // The existing session useEffect handles the redirect once it updates.
+    } catch {
+      setSmsError("Something went wrong. Please check your connection and try again.");
+    } finally {
+      setSmsBusy(false);
+    }
+  };
+
+  const exitSmsMode = () => {
+    setSmsStep("off");
+    setSmsCode("");
+    setSmsError("");
+  };
+
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
 
@@ -736,6 +840,100 @@ function LoginPageContent() {
 
           {/* Form Section */}
 
+          {smsStep !== "off" ? (
+            /* ── SMS sign-in ──────────────────────────────────────────────
+               Replaces the password form rather than sitting beside it: a
+               member who lands here cannot use the other options, so showing
+               them alongside is noise. */
+            <div className="space-y-3 sm:space-y-4">
+              <button
+                type="button"
+                onClick={exitSmsMode}
+                className="inline-flex items-center gap-1.5 text-[13px] sm:text-[14px] font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to sign in
+              </button>
+
+              {/* No heading here: the page already says "Sign in", and the
+                  placeholder / button carry the rest. On the code step one line
+                  is unavoidable — the member needs to see which number it went
+                  to, to catch a typo before burning another of their 3 a day. */}
+              {smsStep === "code" && (
+                <p className="text-[13px] sm:text-[14px] text-neutral-600 dark:text-neutral-400">
+                  Code sent to{" "}
+                  <span className="font-semibold text-neutral-900 dark:text-neutral-100">{smsMobile}</span>
+                </p>
+              )}
+
+              {smsStep === "mobile" ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleSendSmsCode();
+                  }}
+                  className="space-y-3"
+                >
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    name="smsMobile"
+                    aria-label="Mobile number"
+                    value={smsMobile}
+                    onChange={(e) => setSmsMobile(e.target.value)}
+                    className="w-full h-[45px] sm:h-[50px] lg:h-[59px] px-4 py-4 border border-[#d9d9d9] dark:border-neutral-600 rounded-[10px] text-[14px] sm:text-[16px] lg:text-[18px] text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
+                    placeholder="Mobile number (e.g. 0412 345 678)"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={smsBusy || !smsMobile.trim() || smsCooldown > 0}
+                    className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-red-500 text-white rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-[#d40000] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {smsBusy ? "Sending..." : smsCooldown > 0 ? `Try again in ${smsCooldown}s` : "Send me a code"}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifySmsCode} className="space-y-3">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    name="smsCode"
+                    aria-label="Six-digit sign-in code"
+                    maxLength={6}
+                    value={smsCode}
+                    onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, ""))}
+                    className="w-full h-[45px] sm:h-[50px] lg:h-[59px] px-4 py-4 border border-[#d9d9d9] dark:border-neutral-600 rounded-[10px] text-center text-[20px] sm:text-[24px] lg:text-[28px] font-semibold tracking-[0.4em] text-neutral-900 dark:text-neutral-100 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all duration-200"
+                    placeholder="------"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={smsBusy || smsCode.length !== 6}
+                    className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-red-500 text-white rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-[#d40000] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {smsBusy ? "Verifying..." : "Sign in"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSendSmsCode()}
+                    disabled={smsBusy || smsCooldown > 0}
+                    className="w-full text-[13px] sm:text-[14px] font-medium text-red-600 hover:underline disabled:text-neutral-400 dark:disabled:text-neutral-500 disabled:no-underline disabled:cursor-not-allowed"
+                  >
+                    {smsCooldown > 0 ? `Resend code in ${smsCooldown}s` : "Resend code"}
+                  </button>
+                </form>
+              )}
+
+              {smsError && (
+                <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-900 p-3 rounded-lg">
+                  {smsError}
+                </div>
+              )}
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-2 sm:space-y-3 lg:space-y-4">
             {/* Email Field */}
 
@@ -839,18 +1037,35 @@ function LoginPageContent() {
               <div className="flex-1 h-px bg-[#d9d9d9] dark:bg-neutral-600"></div>
             </div>
 
-            {/* Google Sign In */}
+            {/* Alternative sign-in methods — Google and SMS share one row so
+                neither reads as the fallback. Both use identical styling; only
+                the icon and label differ. */}
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={isLoading}
+                className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-white dark:bg-neutral-900 border border-[#e6e8e7] dark:border-neutral-600 text-neutral-900 dark:text-neutral-100 rounded-[10px] font-semibold text-[13px] sm:text-[15px] lg:text-[16px] tracking-[-0.18px] hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.03)] dark:shadow-none"
+              >
+                <GoogleIcon />
+                Sign in
+              </button>
 
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={isLoading}
-              className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-white dark:bg-neutral-900 border border-[#e6e8e7] dark:border-neutral-600 text-neutral-900 dark:text-neutral-100 rounded-[10px] font-semibold text-[14px] sm:text-[16px] lg:text-[18px] tracking-[-0.18px] hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.03)] dark:shadow-none"
-            >
-              <GoogleIcon />
-              Sign in with Google
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSmsStep("mobile");
+                  setSmsError("");
+                }}
+                disabled={isLoading}
+                className="w-full h-[42px] sm:h-[48px] lg:h-[54px] bg-white dark:bg-neutral-900 border border-[#e6e8e7] dark:border-neutral-600 text-neutral-900 dark:text-neutral-100 rounded-[10px] font-semibold text-[13px] sm:text-[15px] lg:text-[16px] tracking-[-0.18px] hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0px_1px_2px_0px_rgba(0,0,0,0.03)] dark:shadow-none"
+              >
+                <Smartphone className="w-4 h-4 sm:w-5 sm:h-5" />
+                SMS sign in
+              </button>
+            </div>
           </form>
+          )}
 
           {/* Sign Up Link */}
 

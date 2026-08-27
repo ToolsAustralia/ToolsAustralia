@@ -138,6 +138,10 @@ export class DrawGrantService {
           "bonus-entry-promo": 0,
           "cancellation-upsell": 0,
           streak: 0,
+          // This service never grants shop entries (see DrawGrantSourceKey above),
+          // but the fresh row must still carry every bucket or the first reader
+          // of a brand-new row hits a missing key.
+          shop: 0,
           [sourceKey]: entries,
         },
         firstAddedDate: now,

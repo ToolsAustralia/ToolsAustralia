@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, type CSSProperties } from "react";
-import { Clock, Calendar, Truck, Zap, Shield, IdCard } from "lucide-react";
+import { Shield } from "lucide-react";
 import { useCurrentMajorDraw } from "@/hooks/queries/useMajorDrawQueries";
 
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
@@ -85,27 +85,6 @@ export default function GiveawayDetails() {
     }
   }, [currentMajorDraw, isMounted]);
 
-  const details = [
-    {
-      icon: Clock,
-      title: `Entries Close (${formattedDates.timezone || ""})`,
-      description: !isMounted || isLoading ? "TBA" : formattedDates.entriesClose,
-    },
-    {
-      icon: Calendar,
-      title: `Draw Date (${formattedDates.timezone || ""})`,
-      description: !isMounted || isLoading ? "TBA" : formattedDates.drawDate,
-    },
-    { icon: Truck, title: "Delivery", description: "Australia-wide, free of charge" },
-    { icon: Zap, title: "We'll Call You", description: "Winner contacted by phone at the draw" },
-    {
-      icon: Shield,
-      title: "Eligibility",
-      description: "Open to all Australian residents 18+ (Excluding SA & ACT)",
-    },
-    { icon: IdCard, title: "License Numbers", description: `ABN: 54 690 397 061 | ${NSW_LICENSE} | ${NTP_NUMBER}` },
-  ];
-
   const datesReady = isMounted && !isLoading;
 
   /**
@@ -180,7 +159,25 @@ export default function GiveawayDetails() {
         </div>
 
         {/* MOBILE — three-step timeline, then the logistics as a compact fact grid. */}
-        <div className="lg:hidden">
+        {/*
+          ONE layout at every width — the design that used to be mobile-only.
+
+          There were two: this numbered rail plus a compact fact grid below the lg
+          breakpoint, and a separate six-card logistics grid above it. They said the
+          same things in a different order with different copy weights, so the page a
+          customer described on the phone was not the page a colleague saw on a
+          laptop, and every copy change had to be made twice or silently diverge.
+
+          The numbered rail is the better of the two: it reads as a SEQUENCE (pick,
+          land, drawn) which is what a first-time visitor is actually asking, and the
+          fact grid keeps the dates and eligibility one glance away without competing
+          for the same visual weight.
+
+          Capped at max-w-2xl and centred: the rail is a reading column, and stretched
+          across a 1440px viewport its one-line steps would sit in a metre of empty
+          space.
+        */}
+        <div className="mx-auto max-w-2xl">
           <ol className="relative list-none pl-[34px]">
             {/* The rail stops 14px short at each end so it starts and finishes on a marker
                 rather than running past the first and last step. */}
@@ -206,7 +203,7 @@ export default function GiveawayDetails() {
             ))}
           </ol>
 
-          <div className="mt-1.5 grid grid-cols-2 gap-2">
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
             {facts.map((fact) => (
               <div
                 key={fact.label}
@@ -228,44 +225,6 @@ export default function GiveawayDetails() {
           </div>
         </div>
 
-        {/* DESKTOP — the original six-card logistics grid. */}
-        <div className="hidden lg:grid lg:grid-cols-2 lg:gap-4">
-          {details.map((detail, index) => (
-            <div
-              key={index}
-              className="relative group bg-gradient-to-br from-gray-900 via-gray-800 to-black backdrop-blur-sm rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-gray-700 transition-all duration-300 hover:shadow-[0_8px_32px_var(--hiw-hover-glow)] hover:border-[color:var(--hiw-hover-border)]"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none z-10 rounded-lg" />
-
-              <div className="relative z-20 px-3 py-3 sm:px-4 sm:py-3.5">
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <div className="relative flex-shrink-0">
-                    <div
-                      className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg border border-gray-600 bg-gradient-to-br from-gray-800 via-gray-800/90 to-black shadow-[0_4px_16px_rgba(0,0,0,0.35)] relative overflow-hidden"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-transparent rounded-lg pointer-events-none" />
-                      <detail.icon
-                        className="relative z-10 h-3.5 w-3.5 sm:h-4 sm:w-4"
-                        style={{ color: theme.primary }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-medium text-sm sm:text-lg font-sans leading-tight text-white">
-                      {detail.title}
-                    </h3>
-                    <div className="mt-2 border-t border-gray-700 pt-2 sm:mt-2.5 sm:pt-2.5">
-                      <p className="text-sm leading-snug text-gray-300 font-sans sm:text-base sm:leading-relaxed">
-                        {detail.description}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
       </SectionContainer>
     </section>
   );

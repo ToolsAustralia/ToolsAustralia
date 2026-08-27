@@ -35,6 +35,8 @@ import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 import { CampaignCodeValidationService } from "@/services/redeemables/CampaignCodeValidationService";
 
+import { claimMobileForNewUser } from "@/utils/auth/claim-mobile";
+
 // Rate limit: 20 create-subscription requests per minute per IP
 const createSubscriptionRateLimiter = createRateLimiter("create-subscription", {
   windowMs: 60 * 1000,
@@ -734,7 +736,7 @@ export async function POST(request: NextRequest) {
         lastName: validatedData.lastName,
         email: validatedData.userEmail,
         password: hashedPassword, // Will be undefined for passwordless users
-        mobile: cleanedMobile,
+        mobile: await claimMobileForNewUser(cleanedMobile, "create-subscription"),
         role: "user",
         stripeCustomerId: customer.id,
         stripeSubscriptionId: shouldWriteCanonicalStripeSubscriptionId(subscription.status)

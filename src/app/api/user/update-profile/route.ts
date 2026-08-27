@@ -6,6 +6,7 @@ import User from "@/models/User";
 import { z } from "zod";
 import { AUSTRALIAN_STATES } from "@/data/australianStates";
 import { GENDER_VALUES, type GenderValue } from "@/data/genders";
+import { normaliseAuMobile } from "@/lib/sms";
 
 const updateProfileSchema = z.object({
   mobile: z
@@ -66,9 +67,24 @@ export async function POST(request: NextRequest) {
     }
 
     if (typeof parsed.data.mobile === "string") {
-      const newMobile = parsed.data.mobile;
+      // NORMALISE BEFORE COMPARING. This check used to run against the raw input
+      // while the model's pre-save hook normalised on write — so typing
+      // "0412345678" when another account held "+61412345678" passed the check,
+      // then became a duplicate a moment later. That mismatch is how the 109
+      // duplicate numbers in production were created; see the migration at
+      // scripts/migrate-normalise-mobiles.ts.
+      const newMobile = normaliseAuMobile(parsed.data.mobile);
+      if (!newMobile) {
+        return NextResponse.json(
+          {
+            error: "Invalid mobile number",
+            field: "mobile",
+            message: "Please enter a valid Australian mobile number.",
+          },
+          { status: 400 }
+        );
+      }
 
-      // Ensure the new mobile number is not already used by another user
       const existingUserWithMobile = await User.findOne({
         mobile: newMobile,
         _id: { $ne: user._id },
@@ -83,6 +99,16 @@ export async function POST(request: NextRequest) {
           },
           { status: 400 }
         );
+      }
+
+      // A NEW number is an unverified number. Without this the member keeps a
+      // green "Verified" chip — and SMS sign-in access — on a number nobody has
+      // proven they hold. `update-email` has always done the equivalent.
+      if (user.mobile !== newMobile) {
+        user.isMobileVerified = false;
+        user.smsOtpHash = undefined;
+        user.smsOtpExpires = undefined;
+        user.smsOtpAttempts = 0;
       }
 
       user.mobile = newMobile;

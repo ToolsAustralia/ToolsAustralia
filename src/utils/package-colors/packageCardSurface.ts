@@ -227,3 +227,46 @@ export function getPackageCardSurface(
     theme,
   };
 }
+
+/**
+ * The full colour scheme a package should paint with, INCLUDING the three cross-tier
+ * remaps that `resolveLightBody` above already applies to card backgrounds.
+ *
+ * Returns a whole SCHEME rather than one colour, because a surface usually needs more
+ * than the accent. The header badge paints `badgeStyle.background` and falls back to
+ * the accent only when that is absent — so remapping the accent alone left it filled
+ * from the ORIGINAL tier and outlined from the remapped one.
+ *
+ * That is the bug this exists for: membership Tradie rendered #5ca9ec on the badge
+ * while its own card rendered #00E5FF, and because getMembershipSectionColorScheme
+ * returns the SAME value for `tradie-subscription` and `tradie-pack`, the badge read
+ * as the ONE-TIME pack's colour to anyone comparing the two.
+ *
+ * Import this rather than calling a scheme getter directly.
+ */
+export function getRemappedPackageScheme(
+  planId: string,
+  isMembershipTab: boolean
+): PackageColorScheme {
+  const lowerId = planId.toLowerCase();
+  const isTradie = lowerId.includes("tradie");
+  const isBoss = lowerId.includes("boss");
+
+  // Membership Tradie borrows the one-time Foreman scheme (electric cyan).
+  if (isTradie && isMembershipTab) return getElectricPackageColorScheme("foreman-pack");
+  // One-time Boss borrows the membership Foreman scheme (DeWalt yellow).
+  if (isBoss && !isMembershipTab) {
+    return getMembershipSectionColorScheme("foreman-subscription", true);
+  }
+  // Membership Boss borrows the one-time Power scheme (electric red).
+  if (isBoss && isMembershipTab) return getElectricPackageColorScheme("power-pack");
+
+  return isMembershipTab
+    ? getMembershipSectionColorScheme(planId, true)
+    : getElectricPackageColorScheme(planId);
+}
+
+/** The accent alone, for surfaces painting a border, a dot or a piece of text. */
+export function getPackageAccentHex(planId: string, isMembershipTab: boolean): string {
+  return getRemappedPackageScheme(planId, isMembershipTab).accentHex;
+}

@@ -51,7 +51,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "3",
       question: "What can I win?",
       answer:
-        "Each month's Grand Winner builds their own prize. They match any toolbox (Monster Milwaukee, 470-piece Kincrome CONTOUR®, 356-piece Sidchrome, or the new 288-piece GEARWRENCH tool set & mobile workstation) with any power toolset (Milwaukee, DeWalt, Makita, Ryobi, or HiKOKI — each kit ships with its own brand storage system), and we add a $5,000 cash bonus on top. Or they skip the gear entirely and take a single $10,000 AUD tax-free cash prize straight to their bank account. You can build and preview any combination on the prize showcase on our [home page](/).",
+        "Each month's Grand Winner builds their own prize. They match any toolbox (Monster Milwaukee, 470-piece Kincrome CONTOUR®, 356-piece Sidchrome, or the 288-piece GEARWRENCH tool set & mobile workstation) with any power toolset (Milwaukee, DeWalt, Makita, Ryobi, HiKOKI, or the new STIHL outdoor power kit — the first five each ship with their own brand storage system, and the STIHL kit comes with two AP 300 S batteries and an AL 301 charger). Or they skip the gear entirely and take a single $10,000 AUD tax-free cash prize straight to their bank account. That cash option is the only cash in the prize — a tool combination does not come with a cash bonus on top. You can build and preview any combination on the prize showcase on our [home page](/).",
       category: "SHOPPING",
     },
     {
@@ -116,7 +116,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "12",
       question: "Are membership fees refundable?",
       answer:
-        "Membership fees are non-refundable once purchased. If you cancel mid-cycle, you will not receive a refund for the unused portion of your membership period — however, your entries for that cycle remain valid and you keep access to your member benefits until the cycle ends. Your rights under Australian Consumer Law are always preserved.",
+        "Membership fees are non-refundable once purchased. If you cancel mid-cycle, you will not receive a refund for the unused portion of your membership period — however, your entries for that cycle remain valid and you keep access to your member benefits until the cycle ends. There are two exceptions: anything required by Australian Consumer Law, and a **genuine purchase error** reported within 48 hours of the payment (see the [Major Giveaway terms](/competition-term-majordraw), Part A, section 5). Your rights under Australian Consumer Law are always preserved.",
       category: "PAYMENTS",
     },
     {
@@ -138,7 +138,19 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "15",
       question: "Is the online shop available?",
       answer:
-        "Our member shop is coming soon. When it launches, members will receive a shop discount based on their tier — Tradie 5%, Foreman 10%, Boss 20%. We will announce the launch date to all members.",
+        "Yes — you can browse and buy from the shop at [/shop](/shop). Members get a discount based on tier: Tradie 10%, Foreman 15%, Boss 25%, applied automatically at checkout. Delivery is a flat $10 on every order, with no minimum to reach. You'll need an account to check out, so your order and delivery details stay attached to you.",
+      category: "REWARDS",
+    },
+    {
+      id: "88",
+      question: "Do I get free entries when I buy merchandise?",
+      // Deliberately conditional ("where an item includes"). Entries on merchandise
+      // are gated on a trade-promotion permit variation and ship switched off, so
+      // this must read true BOTH before and after they are enabled. Do not rewrite
+      // it into a flat promise until the permit is confirmed — and if the answer is
+      // no, this entry stays correct as written.
+      answer:
+        "Where a shop item includes free entries, the number is shown right on the product page before you buy, and again on your order confirmation. The entries are a free inclusion with the item — you're buying the product itself, never the entries. Any included entries go into the monthly major prize draw and are credited as soon as your payment clears. If a promotion is running, the product page shows the boosted total before you check out. See [/terms](/terms) for the full conditions.",
       category: "REWARDS",
     },
 
@@ -283,7 +295,7 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "32",
       question: "How do I log in, or what if I can't?",
       answer:
-        "Sign in with your email and password from the [login page](/login), or use **Sign in with Google**. **Forgot your password?** On the login page tap **\"Forgot password?\"** (or go straight to [reset your password](/reset-password)), enter the email you joined with, and we'll email you a **single-use reset link** — it stays valid for 24 hours, and you can request a new one every 5 minutes. Open the link, choose a new password, and you're back in. Two things that catch people out: **\"Sign in with Google\"** only works if you already have an account with that email (otherwise register first), and if you get **\"no account found\"** when resetting, double-check the email address you used to join. Still stuck? [Contact us](/contact) and we'll help.",
+        "Three ways in from the [login page](/login): **email and password**, **Google**, or **SMS sign in** (a 6-digit code texted to the mobile on your account). **Forgot your password?** Tap **\"Forgot password?\"** (or [reset it here](/reset-password)), enter the email you joined with, and we'll email a single-use link — valid 24 hours, one request every 5 minutes. **Can't get into your email at all?** Use **SMS sign in** — it needs only your mobile, so it works when the email on your account is wrong. Up to 3 codes a day, a minute apart. Catches people out: Google only works if an account already uses that email, and SMS needs an Australian mobile already on your account. Still stuck? [Contact us](/contact).",
       category: "PAYMENTS",
     },
     {
@@ -311,14 +323,14 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
       id: "36",
       question: "Do your prices include GST?",
       answer:
-        "All prices are shown in Australian dollars. Entries into our draws are GST-free, so your membership and pack tax invoices show a GST amount of $0.00. (When our member shop launches, physical products in the shop will include 10% GST.) For anything specific about a tax invoice, [contact us](/contact).",
+        "All prices are shown in Australian dollars, GST included — the 10% is already inside the price and is never added on top at checkout. Entries into our draws are GST-free, so your membership and pack tax invoices show a GST amount of $0.00. Shop orders do carry GST: the 10% is already inside the price on the product page, and your checkout summary and order confirmation email report it as the \"Includes GST\" share of what you paid (delivery sits inside that figure too). For anything specific about a tax invoice, [contact us](/contact).",
       category: "PAYMENTS",
     },
     {
       id: "37",
       question: "How do I update my card or account details?",
       answer:
-        "It's all self-service in [My Account](/my-account) when you're signed in: update your saved card and payment details on your [Membership](/my-account/membership) page (Payment), manage your plan there via **Manage plan**, and update your profile (trade, state, email) in [Settings](/my-account/settings). Your state matters because it affects draw eligibility. I can't make these changes for you from here, but they're quick to do there.",
+        "It's all self-service in [My Account](/my-account) when you're signed in: update your saved card and payment details on your [Membership](/my-account/membership) page (Payment), manage your plan there via **Manage plan**, and update your profile (trade, state, mobile, email) in [Settings](/my-account/settings). Settings also shows whether your **email and mobile** are verified, each with a Verify button. Your state matters because it affects draw eligibility. I can't make these changes for you from here, but they're quick to do there.",
       category: "PAYMENTS",
     },
     {
@@ -369,9 +381,16 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
     // ── ACCOUNT & AUTH ───────────────────────────────────────────────────────
     {
       id: "44",
-      question: "Do I have to verify my email to use my membership?",
+      question: "Do I have to verify my email or mobile?",
       answer:
-        "No — verifying your email is optional and never required to use your membership or to receive your free entries. Your account works and your entries are granted whether or not your email is verified. The one place it matters is signing in with an emailed one-time code — for that we need to confirm your address. You can always verify later from [My Account → Settings](/my-account/settings).",
+        "Yes — **one** of them, and you pick which. We ask once while you set up your account after your first purchase. It takes seconds, and it's what gets you back in if you forget your password. Your entries are never affected either way. Confirm or change either anytime in [My Account → Settings](/my-account/settings).",
+      category: "ALL QUESTIONS",
+    },
+    {
+      id: "94",
+      question: "I never got my SMS code",
+      answer:
+        "Codes go **only to the Australian mobile on your account** — if that number is wrong, use email or [contact us](/contact). They last **10 minutes**; up to **3 a day**, a minute apart. Never bought a membership or pack? No code is sent — join from the [membership page](/membership) first.",
       category: "ALL QUESTIONS",
     },
     {
@@ -696,23 +715,95 @@ export function getSupportChatFaqEntries(): FaqEntry[] {
         "That depends on timing. Waiting is fine if there's still a while before the next Major Draw on the 27th — the block clears on its own in about three days and costs you nothing. But if the draw is close, adding a different card on your [Membership](/my-account/membership) page is the better move, because it applies immediately. To be clear about what's actually at stake: free entries you've already earned stay in that draw regardless — being past-due never removes them — but the free entries included with your renewal are only credited once the payment goes through. So the sooner the renewal succeeds, the sooner those land.",
       category: "PAYMENTS",
     },
-    // -- BONUS CODES (per-customer, personal deadline) -----------------------
+    // ── COMPETITION TERMS — the /competition-term-majordraw refund rules ──────
+    // Added 2026-08-24 (draw 10). A member asked about the refund policy, was given the
+    // membership-only "non-refundable" line, and pushed back citing the 48-hour clause on
+    // our OWN terms page — which Cobber then called an "external link" it could not read.
+    // The page was in neither [key-pages] nor the knowledge pack, so there was nothing to
+    // ground on. These two entries plus the [competition-terms] pack section close that.
     {
       id: "86",
+      question: "I bought a pack or membership by mistake — can I get a refund?",
+      answer:
+        "Possibly, if you tell us quickly. Once free entries have been allocated a purchase is normally final, but the [Major Giveaway terms](/competition-term-majordraw) make an exception for a **genuine purchase error reported within 48 hours** of payment — on top of anything Australian Consumer Law requires. Email our support team within that window with your receipt or transaction ID and a short note on what went wrong, and they will review it. [Contact us](/contact) and I can pass this to a human who can look at your specific payment — I can't decide a refund myself.",
+      category: "PAYMENTS",
+    },
+    {
+      id: "87",
+      question: "What kinds of refund requests are not accepted?",
+      answer:
+        "The [Major Giveaway terms](/competition-term-majordraw) rule out three situations: requests lodged after the draw has already been conducted, change-of-mind once your free entries have been allocated, and duplicate or incorrect package claims with no verifiable technical evidence. Not winning is never grounds for a refund on its own — but genuine technical errors or system failures before the draw are, as is anything Australian Consumer Law requires. If you think one of those applies to you, [contact us](/contact) and a human will review it.",
+      category: "PAYMENTS",
+    },
+
+    // ── MERCHANDISE SHOP (2026-08-19) ────────────────────────────────────────
+    // The shop went live with only two grounded entries (15 = it exists + the
+    // money, 88 = entries on an item), so "where is my order" — the question a
+    // shop gets more than any other — had no answer at all, and Cobber is
+    // forbidden from inventing one. Every figure below is imported-in-spirit from
+    // the code that produces it: the status words are `STATUS_LABEL` in
+    // src/app/(site)/my-account/orders/page-client.tsx, the delivery rule is
+    // `priceCart` (src/utils/shop/pricing.ts) reading SHOP_CONFIG, and the
+    // returns wording matches the Shipping & Returns tab on the product page.
+    // No delivery ETA is quoted anywhere: print turnaround is supplier-dependent
+    // and unconfirmed, so a number here would be a guess told to a paying customer.
+    {
+      id: "89",
+      question: "Where's my order — how do I track it?",
+      answer:
+        "Every order you've placed is in [My Account → Orders](/my-account/orders) when you're signed in, newest first, with what you ordered and the size and colour you picked. Each one carries a status: **Awaiting payment**, **Being made**, **On its way**, **Delivered**, **Complete** or **Cancelled** — and once it's with the courier, the tracking number shows on that order. You'll also get a confirmation email as soon as your payment clears. I can't see your account from here, so I can't look an order up for you — if something looks wrong there, [contact us](/contact) with your order number.",
+      category: "REWARDS",
+    },
+    {
+      id: "90",
+      question: "How long will my shop order take, and why does it say \"Made to order\"?",
+      answer:
+        "Each garment is printed after you order it, in the colour and size you chose — nothing sits in a warehouse waiting, so \"Made to order\" is normal and never means sold out. That printing step is why it takes longer to reach you than something picked off a shelf, and we'd rather not quote a delivery date we can't stand behind. Your order reads **Being made** while it's in production and **On its way** once it's shipped, with the tracking number on it — both on [My Account → Orders](/my-account/orders).",
+      category: "REWARDS",
+    },
+    {
+      id: "91",
+      question: "How much is delivery, and do you ship outside Australia?",
+      answer:
+        "Delivery is a flat $10 on every order — there's no minimum spend to reach and no threshold to work out, so the delivery line is the same whatever's in your cart and whatever your member discount is. Checkout shows it before you pay. We deliver within Australia only: the checkout address form takes the eight Australian states and territories, so we can't send an order overseas at this stage.",
+      category: "REWARDS",
+    },
+    {
+      id: "92",
+      question: "My order arrived faulty, damaged or wrong — what do I do?",
+      answer:
+        "[Contact us](/contact) with your order number and a photo, and we'll replace it or refund it — return postage is on us. If the print itself cracks or peels in ordinary wear and washing, tell us and we'll sort that out too. The one thing we can't do is a change-of-mind return: each garment is printed to order in your chosen colour and size, so there's no way to resell it — worth double-checking your size before you order. None of this limits your rights under Australian Consumer Law.",
+      category: "REWARDS",
+    },
+    {
+      id: "93",
+      question: "Does my membership discount apply in the shop, and does a one-time pack count?",
+      answer:
+        "Yes — while your membership is active your shop discount comes off automatically at checkout (Tradie 10%, Foreman 15%, Boss 25%), across the whole shop, with no code to enter. It's a membership benefit only: one-time packs and Mini Packs carry no shop discount, and a membership that's paused, past due or cancelled doesn't discount either — settling a past-due payment switches it straight back on. Your tier is on [My Account → Membership](/my-account/membership).",
+      category: "REWARDS",
+    },
+    // -- BONUS CODES (per-customer, personal deadline) -----------------------
+    // Renumbered 86-88 -> 95-97 on the 2026-08-27 origin/main -> staging merge.
+    // main authored these as 86/87/88; staging had already issued 86/87 (competition-terms
+    // refunds) and 88 (shop entries on an item) for different content. Nothing outside
+    // src/data/__tests__/faqs.test.ts reads a FAQ id, so moving the newer three was inert
+    // and it leaves staging's 86-94 block contiguous. The three test guards moved with them.
+    {
+      id: "95",
       question: "How long do I have to use my bonus code before it expires?",
       answer:
         "Your bonus code has its own deadline, and it belongs to you alone -- the clock starts the moment the code is created for you, not on a shared cut-off date, so two members who get the same code on different days will have different deadlines. It then runs for a fixed 72 hours from that moment, which means it can run out at any time of day: it is not an end-of-day cut-off and it is not tied to a whole calendar date. To be straight with you, the exact date and time is not shown anywhere you can reach -- it is not printed in the email and there is no page in [My Account](/my-account) that displays it -- so the safe rule is to use the code within 72 hours of the email arriving. If you need the precise moment yours runs out, [contact us](/contact) and our team will read it off your account. Redeem it at checkout before the deadline and the free entries it includes are added to your next Major Draw. If the window has already passed, the code no longer works and the free entries it includes are not added -- and when you are signed in, the message at checkout does name the exact date and time it ran out.",
       category: "REWARDS",
     },
     {
-      id: "87",
+      id: "96",
       question: "Can I use my bonus code more than once, or on a second order?",
       answer:
         "No -- a bonus code is a one-off. Once you redeem it, the free entries it includes are credited and the code is used up for good, so it will not work on a later order. It is also one code per person, not one per order: you will not be issued the same code again after you have redeemed it. If your code expired before you got to use it, that is a different situation -- an unused code that has run out of time can be re-issued to you later with a fresh deadline if you become eligible again, and we will email you if that happens. That is not immediate, though: there is a waiting period of about a month from when the first code was created for you, so qualifying again straight away will not produce a second code.",
       category: "REWARDS",
     },
     {
-      id: "88",
+      id: "97",
       question: "I got a refund on an order where I used a bonus code -- do I get the code back?",
       answer:
         "No. A refund reverses what came with that order, including the free entries the code added, and the code itself stays used -- it is not returned to your account and it will not work again. This is deliberate: a bonus code is a one-per-person thank-you, not something that can be recycled by refunding and re-ordering. If you think a refund has been applied incorrectly, or you were charged for something you did not order, get in touch through our [Contact](/contact) page with your order details and our team will sort it out.",

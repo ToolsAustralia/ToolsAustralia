@@ -40,7 +40,7 @@ import MembershipModal from "@/components/modals/MembershipModal/LazyMembershipM
 |---|---|---|
 | `usePaymentIntent()` | client_secret + state for a charge-now flow | [src/hooks/usePaymentIntent.ts](../../src/hooks/usePaymentIntent.ts) |
 | `useSetupIntent()` | client_secret + state for a save-card flow | [src/hooks/useSetupIntent.ts](../../src/hooks/useSetupIntent.ts) |
-| `use3DSRedirectHandler()` | Detects PI/SI id in URL and reconciles status after a 3DS redirect | [src/hooks/use3DSRedirectHandler.ts](../../src/hooks/use3DSRedirectHandler.ts) |
+| `use3DSRedirectHandler()` | Reconciles payment status after a 3DS redirect from `payment_intent_client_secret`, and on `succeeded` signs the buyer in from proof of payment — see [3DS session establishment](#3ds-session-establishment) | [src/hooks/use3DSRedirectHandler.ts](../../src/hooks/use3DSRedirectHandler.ts) |
 | `useSavedPaymentMethods()` | Lists user's saved methods, supports set-default + delete | [src/hooks/useSavedPaymentMethods.ts](../../src/hooks/useSavedPaymentMethods.ts) |
 | `usePaymentStatus(paymentIntentId, options)` | Polls `/api/payment-status/[paymentIntentId]` until `processed === true` or 90s timeout. Returns `PaymentStatusResponse` — see [api.md](./api.md#get-apipayment-statuspaymentintentid--completed-branch-fields). | [src/hooks/queries/usePaymentQueries.ts](../../src/hooks/queries/usePaymentQueries.ts) |
 
@@ -57,6 +57,20 @@ entriesGranted?: number;
 ```
 
 > _TODO: verify each hook's exact API (mutation vs query, query keys, return shape) — pull from source when refreshing._
+
+## 3DS session establishment
+
+A 3DS/SCA buyer is bounced to their bank and back, and Stripe's redirect destroys all in-page React state — including the `guestUserData` bridge the non-3DS flows use to carry a guest into profile setup. Nothing on the landing page could identify them, so they finished **paying** and stayed **logged out**. Fixed 2026-08-27; the failure and its blast radius are in [gotchas.md](./gotchas.md#resolved--a-3ds-buyer-finished-paying-and-stayed-logged-out-2026-08-27), the design in [2026-08-25 mobile verification and SMS login](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+[`use3DSRedirectHandler`](../../src/hooks/use3DSRedirectHandler.ts) now calls its module-local `establishSessionFromPayment(clientSecret)` when the retrieved intent reports `succeeded`: `POST` [`/api/auth/session-from-payment`](../../src/app/api/auth/session-from-payment/route.ts), then `signIn("auto-login", { token })` with the bridge token it returns. The route belongs to [auth](../auth/) ([api.md](../auth/api.md)) — it takes the client secret and nothing else, derives the user from the PaymentIntent's customer, and requires `status === "succeeded"`.
+
+Three properties are load-bearing. Keep them if you touch this function:
+
+- **Fire-and-forget.** Invoked as `void establishSessionFromPayment(...)`. `paymentStatus` is already `succeeded` by then and must not wait on, or be changed by, the sign-in.
+- **Silent on every failure.** No `setError`, no toast, no `ErrorReport`. The money moved — a sign-in hiccup rendered as a payment error would tell a buyer their successful payment failed. Worst case is the pre-fix behaviour (success page, logged out), and the email / SMS sign-in paths stay open. Encoded as [R13](./rules.md#r13).
+- **`202` is retried; everything else is terminal.** `202 { pending: true }` is the webhook race — a one-time buyer who never registered has no `User` until the Stripe webhook creates one. The loop re-POSTs on `[0, 1500, 3000, 5000]` ms, then stops. Any other non-`ok` status (403 secret mismatch, 409 intent not `succeeded` / no customer, 429, 500) and any thrown fetch return immediately — retrying cannot change them.
+
+**Scope note.** Only the redirect landings use this route. The three in-modal purchase paths in [`MembershipModal/index.tsx`](../../src/components/modals/MembershipModal/index.tsx) still `POST /api/auth/auto-login`. Migrating them is mechanical and was deliberately left out of this change so a fault in a brand-new route could not break the purchase path that already works — once `session-from-payment` is proven in production, delete `auto-login` and point all four call sites at it.
 
 ## State conventions
 

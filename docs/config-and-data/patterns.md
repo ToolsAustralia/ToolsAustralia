@@ -105,7 +105,16 @@ from `TOOLSET_LANDING_SLUGS`) and per-prize **evergreen URLs** `/promotions/<bra
 - Admin Overview **"Prize performance"** ROAS-by-brand card ([`PrizePerformanceCard.tsx`](../../src/app/admin/component/overview/sections/PrizePerformanceCard.tsx)) — maps over `TOOLSET_LANDING_SLUGS`.
 - Per-promotion analytics funnel (`PromoAnalyticsRepository.getAllPromoSlugs`) and promo-slug validation (`validate-promo-slug.ts`).
 - **Klaviyo brand attribution** (`klaviyo/brand-extraction.ts` → the `brandInterest` profile property) — validates against `getAllBrandKeys()`.
-- Brand colour/theme resolution (`prize-brand-colors.ts`, `packageColorScheme.ts`).
+- Brand colour/theme **ramps** (`BRAND_THEMES` in `brand-theme.ts`) — consumers read them by key.
+
+> **`packageColorScheme.ts` does NOT derive automatically — this bullet used to claim it did, and
+> that claim shipped a live bug.** `slugToPromoTierPlanId()` is a hand-written `if` ladder over slug
+> prefixes. STIHL was added to `COLOR_KEYS`, `LANDING_PAGE_BRAND`, `SCHEMES` and `BRAND_GRADIENTS`
+> but not to that ladder, so `stihl-orange` was unreachable: three STIHL slugs fell through to the
+> `milwaukee-red` default and `stihl-kincrome` matched the `includes("kincrome")` line and came back
+> blue. `tsc` cannot see it — every branch returns a valid `COLOR_KEYS`. Add the brand's
+> `startsWith` test **above** the `includes()` fallbacks, and check the live consumers
+> (`usePromoThemeStore`, the login rotator) actually resolve to the new ramp.
 
 **Still needs a manual touch when adding a brand:**
 1. Ship the wordmark `public/images/brands/name/<slug>Text.svg` (used by the ROAS card + promo carousel).

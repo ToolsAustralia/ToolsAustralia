@@ -4,29 +4,49 @@ Hard-won lessons. Read before touching the widget mount, the route runtime, or t
 
 ---
 
-## The knowledge pack is already over its own token ceiling (2026-08-24)
+## The knowledge-pack token ceiling — raised three times now (2026-08-27)
 
-`npm run test:chat-knowledge` asserts the generated pack stays under **14,000** approx tokens
-(`text.length / 4`). It is currently **~14,118** and was **~14,067** before the trial-aware-upgrade
-copy fix below — i.e. **this test was already red on `feature/renewal-surge` (and on `main`) and is
-not caused by that change.** The ceiling's own comment says not to bump it: every token here is paid on **every
-turn**, and the real fix is prompt caching on the system block, not a bigger number.
+`npm run test:chat-knowledge` asserts the generated pack stays under a **ceiling** on approx tokens
+(`text.length / 4`). Current state: ceiling **16,400**, pack **~16,160** — roughly **240 tokens**
+of headroom, which the next FAQ will eat.
 
-Treat this as a standing debt with a clear owner-decision attached: either land prompt caching, or
-trim ~350 characters of lower-value corpus content. Do **not** raise the assertion to make a build
-green, and do not add "nice to have" entries until it is back under budget.
+The 2026-08-27 raise (15,200 -> 16,400) bought nothing new by itself: it is the arithmetic of two
+independently-shipped feature sets merging — draw 10 (competition-terms section + refund FAQs) and
+staging (six merchandise-shop entries). A merge is the wrong moment to decide which of two sets of
+customer answers to delete, so the number moved instead.
 
-**Copy fix that landed alongside it.** Cobber ids **22** and **51** asserted flatly that an upgrade
-"resets your billing cycle to today". That is now wrong for anchored members — the trial-aware
-upgrade charges them today but **preserves their renewal day** (see
+History, because the pattern matters more than the numbers: the ceiling was **12,000**, was breached
+at 12,540, was raised to **14,000** on 2026-08-11, was breached again at 14,067 on `main` (e762dcda,
+blocked-card guidance), and was raised to **15,200** on 2026-08-24 for draw 10, then to **16,400** on 2026-08-27 merging staging. Twice now the guard
+went red on `main` for content that was **not** nice-to-have, and twice the number moved. **A ceiling
+that is raised every time it binds is not a budget — it is a changelog.**
+
+The debt is real and unchanged: there is **no prompt caching** on the system block (no `cache_control`
+anywhere in `src/lib/support-chat` or `src/services/support-chat`; production `ChatConversation.
+tokenUsage` shows `cacheRead: 0` / `cacheWrite: 0`), so the **entire pack is re-sent uncached on every
+single turn** — ~15k input tokens against ~90 output tokens per LLM turn. Landing prompt caching would
+make this ceiling moot and is worth far more than any trimming exercise.
+
+Until then: do **not** raise the assertion just to make a build green, and do not add "nice to have"
+entries. If you must add content, say in the test's comment what it bought — both raises did, and that
+record is the only reason this section can be written honestly.
+
+**Draw-10 additions (2026-08-24, +~1,000 tokens).** A member asked about the refund policy, got only
+the membership "non-refundable" line, and pushed back citing the 48-hour genuine-error clause on
+`/competition-term-majordraw` — a page that was in **neither** the `[key-pages]` list nor the pack, so
+Cobber said it could not read "external links". That was a structural gap, not a prompt slip: the page
+is now a derived `competition-terms` section, and the prize prose is generated from the catalogue so it
+cannot go stale the way a hand-written answer does.
+
+**Copy fix that landed alongside the 2026-08-11 raise.** Cobber ids **22** and **51** asserted flatly
+that an upgrade "resets your billing cycle to today". That is wrong for anchored members — the
+trial-aware upgrade charges them today but **preserves their renewal day** (see
 [subscription/gotchas.md](../subscription/gotchas.md), [BUSINESS.md §9b/§10c](../../BUSINESS.md)).
 Both answers were rewritten to qualify the reset **and tightened**. id51's closing advice — *"it's
-usually best to upgrade close to your renewal date"* — was also **reversed**, because after the
-14-day double-charge floor that advice pointed members at the exact window the floor exists to guard.
-Net cost of both corrections: **+51 tokens** (14,067 → 14,118), most of it the safety clause. Corpus
-size is unchanged (87), so the `faqs.test.ts` count assertion did not move.
-`build:chat-knowledge-pack` was re-run — an un-rebuilt pack leaves Cobber reciting the old copy no
-matter what the corpus file says.
+usually best to upgrade close to your renewal date"* — was **reversed**, because after the 14-day
+double-charge floor that advice pointed members at the exact window the floor exists to guard.
+`build:chat-knowledge-pack` must be re-run after any corpus edit — an un-rebuilt pack leaves Cobber
+reciting the old copy no matter what the corpus file says.
 
 ---
 
@@ -533,6 +553,26 @@ The other direction still holds: a bottom-anchored **non-modal** bar (the mini-d
 [`useDodgeFloatingObstacles`](../../src/components/support-chat/useDodgeFloatingObstacles.ts)
 lifts Cobber clear of it instead. Modal → out-rank it; persistent chrome → dodge it.
 
+## The knowledge-pack builder had its own "coming soon" claims (2026-08-17)
+
+Fixing the FAQ corpus is not enough. `scripts/build-chat-knowledge-pack.ts` writes prose of its
+own straight into the generated pack the LLM is grounded on, and it held two stale shop claims
+that no FAQ edit would have touched:
+
+- the membership-tiers table rendered the shop discount as `` `${pct}% (coming soon)` ``
+- a bullet reading "the **member shop** is coming soon"
+
+Both are corrected. **When a feature's status changes, grep the builder as well as the corpus** —
+`grep -rn "coming soon" scripts/build-chat-knowledge-pack.ts`.
+
+### Editing prose inside the builder's template literals
+
+Those strings live inside JS template literals. A backtick in replacement text **terminates the
+literal** and breaks the build with errors pointing at unrelated lines — `` `/shop` `` did exactly
+that here. Write plain prose (`/shop`, not `` `/shop` ``) and avoid `${`.
+
+Verify with `npm run build:chat-knowledge-pack` (it runs in `prebuild`/`predev`, so a break stops
+the app from starting) and then `npm run test:chat-faqs`.
 ## Blocked-card advice: never lead with "just wait"
 
 Cobber's system prompt is **byte-stable** (for prompt caching) and injects **no date** — it has no way
@@ -558,3 +598,71 @@ exactly wrong for a blocked card (retrying is what caused the block). Corpus cou
 Backend counterpart: `EXCESSIVE_RETRY_COOLDOWN_DAYS` in
 [chargeOrRecoverPolicy.ts](../../src/server/admin/chargeOrRecoverPolicy.ts). If that window changes,
 FAQ 84/85 and the member Pay-Now copy must change with it.
+
+## Cobber called our own terms page an "external link" (2026-08-24, draw 10)
+
+A member asked about the refund policy. Cobber answered with the membership line only
+("non-refundable once purchased"), so the member pushed back, correctly citing the **48-hour
+genuine-purchase-error** clause on `/competition-term-majordraw`. Cobber replied that it did
+"not have access to the content of external links" and offered to escalate — about a page on
+our own site, stating a refund route our published terms actually grant.
+
+**Root cause was structural, not a prompt slip — three layers all missed the page:**
+
+1. `/competition-term-majordraw` was **not in `[key-pages]`** (`buildKeyPagesSection()` in
+   [build-chat-knowledge-pack.ts](../../scripts/build-chat-knowledge-pack.ts)), and answering
+   rule 8 says *"Use only the canonical paths listed in `[key-pages]`. Do not invent paths."*
+   Cobber had no way to link the page even if it had known the content.
+2. The page's **content was nowhere in the pack**. Every clause on it — refunds, entry-package
+   conditions, eligibility, prize claim — was ungrounded, and rule 1 is *"Answer ONLY from the
+   knowledge provided below."* With nothing to cite, "I can't read that link" is the honest
+   output of a correctly-grounded bot.
+3. The **FAQ corpus was one-sided.** id 12 / id 19 asserted "non-refundable" with no mention of
+   the genuine-error exception, so even the deflection path gave an incomplete answer.
+
+**The fix (all four, or it regresses):**
+
+- New **`[competition-terms]`** pack section (`buildCompetitionTermsSection()`) summarising the
+  refund rules in both directions, entry-package conditions, eligibility and claim handling.
+  It is **PROSE, not derived** — the terms page is JSX, with nothing importable. **Keep it in
+  lockstep with [`competition-term-majordraw/page.tsx`]( ../../src/app/\(site\)/competition-term-majordraw/page.tsx)
+  by hand whenever a clause moves.**
+- `/competition-term-majordraw` added to `[key-pages]`.
+- FAQ **ids 86 + 87** (the 48-hour path; what is *not* refundable), and **id 12 corrected** to
+  name the two exceptions. Count assertion bumped 87 → 89.
+- **Answering rule 9** added to [systemPrompt.ts](../../src/services/support-chat/systemPrompt.ts):
+  our own pages are never "external links", and when a member says one of our pages contradicts
+  the bot, treat them as probably right, re-check the knowledge and correct the omission.
+
+**Cost.** The pack ceiling in
+[knowledge-pack.test.ts](../../src/lib/support-chat/__tests__/knowledge-pack.test.ts) went
+14,000 → 15,200 (~900 extra uncached input tokens/turn, ~$0.10/month). Note the guard was
+**already breached at 14,067** before this change — it went red on main at `e762dcda`
+(2026-08-18). Prompt caching remains the real fix and would make the ceiling moot.
+
+**Generalise this.** Any customer-facing page whose *rules* a member can quote back at us
+(`/terms`, `/privacy`, `/competition-term-majordraw`) needs both a `[key-pages]` entry **and**
+grounded content. A page in neither is a page Cobber will deny knowing.
+
+## Cobber's prize knowledge is derived, and states the cash removal explicitly (2026-08-28, draw 10)
+
+`buildPrizesSection()` in [build-chat-knowledge-pack.ts](../../scripts/build-chat-knowledge-pack.ts)
+already derived the *combination list* from `PRIZE_CATALOG`, but the surrounding prose hardcoded
+"each bundled with a $5,000 cash bonus" — so the bot asserted a prize the catalog no longer
+contained. The sentence is gone and the combination count is now interpolated
+(`${toolPrizes.length} combinations`) rather than written out.
+
+**The section now says the absence out loud**, not just omits it:
+
+> This is the ONLY cash in the prize: a tool combination does **not** come with a cash bonus on
+> top. If a member mentions a $5,000 bonus they are recalling a previous draw — it was removed for
+> the draw that opened 2026-08-28.
+
+That is deliberate. Members who saw the old landing pages **will** ask about the $5,000, and a
+pack that merely omits it leaves Cobber to guess — which is how it ends up either confirming a
+prize we no longer give or flatly denying something the member genuinely remembers. FAQ id 3 was
+corrected the same way.
+
+**Lesson for the next prize change:** deriving the *list* is not enough if the *prose around it*
+still describes the old prize. Grep the builder for hardcoded amounts whenever the catalog changes,
+and prefer stating what changed over silently dropping it.

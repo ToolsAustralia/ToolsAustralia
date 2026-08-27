@@ -27,7 +27,11 @@ import {
 } from "@/components/sections/promo/prize-selection/prize-builder-model";
 import { NTP_NUMBER } from "@/constants/legal";
 
-/** Id of the "$5,000 Cash" tab this sheet appends to every non-cash prize. */
+/**
+ * Id of the cash tab. Draw 10 removed the $5,000 combo bonus, so this sheet no longer
+ * APPENDS a cash tab to tool prizes — but the cash-only prize is still a real catalog
+ * entry whose own section carries this id, and `SpecCard` keys its green treatment off it.
+ */
 const CASH_SECTION_ID = "cash-prize";
 
 interface PrizeSpecificationsModalProps {
@@ -49,7 +53,7 @@ interface PrizeSpecificationsModalProps {
    * feature rail from `prize` alone would show the wrong headline for that first frame.
    * When omitted (e.g. the dev modal gallery), it is derived from `prize.slug` instead.
    */
-  feature?: { title: string; stats: { tools: string; storage: string }; showCashBonus: boolean };
+  feature?: { title: string; stats: { tools: string; storage: string } };
   /** "27 JUL · 8PM AEST"; the permit line omits the draw stamp when null. */
   drawLabel?: string | null;
 }
@@ -72,42 +76,19 @@ export default function PrizeSpecificationsModal({
   feature: featureProp,
   drawLabel = null,
 }: PrizeSpecificationsModalProps) {
-  const isCashPrize = prize?.slug === CASH_OPTION.slug;
   /** Tools Australia red for callers outside the builder (e.g. the dev modal gallery). */
   const resolvedAccent = accent ?? "#ee0000";
 
-  /** Sections + the always-appended cash tab, memoised so arrays stay stable. */
-  const sections = useMemo<PrizeSpecSection[]>(() => {
-    if (!prize) return [];
-    const baseSections = prize.specSections ?? [];
-    if (isCashPrize) return baseSections;
+  /**
+   * The prize's own spec sections, memoised so the array identity stays stable.
+   *
+   * Draw 10 removed the $5,000 combo cash bonus, and with it the synthetic "$5,000 Cash"
+   * tab this sheet used to APPEND to every non-cash prize. Tool prizes now show exactly the
+   * sections the catalog defines; the cash-only prize still carries its own section from the
+   * catalog, so nothing here special-cases it any more.
+   */
+  const sections = useMemo<PrizeSpecSection[]>(() => (prize?.specSections ?? []), [prize]);
 
-    return [
-      ...baseSections,
-      {
-        id: CASH_SECTION_ID,
-        label: "$5,000 Cash",
-        summary: "A $5,000 cash bonus included on top of the gear — with every combination.",
-        items: [
-          {
-            name: "$5,000 Cash Prize",
-            description:
-              "A $5,000 cash prize included with your prize package. The money will be deposited directly to your bank account upon verification.",
-            specifications: [
-              "Prize Amount: $5,000 AUD",
-              "Payment Method: Direct bank transfer",
-              "Verification: Standard winner verification process required",
-              "Tax: Winner responsible for applicable taxes",
-            ],
-            includes: [
-              "Included with prize package",
-              "Cash prize is in addition to all tools and equipment",
-            ],
-          },
-        ],
-      },
-    ];
-  }, [prize, isCashPrize]);
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
@@ -131,8 +112,7 @@ export default function PrizeSpecificationsModal({
     if (!lanes) {
       return {
         title: prize?.heroHeading ?? "Prize details",
-        stats: { tools: "—", storage: "—" },
-        showCashBonus: false,
+        stats: { tools: "—", storage: "—" },
         image,
       };
     }
@@ -140,8 +120,7 @@ export default function PrizeSpecificationsModal({
     const toolset = getToolset(lanes.toolset) ?? TOOLSETS[0];
     return {
       title: `${toolset.name} + ${toolbox.name}`,
-      stats: getContentsChips(toolbox, toolset),
-      showCashBonus: true,
+      stats: getContentsChips(toolbox, toolset),
       image,
     };
   }, [featureProp, prize, comboImage]);
@@ -218,8 +197,7 @@ export default function PrizeSpecificationsModal({
             <FeaturePanel
               comboImage={feature.image}
               comboTitle={feature.title}
-              stats={feature.stats}
-              showCashBonus={feature.showCashBonus}
+              stats={feature.stats}
               onOpenViewer={() => setViewerIndex(0)}
             />
           </aside>
@@ -231,8 +209,7 @@ export default function PrizeSpecificationsModal({
               <FeaturePanel
                 comboImage={feature.image}
                 comboTitle={feature.title}
-                stats={feature.stats}
-                showCashBonus={feature.showCashBonus}
+                stats={feature.stats}
                 onOpenViewer={() => setViewerIndex(0)}
               />
             </div>

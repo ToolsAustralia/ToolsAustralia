@@ -94,6 +94,47 @@ Flags: `--limit=N` (optional cap), `--live`, `--admin-email=` (required when `--
 
 `npm run test:igodirect-sso` ([scripts/test-igodirect-sso.ts](../../scripts/test-igodirect-sso.ts)) — proves we can mint a valid MyRewards SSO token and round-trip it. **Production-safe:** it only ever sends iGoDirect's own emailed sample identity (`member_id: tools_reward_user`), which already exists on their side, so `/generatetoken` returns "User found" and creates no new permanent record. Steps: (1) offline secret proof (recomputes the HMAC over their sample token — no network); (2) mint with the production signer + POST `/generatetoken`; (3) replica-encoding retry only if the standard token is rejected; (4) read-only `/verifytoken` 302 check. `--no-network` runs only the offline proof. Needs `IGODIRECT_SSO_SECRET` in `.env.local`.
 
+## Real-SMS smoke test + provider bake-off — `npm run smoke:sms-send` (2026-08-26)
+
+[`scripts/smoke-sms-send.ts`](../../scripts/smoke-sms-send.ts) sends a **real SMS through the live
+gateway** to the one number you pass on argv. It **spends real credits** — one per message,
+because [`src/lib/sms.ts`](../../src/lib/sms.ts) pins `max_parts: 1`. Rationale and the wider
+design it belongs to: [2026-08-25 mobile verification + SMS login design](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+```bash
+npm run smoke:sms-send -- 0412345678
+npm run smoke:sms-send -- 0412345678 --count 5 --gap 10
+npm run smoke:sms-send -- 0412345678 --message "custom body" --yes
+```
+
+| Flag | Default | Notes |
+|---|---|---|
+| `<mobile>` (positional, required) | — | Any AU form; normalised by `normaliseAuMobile`, rejected if it isn't a valid AU mobile |
+| `--count <n>` | `1` | Messages to send. **Each one costs a credit.** |
+| `--gap <sec>` | `5` | Seconds between sends, floored at 1 — the gateway caps concurrent requests at 5 and 429s past that |
+| `--message <s>` | OTP-shaped body | Default body uses `generateOtpCode()` + `OTP_EXPIRY_MINUTES`, so segment count and sender presentation match production |
+| `--yes` | off | Skips the 5-second Ctrl-C abort window |
+
+**Safety interlock** ([`scripts/smoke-sms-send.ts:45-62`](../../scripts/smoke-sms-send.ts)), in
+order: no number argument → usage error, exit 1; unparseable number → exit 1;
+`SMS_ENABLED !== "true"` → refuses, exit 1. It sends only to the single number passed and never
+reads the user database. Exit code is 0 only if every message was accepted.
+
+**It is a `test:*` script that spends money — the interlock is what keeps the naming rule at the
+top of this file honest.** A bulk `test:*` sweep passes no argv, so it dies at the usage check
+before any network call, and it stays dead unless someone has separately opted in with
+`SMS_ENABLED=true`. Its two siblings are genuinely free and offline: `npm run test:sms` (the
+gateway adapter) and `npm run test:mobile-otp` (the OTP policy).
+
+**Second role — the provider bake-off.** This is the measurement half. Each send prints
+`accepted in <n>ms · <credits> credit · id <messageId>`, and the footer prints the avg/min/max
+API round-trip. **Caveat the script prints itself: those timings are API ACCEPTANCE, not handset
+delivery.** For the bake-off, note the wall-clock time each message actually lands on the phone —
+that is the number that picks the provider, not headline price.
+
+Env required in `.env.local`: `SMS_ENABLED`, `MOBILE_MESSAGE_API_USERNAME`,
+`MOBILE_MESSAGE_API_PASSWORD`, `MOBILE_MESSAGE_SENDER`.
+
 ## ⚠️ TEMPORARY: MyRewards SSO test harness (REMOVE before merge)
 
 `src/app/dev/rewards-sso/` — a throwaway dev page at **`/dev/rewards-sso`** (404 outside `development`, so it only runs on localhost — never on a deployed build) to manually verify the gated MyRewards SSO hand-off (`POST /api/partner-discount/sso`). **Flagged for removal** — delete the folder when done; the real entry button is part of the new rewards UI. Kept **uncommitted** (local-only) so it can't ship.

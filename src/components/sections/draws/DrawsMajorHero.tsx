@@ -14,7 +14,9 @@ const PRIZE: Record<PrizePick, { tagline: string; title: string; items: string[]
     items: [
       "Your pick of brand — Milwaukee, DeWalt, Makita & more",
       "Toolbox + power-tool kit + storage system",
-      "$5,000 cash on top",
+      // NOT a delivery or tax claim: Part D of /competition-term-majordraw puts delivery,
+      // installation and tax on the winner. Keep this bullet to draw mechanics, which are true.
+      "One winner every month, drawn live",
     ],
   },
   b: {

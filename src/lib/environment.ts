@@ -36,11 +36,20 @@ export const getEnvironment = (): "production" | "development" | "test" => {
  */
 export const environmentFlags = {
   /**
-   * Whether email verification should be mandatory.
-   * Currently disabled — verification is always optional but available via SendGrid.
+   * Whether a member must hold at least ONE verified contact channel — email
+   * **or** mobile — before profile setup can complete (2026-08-27).
+   *
+   * This replaces `emailVerificationMandatory`, which was hardcoded `false`: the
+   * gate was built and left off, so members finished setup with nothing verified
+   * and no way back in if they had mistyped their email. Registration is
+   * passwordless and the password is set in that same setup step, so the verified
+   * channel is the **recovery credential** for the password they just chose.
+   *
+   * Either channel satisfies it. Email is free, so the UI defaults to it; SMS is
+   * the alternative for someone who cannot reach their inbox.
    */
-  emailVerificationMandatory: (): boolean => {
-    return false;
+  verifiedContactRequired: (): boolean => {
+    return true;
   },
 
   /**
@@ -81,7 +90,7 @@ export const logEnvironmentInfo = (): void => {
       isProduction: isProduction(),
       isDevelopment: isDevelopment(),
       flags: {
-        emailVerificationMandatory: environmentFlags.emailVerificationMandatory(),
+        verifiedContactRequired: environmentFlags.verifiedContactRequired(),
         userSetupModalClosable: environmentFlags.userSetupModalClosable(),
         debugFeaturesEnabled: environmentFlags.debugFeaturesEnabled(),
         useTestData: environmentFlags.useTestData(),

@@ -168,3 +168,60 @@ Two near-misses the predicate deliberately gets right:
 - The mini **upsell** ids (`mini-pack-N-upgrade`, `mini-upsell-additional-*`) are **not** matched — they belong to `/api/upsell/purchase`, which resolves `miniDrawId` from purchase history.
 
 `normalizeMembershipPlanId` strips only `-member`, so `-mini` survives it and raw/canonical forms agree. The existing-user route checks both anyway, and `npm run test:mini-draw-package-id` fails loudly if that ever changes.
+
+## The $5,000 combo cash bonus was removed catalog-wide (2026-08-28, draw 10)
+
+Draw 10 made every tool combination **tools only**. The **$10,000 cash-ONLY** option is untouched
+and is now the only cash in the prize — when grepping, never conflate the two.
+
+**Scale, so you know what a similar change costs:** 113 `$5,000/$5000` hits in
+[prize-summaries.ts](../../src/config/prize-summaries.ts) and 86 in
+[prizes.ts](../../src/config/prizes.ts). They took **six** distinct shapes, and a single
+find/replace would have left most of them live:
+
+| shape | where | count |
+|---|---|---|
+| `, $5000 cash` | `label` + `heroHeading` tails | 40 + 26 |
+| ` plus $5000 cash.` | `heroSubheading` + `summary` tails | 40 + 30 |
+| ` + $5,000 Cash` | `SHORT_PRIZE_LABELS` | 20 |
+| `{ icon: "DollarSign", title: "$5000 Cash Bonus", … }` | `highlights` | 13 + 8 |
+| `Plus $5000 cash.` / `Plus $5000 cold hard cash.` / `Plus, take home $5000 cold hard cash.` | `detailedDescription` tails | 3 + 8 + 7 |
+| backtick template literals | 4 Ryobi `label`/`heroHeading` in prizes.ts | 4 |
+
+Two traps worth remembering:
+
+1. **`detailedDescription` is in `DEEP_ONLY_FIELDS`** (`prize-summaries.test.ts`), so
+   `npm run test:prize-summaries` does **not** compare it across the two files. Eighteen stale
+   sentences would have shipped green. Verify deep-only fields with a raw grep, not the test.
+2. **Four entries used backticks, not double quotes.** A regex anchored on `"` silently skipped
+   them. Anchor on the shape, then assert the remaining count is zero.
+
+**`prizeValueLabel` still bakes in the old $5,000** (`$25,000+` / `$30,000+` / `$35,000+ Value`).
+Left deliberately: every consumer today is **admin-only** (`MajorDrawManagement`, `DrawsTable`,
+`DrawInspector`), so it is not a public claim — but it is one prop away from a customer surface
+and it is the figure a permit filing derives from. Re-band it before it is ever rendered publicly.
+
+## The FAQ guard test watches Cobber, not the public FAQ page (2026-08-27)
+
+`src/data/__tests__/faqs.test.ts` bans stale phrases — `"paypal"`,
+`"international shipping"`, `"3-5 business days"` — but it reads
+`getSupportChatFaqEntries()` from `supportChatFaqs.ts`. **The public `/faq`
+page renders `getFaqEntries()` from `faqs.ts`, which the test never sees.**
+
+So the corpus the chatbot answers from was guarded while the page a customer
+reads was not, and `faqs.ts` kept all three banned claims for as long as the
+guard has existed. Entry `id: "3"` promised **express shipping at 1–2 business
+days** (there is one flat rate — `SHOP_CONFIG` carries only
+`flatShippingRateCents`, no express tier), **international shipping at 7–14
+days** (the checkout address form accepts only the eight Australian states),
+and an unsubstantiated 3–5 business day standard. It predated the shop.
+
+Entry `id: "3"` is rewritten. **Still unguarded and still suspect:** entry
+`id: "2"` claims PayPal and bank transfers, and entry `id: "4"` claims an order
+can be modified or cancelled within an hour — neither verified against the
+checkout.
+
+**A guard that covers one of two copies of the same content is the dangerous
+kind**: it reads as coverage. Pointing the existing ban list at
+`getFaqEntries()` as well is the fix, once the remaining entries are corrected —
+it will fail on `"paypal"` until then, which is the point.

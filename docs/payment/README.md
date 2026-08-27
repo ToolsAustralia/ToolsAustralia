@@ -8,9 +8,9 @@ Payment Intents, Setup Intents, saved payment methods, 3DS handling, and the ric
 - [frontend.md](./frontend.md) — `<PaymentElement>` host components, hooks (`usePaymentIntent`, `useSetupIntent`, `use3DSRedirectHandler`, `useSavedPaymentMethods`)
 - [backend.md](./backend.md) — `utils/payment/*` helper inventory, payment-processing.ts ledger writer, refund reversers
 - [api.md](./api.md) — `/api/payment-intent/**` and `/api/payment-status/**` route reference
-- [rules.md](./rules.md) — PCI compliance, ledger symmetry, 3DS-must-not-bypass
+- [rules.md](./rules.md) — PCI compliance, ledger symmetry, 3DS-must-not-bypass, post-payment sign-in
 - [patterns.md](./patterns.md) — payment-method id-only storage, ledger grants pattern, reverser modules
-- [gotchas.md](./gotchas.md) — confirmation-method fix, default PM string vs object, attribution edge cases
+- [gotchas.md](./gotchas.md) — confirmation-method fix, default PM string vs object, attribution edge cases, the 3DS buyer who stayed logged out
 - [models.md](./models.md) — _N/A — this domain doesn't own its own models. Reads `User.savedPaymentMethods` (auth) and writes via [billing-stripe](../billing-stripe/) `PaymentEvent`._
 - [testing.md](./testing.md) — `__tests__/` suites under `utils/payment/`
 

@@ -14,11 +14,19 @@ export interface ProductData {
   isNew?: boolean;
   isFeatured?: boolean;
   rating?: number;
+  /**
+   * Two shapes flow through here. The static fixtures below carry
+   * `reviewer`/`date`; a product read from Mongo carries `createdAt` and no
+   * display name at all (models/Product.ts reviews sub-schema is
+   * userId/rating/comment/createdAt). Both are optional so neither caller has
+   * to lie about the other.
+   */
   reviews?: Array<{
     rating: number;
-    comment: string;
-    reviewer: string;
-    date: string;
+    comment?: string;
+    reviewer?: string;
+    date?: string;
+    createdAt?: string | Date;
   }>;
 }
 

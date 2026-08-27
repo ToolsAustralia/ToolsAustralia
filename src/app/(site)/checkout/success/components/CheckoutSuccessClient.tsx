@@ -5,19 +5,18 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   CheckCircle,
+  Clock,
+  AlertCircle,
   Package,
   Truck,
   Mail,
-  Phone,
-  Download,
   ArrowRight,
-  Calendar,
   MapPin,
-  CreditCard,
+  Ticket,
 } from "lucide-react";
 import { PaymentSuccessHandler } from "@/components/payment/PaymentSuccessHandler";
 import { getContactEmail } from "@/lib/email/sender-identities";
-import { useOrder } from "@/hooks/queries/useOrderQueries";
+import { useOrder, isOrderPaid } from "@/hooks/queries/useOrderQueries";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trackConversion } from "@/lib/tracking/dispatch-client";
 import { buildPurchaseEvent } from "@/lib/tracking/canonical-event";
@@ -27,7 +26,13 @@ interface CheckoutSuccessClientProps {
   orderId: string;
 }
 
-const PLACEHOLDER_IMG = "/images/SampleProducts/dewalt1.jpg";
+/** The page ground, kept in one place so every state renders on the same surface. */
+const PAGE_SHELL =
+  "bg-gray-50 dark:bg-neutral-950 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh";
+
+/** A raised panel. Both themes, one string — the page has five of these. */
+const CARD =
+  "rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900";
 
 export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClientProps) {
   const { data: order, isLoading, isError, error } = useOrder(orderId);
@@ -36,13 +41,17 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
   useEffect(() => {
     if (firedRef.current) return;
     if (!order) return;
-    if (order.paymentStatus !== "paid") return;
+    // No paymentStatus field exists — payment state is inferred from status,
+    // which is the only thing the webhook writes.
+    if (!isOrderPaid(order)) return;
     if (!order.totalAmount || order.totalAmount <= 0) return;
     // firedRef only survives one mount; Meta's event_id dedup only ~48h. Re-fires
     // inside that window are merged by Meta and recover a swallowed first fire —
-    // which matters most here, since shop has no CAPI counterpart to anchor the
-    // real conversion. Only a revisit BEYOND the window (which Meta would count
-    // as a brand-new conversion) is suppressed.
+    // which matters most here. (There IS a server CAPI counterpart —
+    // finalizeShopOrder fires one on the same orderNumber event id — so a swallowed
+    // browser fire is not total loss, but the browser half carries the richer
+    // client-side match signals.) Only a revisit BEYOND the window (which Meta would
+    // count as a brand-new conversion) is suppressed.
     const purchaseEventId = order.orderNumber ?? orderId;
     if (shouldSuppressPurchasePixel(purchaseEventId)) {
       firedRef.current = true;
@@ -58,7 +67,20 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
         customData: {
           orderId: order.orderNumber ?? orderId,
           contentType: "product",
-          numItems: order.items?.length,
+          /*
+            These MUST match the server half. finalizeShopOrder fires a CAPI
+            Purchase with the SAME event_id (orderNumber), so Meta keeps ONE copy
+            and discards the other — and which one it keeps is not ours to choose.
+            When the two disagreed, the surviving event's num_items was a coin
+            flip between the LINE COUNT (this half) and the SUM OF QUANTITIES (the
+            server half), and content_ids were present or absent at random.
+          */
+          numItems: order.products?.reduce((n, i) => n + (i.quantity ?? 0), 0),
+          contentIds: order.products
+            ?.map((i) =>
+              i.sku ?? (typeof i.product === "object" ? i.product?._id : i.product)
+            )
+            .filter((id): id is string => Boolean(id)),
         },
         eventSourceUrl: typeof window !== "undefined" ? window.location.href : undefined,
       }),
@@ -69,12 +91,16 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
 
   if (isLoading) {
     return (
-      <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-          <Skeleton className="h-24 w-full rounded-2xl" />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <Skeleton className="h-96 rounded-2xl" />
-            <Skeleton className="h-96 rounded-2xl" />
+      <div className={PAGE_SHELL}>
+        <div className="mx-auto max-w-4xl space-y-6 px-4 py-10 sm:px-6 lg:px-8">
+          <div className="flex flex-col items-center gap-3">
+            <Skeleton className="h-16 w-16 rounded-full" />
+            <Skeleton className="h-8 w-64 rounded-lg" />
+            <Skeleton className="h-4 w-80 rounded" />
+          </div>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+            <Skeleton className="h-80 rounded-2xl lg:col-span-3" />
+            <Skeleton className="h-80 rounded-2xl lg:col-span-2" />
           </div>
         </div>
       </div>
@@ -83,230 +109,348 @@ export default function CheckoutSuccessClient({ orderId }: CheckoutSuccessClient
 
   if (isError || !order) {
     return (
-      <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
-        <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Couldn&apos;t load order</h1>
-          <p className="text-gray-600 mb-6">{error instanceof Error ? error.message : "Please check your order ID or try again later."}</p>
-          <Link href="/my-account" className="text-red-600 font-medium hover:underline">
-            Go to My Account
+      <div className={PAGE_SHELL}>
+        <div className="mx-auto max-w-md px-4 py-16 text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50">
+            <AlertCircle className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+          </div>
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 dark:text-white">
+            Couldn&apos;t load order
+          </h1>
+          <p className="mb-6 text-gray-600 dark:text-neutral-400">
+            {error instanceof Error ? error.message : "Please check your order ID or try again later."}
+          </p>
+          <Link
+            href="/my-account/orders"
+            className="inline-flex h-11 items-center rounded-full bg-red-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+          >
+            Go to your orders
           </Link>
         </div>
       </div>
     );
   }
 
-  const paymentMethodLabel = order.paymentMethod
-    ? `${order.paymentMethod.brand ?? order.paymentMethod.type} ending in ${order.paymentMethod.last4 ?? "••••"}`
-    : "Card";
-
+  // shippingAddress is optional (a ticket-only order has none), so it must be
+  // narrowed rather than assumed present.
   const addr = order.shippingAddress;
-  const shipName = `${addr.firstName} ${addr.lastName}`.trim();
+  const shipName = addr ? `${addr.firstName ?? ""} ${addr.lastName ?? ""}`.trim() : "";
+  const hasAddress = Boolean(addr?.addressLine1 ?? addr?.address ?? addr?.city);
+
+  const isPaid = isOrderPaid(order);
+  // `cancelled` has exactly one writer: the stock-loss branch in
+  // finalizeShopOrder. It attempts a full refund first -- but its stripe.refunds
+  // .create is wrapped in a .catch that only logs, then falls through and sets
+  // cancelled regardless. So a refund is the intent, NOT a guarantee, and this
+  // page must not state it as settled fact: the one case where it is untrue is
+  // exactly the case where a human still has to act.
+  const isCancelled = order.status === "cancelled";
+
+  // The headline is guarded on the order's ACTUAL state. It used to read "Order
+  // Confirmed!" unconditionally, so a customer whose order had just been
+  // auto-refunded for lost stock was congratulated on it — and one whose webhook
+  // was still a few seconds out was told it was done before it was. The middle
+  // state gets its own honest wording rather than being folded into either.
+  //
+  // Every tone carries BOTH themes: a `text-green-600` with no dark counterpart
+  // is the exact bug that made this page's headline vanish into its own ground.
+  const statusHeader = isPaid
+    ? {
+        Icon: CheckCircle,
+        tone: "text-green-600 dark:text-green-400",
+        ring: "bg-green-100 dark:bg-green-950/50",
+        title: "Order confirmed",
+        body: "Thanks for your order. We're getting it made.",
+      }
+    : isCancelled
+      ? {
+          Icon: AlertCircle,
+          tone: "text-amber-600 dark:text-amber-400",
+          ring: "bg-amber-100 dark:bg-amber-950/50",
+          title: "This order was cancelled",
+          body: "An item sold out after you paid, so we cancelled the order and issued a refund. Refunds usually take a few business days to appear on your statement — if yours hasn't, email us and we'll chase it.",
+        }
+      : {
+          Icon: Clock,
+          tone: "text-blue-600 dark:text-blue-400",
+          ring: "bg-blue-100 dark:bg-blue-950/50",
+          title: "We're confirming your payment",
+          body: "This normally takes a few seconds. Refresh this page to check, or find the order any time under My Account.",
+        };
+  const StatusIcon = statusHeader.Icon;
+
+  // One label for both money rows, so the page never says "paid" about an order
+  // that has not been paid for or has already been refunded.
+  // "Refund issued", not "Refunded": see the isCancelled comment above -- the
+  // refund can fail and the order is still marked cancelled.
+  const totalLabel = isPaid ? "Total paid" : isCancelled ? "Refund issued" : "Order total";
+
+  const discounts = order.appliedDiscounts ?? [];
+  const money = (n: number) => `$${n.toFixed(2)}`;
 
   return (
-    <div className="bg-gray-50 pt-[var(--app-header-h)] sm:pt-[var(--app-header-h-lg)] min-h-screen-svh">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className={PAGE_SHELL}>
+      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
         {/* Payment Status Handler - Handles 3DS redirects */}
         <PaymentSuccessHandler paymentType="one-time" successMessage="Your payment was successful!">
-          {/* Success Header */}
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-12 h-12 text-green-600" />
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2 font-poppins">Order Confirmed!</h1>
-            <p className="text-gray-600 dark:text-neutral-400 text-lg">Thank you for your purchase. We&apos;re getting your order ready.</p>
-            <div className="mt-4 inline-block bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
-              Order: {order.orderNumber}
-            </div>
-          </div>
-
-          {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Order Details */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Package className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 font-poppins">Order Details</h2>
-                <p className="text-gray-600 dark:text-neutral-400">Items in your order</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {order.items.map((item) => {
-                const img = item.product?.images?.[0] ?? PLACEHOLDER_IMG;
-                const name = item.product?.name ?? "Product";
-                const brand = item.product?.brand ?? "";
-                return (
-                  <div key={`${item.productId}-${item.quantity}`} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <div className="w-16 h-16 bg-white rounded-lg overflow-hidden flex-shrink-0">
-                      <Image src={img} alt={name} width={64} height={64} className="w-full h-full object-cover" sizes="64px" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium text-gray-900 text-sm line-clamp-2">{name}</h3>
-                      {brand ? <p className="text-xs text-gray-500">{brand}</p> : null}
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-sm text-gray-600 dark:text-neutral-400">Qty: {item.quantity}</span>
-                        <span className="font-semibold text-gray-900">${(item.price * item.quantity).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <div className="flex items-center justify-between text-lg font-semibold">
-                <span>Total Paid:</span>
-                <span className="text-green-600">${order.totalAmount.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Shipping & Payment Info */}
-          <div className="space-y-6">
-            {/* Shipping Information */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <Truck className="w-6 h-6 text-orange-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900 font-poppins">Shipping Information</h3>
-                  <p className="text-gray-600 dark:text-neutral-400 text-sm">Delivery details</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Truck className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600 dark:text-neutral-400">
-                    <strong>Shipping</strong>
-                  </span>
-                </div>
-                {order.estimatedDelivery ? (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-600 dark:text-neutral-400">
-                      Estimated delivery: <strong>{new Date(order.estimatedDelivery).toLocaleDateString()}</strong>
-                    </span>
-                  </div>
-                ) : null}
-                <div className="flex items-start gap-2">
-                  <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-                  <div data-cs-mask className="text-sm text-gray-600 dark:text-neutral-400">
-                    <div>
-                      <strong>{shipName}</strong>
-                    </div>
-                    <div>{addr.address}</div>
-                    <div>
-                      {addr.city}, {addr.state} {addr.postalCode}
-                    </div>
-                    <div>{addr.country}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Payment Information */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CreditCard className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900 font-poppins">Payment Information</h3>
-                  <p className="text-gray-600 dark:text-neutral-400 text-sm">Payment details</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-neutral-400">Payment Method:</span>
-                  <span className="text-sm font-medium text-gray-900">{paymentMethodLabel}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-neutral-400">Amount Paid:</span>
-                  <span className="text-sm font-medium text-gray-900">${order.totalAmount.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-neutral-400">Status:</span>
-                  <span className="text-sm font-medium text-green-600 capitalize">{order.paymentStatus}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Next Steps */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-4 font-poppins">What&apos;s Next?</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <Mail className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-              <h3 className="font-semibold text-gray-900 mb-1">Email Confirmation</h3>
-              <p className="text-sm text-gray-600 dark:text-neutral-400">You&apos;ll receive an order confirmation email shortly</p>
-            </div>
-            <div className="text-center p-4 bg-orange-50 rounded-lg">
-              <Package className="w-8 h-8 text-orange-600 mx-auto mb-2" />
-              <h3 className="font-semibold text-gray-900 mb-1">Processing</h3>
-              <p className="text-sm text-gray-600 dark:text-neutral-400">We&apos;re preparing your order for shipment</p>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <Truck className="w-8 h-8 text-green-600 mx-auto mb-2" />
-              <h3 className="font-semibold text-gray-900 mb-1">Shipping</h3>
-              <p className="text-sm text-gray-600 dark:text-neutral-400">You&apos;ll get tracking info when your order ships</p>
-            </div>
-          </div>
-        </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link
-            href="/my-account"
-            className="inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-all duration-200"
-          >
-            View Order Details
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Link>
-
-          <Link
-            href="/shop"
-            className="inline-flex items-center justify-center px-6 py-3 bg-gray-100 text-gray-700 dark:text-neutral-200 rounded-lg font-medium hover:bg-gray-200 transition-all duration-200"
-          >
-            Continue Shopping
-          </Link>
-
-          <button className="inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 dark:text-neutral-200 rounded-lg font-medium hover:bg-gray-50 transition-all duration-200">
-            <Download className="w-4 h-4 mr-2" />
-            Download Receipt
-          </button>
-          </div>
-
-          {/* Support Information */}
-          <div className="text-center mt-8 p-6 bg-gray-100 rounded-2xl">
-          <h3 className="font-semibold text-gray-900 mb-2">Need Help?</h3>
-          <p className="text-gray-600 dark:text-neutral-400 mb-4">
-            If you have any questions about your order, our support team is here to help.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
-              href="tel:+61412345678"
-              className="inline-flex items-center gap-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 transition-colors"
+          {/* ── The one thing the customer came here to read ────────────────── */}
+          <div className="text-center">
+            <div
+              className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${statusHeader.ring}`}
             >
-              <Phone className="w-4 h-4" />
-              +61 4XX XXX XXX
-            </a>
+              <StatusIcon className={`h-9 w-9 ${statusHeader.tone}`} />
+            </div>
+            <h1 className="font-poppins text-3xl font-bold text-gray-900 dark:text-white sm:text-4xl">
+              {statusHeader.title}
+            </h1>
+            <p className="mx-auto mt-2 max-w-xl text-gray-600 dark:text-neutral-400">
+              {statusHeader.body}
+            </p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm shadow-sm ring-1 ring-gray-200 dark:bg-neutral-900 dark:ring-neutral-800">
+              <span className="text-gray-500 dark:text-neutral-400">Order</span>
+              <span className="font-mono font-semibold text-gray-900 dark:text-white">
+                {order.orderNumber}
+              </span>
+            </div>
+
+            {/*
+              Entries are announced next to the order, not buried in the money
+              rows: they are the free inclusion the customer earned, and they are
+              rendered ONLY above zero. Merchandise entries currently ship dark
+              at includedEntries: 0, so "0 free entries" would state a promise we
+              are not making (rule 11 — a free inclusion, never priced).
+            */}
+            {isPaid && (order.entriesGranted ?? 0) > 0 && (
+              <p className="mt-3">
+                <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  <Ticket className="h-4 w-4" />
+                  {order.entriesGranted} free {order.entriesGranted === 1 ? "entry" : "entries"} added
+                  to this month&apos;s draw
+                </span>
+              </p>
+            )}
+          </div>
+
+          <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-5">
+            {/* ── What you bought, and what it cost ─────────────────────────── */}
+            <div className={`${CARD} p-5 sm:p-6 lg:col-span-3`}>
+              <h2 className="font-poppins text-lg font-bold text-gray-900 dark:text-white">
+                Your order
+              </h2>
+
+              <ul className="mt-4 space-y-3">
+                {order.products.map((item) => {
+                  // `product` is an ObjectId ref the read route populates; it is a
+                  // bare id string when population is skipped, so narrow before use.
+                  const populated = typeof item.product === "object" ? item.product : undefined;
+                  // Falls back to an icon, not a stand-in photo. The old fallback was
+                  // a DeWalt product shot, so an item whose image had not loaded was
+                  // pictured as a brand we do not sell.
+                  const img = populated?.images?.[0];
+                  // Prefer the snapshot — the catalog may have been renamed since.
+                  const name = item.name ?? populated?.name ?? "Product";
+                  // Same join order as the order-history list, so one purchase
+                  // never reads as two different variants on two pages.
+                  const variant = [item.colour, item.size].filter(Boolean).join(" · ");
+                  return (
+                    <li
+                      key={`${populated?._id ?? name}-${item.sku ?? ""}-${item.quantity}`}
+                      className="flex items-center gap-3"
+                    >
+                      <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-neutral-800">
+                        {img ? (
+                          <Image
+                            src={img}
+                            alt={name}
+                            width={64}
+                            height={64}
+                            className="h-full w-full object-contain"
+                            sizes="64px"
+                          />
+                        ) : (
+                          <Package className="h-6 w-6 text-gray-400 dark:text-neutral-500" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="line-clamp-2 text-sm font-semibold text-gray-900 dark:text-neutral-100">
+                          {name}
+                        </h3>
+                        {variant && (
+                          <p className="mt-0.5 text-xs text-gray-500 dark:text-neutral-400">{variant}</p>
+                        )}
+                        <p className="mt-0.5 text-xs text-gray-500 dark:text-neutral-400">
+                          Qty {item.quantity}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-gray-900 dark:text-neutral-100">
+                        {money(item.price * item.quantity)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {/*
+                The full composition, not just a total. An Australian invoice
+                has to show the GST, and GST is already INSIDE totalAmount — it is
+                stated beneath the total as a note, never added as a row, or the
+                arithmetic on screen would not sum.
+              */}
+              <dl className="mt-5 space-y-2 border-t border-gray-100 pt-5 text-sm dark:border-neutral-800">
+                <div className="flex justify-between">
+                  <dt className="text-gray-600 dark:text-neutral-400">Subtotal</dt>
+                  <dd className="tabular-nums text-gray-900 dark:text-neutral-100">
+                    {money(order.subtotal)}
+                  </dd>
+                </div>
+
+                {discounts.map((d, i) => (
+                  <div key={i} className="flex justify-between">
+                    <dt className="text-green-700 dark:text-green-400">{d.description}</dt>
+                    <dd className="tabular-nums text-green-700 dark:text-green-400">
+                      −{money(d.amount)}
+                    </dd>
+                  </div>
+                ))}
+
+                <div className="flex justify-between">
+                  <dt className="text-gray-600 dark:text-neutral-400">Shipping</dt>
+                  <dd className="tabular-nums text-gray-900 dark:text-neutral-100">
+                    {order.shippingCost > 0 ? money(order.shippingCost) : "Free"}
+                  </dd>
+                </div>
+
+                <div className="flex items-baseline justify-between border-t border-gray-100 pt-3 dark:border-neutral-800">
+                  <dt className="font-bold text-gray-900 dark:text-white">{totalLabel}</dt>
+                  <dd className={`text-xl font-bold tabular-nums ${statusHeader.tone}`}>
+                    {money(order.totalAmount)}
+                  </dd>
+                </div>
+                <p className="text-right text-xs text-gray-500 dark:text-neutral-400">
+                  Includes {money(order.gstAmount)} GST
+                  {isPaid ? " · paid by card" : ""}
+                </p>
+              </dl>
+            </div>
+
+            {/* ── Where it's going, and what happens next ────────────────────── */}
+            <div className="space-y-6 lg:col-span-2">
+              {hasAddress && (
+                <div className={`${CARD} p-5 sm:p-6`}>
+                  <h2 className="flex items-center gap-2 font-poppins text-lg font-bold text-gray-900 dark:text-white">
+                    <MapPin className="h-4 w-4 text-gray-400 dark:text-neutral-500" />
+                    Delivering to
+                  </h2>
+                  {/* No estimated-delivery date is stored. Print-to-order turnaround
+                      is supplier-dependent and unconfirmed, so promising a date here
+                      would be a guess shown to a paying customer. */}
+                  <address
+                    data-cs-mask
+                    className="mt-3 space-y-0.5 text-sm not-italic text-gray-600 dark:text-neutral-400"
+                  >
+                    {shipName && (
+                      <div className="font-semibold text-gray-900 dark:text-neutral-100">{shipName}</div>
+                    )}
+                    {/* addressLine1 is the current field; `address` is the legacy
+                        single line kept only so pre-2026-08 orders still render. */}
+                    <div>{addr?.addressLine1 ?? addr?.address}</div>
+                    {addr?.addressLine2 ? <div>{addr.addressLine2}</div> : null}
+                    <div>
+                      {addr?.city}, {addr?.state} {addr?.postalCode}
+                    </div>
+                    <div>{addr?.country}</div>
+                  </address>
+                </div>
+              )}
+
+              {/* Only for an order that is actually going ahead. On a cancelled
+                  order every one of these steps describes something that will
+                  never happen. */}
+              {isPaid && (
+                <div className={`${CARD} p-5 sm:p-6`}>
+                  <h2 className="font-poppins text-lg font-bold text-gray-900 dark:text-white">
+                    What happens next
+                  </h2>
+                  <ol className="mt-4 space-y-4">
+                    {[
+                      {
+                        Icon: Mail,
+                        title: "Confirmation email",
+                        body: "Your confirmation and invoice are on their way to your inbox.",
+                      },
+                      {
+                        Icon: Package,
+                        title: "We print it",
+                        body: "Your gear is printed to order, so give us a little time before it ships.",
+                      },
+                      {
+                        Icon: Truck,
+                        title: "It ships",
+                        // Nothing emails a tracking number — an admin adds it to
+                        // the order and my-account/orders renders it. Say where it
+                        // turns up rather than promising a message we never send.
+                        body: "Tracking appears on your order in My Account once it's on the way.",
+                      },
+                    ].map((step) => (
+                      <li key={step.title} className="flex gap-3">
+                        <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 dark:bg-neutral-800">
+                          <step.Icon className="h-4 w-4 text-gray-600 dark:text-neutral-300" />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-semibold text-gray-900 dark:text-neutral-100">
+                            {step.title}
+                          </span>
+                          <span className="block text-xs text-gray-600 dark:text-neutral-400">
+                            {step.body}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            {/* Was /my-account, which has no orders on it — the button promised order
+                details and delivered a dashboard. /my-account/orders is the page that
+                actually answers it. */}
+            <Link
+              href="/my-account/orders"
+              className="inline-flex h-12 items-center justify-center rounded-full bg-red-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-red-700"
+            >
+              View your orders
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+
+            <Link
+              href="/shop"
+              className="inline-flex h-12 items-center justify-center rounded-full border border-gray-300 bg-white px-6 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
+            >
+              Keep shopping
+            </Link>
+
+            {/* "Download Receipt" was removed: it had no onClick and never did anything.
+                A button that silently does nothing is worse than no button — a customer
+                clicks it, gets no file, and contacts support. The receipt is emailed on
+                payment (sendShopOrderConfirmation); if a downloadable invoice is wanted
+                later it needs a real endpoint behind it. */}
+          </div>
+
+          <p className="mt-8 text-center text-sm text-gray-600 dark:text-neutral-400">
+            {/* The "+61 4XX XXX XXX" that used to sit here was a placeholder wired
+                to tel:+61412345678 — a real, dialable number belonging to a
+                stranger. There is no support phone line, so the email is the whole
+                of it. */}
+            Questions about this order?{" "}
             <a
               href={`mailto:${contactEmail}`}
-              className="inline-flex items-center gap-2 text-gray-600 dark:text-neutral-400 hover:text-gray-900 transition-colors"
+              className="font-semibold text-red-600 underline-offset-2 hover:underline dark:text-red-400"
             >
-              <Mail className="w-4 h-4" />
               {contactEmail}
             </a>
-          </div>
-          </div>
+          </p>
         </PaymentSuccessHandler>
       </div>
     </div>

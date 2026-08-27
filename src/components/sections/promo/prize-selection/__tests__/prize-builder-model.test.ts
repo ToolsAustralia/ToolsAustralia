@@ -247,13 +247,12 @@ run("combo-art fallback is per COMBINATION, not per toolbox", () => {
   assert.equal(withArt.image, `/images/majordraws/${TOOLSETS[0].id}-set/${TOOLSETS[0].id}-kincrome.webp`);
 });
 
-run("cash mode short-circuits to the cash prize and hides the $5,000 flag", () => {
+run("cash mode short-circuits to the cash prize", () => {
   const [box] = TOOLBOXES;
   const [set] = TOOLSETS;
   assert.equal(toPrizeSlug({ toolbox: box.id, toolset: set.id, isCash: true }), CASH_OPTION.slug);
   const combo = getComboPresentation(box, set, true);
   assert.equal(combo.image, CASH_OPTION.image);
-  assert.equal(combo.showCashFlag, false, "the bundled $5,000 must not be advertised in cash mode");
   assert.equal(combo.eyebrow, "CASH OPTION");
 });
 

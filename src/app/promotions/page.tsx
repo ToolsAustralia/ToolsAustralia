@@ -28,7 +28,7 @@ export const revalidate = 60;
 export const metadata: Metadata = {
   title: "Giveaway Prize Combinations - Tools Australia",
   description:
-    "Every prize combination in the Tools Australia major draw — Milwaukee, DeWalt, Makita, Ryobi and HiKOKI power tool kits with premium toolbox storage, or the $10,000 cash alternative. Build the win you actually want.",
+    "Every prize combination in the Tools Australia major draw — Milwaukee, DeWalt, Makita, Ryobi, HiKOKI and STIHL power tool kits with premium toolbox storage, or the $10,000 cash alternative. Build the win you actually want.",
   openGraph: {
     title: "Giveaway Prize Combinations - Tools Australia",
     description:

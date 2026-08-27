@@ -1,6 +1,9 @@
 import mongoose, { Document, Schema } from "mongoose";
 
-export const DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION = 3;
+// 4 (2026-08-21): merchandise became its own revenue bucket. Snapshots written at 3
+// have no `shop` bucket and under-report the headline total for any day with merch
+// sales — re-run the snapshot backfill over the shop's live window.
+export const DASHBOARD_STATS_SNAPSHOT_SOURCE_VERSION = 4;
 
 export type AttributedPlatformKey =
   | "meta" | "tiktok" | "snapchat"
@@ -26,7 +29,9 @@ export type RevenueBucketKey =
   | "oneTimePurchase"
   | "additionalOneTimePurchase"
   | "miniDraw"
-  | "upsell";
+  | "upsell"
+  /** Merchandise. Headline revenue, deliberately NOT in the ads/ROAS numerator. */
+  | "shop";
 
 export const REVENUE_BUCKET_KEYS: RevenueBucketKey[] = [
   "membershipPurchase",
@@ -35,6 +40,7 @@ export const REVENUE_BUCKET_KEYS: RevenueBucketKey[] = [
   "additionalOneTimePurchase",
   "miniDraw",
   "upsell",
+  "shop",
 ];
 
 export interface IRevenueBucket {

@@ -12,9 +12,12 @@
  * record there (plus its art + catalog entries) — never an edit in this file
  * and never a layout change.
  *
- * COPY RULE (CLAUDE.md §11): the $5,000 / $10,000 cash is a FREE inclusion in
- * the prize, never a priced entry. Nothing here may emit odds/chance/lottery
- * framing.
+ * COPY RULE (CLAUDE.md §11): the $10,000 cash option is a FREE inclusion in the
+ * prize, never a priced entry. Nothing here may emit odds/chance/lottery framing.
+ *
+ * Draw 10 (2026-08-28) removed the $5,000 bonus that used to ride on every tool
+ * combination. Tool combos now carry NO cash claim — cashFlag is null and the cash
+ * stat tile is absent — while the cash-ONLY option keeps its $10,000.
  */
 
 import {
@@ -34,9 +37,7 @@ import {
 import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
 import { accentInk, contrastRatio } from "@/utils/prize-brand-colors";
 
-/** Cash added to every tool combination — the headline sweetener on each combo. */
-export const COMBO_CASH_BONUS = "$5,000";
-/** Cash taken INSTEAD of the gear. */
+/** Cash taken INSTEAD of the gear. The only cash left in the prize after draw 10. */
 export const CASH_ONLY_AMOUNT = "$10,000";
 
 /** Total combinations on offer — drives the eyebrow, so it can never go stale. */
@@ -92,8 +93,12 @@ export interface SpotlightView {
   title: string;
   /** Kit + storage line, or the cash blurb. */
   description: string;
-  /** Green flag on the case: "+ $5,000 cash" / "$10,000 cash". */
-  cashFlag: string;
+  /**
+   * Green flag on the case — "$10,000 cash" for the cash option.
+   * NULL for a tool combination: since draw 10 there is no cash on top, and an empty
+   * pill would read as a missing value rather than a deliberate absence.
+   */
+  cashFlag: string | null;
   stats: SpotlightStat[];
   /** The prize page this combination opens. */
   href: string;
@@ -121,11 +126,12 @@ export function getSpotlightView(selection: PrizeSelection): SpotlightView {
     tag: isCash ? "Cash option" : "Live preview",
     title: isCash ? CASH_OPTION.title : `${toolset.name} × ${toolbox.brandName}`,
     description: isCash ? CASH_OPTION.sub : `${toolsetKitLine(toolset)} · ${toolbox.name}`,
-    cashFlag: isCash ? `${CASH_ONLY_AMOUNT} cash` : `+ ${COMBO_CASH_BONUS} cash`,
+    cashFlag: isCash ? `${CASH_ONLY_AMOUNT} cash` : null,
     stats: [
       { label: "Power tools", value: isCash ? "—" : `${toolset.toolCount} tools` },
       { label: "Storage", value: isCash ? "—" : toolbox.brandName },
-      { label: "Cash bonus", value: isCash ? CASH_ONLY_AMOUNT : COMBO_CASH_BONUS, isCash: true },
+      // Cash tile only in cash mode — a tool combination has no cash component to report.
+      ...(isCash ? [{ label: "Cash prize", value: CASH_ONLY_AMOUNT, isCash: true }] : []),
     ],
     // Each combination has its own prerendered prize page (`{toolset}-{toolbox}`),
     // so the link lands on art + metadata for exactly what was previewed.

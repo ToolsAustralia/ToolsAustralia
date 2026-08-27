@@ -31,10 +31,22 @@ const ROOT = path.join(__dirname, "..");
 const PUBLIC = path.join(ROOT, "public");
 const LANDING_BASE = "/images/background/promo/landing";
 
-const BRANDS = ["dewalt", "makita", "milwaukee", "ryobi", "hikoki"];
+const BRANDS = ["dewalt", "makita", "milwaukee", "ryobi", "hikoki", "stihl"];
 const TOOLBOX = ["milTB", "sidTB", "kinTB", "gwTB"];
-/** Tiers that ship as real art. `final-hours` is intentionally absent — see header. */
-const URGENCIES = [null, "drawn-tomorrow", "drawn-tonight"];
+/**
+ * Tiers that ship as real art.
+ *
+ * Draw 10 (2026-08-28): the `-drawn-tomorrow` / `-drawn-tonight` sets were WITHDRAWN, not lost.
+ * All 160 baked `& $5K CASH` into the headline, and draw 10 removed that bonus — so they were
+ * advertising a prize we no longer give, on the highest-intent surface we have, and only inside
+ * the countdown window where nobody would routinely look. Deleting them makes
+ * `resolveLandingHeroImage` drop the tier and serve the (correct) base hero, which it already
+ * does for any unshipped tier.
+ *
+ * Restore to [null, "drawn-tomorrow", "drawn-tonight"] when the replacement art lands.
+ * `final-hours` has never shipped for any brand — see header.
+ */
+const URGENCIES = [null];
 const VIEWPORTS = ["desktop", "mobile"];
 const MODES = ["light", "dark"];
 
@@ -43,9 +55,9 @@ const MODES = ["light", "dark"];
  * the guard forever on a healthy tree. Delete an entry the moment its art ships.
  */
 const KNOWN_GAPS = new Set([
-  // Empty — every brand × toolbox pair now ships art. `ryobi|gwTB` was the last gap and
-  // landed 2026-07-28 (see scripts/convert-ryobi-gearwrench-landing.ts). Keep this set:
-  // it is where a future incomplete drop gets recorded rather than silently failing.
+  // Empty — all SIX brands x four toolboxes now ship base light/dark art for both viewports.
+  // STIHL's landing heroes landed 2026-08-26, clearing the last four entries here. Keep the
+  // set: it is where a future incomplete drop gets recorded rather than silently failing.
 ]);
 
 function landingPath(rel) {

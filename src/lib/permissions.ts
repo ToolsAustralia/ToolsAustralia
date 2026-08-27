@@ -41,6 +41,10 @@ export const AREA_ACTIONS = {
   errorReports: ["view", "edit", "delete"],
   abTesting: ["view", "edit", "selectWinner", "delete"],
   rewards: ["view", "edit", "delete"],
+  // Shop catalog + orders. `delete` is split out because the product API carries
+  // bulk-destruction routes (delete-all, delete-by-*) that wipe the catalog in one
+  // call — an operator who can edit a product should not implicitly hold those.
+  shop: ["view", "edit", "delete"],
   // The Receipts ledger — every payment received, joined to the customer who paid and to
   // Stripe. Its own area rather than a reuse of `settings.view` (which gates the other
   // Billing tabs) because this one surface is the complete revenue picture attached to

@@ -7,6 +7,7 @@
 | [src/middleware.ts](../../src/middleware.ts) | NextAuth gating + CSP nonce injection |
 | [src/utils/security/](../../src/utils/security/) | CSP construction (csp.ts) |
 | [src/lib/rate-limiting/](../../src/lib/rate-limiting/) | Rate limit primitives |
+| [src/utils/security/rateLimiter.ts](../../src/utils/security/rateLimiter.ts) | In-memory + Mongo-backed rate limiters (`check` / `refund`) |
 | [next.config.ts](../../next.config.ts) | Static fallback security headers |
 
 ## CSP construction
@@ -36,6 +37,58 @@ The matcher uses **a single regex** with all exclusions combined inside one nega
 
 **Gotcha to remember:** Splitting exclusions into two matcher entries causes middleware to run on paths that should be excluded. For example, two-entry exclusion of `/api/**` (entry 1) AND non-extension paths (entry 2) would still run middleware on `/api/admin/*` because entry 2's "non-extension" pattern matches it. Always keep all exclusions inside one negative lookahead in a single matcher entry.
 
+## Page redirects in middleware — and the dashboard access gate (2026-08-27)
+
+`middleware()` runs its redirect checks in a fixed order, each returning early. #2, #3 and #4
+apply `buildSecurityHeaders(nonce)` + `x-nonce` to the redirect response, so those paths stay
+nonce-class (see "Route classes" below); #1 returns a bare `NextResponse.redirect` and is the one
+exception.
+
+| # | Condition | Redirect to |
+|---|---|---|
+| 1 | `token.userType === "staff"` && `isStaffBlockedPath(pathname)` | `/admin` — see [middleware.md](./middleware.md) |
+| 2 | protected route && no token | `/login` |
+| 3 | protected route && `token.hasEverPaid === false` && `!isInternalUser(token)` | `/membership` — **added 2026-08-27** |
+| 4 | `/admin**` && (no token, or a token that is not internal) | `/` |
+
+`protectedRoutes` is `["/rewards", "/my-account"]` for both #2 and #3.
+
+**Why #3 exists.** A signed-in account that has never bought anything has nothing on the dashboard
+to see, so it lands on the join page — a conversion surface — rather than an empty one. Design
+rationale:
+[2026-08-25-mobile-verification-and-sms-login-design.md](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md)
+§5e.
+
+**Why `hasEverPaid`, not `subscription.isActive`.**
+[`hasEverPaid`](../../src/utils/auth/has-ever-paid.ts) answers "has this account **ever** completed
+a purchase", not "is it paying today". `subscription.isActive` is false for cancelled, paused
+(retention freeze) and past-due members, so gating on it would bounce **4,613 paying customers**
+(38.5% of all payers) off their own dashboard — including past-due members who still hold live draw
+entries and can win. `stripeCustomerId` is wrong in the other direction: registration creates the
+Stripe customer *before* any payment, so it is true for ~44k never-paid registrants. The predicate
+unions the synchronously-written purchase signals (`stripeSubscriptionId`, `oneTimePackages`,
+`subscription.startDate`) alongside webhook-written `processedPayments` so a just-paid buyer is not
+bounced during the webhook race. Test: `npm run test:has-ever-paid`.
+
+**Why `undefined` is allowed through.** The condition is `token.hasEverPaid === false`, deliberately
+**not** `!token.hasEverPaid`. A token minted before this shipped carries no stamp; treating absent as
+"not a customer" would bounce existing signed-in members mid-session, which is worse than letting one
+request past — the jwt callback re-stamps on the next request, so the gate closes one navigation
+later. Same shape as the `tokenVersion` guard in [auth.ts](../../src/lib/auth.ts), which only fires
+once the token already carries the field.
+
+**The token stamp is free.** The jwt callback sets `token.hasEverPaid` on both branches that already
+load the user document — the first-token branch and the per-request refresh (`User.findById(token.sub)`,
+which runs on every request anyway to keep the session fresh and enforce `deleted` / `tokenVersion`).
+No extra query, and because the refresh re-stamps each request, a first purchase unlocks
+`/my-account` on the next navigation with no re-login. The field is declared on `JWT` in
+[src/types/global.d.ts](../../src/types/global.d.ts).
+
+**Scope.** Page routes only — middleware never runs for `/api/**` (R4), so an endpoint that must be
+customers-only checks the predicate itself (`POST /api/auth/send-mobile-login-code` does).
+`/membership` is public and is not in `protectedRoutes`, so the redirect cannot loop; staff never
+reach the check (#1 diverts them first, and `isInternalUser` is a second belt).
+
 ## Edge runtime constraint — `ta_anon_id` minted in middleware (2026-07-28)
 
 `src/middleware.ts` runs in the Edge runtime, which does not support Node's
@@ -63,6 +116,32 @@ marketing) is unaffected.
 [src/lib/rate-limiting/](../../src/lib/rate-limiting/) — primitives for per-IP / per-user / global rate limits. Used by:
 - Public endpoints (contact, public APIs)
 - Admin bulk tools (charge-past-due — 1/admin/5min, 1/global/24h)
+
+The two limiter factories live in [src/utils/security/rateLimiter.ts](../../src/utils/security/rateLimiter.ts) — sync per-instance `createRateLimiter`, and async Mongo-backed `createDistributedRateLimiter` over the [`RateLimit`](../../src/models/RateLimit.ts) collection (one TTL-expiring document per `${bucketKey}:${identifier}`). See gotchas.md "Two rate limiters" for which endpoints use which.
+
+### `refund(identifier)` on the distributed limiter (2026-08-26)
+
+`check()` **consumes a token on the call itself — there is no peek**. A caller that passes the
+check and then fails downstream has permanently eaten one of that identifier's allowance while
+the guarded action never happened. Tolerable on a 5-per-minute login limit; not tolerable on a
+3-per-day one — the SMS OTP send budget
+([`claimOtpSendAllowance`](../../src/utils/auth/mobile-otp.ts)) would lose a third of a member's
+daily allowance every time the gateway hiccuped. `refund()` hands the token back.
+
+The write is a single guarded `updateOne`; both filter clauses are load-bearing:
+
+| Guard | Prevents |
+|---|---|
+| `count: { $gt: 0 }` | a double refund driving the counter negative, which would **mint** allowance above `maxRequests` for the rest of the window |
+| `resetAt: { $gt: new Date() }` | a late refund resurrecting an already-expired window (the TTL sweep may not have removed the document yet) |
+
+It is **best-effort and silent**: any error is logged and swallowed, never thrown — the caller is
+already handling a failure, and a second error thrown on top of the first is strictly worse than
+losing one token. Hence `Promise<void>`: there is nothing to branch on.
+
+Composition order (claim daily → claim cooldown → refund daily if cooldown rejects → refund both
+if the action fails) is patterns.md P6. Design rationale:
+[2026-08-25-mobile-verification-and-sms-login-design.md](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
 
 ## next.config.ts — image + experimental settings
 
@@ -178,3 +257,10 @@ above: one named host is auditable, `https://*.somevendor.com` is not.
 _(`script-src` does carry `https://*.contentsquare.net` since 2026-08-07. Not a counter-example:
 that wildcard widens a vendor domain already granted script execution, rather than granting a new
 capability to a host we don't otherwise trust. See gotchas.md.)_
+
+## Build output directory (2026-08-21)
+
+`distDir` is `process.env.NEXT_DIST_DIR || ".next"`. The e2e harness sets it to
+`.next-e2e` so its `NEXT_PUBLIC_*` values — which Next inlines into client chunks at
+compile time — never land in the cache `npm run dev` serves from. See
+`docs/e2e/gotchas.md` for the CORS failure this fixes.

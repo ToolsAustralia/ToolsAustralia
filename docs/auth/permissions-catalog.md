@@ -138,6 +138,7 @@ personal. If that projection ever gains per-user fields, it moves to `viewPartic
 | `errorReports` | view, edit, delete | `edit` = status changes / individual PATCH; `delete` = bulk archive. |
 | `abTesting` | view, edit, selectWinner, delete | `selectWinner` declares an experiment winner. |
 | `rewards` | view, edit, delete | Milestone rewards + monthly coupon campaigns. `edit` covers create/update/toggle and target-user previews; `delete` removes a milestone reward or soft-deactivates a campaign with existing issuances. |
+| `shop` | view, edit, delete | Product catalog + orders. `view` covers stock reads, sales analytics and CSV export; `edit` covers create/import/duplicate/stock-adjust/archive/restore. `delete` is split out because the product API carries bulk-destruction routes (`delete-all`, ten `delete-by-*`, `delete-low-stock`, `delete-out-of-stock`, `bulk` DELETE) that can wipe the whole catalog in one call — a catalog editor must not implicitly hold those. Storefront reads (list, detail, search, categories, featured, bestsellers, new arrivals, related) are deliberately **public** and ungated. |
 | `receipts` | view, export | The Receipts ledger (Billing tab) — every payment received, joined to the customer who paid. `view` gates the tab + `GET /api/admin/receipts`; `export` additionally gates `?format=csv`. See the split below. |
 | `settings` | view, edit | Admin Settings tab (Roles & Staff sub-screens). |
 | `audit` | view | Staff activity log (audit trail of staff mutations). |

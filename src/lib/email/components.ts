@@ -29,6 +29,16 @@ const EMAIL_HEAD_STYLE = `
     .num{font-variant-numeric:tabular-nums;}
     @media only screen and (max-width:600px){
       .container{width:100%!important;}
+      /* Full-bleed on a phone. The 12px gutters cost 24px of a 320px screen and
+         pushed the card past the viewport into horizontal scroll — measured at
+         340px wide on a 320px window. A card that reaches both edges is also just
+         what a phone email looks like. */
+      .page-pad{padding:18px 0!important;}
+      .card{border-left:none!important;border-right:none!important;border-radius:0!important;}
+      /* A product name is not a field label. Give the line-item name column the
+         room and let the money column size to its content. */
+      .li-name{width:auto!important;}
+      .li-amt{white-space:nowrap!important;}
       .px{padding-left:22px!important;padding-right:22px!important;}
       .py{padding-top:30px!important;padding-bottom:32px!important;}
       .h1{font-size:29px!important;line-height:1.1!important;}
@@ -113,7 +123,7 @@ export function renderBrandEmail(opts: {
 <body class="page" style="margin:0;padding:0;background-color:#f9fafb;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#f9fafb;">${preheader}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="page" style="background-color:#f9fafb;">
-    <tr><td align="center" style="padding:32px 12px;">
+    <tr><td align="center" class="page-pad" style="padding:32px 12px;">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="container card" style="width:600px;max-width:600px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;box-shadow:0 10px 34px rgba(15,23,42,0.10);">
         ${BRAND_HEADER}
         <tr><td class="px py" style="padding:40px 36px 36px;">
@@ -237,17 +247,59 @@ export function alertBlock(opts: { title: string; body: string }): string {
 }
 
 /** Mono-label / value rows in a bordered card (details + receipts). */
-export function infoTable(rows: Array<{ label: string; value: string }>): string {
+export function infoTable(
+  rows: Array<{ label: string; value: string; emphasis?: boolean }>
+): string {
   const body = rows
     .map((r, i) => {
       const last = i === rows.length - 1;
       const border = last ? 'border-bottom:none;' : 'border-bottom:1px solid #f0f1f3;';
+      // `emphasis` is what makes the amount actually paid findable. Without it the
+      // total is set identically to Subtotal and Delivery, so the one number a
+      // customer opens an invoice to check has no more weight than the rest.
+      const amt = r.emphasis
+        ? 'font-size:17px;font-weight:800;'
+        : 'font-size:14px;font-weight:500;';
       return `<tr>
                   <td class="tabler tabler-b" style="padding:14px 18px;${border}font-family:'SFMono-Regular',ui-monospace,Consolas,'Courier New',monospace;font-size:10.5px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#94a3b8;background-color:#ffffff;width:42%;vertical-align:top;">${r.label}</td>
-                  <td class="tabler tabler-b t-dark" style="padding:14px 18px;${border}font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:14px;font-weight:500;color:#111827;background-color:#ffffff;word-break:break-word;">${r.value}</td>
+                  <td class="tabler tabler-b t-dark" style="padding:14px 18px;${border}font-family:'Inter','Helvetica Neue',Arial,sans-serif;${amt}color:#111827;background-color:#ffffff;word-break:break-word;font-variant-numeric:tabular-nums;">${r.value}</td>
                 </tr>`;
     })
     .join('');
+  return `<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;margin:4px 0;"><tbody>${body}</tbody></table></td></tr>`;
+}
+
+/**
+ * Ordered lines: name (+ variant) on the left, money on the right.
+ *
+ * These used to go through `infoTable`, which styles its left column as 10.5px
+ * mono UPPERCASE in a fixed 42% column — right for SUPPLIER and ABN, wrong for a
+ * product name. Measured on a 320px screen, "3 × Tools Australia Heavy Duty
+ * Workwear Tee (Black · XL)" became a 94px-tall five-line stack of capitals in a
+ * 113px column, next to a price sitting alone in the wide half.
+ *
+ * So the columns are the other way round to a label/value table: the NAME takes
+ * the room and the money column shrinks to its content. The variant drops to its
+ * own muted line rather than being parenthesised into the name, because it is the
+ * detail a customer scans for when checking what they bought.
+ */
+export function lineItemsTable(
+  rows: Array<{ name: string; variant?: string; quantity: number; amount: string }>
+): string {
+  const body = rows
+    .map((r, i) => {
+      const last = i === rows.length - 1;
+      const border = last ? "border-bottom:none;" : "border-bottom:1px solid #f0f1f3;";
+      const variant = r.variant
+        ? `<div class="t-mut" style="margin-top:3px;font-size:12.5px;font-weight:500;color:#94a3b8;">${r.variant}</div>`
+        : "";
+      return `<tr>
+                  <td class="tabler tabler-b t-dark li-name" style="padding:14px 10px 14px 18px;${border}font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:14.5px;font-weight:600;color:#111827;background-color:#ffffff;word-break:break-word;vertical-align:top;">${r.name}${variant}</td>
+                  <td class="tabler tabler-b t-dark li-amt" align="right" style="padding:14px 18px 14px 10px;${border}font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-size:14.5px;font-weight:600;color:#111827;background-color:#ffffff;vertical-align:top;white-space:nowrap;font-variant-numeric:tabular-nums;">
+                    <span class="t-mut" style="color:#94a3b8;font-weight:500;">× ${r.quantity}</span>&nbsp;&nbsp;${r.amount}</td>
+                </tr>`;
+    })
+    .join("");
   return `<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;margin:4px 0;"><tbody>${body}</tbody></table></td></tr>`;
 }
 
