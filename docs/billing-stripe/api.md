@@ -30,6 +30,26 @@ Full inventory of routes under `/api/stripe/**` and `/api/invoice/**`. Auth and 
 | POST | `/api/stripe/verify-payment-intent` | Read-only verification of PI state |
 | POST | `/api/stripe/verify-payment-complete` | Higher-level "did this purchase succeed?" check |
 | POST | `/api/stripe/analyze-payment-intent` | Diagnostics endpoint (dev/support) |
+| POST | `/api/stripe/attach-campaign-code` | Stamps the customer's applied bonus-entry code onto the **still-unpaid** checkout object at the PURCHASE click, before `confirmPayment`. See below. |
+
+#### `POST /api/stripe/attach-campaign-code`
+
+Thin handler over `attachCampaignCodeToCheckout` ([payment/backend.md](../payment/backend.md#campaign-code-checkoutts--the-authoritative-campaign-code-write)) — parse, rate-limit, resolve an optional session, delegate, map the typed result.
+
+Body — `code` (`string | null`; `null` CLEARS a stale stamp) plus **exactly one** complete target pair:
+
+| Target | Fields | Possession proof |
+|---|---|---|
+| subscription | `subscriptionId`, `subscriptionRequestId` | the `subscriptionRequestId` **the server itself wrote** into `subscription.metadata` at create |
+| payment intent | `paymentIntentId`, `clientSecret` | Stripe's own `client_secret` capability token |
+
+**Unauthenticated by design**, the same call the sibling `POST /api/codes/validate` makes: guest checkout is the majority of this journey (step-1 registration does not authenticate — CLAUDE.md rule 6), so a session cannot be the gate. A session, when present, is used only as a last-resort identity hint; the user id that the code is re-verified against comes from the Stripe object's own metadata. Rate limited per IP (60/min, bucket `attach-campaign-code`), mirroring `/api/codes/validate`.
+
+The `clientSecret` is a bearer credential: never logged, never echoed, never included in an error body. The two arms use different proofs because each object already carries one the browser provably holds — adding a third token would be new plumbing across six call sites for no gain.
+
+Responses: `200 { success: true, campaignCode }` (`campaignCode` is `null` when the server refused or cleared the code — that is a **success**, not an error) · `400` validation · `403` proof mismatch · `404` no such object · `409` object already paid · **`200 { success: false }` for a Stripe or unexpected failure**. Failure bodies are deliberately generic. **Callers must treat every failure as non-fatal and charge anyway** — the client helper (`useStripeSubscription().attachCampaignCode`) caps itself at 15s and never throws.
+
+⚠️ **A Stripe hiccup here is deliberately NOT a 5xx** (it was `502`/`500` until 2026-08-27). This endpoint is non-fatal by contract, so a transient failure is a normal answer, not a server fault — and the e2e QA watchdog records **any** same-origin response `>= 500` as a problem, so signalling it that way failed whichever unrelated `@purchase` spec happened to be running. The client treats every non-`success` body identically, so the status carries no information it acts on; the diagnosis lives in the server log, which is where it is read. Do not "restore correct status codes" here without also re-reading `e2e/fixtures/test.ts`.
 
 ### Saved payment methods
 

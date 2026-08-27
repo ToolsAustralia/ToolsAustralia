@@ -78,6 +78,18 @@ check(
   PLUS_72H
 );
 
+// 2b. The OPEN-ENDED trigger campaign — BACKIN200 / LOCKIN100 / EXTRA100 as the admin
+// form now creates them: a 72h personal window with `endsAt` set to the far-future
+// sentinel meaning "no minting backstop, issues until an admin switches it off".
+// The open-ended backstop must NOT leak into the customer's deadline — the sentinel is
+// the CAMPAIGN's clock, the 72 hours is the CUSTOMER's. If this ever stamped the sentinel
+// the code would never expire, which is the exact outcome the 72h window exists to prevent.
+check(
+  "open-ended backstop (year-9999 endsAt) still yields the 72h personal window",
+  stamp(campaign({ validForHours: 72, neverExpires: false, endsAt: new Date(NEVER_EXPIRES_SENTINEL) })),
+  PLUS_72H
+);
+
 // 3. A validForHours below the >= 1 floor is NOT a personal window — it falls
 // through, exactly as personalWindowGoverns defines it.
 check("validForHours 0 -> falls through to endsAt", stamp(campaign({ validForHours: 0 })), CAMPAIGN_ENDS_AT.toISOString());

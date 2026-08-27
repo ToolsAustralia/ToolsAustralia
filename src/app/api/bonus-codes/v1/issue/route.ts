@@ -236,12 +236,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     //    preview URL plus the secret would mint into the shared production
     //    database and burn a real customer's one-per-lifetime grant. Belt and
     //    braces with scoping the secret to the Production environment.
-    if (process.env.VERCEL_ENV !== "production") {
+    //
+    //    THE ONE DELIBERATE EXCEPTION — staging rehearsal. This path cannot be
+    //    rehearsed anywhere else: the gate sits ahead of the MINT, not just the
+    //    email, so without an opt-in the production smoke test is the first
+    //    genuine execution the code ever gets. `BONUS_CODE_ALLOW_NON_PRODUCTION_MINT`
+    //    opens it, and it is named to be alarming on purpose.
+    //
+    //    IT IS ONLY SAFE ON AN ENVIRONMENT WITH ITS OWN DATABASE. Set it on the
+    //    staging project ONLY, never on a preview and never on production (where
+    //    it is redundant anyway). Set on a deployment pointed at the production
+    //    Mongo, it re-opens exactly the hole the gate exists to close: a mint
+    //    burns a real customer's one-per-lifetime grant, and `redeemedEverAt`
+    //    makes that permanent.
+    //
+    //    Fail-closed: absent, empty or anything other than "true" refuses.
+    const allowNonProductionMint = process.env.BONUS_CODE_ALLOW_NON_PRODUCTION_MINT === "true";
+    if (process.env.VERCEL_ENV !== "production" && !allowNonProductionMint) {
       console.error("[bonus-code] webhook refused outside production", {
         requestId,
         vercelEnv: process.env.VERCEL_ENV ?? null,
       });
       return finish(403, "not_production");
+    }
+    if (allowNonProductionMint && process.env.VERCEL_ENV !== "production") {
+      // Loud on every accepted non-production call. If this ever appears in a
+      // production log, the flag is set where it must not be — treat it as an
+      // incident, not a curiosity.
+      console.error("[bonus-code] NON-PRODUCTION MINT ALLOWED by BONUS_CODE_ALLOW_NON_PRODUCTION_MINT", {
+        requestId,
+        vercelEnv: process.env.VERCEL_ENV ?? null,
+      });
     }
 
     // 2. THE SHARED SECRET. Fails closed when unset (500), never open.

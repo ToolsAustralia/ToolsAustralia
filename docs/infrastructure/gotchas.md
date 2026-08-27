@@ -149,6 +149,35 @@ spec self-skips unless it's set, and no other run mode ever seeds a promo (an ac
 multiplies every subscription grant and would break the sibling purchase specs' exact-count
 assertions). Full mechanics: `docs/e2e/how-to-run.md` "The full-journey mode".
 
+## `npm run e2e:bonus-code` (package.json, 2026-08-27)
+
+`tsx e2e/run.ts --grep "bonus code journey" --project chromium-desktop` — the per-customer
+bonus-code journey: a code is minted for a specific customer, that customer applies it at
+checkout, pays through real Stripe TEST mode, and the free entries land in the draw.
+
+**Why it needs its own script rather than riding the default run.** The mint it exercises goes
+through `POST /api/bonus-codes/v1/issue`, which answers `403` unless
+`process.env.VERCEL_ENV === "production"` — a deliberate gate that sits ahead of the MINT (not
+just the email) so a preview deploy can never burn a real customer's one-per-lifetime grant
+(`docs/rewards-redeemables/gotchas.md`, launch order). The spec therefore cannot reach the
+endpoint over HTTP against the e2e dev server; it drives the real route handler out of process
+via `e2e/lib/mint-bonus-code.ts` under `tsx` (which resolves the `@/` path aliases the Playwright
+runner does not). **Do not "fix" this by setting `VERCEL_ENV=production` on the e2e server** —
+that flips every other production gate in the app at the same time.
+
+**It also brakes Klaviyo three times, deliberately.** A developer `.env.local` carries a REAL
+`pk_` Klaviyo private key with `KLAVIYO_ENABLED=true`, and `klaviyo.trackEvent` has no mode gate —
+only `isConfigured()`. So the runner swaps `@/lib/klaviyo` in `require.cache` before anything can
+load the real client, VERIFIES the swap by object identity before `VERCEL_ENV` is ever set, and
+forces `KLAVIYO_ENABLED=false`. Remove any one of those and an e2e run fires real marketing events
+at real profiles using the developer key. The database is guarded separately: the URI comes from
+`resolveE2eEnv()`, so the process refuses to start unless `E2E_MONGODB_URI` is set, differs from
+`MONGODB_URI`, and names a database containing "e2e".
+
+Chromium-desktop only, and it drives a real Stripe TEST-mode payment, so it carries the same
+environment sensitivity as the sibling `@purchase` specs — see `docs/e2e/architecture.md`'s
+per-project sequencing note. Full mechanics: `docs/e2e/how-to-run.md`.
+
 ## `npm run e2e:proof:join` (package.json, 2026-07-24)
 
 `tsx e2e/proof/join.ts <out-name> <clipA.mp4> <clipB.mp4> …` — joins several finished proof

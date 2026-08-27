@@ -231,4 +231,129 @@ export class CampaignCodeValidationService {
       return undefined;
     }
   }
+
+  /**
+   * Record, ON OUR OWN SIDE, that this customer has this code applied to the
+   * checkout they are about to pay — then forget about it unless the Stripe
+   * stamp goes missing.
+   *
+   * WHY. The stamp lives only in Stripe metadata, and the browser gives up on
+   * the request that writes it. Observed live on this branch: the server
+   * answered `200 in 14903ms` against the client's 15s cap, the browser had
+   * already aborted, the charge went through, and the webhook saw no
+   * `campaignCode`. Raising the cap does not fix that — it only moves it, and it
+   * cannot fix a dropped connection or a browser closed mid-spinner. The
+   * asymmetry is the point: THE SERVER KNOWS whether the customer asked for the
+   * code, and the browser does not. So the server writes it down where the
+   * webhook can find it, and the outcome stops depending on a client-side race.
+   *
+   * Written BEFORE the Stripe update, deliberately: the Stripe round trip is the
+   * slow, failure-prone half, and a record written only on its success would be
+   * missing in precisely the cases this exists for.
+   *
+   * NEVER THROWS and never blocks the sale — a failure here just means we fall
+   * back to today's behaviour, where the Stripe stamp is the only record.
+   *
+   * @param params.campaignCode the canonical code `resolveCodeForCheckout`
+   *   returned, or `null`/`undefined` to CLEAR — a customer who REMOVES an
+   *   applied code must not be recovered into it by the fallback.
+   */
+  static async recordCheckoutIntent(params: {
+    userId?: string | null;
+    campaignCode?: string | null;
+    /** The Stripe object (`sub_…` / `pi_…`) being stamped. Audit only. */
+    targetId: string;
+  }): Promise<void> {
+    const { userId, campaignCode, targetId } = params;
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) return;
+
+    try {
+      if (!campaignCode) {
+        // CLEAR. Scoped to rows that actually carry an intent so this is a no-op
+        // for the overwhelming majority of checkouts, which never applied a code.
+        await RedeemableIssuance.updateMany(
+          { userId, checkoutIntentAt: { $ne: null } },
+          { $set: { checkoutIntentAt: null, checkoutIntentTargetId: null } }
+        );
+        return;
+      }
+
+      const campaign = await MonthlyEntryCampaign.findOne({ code: campaignCode.trim().toUpperCase() })
+        .select("_id")
+        .lean();
+      if (!campaign) return;
+
+      await RedeemableIssuance.updateOne(
+        { campaignId: campaign._id, userId },
+        { $set: { checkoutIntentAt: new Date(), checkoutIntentTargetId: targetId } }
+      );
+    } catch (error) {
+      console.error("[campaign-code] could not record checkout intent — falling back to the Stripe stamp alone", {
+        userId,
+        code: campaignCode ?? null,
+        error,
+      });
+    }
+  }
+
+  /**
+   * How long after a customer applied a code we will still finish the job for
+   * them if the Stripe stamp went missing.
+   *
+   * Sized on the gap it has to span: the applied code reaches this service at
+   * the PURCHASE click, and the paid-invoice webhook that reads it back lands
+   * seconds later — minutes at worst on a Stripe retry. 30 minutes is generous
+   * for that and still far too short to reach the customer's NEXT purchase or a
+   * renewal invoice, which is what keeps this from auto-redeeming a code they
+   * did not apply.
+   */
+  static readonly CHECKOUT_INTENT_WINDOW_MS = 30 * 60 * 1000;
+
+  /**
+   * The recovery read: "did this customer apply a code to a checkout just now,
+   * that the paid object does not carry?"
+   *
+   * ONLY consulted when the Stripe object has no `campaignCode` at all — the
+   * stamp always wins, so a customer who applied A, removed it and applied B is
+   * decided by the stamp, not by this.
+   *
+   * Returns a CANDIDATE, never a decision. `RedemptionService.redeem` still
+   * applies every eligibility, expiry and already-spent gate, so this cannot
+   * grant anything redemption itself would refuse.
+   */
+  static async resolveCheckoutIntent(params: {
+    userId: string;
+    now?: Date;
+  }): Promise<{ code: string; issuanceId: string; intentTargetId: string | null } | null> {
+    if (!mongoose.Types.ObjectId.isValid(params.userId)) return null;
+    const now = params.now ?? new Date();
+    const cutoff = new Date(now.getTime() - this.CHECKOUT_INTENT_WINDOW_MS);
+
+    try {
+      const issuance = await RedeemableIssuance.findOne({
+        userId: params.userId,
+        status: "active",
+        checkoutIntentAt: { $gte: cutoff },
+      })
+        .select("_id campaignId checkoutIntentAt checkoutIntentTargetId")
+        .sort({ checkoutIntentAt: -1 })
+        .lean();
+      if (!issuance) return null;
+
+      const campaign = await MonthlyEntryCampaign.findOne({ _id: issuance.campaignId }).select("code").lean();
+      if (!campaign?.code) return null;
+
+      return {
+        code: campaign.code,
+        issuanceId: String(issuance._id),
+        intentTargetId: issuance.checkoutIntentTargetId ?? null,
+      };
+    } catch (error) {
+      console.error("[campaign-code] checkout-intent lookup failed — no recovery this time", {
+        userId: params.userId,
+        error,
+      });
+      return null;
+    }
+  }
 }

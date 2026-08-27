@@ -31,6 +31,16 @@ Three entry points write `RedeemableIssuance` rows. All three stamp `expiresAt` 
 `resolveIssuanceExpiry(campaign, issuedAt)` helper (precedence chain: `validForHours` > `neverExpires` >
 `endsAt` — full table in [architecture.md](./architecture.md#expiry-precedence-chain)).
 
+`NEVER_EXPIRES_ISSUANCE_DATE` (`9999-12-31T23:59:59.999Z`) is **declared in
+[`bonus-code-policy.ts`](../../src/utils/redeemables/bonus-code-policy.ts) and re-exported here** (moved
+2026-08-27; the admin modal is a client component and importing `CampaignService` would drag mongoose and
+the models into the browser bundle). It serves two clocks: the `expiresAt` of a `neverExpires` issuance, and
+a campaign `endsAt` meaning "no minting backstop, issues until an admin disables it". `bonus-code-policy.ts`
+also exports `isOpenEndedDate(value)` (a **year threshold**, not an equality test) and
+`campaignExpiryShape(campaign)` — the latter is **display/form only** and must never be substituted for
+`personalWindowGoverns` at a mint site. See
+[architecture.md](./architecture.md#the-three-campaign-expiry-shapes-and-the-open-ended-sentinel-2026-08-27).
+
 | Entry point | Trigger? | Purpose |
 |---|---|---|
 | `issueCampaignToUsers({ campaign, userIds, … })` | n/a (bulk) | Bulk issue. Captures **one** `issuedAt` **above** the loop, so a single click straddling Sydney midnight cannot hand two users in the same batch different expiry days. Also stamps `firstIssuedAt`. **Refuses** a personal-window campaign when `issuedBy === "cron"` — this path has no trigger gate, so the cron would otherwise mass-mint the whole subscriber base (gotchas trap 6b). |

@@ -226,6 +226,71 @@ at the viewport edge is clickable, but the native focus that a click brings scro
 view, which a scroll-delta assertion reads as page movement. Observed as an 82px drift on
 mobile-safari in a test whose whole point was "selecting a prize must not move the page".
 
+Bonus-code journey (2026-08-27) — `e2e/specs/membership/bonus-code-journey.spec.ts`. Three things
+worth carrying into the next spec that has to prove a grant:
+
+1. **Wait on the LEDGER, not on `entries > 0`.** `waitForOneTimeEntries` / `waitForActiveMembership`
+   return the instant the customer has any entries at all, and the package's OWN entries land in the
+   draw strictly BEFORE the campaign redemption runs — so reading a combined total on their signal is
+   a guaranteed race. `waitForCampaignGrant()` (`e2e/helpers/bonus-code.ts`) is the right signal.
+   **But wait on the LAST write, not the first.** The campaign receipt is three separate,
+   non-atomic awaits inside the `checkAndRedeemCampaign` block of `payment-processing.ts`:
+   `incLedgerGrants({ campaignEntries })` → `setLedgerCampaign({ code, … })` →
+   `pushDrawGrant({ sourceKey: "bonus-entry-promo" })`. This helper's docblock used to claim
+   `campaignEntries` was "written LAST" — it is written **first**, so a poll that returned on it
+   handed the spec a doc whose `grants.campaign` was still in flight, and the spec went red at
+   random with nothing wrong in the product. It now returns only once all three have landed, and its
+   timeout message names which of the three is still missing.
+2. **`entriesForUser` cannot tell a campaign grant from a package grant** — it sums `totalEntries`
+   across every source. Use `drawEntryBucketsFor()` and assert `entriesBySource` per key
+   (`membership` vs `bonus-entry-promo`), or the assertion passes on the wrong grant entirely.
+3. **Never compute the expected value with the implementation's own expression.**
+   `expect(granted).toBe(campaign.entriesAmount)` re-reads the same document the code read and
+   passes even if the amount was dropped, doubled, or taken from the wrong row. The fixture picks
+   `100`; the spec asserts the bare literals `100` / `15` / `115` with a comment naming each source.
+
+4. **Setup that a parallel sibling can survive.** `beforeAll`/`afterAll` run **once per worker**, and
+   `playwright.config.ts` is `fullyParallel` — so a shared fixture's teardown fires while another leg
+   is still mid-run. This spec's original `afterAll` deleted the campaign **and every issuance against
+   it** at roughly t+100s, right inside the other leg's 180s wait for the grant it was about to
+   assert. Setup is now an idempotent `updateOne(..., { upsert: true })` with no issuance deletion,
+   and there is **no fixture teardown at all**: `run.ts` → `wipeAndSeed` → `dropDatabase()` already
+   guarantees a clean database per run.
+5. **Never wait on `waitForActiveMembership` for an anchored purchase.** It requires
+   `subscription.status === "active"`, and under anchor-24 (AEST 25/26/27) these subscriptions REST at
+   `trialing` — `active` only ever exists as a transient. It burns its full budget and then fails a
+   spec that is otherwise green. Wait on the grant ledger instead.
+6. **Absence needs an observed edge, not a sleep.** The negative leg used to `waitForTimeout(20_000)`
+   and call silence a pass — on a slower machine a campaign grant landing at 25s turns a BROKEN
+   visibility rule green, which is the dangerous direction. It now polls `waitForGrantLedger()` (the
+   `BenefitsGranted` doc appearing proves the webhook ran) and adds a short 5s tail for the campaign
+   block, which is written last.
+
+✅ **Fixed 2026-08-27 — but read this before trusting a green pack leg.** The positive legs were red
+against a real product defect: `MembershipModal` pre-warms the checkout object the moment the
+billing step mounts, and the coupon row lives on that same step, so the object that got charged
+carried no `campaignCode`. The fix stamps it at the PURCHASE click, before `confirmPayment`
+([payment/gotchas.md](../payment/gotchas.md#the-applied-discount-code-was-thrown-away-at-checkout-fixed-2026-08-27)).
+The **membership** leg measured a deterministic bug. The **one-time pack** leg measured a RACE —
+`create-one-time-purchase` did send the code, but patched the PaymentIntent after the browser
+confirmed it, racing the webhook's own fresh retrieve — and a race can pass against unfixed code on a
+fast machine. Reverting the fix left that leg green two runs in three.
+
+**That is now fixed by asserting the mechanism, not the outcome.** The pack leg asserts, directly:
+exactly **one** `POST /api/stripe/create-payment-intent` produced an object for the whole checkout
+(`trackPaymentIntentCreations`, installed before the first navigation because the call it must see
+is the pre-warm); the `BenefitsGranted` id equals that object's id, so the object charged is the
+object the browser minted; and the object's own Stripe metadata carries a real `userId`/`userEmail`
+plus the `campaignCode` — never the `"guest"` placeholder `create-payment-intent` stamps when a
+call arrives without `userEmail`. None of those depend on who wins a race, so the leg fails on
+**every** run when the duplicate-PaymentIntent mutex is dropped.
+
+Scope worth knowing: this leg pays with a good card, so it never enters the
+`PAYMENT_INTENT_CANCELED_RETRY` recovery branches. It therefore cannot catch a mutex regression in
+*those* — provoking them needs the PaymentIntent cancelled between the pre-warm and the click, and a
+retry there also remounts the Elements provider, so the card fields are empty and the automatic
+retry cannot complete a charge on its own. Know that before writing a leg that expects one.
+
 `ta_anon_id` IS assertable on page routes — since 2026-07-28 (superseded note, corrected
 2026-07-29): this note previously said the opposite, and that was true when written. The cookie's
 only writer used to be `/api/ab-testing/assign`, so a visitor who never triggered an experiment

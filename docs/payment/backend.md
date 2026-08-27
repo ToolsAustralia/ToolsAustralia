@@ -12,6 +12,22 @@ The biggest helper directory in the repo. Each module has one focused responsibi
 | `stripe-invoice-payment-intents.ts` | Invoice ↔ PaymentIntent navigation helpers. |
 | `stripe-refund-amount.ts` | Compute refund amount given a charge / invoice. |
 | `stripe-subscription-metadata.ts` | Read/write `metadata` on subscription objects. |
+| `campaign-code-checkout.ts` | `attachCampaignCodeToCheckout()` — the **pre-confirm** write that stamps the customer's applied bonus-entry code onto the still-unpaid subscription / PaymentIntent. See below. |
+
+### `campaign-code-checkout.ts` — the authoritative campaign-code write
+
+`MembershipModal` pre-warms the checkout object the moment step 2 mounts, and the coupon box lives on that same step — so at pre-warm time the customer has not typed anything yet, and the object that gets charged carried no `campaignCode`. This module closes that: at the PURCHASE click, **after** the code is final and **before** `confirmPayment`, it writes the desired state of `campaignCode` onto the object.
+
+Contract:
+
+- **Desired-state, not append-only.** `code: null` clears the stamp by writing `campaignCode: ""` (every downstream read is a truthiness check, so `""` and "key absent" are equivalent). This is what makes *apply A → card declines → remove A → retry* correct.
+- **Re-verifies server-side.** Calls `CampaignCodeValidationService.resolveCodeForCheckout` verbatim, with a user id resolved **only** from the Stripe object's own server-written metadata (`userId`, else `userEmail` → `User` lookup, else the session). The request body is never an identity claim.
+- **Authorization is a possession proof**, because the caller may be a guest: `metadata.subscriptionRequestId` for a subscription, `client_secret` for a PaymentIntent. Both are server-written and bound to the specific object. The `client_secret` is never logged or echoed.
+- **State guard: the object must be unpaid.** Subscription: `status ∈ {incomplete, trialing}` **and** `latest_invoice.status !== "paid"`. PaymentIntent: `status ∈ {requires_payment_method, requires_confirmation, requires_action}`. `trialing` is accepted because on the anchor days (AEST 25/26/27) the create routes send `trial_end`, and Stripe will not hold a trialing subscription at `incomplete` — the up-front charge rides an `add_invoice_items` line on an open invoice instead. The paired invoice check is what keeps "never stamp a paid object" intact.
+- **Never throws, never blocks the sale.** Every failure is a typed result; the caller charges anyway and a genuine holder keeps the unspent issuance in their rewards wallet.
+- **Metadata is spread in full on every write.** These update calls take a metadata *map*, so a partial payload would destroy `packageId`, the CAPI match keys, the A/B assignment and the attribution on an object the customer is about to be charged on.
+
+Reached over HTTP via `POST /api/stripe/attach-campaign-code` ([billing-stripe/api.md](../billing-stripe/api.md)); called from `useStripeSubscription().attachCampaignCode`.
 
 ### Ledger & processing (the heart)
 

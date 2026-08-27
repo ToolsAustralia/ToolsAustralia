@@ -691,6 +691,16 @@ A customer participates passively — visiting via an affiliate link stamps `Use
 
 **Event-based redeemables ledger (current).** An issuance ledger (not a points balance) — each grant is a discrete `RedeemableIssuance` / `MilestoneIssuance` record. Items auto-issue for active campaigns on wallet read; redeemable when `status === "active"` and not past `expiresAt`. For campaign config, milestone types, and `purchaseRequirement` rules see [docs/rewards-redeemables/](docs/rewards-redeemables/).
 
+**Two clocks, and only one of them is the customer's.** A coupon campaign has a *campaign* clock —
+how long we keep handing the code out to new people — and a *customer* clock, how long that one
+person has once it lands in their account. They are separate, and only the second is ever enforced
+against the customer: the deadline is stamped onto their own row at the moment the code is created,
+and checkout compares against that stored instant. A campaign that keeps issuing indefinitely
+therefore cannot extend anybody's 72 hours, and a campaign that stops issuing does not shorten a
+code already in someone's hands. The admin flag named "Never expires" belongs to the **customer's**
+clock — it means the coupon itself never stops working — so it is OFF for the three bonus codes,
+which expire 72 hours after they are minted (2026-08-27).
+
 **Per-customer bonus codes with a personal deadline (inert until a campaign exists).** A campaign carrying `validForHours` (default 72) gives each customer **their own** expiry window rather than a shared campaign deadline or a monthly cron. **The clock starts when the discount email is about to send** — the marketing flow calls us one step before the email goes out (`POST /api/bonus-codes/v1/issue`, shipped 2026-08-26), we create the code at that instant, and the email lands seconds later with it printed in. That is a change of anchor, not just of unit: the code used to be created days earlier, at the moment the customer qualified, and the nurture emails land 2.5–17 days after that — so most customers would have received a code that had already expired. Three flows call it:
 
 | Flow | What the customer did to enter it | Code |
@@ -706,6 +716,29 @@ The old limitation — that only the **guest** checkout-start moment could enrol
 **A daily cap, and a record of every issuing call (added 2026-08-26, live with the webhook endpoint).** A **global daily cap** bounds how many codes can be created in a day (default 500, plus a break-glass switch that stops all minting at once). It **fails closed**: if our database is unreachable, if the cap is misconfigured, or if the webhook secret is not set, we mint **nothing** rather than minting without a limit. What a customer would see if the cap trips is nothing at all on our site — the marketing email still sends with the code printed in it (we cannot stop it from our side), and the code then reads as not available on their account at checkout. That is the trade for a hard cap, and it is why the cap sits well above normal daily volume.
 
 **Which customer the code goes to, and when we would rather give nobody one (2026-08-26).** The marketing flow tells us who the customer is by their account id, their email address, or both. The id wins when we have a usable one; the address is the fallback for a profile that carries no id — which is normal, not an edge case, for someone who only ever joined the newsletter or started a guest checkout. **If the flow sends an account id that no longer matches an account, we stop there rather than trying the address instead.** A marketing profile can go stale or be merged with another one, so an old id sitting next to a live address is exactly the situation where the wrong person would be handed the grant — and because entries are a free inclusion capped at **one grant per person for life**, that would quietly spend a bystander's only grant on something they never did. The customer in that case receives an email whose code does not work; we treat that as the better failure, and we record it so a rising rate is visible. For the same reason, an id and an address that name **two different** accounts are refused outright. What does **not** stop a call is a half-written field: a merge tag that renders partially is treated as missing, not as an error, so a call still succeeds on whichever identity did arrive.
+
+**Two ways this used to leave a paying customer with nothing — both closed 2026-08-27.**
+
+*A shared code could reach only one person, ever.* All three codes are the shared kind, where
+everyone types the same string, and for those we store a record with no personal code on it. A
+database rule accidentally allowed only one such record per code, so the first customer enrolled
+worked and every customer after them was silently refused: no email, and — if the marketing flow
+sent its discount email as its own step — they could type the code at checkout, see it accepted,
+pay, and receive nothing. Fixed, with a database migration that has to be run before the sequences
+go out. Nothing about what we store changes; the second and third customer can now hold the code
+too.
+
+*A slow checkout could lose an applied code.* When a customer clicks PURCHASE we attach their code
+to the payment, and the browser gives up waiting after 15 seconds and takes the payment anyway —
+deliberately, because a bonus lookup must never block a sale. That window was real: in one test the
+server finished at 14.9 seconds, the browser had already stopped listening, the card was charged,
+and the entries did not land. We now record, on the customer’s own code record, that they applied
+it and to which payment (`checkoutIntentAt` / `checkoutIntentTargetId`), **before** we talk to
+Stripe; when the payment arrives without a code attached, that record is used to finish the job. The
+customer keeps their unused code either way — what this recovers is the free entries on the purchase
+they just made. If they REMOVE the code before paying, the record is removed with it, and it expires
+after 30 minutes so it can never attach itself to a later purchase or a renewal. This is our own
+record only: nothing new is sent to Klaviyo, Stripe or any other third party.
 
 **What we store about the customer for this:** one row per issuing call — accepted, refused **or** errored — holding a request id, the resolved `userId` where we could resolve one, which of the three flows called, the outcome and the HTTP status, and a **hashed** (never raw) IP of the caller. No email address, no code string and no request body are kept. Rows auto-delete after **90 days**. This is the only record that can answer "why did this customer not get their code?", because there is no admin screen for bonus codes; the refused rows are also how we would notice someone probing the endpoint with a leaked secret. **The endpoint itself tells the caller nothing about the customer** — every customer-state answer (code created, already held, already used, no such account, and the case where the flow sends two identities that name two different accounts) comes back identical, so someone holding the secret cannot use it to find out whether an email address belongs to a Tools Australia customer. That last case used to answer with a distinct status and no longer does (2026-08-26); it is still logged and still written to the audit row, so it is exactly as visible to us as it was.
 

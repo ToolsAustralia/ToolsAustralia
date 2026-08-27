@@ -330,8 +330,19 @@ Under `/api/admin/**` (in [admin](../admin/)):
   `.select()` projection there must list `validForHours` explicitly or it silently reads as
   `undefined` at runtime despite type-checking cleanly.
 
+**Open-ended `endsAt` (2026-08-27) — no contract change, one new legal value.** `endsAt` may carry the
+far-future sentinel `9999-12-31T23:59:59.999Z` alongside `neverExpires: false`, meaning "this campaign
+has no minting backstop; it keeps issuing until an admin disables it". Both admin routes accept it with
+no change (`endsAt` is `z.string()`, format-unchecked; the model's `pre("save")` only asserts
+`startsAt < endsAt`), and it is what the admin form writes for an always-on trigger campaign. It does
+**not** reach the customer's deadline — `resolveIssuanceExpiry` still returns `issuedAt + validForHours`
+(pinned by `test:issuance-expiry`). Display consumers should detect it with `isOpenEndedDate` (a **year
+threshold**, never `getTime() ===`) and print "no end date".
+
 See [architecture.md](./architecture.md#expiry-precedence-chain) for the full
-`validForHours` > `neverExpires` > `endsAt` precedence chain used at redemption/issuance time.
+`validForHours` > `neverExpires` > `endsAt` precedence chain used at redemption/issuance time, and
+[the three campaign expiry shapes](./architecture.md#the-three-campaign-expiry-shapes-and-the-open-ended-sentinel-2026-08-27)
+for how the admin form maps one question onto those three fields.
 
 ## Authorization
 

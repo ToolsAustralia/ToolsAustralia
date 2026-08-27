@@ -1,31 +1,134 @@
 # Shared UI — Frontend
 
-## `AdminMonthlyRedeemablesModal` — `validForHours` (2026-08-25; renamed from `validForDays` 2026-08-26)
+## `AdminMonthlyRedeemablesModal` — "How this coupon ends" (rewritten 2026-08-27)
 
 `src/components/modals/AdminMonthlyRedeemablesModal.tsx` (admin-only, but lives under the generic
 `src/components/modals/**` glob, which the Domain Manifest routes to `shared-ui` rather than
-`admin` or `rewards-redeemables` — see [admin/frontend.md](../admin/frontend.md#monthly-redeemables-campaign-panel--validforhours-2026-08-25-renamed-from-validfordays-2026-08-26))
-now threads `validForHours` (per-customer window, in HOURS counted from the issuing instant) through the create/edit form:
+`admin` or `rewards-redeemables` — see [admin/frontend.md](../admin/frontend.md#monthly-redeemables-campaign-panel--validforhours-2026-08-25-renamed-from-validfordays-2026-08-26)).
 
-- New numeric input "Per-customer window (hours)" in the **Coupon Window** section, min 1,
-  **disabled whenever "Never expires" is checked** — the two are mutually exclusive
-  (`neverExpires` and `validForHours` are rejected together by both create/update zod schemas).
-  Checking "Never expires" also clears any entered `validForHours` client-side so a disabled,
-  stale value can't silently ride along in the submit payload.
-- The **End** date label relabels to "Backstop — no new customers qualify after this date"
-  whenever `validForHours` is set (and `neverExpires` is not) — `endsAt` still gates NEW
-  issuance minting for a rolling-window campaign, it just stops being the redemption deadline.
-- On submit, editing a campaign that already has `issuanceCount > 0` and changing
-  `validForHours` to a new value triggers a `window.confirm` warning: existing
-  `RedeemableIssuance` rows are stamped with their expiry at mint time and are **never
-  re-stamped**, so they keep their original deadline while only newly-minted issuances pick up
-  the change.
-- Clearing sentinel: on edit, an emptied input sends `validForHours: null` (not `undefined`) when
-  the campaign previously had a value set, so the PUT route's `.nullable().optional()` zod field
-  can actually `$unset` it — omitting the field entirely would leave the old value untouched
-  (two independent undefined-strip layers between the route and `CampaignService` otherwise
-  swallow a bare omission). On create, only `undefined` is ever sent (the create schema is
-  `.optional()`, not `.nullable()`).
+**What changed and why.** The form used to show `endsAt`, a "Never expires" checkbox and a
+"Per-customer window (hours)" input side by side in a **Coupon Window** section, with no indication
+that they answer **two different questions**. They do:
+
+- **The campaign's clock** — how long we keep handing the code out to NEW people (`startsAt` / `endsAt`).
+- **The customer's clock** — how long the person holding a code has to use it (`neverExpires` /
+  `validForHours`).
+
+The old form let an operator tick "Never expires" believing it meant "this campaign runs forever",
+when it actually means "the coupons themselves are immortal" — the opposite of a 72-hour trigger
+window. The section is now a single question with three mutually exclusive shapes.
+
+### The shape selector
+
+Three cards at the **top** of the form, **no default on create** (a default is how the previous form
+produced campaigns whose shape nobody had actually chosen). On edit, preselected from
+`campaignExpiryShape(editingCampaign)` in
+[`bonus-code-policy.ts`](../../src/utils/redeemables/bonus-code-policy.ts), which branches in the same
+order as `resolveIssuanceExpiry` so the form's label can never disagree with the mint path.
+
+| Card | Shape | Fields it reveals | Payload |
+|---|---|---|---|
+| "Everyone shares one end date" | `fixed-end` | `Ends` (DateTimePicker) | `endsAt` = picker · `neverExpires: false` · `validForHours` cleared |
+| "Each customer gets their own countdown" | `personal-window` | `Hours each customer gets` (prefilled `72`), a **"Stop issuing new codes on a date"** checkbox that reveals `endsAt`, and the trigger-coupon banner | `neverExpires: false` · `validForHours` = hours · `endsAt` = picker when the box is ticked, else the **open-ended sentinel** |
+| "No deadline at all" | `never-expires` | *(nothing)* | `endsAt: undefined` · `neverExpires: true` · `validForHours` cleared |
+
+A **live consequence sentence** sits under the cards at all times, composed from the operator's actual
+values in `en-AU` format (blanks render as `…`) — e.g. *"New codes are issued until you switch this
+coupon off. Each customer has 72 hours from the moment their code is issued."* It is the whole point of
+the redesign: the interaction between the two clocks is on screen instead of in the operator's head.
+
+### The open-ended sentinel — the one thing that can silently break
+
+Dropping the backstop stores `endsAt` = `NEVER_EXPIRES_ISSUANCE_DATE` (`9999-12-31T23:59:59.999Z`) with
+`neverExpires: false`. Two rules protect it, and both are required:
+
+1. **The sentinel is emitted from the constant, never from the picker.** With the box unticked,
+   `formData.endsAt` is irrelevant to the payload.
+2. **On edit hydration the sentinel never reaches the picker.** `isOpenEndedDate(endsAt)` → backstop box
+   **unticked**, picker **empty**.
+
+Why: a `datetime-local` input parses its value as **local** time, so round-tripping the sentinel shifts
+the stored instant by the UTC offset on every save (and west of UTC rolls it into year 10000). Nothing
+errors and nothing looks wrong — the value just drifts. For the same reason `isOpenEndedDate` is a
+**year threshold** (`getUTCFullYear() >= 9999`), never `getTime() === SENTINEL.getTime()`.
+
+**`neverExpires` is the CUSTOMER's clock, not the campaign's.** It is passed through to the wallet
+card, which renders `"No expiry"` to the customer (`RedeemablesWallet.tsx`), so it must stay **off**
+for the three bonus codes — they expire 72 hours after minting. "The campaign never closes" is
+expressed by leaving the **backstop date off**, which stores the sentinel with `neverExpires: false`.
+
+### Two representations of the same field — pick the picker's
+
+`formData.startsAt` / `formData.endsAt` hold whatever `DateTimePicker` emits, which is a **full ISO
+instant** (`utcDate.toISOString()`). Edit hydration must therefore write the full ISO too — **not**
+`.toISOString().slice(0, 16)`. The bare `YYYY-MM-DDTHH:mm` form is parsed by `new Date()` as
+**browser-local**, so the consequence sentence rendered the UTC digits as if they were local and
+disagreed with the campaign list (`MonthlyRedeemablesCampaignPanel.formatDateTime`, which parses the
+true instant) by the browser's UTC offset — ten hours in Sydney. Create was unaffected (the picker's
+own ISO parses unambiguously), which is what made it easy to miss. `parseValueToUtcInstant` handles a
+full ISO directly, so the picker displays the true local time as well.
+
+### Activation is not this form's to set
+
+The submit body sends `isActive: true` **on create only**. Activation belongs solely to the campaign
+card's **Disable / Activate** toggle, which PUTs `{ isActive }` by itself. Under the open-ended
+backstop shape `isActive` is the *only* remaining stop on minting — `isCampaignLive` and
+`ensureCampaignIssuanceForUser`'s lookup are both satisfied forever by the year-9999 sentinel, and
+`CampaignService.deleteCampaign` is a **soft delete** that only sets `isActive: false`. Re-sending
+`true` from an edit therefore resurrected a disabled *or deleted* campaign silently: neither confirm
+dialog fires (both key on the window, not on activation) and nothing on screen mentions it.
+
+### Other behaviour in this form
+
+- **Trigger-coupon banner** on the personal-window card: codes go out only when the marketing flow asks
+  for one, and **the monthly issuance job skips this coupon entirely**. That fact previously existed only
+  in a cron-route comment and the seed script's header; it is now at the point of decision. Not cosmetic:
+  `validForHours` is the marker all three mass-mint defences key off (see
+  [rewards-redeemables/rules.md](../rewards-redeemables/rules.md)), so the field the operator is setting
+  has consequences well beyond a deadline.
+- **Hours field** shows a derived `= 3 days` hint when the value divides evenly into days (guards the
+  2026-08-26 `validForDays` → `validForHours` rename — an operator typing `3` would otherwise kill every
+  code in three hours with no error), and an inline caution whenever the value is not `72`, because
+  Cobber FAQ id 86 hardcodes "a fixed 72 hours" and `test:chat-faqs` guards that **wording**, not the
+  campaign row — so a mismatch ships green and Cobber states a deadline the server does not enforce.
+- **Copy that quotes the hours number is interpolated, never hardcoded.** The hours value is editable,
+  so `EXPIRY_SHAPE_CARDS[].body` and `COPY.hoursHelper` are **functions** taking the operator's current
+  value (falling back to the `72` prefill while the field is blank), the same way the consequence
+  sentence already composed. A static "72" beside an input set to `48` is the form contradicting itself,
+  which is the precise failure this section exists to remove.
+- **The hours helper names the anchor explicitly** — the countdown starts when the marketing flow calls
+  us, the step just before the customer's discount email, *not* when the customer qualified. Those are
+  usually days apart, and getting it backwards is the bug the whole rework fixed.
+- **Coupon code** on the personal-window card shows the three codes the flow asks for and a
+  **non-blocking** warning when the normalised code is not one of `BONUS_CODE_BY_TRIGGER` — a mismatch
+  means the email still sends and the code is refused at checkout, with no error anywhere.
+- **Coupon mode** is *defaulted* (not forced) to `global` the first time the operator picks the
+  personal-window card; changing the dropdown afterwards sticks. Forcing it would invent a UI-only
+  invariant and phantom-edit campaigns created via Norm or curl.
+- **Reporting month** keeps its input (it is the cron's first filter term) but is relabelled, with a
+  per-shape helper saying whether it gates anything.
+- **Entries** input is relabelled "Free entries granted when redeemed" (rule 11 — entries are a free
+  inclusion, never sold or priced per unit; admin helper text gets paraphrased by marketers).
+- **Two confirm dialogs on save (edit only)**, A first, both if both apply:
+  - **A — losing the personal window**: fires when the stored campaign had `validForHours` and the chosen
+    shape is no longer `personal-window`, **independent of `issuanceCount`** — the consequence is the
+    audience the monthly cron would sweep, not rows that already exist.
+  - **B — stranded issuances**: fires when `issuanceCount > 0` and the effective customer window changed
+    *at all* (the shape, or the hours number). Widened from the old "hours number changed" check, because
+    switching shape strands rows identically: `RedeemableIssuance` rows are stamped at mint time and are
+    **never** re-stamped.
+- **Clearing sentinel** (unchanged): on edit, leaving the personal-window shape sends
+  `validForHours: null` (not `undefined`) when the campaign previously had a value, so the PUT route's
+  `.nullable().optional()` zod field can actually `$unset` it — two independent undefined-strip layers
+  between the route and `CampaignService` otherwise swallow a bare omission. On create, only `undefined`
+  is ever sent (the create schema is `.optional()`, not `.nullable()`).
+- **The `!(neverExpires && validForHours)` clause in `canSubmit` stays**, even though the shape selector
+  makes it unreachable by construction. `formData` is still a mutable object, and the mutual exclusion is
+  enforced in six places for a reason — deleting a guard to celebrate that a form got better is how the
+  mass-mint defect this branch already caught once comes back.
+- **Validation tightened**: `monthKey` must match `YYYY-MM`, `name` must be ≥ 3 chars (the route's zod is
+  `min(3)`; the old modal only checked non-empty, so a 2-char name 400'd), the normalised `code` must
+  match the route's 6–32-char pattern, and `endsAt` must be strictly after `startsAt` wherever it applies.
 
 ## Promotions account menu — radial scrim removed (2026-08-11)
 
@@ -1979,3 +2082,131 @@ rendered. Both call sites now go through this function; there is no second copy 
 flag *before* awaiting `refetch()`, so the step unlocks the moment the server accepts the code
 rather than after the profile query round-trips. The same value feeds `primaryDisabled`, so the
 footer button enables at that same instant.
+## MembershipModal — the campaign code is stamped at the PURCHASE click, not at pre-warm (2026-08-27)
+
+`src/components/modals/MembershipModal/index.tsx` opens step 2 by **pre-warming** the Stripe
+checkout object (a subscription for a membership, a PaymentIntent for a pack) so the card form has
+a client secret the instant it mounts. `CouponRow` is rendered by `PaymentStep` on that **same
+step** — so at pre-warm time the customer has had no opportunity to type a code, and until
+2026-08-27 the object that got charged carried none. The customer saw APPLIED, paid, and received
+nothing.
+
+**The one insertion.** `handleSubmit` calls the local `writeCampaignCodeTo(target)` once, placed
+immediately after `lastChargedStaticPackageIdRef.current = packageId` and **above every**
+`confirmStripeIntent()` branch — the subscription reuse branch and the one-time branch. Placement
+is the whole fix, and it has a mechanical check:
+
+```bash
+grep -n "attachCampaignCode({" src/components/modals/MembershipModal/index.tsx   # exactly ONE line
+grep -n "confirmStripeIntent()" src/components/modals/MembershipModal/index.tsx  # all AFTER it
+```
+
+Dropping it into the subscription branch instead — where the bug was diagnosed and where the
+acceptance spec lives — turns `npm run e2e:bonus-code` green while the pack leg stays broken. The
+pack leg is a race, so it will sometimes pass anyway. That is the "looks fixed, isn't" outcome.
+
+⚠️ **That grep passes and is NOT sufficient.** The two `PAYMENT_INTENT_CANCELED_RETRY` recovery
+branches create a **brand-new PaymentIntent** and confirm *that* one, and they do it *between* the
+attach's line number and the confirm's — so the object charged after a decline-and-retry never went
+through the block above. Each recovery therefore calls `writeCampaignCodeTo` again, on its own new
+intent, before its retry confirm (and resets `attachedCampaignCodeRef` first, because the new object
+carries no stamp). **Any future code path that mints a checkout object after the attach owes the
+same call.** The invariant is "one write per object that is about to be confirmed", not "one write
+per submit".
+
+⚠️ **And re-stamping is itself not sufficient** unless that path also holds the pre-warm mutex — a
+recovery that mints a duplicate stamps one object and confirms the other. See
+[the mutex rule](#the-mutex-rule-every-path-that-nulls-paymentintentclientsecret-must-hold-iscreatingpaymentintentref)
+below; both requirements are on every such path, not one or the other.
+
+**Two refs mirror the checkout object's lifetime**, and both must be maintained wherever
+`subscriptionCreatedRef` / the PaymentIntent client secret are:
+
+| Ref | Meaning | Set at | Cleared at |
+|---|---|---|---|
+| `subscriptionRequestIdRef` | the `subscriptionRequestId` the server wrote into the subscription's metadata — the possession proof the attach endpoint authorizes against | pre-warm `onSuccess`, sessionStorage restore | package-change teardown |
+| `attachedCampaignCodeRef` | the code we last successfully WROTE onto the object (null = cleared / never written) | after a successful attach | every point a NEW object is minted or restored |
+
+A new object never carries a stamp — that is the entire reset rule. `attachedCampaignCodeRef` is
+what makes the write **desired-state**: after *apply A → card declines → remove A → retry*, the
+still-unpaid object has A on it and nothing else would take it off.
+
+**Guards on the call.** It is skipped when paying with a saved method (those doors send the code at
+create time and orphan the pre-warm), and skipped entirely when no code is applied and none was
+ever stamped — so the overwhelming majority of checkouts pay zero latency. A failure logs with
+`console.error` (the only level that survives a production build) carrying the code and the
+customer's email, because that log line **is** the "charged without the code" record, and then
+charges anyway.
+
+**Three log lines, and they mean different things.** Conflating them is how this defect stayed
+invisible for so long, so keep them distinct:
+
+| Line | Meaning | Fails an e2e spec? |
+|---|---|---|
+| `attach failed before confirm — charging without it` | the server answered and did **not** write the code. A real loss. | **Yes**, deliberately — it is not in `CONSOLE_ALLOWLIST`. |
+| `attach outcome unknown — server may have written it` | the browser stopped listening (client cap / dropped connection). The server may well have succeeded. | No — allowlisted in `e2e/fixtures/test.ts`. |
+| `pre-warmed checkout object has no attachable target` | a pre-warmed object exists and will be charged, but no possession proof could be built for it (e.g. a sessionStorage blob with no `subscriptionRequestId`). | **Yes.** |
+
+On `unknown` the modal sets `attachedCampaignCodeRef` to the code it *tried* to write, precisely
+because the write may have landed: a later retry must still be able to clear it. A `null` target on
+the doors that pass the code at create time is normal and logs nothing.
+
+**Registration mints the pack PaymentIntent, and it owns the mutex.** The step-1 registration
+handler creates the one-time PaymentIntent itself, and it must (a) pass `userEmail` (from the
+registration response — `guestUserData` is set in the same tick and is not readable in that
+closure) and (b) hold `isCreatingPaymentIntentRef` for the whole round trip. Without (a) the route
+takes its "true guest" branch and stamps the placeholders `userId: "guest"` / `userEmail: "guest"`,
+which the attach cannot resolve an account from — so it refuses and **clears** the code. Without
+(b) the step-2 pre-warm effect fires on the same render and creates a **second** PaymentIntent;
+whichever resolves last is the one charged. Both shipped missing, and together they were the whole
+of the remaining one-time-pack loss.
+
+### THE MUTEX RULE: every path that nulls `paymentIntentClientSecret` must hold `isCreatingPaymentIntentRef`
+
+`isCreatingPaymentIntentRef` is the **only** thing the step-2 pre-warm effect checks before minting
+(the package-change effect returns early on it too). Every other clause of that gate —
+`currentStep === 2`, `hasCompletedRegistration`, `isActualPlan`, `!setupIntentClientSecret`,
+`!paymentIntentClientSecret`, `period !== "mo"`, `amountInCents > 0` — is **open** the moment a
+handler nulls the client secret. So the shape below is a duplicate-PaymentIntent generator, not a
+style nit:
+
+```ts
+setPaymentIntentClientSecret(null);          // gate now open
+const created = await createPaymentIntent.mutateAsync({ … });   // render happens HERE
+```
+
+React batches those setStates and flushes at the `await`, so the effect runs while the request is
+still in flight, mints a second object, and its `onSuccess` sets the state the card form actually
+confirms from. The second object was issued one render later, so it lands **last** in the common
+case — the losing ordering is the default one, not an edge case. The code is stamped on the object
+the handler holds; the card is charged against the other one.
+
+This bit **three** call sites, all fixed the same way — take the ref synchronously *before* the
+null-out, release it in a `finally`:
+
+| Site | Path |
+|---|---|
+| step-1 registration | mints the pack PaymentIntent for a brand-new guest |
+| `PAYMENT_INTENT_CANCELED_RETRY` recovery, saved-method arm | nulls the secret, mints a replacement, re-stamps, retries the confirm |
+| `PAYMENT_INTENT_CANCELED_RETRY` recovery, new-card arm | byte-identical twin of the above |
+
+The recovery branches put the `finally` on the **outer** `try` (the one with
+`catch (recoveryError)`), not on a narrow one around the request, for two reasons: the early
+`isSubscription` throw happens before the request and would otherwise leak the ref `true` for the
+rest of the session (`isFormValid()` reads it, so the submit button would never re-enable), and
+holding it across the 800 ms settle + retry confirm is the correct behaviour anyway. After release
+the gate stays shut on its own, because `paymentIntentClientSecret` now holds the recovery object;
+if recovery failed it is still `null` and the effect **should** mint a fresh one for the reset form
+(its `onSuccess` clears `attachedCampaignCodeRef`, so the next submit re-attaches).
+
+`handleAddNewPaymentMethod` has the same un-mutexed shape against a **SetupIntent**. It is not a
+loss path — it is gated on `isAuthenticated && userData`, both objects carry a real `userEmail`,
+and the attach block reads the same client-secret **state** the confirm uses, so local and state
+cannot disagree. Left as-is deliberately; if that ever changes, it needs the same treatment.
+
+**The pre-warm still passes `campaignCode`** and that is deliberate — it is `undefined` in the
+normal journey, but the effect re-runs on later deps and an auto-applied code (the rewards-unlock
+path) can legitimately be present by then. Removing it would delete a path that sometimes works.
+
+Contract details: [payment/backend.md](../payment/backend.md#campaign-code-checkoutts--the-authoritative-campaign-code-write) ·
+failure modes: [payment/gotchas.md](../payment/gotchas.md#the-applied-discount-code-was-thrown-away-at-checkout-fixed-2026-08-27).

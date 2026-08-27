@@ -484,7 +484,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useEntryRewardToast.ts",
         "src/utils/rewards-widget-spotlight-storage.ts"
       ],
-      "lastVerified": "2026-08-26"
+      "lastVerified": "2026-08-27"
     },
     "promo": {
       "docs": "docs/promo/",
@@ -881,7 +881,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-08-26"
+      "lastVerified": "2026-08-27"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -1047,7 +1047,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "e2e/**",
         "playwright.config.ts"
       ],
-      "lastVerified": "2026-08-24"
+      "lastVerified": "2026-08-27"
     }
   }
 }

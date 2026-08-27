@@ -435,3 +435,55 @@ another tier's name. Anything needing real catalog data must go through `metadat
 back to `plan.id` only for plans built outside this adapter (upsells), where the id *is* the record
 id. First consumer: the package-inclusions comparison table —
 [shared-ui/frontend.md](../shared-ui/frontend.md).
+## `useStripeSubscription.attachCampaignCode` — stamping the applied code before the charge (2026-08-27)
+
+**The defect this exists to close.** A customer could type a discount code, click Apply, see
+**APPLIED**, pay — and receive nothing. `MembershipModal` pre-warms a Stripe subscription when step 2
+mounts, and the coupon input lives on that same step, so the pre-warm was created with an **empty**
+`campaignCode`. The PURCHASE handler then reused that pre-warmed subscription
+(`canReuseSubscription`), the webhook read `subscription.metadata.campaignCode`, found nothing, and
+granted nothing. The charge succeeded and nothing logged. The existing teardown only discards the
+pre-warmed subscription when the **package** changes — there was no equivalent for the applied code.
+
+**The shape of the fix.** The code is no longer expected to travel on an object created before the
+customer could type it. `attachCampaignCode` stamps the applied code onto whatever checkout object
+the PURCHASE click is about to charge, via `POST /api/stripe/attach-campaign-code`, which
+re-validates it server-side (the browser is never trusted for which code applies).
+
+Two rules govern the call, and both are load-bearing:
+
+1. **It MUST be awaited BEFORE `confirmStripeIntent()`.** The webhook reads the code off the Stripe
+   object as of the moment payment succeeded. A write that lands after the confirm is a race the
+   browser usually loses — and on a redirecting confirm (3-D Secure) the browser leaves the page, so
+   it never happens at all.
+2. **It NEVER throws and never blocks the sale.** A refusal, a non-2xx, a network failure and the
+   client timeout all return `success: false`, and the caller charges anyway. A genuine holder still
+   keeps their unspent issuance in the rewards wallet, so the entries are recoverable; a membership
+   sale blocked because a bonus lookup timed out is not. That trade is deliberate — do not "improve"
+   it into a hard failure.
+
+**`outcome` is not decoration — it is what keeps the alarm honest.** The result carries
+`outcome: "attached" | "refused" | "unknown"`:
+
+- `"refused"` — the server answered and did not write the code. **A customer was charged without
+  it**, and the modal's `console.error` for this is the only production signal that says so.
+- `"unknown"` — the client cap fired or the connection dropped. The request may well have been
+  served: the fix's own e2e run recorded `POST /api/stripe/attach-campaign-code 200 in 8089ms`
+  against the original 8s cap, on a request that **had** written the code. Reporting that as a loss
+  makes the alarm above worthless, and it failed the e2e console watchdog on unrelated specs.
+
+**The cap is 15s, and it was raised from 8s on evidence.** The budget has to cover a rate-limit
+check, `request.json()`, `getServerSession` (a DB hit), `connectDB`, a Stripe retrieve with
+`expand`, a `User.findOne`, two campaign/issuance reads and a Stripe update — two Stripe round trips
+plus three DB reads, on a possibly-cold lambda. The customer has already clicked PURCHASE and is
+watching a spinner; a few extra seconds is much cheaper than silently losing money-equivalent
+entries. Do not lower it without re-measuring that chain.
+
+**The `import type` is not a style choice.** `@/utils/payment/campaign-code-checkout` is server-only
+(it reaches the Stripe secret key and the `User` model). `import type` is fully erased at compile
+time, so nothing from it reaches the client bundle. Changing it to a value import would drag server
+code into the browser.
+
+Regression cover: `e2e/specs/membership/bonus-code-journey.spec.ts` (`npm run e2e:bonus-code`) drives
+the real journey — mint, apply at checkout, real Stripe TEST-mode charge — and reads the granted
+entries out of the **draw**, not off the receipt. It was red for this defect before the fix.
