@@ -16,6 +16,16 @@ interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
   email: string;
+  /**
+   * Mobile on the colliding account, when the caller knows it. Enables the SMS
+   * sign-in option — which is the ONLY way in for someone who reached this modal
+   * via a *mobile* collision, because `register` deliberately withholds the
+   * account's email in that case (enumeration guard), so `email` is whatever they
+   * just typed and no email-based path can work.
+   */
+  mobile?: string;
+  /** Open straight into the SMS flow. Requires `mobile`. */
+  initialFlow?: "password" | "sms";
 }
 
 // Google Icon Component
@@ -42,7 +52,7 @@ function GoogleIcon() {
   );
 }
 
-const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
+const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email, mobile, initialFlow = "password" }) => {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { isStaff } = usePermissions();
@@ -59,8 +69,22 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [isPasteClicked, setIsPasteClicked] = useState(false);
-  const [loginCodeFlow, setLoginCodeFlow] = useState(false);
+  const [loginCodeFlow, setLoginCodeFlow] = useState(initialFlow === "sms");
   const [loginCodeSent, setLoginCodeSent] = useState(false);
+  /**
+   * Which channel the one-time code goes down. Both channels share this modal's
+   * digit-box entry, paste button and keyboard nav — only the endpoints and the
+   * copy differ, so this is a switch rather than a second parallel flow.
+   */
+  const [codeChannel, setCodeChannel] = useState<"email" | "sms">(initialFlow === "sms" ? "sms" : "email");
+  /** Seconds until a resend is allowed — the server enforces 60s between sends. */
+  const [smsCooldown, setSmsCooldown] = useState(0);
+
+  useEffect(() => {
+    if (smsCooldown <= 0) return;
+    const t = setTimeout(() => setSmsCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [smsCooldown]);
 
   // Ref to prevent double submission of send verification (handles double-click before setState flushes)
   const isSendingVerificationRef = useRef(false);
@@ -72,11 +96,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
       setPassword("");
       setError("");
       setCodeSent(false);
-      setLoginCodeFlow(false);
+      setLoginCodeFlow(initialFlow === "sms");
+      setCodeChannel(initialFlow === "sms" ? "sms" : "email");
       setLoginCodeSent(false);
+      setSmsCooldown(0);
       setCodeDigits(["", "", "", "", "", ""]);
     }
-  }, [isOpen]);
+  }, [isOpen, initialFlow]);
 
   // If the user opens this modal while already signed in, send them to the right dashboard.
   // When the modal is closed we must NOT redirect — parent pages (e.g. /dev/modals) mount this
@@ -466,6 +492,30 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
     setError("");
 
     try {
+      if (codeChannel === "sms") {
+        const response = await fetch("/api/auth/send-mobile-login-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mobile }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.error || "We couldn't send a code. Please try again.");
+          // A 429 carries the wait — start the countdown so the button self-heals.
+          if (typeof data.retryAfterSeconds === "number") setSmsCooldown(data.retryAfterSeconds);
+          return;
+        }
+
+        // The send route replies identically whether or not the number has an
+        // account (mobile numbers are enumerable — see docs/auth/api.md), so
+        // there is nothing to branch on: always advance to code entry.
+        setLoginCodeSent(true);
+        setSmsCooldown(60);
+        setCodeDigits(["", "", "", "", "", ""]);
+        return;
+      }
+
       const response = await fetch("/api/auth/send-login-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -508,11 +558,20 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
     setIsVerifyingCode(true);
 
     try {
-      const response = await fetch("/api/auth/verify-login-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, loginCode: currentCode }),
-      });
+      // Both channels return the same `{ success, token, user }` shape, so
+      // everything below this fetch is shared.
+      const response =
+        codeChannel === "sms"
+          ? await fetch("/api/auth/verify-mobile-login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ mobile, code: currentCode }),
+            })
+          : await fetch("/api/auth/verify-login-code", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, loginCode: currentCode }),
+            });
 
       const data = await response.json();
 
@@ -578,10 +637,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
 
       <ModalContent padding="lg">
         <div className="w-full max-w-md space-y-6">
-          {/* Email Display */}
+          {/* Identity display — the mobile in the SMS flow, since that is the
+              identifier being used and the email shown may not even be theirs
+              (on a mobile collision it is whatever they just typed). */}
           <div className="text-center">
             <p className="text-sm text-gray-600 dark:text-neutral-400">Signing in as</p>
-            <p className="text-base font-semibold text-gray-900 dark:text-neutral-100">{email}</p>
+            <p className="text-base font-semibold text-gray-900 dark:text-neutral-100">
+              {codeChannel === "sms" && mobile ? mobile : email}
+            </p>
           </div>
 
           {/* Error Message - hidden for password form when Input shows it inline; shown for verification, login code, and non-password errors (e.g. Google) */}
@@ -699,9 +762,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                 <div className="space-y-4">
                   <div className="text-center">
                     <p className="text-sm text-gray-600 dark:text-neutral-400 mb-4">
-                      {loginCodeSent
-                        ? "Enter the 6-digit code sent to your email"
-                        : "We'll send a one-time code to your email to sign in."}
+                      {codeChannel === "sms"
+                        ? loginCodeSent
+                          ? `Enter the 6-digit code sent to ${mobile}`
+                          : `We'll text a one-time code to ${mobile}.`
+                        : loginCodeSent
+                          ? "Enter the 6-digit code sent to your email"
+                          : "We'll send a one-time code to your email to sign in."}
                     </p>
                   </div>
 
@@ -771,9 +838,11 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                           size="lg"
                           className="rounded-[10px]"
                           loading={isSendingCode}
-                          disabled={isSendingCode}
+                          disabled={isSendingCode || smsCooldown > 0}
                         >
-                          Resend Code
+                          {/* SMS is throttled to one send per 60s server-side;
+                              surface the wait rather than let the tap 429. */}
+                          {smsCooldown > 0 ? `Resend in ${smsCooldown}s` : "Resend Code"}
                         </Button>
                         <button
                           type="button"
@@ -828,14 +897,33 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, email }) => {
                       onIconClick={() => setShowPassword(!showPassword)}
                       error={error && error.includes("password") ? error : undefined}
                     />
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap justify-end gap-x-4 gap-y-1">
                       <button
                         type="button"
-                        onClick={() => setLoginCodeFlow(true)}
+                        onClick={() => {
+                          setCodeChannel("email");
+                          setLoginCodeFlow(true);
+                        }}
                         className="text-sm font-medium text-red-600 hover:underline"
                       >
-                        Send code to sign in instead
+                        Email me a code
                       </button>
+                      {/* Only offered when the caller knows the account's mobile.
+                          For a mobile collision this is the only workable path —
+                          the email shown is the one they just typed, not the
+                          account's, so every email-based route fails. */}
+                      {mobile && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCodeChannel("sms");
+                            setLoginCodeFlow(true);
+                          }}
+                          className="text-sm font-medium text-red-600 hover:underline"
+                        >
+                          Text me a code
+                        </button>
+                      )}
                     </div>
                   </div>
 

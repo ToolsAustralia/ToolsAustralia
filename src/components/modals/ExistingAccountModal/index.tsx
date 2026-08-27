@@ -12,6 +12,13 @@ interface ExistingAccountModalProps {
   onClose: () => void;
   conflictField?: "email" | "mobile";
   email?: string;
+  /**
+   * The mobile the caller just typed. Required to make a **mobile** collision
+   * recoverable: `register` withholds the matched account's email in that case
+   * (enumeration guard), so `email` is the address the caller typed — not the
+   * account's — and every email-based sign-in path fails by construction.
+   */
+  mobile?: string;
 }
 
 /**
@@ -24,12 +31,18 @@ const ExistingAccountModal: React.FC<ExistingAccountModalProps> = ({
   onClose,
   conflictField = "email",
   email,
+  mobile,
 }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const visible = isOpen && !showLoginModal;
 
+  // On a mobile collision, SMS is the only path that can work — so open straight
+  // into it rather than showing a password form addressed to the wrong email.
+  const smsRecovery = conflictField === "mobile" && Boolean(mobile);
+  const canRecover = smsRecovery || Boolean(email);
+
   const handleGoToLogin = () => {
-    if (email) setShowLoginModal(true);
+    if (canRecover) setShowLoginModal(true);
   };
 
   const handleLoginModalClose = () => {
@@ -64,11 +77,11 @@ const ExistingAccountModal: React.FC<ExistingAccountModalProps> = ({
               tone="red"
               size="md"
               onClick={handleGoToLogin}
-              disabled={!email}
+              disabled={!canRecover}
               className="w-full gap-1.5"
             >
               <LogIn className="h-4 w-4" />
-              Login
+              {smsRecovery ? "Sign in with your mobile" : "Login"}
             </Button>
             <Button
               variant="outline"
@@ -84,11 +97,13 @@ const ExistingAccountModal: React.FC<ExistingAccountModalProps> = ({
       </Shell>
 
       {/* Login modal — rendered outside Shell to avoid nesting issues */}
-      {email && (
+      {canRecover && (
         <LoginModal
           isOpen={showLoginModal}
           onClose={handleLoginModalClose}
-          email={email}
+          email={email ?? ""}
+          mobile={mobile}
+          initialFlow={smsRecovery ? "sms" : "password"}
         />
       )}
     </>
