@@ -163,7 +163,17 @@ export async function runKlaviyoProfileReconciliation(
     const results = await Promise.allSettled(
       batch.map(async (user) => {
         const ledger = ledgers.get(user._id.toString()) ?? emptyGrantLedger();
-        await syncUserProfileToKlaviyo(user, undefined, undefined, undefined, ledger);
+
+        // `syncUserProfileToKlaviyo` swallows its own errors and returns false rather than
+        // throwing — so NOT checking this return value would make every failure look like a
+        // success, advance the watermark past the user, and skip them forever. A 401, a 429,
+        // a Klaviyo outage, or the dev/prod write guard refusing would all be invisible.
+        // Throwing here routes the user into the `rejected` branch below, which increments
+        // `failed`, holds the watermark, and logs — i.e. they are retried next run.
+        const synced = await syncUserProfileToKlaviyo(user, undefined, undefined, undefined, ledger);
+        if (!synced) {
+          throw new Error("Klaviyo upsert did not land (see the preceding klaviyo error line)");
+        }
 
         // `{ timestamps: false }` is LOAD-BEARING: without it this write bumps `updatedAt`,
         // re-dirtying the user so the sweep re-selects them forever. Verified on Mongoose

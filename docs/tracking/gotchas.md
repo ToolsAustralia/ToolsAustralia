@@ -456,3 +456,32 @@ navigations, where the URL has dropped the params but the session is unchanged; 
 **The general trap:** component B reading state that component A writes in an effect is a
 race, and `<Suspense>` makes the ordering non-obvious — tree order is not effect order. If the
 value exists in the URL, read the URL.
+
+## A swallowed Klaviyo failure must never look like a success (2026-08-27)
+
+`syncUserProfileToKlaviyo` swallows its own errors by design — a profile sync must not break
+the caller — so **its boolean return is the only signal that the write actually landed**.
+
+The first version of `KlaviyoProfileReconciliationService` ignored it. `Promise.allSettled` saw
+`fulfilled` for a refused write, `processed` incremented, the watermark advanced past the user,
+and `klaviyoSyncedAt` was stamped as though they had synced. A 401, a 429, a Klaviyo outage, or
+the dev/prod write guard refusing would all have been **invisible** — and the user would never
+be retried. That is precisely the silent-permanent-gap failure this subsystem exists to remove,
+reintroduced inside the thing built to fix it.
+
+The sweep now throws on a `false` return, which routes the user into the `rejected` branch:
+`failed` increments, the watermark holds, and the cron logs. Pinned by
+`npm run test:klaviyo-reconciliation`.
+
+Same contract as `DrawGrantService.grantMonthlyCouponEntries`: **false means "not delivered"**.
+
+## The dev/prod write guard keys on `NODE_ENV`, not `KLAVIYO_MODE` (2026-08-27)
+
+`KLAVIYO_MODE` is a hand-set event-name-prefix setting, and this repo's own `.env.local` ships
+it as `development`. Gating the profile-write guard on it would mean that a stray
+`KLAVIYO_MODE=development` in Vercel refuses **every** profile write in production — silently
+disabling the whole reconciliation sweep while it still reported success.
+
+A safety gate must not be disableable by a cosmetic config var, so the guard keys on
+`NODE_ENV === "production"` (true for any deployed build, false on a developer's machine).
+`KLAVIYO_ALLOW_DEV_PROFILE_WRITES` remains the explicit opt-in for a sanctioned ops run.
