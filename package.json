@@ -486,7 +486,9 @@
     "verify:klaviyo-accuracy": "tsx scripts/verify-klaviyo-profile-accuracy.ts",
     "sync:klaviyo-profiles": "tsx scripts/sync-klaviyo-profiles.ts",
     "sync:klaviyo-profiles-bulk": "tsx scripts/sync-klaviyo-profiles-bulk.ts",
-    "migrate:klaviyo-draw-properties": "tsx scripts/migrate-klaviyo-draw-properties.ts"
+    "migrate:klaviyo-draw-properties": "tsx scripts/migrate-klaviyo-draw-properties.ts",
+    "migrate:remove-upsell-stats": "tsx scripts/migrate-remove-upsell-stats.ts",
+    "migrate:remove-upsell-stats:dry": "tsx scripts/migrate-remove-upsell-stats.ts --dry-run"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.85",

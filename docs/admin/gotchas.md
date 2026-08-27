@@ -477,3 +477,23 @@ That 10s ceiling is **smaller than `connectDB`'s own failure path**: `serverSele
 **Deliberately NOT done:** no new indexes. MER's draw lookup is already served by `{status:1, activationDate:-1}`, and the five-field index `distinctUserCounts.ts` asks for would be permanent write amplification on the hottest collection bought for a query now removed from this path. No MER snapshot model either — after the two fixes each draw is one indexed `find` on a unique index, and caching that is machinery for no measured win.
 
 ⚠️ **Still worth measuring:** the snapshot cron writes a **90-day sliding window**, while MER's window opens earlier. Any day without a snapshot is recomputed **live**, which includes an untimed Meta Graph call (`fetchFacebookInsights` passes no `AbortSignal`; `outboundAgent` sets only a connect timeout, so undici's 300s header/body defaults stand). If MER is still slow after this, check `dashboardstatsdailysnapshots` coverage first and run `backfill:dashboard-stats-snapshots`.
+
+## Admin engagement score lost its upsell component (2026-08-27)
+
+Both engagement scorers (`GET /api/admin/users/[id]` and
+`src/features/admin/users/server/queries.ts`) contained:
+
+```ts
+if (upsellStats?.totalAccepted > 0) score += 10;
+```
+
+`upsellStats` was 0 for **all 56,360 users** — the tracker that wrote it was mounted nowhere —
+so this branch contributed nothing to any score. It was removed with the field, and **no score
+changes as a result**.
+
+`upsellPurchases.length` IS a real signal (2,290 users have one). Re-adding an upsell component
+on that basis would be a deliberate scoring change and was deliberately NOT done as part of a
+deletion. The decision is recorded in a comment at both sites.
+
+`upsellStats` was also dropped from the admin user-detail response and from
+`src/types/admin.ts`.

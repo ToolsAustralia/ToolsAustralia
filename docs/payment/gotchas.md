@@ -251,3 +251,9 @@ Three separate traps, all of which had to be fixed together — see `reportDrawC
 **Volume:** deduplicated on (message + errorName + userId + category + severity) within a **30-minute** payment window, so a renewal burst collapses to one row per affected user, not one per attempt. `ErrorReport` has a 90-day TTL. `autoLogErrorServer` wraps its whole body in try/catch and `reportDrawCreditFailure` adds its own, so reporting can never abort a grant mid-flight.
 
 ⚠️ **When adding any server-side error report, check the argument count first.** A two-argument call compiles, type-checks, lints, and does nothing.
+
+## `account-manager` no longer initialises `upsellStats` (2026-08-27)
+
+`createUserAccount` in `src/utils/payment/account-manager.ts` seeded a five-counter
+`upsellStats` object on guest-checkout account creation. The field is deleted from the User
+model — see `docs/upsell/gotchas.md`. `upsellPurchases` / `upsellHistory` are untouched.

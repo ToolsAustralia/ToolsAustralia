@@ -84,3 +84,38 @@ assertion; the owner ratified stacking as intended (the `membership/*-50x.webp` 
 `*-100x.webp` artwork variants exist precisely for the stacked 5×/10× promo cases). The
 stale comment is fixed; if stacking policy ever changes, `full-journey.spec.ts`'s
 `upsellEntries = 3 × 10 × promo` expectation is the tripwire.
+
+## The upsell TRACKER is deleted (2026-08-27)
+
+Not to be confused with upsell *purchases*, which are live and unaffected (2,290 users have
+one). What is gone is the engagement-tracking layer that was never switched on.
+
+`UpsellManager.tsx` was imported nowhere in the app. It was the only caller of
+`POST /api/upsell/track`, which was the only writer of `User.upsellStats`. So the whole chain
+ran zero times in production: measured 2026-08-26, **0 of 56,360 users had
+`upsellStats.totalShown > 0`**. Five permanent zeros that read like measured data, and which
+were published to Klaviyo as five profile properties until those were retired.
+
+Deleted:
+
+| | |
+|---|---|
+| `src/components/modals/UpsellManager.tsx` | the unmounted component |
+| `src/app/api/upsell/track/` | its only endpoint |
+| `useUpsellManager`, `useTrackUpsellEvent`, `useUpsellTracking` | the tracking hooks |
+| `UpsellManagerProps` | its props type |
+| `User.upsellStats` | interface + schema + all three initialisation sites |
+
+`useUpsellTracking` was doubly dead — it called `/api/upsell/tracking/${offerId}`, a route that
+has never existed.
+
+**Kept deliberately:** `usePurchaseUpsell` (5 consumers) and `useUpsellPrefetch` (2 consumers)
+are live. `UpsellOffer` and `SAMPLE_UPSELL_OFFERS` stay in `types/upsell.ts` — the dev modal
+gallery uses them.
+
+**Also flagged, not done:** `useUpsellOffers`, `useUpsellAnalytics`, `useAcceptUpsellOffer` and
+`useDismissUpsellOffer` now have zero consumers (their only caller was `useUpsellManager`).
+They are unrelated dead code, not part of the tracker, so they were left alone.
+
+Stored residue is stripped by `npm run migrate:remove-upsell-stats` (`:dry` first). Reviving
+upsell funnel data means building a tracker that is actually mounted.

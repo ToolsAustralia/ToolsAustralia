@@ -235,16 +235,6 @@ export interface IUser extends Document {
     timestamp: Date;
   }>;
 
-  // Upsell Statistics
-  upsellStats?: {
-    totalShown: number;
-    totalAccepted: number;
-    totalDeclined: number;
-    totalDismissed: number;
-    conversionRate: number;
-    lastInteraction: Date | null;
-  };
-
   referral?: {
     code: string;
     successfulConversions: number;
@@ -1015,34 +1005,6 @@ const UserSchema = new Schema<IUser>(
         },
       },
     ],
-
-    // Upsell Statistics
-    upsellStats: {
-      totalShown: {
-        type: Number,
-        default: 0,
-      },
-      totalAccepted: {
-        type: Number,
-        default: 0,
-      },
-      totalDeclined: {
-        type: Number,
-        default: 0,
-      },
-      totalDismissed: {
-        type: Number,
-        default: 0,
-      },
-      conversionRate: {
-        type: Number,
-        default: 0,
-      },
-      lastInteraction: {
-        type: Date,
-        default: null,
-      },
-    },
 
     referral: {
       code: {

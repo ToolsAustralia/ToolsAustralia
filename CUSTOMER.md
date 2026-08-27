@@ -240,7 +240,6 @@ Embedded subdocument `subscription` (one active membership at a time; [User.ts:2
 | `retentionOffersConsumed` | subdoc (opt) | One-time retention flags: `pause30d?`, `discount50_2mo?` ([User.ts:193](src/models/User.ts#L193)) | — |
 | `upsellPurchases[]` | array (opt) | Each: `offerId, offerTitle, entriesAdded, amountPaid, purchaseDate, triggeringPaymentIntentId?` ([User.ts:867-897](src/models/User.ts#L867)). `triggeringPaymentIntentId` keys the per-trigger "one purchase per appearance" upsell dedup ([upsell/purchase/route.ts:203-214](src/app/api/upsell/purchase/route.ts#L203)). **Caveat:** rows written before 2026-07-10 lack it — the field was missing from the schema block and `strict: true` stripped it on write (fixed 2026-07-10), so the dedup only bites on purchases made after the fix. | — |
 | `upsellHistory[]` | array (opt) | Each: `offerId, action, triggerEvent, timestamp` ([User.ts:207-212](src/models/User.ts#L207)) | — |
-| `upsellStats` | subdoc (opt) | `totalShown, totalAccepted, totalDeclined, totalDismissed, conversionRate, lastInteraction` ([User.ts:215-222](src/models/User.ts#L215)) | — |
 | `redemptionHistory[]` | array (opt, def []) | Points-redemption log: `redemptionId?, redemptionType("discount"\|"entry"\|"shipping"\|"package"), packageId?, packageName?, pointsDeducted, value, description, redeemedAt, status("completed"\|"pending"\|"cancelled")` ([User.ts:259-269](src/models/User.ts#L259)) | — |
 
 ### 2j. Timestamps
@@ -619,6 +618,17 @@ A customer participates passively — visiting via an affiliate link stamps `Use
 ## 8. Marketing & attribution data captured
 
 What marketing/attribution data we capture about a customer, and which of it **leaves to third parties** (Klaviyo, Meta/TikTok/Snapchat). See [docs/tracking/](docs/tracking/).
+
+### Five dormant upsell fields removed from the customer record (2026-08-27)
+
+The customer record carried five counters meant to describe how they respond to upsell offers —
+how many were shown, accepted, declined, dismissed, and a conversion rate. The thing that was
+supposed to fill them was never switched on, so for **every one of the ~56,900 customers all
+five read zero** since launch. They looked like measured behaviour and were not.
+
+They are removed from the customer record and from what we send to the email platform. Nothing
+a customer can see changes: no page displayed them, and their actual upsell **purchases** —
+which 2,290 customers have — are untouched and still recorded.
 
 ### 8-0. What Klaviyo holds about a customer, and when it catches up (2026-08-26)
 

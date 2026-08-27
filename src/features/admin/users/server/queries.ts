@@ -33,7 +33,6 @@ function calculateEngagementScore(
     lastLogin?: Date;
     subscription?: { isActive?: boolean };
     oneTimePackages?: unknown[];
-    upsellStats?: { totalAccepted?: number };
   },
   paymentEvents: Array<{ eventType?: string }>,
   majorDrawParticipation: Array<{ totalEntries?: number }>
@@ -66,9 +65,6 @@ function calculateEngagementScore(
 
   // One-time packages
   if ((user.oneTimePackages?.length || 0) > 0) score += 10;
-
-  // Upsell engagement
-  if ((user.upsellStats?.totalAccepted || 0) > 0) score += 10;
 
   return Math.min(score, 100); // Cap at 100
 }
@@ -386,7 +382,6 @@ export async function buildAdminUserProfile(userId: string): Promise<AdminUserDe
       purchaseDate: upsell.purchaseDate instanceof Date ? upsell.purchaseDate.toISOString() : upsell.purchaseDate,
     })),
     upsellHistory,
-    upsellStats: user.upsellStats || undefined,
     redemptionHistory,
     statistics: {
       totalSpent,

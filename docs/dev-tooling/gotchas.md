@@ -72,3 +72,8 @@ All three now use the shared
 [`isValidPendingUpgrade`](src/utils/subscription/pending-upgrade.ts), which checks the payload
 rather than the object's existence. Same root cause as the Klaviyo
 `subscription_has_pending_upgrade` fix; see `docs/subscription/models.md`.
+
+## `klaviyo-user-sync` test route no longer seeds `upsellStats` (2026-08-27)
+
+`src/app/api/test/klaviyo-user-sync/route.ts` built its throwaway user with a five-counter
+`upsellStats` object. The field is deleted from the User model — see `docs/upsell/gotchas.md`.
