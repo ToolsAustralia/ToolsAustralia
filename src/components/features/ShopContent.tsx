@@ -1,25 +1,21 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useScrollLock, useModalA11y } from "@/hooks/useModalBlocking";
+import { useState, useEffect, useMemo } from "react";
 import ShopProductCard from "@/components/shop/ShopProductCard";
 import { resolveShopDiscountBadge } from "@/utils/shop/member-discount";
 import { FLAT_SHIPPING_RATE_LABEL } from "@/config/shop";
 import { useUserContext } from "@/contexts/UserContext";
 import ProductFilters from "@/components/features/ProductFilters";
+import SheetShell from "@/components/ui/SheetShell";
 import { useShopFacets } from "@/hooks/queries/useProductQueries";
+import { useStickyHeaderOffset } from "@/hooks/useStickyHeaderOffset";
 import MetallicButton from "@/components/ui/MetallicButton";
-import { Filter, X, Search, Clock, ArrowUpDown, Tag, Truck, ChevronDown } from "lucide-react";
+import { Check, SlidersHorizontal, X, Search, Clock, ArrowUpDown, Tag, Truck } from "lucide-react";
 import { Product as ProductType } from "@/types/product";
 import { useProducts, type Product as ReactQueryProduct } from "@/hooks/queries";
 import { SectionContainer } from "@/components/ui";
 import Dropdown from "@/components/modals/ui/Dropdown";
-
-/**
- * Duration of the `sidebar-slide-in` / `sidebar-slide-out` keyframes in globals.css.
- * Kept as a named constant so the close timeout and the CSS cannot drift apart silently.
- */
-const SIDEBAR_ANIM_MS = 300;
+import { cn } from "@/utils/cn";
 
 // Filter state interface
 /*
@@ -42,12 +38,14 @@ import { PRICE_NO_MAX } from "@/components/features/ProductFilters";
  * A server-side default cannot fix a client that always overrides it.
  */
 /*
-  The five the design names, in its order.
+  The same shape as the mini-draws sort list, which is the page this one is
+  modelled on: value is "<field>-<direction>" and the field is whatever
+  /api/products accepts (name · price · createdAt · displayOrder ·
+  includedEntries).
 
-  "Oldest", "Top Rated" and "Name (A-Z)" are gone: nobody sorts a 7-product shop
-  alphabetically, and a rating sort on a catalogue where most items have no
-  reviews orders by a number that is mostly absent. "Most free entries" is new and
-  sorts on includedEntries, which the products route now accepts.
+  "Top Rated" stays out — a rating sort on a catalogue where most items have no
+  reviews orders by a number that is mostly absent. The two name sorts are back
+  by request; they are the one ordering a shopper can predict before tapping.
 */
 const sortOptions = [
   { value: "displayOrder-asc", label: "Featured" },
@@ -55,6 +53,8 @@ const sortOptions = [
   { value: "price-desc", label: "Price: High to Low" },
   { value: "includedEntries-desc", label: "Most free entries" },
   { value: "createdAt-desc", label: "Newest" },
+  { value: "name-asc", label: "Name (A-Z)" },
+  { value: "name-desc", label: "Name (Z-A)" },
 ];
 
 /**
@@ -97,12 +97,15 @@ export default function ShopContent({
   const [sortBy, setSortBy] = useState(DEFAULT_SORT);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [isSortOpen, setIsSortOpen] = useState(false);
+
   /**
-   * Drives the slide-OUT. The panel is conditionally mounted, so without a closing
-   * state it vanishes the instant `isFiltersOpen` flips and only half the animation
-   * exists. Same two-state pattern as the header's mobile menu and cart.
+   * Where the mobile control bar docks. MEASURED, not `top-[60px]`: the announcement bar
+   * puts the real header bottom at 85px, so the constant parked this bar 25px BEHIND the
+   * fixed header — the search field was clipped and the category rail was invisible.
+   * See the hook for the full table.
    */
-  const [isClosingFilters, setIsClosingFilters] = useState(false);
+  const { stickyTop } = useStickyHeaderOffset();
 
   // Parse sort parameters
   const [sortField, sortOrder] = sortBy.split("-");
@@ -197,44 +200,21 @@ export default function ShopContent({
     setCurrentPage(1); // Reset to first page when filters change
   };
 
-  // Handle closing mobile filters (useful after applying filters)
-  /**
-   * Closes through the 300ms slide-out rather than unmounting on the spot.
-   * `SIDEBAR_ANIM_MS` must stay in step with the `sidebar-slide-out` keyframe in
-   * globals.css — a shorter timeout cuts the animation off mid-flight, a longer one
-   * leaves an invisible scrim swallowing clicks.
-   */
-  const handleCloseFilters = useCallback(() => {
-    // Re-entrancy guard: Escape plus a backdrop click would otherwise queue two
-    // timeouts, and the second re-opens nothing but does clear the closing flag early.
-    setIsClosingFilters((closing) => {
-      if (closing) return closing;
-      setTimeout(() => {
-        setIsFiltersOpen(false);
-        setIsClosingFilters(false);
-      }, SIDEBAR_ANIM_MS);
-      return true;
-    });
-  }, []);
-
-  // The mobile filter drawer paints a full-viewport scrim, which makes it modal by the
-  // shared-ui R-MODAL test — so it owes the page behind it a scroll lock and a focus trap.
-  // It had neither, while the ADMIN copy of this same drawer already locked, which is what
-  // marks this as an oversight rather than a decision. The drawer has its own
-  // `overflow-y-auto`, so without a lock a swipe past its end chains into the product grid.
-  const filtersPanelRef = useRef<HTMLDivElement>(null);
-  useScrollLock(isFiltersOpen);
-  useModalA11y(isFiltersOpen, filtersPanelRef, handleCloseFilters);
-
   // Handle sort change
   const handleSortChange = (newSort: string) => {
     setSortBy(newSort);
     setCurrentPage(1); // Reset to first page when sort changes
+    setIsSortOpen(false);
   };
 
-  const handleClearAll = () => {
-    setSearchQuery("");
-    setDebouncedSearch("");
+  /**
+   * Just the facets — not the search box, not the sort.
+   *
+   * The sheet's footer button says "Clear" next to a panel of filters, so it clears
+   * filters. Wiping a typed search term from a control that never mentions search is
+   * the kind of surprise that makes someone retype it and distrust the button.
+   */
+  const handleClearFilters = () => {
     setFilters({
       category: [],
       priceRange: [0, PRICE_NO_MAX],
@@ -244,8 +224,15 @@ export default function ShopContent({
       hasEntries: false,
       readyToShip: false,
     });
-    setSortBy(DEFAULT_SORT);
     setCurrentPage(1);
+  };
+
+  /** Everything: facets, the search term and the sort order. */
+  const handleClearAll = () => {
+    setSearchQuery("");
+    setDebouncedSearch("");
+    handleClearFilters();
+    setSortBy(DEFAULT_SORT);
   };
 
   // Handle page change
@@ -321,6 +308,55 @@ export default function ShopContent({
     return pills;
   }, [filters]);
 
+  const sortLabel = sortOptions.find((o) => o.value === sortBy)?.label ?? sortOptions[0].label;
+
+  const filterSubLabel =
+    activeFilterCount > 0
+      ? `${activeFilterCount} filter${activeFilterCount === 1 ? "" : "s"} applied`
+      : "All products";
+
+  /**
+   * The sort options as a tappable list — the body of the mobile sort sheet.
+   *
+   * Lifted from MiniDrawsContent so both browse pages sort through the same control.
+   * It replaced a transparent native <select> stretched over a hand-drawn pill: that
+   * trick existed only to dodge the `select { font-size: 16px !important }` rule
+   * globals.css needs to stop iOS zooming the viewport, and it is not needed once the
+   * options live in a sheet we draw ourselves.
+   */
+  const sortList = (
+    <div className="flex flex-col">
+      {sortOptions.map((option) => {
+        const on = option.value === sortBy;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => handleSortChange(option.value)}
+            className={cn(
+              "flex h-[52px] w-full items-center justify-between gap-2.5 rounded-[14px] px-3.5 transition-colors",
+              on
+                ? "bg-red-600/[.05] text-[#C70000] dark:bg-red-950/30 dark:text-red-400"
+                : "text-[#374151] dark:text-neutral-300"
+            )}
+          >
+            <span className="text-[13.5px] font-semibold">{option.label}</span>
+            <span
+              className={cn(
+                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                on
+                  ? "border-red-600 bg-red-600 text-white"
+                  : "border-[#D8DAE0] bg-white text-transparent dark:border-neutral-600 dark:bg-neutral-800"
+              )}
+            >
+              <Check className="h-[11px] w-[11px]" />
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
     <SectionContainer className="py-8">
       <div className="flex flex-col lg:flex-row gap-8">
@@ -339,48 +375,6 @@ export default function ShopContent({
             <ProductFilters selectedFilters={filters} onFilterChange={handleFilterChange} isMobile={false} />
           </div>
         </div>
-
-        {/* Mobile/Tablet Filter Overlay */}
-        {isFiltersOpen && (
-          <div className="fixed inset-0 z-[110] lg:hidden">
-            {/* Backdrop */}
-            <div
-              className={`absolute inset-0 bg-black/50 sidebar-overlay transition-opacity duration-300 ${
-                isClosingFilters ? "opacity-0" : "animate-fade-in"
-              }`}
-              onClick={handleCloseFilters}
-            />
-
-            {/* Sidebar. `role="dialog"` + `aria-modal` are new and are matched by the focus
-                trap above — the pair must ship together, or the attribute is a claim to
-                assistive tech that nothing enforces. */}
-            <div
-              ref={filtersPanelRef}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Product filters"
-              className={`absolute left-0 top-0 h-full w-80 max-w-[90vw] bg-white dark:bg-neutral-900 shadow-xl overflow-y-auto overscroll-contain brand-scrollbar border-r-2 border-gray-200 dark:border-red-900/40 ${
-                isClosingFilters ? "sidebar-slide-out" : "sidebar-slide-in"
-              }`}
-            >
-              <div className="p-4 border-b border-gray-200 dark:border-neutral-800 sticky top-0 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-sm z-10">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
-                  <button
-                    onClick={handleCloseFilters}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-neutral-800 dark:hover:text-white rounded-full transition-colors text-gray-700 dark:text-neutral-400"
-                    aria-label="Close filters"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-              <div className="p-4">
-                <ProductFilters selectedFilters={filters} onFilterChange={handleFilterChange} isMobile={true} />
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Main Content */}
         <div className="flex-1">
@@ -467,10 +461,10 @@ export default function ShopContent({
 
               <div className="lg:hidden">
                 <button
-                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+                  onClick={() => setIsFiltersOpen(true)}
                   className="inline-flex h-[42px] items-center gap-1.5 rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 px-3 text-sm font-medium text-gray-700 dark:text-neutral-200 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800"
                 >
-                  <Filter className="h-4 w-4" />
+                  <SlidersHorizontal className="h-4 w-4" />
                   Filters
                   {activeFilterCount > 0 && (
                     <span className="rounded-full bg-red-600/10 px-1.5 py-0.5 text-xs font-semibold text-red-600">
@@ -505,22 +499,25 @@ export default function ShopContent({
             which is the distance it actually needs to cover.
           */}
             {/*
-              top-[60px] IS THE HEADER, MEASURED — not --app-header-h.
+              WHERE THIS DOCKS IS MEASURED, never a constant.
 
-              That variable is a flat 86px while the mobile header actually
-              renders 60px (verified in the browser: <header> is `fixed top-0`
-              with a 60px box). Pinning the band at 86 parked it 26px BELOW the
-              header's bottom edge, and that strip is transparent — so product
-              cards scrolled up through the gap between the navbar and this bar,
-              which is exactly what it looked like: a leak, not a spacing choice.
+              It used to pin at `top-[60px]`, which is the nav's own height — but the
+              site also renders a dismissible announcement bar above the nav, so the real
+              header bottom is 85px whenever that bar is up. The bar therefore sat 25px
+              BEHIND the fixed header: the search field was sliced off at the top and the
+              category rail never appeared at all. `useStickyHeaderOffset` measures the
+              header's live bottom edge, which is correct with the bar up, with it
+              dismissed, and at every breakpoint.
 
-              Fixed here rather than by correcting the variable, because
-              --app-header-h is also the top PADDING on many pages; changing it
-              globally would shift every mobile page by 26px in one go. That is a
-              real fix worth making deliberately, not as a side effect of
-              straightening one bar.
+              The surface treatment matches the mini-draws control bar on purpose — a
+              deeper background than the nav (`neutral-950` against the nav's
+              `neutral-900`) plus a hairline and a soft shadow, so the band reads as its
+              own strip instead of melting into the navbar above it.
             */}
-            <div className="sticky top-[60px] z-20 -mx-4 space-y-3 border-b border-gray-200 bg-white/95 px-4 pb-3 pt-3 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/95 sm:-mx-5 sm:px-5 md:hidden">
+            <div
+              style={{ top: stickyTop }}
+              className="sticky z-20 -mx-4 space-y-3 border-b border-[#EDEFF2] bg-white/[.96] px-4 pb-3 pt-3 shadow-[0_6px_18px_-14px_rgba(15,23,42,.5)] backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-950/95 sm:-mx-5 sm:px-5 md:hidden"
+            >
               <div className="flex items-center gap-2">
                 <div className="relative min-w-0 flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-neutral-400" />
@@ -529,21 +526,40 @@ export default function ShopContent({
                     placeholder="Search products..."
                     value={searchQuery}
                     onChange={handleSearchChange}
-                    className="w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 py-2.5 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
+                    aria-label="Search products"
+                    className="h-[42px] w-full rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 pl-10 pr-4 text-sm text-gray-800 dark:text-neutral-100 placeholder:text-gray-500 dark:placeholder:text-neutral-500 outline-none transition-all duration-200 focus:border-red-600/40 focus:ring-2 focus:ring-red-600/10"
                   />
                 </div>
 
+                {/*
+                  Two square icon buttons, exactly as the mini-draws bar carries them.
+                  The old "Filters" button spelled its label out, which on a 390px screen
+                  cost roughly a quarter of the row and left the search field too narrow
+                  to show what had been typed.
+                */}
                 <button
-                  onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-                  className="inline-flex h-[42px] shrink-0 items-center gap-1.5 rounded-xl border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-950 px-3 text-sm font-medium text-gray-700 dark:text-neutral-200 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-800"
+                  type="button"
+                  onClick={() => setIsFiltersOpen(true)}
+                  aria-label="Open filters"
+                  className="relative flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition-colors hover:bg-gray-50 dark:border-neutral-600 dark:bg-neutral-950 dark:text-neutral-200 dark:hover:bg-neutral-800"
                 >
-                  <Filter className="h-4 w-4" />
-                  Filters
+                  <SlidersHorizontal className="h-[18px] w-[18px]" />
                   {activeFilterCount > 0 && (
-                    <span className="rounded-full bg-red-600/10 px-1.5 py-0.5 text-xs font-semibold text-red-600">
+                    <span className="absolute -right-[5px] -top-[5px] flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-red-600 px-1 text-[10.5px] font-extrabold text-white dark:border-neutral-950">
                       {activeFilterCount}
                     </span>
                   )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSortOpen(true)}
+                  // The label is announced rather than printed: the pill that used to show it
+                  // sat in the results row and has been dropped, so this is the only place a
+                  // screen reader can learn what the list is currently ordered by.
+                  aria-label={`Sort products, currently ${sortLabel}`}
+                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl border border-gray-300 bg-white text-gray-700 transition-colors hover:bg-gray-50 dark:border-neutral-600 dark:bg-neutral-950 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                >
+                  <ArrowUpDown className="h-[18px] w-[18px]" />
                 </button>
               </div>
 
@@ -593,14 +609,15 @@ export default function ShopContent({
               )}
 
               {/*
-                THE SORT USED TO SIT HERE, FULL-WIDTH, AND IT WAS THE SECOND ONE.
+                A FULL-WIDTH SORT PICKER USED TO SIT HERE, AND IT WAS THE SECOND
+                OF THREE.
 
-                The results row below already pairs the count with a sort control,
-                so a phone carried two "Featured" pickers a few hundred pixels
-                apart — and this one spent a whole sticky row saying one word,
-                pushing the products themselves further down the fold on the
-                breakpoint with the least room. The count row keeps it: sorting
-                belongs beside the number it reorders.
+                It spent an entire sticky row saying one word ("Featured"),
+                pushing the products further down the fold on the breakpoint with
+                the least room, while the results row below carried a third copy
+                of the same control. Sorting is now the ↑↓ button in the row
+                above — one control, 42px, beside the filter button it belongs
+                with.
               */}
             </div>
 
@@ -637,72 +654,26 @@ export default function ShopContent({
               </div>
             )}
             {/*
-              THE COUNT AND THE SORT SHARE A ROW.
+              THE COUNT, ON ITS OWN.
 
-              "Showing 1-7 of 7 Products" sat on its own line under a full-width
-              sort dropdown — two stacked rows spending real vertical space above
-              the grid to say very little. On a 7-product shop the range is also
-              noise: the numbers restate each other, and 1-7 of 7 is a sentence
-              nobody needs. "7 items" is the fact; the sort belongs beside it
-              because they are the same decision, not two.
+              A second sort control used to sit on the right of this row — a
+              transparent native <select> stretched over a hand-drawn "Featured"
+              pill. It has been dropped: sorting now lives in the mobile control
+              bar's ↑↓ button (and in the desktop card's dropdown above), so this
+              row was carrying a third copy of the same picker.
 
-              The select is native on purpose. The handoff asks for a popover
-              rather than a modal specifically so sorting cannot lock the page
-              scroll — a native select satisfies that, renders as the platform's
-              own picker on a phone, and is keyboard-accessible without any of the
-              focus management a custom menu would need.
+              The range is deliberately not printed. On a small catalogue the
+              numbers restate each other — "1-7 of 7" is a sentence nobody needs.
             */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <p className="text-[11.5px] font-semibold text-gray-600 dark:text-neutral-400">
-                  {totalProducts > 0
-                    ? `${totalProducts} ${totalProducts === 1 ? "item" : "items"}`
-                    : "No products found"}
-                </p>
-                {isLoading && (
-                  <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-black dark:border-neutral-600 dark:border-t-white" />
-                )}
-              </div>
-
-              {/*
-                A TRANSPARENT NATIVE SELECT OVER A PILL WE DRAW OURSELVES.
-
-                Styling the select directly cannot make this text smaller.
-                globals.css carries `select { font-size: 16px !important }` under
-                768px, and that rule is load-bearing: iOS Safari zooms the whole
-                viewport when a form control under 16px takes focus, and the page
-                does not zoom back. Any `text-[11.5px]` on a <select> is silently
-                discarded on the one breakpoint that asked for it.
-
-                So the select keeps its 16px and its opacity drops to zero; the
-                pill beside it is what a reader sees, at whatever size the design
-                wants. The control underneath is still a real <select> — the
-                platform's own picker on a phone, no scroll lock, arrow keys and
-                a label for assistive tech — which is why it was chosen over a
-                custom menu in the first place. `peer-focus-visible` moves the
-                focus ring onto the visible pill so keyboard focus stays legible.
-              */}
-              <div className="relative shrink-0">
-                <select
-                  value={sortBy}
-                  onChange={(e) => handleSortChange(e.target.value)}
-                  aria-label="Sort products"
-                  className="peer absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                >
-                  {sortOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none inline-flex h-8 items-center gap-1.5 rounded-full border border-gray-300 bg-white pl-2.5 pr-2.5 text-[11.5px] font-bold text-gray-800 transition-colors peer-hover:border-gray-400 peer-focus-visible:border-red-600/40 peer-focus-visible:ring-2 peer-focus-visible:ring-red-600/10 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100">
-                  <ArrowUpDown className="h-3 w-3 shrink-0 text-gray-500 dark:text-neutral-400" aria-hidden />
-                  <span className="whitespace-nowrap">
-                    {sortOptions.find((o) => o.value === sortBy)?.label ?? "Sort"}
-                  </span>
-                  <ChevronDown className="h-3 w-3 shrink-0 text-gray-500 dark:text-neutral-400" aria-hidden />
-                </div>
-              </div>
+            <div className="flex items-center gap-2.5">
+              <p className="text-[11.5px] font-semibold text-gray-600 dark:text-neutral-400">
+                {totalProducts > 0
+                  ? `${totalProducts} ${totalProducts === 1 ? "item" : "items"}`
+                  : "No products found"}
+              </p>
+              {isLoading && (
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-300 border-t-black dark:border-neutral-600 dark:border-t-white" />
+              )}
             </div>
 
             {/* Error message */}
@@ -876,6 +847,87 @@ export default function ShopContent({
           )}
         </div>
       </div>
+
+      {/*
+        ── Filter bottom sheet ──
+
+        This used to be a full-height drawer that slid in from the LEFT edge, which is a
+        desktop pattern wearing a phone's clothes: it covered the results it was narrowing,
+        put its controls under the thumb's reach at the top of a 844px screen, and needed
+        a hand-rolled scroll lock, focus trap and 300ms slide-out timeout that had to stay
+        in step with a keyframe in globals.css.
+
+        `SheetShell` is the same component the mini-draws browse page uses — a bottom sheet
+        on mobile, a centred modal from lg, with the lock/trap/Escape handling built in.
+        Both browse pages now open the identical surface.
+      */}
+      <SheetShell open={isFiltersOpen} onClose={() => setIsFiltersOpen(false)} labelledBy="shop-filters-title">
+        <div className="flex items-center justify-between gap-2.5 px-[18px] pb-3 pt-2.5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-red-600/[.09] text-red-600">
+              <SlidersHorizontal className="h-4 w-4" />
+            </span>
+            <span className="flex flex-col">
+              <span
+                id="shop-filters-title"
+                className="text-[15px] font-extrabold leading-tight text-[#111827] dark:text-white"
+              >
+                Filters
+              </span>
+              <span className="text-[11.5px] text-[#6B7280] dark:text-neutral-400">{filterSubLabel}</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsFiltersOpen(false)}
+            aria-label="Close filters"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#F3F4F6] text-[#4B5563] dark:bg-neutral-800 dark:text-neutral-300"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* `min-h-0 flex-1` is what makes the panel — not the page — the thing that scrolls. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-[18px] pb-3.5">
+          <ProductFilters selectedFilters={filters} onFilterChange={handleFilterChange} isMobile />
+        </div>
+
+        {/* Selection applies immediately; this footer only clears or dismisses. */}
+        <div className="flex shrink-0 gap-2.5 border-t border-[#F1F2F5] px-[18px] pb-[22px] pt-3 dark:border-neutral-800">
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            className="h-12 flex-[0_0_34%] rounded-[14px] border border-[#E5E7EB] bg-white text-[13px] font-bold text-[#374151] dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsFiltersOpen(false)}
+            className="h-12 flex-1 rounded-[14px] bg-gradient-to-r from-red-600 to-red-675 text-[13.5px] font-extrabold text-white shadow-[0_12px_22px_-12px_rgba(238,0,0,.9)]"
+          >
+            Show {totalProducts} {totalProducts === 1 ? "item" : "items"}
+          </button>
+        </div>
+      </SheetShell>
+
+      {/* ── Sort bottom sheet ── */}
+      <SheetShell open={isSortOpen} onClose={() => setIsSortOpen(false)} labelledBy="shop-sort-title">
+        <div className="flex items-center justify-between px-[18px] pb-1.5 pt-3">
+          <span id="shop-sort-title" className="text-[15px] font-extrabold text-[#111827] dark:text-white">
+            Sort by
+          </span>
+          <button
+            type="button"
+            onClick={() => setIsSortOpen(false)}
+            aria-label="Close sort options"
+            className="grid h-8 w-8 place-items-center rounded-full bg-[#F3F4F6] text-[#4B5563] dark:bg-neutral-800 dark:text-neutral-300"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="min-h-0 overflow-y-auto px-3 pb-[26px] pt-1">{sortList}</div>
+      </SheetShell>
     </SectionContainer>
   );
 }

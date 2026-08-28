@@ -89,6 +89,13 @@ Two traps found while fixing this, both worth checking on any new overlay:
 filter drawers (both also gained the `role="dialog"`/`aria-modal` they were missing — set the
 attribute and the trap together, never one alone); `PastDueTierSwitchModal`.
 
+> **Better still: don't hand-roll the overlay at all.** Both browse-page filter panels have since
+> moved to [`SheetShell`](../../src/components/ui/SheetShell.tsx) (`ShopContent` 2026-08-28,
+> `MiniDrawsContent` earlier), which portals to `<body>`, calls `useScrollLock` + `useModalA11y`
+> itself, and sets `role="dialog"` / `aria-modal` / `aria-labelledby` as one piece. That is four
+> of this section's requirements satisfied by construction rather than by remembering. Reach for
+> `useModalBlocking` directly only for an overlay `SheetShell` genuinely cannot be.
+
 Two things worth copying from those:
 
 - **Key the lock on the OPEN state, not the exit animation.** `MiniDrawsContent` is wrapped in

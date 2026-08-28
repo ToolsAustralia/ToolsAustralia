@@ -604,3 +604,40 @@ Step 2 (`Step2Demographics`) now collects **gender** alongside state / professio
 `isGenderDropdownOpen` joins `isStep2OverlayOpen`; without it the last field on the step gets clipped when its menu opens.
 
 The `/my-account/settings` **ProfileTab** mirrors this: gender is the one field there with **no amber "Required" chip** and is excluded from the `missing` completeness list — badging an optional field as required would be a lie. It always POSTs the key (as `""` when unset) so clearing works.
+
+## Browse-page control bar — one shape for `/shop` and `/mini-draws` (2026-08-28)
+
+Both browse pages now run the identical mobile control surface. When a third listing page
+arrives, copy this rather than inventing a fourth arrangement.
+
+**The sticky band** (search field · filters icon button · sort icon button, then a horizontally
+scrolling facet chip rail ending in `+ More`):
+
+- Docks at `style={{ top: stickyTop }}` from
+  [`useStickyHeaderOffset`](../../src/hooks/useStickyHeaderOffset.ts) — never a `top-*` class,
+  never `var(--app-header-h)`. See [gotchas.md](./gotchas.md) for the two ways a constant is wrong.
+- Surface: `bg-white/[.96] dark:bg-neutral-950/95` + `backdrop-blur-md` + a hairline and
+  `shadow-[0_6px_18px_-14px_rgba(15,23,42,.5)]`. The **darker-than-the-nav** background is the
+  point: the nav is `neutral-900`, so an equally dark band merges into it and the two read as one
+  slab with the search field apparently growing out of the logo.
+- The two trailing controls are **42×42 icon buttons**, not labelled ones. "Filters" spelled out
+  cost roughly a quarter of a 390px row and left the search field too narrow to show what had been
+  typed. The filter button carries an absolutely-positioned count badge when facets are on.
+
+**Both sheets are [`SheetShell`](../../src/components/ui/SheetShell.tsx)** — bottom sheet on
+mobile, centred modal from `lg`, scroll lock / focus trap / Escape / portal included (see
+[rules.md § R-MODAL](./rules.md)).
+
+**The chrome/body split.** The page component owns the sheet's header, sub-label, close button and
+the `Show N …` footer, because it is the only one holding the live result count; the filter panel
+(`ProductFilters` / `MiniDrawsFilters`) renders the body only and **suppresses its own header when
+`isMobile`**. Get this wrong and the sheet prints two titles.
+
+**The footer's `Clear` clears facets only** — not the search term, not the sort. The panel it sits
+in is a panel of filters; wiping a typed search from a control that never mentions search reads as
+a bug. A separate "reset controls" affordance owns the everything case.
+
+**Sort is a list of `<button>` rows with a check mark**, not a `<select>`. Aside from matching the
+sheet, it sidesteps `select { font-size: 16px !important }` entirely — see
+[gotchas.md](./gotchas.md). One sort control per breakpoint: the desktop card's `Dropdown` above
+`lg`, the sheet below it. Three lookalike pickers on one page is the state both files started in.
