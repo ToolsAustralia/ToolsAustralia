@@ -115,6 +115,18 @@ per-brand split bought nothing, and it could not express the one thing that genu
 **theme**. A dark-mode visitor was served the light backdrop and then a dark hero painted over
 it. Brand is no longer an input, so the function takes `mode` instead of a slug.
 
+**Re-shot 2026-08-28.** All four files were replaced with a new studio backdrop — a bright
+concrete wall + tiled floor for light, a dark floor under a soft top light for dark. Same four
+paths, same pixel dimensions (2560×1044 desktop, 1080×1164 mobile), so no resolver, manifest or
+call site changed; `npm run build:landing-manifest` still reports the same 102 entries. Encoded
+at webp q85 (33 / 35 / 28 / 30 KB), which measures 44–48 dB PSNR against the source — the dark
+pair is a smooth gradient, and anything cheaper bands visibly.
+
+> Light vs dark is decided by **measuring**, never by the export's filename. The supplied files
+> were named `MS - 1`, `KM - 2`, `MS - Square - 1`, `SH - Square - 2`; mean luminance (235 / 15 /
+> 235 / 31) and an exact dimension match are what mapped them onto the four slots.
+
+
 ### Ingest — and why it is not a filename parse
 
 `scripts/convert-draw9-landing-to-webp.ts` (+ `-videos.ts`) map the art team's export into the

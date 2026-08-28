@@ -535,11 +535,41 @@ being the share of the mark's height its main letter band occupies. So:
 scale = targetCap / (min(plateH, plateW / aspect) x capFrac)
 ```
 
-Measured `capFrac`: Sidchrome 0.42, Milwaukee 0.523, Makita 0.607, DeWalt 0.757, STIHL 0.938,
+Measured `capFrac`: Milwaukee 0.29, Sidchrome 0.42, Makita 0.607, DeWalt 0.757, STIHL 0.938,
 Ryobi 0.945, GearWrench 0.952, HiKOKI 0.957, Kincrome 0.98. Draw 10 solved both lanes against
 a 13px target on the 156x30 desktop plate and a 12px target on the 156x20 toolset band; every
 mark now lands within 0.1px of its lane-mates, down from spreads of 1.97x (toolbox) and 1.75x
 (toolset).
+
+### Milwaukee is the one mark the formula is deliberately NOT solved for (2026-08-28)
+
+The Milwaukee wordmark was re-cut horizontal — the art was a lockup tilted ~11.8°, and the
+brand's own reference is level. The same vector paths were rotated and re-cropped to the ink by
+`npm run check:brand-wordmarks -- --fix`; nothing was re-traced, so the glyphs are unchanged and
+the `#F72D2C` fill that `npm run test:prize-builder` asserts against is untouched.
+
+Levelling changes the geometry a lot, and the formula above reacts badly to it:
+
+| | aspect | capFrac | derived markScale | derived wordmarkScale |
+| --- | --- | --- | --- | --- |
+| tilted (before) | 2.23 | 0.523 | 0.82 | 1.14 |
+| level (now) | 2.71 | 0.291 | 1.49 | 2.07 |
+
+`capFrac` halves because the bolt used to run diagonally THROUGH the word's vertical band and now
+sits below it — the same letters occupy half the share of a taller box. The formula is not wrong:
+at `wordmarkScale: 2.07` Milwaukee's letters really do match everyone else's 12px. But the lockup
+is then 43px tall and 117px wide inside a 20.8 × 154px plate. Measured in the browser at 1440px,
+it spilled across the DeWalt and STIHL cards either side of it.
+
+**So the derived values are NOT pasted for Milwaukee.** Both lanes keep the numbers solved for the
+tilted art — `markScale: 0.82`, `wordmarkScale: 1.14` — which fit the plate and read cleanly in
+both themes. Milwaukee's letters land smaller than its lane-mates as a result; that is the
+accepted trade, because the alternative overlaps its neighbours.
+
+The honest fix, if that size gap ever matters: grow the wordmark plate (`--pbc-reel-card-*` and
+ComboRail's `h-9`) so a two-tier lockup can show 12px letters, then re-run the doctor and paste
+for **every** brand. That is a reel-geometry change for all nine marks, not a Milwaukee tweak — do
+not hand-tune one brand's number to fake it.
 
 **This replaced the old "level everything DOWN to Milwaukee" rule**, which only held while the
 SVGs carried 58-72% dead canvas padding — five of them were exported onto a 700x200 sheet, so
