@@ -237,9 +237,12 @@ the shop as its own thing.** The remaining differences are the work, not the lay
 | | Mini-draws | Shop | Status |
 |---|---|---|---|
 | Hero overlay | `bg-black/50` | `bg-black/50` | aligned 2026-08-17 |
-| Mobile filters | Horizontal scrolling **brand chip row** | Single "Filters" drawer button | **open** |
-| Empty state | Icon + "Try a different brand or clear your filters" | Nothing rendered | **open** |
-| Facets | Brands, drawn from real data | Hard-coded power-tool categories (`Power Tools`, `Cutting Tools`) and a `Tool Style` group (`DIY`, `Heavy Duty`) | **open** — merchandise is unfilterable, and the brand list has no `Tools Australia` entry |
+| Mobile filters | Horizontal scrolling **brand chip row** | Category chip rail, same classes | aligned 2026-08-25 |
+| Mobile filter surface | `SheetShell` bottom sheet | `SheetShell` bottom sheet | aligned 2026-08-28 |
+| Mobile sort surface | ↑↓ icon button → sort bottom sheet | ↑↓ icon button → sort bottom sheet | aligned 2026-08-28 |
+| Sticky bar dock | `useStickyHeaderOffset` (measured) | `useStickyHeaderOffset` (measured) | aligned 2026-08-28 |
+| Empty state | Icon + "Try a different brand or clear your filters" | Icon + names the constraint (search vs filter) | aligned 2026-08-25 |
+| Facets | Brands, drawn from real data | Categories / brands / sizes / colours, drawn from real data | aligned 2026-08-17 |
 
 ## The free-entry badge
 
@@ -666,6 +669,52 @@ bug read before.
 **The view toggle is gone.** Grid/list was removed on both breakpoints — the redesign's
 control row is search, filter and sort, and a list view of an image-led card is a second
 layout to maintain for a mode the design does not have.
+
+## The mobile control bar and its two sheets (2026-08-28)
+
+The shop's phone controls now match `/mini-draws` exactly, because they are the same three
+decisions and there was no reason for two answers.
+
+**Filters open UPWARD, not from the left.** The panel was a full-height drawer sliding in from
+the left edge — a desktop pattern wearing a phone's clothes. It covered the results it was
+narrowing, put its controls at the top of an 844px screen where a thumb cannot reach, and
+carried a hand-rolled scroll lock, focus trap and a 300ms slide-out `setTimeout` that had to
+stay in step with a keyframe in `globals.css`. It is now
+[`SheetShell`](../../src/components/ui/SheetShell.tsx) — bottom sheet on mobile, centred modal
+from `lg`, with the lock/trap/Escape built in and roughly 45 lines of bespoke machinery deleted.
+
+The split between the sheet and the panel mirrors `MiniDrawsFilters`: **`ShopContent` owns the
+chrome** (title, sub-label, close, and the `Show N items` footer — it is the only component that
+knows the live result count), **`ProductFilters` owns the body**. So `ProductFilters` suppresses
+its own "Refine" header when `isMobile`; without that the sheet printed two headers.
+
+The footer's `Clear` resets **only the facets** — not the search box, not the sort. A button that
+sits inside a panel of filters and silently wipes a typed search term is the kind of surprise that
+makes someone retype it and stop trusting the button. `handleClearAll` (the reset-controls chip and
+the empty state) is the one that clears everything.
+
+**Sorting moved into a sheet, and lost its duplicate.** There were three sort controls on the page:
+the desktop card's `Dropdown`, a full-width picker in the sticky band, and a third pill beside the
+result count. The pill is gone; mobile now sorts through an ↑↓ icon button in the control bar that
+opens a `Sort by` sheet of button rows with a check mark on the active option — the same `sortList`
+shape `MiniDrawsContent` uses.
+
+Dropping the pill also retired the transparent-`<select>`-over-a-drawn-pill trick that existed only
+to dodge `select { font-size: 16px !important }` (see
+[shared-ui/gotchas.md](../shared-ui/gotchas.md)). Button rows have no forced font size. The current
+sort label is no longer printed anywhere on mobile, so it rides on the sort button's `aria-label`
+(`Sort products, currently Price: Low to High`) — that is the only thing a screen reader has left
+to read.
+
+**Sort options** are `Featured` (`displayOrder-asc`, the default) · `Price: Low to High` ·
+`Price: High to Low` · `Most free entries` · `Newest` · `Name (A-Z)` · `Name (Z-A)`. The two name
+sorts are new; `/api/products` already accepted `sortBy=name`, so nothing on the server changed.
+
+**Where the bar docks is measured, not constant.** It pinned at `top-[60px]` — the nav's own
+height — which parks it 25px *behind* the fixed header whenever the announcement bar is up, slicing
+the top off the search field and hiding the chip rail entirely. It now reads
+[`useStickyHeaderOffset`](../../src/hooks/useStickyHeaderOffset.ts). Full write-up, including the
+opposite failure on `/mini-draws`, in [shared-ui/gotchas.md](../shared-ui/gotchas.md).
 
 ## Variant gating on the product page (2026-08-25)
 

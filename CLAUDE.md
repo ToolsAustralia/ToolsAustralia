@@ -835,7 +835,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/(site)/privacy/**",
         "src/app/lazy-motion-features.ts"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-08-28"
     },
     "client-state": {
       "docs": "docs/client-state/",

@@ -37,6 +37,12 @@ export interface FilterState {
 interface ProductFiltersProps {
   selectedFilters: FilterState;
   onFilterChange?: (filters: Partial<FilterState>) => void;
+  /**
+   * `true` renders the bottom-sheet body only. The sheet chrome — title, sub-label, close
+   * button, and the "Show N items" footer — belongs to `ShopContent`, which is the one
+   * component that knows the live result count, so the panel must NOT draw a second header
+   * of its own. (Same split as `MiniDrawsFilters`.)
+   */
   isMobile?: boolean;
 }
 
@@ -84,20 +90,23 @@ export default function ProductFilters({ selectedFilters, onFilterChange, isMobi
 
   return (
     <div className={cn("flex flex-col gap-5", isMobile ? "pb-4" : "")}>
-      {/* Header — names the panel and what is currently in view. */}
-      <div className="flex items-center gap-3">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-red-600/10 text-red-600">
-          <SlidersHorizontal className="h-4 w-4" />
-        </span>
-        <div className="min-w-0">
-          <div className="text-[15px] font-extrabold leading-tight text-gray-900 dark:text-white">Refine</div>
-          <div className="truncate text-[11.5px] text-gray-500 dark:text-neutral-400">
-            {selectedFilters.category.length === 0
-              ? "All products"
-              : selectedFilters.category.join(", ")}
+      {/* Header — names the panel and what is currently in view. Desktop rail only: in the
+          sheet the same two lines are already printed above by the sheet's own chrome. */}
+      {!isMobile && (
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-red-600/10 text-red-600">
+            <SlidersHorizontal className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[15px] font-extrabold leading-tight text-gray-900 dark:text-white">Refine</div>
+            <div className="truncate text-[11.5px] text-gray-500 dark:text-neutral-400">
+              {selectedFilters.category.length === 0
+                ? "All products"
+                : selectedFilters.category.join(", ")}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* CATEGORY — a card per category, with its own count. */}
       {categories.length > 0 && (

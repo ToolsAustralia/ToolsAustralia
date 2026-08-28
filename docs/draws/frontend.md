@@ -214,8 +214,13 @@ and what replaced each:
 
 ### Browse (`/mini-draws`)
 
-- **Sticky control bar** (below `lg`) pinned at `top-[var(--app-header-h)]`: 42px search, 42px filter
-  button with a live selected-brand count badge, 42px sort button, then the chip rail
+- **Sticky control bar** (below `lg`) pinned at the header's **measured** bottom edge via
+  [`useStickyHeaderOffset`](../../src/hooks/useStickyHeaderOffset.ts) — it used to read
+  `top-[var(--app-header-h)]`, a flat 86px, which left a transparent 26px strip that mini-draw
+  cards scrolled up through once the announcement bar was dismissed (real header bottom: 85px with
+  the bar, 60px without). `/shop` runs the identical bar; see
+  [shared-ui/patterns.md § Browse-page control bar](../shared-ui/patterns.md). Contents: 42px
+  search, 42px filter button with a live selected-brand count badge, 42px sort button, then the chip rail
   (`All brands` → Sidchrome, Milwaukee, Makita, KINCROME, DEWALT, Knipex → a dashed `+ More` that
   opens the filter sheet). `All brands` renders "on" when no brand is selected.
 - **Desktop (`lg+`)** keeps the sidebar (`MiniDrawsFilters isMobile={false}`, sticky at `top-24`) plus

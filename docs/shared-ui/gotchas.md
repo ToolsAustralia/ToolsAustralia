@@ -812,6 +812,40 @@ was simply scrolling away. Swapping both wrappers to `overflow-x-clip` fixed it.
 `body` fix does **not** immunise a page that re-introduces the same declaration one level down;
 `overflow-x-hidden` on a full-bleed page container is a common instinct, so check for it first.
 
+## A sticky bar's `top` must be MEASURED off the header, never a constant (2026-08-28)
+
+Once a bar sticks (previous entry), the next question is *where*. There is no constant that is
+right: `--app-header-h` (86 / 106px) is the **reserved padding** for the header alone, but the
+site also renders a dismissible announcement bar above the nav, so the header's real bottom edge
+moves on the same page while the member is on it.
+
+| mobile, measured live | announcement bar up | bar dismissed |
+| --------------------- | ------------------- | ------------- |
+| `.site-header header` bottom | **85px** | **60px** |
+
+Both wrong answers had shipped at once, on two pages that look the same:
+
+- **Too small.** `/shop`'s bar pinned at `top-[60px]` (the nav's own height). With the bar up
+  that is 25px **behind** the fixed header — the search field was sliced off at the top and the
+  category chip rail never appeared at all. Verified in the browser: header bottom 85, bar top 60.
+- **Too large.** `/mini-draws` pinned at `var(--app-header-h)` = 86px. Once the announcement bar
+  is dismissed that leaves a transparent 26px strip below the navbar, and product cards scroll up
+  through the gap.
+
+**Use [`useStickyHeaderOffset`](../../src/hooks/useStickyHeaderOffset.ts).** It measures
+`.site-header header`'s `getBoundingClientRect().bottom`, keeps it current with a
+`ResizeObserver` (so dismissing the bar mid-scroll re-docks the bar in the same frame), and falls
+back to the constant for SSR and the first paint. Apply it as an inline `style={{ top: stickyTop }}`
+with no `top-*` class, or the class wins.
+
+Two details the hook exists to encode:
+
+- **Observe the fixed CHILD, not `.site-header`.** The wrapper is `static, h=0` by design (see
+  the Suspense-fallback entry above); measuring it yields 0. The child also arrives after a
+  Suspense boundary resolves, so the hook waits for it via `MutationObserver` before observing.
+- `/discount` still carries its own inline copy because it drives a docked-yet `IntersectionObserver`
+  off the same number. If that page changes, fold it onto the hook rather than growing a third variant.
+
 ## The same mutation mounted three times must fail the same way three times (2026-08)
 
 [`RewardsClaimables`](../../src/components/sections/rewards/RewardsClaimables.tsx) called
@@ -1464,9 +1498,21 @@ renders its text too large — which reads as "Tailwind didn't work" rather than
 **Do not raise the specificity to win.** Removing or overriding the guard trades a
 type-size nit for viewport zoom on every iPhone.
 
-**The pattern that satisfies both** (shop sort control, `ShopContent.tsx`): keep a
-real `<select>` at its 16px, give it `peer absolute inset-0 opacity-0`, and draw
-the visible pill as a sibling `div` at whatever size the design wants with
-`pointer-events-none`. The native picker, arrow keys, `aria-label` and the absence
-of a scroll lock all survive; only the painting moves. Carry the focus ring across
-with `peer-focus-visible:` or keyboard focus becomes invisible.
+**Two patterns satisfy both.** Pick by whether the control has to be a `<select>` at all:
+
+1. **Don't use a `<select>`.** A sheet of `<button>` rows has no forced font size, so
+   the rule never applies. This is what `/shop` and `/mini-draws` both do now: the sort
+   options live in a `SheetShell` bottom sheet (`sortList` in `ShopContent.tsx` /
+   `MiniDrawsContent.tsx`) with a check mark on the active one. Prefer this when the
+   surface is already a sheet — it is less machinery than the trick below, and the two
+   browse pages then sort through one control instead of two lookalikes.
+2. **Keep the `<select>` and move only the painting.** Leave it at its 16px, give it
+   `peer absolute inset-0 opacity-0`, and draw the visible pill as a sibling `div` at
+   whatever size the design wants with `pointer-events-none`. The native picker, arrow
+   keys, `aria-label` and the absence of a scroll lock all survive. Carry the focus ring
+   across with `peer-focus-visible:` or keyboard focus becomes invisible. Reach for this
+   when a full sheet would be overkill — a lone control on an otherwise static page.
+
+_(The shop's sort control used pattern 2 until 2026-08-28 and now uses pattern 1; no
+component in `src/` currently ships the transparent-select trick, so pattern 2 is
+documented here rather than pointed at a live example.)_
