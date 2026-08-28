@@ -34,7 +34,15 @@ export type FinalizeShopOrderStatus =
   | "fulfilled"
   | "already_processed"
   | "order_not_found"
-  | "refunded_stock_lost";
+  | "refunded_stock_lost"
+  /**
+   * Money arrived on an order that had already been retired (superseded checkout, a
+   * failed-payment retirement, or the stale sweep) and was refunded here. Distinct from
+   * `refunded_stock_lost` so the two causes stay separable in logs — this one means a
+   * PaymentIntent outlived its order, which should now be impossible from our side and
+   * is worth investigating whenever it appears.
+   */
+  | "refunded_order_retired";
 
 export interface FinalizeShopOrderResult {
   status: FinalizeShopOrderStatus;
@@ -195,6 +203,69 @@ async function sendOrderConfirmationOnce(order: IOrder): Promise<void> {
   }
 }
 
+/**
+ * A payment arrived for an order that had already been retired. Give it back.
+ *
+ * The alternative — fulfilling it — is wrong: the order was superseded precisely because
+ * the buyer changed their cart, and a newer order almost certainly exists and may also
+ * have been paid. Keeping the money silently was the bug. Refunding is the only outcome
+ * that leaves the customer whole without guessing what they wanted.
+ */
+async function refundRetiredOrder(
+  order: IOrder,
+  paymentIntent: Stripe.PaymentIntent
+): Promise<FinalizeShopOrderResult> {
+  console.error("[shop] payment landed on a RETIRED order — refunding", {
+    orderNumber: order.orderNumber,
+    paymentIntentId: paymentIntent.id,
+    cancellationReason: order.cancellationReason ?? "(cancelled before the field existed)",
+  });
+
+  let refunded = false;
+  try {
+    await stripe.refunds.create({
+      payment_intent: paymentIntent.id,
+      reason: "requested_by_customer",
+      metadata: { reason: "shop_order_retired_before_payment", orderNumber: order.orderNumber },
+    });
+    refunded = true;
+  } catch (err) {
+    // `charge_already_refunded` is a SUCCESS here, not a failure: a legacy row with no
+    // `cancellationReason` may genuinely have been refunded by the stock-loss branch
+    // before this field existed, and re-refunding it must not be reported as broken.
+    if ((err as { code?: string })?.code === "charge_already_refunded") {
+      refunded = true;
+    } else {
+      // Loud: the customer has paid for something we are not sending, and only a human
+      // can resolve it from here.
+      console.error("[shop] REFUND FAILED on a retired order — manual action required", {
+        orderNumber: order.orderNumber,
+        paymentIntentId: paymentIntent.id,
+        err,
+      });
+    }
+  }
+
+  if (refunded) {
+    // Record it so a second delivery of the same webhook short-circuits at the
+    // `moneyWasReturned` check instead of attempting another refund.
+    order.cancellationReason = "refunded";
+    order.notes = `Auto-refunded: payment received after the order was retired. ${order.notes ?? ""}`
+      .trim()
+      .slice(0, 500);
+    await order.save();
+
+    await sendShopOrderRefunded(
+      order,
+      "This order had already been closed when your payment came through, so we've refunded it in full."
+    ).catch((err) => {
+      console.error("[shop] refund email failed", { orderNumber: order.orderNumber, err });
+    });
+  }
+
+  return { status: "refunded_order_retired", orderNumber: order.orderNumber };
+}
+
 export async function finalizeShopOrder(
   paymentIntent: Stripe.PaymentIntent,
   { requestContext }: FinalizeShopOrderOptions
@@ -234,8 +305,25 @@ export async function finalizeShopOrder(
     // Retrying is safe: processPaymentBenefits is idempotent on that same
     // PaymentEvent id, and a grant that already landed is a no-op.
     if (existing.status === "cancelled") {
-      // Auto-refunded for lost stock. Never grant against a refunded order.
-      return { status: "already_processed", orderNumber: existing.orderNumber };
+      // `cancelled` has FOUR writers — superseded checkout, failed payment, the stale
+      // sweep, and the stock-loss auto-refund — and only the last two mean the customer
+      // got their money back. Treating all of them as refunded is what made a payment on
+      // a superseded order disappear: captured, never fulfilled, no receipt, and the
+      // admin refund tool answering "already refunded".
+      const moneyWasReturned =
+        existing.cancellationReason === "stock_loss" || existing.cancellationReason === "refunded";
+
+      if (moneyWasReturned) {
+        // Never grant against a refunded order.
+        return { status: "already_processed", orderNumber: existing.orderNumber };
+      }
+
+      // Money landed on an order we had retired. Since 2026-08-28 `abandonPendingOrder`
+      // cancels the intent first, so this should be unreachable from our own paths — but
+      // a Stripe-side race, a cancel that failed, or a row cancelled before
+      // `cancellationReason` existed can all still arrive here. Give the money back
+      // rather than keep it, and tell them, exactly as the stock-loss branch does.
+      return await refundRetiredOrder(existing, paymentIntent);
     }
 
     const entriesGranted =
@@ -283,6 +371,7 @@ export async function finalizeShopOrder(
       });
 
     order.status = "cancelled";
+    order.cancellationReason = "stock_loss";
     order.notes = `Auto-refunded: out of stock after payment (${failed.join(", ")})`;
     await order.save();
 

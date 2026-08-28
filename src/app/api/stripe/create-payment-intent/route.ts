@@ -13,6 +13,7 @@ import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-dr
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
+import { resolvePurchaseIdentity } from "@/utils/payment/checkout-identity";
 
 /**
  * POST /api/stripe/create-payment-intent
@@ -106,25 +107,45 @@ export async function POST(request: NextRequest) {
       // ✅ STRIPE BEST PRACTICE: For guest users, check if they registered in step 1
       // If user exists from registration, they should have a Stripe customer already
       // This ensures customer is set BEFORE PaymentIntent confirmation for proper webhook processing
-      if (validatedData.userEmail) {
-        const registeredUser = await User.findOne({ email: validatedData.userEmail.toLowerCase() });
-        if (registeredUser?.stripeCustomerId) {
-          stripeCustomerId = registeredUser.stripeCustomerId;
-          userEmail = registeredUser.email;
-          userId = registeredUser._id.toString();
-          // console.log(`✅ Found registered user's Stripe customer: ${stripeCustomerId}`);
-        } else {
-          // User registered but no customer yet (shouldn't happen, but handle gracefully)
-          // console.log(`⚠️ Registered user found but no Stripe customer: ${registeredUser?._id}`);
-          stripeCustomerId = undefined;
-          userId = registeredUser?._id.toString() || "guest";
-          userEmail = validatedData.userEmail;
-        }
+      //
+      // SECURITY (2026-08-28): a bare `User.findOne({ email })` here was an account
+      // takeover. `userEmail` is caller-supplied and this route takes no session, so
+      // naming any member's email bound the intent to THEIR Stripe customer and returned
+      // the client secret — which `/api/auth/session-from-payment` then accepts as proof
+      // of identity. The email must now be PROVEN, via the cookie
+      // `/api/auth/register` sets. See src/utils/payment/checkout-identity.ts.
+      const identity = await resolvePurchaseIdentity({
+        request,
+        sessionUserId: null,
+        userEmail: validatedData.userEmail ?? null,
+      });
+
+      if (identity.kind === "must_authenticate") {
+        // The email has an account and this caller did not prove control of it. Refuse
+        // rather than degrade to guest: the guest branch still echoes the email into
+        // `metadata.userEmail`, which the webhook uses to resolve the buyer, so the
+        // payment would be attributed to that account.
+        return NextResponse.json(
+          {
+            success: false,
+            error: "This email is already associated with an account. Please log in to continue.",
+            code: "ACCOUNT_EXISTS_LOGIN_REQUIRED",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (identity.kind === "bound") {
+        // Registered in step 1 by THIS browser — bind exactly as before.
+        stripeCustomerId = identity.user.stripeCustomerId;
+        userId = identity.user._id.toString();
+        userEmail = identity.user.email;
       } else {
-        // True guest - no registration yet, customer will be created during purchase
+        // True guest — this email has no account yet. The customer is created during
+        // purchase processing, and the webhook builds the account from the metadata.
         stripeCustomerId = undefined;
         userId = "guest";
-        userEmail = undefined;
+        userEmail = validatedData.userEmail;
       }
     }
 

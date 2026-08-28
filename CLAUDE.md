@@ -344,7 +344,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-08-27",
+  "lastModified": "2026-08-28",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -413,7 +413,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-08-28"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -429,7 +429,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useSavedPaymentMethods.ts",
         "eslint/rules/no-eager-stripe.js"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-08-28"
     },
     "draws": {
       "docs": "docs/draws/",
@@ -484,7 +484,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useEntryRewardToast.ts",
         "src/utils/rewards-widget-spotlight-storage.ts"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-08-28"
     },
     "promo": {
       "docs": "docs/promo/",
@@ -625,7 +625,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/contexts/CartContext.tsx",
         "src/hooks/usePurchaseInvalidation.ts"
       ],
-      "lastVerified": "2026-08-20"
+      "lastVerified": "2026-08-28"
     },
     "error-reporting": {
       "docs": "docs/error-reporting/",
@@ -669,7 +669,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/migrate-seed-staff-roles.ts",
         "src/contexts/UserContext.tsx"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-08-28"
     },
     "email": {
       "docs": "docs/email/",
@@ -822,6 +822,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useLeafTimer.ts",
         "src/hooks/useTilt.ts",
         "src/hooks/useModalBlocking.ts",
+        "src/hooks/useStickyHeaderOffset.ts",
         "eslint/rules/no-adhoc-scroll-lock.js",
         "src/types/upsell.ts",
         "src/app/globals.css",
@@ -988,7 +989,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/connect-ops-db.ts",
         "scripts/check-env.mjs"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-08-28"
     },
     "dev-tooling": {
       "docs": "docs/dev-tooling/",

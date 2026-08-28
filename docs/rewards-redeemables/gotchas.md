@@ -583,3 +583,32 @@ entries in a draw that cannot be withdrawn. It returns whether the issuance is a
 
 **The invariant to check every new branch against:** for every way this can fail, the customer is
 left with either their entries or their code — never neither, never both.
+returns `false` when the entries did not land in a draw.** Any caller granting an entitlement
+must treat `false` as "not delivered" — never record it on the member, never tell the member it
+worked, and never burn a one-time offer on it.
+
+## The unredeem methods double-reversed entries on a refund (fixed 2026-08-28)
+
+`RedemptionService.unredeemMonthlyCouponRedemption` and `unredeemMilestoneRedemption` each did two
+things: restore the redemption record (issuance status + pull the `redemptionHistory` row) **and**
+reverse the entries (`$inc accumulatedEntries: -n` plus `removeMajorDrawEntries`).
+
+That second responsibility was wrong for their only production caller. The refund path
+([`refund-ledger-reversal.ts`](../../src/utils/payment/refund-ledger-reversal.ts)) had **already**
+reversed those entries two steps earlier — `legacyTotalEntries()` counts `grants.campaignEntries`,
+and the `drawEntries` step removes them from the ledger's own draw, scoped by `drawId`. So a
+100-entry code took 200 entries back, and the service's own `removeMajorDrawEntries` call — made
+with **no drawId** — could strip entries from a different, unrefunded draw.
+
+Both methods now accept `entriesAlreadyReversed`. When true they restore the redemption record and
+nothing else; the entry arithmetic belongs to whoever counted it. **The record restoration is not
+optional and still runs either way** — skipping the whole method would have left the issuance stuck
+`redeemed` and unusable.
+
+Read the full write-up, including what was deliberately left alone, in
+[payment/gotchas.md](../payment/gotchas.md#a-refunded-bonus-code-purchase-reversed-its-entries-twice-fixed-2026-08-28).
+
+**If you add a third caller**, decide the flag deliberately: pass `true` only when your own path has
+already reversed both the counter and the draw entries. Passing it wrongly in either direction is
+silent — `true` when nothing reversed leaves a member holding refunded entries; `false` when the
+ledger already did takes them twice.

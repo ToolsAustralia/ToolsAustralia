@@ -603,3 +603,51 @@ we cannot substantiate.
 supplier in writing and is stored.** If one is ever added, state it as
 production time explicitly and separately from shipping, or it will be read as
 the whole wait.
+
+## A superseded checkout left a payable PaymentIntent behind (fixed 2026-08-28)
+
+**The failure.** A buyer with checkout open changes their cart (second tab, back button, a phone
+restoring a backgrounded page). `resolvePendingOrder` supersedes the first order and calls
+`abandonPendingOrder`, which flipped it to `cancelled` — **and did nothing to its Stripe
+PaymentIntent**, which stayed in `requires_payment_method` and fully payable for the hour-long grace
+window. If the buyer then paid the stale tab:
+
+- Stripe captured the money.
+- `finalizeShopOrder` saw `status === "cancelled"`, assumed "auto-refunded for lost stock", and
+  returned `already_processed` — no stock decrement, no entries, no confirmation email.
+- `refundShopOrder` answered `already_refunded`, so **staff could not fix it by hand** and the
+  customer's order history told them a refund had been issued.
+
+Money in, nothing out, and every surface reporting it as resolved. Reproduced end to end (real
+services, real Stripe test mode, isolated Mongo) by `scripts/smoke-shop-abandoned-intent.ts`.
+
+**Root cause: `cancelled` is four different things.** It has four writers — superseded checkout,
+failed payment, the stale-order sweep, and the stock-loss auto-refund — and only the last means the
+customer got their money back. The distinction lived only in free-text `notes`, which code cannot
+branch on, so `finalizeShopOrder` assumed the most dangerous reading. The service's own comment
+admitted this ("`cancelled` now covers three distinct causes… a human needs to tell them apart")
+while two call sites went on treating them as one.
+
+**The fix, in three parts:**
+
+1. **`Order.cancellationReason`** — a structured value (`stock_loss | refunded | abandoned |
+   payment_failed`), written by all four writers. Optional, because rows cancelled before this date
+   have none; **treat `undefined` as "unknown", never as "refunded"** — that assumption is the bug.
+2. **`abandonPendingOrder` cancels the intent first**, and returns `{ retired: false }` without
+   retiring anything if it cannot prove the intent is `canceled`. Leaving an order `pending` is
+   recoverable; retiring a payable one is not.
+3. **`finalizeShopOrder` branches on the reason.** Only `stock_loss`/`refunded` short-circuit as
+   `already_processed`. Anything else means money landed on an order we retired, so it **refunds,
+   emails the customer, and logs loudly** (`refunded_order_retired`) rather than keeping it.
+   `refundShopOrder` follows the same rule and no longer claims `already_refunded` for an order that
+   was never paid back.
+
+**The sweep had the same bug, worse.** `scripts/cleanup-abandoned-shop-orders.ts` listed
+`requires_payment_method`, `requires_confirmation`, `requires_action` and `requires_capture` in a set
+named `DEAD_INTENT_STATUSES` — "states that mean the intent can never be paid". **Every one of them
+is payable**, and `requires_payment_method` is where a fresh intent sits. It now cancels the intent
+before retiring, and keeps the order if the cancel fails.
+
+**If you add a fifth reason to cancel an order:** add it to the enum, write it at the call site, and
+decide explicitly whether `finalizeShopOrder` should treat it as money-returned. The default must
+stay "no".

@@ -11,6 +11,9 @@ import { z } from "zod";
 import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { resolvePurchaseIdentity } from "@/utils/payment/checkout-identity";
 // ✅ REMOVED: processPaymentBenefits and isPaymentProcessed imports
 // Fallback processing removed to prevent duplicate Facebook tracking
 // Webhook is now the single source of truth for payment processing
@@ -159,8 +162,35 @@ export async function POST(request: NextRequest) {
     if (gateResponse) return gateResponse;
 
     // Check if user already exists (from registration)
+    //
+    // SECURITY (2026-08-28): this was a bare `User.findOne({ email })` on a route that
+    // takes NO session, with `userEmail` supplied by the caller. Naming any member's email
+    // bound the PaymentIntent to their Stripe customer and stamped their id into metadata
+    // — the same account-takeover shape fixed in `create-payment-intent`. The email must
+    // now be PROVEN by the cookie `/api/auth/register` sets, or the caller is treated as a
+    // true guest. See src/utils/payment/checkout-identity.ts.
     console.log("👤 Checking if user already exists...");
-    const registeredUser = await User.findOne({ email: validatedData.userEmail.toLowerCase() });
+    const sessionForBind = await getServerSession(authOptions);
+    const purchaseIdentity = await resolvePurchaseIdentity({
+      request,
+      sessionUserId: sessionForBind?.user?.id ?? null,
+      userEmail: validatedData.userEmail ?? null,
+    });
+
+    if (purchaseIdentity.kind === "must_authenticate") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This email is already associated with an account. Please log in to continue.",
+          code: "ACCOUNT_EXISTS_LOGIN_REQUIRED",
+        },
+        { status: 403 }
+      );
+    }
+
+    // `null` for a genuine new buyer — every downstream use is already null-safe
+    // (`registeredUser?.`), which is what the true-guest path has always relied on.
+    const registeredUser = purchaseIdentity.kind === "bound" ? purchaseIdentity.user : null;
     const existingAffiliateCode = registeredUser?.affiliateReferral?.affiliateCode;
     const affiliateMetadataCode = normalizedAffiliateCode || existingAffiliateCode;
 

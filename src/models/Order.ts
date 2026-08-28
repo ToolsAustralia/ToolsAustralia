@@ -118,6 +118,21 @@ export interface IOrder extends Document {
    */
   confirmationSentAt?: Date;
   notes?: string;
+  /**
+   * WHY this order was cancelled, as a value rather than prose.
+   *
+   * `status: "cancelled"` has four distinct writers — a superseded checkout, a failed
+   * payment, the stale-order sweep, and the stock-loss auto-refund — and only the last
+   * means the customer's money was given back. `notes` recorded the difference in free
+   * text, so `finalizeShopOrder` could not branch on it and assumed every cancelled
+   * order had been refunded. A payment landing on a superseded order was therefore
+   * swallowed as `already_processed`: money taken, nothing fulfilled, and the admin
+   * refund tool reporting "already refunded". See docs/cart-shop-products/gotchas.md.
+   *
+   * Optional because rows cancelled before 2026-08-28 have no value. Treat `undefined`
+   * as "unknown" and never as "refunded" — that assumption is the bug.
+   */
+  cancellationReason?: "stock_loss" | "refunded" | "abandoned" | "payment_failed";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -283,6 +298,12 @@ const OrderSchema = new Schema<IOrder>(
       type: String,
       trim: true,
       maxlength: [500, "Notes cannot be more than 500 characters"],
+    },
+    // Deliberately NOT defaulted: an absent value means "cancelled before this field
+    // existed", which is different from any of the four known causes.
+    cancellationReason: {
+      type: String,
+      enum: ["stock_loss", "refunded", "abandoned", "payment_failed"],
     },
   },
   {

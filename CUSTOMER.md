@@ -354,6 +354,29 @@ This is the most important and non-obvious behaviour. Registering in **step 1** 
 
 The register route even hard-codes `isAuthenticated: false` in its Klaviyo "Started Checkout" event "because this path runs at registration submit and the user is, by definition, a guest" ([register/route.ts:109-111](src/app/api/auth/register/route.ts#L109)). Documented at [docs/auth/gotchas.md:26-50](docs/auth/gotchas.md#L26).
 
+### 4a-bis. The step-1 → step-2 bridge is now proven by a cookie (2026-08-28)
+
+Because step 1 does not log anyone in, step 2's payment call has no session and has to name the
+account by **email**. That was exploitable: the purchase endpoints took the email on trust, so anyone
+who knew a member's address could get a payment attached to that member's Stripe customer and — via
+the new "sign you in after you pay" step — end up inside their account for the price of a $1 charge.
+
+`POST /api/auth/register` now sets a short-lived, HttpOnly cookie (`ta_checkout_identity`, 2 hours)
+on success, and the purchase endpoints require it before they will act for an existing account. It is
+proof because registration **refuses** any email that already has an account — so reaching success
+means this browser just created it.
+
+**What a customer actually notices:** nothing, in the normal flow — the cookie is set and sent
+automatically. Two edge cases are visible:
+
+- Someone who tries to buy using an email that already has an account, without being signed in, is
+  told **"This email is already associated with an account. Please log in to continue."** (HTTP 403).
+  This is the same answer registration already gives them.
+- A buyer who leaves checkout open longer than **2 hours** and then pays gets that message instead of
+  silently completing as a guest. They log in and continue; nothing is charged in the meantime.
+
+A genuinely new buyer — an email with no account — is unaffected and still checks out as a guest.
+
 ### 4a-ii. "Your Details" follows the visitor between pages (2026-08-04)
 
 Each page mounts its own copy of the `MembershipModal`, so anything typed into step 1 used to be lost the moment the visitor navigated — someone who started on `/` and then opened the modal on `/promotions/[slug]` or `/membership` faced an empty form again. The four identity fields (first name, last name, email, mobile) are now kept in **`sessionStorage`** (`ta.guestDetails`, owned by [guest-details-storage.ts](src/utils/auth/guest-details-storage.ts)) and refilled when the modal opens.
@@ -1015,7 +1038,7 @@ All `/my-account/*` routes require a signed-in session; an unauthenticated visit
 
 A `pending` order stays visible for **one hour** and is then hidden from the customer's own list (`PENDING_GRACE_MS`): a real payment resolves in seconds, so anything still pending was abandoned at the card step and would otherwise sit in their history looking like a second purchase. Staff still see it.
 
-**The money label follows the order's actual state**, on both this page and the checkout success page: `pending` → "Order total", `cancelled` → "Refund issued", otherwise "Total paid". A customer is never told they paid for something that has not been captured, or that money is still theirs after it has been refunded. "Refund issued" rather than "Refunded" is deliberate — the cancel path attempts the refund and swallows a failure, so it is the intent and not a guarantee. GST is shown as **inside** the total (Australian tax-invoice requirement), never added to it.
+**The money label follows the order's actual state**, on both this page and the checkout success page: `pending` → "Order total", `cancelled` → "Refund issued", otherwise "Total paid". ⚠️ **Known wrong since 2026-08-28 — `cancelled` no longer implies a refund.** It has four causes (`Order.cancellationReason`: `stock_loss`, `refunded`, `abandoned`, `payment_failed`) and only the first two involved money at all. A superseded checkout or a failed payment is now correctly recorded as `abandoned` / `payment_failed`, but this label still reads "Refund issued" for them — telling a customer money was returned when they were never charged. The data to fix it exists; the label must branch on `cancellationReason`, not on `status`. Tracked as a follow-up to the shop money-bug fix. A customer is never told they paid for something that has not been captured, or that money is still theirs after it has been refunded. "Refund issued" rather than "Refunded" is deliberate — the cancel path attempts the refund and swallows a failure, so it is the intent and not a guarantee. GST is shown as **inside** the total (Australian tax-invoice requirement), never added to it.
 
 **Free entries on a shop order are shown only above zero.** Merchandise entries currently ship dark at `includedEntries: 0`; "0 free entries" would state a promise we are not making. What is displayed is `entriesGranted` — what the webhook actually granted — not a recomputation, so a later multiplier change cannot restate a customer's history.
 **A refresh at the card step no longer creates a second order (fixed 2026-08-21).** Submitting

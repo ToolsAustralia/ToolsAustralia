@@ -56,9 +56,25 @@ const CSV_PATH = CSV_PATH_ARG
         .replace(/[:.]/g, "-")}.csv`
     );
 
-/** Stripe states that mean the intent can never be paid — safe to retire the order. */
-const DEAD_INTENT_STATUSES = new Set([
-  "canceled",
+/**
+ * The ONLY state in which an intent can never be paid.
+ *
+ * This set used to also contain `requires_payment_method`, `requires_confirmation`,
+ * `requires_action` and `requires_capture` under the heading "can never be paid". That
+ * was wrong — every one of them is payable, and `requires_payment_method` is the state a
+ * freshly created intent sits in. Retiring those orders left a live intent behind that a
+ * customer could still pay, after which `finalizeShopOrder` swallowed the payment as
+ * `already_processed`: money captured, nothing fulfilled, no refund. Demonstrated by
+ * paying exactly a `requires_payment_method` intent in
+ * `scripts/smoke-shop-abandoned-intent.ts`.
+ */
+const DEAD_INTENT_STATUSES = new Set(["canceled"]);
+
+/**
+ * Payable, but abandoned. These may be retired only AFTER the intent is cancelled, so the
+ * order and its money die together.
+ */
+const CANCELLABLE_INTENT_STATUSES = new Set([
   "requires_payment_method",
   "requires_confirmation",
   "requires_action",
@@ -189,12 +205,37 @@ async function main(): Promise<void> {
           csvWrite({ ...base, intentStatus, action: "KEPT — needs reconciliation", error: "" });
           continue;
         }
-        if (!DEAD_INTENT_STATUSES.has(intent.status)) {
+        if (!DEAD_INTENT_STATUSES.has(intent.status) && !CANCELLABLE_INTENT_STATUSES.has(intent.status)) {
           // An unrecognised state: be conservative and report it rather than guess.
           counts.keptUnknown += 1;
           csvWrite({ ...base, intentStatus, action: "KEPT — unknown intent status", error: "" });
           continue;
         }
+
+        // Payable-but-abandoned: kill the money BEFORE retiring the record, or the order
+        // goes away while the intent stays chargeable — see DEAD_INTENT_STATUSES above.
+        if (CANCELLABLE_INTENT_STATUSES.has(intent.status)) {
+          if (DRY_RUN) {
+            csvWrite({ ...base, intentStatus, action: "WOULD CANCEL INTENT + RETIRE", error: "" });
+            counts.retired += 1;
+            continue;
+          }
+          try {
+            await stripe.paymentIntents.cancel(order.paymentIntentId);
+          } catch (cancelErr) {
+            // Could not prove the intent is dead — the buyer may still pay it. Keeping a
+            // pending order is recoverable; retiring a payable one is not.
+            counts.keptUnknown += 1;
+            csvWrite({
+              ...base,
+              intentStatus,
+              action: "KEPT — intent cancel failed",
+              error: (cancelErr as Error).message,
+            });
+            continue;
+          }
+        }
+
         retire = true;
         reason = `Abandoned checkout — payment ${intent.status}`;
       }
@@ -205,7 +246,9 @@ async function main(): Promise<void> {
           // uses — so a webhook landing mid-sweep always wins.
           await Order.updateOne(
             { _id: order._id, status: "pending" },
-            { status: "cancelled", notes: reason }
+            // Structured reason as well as prose: `finalizeShopOrder` branches on this,
+            // and "abandoned" must never be mistaken for "refunded". See models/Order.ts.
+            { status: "cancelled", notes: reason, cancellationReason: "abandoned" }
           );
         }
         counts.retired += 1;

@@ -50,6 +50,7 @@ export const GET = withNorm(
           additionalOneTimePurchase: pickBucket(stats.revenue.breakdown.additionalOneTimePurchase),
           miniDraw: pickBucket(stats.revenue.breakdown.miniDraw),
           upsell: pickBucket(stats.revenue.breakdown.upsell),
+          shop: pickBucket(stats.revenue.breakdown.shop),
         },
       },
       majorDraw: { totalEntries: stats.majorDraw.totalEntries, activeDraws: stats.majorDraw.activeDraws },

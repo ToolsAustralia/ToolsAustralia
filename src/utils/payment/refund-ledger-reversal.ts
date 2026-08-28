@@ -234,6 +234,14 @@ function buildLedgerReversalSteps(
             const r = await RedemptionService.unredeemMonthlyCouponRedemption({
               userId,
               redeemableIssuanceId: grants.campaign.monthlyIssuanceId,
+              // The `accumulatedEntriesAndRewardsPoints` step above already subtracted
+              // these (legacyTotalEntries includes campaignEntries) and `drawEntries`
+              // already removed them from the ledger's OWN draw. Letting the service
+              // repeat both is the double-reversal fixed 2026-08-28. Only claim that
+              // when the ledger genuinely carried the figure — a grants row with a
+              // campaign but a zero/absent campaignEntries was never reversed above,
+              // so the service must still do it.
+              entriesAlreadyReversed: (grants.campaignEntries || 0) > 0,
             });
             if (!r.success) {
               reversalIssues.push({ step: "campaign.unredeemMonthly", error: r.error || "failed" });
@@ -249,6 +257,11 @@ function buildLedgerReversalSteps(
             const r = await RedemptionService.unredeemMilestoneRedemption({
               userId,
               milestoneIssuanceId: grants.campaign.milestoneIssuanceId,
+              // Same reasoning as the monthly-coupon arm directly above: a campaign-code
+              // milestone stamps campaignEntries + a scoped drawGrants row, both of which
+              // the earlier steps have already reversed. The `milestoneRevoke` step's own
+              // path (auto-grants) does not pass this and is unaffected.
+              entriesAlreadyReversed: (grants.campaignEntries || 0) > 0,
             });
             if (!r.success) {
               reversalIssues.push({ step: "campaign.unredeemMilestone", error: r.error || "failed" });
