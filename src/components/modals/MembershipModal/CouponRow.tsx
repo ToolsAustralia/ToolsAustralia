@@ -99,7 +99,11 @@ const CouponRow: React.FC<CouponRowProps> = ({
               complete your purchase.
             </p>
           )}
-          {referralError && <p className="mt-2 text-xs text-red-600">{referralError}</p>}
+          {referralError && (
+            <p role="alert" className="mt-2 text-xs text-red-600">
+              {referralError}
+            </p>
+          )}
         </>
       )}
     </div>

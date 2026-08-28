@@ -6,7 +6,7 @@
 |---|---|---|
 | POST | `/api/bonus-codes/v1/issue` | **The Klaviyo bonus-code webhook.** Mints a customer's per-customer bonus code and starts its 72-hour clock, called from inside a Klaviyo flow immediately before the discount email — see below. |
 | GET | `/api/redeemables/status` | Eligibility + active campaigns for the caller. **A campaign `code` is returned only when the caller holds a `RedeemableIssuance` for it** — see below. |
-| POST | `/api/redeemables/redeem` | Redeem a code/issuance. Failure `error` is human copy, never the raw `RedemptionFailureReason` string — see below. |
+| POST | `/api/redeemables/redeem` | Redeem a code/issuance. Failure `error` is human copy, never the raw `RedemptionFailureReason` string — see below. A **503 / `grant_unavailable`** means the claim was valid but no draw was available: nothing was granted, nothing was spent, the customer still holds the code. A **500 / `grant_unresolved`** (2026-08-27) means the claim IS spent and could not be safely handed back — the draw write could not be proven either way, or the compensation itself failed. Its copy must never say the code is still theirs, and the status is deliberately 500 rather than 503 so it does not invite a retry. |
 | _TODO_ | `/api/redeemables/**` (remaining) | List + redeem |
 | _TODO_ | `/api/rewards/**` | Public catalog + user-facing reward views |
 

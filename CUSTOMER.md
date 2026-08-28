@@ -732,7 +732,7 @@ which expire 72 hours after they are minted (2026-08-27).
 | `one-time-purchase` | Bought a one-time pack while **not** holding an active membership | `EXTRA100` |
 | `checkout-start` | Registered as a guest with a package selected | `LOCKIN100` |
 
-Customer-visible effect: **the discount email itself**, carrying the code string — hardcoded in the marketing template, made real for that person by the call one step above it. Alongside it we record a `Bonus Code Issued` Klaviyo event holding the code, the free entries it includes and **that customer's own deadline** (the stored instant, formatted in Sydney time, never recomputed — so no copy of the deadline can disagree with the one redemption enforces). **That event is our record, not a message to the customer** (corrected 2026-08-26 — this line used to imply the deadline was emailed): a Klaviyo flow email renders against its own trigger metric, so the three discount templates cannot read the deadline off our event and none of them prints it. One **redeemed** grant per person, per code, for life: a grant that has ever been redeemed is never re-issued, and that survives a refund — the refund takes back the entries and the code stays used, so it is refused at redemption and at checkout, and the wallet shows it as **Redeemed** in the "past" list rather than as a claimable coupon. The check that decides whether a code may be applied at checkout also runs **server-side at payment**, on an id the server resolved, so a customer who applies a code they do not hold is refused **before** they pay rather than silently granted nothing afterwards — this matters because a customer applying a code straight after registering is still a guest at that point. A re-trigger *inside* a live window is a **silent no-op on our side** — nothing is written and **no second `Bonus Code Issued` event fires**; the flow's own discount email may still send, because we sit one step above it and answer "carry on". Either way the deadline is not extended and the code is unchanged, so a second email is harmless in this case — it carries a code that still works. (Corrected 2026-08-26 — this used to say flatly "no second email is sent".) A customer who loses that first email **cannot look the code up anywhere** (corrected 2026-08-26 — this used to say they could find it in their rewards wallet at `/my-account`, and they cannot): the only two surfaces that print a code and its deadline are the `/rewards` wallet, which is behind the rewards pause flag, and a floating widget that has been unmounted since the 2026-07 dashboard revamp. What they *can* see, at [My Account → Rewards](/my-account/rewards), is the reward itself with a Claim button — which is enough to use a code that needs no purchase, and not enough to tell them the code string or the date. **And the deadline is worse off than the code: even the email does not name it.** Before the window lapses there is nowhere a customer can learn their exact date and time; after it lapses, the checkout message names it to a signed-in caller. Anything else has to come from support, which is what Cobber id 86 now tells them. An **unredeemed** code whose window has already lapsed is the one case that can come back: if the customer triggers again later, it is re-armed with a fresh deadline and a new email — they never used the first one, so nothing was spent. The event is emitted only in production, so preview deploys cannot email a real customer or burn their grant.
+Customer-visible effect: **the discount email itself**, carrying the code string — hardcoded in the marketing template, made real for that person by the call one step above it. Alongside it we record a `Bonus Code Issued` Klaviyo event holding the code, the free entries it includes and **that customer's own deadline** (the stored instant, formatted in Sydney time, never recomputed — so no copy of the deadline can disagree with the one redemption enforces). **That event is our record, not a message to the customer** (corrected 2026-08-26 — this line used to imply the deadline was emailed): a Klaviyo flow email renders against its own trigger metric, so the three discount templates cannot read the deadline off our event and none of them prints it. One **redeemed** grant per person, per code, for life: a grant that has ever been redeemed is never re-issued, and that survives a refund — the refund takes back the entries and the code stays used, so it is refused at redemption and at checkout, and the wallet shows it as **Redeemed** in the "past" list rather than as a claimable coupon. **Applying the code no longer depends on pressing the Apply button** (corrected 2026-08-27): typing the code and pressing Purchase now means the same thing — the code is checked at the click and carried onto the payment, and if it is definitely wrong the sale stops once, at no cost, with the reason shown beside the box and a second press going through without it. Before this, a code typed and left unapplied was silently discarded and the customer was charged with nothing attached. The check that decides whether a code may be applied at checkout also runs **server-side at payment**, on an id the server resolved, so a customer who applies a code they do not hold is refused **before** they pay rather than silently granted nothing afterwards — this matters because a customer applying a code straight after registering is still a guest at that point. A re-trigger *inside* a live window is a **silent no-op on our side** — nothing is written and **no second `Bonus Code Issued` event fires**; the flow's own discount email may still send, because we sit one step above it and answer "carry on". Either way the deadline is not extended and the code is unchanged, so a second email is harmless in this case — it carries a code that still works. (Corrected 2026-08-26 — this used to say flatly "no second email is sent".) A customer who loses that first email **cannot look the code up anywhere** (corrected 2026-08-26 — this used to say they could find it in their rewards wallet at `/my-account`, and they cannot): the only two surfaces that print a code and its deadline are the `/rewards` wallet, which is behind the rewards pause flag, and a floating widget that has been unmounted since the 2026-07 dashboard revamp. What they *can* see, at [My Account → Rewards](/my-account/rewards), is the reward itself with a Claim button — which is enough to use a code that needs no purchase, and not enough to tell them the code string or the date. **And the deadline is worse off than the code: even the email does not name it.** Before the window lapses there is nowhere a customer can learn their exact date and time; after it lapses, the checkout message names it to a signed-in caller. Anything else has to come from support, which is what Cobber id 86 now tells them. An **unredeemed** code whose window has already lapsed is the one case that can come back: if the customer triggers again later, it is re-armed with a fresh deadline and a new email — they never used the first one, so nothing was spent. The event is emitted only in production, so preview deploys cannot email a real customer or burn their grant.
 
 The old limitation — that only the **guest** checkout-start moment could enrol, because the authenticated one is emitted client-side and a component cannot reach the database — disappears under the webhook model: what decides whether a customer gets a code is whether they entered the Klaviyo flow, not where the event that put them there was emitted. Two things a customer could notice: a code they never used and whose deadline has passed can be re-issued with a fresh deadline if they qualify again, but **not within 30 days** of the first one — the flows can be re-entered and re-run, and without that cooldown "one grant per person" would quietly become "one per flow re-entry"; and the deadline is now an exact 72 hours, so a code issued at 2:47pm on a Friday dies at 2:47pm on the Monday rather than at 11:59pm. Across a daylight-saving change the displayed time shifts by an hour (a Friday 2pm issue expires Monday 3pm) — that is correct for "exactly 72 hours", and it will look like a bug to anyone who does not know.
 
@@ -762,6 +762,31 @@ customer keeps their unused code either way — what this recovers is the free e
 they just made. If they REMOVE the code before paying, the record is removed with it, and it expires
 after 30 minutes so it can never attach itself to a later purchase or a renewal. This is our own
 record only: nothing new is sent to Klaviyo, Stripe or any other third party.
+
+*A code typed on the wrong kind of package could still be lost — and our own wording sent them
+there (2026-08-27).* Some codes only work on a membership. Type one on a one-time pack and we stop
+once and say "This code is for membership packs only — press Purchase again to continue without it."
+The obvious thing to do next is switch to a membership, where the code is perfectly good. Until this
+fix, that switch was silently fatal: we had filed the code away as "already refused", skipped
+re-checking it, and charged for the membership with the code still sitting in the box looking
+applied and the customer's **one-per-lifetime** free-entry grant quietly gone. We now remember the
+refusal as *this code, on this kind of package*, so switching to a membership asks the question
+again and honours the code. Pressing Purchase a second time on the **same** package still buys, and
+still buys without the code — that promise is unchanged.
+
+*Two of the three kinds of code only reached us on some checkouts (2026-08-27).* The box accepts
+three kinds of code: a mate's referral code, a promo link code, and a bonus code from one of our
+emails. Bonus codes always got through. The other two only travelled if the checkout happened to
+create its payment at the moment you pressed Purchase — and on a membership checkout it usually
+does not, because we set the payment up in the background as soon as you reach the payment step so
+the card form is ready. On those checkouts a referral code was dropped, and pressing **Apply** did
+not save it either. All three kinds now travel the same way bonus codes already did: we hand the
+raw code you typed to our own server at the moment of purchase, and **our server** decides which of
+the three it is and re-checks it against your account. Your browser never gets to claim "this is a
+referral code" — which is what makes it safe. One consequence you can see: the confirmation screen
+only says "Referral code MATE-CODE applied" when the code genuinely reached us. If we could not tell
+(our own timeout, our own outage), we take the payment as always, but we say nothing rather than
+claim something we cannot stand behind.
 
 **What we store about the customer for this:** one row per issuing call — accepted, refused **or** errored — holding a request id, the resolved `userId` where we could resolve one, which of the three flows called, the outcome and the HTTP status, and a **hashed** (never raw) IP of the caller. No email address, no code string and no request body are kept. Rows auto-delete after **90 days**. This is the only record that can answer "why did this customer not get their code?", because there is no admin screen for bonus codes; the refused rows are also how we would notice someone probing the endpoint with a leaked secret. **The endpoint itself tells the caller nothing about the customer** — every customer-state answer (code created, already held, already used, no such account, and the case where the flow sends two identities that name two different accounts) comes back identical, so someone holding the secret cannot use it to find out whether an email address belongs to a Tools Australia customer. That last case used to answer with a distinct status and no longer does (2026-08-26); it is still logged and still written to the audit row, so it is exactly as visible to us as it was.
 
@@ -1103,3 +1128,71 @@ now says **partner discounts** everywhere, including the chatbot; the `/my-accou
 URL and the internal `partnerCatalog*` identifiers are unchanged, since those are engine terms a
 customer never sees. Nothing about the entitlement itself changed — same tiers, same percentages,
 same stacking rules (§7a above).
+
+**A customer can see and claim a bonus code without being a member (2026-08-27).** The three
+trigger codes are `purchaseRequirement: "none"`, and two of the three cohorts they target are by
+definition not members — someone who cancelled their membership, and a guest who started a checkout and
+never joined. Until now the rewards page hid its claimables section from exactly those people: they
+received an email carrying a code, opened their account to check it, and saw nothing at all. They can
+now see what they hold and claim it — from the Rewards page, and from a badged Redeem tile on the guest
+dashboard when they are holding something. What they still cannot see anywhere is the code string
+itself or its deadline: that screen shows the reward's name, the number of free entries and a Claim
+button, and no customer-reachable surface prints the code or its expiry today (the emailed copy is the
+only one). Nothing about who may redeem changed: the
+server has always allowed it, and still applies the same checks. What changed is that the app now shows
+them. Members see exactly what they saw before.
+
+**A claim that cannot be delivered is now honest about it, and the code stays theirs (2026-08-27).**
+Free entries have to land somewhere — a prize draw that is open and taking entries. There is a short
+window each month between one draw closing and the next opening, and if the next draw has not been set
+up yet there is nowhere for the entries to go. Until now, a customer who tapped Claim in that window
+was told "200 free entries added to your account", their one-per-lifetime grant was marked used
+forever, and no draw ever received a single entry. Nothing on any screen would have told them
+otherwise.
+
+Now, in that window, nothing is spent. The claim is undone from end to end — the reward goes back to
+claimable, the counter goes back down, the "used" mark is removed — and the customer is told plainly
+that we could not add the entries just now and that their code is still theirs to use. They can come
+back and claim it when the next draw is running. The same applies to a milestone reward claimed by
+hand.
+
+Take Sarah: she cancels on 20 August and gets `BACKIN200`. She taps Claim at 9pm on the 27th, in the
+gap between the August draw finishing and the September one starting. Instead of a false "200 free
+entries added", she sees "We couldn't add your free entries just now — the next giveaway is being set
+up. Your code is still yours, so please try again shortly." At 10pm, once September is live, the same
+tap works and her 200 free entries land in the September draw.
+
+**Giving the code back only happens when we are certain the entries did NOT land (2026-08-27).**
+There is a rarer failure than the one above: we ask for the entries to be added, and the answer never
+comes back. Not "no" — no answer at all, because the connection dropped mid-sentence. The entries may
+be sitting in the draw, or they may not, and from our side the two look identical. Handing the code
+back on that guess is dangerous: if the entries *did* land, the customer claims again and the same
+200 land a second time, in a draw that decides who wins a real prize. Entries in a draw cannot be
+quietly taken out again.
+
+So we now check before undoing anything, and we only undo a claim we can prove delivered nothing.
+When we genuinely cannot tell, nothing is reversed and the customer is told the truth: "Your code has
+been used, but we couldn't confirm your free entries landed. We've logged it for our team to check —
+please don't try again; contact support if you don't see them." That is deliberately the less
+comfortable answer. A claim stuck like this is rare, is logged with everything needed to put it
+right by hand, and a person can fix it; the same entries landing twice in a live prize draw is
+neither rare enough to ignore nor fixable afterwards. The same rule now covers the automatic streak
+rewards and the 100-entry cancellation offer.
+
+**And the receipt no longer claims a code the server refused (2026-08-27).** Someone who registers
+at step 1 of the membership modal is not signed in yet, so the quick code check on the box can only
+say "that code exists" — it cannot see whose it is. Type `EXTRA100`, pick the $25 Apprentice Pack and
+press Purchase without pressing Apply, and the payment step resolves the real account and refuses the
+code, because it was never theirs (or their 72 hours had run out). The purchase still goes through —
+a code check never costs a sale — but the success screen used to print "Campaign code EXTRA100
+applied" anyway, because the code had been *sent* with the order, not because anything accepted it.
+It now prints that line only when the server has actually said yes. The customer keeps the pack they
+bought and simply sees no code line, which is the truth.
+
+**And a customer who is not a member can now SEE the entries they claimed.** Claiming a bonus code
+does not make anyone a member, so a cancelled member or a never-joined guest holds real entries while
+their account still reads "no membership". Their dashboard used to show no entry count at all and their
+Draws tab showed no entry card, so the only confirmation they ever got was the toast that disappeared —
+and the natural conclusion was that the claim had failed. Both screens now show the entry card whenever
+there are entries to show, member or not: the same card, the same number, the same countdown to the
+draw. Being a non-member changes what we offer them next; it does not change what they hold.

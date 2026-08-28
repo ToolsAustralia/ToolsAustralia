@@ -1,5 +1,5 @@
 /**
- * `attachCampaignCodeToCheckout` — the pre-confirm write that puts the
+ * `attachTypedCodeToCheckout` — the pre-confirm write that puts the
  * customer's applied bonus code onto the Stripe object about to be charged.
  *
  * WHY EACH CASE EARNS ITS PLACE.
@@ -53,11 +53,11 @@
  * be created or mutated. The campaign-code service and the `User` model are
  * stubbed too, so there is no database traffic and no fixture to clean up.
  *
- * Run via: `npm run test:campaign-code-checkout`
+ * Run via: `npm run test:attach-typed-code`
  */
 import path from "node:path";
 import type Stripe from "stripe";
-import type { AttachCampaignCodeResult, CheckoutCampaignTarget } from "../campaign-code-checkout";
+import type { AttachTypedCodeResult, TypedCodeCheckoutTarget } from "../attach-typed-code";
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -165,6 +165,40 @@ const stubCampaignCodeService = {
   },
 };
 
+/**
+ * The referral leg. The real `validateReferralCodeForUser` THROWS for "not a
+ * referral code", which is how the classifier falls through to promo — so the
+ * stub must throw by default or every code would classify as a referral.
+ */
+let referralAnswer: { referrerName: string } | null = null;
+const referralCalls: Array<{ referralCode: string; inviteeUserId?: string | null; inviteeEmail?: string | null }> = [];
+const stubReferral = {
+  async validateReferralCodeForUser(args: {
+    referralCode: string;
+    inviteeUserId?: string | null;
+    inviteeEmail?: string | null;
+  }) {
+    referralCalls.push(args);
+    if (!referralAnswer) throw new Error("Referral code not found");
+    return referralAnswer;
+  },
+};
+
+/** The promo-link leg. `null` = "no such active promo link", the normal answer. */
+let promoLinkAnswer: { code: string; expired: boolean } | null = null;
+const stubPromoLink = {
+  __esModule: true,
+  default: {
+    async findActiveByCode(code: string) {
+      if (!promoLinkAnswer) return null;
+      return {
+        code: promoLinkAnswer.code || code,
+        isExpired: () => promoLinkAnswer?.expired === true,
+      };
+    },
+  },
+};
+
 /** Mirrors `User.findOne(...).select("_id").lean()` — the only DB call in the module. */
 const stubUserModel = {
   __esModule: true,
@@ -199,6 +233,8 @@ function stub(relativeTsPath: string, exports: Record<string, unknown>) {
 stub("src/lib/stripe.ts", { stripe: stubStripe });
 stub("src/services/redeemables/CampaignCodeValidationService.ts", stubCampaignCodeService);
 stub("src/models/User.ts", stubUserModel);
+stub("src/lib/referral.ts", stubReferral);
+stub("src/models/PromoLink.ts", stubPromoLink);
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -270,12 +306,12 @@ function paymentIntentFixture(overrides: {
   };
 }
 
-const SUBSCRIPTION_TARGET: CheckoutCampaignTarget = {
+const SUBSCRIPTION_TARGET: TypedCodeCheckoutTarget = {
   kind: "subscription",
   subscriptionId: SUBSCRIPTION_ID,
   subscriptionRequestId: REQUEST_ID,
 };
-const PAYMENT_INTENT_TARGET: CheckoutCampaignTarget = {
+const PAYMENT_INTENT_TARGET: TypedCodeCheckoutTarget = {
   kind: "payment_intent",
   paymentIntentId: PAYMENT_INTENT_ID,
   clientSecret: CLIENT_SECRET,
@@ -290,6 +326,9 @@ function reset() {
   updateError = null;
   resolverAnswer = SERVER_VERIFIED_CODE;
   userLookupAnswer = null;
+  referralAnswer = null;
+  referralCalls.length = 0;
+  promoLinkAnswer = null;
   nextSubscription = subscriptionFixture({ status: "incomplete" });
   nextPaymentIntent = paymentIntentFixture({ status: "requires_payment_method" });
 }
@@ -299,10 +338,10 @@ function reset() {
 // ---------------------------------------------------------------------------
 
 type AttachFn = (params: {
-  target: CheckoutCampaignTarget;
+  target: TypedCodeCheckoutTarget;
   code: string | null;
   sessionUserId?: string;
-}) => Promise<AttachCampaignCodeResult>;
+}) => Promise<AttachTypedCodeResult>;
 
 /** Refusals log loudly by design; silenced per call so a FAIL is never buried. */
 async function quietly<T>(fn: () => Promise<T>): Promise<T> {
@@ -328,15 +367,15 @@ async function run() {
   console.log("Stripe is stubbed (verified by identity) — no outbound call is possible.\n");
 
   /* eslint-disable @typescript-eslint/no-require-imports */
-  const attach = (require("../campaign-code-checkout") as { attachCampaignCodeToCheckout: AttachFn })
-    .attachCampaignCodeToCheckout;
+  const attach = (require("../attach-typed-code") as { attachTypedCodeToCheckout: AttachFn })
+    .attachTypedCodeToCheckout;
   /* eslint-enable @typescript-eslint/no-require-imports */
 
   // ---- 1. METADATA PRESERVATION ------------------------------------------
   console.log("\n1. metadata preservation (the catastrophic-failure guard)");
   reset();
   let result = await attach({ target: SUBSCRIPTION_TARGET, code: APPLIED_CODE });
-  check("  subscription: attach succeeded", result, { ok: true, campaignCode: SERVER_VERIFIED_CODE });
+  check("  subscription: attach succeeded", result, { ok: true, code: SERVER_VERIFIED_CODE, slot: "campaign" });
   check("  subscription: exactly one update call", updateCalls.length, 1);
   for (const [key, value] of Object.entries(SIBLING_METADATA)) {
     check(`  subscription: preserved metadata.${key}`, updateCalls[0]?.metadata[key], value);
@@ -350,7 +389,7 @@ async function run() {
 
   reset();
   result = await attach({ target: PAYMENT_INTENT_TARGET, code: APPLIED_CODE });
-  check("  payment_intent: attach succeeded", result, { ok: true, campaignCode: SERVER_VERIFIED_CODE });
+  check("  payment_intent: attach succeeded", result, { ok: true, code: SERVER_VERIFIED_CODE, slot: "campaign" });
   check("  payment_intent: exactly one update call", updateCalls.length, 1);
   check("  payment_intent: preserved metadata.packageId", updateCalls[0]?.metadata.packageId, SIBLING_METADATA.packageId);
   check("  payment_intent: preserved metadata.capi_client_ip", updateCalls[0]?.metadata.capi_client_ip, SIBLING_METADATA.capi_client_ip);
@@ -366,8 +405,9 @@ async function run() {
   console.log("\n2. code: null CLEARS the stamp without touching siblings");
   reset();
   result = await attach({ target: SUBSCRIPTION_TARGET, code: null });
-  check("  result reports no code", result, { ok: true, campaignCode: null });
-  check("  campaignCode written as empty string", updateCalls[0]?.metadata.campaignCode, "");
+  check("  result reports no code", result, { ok: true, code: null, slot: null });
+  check("  no campaignCode is left on the object", updateCalls[0]?.metadata.campaignCode || "", "");
+  check("  …and the slot marker is emptied with it", updateCalls[0]?.metadata.typedCodeSlot, "");
   check("  sibling metadata.packageId survives the clear", updateCalls[0]?.metadata.packageId, SIBLING_METADATA.packageId);
   check("  sibling metadata.promoLinkCode survives the clear", updateCalls[0]?.metadata.promoLinkCode, SIBLING_METADATA.promoLinkCode);
 
@@ -376,8 +416,8 @@ async function run() {
   reset();
   resolverAnswer = undefined;
   result = await quietly(() => attach({ target: SUBSCRIPTION_TARGET, code: "NOTMINE100" }));
-  check("  still ok (the purchase is never blocked)", result, { ok: true, campaignCode: null });
-  check("  refused code is NOT in the metadata", updateCalls[0]?.metadata.campaignCode, "");
+  check("  still ok (the purchase is never blocked)", result, { ok: true, code: null, slot: null });
+  check("  refused code is NOT in the metadata", updateCalls[0]?.metadata.campaignCode || "", "");
   check("  the caller's raw value appears nowhere", JSON.stringify(updateCalls[0]?.metadata).includes("NOTMINE100"), false);
   check("  the resolver was asked with the caller's raw value", resolverCalls[0]?.code, "NOTMINE100");
 
@@ -400,7 +440,7 @@ async function run() {
   reset();
   nextSubscription = subscriptionFixture({ status: "trialing", invoiceStatus: "open" });
   result = await attach({ target: SUBSCRIPTION_TARGET, code: APPLIED_CODE });
-  check("  anchor-day trialing + OPEN invoice is ACCEPTED", result, { ok: true, campaignCode: SERVER_VERIFIED_CODE });
+  check("  anchor-day trialing + OPEN invoice is ACCEPTED", result, { ok: true, code: SERVER_VERIFIED_CODE, slot: "campaign" });
   check("  …and it wrote the code", updateCalls[0]?.metadata.campaignCode, SERVER_VERIFIED_CODE);
 
   // The half that proves accepting `trialing` did not weaken the invariant.
@@ -468,7 +508,7 @@ async function run() {
   userLookupAnswer = { _id: OWNER_USER_ID };
   result = await attach({ target: PAYMENT_INTENT_TARGET, code: APPLIED_CODE });
   check("  userId 'new' falls through to the email lookup", resolverCalls[0]?.userId, OWNER_USER_ID);
-  check("  …and the code is written", result, { ok: true, campaignCode: SERVER_VERIFIED_CODE });
+  check("  …and the code is written", result, { ok: true, code: SERVER_VERIFIED_CODE, slot: "campaign" });
   check("  …with the RESOLVER's value", updateCalls[0]?.metadata.campaignCode, SERVER_VERIFIED_CODE);
 
   // The exact production shape: `pi_...` with BOTH fields placeholdered.
@@ -480,8 +520,8 @@ async function run() {
   userLookupAnswer = { _id: OWNER_USER_ID }; // must NOT be consulted for "guest"
   result = await quietly(() => attach({ target: PAYMENT_INTENT_TARGET, code: APPLIED_CODE }));
   check("  placeholder identity resolves to NO user", resolverCalls[0]?.userId, undefined);
-  check("  …the attach still succeeds (never blocks the sale)", result, { ok: true, campaignCode: null });
-  check("  …and it CLEARS rather than writing an unredeemable code", updateCalls[0]?.metadata.campaignCode, "");
+  check("  …the attach still succeeds (never blocks the sale)", result, { ok: true, code: null, slot: null });
+  check("  …and it CLEARS rather than writing an unredeemable code", updateCalls[0]?.metadata.campaignCode || "", "");
 
   // A session is the last resort, and only when metadata resolves nothing.
   reset();
@@ -514,7 +554,7 @@ async function run() {
   console.log("\n7. the checkout intent is recorded server-side, before Stripe is touched");
   reset();
   result = await attach({ target: SUBSCRIPTION_TARGET, code: APPLIED_CODE });
-  check("  subscription: attach still succeeded", result, { ok: true, campaignCode: SERVER_VERIFIED_CODE });
+  check("  subscription: attach still succeeded", result, { ok: true, code: SERVER_VERIFIED_CODE, slot: "campaign" });
   check("  exactly one intent recorded", intentCalls.length, 1);
   check("  recorded the RESOLVER's canonical code, not the caller's raw string", intentCalls[0]?.campaignCode, SERVER_VERIFIED_CODE);
   check("  …against the identity resolved from the object's own metadata", intentCalls[0]?.userId, OWNER_USER_ID);
@@ -539,7 +579,104 @@ async function run() {
   resolverAnswer = undefined;
   result = await quietly(() => attach({ target: SUBSCRIPTION_TARGET, code: APPLIED_CODE }));
   check("  a refused code records a CLEAR, never the code", intentCalls[0]?.campaignCode, null);
-  check("  …and the stamp is cleared too", updateCalls[0]?.metadata.campaignCode, "");
+  check("  …and the stamp is cleared too", updateCalls[0]?.metadata.campaignCode || "", "");
+
+  // ---- 8. ALL THREE CODE TYPES -------------------------------------------
+  //
+  // WHY THIS SECTION EXISTS. `referralCode` and `promoLinkCode` used to ride
+  // ONLY in a create-subscription body, so on the two doors where the step-2
+  // pre-warm means that create call is skipped they never left the browser —
+  // pressing Apply did not rescue them either. This seam is now what delivers
+  // them, which makes three things load-bearing and none of them visible to tsc:
+  //
+  //   a. The CLIENT SENDS A RAW STRING. If the classification ever moved back to
+  //      the browser, a caller could claim "this is a referral code" and mint a
+  //      referral grant. The order and the identity below are the whole gate.
+  //   b. THE SLOT MARKER SCOPES CLEARING. Three keys are now in play and the
+  //      write is desired-state, so without a marker saying which key this seam
+  //      owns, stamping a campaign code would wipe the `?promo=` ATTRIBUTION
+  //      `promoLinkCode` a different writer put there at create time.
+  //   c. A LEGACY OBJECT HAS NO MARKER. Everything stamped before it existed
+  //      carries `campaignCode` and nothing else, and "apply A -> decline ->
+  //      remove A -> retry" must still take A back off.
+  console.log("\n8. all three code types, classified server-side");
+
+  reset();
+  referralAnswer = { referrerName: "Dave" };
+  result = await attach({ target: SUBSCRIPTION_TARGET, code: "mate-code" });
+  check("  a referral code lands in the REFERRAL slot", result, {
+    ok: true,
+    code: "MATE-CODE",
+    slot: "referral",
+  });
+  check("  …written to metadata.referralCode", updateCalls[0]?.metadata.referralCode, "MATE-CODE");
+  check("  …and the marker records the slot", updateCalls[0]?.metadata.typedCodeSlot, "referral");
+  check(
+    "  …the referral leg was asked with the SERVER-resolved invitee, not a body field",
+    referralCalls[0]?.inviteeUserId,
+    OWNER_USER_ID
+  );
+  check(
+    "  …the campaign resolver was never reached (first match wins)",
+    resolverCalls.length,
+    0
+  );
+  check(
+    "  A ?promo= attribution promoLinkCode this seam did not write is UNTOUCHED",
+    updateCalls[0]?.metadata.promoLinkCode,
+    SIBLING_METADATA.promoLinkCode
+  );
+
+  reset();
+  promoLinkAnswer = { code: "SPRING50", expired: false };
+  result = await attach({ target: PAYMENT_INTENT_TARGET, code: " spring50 " });
+  check("  a promo-link code lands in the PROMO slot", result, {
+    ok: true,
+    code: "SPRING50",
+    slot: "promo",
+  });
+  check("  …written to metadata.promoLinkCode", updateCalls[0]?.metadata.promoLinkCode, "SPRING50");
+  check("  …with the MODEL's canonical code, not the caller's string", resolverCalls.length, 0);
+
+  reset();
+  promoLinkAnswer = { code: "SPRING50", expired: true };
+  resolverAnswer = undefined;
+  result = await quietly(() => attach({ target: PAYMENT_INTENT_TARGET, code: "SPRING50" }));
+  check("  an EXPIRED promo link is not a promo code", result.ok && result.slot, null);
+
+  // Replacing one type with another must not leave the customer holding both.
+  reset();
+  nextSubscription = subscriptionFixture({
+    status: "incomplete",
+    metadata: { ...SIBLING_METADATA, referralCode: "MATE-CODE", typedCodeSlot: "referral" },
+  });
+  result = await attach({ target: SUBSCRIPTION_TARGET, code: APPLIED_CODE });
+  check("  swapping referral -> campaign writes the campaign code", updateCalls[0]?.metadata.campaignCode, SERVER_VERIFIED_CODE);
+  check("  …and CLEARS the referral slot it replaced", updateCalls[0]?.metadata.referralCode, "");
+  check("  …and moves the marker", updateCalls[0]?.metadata.typedCodeSlot, "campaign");
+
+  // The marker only ever clears a key THIS seam wrote.
+  reset();
+  nextSubscription = subscriptionFixture({
+    status: "incomplete",
+    metadata: { ...SIBLING_METADATA, typedCodeSlot: "campaign", campaignCode: "OLDCODE" },
+  });
+  result = await quietly(() => attach({ target: SUBSCRIPTION_TARGET, code: null }));
+  check("  clearing removes the marked slot", updateCalls[0]?.metadata.campaignCode, "");
+  check(
+    "  …and still never touches the attribution promoLinkCode",
+    updateCalls[0]?.metadata.promoLinkCode,
+    SIBLING_METADATA.promoLinkCode
+  );
+
+  // A LEGACY object: campaignCode stamped, no marker. Removal must still work.
+  reset();
+  nextSubscription = subscriptionFixture({
+    status: "incomplete",
+    metadata: { ...SIBLING_METADATA, campaignCode: "LEGACYSTAMP" },
+  });
+  result = await quietly(() => attach({ target: SUBSCRIPTION_TARGET, code: null }));
+  check("  a pre-marker campaignCode is still cleared on removal", updateCalls[0]?.metadata.campaignCode, "");
 
   if (failures > 0) {
     console.error(`\n${failures} assertion(s) failed`);
@@ -549,6 +686,6 @@ async function run() {
 }
 
 run().catch((error) => {
-  console.error("campaign-code-checkout.test.ts crashed:", error);
+  console.error("attach-typed-code.test.ts crashed:", error);
   process.exit(1);
 });

@@ -35,7 +35,7 @@ import {
  * and the object that gets charged carried no `campaignCode`. The customer saw
  * APPLIED, was charged, and received nothing. The fix writes the code onto the
  * still-unpaid object at the PURCHASE click, before `confirmPayment`
- * (`src/utils/payment/campaign-code-checkout.ts`). Both purchase shapes are
+ * (`src/utils/payment/attach-typed-code.ts`). Both purchase shapes are
  * covered because they failed for DIFFERENT reasons and only one of them was
  * deterministic:
  *   - MEMBERSHIP: the reuse branch sent no code at all. Always broken.
@@ -50,6 +50,14 @@ import {
  * the PaymentIntent COUNT, the identity stamped on it, and that the object the webhook
  * charged is the object the browser minted — none of which depend on who wins a race.
  * See docs/e2e/gotchas.md.
+ *
+ * THE TYPED-BUT-NEVER-APPLIED LEG (added 2026-08-27) is the second half of the
+ * same story. The Apply button beside the code box used to be the only thing
+ * that made a typed code real, so a customer who typed their code and went
+ * straight for PURCHASE — which is what the owner did on the first live run —
+ * was charged with nothing attached, and the code still sitting in the box made
+ * it look like it had worked. That leg differs from the first by exactly one
+ * removed line (the Apply click), which IS the assertion; never add it back.
  *
  * THE NEGATIVE CASE IS THE POINT. `/api/codes/validate` answers a GUEST from the
  * campaign window alone — it has no session to key a per-user lookup on — so a
@@ -209,6 +217,92 @@ test.describe("bonus code journey @purchase", () => {
     // Exactly-once on the payment itself, same two-part proof as the sibling specs.
     const ref = await findBenefitsGrantedRef(userId, "membership");
     expect(ref.kind).toBe("invoice");
+    expect(await benefitsGrantedCount(ref.kind, ref.id)).toBe(1);
+  });
+
+  test("minted code TYPED BUT NEVER APPLIED: purchase alone carries it → 100 free entries land", async ({ page }) => {
+    test.setTimeout(420_000);
+    const { email, mobile } = purchaseIdentity("bonusnoapply", test.info());
+
+    /**
+     * THE REGRESSION THIS FILE EXISTS TO STOP COMING BACK.
+     *
+     * The owner hit it on the first real run: he typed his code, pressed
+     * PURCHASE, and was charged with nothing attached. `appliedCouponPayload`
+     * gates all three code fields on `couponApplied`, which ONLY the Apply
+     * button sets — so the typed text never left the browser. The customer's
+     * one-per-life grant was burned on a purchase that carried no code, and
+     * the box still showed the code, so nothing told them.
+     *
+     * The ONLY thing separating this test from the leg above is the missing
+     * `getByRole("button", { name: "Apply" }).click()`. That is deliberate and
+     * must never be added: it is the whole assertion.
+     *
+     * It is also the ONLY executable proof that the purchase-time resolve is
+     * threaded into the CHARGE. There is no DOM runner in this repo, and the
+     * likeliest way the fix ships broken is calling `setCouponApplied(true)`
+     * mid-submit and charging on the memo that closure already captured — which
+     * looks green on the Apply-first path (the one that was never broken) and
+     * still sends `undefined` here. A unit test cannot see that; this can.
+     */
+    const purchaseButton = page.getByRole("button", { name: /^purchase$/i });
+    const chooseTradie = page
+      .getByRole("button", { name: /choose tradie/i })
+      .or(page.getByRole("link", { name: /choose tradie/i }))
+      .first();
+
+    await page.goto("/membership");
+    await expect(chooseTradie).toBeVisible({ timeout: 45_000 });
+    await chooseTradie.click();
+
+    await page.locator('input[name="firstName"]').fill("E2E");
+    await page.locator('input[name="lastName"]').fill("NoApply");
+    await page.locator('input[name="email"]').fill(email);
+    await page.locator('input[name="phone"]').fill(mobile);
+    await page.getByRole("button", { name: /register/i }).click();
+    await expect(purchaseButton).toBeVisible({ timeout: 45_000 });
+
+    const user = await findUserByEmail(email);
+    expect(user, `registration should have created ${email}`).toBeTruthy();
+    const userId = String(user!._id);
+
+    const mint = await mintBonusCodeViaWebhook({ email, trigger: "checkout-start" });
+    expect(mint.status).toBe(200);
+    expect(mint.outcome).toBe("minted");
+
+    const issued = await issuanceFor(CAMPAIGN_CODE, userId);
+    expect(issued, "the mint should have written this customer an issuance").toBeTruthy();
+    expect(issued!.status).toBe("active");
+
+    // TYPE IT AND WALK AWAY FROM THE BUTTON. No Apply click, and no APPLIED
+    // badge is asserted — there should not be one at this point, and requiring
+    // it would quietly turn this back into the leg above.
+    const couponInput = page.getByPlaceholder("Enter coupon code");
+    await expect(couponInput).toBeVisible({ timeout: 30_000 });
+    await couponInput.fill(CAMPAIGN_CODE);
+    await expect(page.getByRole("button", { name: "Apply", exact: true })).toBeVisible();
+
+    await fillPaymentElement(page, CARDS.ok);
+    await expect(purchaseButton).toBeEnabled({ timeout: 30_000 });
+    await purchaseButton.click();
+
+    // The entries themselves, on the same ledger edge the Apply-first leg waits
+    // on. This is what was silently zero before the fix.
+    const ledger = await waitForCampaignGrant(userId, "membership", CAMPAIGN_ENTRIES, 180_000);
+    expect(ledger.campaign?.code).toBe(CAMPAIGN_CODE);
+    expect(ledger.campaign?.redemptionKind).toBe("monthly-coupon");
+    expect(ledger.campaign?.monthlyIssuanceId).toBeTruthy();
+
+    const buckets = await drawEntryBucketsFor(userId);
+    expect(buckets.bySource["membership"]).toBe(TRADIE_ENTRIES); // 15
+    expect(buckets.bySource["bonus-entry-promo"]).toBe(CAMPAIGN_ENTRIES); // 100
+    expect(buckets.totalEntries).toBe(115); // 15 free with Tradie + 100 free with the code
+
+    const redeemed = await issuanceFor(CAMPAIGN_CODE, userId);
+    expect(redeemed!.status).toBe("redeemed");
+    expect(redeemed!.redeemedEverAt).toBeTruthy();
+
+    const ref = await findBenefitsGrantedRef(userId, "membership");
     expect(await benefitsGrantedCount(ref.kind, ref.id)).toBe(1);
   });
 

@@ -115,7 +115,7 @@ step 2 mounts ──► pre-warm (subscription | PaymentIntent)   ← no code ex
                             │                                  THIS step)
 customer types code, Apply  │
                             ▼
-PURCHASE click ──► attachCampaignCodeToCheckout()  ← server re-verifies, stamps
+PURCHASE click ──► attachTypedCodeToCheckout()  ← server re-verifies, stamps
                             │                        the UNPAID object
                             ▼
                     confirmPayment()  ← Stripe emits ...payment_succeeded
@@ -125,12 +125,12 @@ PURCHASE click ──► attachCampaignCodeToCheckout()  ← server re-verifies,
 ```
 
 The ordering is the whole design: stamp before the confirm, never after. See
-[backend.md](./backend.md#campaign-code-checkoutts--the-authoritative-campaign-code-write)
+[backend.md](./backend.md#attach-typed-codets--the-authoritative-typed-code-write)
 and [gotchas.md](./gotchas.md).
 
 ### The recovery leg: a recorded checkout intent (2026-08-27)
 
-The stamp above is written by a request the **browser abandons**. `attachCampaignCode`
+The stamp above is written by a request the **browser abandons**. `attachTypedCode`
 (`useStripeSubscription.ts`) caps it at 15s and the modal charges regardless of the outcome — the
 "never block the sale" contract, which is right. But it left one open window, and it was observed
 live rather than theorised: the server answered `200 in 14903ms`, the browser had already aborted,
@@ -143,7 +143,7 @@ for the code; the browser does not.** So the server writes its own record, and t
 depending on a client-side race being won:
 
 ```
-PURCHASE click ──► attachCampaignCodeToCheckout()
+PURCHASE click ──► attachTypedCodeToCheckout()
                      │
                      ├─ 1. retrieve · authorize · state · identity · re-verify
                      ├─ 2. recordCheckoutIntent()   ← OUR DB. fast, before the slow half.
@@ -159,7 +159,7 @@ PURCHASE click ──► attachCampaignCodeToCheckout()
 
 Step 2 sits **before** step 3 deliberately: a record written only on the Stripe write's success
 would be missing in exactly the cases it exists for. The ordering is asserted, not assumed —
-`npm run test:campaign-code-checkout` §7 pins `["intent", "stripe"]`.
+`npm run test:attach-typed-code` §7 pins `["intent", "stripe"]`.
 
 The intent is a **candidate, not a decision**: `RedemptionService.redeem` re-applies every
 eligibility, expiry and already-spent gate, so the recovery can never grant something the normal

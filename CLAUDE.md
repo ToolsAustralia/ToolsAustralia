@@ -525,7 +525,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-draw10-landing-assets.ts",
         "src/docs/PROMOTION_ANALYTICS.md"
       ],
-      "lastVerified": "2026-08-26"
+      "lastVerified": "2026-08-27"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -598,7 +598,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/upsellImageManifest.ts",
         "scripts/build-upsell-image-manifest.ts"
       ],
-      "lastVerified": "2026-08-04"
+      "lastVerified": "2026-08-27"
     },
     "cart-shop-products": {
       "docs": "docs/cart-shop-products/",
@@ -822,6 +822,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useLeafTimer.ts",
         "src/hooks/useTilt.ts",
         "src/hooks/useModalBlocking.ts",
+        "src/hooks/useStickyHeaderOffset.ts",
         "eslint/rules/no-adhoc-scroll-lock.js",
         "src/types/upsell.ts",
         "src/app/globals.css",

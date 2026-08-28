@@ -48,7 +48,59 @@ import { useLoading } from "@/contexts/LoadingContext";
 import { type LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useStripeSubscription } from "@/hooks/useStripeSubscription";
 // TYPE-ONLY (erased at compile time) — the module itself is server-only.
-import type { CheckoutCampaignTarget } from "@/utils/payment/campaign-code-checkout";
+import type {
+  TypedCodeCheckoutTarget,
+  CheckoutCodeSlot,
+} from "@/utils/payment/attach-typed-code";
+import {
+  evaluatePurchaseRequirementGate,
+  resolveTypedCodeAtCheckout,
+  typedCodeRefusalCopy,
+  type PurchaseRequirementStop,
+} from "@/utils/payment/typed-code-at-checkout";
+
+/**
+ * The code state `handleSubmit` actually charges on, settled once at the click.
+ *
+ * It exists because `handleSubmit` captured `appliedCouponPayload` AT RENDER
+ * TIME: resolving a typed code mid-invocation and calling `setCouponApplied`
+ * does not update that memo, so every read inside the submit must come from this
+ * local instead. Building the local and forgetting to thread it is the single
+ * likeliest way this fix ships green and changes nothing.
+ */
+type SettledCoupon = {
+  referralCode?: string;
+  promoLinkCode?: string;
+  campaignCode?: string;
+  /**
+   * The RAW string the customer settled on, whatever its kind — this is what the
+   * attach seam sends, because the SERVER classifies it. Null means "charge with
+   * no typed code" (empty box, a refusal already answered, or a requirement stop
+   * the customer pressed through).
+   */
+  typedCode: string | null;
+  /** Our best reading of its kind. Used for the success-screen claim, never to gate the server. */
+  typedCodeType: CheckoutCodeSlot | null;
+  /**
+   * What the success screen may claim was applied — never the `?promo=` fallback,
+   * and never a type that did not actually reach the server. Settled LAST, after
+   * the attach has answered, by `settleAppliedLabel` below.
+   */
+  appliedLabel: {
+    label: "Campaign" | "Referral" | "Promo";
+    code: string;
+  } | null;
+};
+
+/** One place the three type words become the three display words. */
+const CODE_TYPE_LABEL: Record<
+  CheckoutCodeSlot,
+  "Campaign" | "Referral" | "Promo"
+> = {
+  campaign: "Campaign",
+  referral: "Referral",
+  promo: "Promo",
+};
 import { getStripePromise } from "@/lib/stripe-client";
 import { useMemberships } from "@/hooks/useMemberships";
 import { cn } from "@/utils/cn";
@@ -284,6 +336,30 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const isCreatingPaymentIntentRef = useRef<boolean>(false);
   const isCreatingSetupIntentRef = useRef<boolean>(false);
   const checkoutSubmitLockRef = useRef(false);
+  /**
+   * The exact normalized code the server DEFINITIVELY refused at the purchase
+   * click. One-shot: the next Purchase press carrying the same string skips the
+   * resolve entirely and charges with NO code (not the raw string — we already
+   * know it is bad, and a wasted attach round trip on an already-annoyed
+   * customer is not earned). Any keystroke in the code box clears it, so fixing
+   * a typo re-arms validation rather than silently buying without it.
+   */
+  const refusedCodeRef = useRef<string | null>(null);
+  /**
+   * The purchase-requirement stop, remembered as (code + purchase kind).
+   *
+   * DELIBERATELY NOT `refusedCodeRef`. That ref holds a DEFINITE refusal — "we
+   * don't recognise this", "already redeemed" — which is a fact about the code
+   * alone and rightly survives anything the customer does to their basket. A
+   * requirement mismatch is not: `BACKIN200` refused on a one-time pack is
+   * perfectly valid on a membership, and the stop's own sentence ("This code is
+   * for membership packs only") is what sends the customer to switch. Sharing one
+   * ref meant the switch skipped the resolve and charged them for the membership
+   * with their one-per-lifetime grant silently dropped — the fix's own copy
+   * routing them into the loss. Keyed on the pairing, switching to a membership
+   * re-arms the gate; switching between two one-time packs correctly does not.
+   */
+  const requirementStopRef = useRef<PurchaseRequirementStop | null>(null);
   /** Fires-once guard for Meta InitiateCheckout per active plan lifetime; prevents double-fire on rapid clicks. Reset when activePlan changes or modal closes. */
   const initiateCheckoutFiredRef = useRef(false);
   const isCreatingSubscriptionRef = useRef<boolean>(false);
@@ -293,7 +369,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const subscriptionPackageIdRef = useRef<string | null>(null);
   /**
    * The `subscriptionRequestId` the SERVER wrote into the pre-warmed
-   * subscription's metadata. It is the possession proof `/api/stripe/attach-campaign-code`
+   * subscription's metadata. It is the possession proof `/api/stripe/attach-typed-code`
    * authorizes against, so it must track `subscriptionCreatedRef` exactly: set
    * wherever that is set (create success AND sessionStorage restore), cleared
    * wherever that is cleared.
@@ -305,7 +381,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
    * is minted or restored — a new object never carries a stamp. This is what
    * makes "apply A, card declines, remove A, retry" clear the stale A.
    */
-  const attachedCampaignCodeRef = useRef<string | null>(null);
+  const attachedTypedCodeRef = useRef<string | null>(null);
   const previousSubscriptionToCancelRef = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
   const lastChargedStaticPackageIdRef = useRef<string | null>(null);
@@ -438,7 +514,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   }, [isOpen, isPackageSelectionOpen]);
 
   // Hooks for API integration
-  const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser, attachCampaignCode } = useStripeSubscription();
+  const { createSubscription, createOneTimePurchase, createSubscriptionExistingUser, attachTypedCode } = useStripeSubscription();
   const { subscriptionPackages, oneTimePackages } = useMemberships();
   const catalogPackageIdForBenefits = useMemo(() => {
     const api = convertToAPIPlan(activePlan, [...subscriptionPackages, ...oneTimePackages]);
@@ -659,6 +735,14 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       setIsCreatingSubscription(false);
       setPaymentMethodTypeFromElement(null);
       userIdRef.current = null;
+      // A refusal is a fact about ONE press in ONE session, not about the code.
+      // It was cleared only by a keystroke in the coupon box, so a customer
+      // refused `EXTRA100` (not held yet), who then claimed the reward and
+      // reopened the modal — which re-prefills that same code without a
+      // keystroke — had the resolve skipped and was charged with nothing
+      // attached and nothing said. A fresh modal session re-arms validation.
+      refusedCodeRef.current = null;
+      requirementStopRef.current = null;
     } else {
       setShowPaymentProcessing(false);
       setPaymentIntentId(null);
@@ -1012,6 +1096,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       setCouponType(null);
       setReferralInfo(null);
       setReferralError(null);
+      // A programmatic fill is a new code in the box, exactly like typing one.
+      refusedCodeRef.current = null;
+      requirementStopRef.current = null;
       // Auto-apply the incoming code once state settles (effect below) — mirrors
       // SpecialPackagesModal's initialCouponCode auto-apply, so the rewards unlock
       // flow's code is actually carried on the purchase without a manual Apply click.
@@ -1110,7 +1197,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           subscriptionCreatedRef.current = null;
           subscriptionPackageIdRef.current = null;
           subscriptionRequestIdRef.current = null;
-          attachedCampaignCodeRef.current = null;
+          attachedTypedCodeRef.current = null;
           try {
             sessionStorage.removeItem(SUBSCRIPTION_CHECKOUT_STORAGE_KEY);
           } catch {
@@ -1130,11 +1217,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               setPaymentIntentClientSecret(secretStr);
               subscriptionCreatedRef.current = parsed.subscriptionId;
               subscriptionPackageIdRef.current = currentPackageId;
-              // The restored request id is what makes the pre-confirm campaign-code
+              // The restored request id is what makes the pre-confirm typed-code
               // attach authorizable after a reload; without it the attach is skipped
               // and a reloaded checkout silently loses the code again.
               subscriptionRequestIdRef.current = parsed.subscriptionRequestId ?? null;
-              attachedCampaignCodeRef.current = null;
+              attachedTypedCodeRef.current = null;
               return;
             }
           } catch {
@@ -1161,7 +1248,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             subscriptionPackageIdRef.current = packageId || null;
             subscriptionRequestIdRef.current = subscriptionRequestId;
             // A brand-new subscription never carries a stamp.
-            attachedCampaignCodeRef.current = null;
+            attachedTypedCodeRef.current = null;
             if (res?.data?.userId) userIdRef.current = res.data.userId;
             try {
               sessionStorage.setItem(
@@ -1223,7 +1310,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               // has had no opportunity to type. It is kept because the effect also
               // re-runs on later deps, so an auto-applied code (the rewards-unlock
               // path) can legitimately be present. The AUTHORITATIVE write is the
-              // attachCampaignCode call in handleSubmit, immediately before confirm.
+              // attachTypedCode call in handleSubmit, immediately before confirm.
               campaignCode: appliedCouponPayload.campaignCode,
             })
               .then((result) => result && onSuccess(result as never))
@@ -1242,7 +1329,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             affiliateCode: affiliateCode || undefined,
             promoLinkCode: appliedCouponPayload.promoLinkCode,
             // Best-effort only — see the note on the authenticated pre-warm above.
-            // The authoritative write is attachCampaignCode, just before confirm.
+            // The authoritative write is attachTypedCode, just before confirm.
             campaignCode: appliedCouponPayload.campaignCode,
           })
             .then((result) => result && onSuccess(result as never))
@@ -1288,7 +1375,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 setCardFormError(null);
                 lastPaymentIntentAmountRef.current = amountInCents;
                 // A brand-new PaymentIntent never carries a campaignCode stamp.
-                attachedCampaignCodeRef.current = null;
+                attachedTypedCodeRef.current = null;
               }
               isCreatingPaymentIntentRef.current = false;
             },
@@ -1353,7 +1440,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   setCardFormError(null);
                   lastPaymentIntentAmountRef.current = amountInCents;
                   // A brand-new PaymentIntent never carries a campaignCode stamp.
-                  attachedCampaignCodeRef.current = null;
+                  attachedTypedCodeRef.current = null;
                 }
                 isCreatingPaymentIntentRef.current = false;
               },
@@ -1758,7 +1845,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 packageName: packageName,
                 // WITHOUT THIS the route takes its "true guest" branch and stamps the
                 // literal placeholders `userId: "guest"`, `userEmail: "guest"`
-                // (create-payment-intent/route.ts). `attachCampaignCodeToCheckout` can then
+                // (create-payment-intent/route.ts). `attachTypedCodeToCheckout` can then
                 // resolve no account, `resolveCodeForCheckout` refuses, and the attach
                 // CLEARS the customer's code — the exact loss this change exists to remove,
                 // on EXTRA100's own audience. `guestUserData` is not readable in this
@@ -1775,7 +1862,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 setCardFormError(null);
                 lastPaymentIntentAmountRef.current = amountInCents;
                 // A brand-new PaymentIntent never carries a campaignCode stamp.
-                attachedCampaignCodeRef.current = null;
+                attachedTypedCodeRef.current = null;
               } else {
                 throw new Error(paymentResult.error || "Failed to create PaymentIntent");
               }
@@ -1897,6 +1984,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         return;
       }
 
+      // An explicit Apply is a fresh intent on this code — it supersedes any
+      // earlier purchase-time refusal, so the next press re-checks rather than
+      // silently charging without the code.
+      refusedCodeRef.current = null;
+      requirementStopRef.current = null;
       setIsValidatingReferral(true);
       setReferralError(null);
 
@@ -1992,6 +2084,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       return;
     }
     setCouponCode(storedReferralCode);
+    // Same rule as the prefill listener: the box changed without a keystroke,
+    // so the "already refused" memory must not carry over onto this code.
+    refusedCodeRef.current = null;
+    requirementStopRef.current = null;
   }, [storedReferralCode, couponCode]);
 
   useEffect(() => {
@@ -2337,8 +2433,38 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     handlePaymentRecovery,
   ]);
 
+  /**
+   * @param settled Pass the local built by `handleSubmit`'s purchase-time resolve.
+   *   This callback closes over `couponApplied` / `couponType` FROM THE RENDER
+   *   THAT STARTED THE SUBMIT, and calling `setCouponApplied` mid-invocation does
+   *   not update it — so without the override the success screen would omit
+   *   "Campaign code BACKIN200 applied" for exactly the customer who typed a code
+   *   and never pressed Apply. Every call site INSIDE `handleSubmit` passes it;
+   *   the ones outside pass nothing and keep reading state.
+   */
   const appendCodeBenefits = useCallback(
-    (benefits: { text: string; icon: "gift" | "star" | "zap" | "ticket" | "tag"; highlight?: boolean }[]) => {
+    (
+      benefits: {
+        text: string;
+        icon: "gift" | "star" | "zap" | "ticket" | "tag";
+        highlight?: boolean;
+      }[],
+      settled?: SettledCoupon,
+    ) => {
+      if (settled) {
+        // `appliedLabel` — NOT the payload fields. `promoLinkCode` falls back to
+        // the `?promo=` attribution code even when nothing was typed, and
+        // surfacing that as "Promo code X applied" would be a new claim on the
+        // success screen. Only a code the customer actually applied shows here,
+        // exactly as before.
+        if (!settled.appliedLabel) return;
+        benefits.push({
+          text: `${settled.appliedLabel.label} code ${settled.appliedLabel.code} applied`,
+          icon: "tag",
+          highlight: true,
+        });
+        return;
+      }
       if (couponApplied && couponCode) {
         const label = couponType === "campaign" ? "Campaign" : couponType === "referral" ? "Referral" : "Promo";
         benefits.push({
@@ -2938,29 +3064,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       return;
     }
 
-    if (couponType === "campaign" && campaignPurchaseRequirement) {
-      const isSubscription = activePlan?.period === "mo";
-
-      if (campaignPurchaseRequirement === "membership" && !isSubscription) {
-        showToast({
-          type: "error",
-          title: "Code not applicable",
-          message: "This code is for membership packs only.",
-          duration: 5000,
-        });
-        return;
-      }
-
-      if (campaignPurchaseRequirement === "one-time" && isSubscription) {
-        showToast({
-          type: "error",
-          title: "Code not applicable",
-          message: "This code is for one-time packages only.",
-          duration: 5000,
-        });
-        return;
-      }
-    }
+    // The campaign purchase-requirement gate USED to sit here. It read
+    // `couponType` / `campaignPurchaseRequirement`, which only `handleCouponApply`
+    // populates — so a membership-only code TYPED but not applied on a one-time
+    // pack sailed straight past the gate that exists to catch it. It now runs
+    // below, against the freshly resolved answer.
 
     checkoutSubmitLockRef.current = true;
     setIsSubmitting(true);
@@ -3053,6 +3161,321 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       }
     }
 
+    // ── THE TYPED CODE, SETTLED ───────────────────────────────────────────────
+    // Pressing Purchase means the same thing as pressing Apply first. A code the
+    // customer typed and never applied is resolved HERE — after the re-entry lock
+    // is taken (so the button is already disabled and a second tap cannot start a
+    // second charge across the round trip), after the tracking block (so
+    // InitiateCheckout / Klaviyo Started Checkout still fire on the real click),
+    // and before showLoading (so a stop for a bad code does not flash a
+    // full-screen "Processing Purchase" overlay at someone who is not being
+    // charged).
+    //
+    // NOTE the manual release on every early return below: the `finally` that
+    // clears the lock belongs to the try that starts AFTER showLoading, so a
+    // return from here would otherwise wedge the button for the modal's lifetime.
+    const releaseCheckoutSubmit = () => {
+      checkoutSubmitLockRef.current = false;
+      setIsSubmitting(false);
+    };
+
+    // An upsell purchase carries NO code fields at all (`purchaseUpsell` sends
+    // none), and `CouponRow` returns null on an upsell so there is no box, no
+    // error slot and nothing the customer could correct. Resolving here could
+    // therefore only ever produce a stop nobody can see or escape — a dead button
+    // press. Skip the whole thing; a code typed before the plan became an upsell
+    // is dropped exactly as it was before, which is the pre-existing behaviour.
+    const isUpsellOffer = activePlan?.metadata?.isUpsellOffer === true;
+
+    /**
+     * Can the customer actually SEE the code row's red error slot right now?
+     *
+     * `CouponRow` renders `referralError` only in its input branch. It returns
+     * null on an upsell, and swaps the whole input+error slot for a static
+     * "N extra entries applied" panel when a valid promo link with bonus entries
+     * is showing. Writing a refusal into an invisible slot is how a stop becomes
+     * a dead button press, so when the row cannot render it the message goes to
+     * the toast the requirement gate already uses for exactly this reason.
+     */
+    const couponErrorIsVisible =
+      !isUpsellOffer &&
+      !(promoLinkInfo?.isValid && promoLinkInfo.bonusEntries > 0);
+
+    const showCodeStop = (message: string) => {
+      // Always set the inline error too: it is what `onCouponCodeChange` clears,
+      // and if the promo panel later stops rendering the customer still sees why.
+      setReferralError(message);
+      if (!couponErrorIsVisible) {
+        showToast({
+          type: "error",
+          title: "Code not applied",
+          message,
+          duration: 8000,
+        });
+      }
+    };
+
+    /**
+     * Does the create call inside THIS submit still run, carrying all three code
+     * fields in its body?
+     *
+     * When step-2's mount already pre-warmed the subscription and we are not
+     * paying with a saved method, that create call is skipped
+     * (`canReuseSubscription` below, and the guest `subscriptionCreatedRef`
+     * branch) — so on those doors the body never leaves the browser and the
+     * attach seam is the ONLY thing that delivers the code. This boolean is what
+     * `settleAppliedLabel` reads to decide whether the success screen may claim
+     * the code applied.
+     */
+    const codeRidesInCreateBody = !(
+      activePlan?.period === "mo" &&
+      !!subscriptionCreatedRef.current &&
+      !(isAuthenticated && !!useSavedPaymentMethod && !!selectedPaymentMethod)
+    );
+
+    let settledCoupon: SettledCoupon = {
+      referralCode: appliedCouponPayload.referralCode,
+      promoLinkCode: appliedCouponPayload.promoLinkCode,
+      campaignCode: appliedCouponPayload.campaignCode,
+      typedCode:
+        couponApplied && normalizedCouponCode ? normalizedCouponCode : null,
+      typedCodeType: couponApplied && couponType ? couponType : null,
+      // Settled at the end of the attach block, never here — see settleAppliedLabel.
+      appliedLabel: null,
+    };
+    let settledCampaignRequirement:
+      "none" | "membership" | "one-time" | "any" | null =
+      couponType === "campaign" ? campaignPurchaseRequirement : null;
+
+    if (
+      !isUpsellOffer &&
+      !couponApplied &&
+      normalizedCouponCode &&
+      // One shot. A code the server DEFINITIVELY refused does not get re-checked —
+      // the second press buys without it, which is the escape the error line
+      // promised. A keystroke clears this ref and re-arms validation. A
+      // requirement stop is NOT recorded here (see `requirementStopRef`): it is a
+      // fact about this package, not about this code, so switching package must
+      // bring the code back.
+      refusedCodeRef.current !== normalizedCouponCode
+    ) {
+      const inviteeUserId = isAuthenticated
+        ? userData?._id
+        : guestUserData?.userId;
+      const rawTypedEmail = isAuthenticated
+        ? userData?.email
+        : (guestUserData?.email ?? formData.email ?? undefined);
+      const resolution = await resolveTypedCodeAtCheckout({
+        code: normalizedCouponCode,
+        inviteeUserId,
+        inviteeEmail: rawTypedEmail?.trim() ? rawTypedEmail.trim() : undefined,
+      });
+
+      if (resolution.status === "refused") {
+        // A DEFINITE server answer that the code is wrong — overwhelmingly a
+        // typo on a code just pasted out of an email. Stop before any money
+        // moves; the grant is one-per-customer-for-life and rides on a purchase,
+        // so charging here burns the purchase it was meant to attach to. Nothing
+        // else is cleared: a stored referral or a `?promo=` link must survive
+        // someone mistyping a coupon.
+        refusedCodeRef.current = normalizedCouponCode;
+        showCodeStop(typedCodeRefusalCopy(resolution, "Purchase"));
+        setCouponApplied(false);
+        setCouponType(null);
+        setReferralInfo(null);
+        releaseCheckoutSubmit();
+        return;
+      }
+
+      if (resolution.status === "resolved") {
+        // Mirror handleCouponApply's state writes so the row shows APPLIED and a
+        // later reopen agrees — but the CHARGE reads `settledCoupon` below, never
+        // these setters: they cannot update the memo this closure already captured.
+        setCouponApplied(true);
+        setCouponType(resolution.type);
+        setReferralError(null);
+        if (resolution.type === "referral") {
+          setReferralInfo(
+            resolution.referrerName
+              ? { referrerName: resolution.referrerName }
+              : null,
+          );
+          persistReferralCode(resolution.code);
+          clearPromoCode();
+        } else if (resolution.type === "promo") {
+          setReferralInfo(null);
+          setPromoCode(resolution.code);
+          clearReferralCode();
+        } else {
+          setReferralInfo(null);
+          setCampaignPurchaseRequirement(
+            resolution.purchaseRequirement ?? null,
+          );
+          clearReferralCode();
+          clearPromoCode();
+        }
+        settledCampaignRequirement =
+          resolution.type === "campaign"
+            ? (resolution.purchaseRequirement ?? null)
+            : null;
+        settledCoupon = {
+          referralCode:
+            resolution.type === "referral" ? resolution.code : undefined,
+          // The `?promo=` attribution fallback is replicated EXACTLY as the memo
+          // does it. Dropping it would let a typed code silently destroy an
+          // attributed campaign link.
+          promoLinkCode:
+            resolution.type === "promo"
+              ? resolution.code
+              : promoLinkCode || undefined,
+          campaignCode:
+            resolution.type === "campaign" ? resolution.code : undefined,
+          typedCode: resolution.code,
+          typedCodeType: resolution.type,
+          appliedLabel: null,
+        };
+      } else if (resolution.status === "inconclusive") {
+        // We could not OBTAIN an answer (our rate limiter, our outage, a timeout,
+        // a dropped connection). That has never been allowed to cost a sale and
+        // does not start now. The raw string still rides — the attach seam and
+        // every create route re-classify and re-validate it server-side against a
+        // server-resolved user, fail-closed, so an unclassified string is safe.
+        // It rides as `campaignCode` in the CREATE body (the only field those
+        // routes re-resolve) and as `typedCode` to the attach (which classifies
+        // all three), so whichever door this checkout takes, the server decides.
+        //
+        // console.error is the only level surviving the production build, and it
+        // must say UNKNOWN: this is not evidence the customer lost anything.
+        console.error(
+          "[typed-code] resolve outcome unknown — charging with the raw code",
+          {
+            reason: resolution.reason,
+            code: resolution.code,
+            email: isAuthenticated ? userData?.email : guestUserData?.email,
+          },
+        );
+        settledCampaignRequirement = null;
+        settledCoupon = {
+          referralCode: undefined,
+          promoLinkCode: promoLinkCode || undefined,
+          campaignCode: normalizedCouponCode,
+          typedCode: normalizedCouponCode,
+          // We do not know the kind, so nothing may be claimed about it.
+          typedCodeType: null,
+          appliedLabel: null,
+        };
+      }
+    }
+
+    // The purchase-requirement gate, moved down here so it runs against the
+    // FRESH answer rather than only against what Apply happened to populate.
+    //
+    // ONE STOP, NEVER A WALL. This gate used to toast and return without
+    // recording anything, so the very next press re-read the same state, hit the
+    // same branch and stopped again — forever. Before the purchase-click resolve
+    // existed this customer's code was simply dropped and THE SALE COMPLETED; a
+    // permanently blocked sale is the one outcome worse than the bug this branch
+    // fixes. `previousStop` makes the escape structural (see
+    // `evaluatePurchaseRequirementGate`) — it does not depend on the state clears
+    // below landing in any particular order.
+    const requirementGate = evaluatePurchaseRequirementGate({
+      campaignCode: settledCoupon.campaignCode,
+      purchaseRequirement: settledCampaignRequirement,
+      isSubscriptionPurchase: activePlan?.period === "mo",
+      ctaLabel: "Purchase",
+      previousStop: requirementStopRef.current,
+    });
+
+    if (requirementGate.outcome === "stop") {
+      // Belt: remember the stop as (code + purchase kind), so pressing again on
+      // THIS package buys without it while switching package brings it back.
+      requirementStopRef.current = requirementGate.stop;
+      // Braces: disarm `appliedCouponPayload`, which would otherwise re-supply
+      // the code from state on the next press.
+      setCouponApplied(false);
+      setCouponType(null);
+      setCampaignPurchaseRequirement(null);
+      showCodeStop(requirementGate.message);
+      releaseCheckoutSubmit();
+      return;
+    }
+
+    if (requirementGate.outcome === "allow_without_code") {
+      // The second press on the same package. Buy, but drop the code: we already
+      // told them it does not apply here, and `RedemptionService` would refuse it
+      // as `ineligible` after the charge anyway.
+      //
+      // The row must stop saying APPLIED with it. The resolve above re-ran (the
+      // requirement stop deliberately does not suppress it, so switching package
+      // brings the code back) and set that state on the way through; leaving it
+      // would show a green APPLIED beside a code this charge is not carrying —
+      // which is exactly the false claim this branch exists to remove.
+      setCouponApplied(false);
+      setCouponType(null);
+      setCampaignPurchaseRequirement(null);
+      settledCoupon = {
+        ...settledCoupon,
+        campaignCode: undefined,
+        typedCode: null,
+        typedCodeType: null,
+      };
+      settledCampaignRequirement = null;
+    }
+
+    /**
+     * WHAT THE SUCCESS SCREEN IS ALLOWED TO CLAIM.
+     *
+     * "Referral code MATE-CODE applied" may only be printed once that code has
+     * actually reached the server. Two things can deliver it, and this runs after
+     * both have had their turn:
+     *
+     *   - the create call in this submit, which carries all three fields; or
+     *   - the attach seam, which classifies the raw string server-side and stamps
+     *     the matching Stripe metadata key — and reports back WHICH one.
+     *
+     * An `unknown` attach outcome (we stopped listening; the server may well have
+     * written it) deliberately does NOT license the claim. A missing claim costs
+     * a line of reassurance; a false one is a statement about a money-equivalent
+     * perk at the moment of purchase.
+     *
+     * AND A REFUSAL WE HAVE ALREADY BEEN TOLD ABOUT VETOES BOTH. `codeRidesInCreateBody`
+     * only says WHICH BODY the field left the browser in — it is no evidence the
+     * server accepted it, and the create routes re-resolve the code against a
+     * server-resolved user and DROP it when the customer does not hold it. A guest
+     * who registered at step 1 (which does not authenticate) gets `valid: true`
+     * from `/api/codes/validate` on the campaign window alone, then the attach
+     * resolves their real identity and answers `200 { code: null, slot: null }` —
+     * a definite refusal. That used to print "Campaign code EXTRA100 applied" on
+     * the success screen for a code the server had explicitly refused.
+     */
+    let attachedCodeSlot: CheckoutCodeSlot | null = null;
+    /**
+     * The server answered about THIS code and did not write it — a 200 carrying no
+     * slot. Sticky across a decline-and-retry (the refusal is about the customer
+     * and the code, not the checkout object), and cleared only by a later attach
+     * that positively names a slot.
+     */
+    let serverRefusedTypedCode = false;
+    const settleAppliedLabel = () => {
+      const type = settledCoupon.typedCodeType;
+      const code = settledCoupon.typedCode;
+      const reachedServer =
+        !!type &&
+        !serverRefusedTypedCode &&
+        (attachedCodeSlot === type || codeRidesInCreateBody);
+      settledCoupon = {
+        ...settledCoupon,
+        appliedLabel:
+          type && code && reachedServer
+            ? { label: CODE_TYPE_LABEL[type], code }
+            : null,
+      };
+    };
+    // Settled again after each attach; this call covers every door the attach
+    // block below skips (saved-card, no pre-warmed object, empty box).
+    settleAppliedLabel();
+    // ──────────────────────────────────────────────────────────────────────────
+
     showLoading("Processing Purchase", "", [
       "Authorizing payment method",
       "Confirming transaction with Stripe",
@@ -3066,8 +3489,6 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
     try {
       lastChargedStaticPackageIdRef.current = null;
-
-      const isUpsellOffer = activePlan?.metadata?.isUpsellOffer === true;
 
       if (isUpsellOffer) {
         const result = await purchaseUpsell.mutateAsync({
@@ -3168,13 +3589,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       lastChargedStaticPackageIdRef.current = packageId;
 
       // ─────────────────────────────────────────────────────────────────────
-      // AUTHORITATIVE campaign-code write — the ONLY place the customer's
+      // AUTHORITATIVE typed-code write — the ONLY place the customer's
       // applied code reaches Stripe on the pre-warmed path.
       //
       // Everything above ran before the customer could type it: CouponRow lives
       // on step 2, the same step whose mount pre-warms the subscription /
       // PaymentIntent. So the object we are about to charge may carry no
-      // campaignCode at all, or a STALE one from an earlier declined attempt.
+      // typed code at all, or a STALE one from an earlier declined attempt.
       // Write the DESIRED state now, while it is still unpaid.
       //
       // NEVER move this below the confirm. `payment_intent.succeeded` /
@@ -3184,13 +3605,20 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       // Secure) it never runs at all. This single call sits above BOTH confirm
       // branches (subscription and one-time) deliberately.
       //
-      // It never blocks the sale: attachCampaignCode cannot throw, caps itself
+      // It never blocks the sale: attachTypedCode cannot throw, caps itself
       // at 15s, and a failure only logs.
-      const desiredCampaignCode = appliedCouponPayload.campaignCode ?? null;
-      const payingWithSavedMethodNow = !!(useSavedPaymentMethod && selectedPaymentMethod);
+      // The RAW string the customer settled on — NOT a classification. The server
+      // decides whether it is a referral, a promo link or a campaign code, and
+      // stamps the matching metadata key. That is what carries referral and
+      // promo-link codes on the two doors where the create call is skipped and
+      // they otherwise never left the browser at all.
+      const desiredTypedCode = settledCoupon.typedCode;
+      const payingWithSavedMethodNow = !!(
+        useSavedPaymentMethod && selectedPaymentMethod
+      );
 
       /**
-       * Writes the desired campaign-code state onto ONE unpaid checkout object.
+       * Writes the desired typed-code state onto ONE unpaid checkout object.
        *
        * Called immediately below for the pre-warmed object — and AGAIN by each
        * decline-and-retry branch, which mints a brand-new PaymentIntent and
@@ -3199,10 +3627,37 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
        * charge carries no code at all and falls back to the post-confirm race
        * this change exists to remove.
        */
-      const writeCampaignCodeTo = async (target: CheckoutCampaignTarget): Promise<void> => {
-        const attached = await attachCampaignCode({ target, code: desiredCampaignCode });
+      const writeTypedCodeTo = async (
+        target: TypedCodeCheckoutTarget,
+      ): Promise<void> => {
+        const attached = await attachTypedCode({
+          target,
+          code: desiredTypedCode,
+        });
         if (attached.success) {
-          attachedCampaignCodeRef.current = attached.campaignCode;
+          attachedTypedCodeRef.current = attached.code;
+          // The server's own answer about WHICH kind of code landed. This is the
+          // only thing that licenses the success screen to name it.
+          attachedCodeSlot = attached.slot;
+          // A 200 with NO slot, on a request that carried a code, is the server
+          // saying it will not write this code for this customer — not held, or
+          // expired. It is the same answer the create route will reach, so the
+          // success screen must not claim it applied by either door.
+          serverRefusedTypedCode = desiredTypedCode !== null && attached.slot === null;
+          if (serverRefusedTypedCode) {
+            // console.error is the only level a production build keeps, and this
+            // is a customer who typed a code and is about to be charged without
+            // it — the same alarm the definite-refusal branch below raises.
+            console.error(
+              "[typed-code] attach answered 200 with no slot — the server refused this code; not claiming it applied",
+              {
+                target: target.kind,
+                code: desiredTypedCode,
+                email: isAuthenticated ? userData?.email : guestUserData?.email,
+              },
+            );
+          }
+          settleAppliedLabel();
           return;
         }
         // console.error is the ONLY level that survives a production build
@@ -3214,21 +3669,28 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           // an 8s cap. Claiming a loss here would make the one alarm that means
           // "a customer was charged without their code" untrustworthy from day one.
           // Assume the write MAY have landed, so a later retry still clears it.
-          attachedCampaignCodeRef.current = desiredCampaignCode ?? attachedCampaignCodeRef.current;
-          console.error("[campaign-code] attach outcome unknown — server may have written it; charging either way", {
-            target: target.kind,
-            code: desiredCampaignCode,
-            email: isAuthenticated ? userData?.email : guestUserData?.email,
-          });
+          attachedTypedCodeRef.current =
+            desiredTypedCode ?? attachedTypedCodeRef.current;
+          console.error(
+            "[typed-code] attach outcome unknown — server may have written it; charging either way",
+            {
+              target: target.kind,
+              code: desiredTypedCode,
+              email: isAuthenticated ? userData?.email : guestUserData?.email,
+            },
+          );
           return;
         }
         // A DEFINITE refusal from the server. This IS the "charged without the
         // code" case, so it must carry enough identity to grant by hand.
-        console.error("[campaign-code] attach failed before confirm — charging without it", {
-          target: target.kind,
-          code: desiredCampaignCode,
-          email: isAuthenticated ? userData?.email : guestUserData?.email,
-        });
+        console.error(
+          "[typed-code] attach failed before confirm — charging without it",
+          {
+            target: target.kind,
+            code: desiredTypedCode,
+            email: isAuthenticated ? userData?.email : guestUserData?.email,
+          },
+        );
       };
 
       if (
@@ -3240,13 +3702,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         // Zero latency cost for the overwhelming majority of checkouts, which
         // never applied a code. The second clause is what lets "apply → decline →
         // remove → retry" CLEAR a stamp that is still on the object.
-        (desiredCampaignCode !== null || attachedCampaignCodeRef.current !== null)
+        (desiredTypedCode !== null || attachedTypedCodeRef.current !== null)
       ) {
         const isSubscriptionCheckout = activePlan.period === "mo";
         const piIdForAttach =
           paymentIntentId ??
           (paymentIntentClientSecret ? paymentIntentClientSecret.split("_secret_")[0] : null);
-        const campaignCodeTarget: CheckoutCampaignTarget | null =
+        const typedCodeTarget: TypedCodeCheckoutTarget | null =
           isSubscriptionCheckout && subscriptionCreatedRef.current && subscriptionRequestIdRef.current
             ? {
                 kind: "subscription",
@@ -3263,10 +3725,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
         // No pre-warmed object to stamp: the create calls further down carry the
         // code on those doors, so skipping here loses nothing.
-        if (campaignCodeTarget) {
-          await writeCampaignCodeTo(campaignCodeTarget);
+        if (typedCodeTarget) {
+          await writeTypedCodeTo(typedCodeTarget);
         } else if (
-          desiredCampaignCode !== null &&
+          desiredTypedCode !== null &&
           // NARROW ON PURPOSE. A null target is normal and harmless on the doors
           // that create the object with the code already in it. It is only a loss
           // when a pre-warmed object EXISTS (and will be reused below by
@@ -3278,11 +3740,16 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             ? !!subscriptionCreatedRef.current && !subscriptionRequestIdRef.current
             : !!paymentIntentClientSecret && !piIdForAttach)
         ) {
-          console.error("[campaign-code] pre-warmed checkout object has no attachable target — charging without it", {
-            checkout: isSubscriptionCheckout ? "subscription" : "payment_intent",
-            code: desiredCampaignCode,
-            email: isAuthenticated ? userData?.email : guestUserData?.email,
-          });
+          console.error(
+            "[typed-code] pre-warmed checkout object has no attachable target — charging without it",
+            {
+              checkout: isSubscriptionCheckout
+                ? "subscription"
+                : "payment_intent",
+              code: desiredTypedCode,
+              email: isAuthenticated ? userData?.email : guestUserData?.email,
+            },
+          );
         }
       }
       // ─────────────────────────────────────────────────────────────────────
@@ -3525,9 +3992,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   // object is brand new and carries no campaignCode. It is created
                   // BETWEEN the attach and its confirm, so the "one attach above every
                   // confirm" placement grep passes while the charge still loses the code.
-                  attachedCampaignCodeRef.current = null;
-                  if (desiredCampaignCode !== null) {
-                    await writeCampaignCodeTo({
+                  attachedTypedCodeRef.current = null;
+                  if (desiredTypedCode !== null) {
+                    await writeTypedCodeTo({
                       kind: "payment_intent",
                       // Same fallback as the main block: the id is a prefix of the
                       // client secret, so a response missing `payment_intent_id`
@@ -3567,7 +4034,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 // By here `paymentIntentClientSecret` is either the recovery object (so the
                 // pre-warm gate stays shut on its own) or still null because recovery failed,
                 // in which case the effect SHOULD mint a fresh one for the reset form — and
-                // its onSuccess clears `attachedCampaignCodeRef`, so the next submit
+                // its onSuccess clears `attachedTypedCodeRef`, so the next submit
                 // re-attaches the code.
                 isCreatingPaymentIntentRef.current = false;
               }
@@ -3700,9 +4167,9 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   // object is brand new and carries no campaignCode. It is created
                   // BETWEEN the attach and its confirm, so the "one attach above every
                   // confirm" placement grep passes while the charge still loses the code.
-                  attachedCampaignCodeRef.current = null;
-                  if (desiredCampaignCode !== null) {
-                    await writeCampaignCodeTo({
+                  attachedTypedCodeRef.current = null;
+                  if (desiredTypedCode !== null) {
+                    await writeTypedCodeTo({
                       kind: "payment_intent",
                       // Same fallback as the main block: the id is a prefix of the
                       // client secret, so a response missing `payment_intent_id`
@@ -3742,7 +4209,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 // By here `paymentIntentClientSecret` is either the recovery object (so the
                 // pre-warm gate stays shut on its own) or still null because recovery failed,
                 // in which case the effect SHOULD mint a fresh one for the reset form — and
-                // its onSuccess clears `attachedCampaignCodeRef`, so the next submit
+                // its onSuccess clears `attachedTypedCodeRef`, so the next submit
                 // re-attaches the code.
                 isCreatingPaymentIntentRef.current = false;
               }
@@ -3801,19 +4268,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           } else {
             const userEmail = userData?.email || "unknown";
             const idempotencyKey = `sub_${packageId}_${userEmail}_${Date.now()}`;
-            const promoLinkCodeToSend = appliedCouponPayload.promoLinkCode;
-            const cancelPreviousSubscriptionId = previousSubscriptionToCancelRef.current ?? undefined;
-            if (previousSubscriptionToCancelRef.current) previousSubscriptionToCancelRef.current = null;
+            const promoLinkCodeToSend = settledCoupon.promoLinkCode;
+            const cancelPreviousSubscriptionId =
+              previousSubscriptionToCancelRef.current ?? undefined;
+            if (previousSubscriptionToCancelRef.current)
+              previousSubscriptionToCancelRef.current = null;
 
             result = await createSubscriptionExistingUser({
               packageId,
               paymentMethodId,
               idempotencyKey,
               cancelPreviousSubscriptionId,
-              referralCode: appliedCouponPayload.referralCode,
+              referralCode: settledCoupon.referralCode,
               affiliateCode: affiliateCode || undefined,
               promoLinkCode: promoLinkCodeToSend,
-              campaignCode: appliedCouponPayload.campaignCode,
+              campaignCode: settledCoupon.campaignCode,
             });
 
             if (result?.success && result.subscription?.id) {
@@ -3827,10 +4296,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             userId: userData?._id || "",
             paymentMethodId,
             idempotencyKey: oneTimeCheckoutIdempotencyKey,
-            referralCode: appliedCouponPayload.referralCode,
+            referralCode: settledCoupon.referralCode,
             affiliateCode: affiliateCode || undefined,
-            promoLinkCode: appliedCouponPayload.promoLinkCode,
-            campaignCode: appliedCouponPayload.campaignCode,
+            promoLinkCode: settledCoupon.promoLinkCode,
+            campaignCode: settledCoupon.campaignCode,
           });
         }
 
@@ -3945,7 +4414,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
               }
             }
 
-            appendCodeBenefits(benefits);
+            appendCodeBenefits(benefits, settledCoupon);
             showSuccess("Successful!", purchaseSuccessSubtitle, benefits);
 
             let fallbackPaymentIntentId: string | null = null;
@@ -4104,10 +4573,10 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             ...(activePlan.period !== "mo" && confirmedPaymentIntentId
               ? { paymentIntentId: confirmedPaymentIntentId }
               : {}),
-            referralCode: appliedCouponPayload.referralCode,
+            referralCode: settledCoupon.referralCode,
             affiliateCode: affiliateCode || undefined,
-            promoLinkCode: appliedCouponPayload.promoLinkCode,
-            campaignCode: appliedCouponPayload.campaignCode,
+            promoLinkCode: settledCoupon.promoLinkCode,
+            campaignCode: settledCoupon.campaignCode,
           };
 
           console.log(
@@ -4302,9 +4771,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
                     hideLoading();
                     const oneTimeEntries =
-                      activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0;
-                    const benefits = buildActivationBenefits({ entriesOverride: oneTimeEntries });
-                    appendCodeBenefits(benefits);
+                      activePlan.metadata?.entriesCount ||
+                      oneTimeData.totalEntries ||
+                      0;
+                    const benefits = buildActivationBenefits({
+                      entriesOverride: oneTimeEntries,
+                    });
+                    appendCodeBenefits(benefits, settledCoupon);
                     showSuccess("Welcome!", purchaseSuccessSubtitle, benefits);
 
                     const oneTimePaymentIntentId = oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
@@ -4401,10 +4874,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   if (signInResult?.ok) {
                     hideLoading();
                     const oneTimeEntries2 =
-                      activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0;
-                    const benefits2 = buildActivationBenefits({ entriesOverride: oneTimeEntries2 });
-                    appendCodeBenefits(benefits2);
-                    showSuccess("Welcome!", purchaseSuccessSubtitle, benefits2, 3000);
+                      activePlan.metadata?.entriesCount ||
+                      oneTimeData.totalEntries ||
+                      0;
+                    const benefits2 = buildActivationBenefits({
+                      entriesOverride: oneTimeEntries2,
+                    });
+                    appendCodeBenefits(benefits2, settledCoupon);
+                    showSuccess(
+                      "Welcome!",
+                      purchaseSuccessSubtitle,
+                      benefits2,
+                      3000,
+                    );
 
                     const oneTimePaymentIntentId2 =
                       oneTimeData?.paymentIntentId || result.data?.paymentIntentId || null;
@@ -4483,8 +4965,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                         entriesOverride:
                           activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
                       });
-                      appendCodeBenefits(benefits);
-                      showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+                      appendCodeBenefits(benefits, settledCoupon);
+                      showSuccess(
+                        "Account Created!",
+                        purchaseSuccessSubtitle,
+                        benefits,
+                        3000,
+                      );
                     }
                   }
                 } else {
@@ -4494,8 +4981,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                       entriesOverride:
                         activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
                     });
-                    appendCodeBenefits(benefits);
-                    showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+                    appendCodeBenefits(benefits, settledCoupon);
+                    showSuccess(
+                      "Account Created!",
+                      purchaseSuccessSubtitle,
+                      benefits,
+                      3000,
+                    );
                   }
                 }
               } catch (autoLoginError) {
@@ -4506,8 +4998,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     entriesOverride:
                       activePlan.metadata?.entriesCount || oneTimeData.totalEntries || 0,
                   });
-                  appendCodeBenefits(benefits);
-                  showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+                  appendCodeBenefits(benefits, settledCoupon);
+                  showSuccess(
+                    "Account Created!",
+                    purchaseSuccessSubtitle,
+                    benefits,
+                    3000,
+                  );
                 }
               }
             } else {
@@ -4516,8 +5013,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                 const benefits = buildActivationBenefits({
                   entriesOverride: oneTimeData?.totalEntries || 0,
                 });
-                appendCodeBenefits(benefits);
-                showSuccess("Account Created!", purchaseSuccessSubtitle, benefits, 3000);
+                appendCodeBenefits(benefits, settledCoupon);
+                showSuccess(
+                  "Account Created!",
+                  purchaseSuccessSubtitle,
+                  benefits,
+                  3000,
+                );
               }
             }
 
@@ -5011,94 +5513,101 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                   className={`absolute -top-4 z-20 pointer-events-none
                     ${currentStep === 2 ? "-right-[12px]" : "-left-[12px]"}
                   `}
-                >
-                  {packageBadgeSrc ? (
-                    <Image
-                      src={packageBadgeSrc}
-                      alt={`${promoMultiplier}x bonus entries`}
-                      width={72}
-                      height={72}
-                      className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-md"
-                      sizes="(max-width: 640px) 48px, 56px"
-                    />
-                  ) : (
-                    <div
-                      className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-sm sm:text-base font-black text-white shadow-md border-2 border-amber-300/70"
-                      aria-label={`${promoMultiplier}x bonus entries`}
-                    >
-                      {promoMultiplier}x
-                    </div>
-                  )}
-                </div>
-              )}
+                  >
+                    {packageBadgeSrc ? (
+                      <Image
+                        src={packageBadgeSrc}
+                        alt={`${promoMultiplier}x bonus entries`}
+                        width={72}
+                        height={72}
+                        className="w-12 h-12 sm:w-14 sm:h-14 object-contain drop-shadow-md"
+                        sizes="(max-width: 640px) 48px, 56px"
+                      />
+                    ) : (
+                      <div
+                        className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-sm sm:text-base font-black text-white shadow-md border-2 border-amber-300/70"
+                        aria-label={`${promoMultiplier}x bonus entries`}
+                      >
+                        {promoMultiplier}x
+                      </div>
+                    )}
+                  </div>
+                )}
 
-            {/* Step 1: Personal Details for new users */}
-            {currentStep === 1 && (
-              <RegistrationStep
-                formData={formData}
-                registrationErrors={registrationErrors}
-                isRegistering={isRegistering}
-                hasCompletedRegistration={hasCompletedRegistration}
-                onInputChange={handleInputChange}
-                onNextStep={handleNextStep}
-                formatMobileNumber={formatMobileNumber}
-                validateMobileNumber={validateMobileNumber}
-                getPhoneMaxLength={getPhoneMaxLength}
-              />
-            )}
+                {/* Step 1: Personal Details for new users */}
+                {currentStep === 1 && (
+                  <RegistrationStep
+                    formData={formData}
+                    registrationErrors={registrationErrors}
+                    isRegistering={isRegistering}
+                    hasCompletedRegistration={hasCompletedRegistration}
+                    onInputChange={handleInputChange}
+                    onNextStep={handleNextStep}
+                    formatMobileNumber={formatMobileNumber}
+                    validateMobileNumber={validateMobileNumber}
+                    getPhoneMaxLength={getPhoneMaxLength}
+                  />
+                )}
 
-            {/* Step 2: Billing Info */}
-            {currentStep === 2 && (
-              <PaymentStep
-                isAuthenticated={isAuthenticated}
-                activePlan={activePlan}
-                promoEnhancedPlan={promoEnhancedPlan}
-                isPlaceholderPlan={isPlaceholderPlan}
-                subscriptionPackages={subscriptionPackages}
-                oneTimePackages={oneTimePackages}
-                promoThemePrimary={promoTheme.primary}
-                selectedPaymentMethod={selectedPaymentMethod}
-                showCardForm={showCardForm}
-                setupIntentClientSecret={setupIntentClientSecret}
-                paymentIntentClientSecret={paymentIntentClientSecret}
-                cardFormRef={cardFormRef}
-                cardFormError={cardFormError}
-                isCreatingSetupIntentPending={createSetupIntent.isPending}
-                isCreatingPaymentIntentPending={createPaymentIntent.isPending}
-                isCreatingSubscription={isCreatingSubscription}
-                resolvedBillingDetails={resolvedBillingDetails}
-                paymentMethodTypeFromElement={paymentMethodTypeFromElement}
-                promoLinkInfo={promoLinkInfo}
-                couponCode={couponCode}
-                couponApplied={couponApplied}
-                showApplyingIndicator={showApplyingIndicator}
-                isApplyDisabled={isApplyDisabled}
-                referralInfo={referralInfo}
-                referralError={referralError}
-                isSubmitting={isSubmitting}
-                isFormValid={isFormValid()}
-                onPaymentMethodSelect={handlePaymentMethodSelect}
-                onAddNewPaymentMethod={handleAddNewPaymentMethod}
-                onCardElementChange={handleCardElementChange}
-                onPaymentMethodTypeChange={setPaymentMethodTypeFromElement}
-                onElementReady={setIsPaymentElementReady}
-                onCouponCodeChange={(value) => {
-                  setCouponCode(value);
-                  setCouponApplied(false);
-                  setCouponType(null);
-                  setReferralInfo(null);
-                  setReferralError(null);
-                  if (!value.trim()) {
-                    clearReferralCode();
-                  }
-                }}
-                onApplyCoupon={() => handleCouponApply("manual")}
-                onSubmit={handleSubmit}
-                onPackageChange={handlePackageChange}
-              />
-            )}
+                {/* Step 2: Billing Info */}
+                {currentStep === 2 && (
+                  <PaymentStep
+                    isAuthenticated={isAuthenticated}
+                    activePlan={activePlan}
+                    promoEnhancedPlan={promoEnhancedPlan}
+                    isPlaceholderPlan={isPlaceholderPlan}
+                    subscriptionPackages={subscriptionPackages}
+                    oneTimePackages={oneTimePackages}
+                    promoThemePrimary={promoTheme.primary}
+                    selectedPaymentMethod={selectedPaymentMethod}
+                    showCardForm={showCardForm}
+                    setupIntentClientSecret={setupIntentClientSecret}
+                    paymentIntentClientSecret={paymentIntentClientSecret}
+                    cardFormRef={cardFormRef}
+                    cardFormError={cardFormError}
+                    isCreatingSetupIntentPending={createSetupIntent.isPending}
+                    isCreatingPaymentIntentPending={
+                      createPaymentIntent.isPending
+                    }
+                    isCreatingSubscription={isCreatingSubscription}
+                    resolvedBillingDetails={resolvedBillingDetails}
+                    paymentMethodTypeFromElement={paymentMethodTypeFromElement}
+                    promoLinkInfo={promoLinkInfo}
+                    couponCode={couponCode}
+                    couponApplied={couponApplied}
+                    showApplyingIndicator={showApplyingIndicator}
+                    isApplyDisabled={isApplyDisabled}
+                    referralInfo={referralInfo}
+                    referralError={referralError}
+                    isSubmitting={isSubmitting}
+                    isFormValid={isFormValid()}
+                    onPaymentMethodSelect={handlePaymentMethodSelect}
+                    onAddNewPaymentMethod={handleAddNewPaymentMethod}
+                    onCardElementChange={handleCardElementChange}
+                    onPaymentMethodTypeChange={setPaymentMethodTypeFromElement}
+                    onElementReady={setIsPaymentElementReady}
+                    onCouponCodeChange={(value) => {
+                      setCouponCode(value);
+                      setCouponApplied(false);
+                      setCouponType(null);
+                      setReferralInfo(null);
+                      setReferralError(null);
+                      // Re-arm purchase-time validation. Without this, correcting a
+                      // typo would still be treated as "already refused" and the
+                      // corrected code would be dropped on the next press.
+                      refusedCodeRef.current = null;
+                      requirementStopRef.current = null;
+                      if (!value.trim()) {
+                        clearReferralCode();
+                      }
+                    }}
+                    onApplyCoupon={() => handleCouponApply("manual")}
+                    onSubmit={handleSubmit}
+                    onPackageChange={handlePackageChange}
+                  />
+                )}
 
-            {/* Security Section - Only visible in payment step (no border).
+                {/* Security Section - Only visible in payment step (no border).
                 Inline-SVG marks (SecureCheckoutBar), not the flattened
                 /images/safe-checkout-stripe.webp — that raster could only be made legible
                 by forcing a `bg-[#ffffff]` plate behind it, which ignored dark mode and

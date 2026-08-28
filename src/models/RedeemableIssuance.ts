@@ -33,7 +33,7 @@ export interface IRedeemableIssuance extends Document {
   notifyError?: string | null;
   /**
    * When this customer last had this code APPLIED to a live checkout, written by
-   * `attachCampaignCodeToCheckout` immediately before it stamps Stripe.
+   * `attachTypedCodeToCheckout` immediately before it stamps Stripe.
    *
    * This is the server's own record that the customer asked for the code on a
    * purchase they were about to make. It exists because the browser caps the

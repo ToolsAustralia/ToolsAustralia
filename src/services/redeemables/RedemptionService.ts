@@ -6,7 +6,7 @@ import MilestoneReward from "@/models/MilestoneReward";
 import User from "@/models/User";
 import { hasQualifyingPurchase } from "@/utils/redeemables/purchase-eligibility";
 import { isCampaignRedeemable, personalWindowGoverns } from "@/utils/redeemables/bonus-code-policy";
-import { DrawGrantService } from "./DrawGrantService";
+import { DrawGrantService, type DrawGrantOutcome } from "./DrawGrantService";
 
 export type RedemptionFailureReason =
   | "unauthorized"
@@ -16,7 +16,32 @@ export type RedemptionFailureReason =
   | "already_redeemed"
   | "expired"
   | "ineligible"
-  | "concurrency_conflict";
+  | "concurrency_conflict"
+  /**
+   * The claim was valid and was NOT spent — but no Major Draw was available to
+   * receive the entries (freeze window with nothing queued, or a draw write that
+   * VERIFIABLY did not land). Everything this call wrote has been reversed: the
+   * issuance is back to `active`, `redeemedEverAt` is gone if this call is what
+   * wrote it, the wallet counter and the redemptionHistory row are undone. The
+   * customer still holds their one-per-lifetime grant and can claim again later.
+   */
+  | "grant_unavailable"
+  /**
+   * The claim IS spent and this call could not safely hand it back. Two ways in,
+   * and neither may be reversed automatically:
+   *
+   *   - the draw write could not be proven either way (a lost acknowledgement on
+   *     a `save()` the server may have applied). Reversing would re-arm the code
+   *     over entries that may already be in the live draw — a SECOND grant, and
+   *     entries in a draw cannot be quietly withdrawn; or
+   *   - the compensation itself failed, so the issuance is still `redeemed`.
+   *
+   * Distinct from `grant_unavailable` because that reason promises the grant is
+   * still held, and here it may not be. Every occurrence is logged with the ids
+   * needed to reconcile by hand. This is the deliberate trade: a stuck claim an
+   * admin can fix, never a double grant nobody can undo.
+   */
+  | "grant_unresolved";
 
 export interface RedemptionResult {
   success: boolean;
@@ -38,6 +63,213 @@ export interface RedemptionResult {
 }
 
 export class RedemptionService {
+  /**
+   * Land a claim's entries in a draw, or undo the whole claim.
+   *
+   * WHY BURN-THEN-COMPENSATE, NOT GRANT-THEN-BURN. The sibling
+   * `/api/cancellation-upsell/redeem` route grants first because its "already
+   * redeemed?" check is a plain read with no atomicity to lose. A claim here is
+   * different: the `findOneAndUpdate(status: "active" → "redeemed")` above is the
+   * ONLY thing standing between two concurrent POSTs and a DOUBLE grant of a
+   * money-equivalent code (two 200-entry grants into the live draw for one
+   * BACKIN200). Granting before that gate would trade a rare "told you it landed
+   * when it didn't" for a rare "landed twice" — strictly worse, because entries
+   * already in a draw decide who wins and cannot be quietly withdrawn.
+   *
+   * So the gate stays first and this compensates instead. It is the same shape as
+   * `autoRedeemMilestoneIssuance` below, which was fixed this way for exactly this
+   * failure mode. Reversal is safe precisely because the draw write is the step
+   * that did NOT happen.
+   *
+   * Order matters: revert the wallet FIRST, and re-open the issuance only if that
+   * revert succeeded — re-opening while the counter still holds the `$inc` would
+   * let the next claim double-count it.
+   *
+   * REVERSE ONLY WHAT IS PROVABLY UNWRITTEN. This used to reverse on a `false`
+   * return AND on a throw, as if they were the same fact. They are not: `false`
+   * meant no draw was ever touched, but a throw could come from
+   * `activeMajorDraw.save()` — AFTER the entries had been added to the document.
+   * A lost acknowledgement on a save the server actually applied would then leave
+   * the entries in the live draw AND hand the code back, so the next claim landed
+   * the same 200 entries a second time. `DrawGrantService` now answers with three
+   * states instead of a boolean, and only `not_written` is reversed here.
+   *
+   * @returns "landed"     — the entries are in a draw, the claim stands.
+   *          "reversed"   — nothing was granted and the whole claim was undone;
+   *                         the customer still holds their grant.
+   *          "unresolved" — the claim is spent and could NOT be safely handed
+   *                         back. Logged loudly; needs a human.
+   */
+  private static async landEntriesOrCompensate(params: {
+    userId: string;
+    entriesAmount: number;
+    redemptionId: string;
+    reopenIssuance: () => Promise<unknown>;
+    logContext: Record<string, string>;
+  }): Promise<"landed" | "reversed" | "unresolved"> {
+    const { userId, entriesAmount, redemptionId, reopenIssuance, logContext } = params;
+
+    let outcome: DrawGrantOutcome;
+    try {
+      outcome = await DrawGrantService.grantMonthlyCouponEntries(userId, entriesAmount);
+    } catch (e) {
+      // `grantMonthlyCouponEntries` is total by contract. An escape means we do
+      // not know what it wrote, which is exactly the case that must NOT reverse.
+      outcome = { status: "unconfirmed", reason: e instanceof Error ? e.message : String(e) };
+    }
+    if (outcome.status === "landed") return "landed";
+
+    const reason = outcome.reason;
+
+    if (outcome.status === "unconfirmed") {
+      // NOTHING is undone here. The entries may already be in the draw, and
+      // handing the code back over them is the double-grant this branch exists to
+      // prevent. The customer keeps the wallet counter and history row that match
+      // a successful claim; if the draw write really was lost, this log is how it
+      // gets reconciled.
+      console.error("[redeemables] CLAIM WRITE UNCONFIRMED — nothing reversed, claim left spent, reconcile by hand:", {
+        ...logContext,
+        userId,
+        entriesAmount,
+        redemptionId,
+        reason,
+      });
+      return "unresolved";
+    }
+
+    let walletReverted = false;
+    try {
+      await User.updateOne(
+        { _id: userId },
+        { $inc: { accumulatedEntries: -entriesAmount }, $pull: { redemptionHistory: { redemptionId } } }
+      );
+      walletReverted = true;
+    } catch (revertErr) {
+      // console.error, never warn: production builds strip warn, and hiding this
+      // behind a stripped level is exactly how the original defect stayed invisible.
+      console.error("[redeemables] CLAIM COMPENSATION FAILED (wallet revert) — claim left spent:", {
+        ...logContext,
+        userId,
+        entriesAmount,
+        redemptionId,
+        reason,
+        revertErr,
+      });
+    }
+
+    let reopened = false;
+    if (walletReverted) {
+      reopened = await reopenIssuance()
+        .then(() => true)
+        .catch((revertErr) => {
+          console.error("[redeemables] CLAIM COMPENSATION FAILED (issuance re-open) — claim left spent:", {
+            ...logContext,
+            userId,
+            revertErr,
+          });
+          return false;
+        });
+    }
+
+    console.error("[redeemables] CLAIM DID NOT LAND — no entries granted:", {
+      ...logContext,
+      userId,
+      entriesAmount,
+      reason,
+      walletReverted,
+      reopened,
+    });
+
+    // `grant_unavailable` promises the customer their code is still theirs. That
+    // is only true once the issuance is actually back to `active` — a half-done
+    // compensation must not borrow the reassuring answer.
+    return reopened ? "reversed" : "unresolved";
+  }
+
+  /**
+   * The wallet write threw. Hand the grant back — without letting a LOST
+   * ACKNOWLEDGEMENT on that same write leave a phantom `$inc` behind.
+   *
+   * A throw is not proof the write did not apply, and this runs on the one path
+   * where the issuance is ALREADY flipped to `redeemed` with `redeemedEverAt`
+   * stamped: leaving it there burns a one-per-lifetime grant for a customer who
+   * received nothing. So the grant goes back — but the `redemptionId` history row
+   * is the marker that says whether the counter moved, so we ask before undoing.
+   * Re-opening while the counter still holds the `$inc` is how the next claim
+   * double-counts it.
+   *
+   * When we cannot tell, we re-open anyway: NOTHING has reached a draw at this
+   * point, so the worst case is a counter an admin can correct — never entries in
+   * a draw that cannot be withdrawn.
+   *
+   * @returns true when the issuance is back to `active` (the grant is held).
+   */
+  private static async reopenAfterWalletFailure(params: {
+    userId: string;
+    entriesAmount: number;
+    redemptionId: string;
+    reopenIssuance: () => Promise<unknown>;
+    walletErr: unknown;
+    logContext: Record<string, string>;
+  }): Promise<boolean> {
+    const { userId, entriesAmount, redemptionId, reopenIssuance, walletErr, logContext } = params;
+
+    let walletApplied = false;
+    try {
+      walletApplied = Boolean(
+        await User.exists({ _id: userId, "redemptionHistory.redemptionId": redemptionId })
+      );
+    } catch {
+      // Cannot tell — fall through as "not applied" and re-open below.
+    }
+
+    let safeToReopen = true;
+    if (walletApplied) {
+      safeToReopen = false;
+      try {
+        await User.updateOne(
+          { _id: userId },
+          { $inc: { accumulatedEntries: -entriesAmount }, $pull: { redemptionHistory: { redemptionId } } }
+        );
+        safeToReopen = true;
+      } catch (revertErr) {
+        console.error("[redeemables] WALLET WRITE LANDED THEN FAILED TO REVERT — claim left spent:", {
+          ...logContext,
+          userId,
+          entriesAmount,
+          redemptionId,
+          revertErr,
+        });
+      }
+    }
+
+    let reopened = false;
+    if (safeToReopen) {
+      reopened = await reopenIssuance()
+        .then(() => true)
+        .catch((revertErr) => {
+          console.error("[redeemables] CLAIM COMPENSATION FAILED (issuance re-open) — claim left spent:", {
+            ...logContext,
+            userId,
+            revertErr,
+          });
+          return false;
+        });
+    }
+
+    console.error("[redeemables] CLAIM WALLET WRITE FAILED — no entries granted:", {
+      ...logContext,
+      userId,
+      entriesAmount,
+      redemptionId,
+      walletApplied,
+      reopened,
+      walletErr,
+    });
+
+    return reopened;
+  }
+
   static async redeem(params: {
     userId: string;
     code?: string;
@@ -154,22 +386,63 @@ export class RedemptionService {
         return { success: false, reason: "concurrency_conflict" };
       }
 
-      await User.findByIdAndUpdate(user._id, {
-        $inc: { accumulatedEntries: updatedMilestoneIssuance.entriesAmount },
-        $push: {
-          redemptionHistory: {
-            redemptionId: `milestone-${String(updatedMilestoneIssuance._id)}`,
-            redemptionType: "entry",
-            pointsDeducted: 0,
-            value: updatedMilestoneIssuance.entriesAmount,
-            description: `Redeemed milestone reward (${updatedMilestoneIssuance.milestoneType})`,
-            redeemedAt: now,
-            status: "completed",
-          },
-        },
-      });
+      const milestoneRedemptionId = `milestone-${String(updatedMilestoneIssuance._id)}`;
+      const milestoneLogContext = {
+        path: "milestone-manual-claim",
+        milestoneIssuanceId: String(updatedMilestoneIssuance._id),
+      };
+      // HOISTED ABOVE THE WALLET WRITE. Defined below it — as it used to be —
+      // there was nothing to hand the grant back with when that write threw: the
+      // exception escaped `redeem()`, the route answered 500, and the issuance
+      // stayed `redeemed` with nothing granted. Same shape as
+      // `autoRedeemMilestoneIssuance`'s "Step A", which this file already got
+      // right; only its second half had been copied here.
+      const reopenMilestoneIssuance = () =>
+        MilestoneIssuance.updateOne(
+          { _id: updatedMilestoneIssuance._id, status: "redeemed" },
+          { $set: { status: "active" }, $unset: { redeemedAt: 1 } }
+        );
 
-      await DrawGrantService.grantMonthlyCouponEntries(user._id.toString(), updatedMilestoneIssuance.entriesAmount);
+      try {
+        await User.findByIdAndUpdate(user._id, {
+          $inc: { accumulatedEntries: updatedMilestoneIssuance.entriesAmount },
+          $push: {
+            redemptionHistory: {
+              redemptionId: milestoneRedemptionId,
+              redemptionType: "entry",
+              pointsDeducted: 0,
+              value: updatedMilestoneIssuance.entriesAmount,
+              description: `Redeemed milestone reward (${updatedMilestoneIssuance.milestoneType})`,
+              redeemedAt: now,
+              status: "completed",
+            },
+          },
+        });
+      } catch (walletErr) {
+        // Nothing has reached a draw yet, so the grant can go straight back.
+        const handedBack = await RedemptionService.reopenAfterWalletFailure({
+          userId: String(user._id),
+          entriesAmount: updatedMilestoneIssuance.entriesAmount,
+          redemptionId: milestoneRedemptionId,
+          reopenIssuance: reopenMilestoneIssuance,
+          walletErr,
+          logContext: milestoneLogContext,
+        });
+        return { success: false, reason: handedBack ? "grant_unavailable" : "grant_unresolved" };
+      }
+
+      // The grant's outcome is the ONLY signal that the entries reached a draw.
+      // Discarding it is what let a claim report success while granting nothing.
+      const milestoneGrant = await RedemptionService.landEntriesOrCompensate({
+        userId: String(user._id),
+        entriesAmount: updatedMilestoneIssuance.entriesAmount,
+        redemptionId: milestoneRedemptionId,
+        reopenIssuance: reopenMilestoneIssuance,
+        logContext: milestoneLogContext,
+      });
+      if (milestoneGrant !== "landed") {
+        return { success: false, reason: milestoneGrant === "reversed" ? "grant_unavailable" : "grant_unresolved" };
+      }
 
       return {
         success: true,
@@ -267,22 +540,80 @@ export class RedemptionService {
       return { success: false, reason: "concurrency_conflict" };
     }
 
-    await User.findByIdAndUpdate(user._id, {
-      $inc: { accumulatedEntries: updatedIssuance.entriesAmount },
-      $push: {
-        redemptionHistory: {
-          redemptionId: `monthly-coupon-${String(updatedIssuance._id)}`,
-          redemptionType: "entry",
-          pointsDeducted: 0,
-          value: updatedIssuance.entriesAmount,
-          description: `Redeemed monthly free-entry coupon (${updatedIssuance.monthKey})`,
-          redeemedAt: now,
-          status: "completed",
-        },
-      },
-    });
+    const couponRedemptionId = `monthly-coupon-${String(updatedIssuance._id)}`;
 
-    await DrawGrantService.grantMonthlyCouponEntries(user._id.toString(), updatedIssuance.entriesAmount);
+    // Did THIS call write redeemedEverAt? `$min` keeps the FIRST value, so a row
+    // that already carried an older marker (a refunded legacy coupon) comes back
+    // with that older date. Only the marker we wrote may be reversed — unsetting
+    // an older one would erase real audit history and hand back a grant that was
+    // genuinely spent. Exact-timestamp equality is the precise test.
+    const wroteRedeemedEverAt =
+      updatedIssuance.redeemedEverAt instanceof Date &&
+      updatedIssuance.redeemedEverAt.getTime() === now.getTime();
+
+    const couponLogContext = {
+      path: "monthly-coupon-claim",
+      issuanceId: String(updatedIssuance._id),
+      campaignId: String(campaign._id),
+    };
+    // HOISTED ABOVE THE WALLET WRITE — and it must carry the
+    // `wroteRedeemedEverAt`-conditional `$unset`, so an OLDER marker this call
+    // did not write is never erased. Defined below the write, as it used to be,
+    // a thrown wallet update escaped `redeem()` with the issuance left `redeemed`
+    // and `redeemedEverAt` stamped: for a personal-window campaign (all three
+    // live codes) that marker is terminal in both the pre-check and the atomic
+    // filter, so the grant was spent for life for zero entries.
+    const reopenCouponIssuance = () =>
+      RedeemableIssuance.updateOne(
+        { _id: updatedIssuance._id, status: "redeemed" },
+        {
+          $set: { status: "active" },
+          $unset: wroteRedeemedEverAt ? { redeemedAt: 1, redeemedEverAt: 1 } : { redeemedAt: 1 },
+        }
+      );
+
+    try {
+      await User.findByIdAndUpdate(user._id, {
+        $inc: { accumulatedEntries: updatedIssuance.entriesAmount },
+        $push: {
+          redemptionHistory: {
+            redemptionId: couponRedemptionId,
+            redemptionType: "entry",
+            pointsDeducted: 0,
+            value: updatedIssuance.entriesAmount,
+            description: `Redeemed monthly free-entry coupon (${updatedIssuance.monthKey})`,
+            redeemedAt: now,
+            status: "completed",
+          },
+        },
+      });
+    } catch (walletErr) {
+      // Nothing has reached a draw yet, so the grant can go straight back.
+      const handedBack = await RedemptionService.reopenAfterWalletFailure({
+        userId: String(user._id),
+        entriesAmount: updatedIssuance.entriesAmount,
+        redemptionId: couponRedemptionId,
+        reopenIssuance: reopenCouponIssuance,
+        walletErr,
+        logContext: couponLogContext,
+      });
+      return { success: false, reason: handedBack ? "grant_unavailable" : "grant_unresolved" };
+    }
+
+    // The grant's outcome is the ONLY signal that the entries reached a draw.
+    // Discarding it is what let a claim report success while granting nothing —
+    // the customer was told "N free entries added", `redeemedEverAt` burned their
+    // one-per-lifetime grant for good, and no draw ever received the entries.
+    const couponGrant = await RedemptionService.landEntriesOrCompensate({
+      userId: String(user._id),
+      entriesAmount: updatedIssuance.entriesAmount,
+      redemptionId: couponRedemptionId,
+      reopenIssuance: reopenCouponIssuance,
+      logContext: couponLogContext,
+    });
+    if (couponGrant !== "landed") {
+      return { success: false, reason: couponGrant === "reversed" ? "grant_unavailable" : "grant_unresolved" };
+    }
 
     console.log("Redeemable redeemed", {
       userId: user._id.toString(),
@@ -441,22 +772,33 @@ export class RedemptionService {
     }
 
     // Step B — land the entries. A paid-for milestone must never vanish behind a
-    // "redeemed" status with zero draw entries: on ANY failure (no target draw,
-    // or a save error on the hot draw doc) revert step A, then re-open the
-    // issuance so the sweep retries. The issuance is re-opened ONLY when the
-    // wallet revert succeeded — otherwise a sweep retry would double-count the
-    // wallet $inc; on that double-fault we leave it redeemed and log loudly.
-    let granted = false;
-    let grantError: unknown = null;
+    // "redeemed" status with zero draw entries: when the draw write VERIFIABLY
+    // did not land, revert step A, then re-open the issuance so the sweep
+    // retries. The issuance is re-opened ONLY when the wallet revert succeeded —
+    // otherwise a sweep retry would double-count the wallet $inc; on that
+    // double-fault we leave it redeemed and log loudly.
+    //
+    // An `unconfirmed` write is NOT reverted, for the same reason the manual
+    // claim above does not revert one: re-opening the issuance over entries that
+    // may already be in the draw makes the sweep grant them a SECOND time.
+    let outcome: DrawGrantOutcome;
     try {
-      granted = await DrawGrantService.grantMonthlyCouponEntries(userId, updated.entriesAmount, "streak", {
+      outcome = await DrawGrantService.grantMonthlyCouponEntries(userId, updated.entriesAmount, "streak", {
         skipMilestoneCheck: true,
       });
     } catch (e) {
-      grantError = e;
+      outcome = { status: "unconfirmed", reason: e instanceof Error ? e.message : String(e) };
     }
-    if (!granted) {
-      const msg = grantError instanceof Error ? grantError.message : grantError ? String(grantError) : "no_target_draw";
+    if (outcome.status === "unconfirmed") {
+      console.error("Streak auto-grant write UNCONFIRMED — nothing reverted, issuance left redeemed, reconcile by hand:", {
+        userId,
+        milestoneIssuanceId,
+        error: outcome.reason,
+      });
+      return { success: false, error: `grant_unconfirmed_not_reverted: ${outcome.reason}` };
+    }
+    if (outcome.status === "not_written") {
+      const msg = outcome.reason;
       let walletReverted = false;
       try {
         await User.updateOne(

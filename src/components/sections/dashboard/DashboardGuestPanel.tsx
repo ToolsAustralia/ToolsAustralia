@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { Ticket, Gift, ShieldCheck, CreditCard, Store, History, MessageCircle, ArrowRight, ArrowUpRight } from "lucide-react";
 import { QuickTile } from "@/components/ui/QuickTile";
+import { cn } from "@/utils/cn";
+import { CT } from "@/utils/dashboard/tile-colors";
 import { getOneTimePackages } from "@/data/membershipPackages";
 
 // Lowest PUBLIC one-time pack price (guests have no additional-pack access), derived from the
@@ -17,6 +19,15 @@ interface DashboardGuestPanelProps {
   onBuyPackage: () => void;
   /** Membership Streak "Members only" teaser (Build Kit §05) — the ladder as the sell. */
   streakTeaser?: React.ReactNode;
+  /**
+   * Claimable redeemables this guest is holding. A guest never sees QuickActionsGrid (that whole
+   * branch is member-only), so its "Redeem" tile — the only badged signal that a code is waiting —
+   * never reached the two trigger cohorts who are `acct === "none"` by definition (a member who
+   * cancelled, a guest who abandoned checkout). Rendered only when there IS something to claim —
+   * a guest holding nothing is not shown a claim affordance, and still reaches Rewards via the nav
+   * tab. The Explore grid reflows for the fifth tile (see the grid comment below).
+   */
+  redeemCount?: number;
   className?: string;
 }
 
@@ -32,7 +43,7 @@ const MEMBER_BENEFITS = [
  * Guest (no-plan) home body. A one-time package also grants draw entry + catalogue
  * access, so we NEVER gate everything behind membership — two equal CTAs.
  */
-export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPackage, streakTeaser, className }: DashboardGuestPanelProps) {
+export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPackage, streakTeaser, redeemCount = 0, className }: DashboardGuestPanelProps) {
   return (
     <div className={className}>
       <section className="rounded-3xl border border-token bg-surface p-5 shadow-sm">
@@ -88,7 +99,17 @@ export default function DashboardGuestPanel({ drawName, onBecomeMember, onBuyPac
 
       <section className="mt-4">
         <span className="mb-3 block text-[11px] font-bold uppercase tracking-[0.18em] text-muted-token">Explore</span>
-        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+        {/* Four tiles fit four columns; the Redeem tile makes five, and five columns cannot fit a
+            56px QuickTile chip on a 360–375px phone (5 × 64px + gaps > the 339px content width), so
+            forcing grid-cols-5 there clips the last tile. Fall to three columns on mobile instead —
+            3 + 2 — so nothing sits alone on a second row, and go five across from `sm` where there
+            is room. `gap-y-4` matches QuickActionsGrid's own two-row spacing. */}
+        <div className={cn("grid gap-x-2 gap-y-4 sm:gap-x-3", redeemCount > 0 ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-4")}>
+          {redeemCount > 0 && (
+            // CT.gold, not a local hex: this is the SAME tile the member dashboard shows
+            // (QuickActionsGrid's "Redeem"), so it doesn't change appearance if they join later.
+            <QuickTile icon={Gift} label="Redeem" badge={redeemCount} accentHex={CT.gold} href="/my-account/rewards" />
+          )}
           <QuickTile icon={CreditCard} label="Membership" accentHex="#ee0000" href="/my-account/membership" />
           <QuickTile icon={Store} label="Partners" accentHex="#0ea5a5" href="/my-account/rewards" />
           <QuickTile icon={History} label="Past draws" accentHex="#8b5cf6" href="/my-account/draws" />
