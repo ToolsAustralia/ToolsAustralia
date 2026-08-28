@@ -305,8 +305,25 @@ export class RedemptionService {
   static async unredeemMonthlyCouponRedemption(params: {
     userId: string;
     redeemableIssuanceId: string;
+    /**
+     * True when the caller's ledger reversal has ALREADY undone the entries — i.e.
+     * `grants.campaignEntries` was counted into `legacyTotalEntries()` and a scoped
+     * `drawGrants` row removed them from the right draw.
+     *
+     * Without this the refund path reversed the same coupon twice: `accumulatedEntries`
+     * fell by 2x the coupon (and could go negative, since `User.updateOne` skips the
+     * schema's `min: 0`), and the second `removeMajorDrawEntries` ran with NO drawId —
+     * the legacy multi-draw walk that `remove-draw-entries.ts` itself calls "the
+     * historical danger zone", which consumes entries oldest-first and can strip a
+     * DIFFERENT, unrefunded draw. Reproduced end-to-end by
+     * `npm run test:campaign-refund-reversal`.
+     *
+     * The issuance status and `redemptionHistory` row are restored either way — those
+     * are this method's own responsibility and the ledger never touches them.
+     */
+    entriesAlreadyReversed?: boolean;
   }): Promise<{ success: boolean; error?: string }> {
-    const { userId, redeemableIssuanceId } = params;
+    const { userId, redeemableIssuanceId, entriesAlreadyReversed = false } = params;
     if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(redeemableIssuanceId)) {
       return { success: false, error: "invalid_ids" };
     }
@@ -335,13 +352,17 @@ export class RedemptionService {
       await User.updateOne(
         { _id: new mongoose.Types.ObjectId(userId) },
         {
-          $inc: { accumulatedEntries: -entriesAmount },
+          // Only this method can undo the redemption record; the entry counter is the
+          // ledger's job whenever the ledger already counted it.
+          ...(entriesAlreadyReversed ? {} : { $inc: { accumulatedEntries: -entriesAmount } }),
           $pull: { redemptionHistory: { redemptionId } },
         }
       );
 
-      const { removeMajorDrawEntries } = await import("@/utils/draws/remove-draw-entries");
-      await removeMajorDrawEntries(userId, entriesAmount, "bonus-entry-promo");
+      if (!entriesAlreadyReversed) {
+        const { removeMajorDrawEntries } = await import("@/utils/draws/remove-draw-entries");
+        await removeMajorDrawEntries(userId, entriesAmount, "bonus-entry-promo");
+      }
 
       return { success: true };
     } catch (e) {
@@ -472,8 +493,24 @@ export class RedemptionService {
   static async unredeemMilestoneRedemption(params: {
     userId: string;
     milestoneIssuanceId: string;
+    /**
+     * Same contract as the monthly-coupon arm: true when the caller's ledger reversal
+     * already undid the entries.
+     *
+     * Only the CAMPAIGN-CODE milestone flow sets it. That flow stamps
+     * `grants.campaignEntries` + a scoped `drawGrants` row alongside
+     * `campaign.milestoneIssuanceId` (payment-processing.ts), so the refund's first two
+     * steps have already reversed both — repeating them here is the same double-reversal
+     * fixed on the monthly arm.
+     *
+     * The milestone AUTO-GRANT flow (`grants.milestoneIssuanceIds`, written at
+     * payment-processing.ts:777 and reversed by the `milestoneRevoke` step) does NOT
+     * feed those ledger fields, so it leaves this false and this method still owns the
+     * reversal. Defaulting to false is what keeps that path unchanged.
+     */
+    entriesAlreadyReversed?: boolean;
   }): Promise<{ success: boolean; error?: string }> {
-    const { userId, milestoneIssuanceId } = params;
+    const { userId, milestoneIssuanceId, entriesAlreadyReversed = false } = params;
     if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(milestoneIssuanceId)) {
       return { success: false, error: "invalid_ids" };
     }
@@ -492,16 +529,18 @@ export class RedemptionService {
       await User.updateOne(
         { _id: new mongoose.Types.ObjectId(userId) },
         {
-          $inc: { accumulatedEntries: -entriesAmount },
+          ...(entriesAlreadyReversed ? {} : { $inc: { accumulatedEntries: -entriesAmount } }),
           $pull: { redemptionHistory: { redemptionId } },
         }
       );
 
-      const { removeMajorDrawEntries } = await import("@/utils/draws/remove-draw-entries");
-      // Streak auto-grants land in the "streak" bucket; every other milestone
-      // redemption lands in "bonus-entry-promo" — reversal must match the grant.
-      const sourceKey = doc.milestoneType === "streak-months" ? "streak" : "bonus-entry-promo";
-      await removeMajorDrawEntries(userId, entriesAmount, sourceKey);
+      if (!entriesAlreadyReversed) {
+        const { removeMajorDrawEntries } = await import("@/utils/draws/remove-draw-entries");
+        // Streak auto-grants land in the "streak" bucket; every other milestone
+        // redemption lands in "bonus-entry-promo" — reversal must match the grant.
+        const sourceKey = doc.milestoneType === "streak-months" ? "streak" : "bonus-entry-promo";
+        await removeMajorDrawEntries(userId, entriesAmount, sourceKey);
+      }
 
       return { success: true };
     } catch (e) {

@@ -1713,7 +1713,9 @@ async function handlePaymentFailure(paymentIntent: Stripe.PaymentIntent) {
     */
     await Order.findOneAndUpdate(
       { paymentIntentId: paymentIntent.id, status: "pending" },
-      { status: "cancelled", notes: "Payment failed" }
+      // `cancellationReason` is what `finalizeShopOrder` branches on: it must NOT read as
+      // "refunded", because no money was taken here. See models/Order.ts.
+      { status: "cancelled", notes: "Payment failed", cancellationReason: "payment_failed" }
     );
 
     // Extract payment type and details from metadata

@@ -93,6 +93,11 @@ async function main() {
     process.exit(1);
   }
   console.log("\nAll tests passed");
+  // Explicit exit: `@/lib/audit-log` transitively imports `@/lib/auth`, which
+  // opens a Mongo handle that keeps the event loop alive. Without this the suite
+  // prints "All tests passed" and then hangs forever. Same reason as the other
+  // exit(0) suites.
+  process.exit(0);
 }
 
 main();

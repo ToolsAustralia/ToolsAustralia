@@ -14,6 +14,14 @@
 | `npm run test:receipts` | `src/services/admin/__tests__/receipts.test.ts` | Receipts ledger pure logic: `classifyReceiptCategory` (every packageType, the `subscription_cycle` renewal case, the `additional-` split, missing-`packageId` parity with the Mongo `$not` clause); a **lockstep assertion against `classifyAcquisitionCategory`** proving renewals are the ONLY divergence — the thing that makes "Receipts − dashboard == renewals" true; `stripeDashboardUrl` for `pi_` / `invoice_in_` / `cus_` in **both** live and test mode, plus its refusal to guess an unknown prefix and its fail-safe-to-test mode resolution; `deriveReceiptRefund` (none / full / partial, cents→dollars conversion, over-refund clamp, no-payment-id); and CSV shape + quote escaping. |
 | `npm run test:cancellation-analytics` | `src/services/admin/__tests__/cancellationFlowAnalytics.test.ts` | `summarizeCancellationEvents` pure shaper: reason shares, funnel (incl. abandoned = in_progress + >1h), save rate, offers-accepted, past-due exclusion, 90-day retention split (matured vs pending), **per-offer retention split `retention90ByOffer` (Task 21 — same matured/pending cutoff, per-offer totals reconcile with overall, empty-array zeroed guard)**, divide-by-zero guards (empty array, 0-denom save rate) |
 
+| `npm run test:staff-activity` | `src/lib/__tests__/staff-activity.test.ts` | The `StaffActivity` audit-log catalog and `safeLog`'s never-throw contract (including when `connectDB` rejects — an audit-log outage must never fail the action it was recording), plus a pin on the `rewards` area's `view`/`edit`/`delete` action list so a future trim of the area fails loudly. |
+
+**This suite must `process.exit(0)` on success.** It imports `@/lib/audit-log`, which transitively
+pulls in `@/lib/auth` and opens a Mongo handle nothing here closes. Until 2026-08-28 it printed
+`All tests passed` and then hung forever — assertions green, process never returning, `&&` chain
+stuck. The same fix landed on `test:api-auth-permissions`; see
+[auth/testing.md](../auth/testing.md) for the general rule.
+
 `charge-past-due-totals.ts`, `recoverStrandedPastDuePolicy.ts`, `forceChargePastDuePolicy.ts`, `chargeOrRecoverPolicy.ts`, and `cancellationFlowAnalytics.ts`'s `summarizeCancellationEvents` are Stripe-free and Mongoose-free — run with just `tsx`, no env vars needed. So is `test:receipts`: its subject (`src/utils/admin/receipts.ts` + `src/utils/billing/stripeDashboardUrl.ts`) is the deliberately pure half of the Receipts feature, split out so the client can import it without bundling Mongoose — which also makes it unit-testable without a database.
 
 ## Receipts reconciliation (live data)

@@ -31,6 +31,7 @@ export const GET = withNorm(
         additionalOneTimePurchase: pick(stats.revenue.breakdown.additionalOneTimePurchase),
         miniDraw: pick(stats.revenue.breakdown.miniDraw),
         upsell: pick(stats.revenue.breakdown.upsell),
+        shop: pick(stats.revenue.breakdown.shop),
       },
     });
   }

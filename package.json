@@ -316,6 +316,7 @@
     "test:activity-log-keyset": "tsx src/services/admin/__tests__/activity-log-keyset.test.ts",
     "test:stripe-refund-amount": "tsx src/utils/payment/__tests__/stripe-refund-amount.test.ts",
     "test:refund-reversal": "tsx src/utils/payment/__tests__/refund-reversal.test.ts",
+    "test:campaign-refund-reversal": "tsx src/utils/payment/__tests__/campaign-refund-double-reversal.test.ts",
     "test:facebook-ads-insights-service": "tsx src/services/facebook-ads/__tests__/FacebookAdsInsightsService.test.ts",
     "test:facebook-ads-health-verdict": "tsx src/services/facebook-ads-health/__tests__/verdictEngine.test.ts",
     "test:facebook-ads-health-two-window": "tsx src/services/facebook-ads-health/__tests__/twoWindow.test.ts",

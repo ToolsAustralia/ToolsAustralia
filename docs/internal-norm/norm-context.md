@@ -940,7 +940,7 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 
 0d. **`searchTruncated: true` means the numbers are incomplete.** A broad `search` term resolves to at most 1,000 customers, so both `rows` and `totals` become a subset. Say so rather than reporting the figure; re-run with an exact email for a definitive answer.
 
-0e. **Shop rows are structurally supported but currently always empty** — the shop has not launched (0 `Order` documents in production as of 2026-08-17). An empty `shop-order` filter is expected, not an error.
+0e. **Shop rows are live as of 2026-08-27.** The merch shop shipped with the #815–#824 merge, so `shop-order` rows now carry real money and an empty result is a genuine "no merch sold in this range", not the structural blank it was before. (Until 2026-08-27 this section said the shop had not launched and 0 `Order` documents existed — that is no longer true; do not repeat it.) Merch totals include shipping, so a `shop-order` row is not price-comparable with a package row.
 
 ---
 

@@ -93,6 +93,30 @@ vanished from `/v1/major-draw/participants` output while every smoke test stayed
 when a projected shape gains a field, **grep the Norm schema for it** — passing smoke tests prove
 nothing about added keys.
 
+### It shipped anyway: `breakdown.shop` 500'd both dashboard endpoints (2026-08-27 → fixed 2026-08-28)
+
+The forward trap G9 describes landed in production for a day. The merch merge added a required
+`shop: RevenueBucketSchema` to `NormDashboardStatsSchema.revenue.breakdown`
+(`src/lib/internal-norm/schemas/dashboard.ts`) and widened `DashboardStatsService` to produce the
+bucket — but neither Norm route that projects that shape gained the matching line. Both
+`/v1/dashboard/stats` and `/v1/dashboard/revenue-breakdown` therefore failed `ctx.ok()`'s
+`safeParse` and returned `500 response_schema_invalid` on **every** call until the two projections
+were added.
+
+Two things made it invisible:
+
+- **`tsc` was green.** `ctx.ok` is generic `<T>(data: T)`, so the object literal is never checked
+  against the Zod shape — exactly the independence G9 warns about.
+- **The admin sibling was fine.** `/api/admin/dashboard/revenue-breakdown` builds its own object
+  and already had `shop`, so the admin UI showed correct merch revenue while Norm was dark. A
+  working admin tab is **not** evidence that the Norm mirror works.
+
+`NormRevenueBreakdownSchema` is derived (`NormDashboardStatsSchema.shape.revenue.shape.breakdown`),
+so one schema edit silently obligated **two** routes. When a shared or derived schema gains a
+required key, grep every route that builds it — the count is rarely one. This is the concrete case
+CLAUDE.md rule 10 exists to prevent, and the cheap check is `npm run norm:smoke` against a dev
+server, which since G9 exits non-zero on the 500.
+
 ## eslint/rules/index.js now hosts non-Norm rules too (2026-07-19)
 
 The local ESLint plugin registered as `internal-norm` gained `no-eager-stripe` (a payment-perf guardrail — see docs/payment/gotchas.md). The plugin NAMESPACE no longer implies Norm-only content; if more general rules accumulate, renaming the namespace (e.g. `local-rules`) is a sanctioned future cleanup — coordinate with every `eslint.config.mjs` reference when doing so.

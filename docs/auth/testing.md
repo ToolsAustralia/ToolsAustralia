@@ -10,7 +10,19 @@
 | `npm run test:privileged-account` | `src/utils/auth/__tests__/privileged-account.test.ts` — the public registration path can never create or overwrite a staff/admin account; anchors that the staff marker is `roleId`/`userType`, **not** the legacy `role` string. See [gotchas.md](./gotchas.md). |
 | `npm run test:user-setup` | `src/components/modals/UserSetupModal/__tests__/UserSetupModal.test.ts` — server-renders the setup sub-components. Owned by [shared-ui](../shared-ui/), listed here because it is the only automated check on **step 3**, the surface that enforces the verified-contact requirement ([rules.md](./rules.md) R8): it pins the renamed `Step3VerifyContact` and its full prop contract, so dropping a channel-picker prop fails the build rather than silently rendering an empty tab. It does **not** exercise the state machine or the routes. |
 
+| `npm run test:api-auth-permissions` | [`src/lib/__tests__/api-auth-permissions.test.ts`](../../src/lib/__tests__/api-auth-permissions.test.ts) — `hasPermissionInList` presence/absence/empty-list behaviour, and that `LEGACY_ADMIN_ALL` stays the full frozen `PERMISSIONS` array. Pure assertions, but it reaches them through a **dynamic** import of `@/lib/api-auth-permissions`, which is why it needs `.env.local` loaded first. |
+
 All of these are standalone `tsx` scripts (no jest/vitest) — see [infrastructure/testing.md](../infrastructure/testing.md).
+
+**A suite that imports `@/lib/auth` must `process.exit(0)` on success.** `@/lib/auth` opens a Mongo
+handle at module load, and nothing in these scripts closes it, so a suite that simply falls off the
+end of `main()` prints `All tests passed` and then **hangs forever** — the assertions have already
+passed, so the only symptom is a command that never returns and a `&&` chain that never advances.
+`test:api-auth-permissions` did exactly that until 2026-08-28 (as did `test:staff-activity`); both
+now exit explicitly, matching the ~25 other suites that already do. `test:permissions` is the
+contrast case — same directory, no hang, because it uses static imports and never pulls in
+`@/lib/auth`. If you add a suite here that touches auth, add the `exit(0)` or you will hand the next
+person a "stuck" test run with a green message on screen.
 
 ## Manual smoke
 

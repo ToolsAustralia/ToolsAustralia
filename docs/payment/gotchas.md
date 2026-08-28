@@ -503,3 +503,116 @@ attach path is slow and wants attention. See
 **What is NOT covered.** The intent is only recorded for a customer the server can resolve to a real
 account from the checkout object's own metadata. A code applied by someone with no account row could
 never redeem anyway (`resolveCodeForCheckout` refuses it first), so there is nothing to recover.
+
+## A refunded bonus-code purchase reversed its entries twice (live 2026-04-21 → fixed 2026-08-28)
+
+**Exposure window: ~4 months.** Commit `aa2b1257` (2026-04-21) added the `campaignUnredeem` step and
+`campaignEntries` in `legacyTotalEntries` in the same change, so the double existed from that day.
+It was initially mis-dated to the #815–#824 merge (2026-08-27); that merge only made it *more
+frequent*, by launching the Klaviyo-distributed codes. Anyone sizing the damage must scan from
+**April**, not from the merge — the wrong window would have found almost nothing and closed the
+question.
+
+`reverseLedgerBenefits` runs every reverser in order with no short-circuit
+([`reversers/orchestrator.ts`](../../src/utils/payment/reversers/orchestrator.ts)). For a purchase
+carrying a campaign grant, **three** steps touched the same entries:
+
+1. `accumulatedEntriesAndRewardsPoints` — `legacyTotalEntries()` includes
+   `grants.campaignEntries`, so it did `$inc accumulatedEntries: -100`.
+2. `drawEntries` — removed 100 from the draw the ledger names, correctly **scoped** by `drawId`.
+3. `campaignUnredeem` — called `RedemptionService.unredeem*Redemption`, which did
+   `$inc accumulatedEntries: -100` **again** and called `removeMajorDrawEntries` with **no drawId**.
+
+Both consequences were silent:
+
+- A 100-entry code took **200** entries back, and `accumulatedEntries` could go **negative** — the
+  schema's `min: 0` never runs, because both writes use `User.updateOne` and Mongoose skips
+  validators on update by default.
+- The second removal took the drawId-less branch of
+  [`remove-draw-entries.ts`](../../src/utils/draws/remove-draw-entries.ts), which that module itself
+  labels *"the historical danger zone… entries will be consumed from the oldest forward and may
+  decrement an unrelated draw"*. So refunding **this** month's purchase could strip entries a member
+  legitimately earned in a **previous, unrefunded** draw.
+
+**The fix.** The two unredeem methods take `entriesAlreadyReversed`, and the refund path passes it
+whenever `grants.campaignEntries` actually carried the figure. Both campaign arms are covered
+(monthly-coupon and milestone) because both stamp `campaignEntries` + a scoped `drawGrants` row
+alongside the issuance id. The issuance status and the `redemptionHistory` row are still restored
+either way — those are the service's own responsibility and the ledger never touches them.
+
+**What deliberately did NOT change.** The milestone **auto-grant** flow
+(`grants.milestoneIssuanceIds`, written at `payment-processing.ts:777`, reversed by the
+`milestoneRevoke` step) does not feed `campaignEntries` or `drawGrants`, so it leaves the flag at its
+`false` default and still owns its own reversal. Guessing there would have risked the opposite bug —
+a member keeping entries they were refunded for.
+
+**Still open in that area:** `unredeemMilestoneRedemption` never resets the issuance's `redeemed`
+status, and its auto-grant path still calls `removeMajorDrawEntries` **unscoped**. Neither is reachable
+as a double-reversal today, but both are the same latent shape.
+
+Pinned by `npm run test:campaign-refund-reversal`, which drives the REAL `reverseLedgerBenefits` with
+the model statics patched to record writes. It is **mutation-verified**: forcing the flag to `false`
+restores `[-100,-100]` / `1 unscoped` and fails the suite.
+
+## Account takeover: an unauthenticated caller could bind ANY member's Stripe customer (fixed 2026-08-28)
+
+`create-payment-intent` and `create-one-time-purchase` both took `userEmail` from the request
+body, looked the account up with a bare `User.findOne({ email })`, and bound the PaymentIntent to
+its `stripeCustomerId` while stamping `metadata.userId`. **Neither route requires a session.**
+`/api/auth/session-from-payment` (added the same week) derives identity from
+`paymentIntent.customer`, so the two composed into a full takeover:
+
+1. `POST /api/stripe/create-payment-intent` with `{ amount: 100, userEmail: "<member>" }` → 200,
+   `client_secret`, intent bound to that member's `cus_…`.
+2. Confirm it with the **attacker's own** card → `succeeded`, A$1.00.
+3. `POST /api/auth/session-from-payment` with that client secret → a valid sign-in token for the
+   member. `signIn("auto-login", { token })` finishes it.
+
+Reproduced end to end over HTTP against a real server:
+`REPRO_BASE=… npx tsx scripts/smoke-session-from-payment-takeover.ts`. The cost to an attacker was
+one minimum charge and knowledge of an email address.
+
+**Why it was not fixed in the auth route.** `session-from-payment` only *consumed* a false premise.
+Leaving the bind in place would still let an attacker attach their card to a stranger's Stripe
+customer and have a purchase credited to that account. The invariant has to hold where the intent is
+created: **the account a PaymentIntent names must be one its creator controls.**
+
+**Why the obvious fixes are wrong.** Deleting the email lookup regresses the documented EXTRA100
+flow — step 1 registers, step 2 pays with no session, and the campaign-code attach needs a resolved
+account (see "The applied discount code was thrown away at checkout"). Gating on "established
+accounts only" is impossible: the platform is passwordless, so nothing distinguishes a fresh
+registrant from a long-standing member. Requiring the webhook to have granted the payment only
+raises the price from A$1 to one pack.
+
+**The fix** — [`src/utils/payment/checkout-identity.ts`](../../src/utils/payment/checkout-identity.ts),
+the single place that decides. It leans on a property `/api/auth/register` already has: **it refuses
+any email that already has an account** ("Please log in instead"). So a successful registration
+proves the caller just created that account, and a short-lived HttpOnly cookie minted at that moment
+is proof of control. An attacker cannot get one for a victim's email because they cannot register it.
+
+`resolvePurchaseIdentity` returns three outcomes, deliberately not a nullable user:
+
+| Outcome | When | Route behaviour |
+| --- | --- | --- |
+| `bound` | authenticated, or the cookie proves this email | bind the customer, stamp `metadata.userId` |
+| `guest` | the email belongs to **no** account | true guest; the webhook builds the account after payment |
+| `must_authenticate` | the email HAS an account, unproven | **403 `ACCOUNT_EXISTS_LOGIN_REQUIRED`** |
+
+That third outcome matters. Degrading it to `guest` still leaks the victim's address into
+`metadata.userEmail`, which the webhook falls back to when resolving the buyer — so the attacker's
+payment would be attributed to the victim even with the customer binding removed. It discloses
+nothing new, because `/api/auth/register` already answers the same way for the same email.
+
+**Two properties worth preserving if you touch this.** The token's JWT `audience` is
+`tools-australia-checkout`, deliberately NOT the `auto-login` bridge's `tools-australia-users` —
+without that separation a checkout-identity token would itself be a valid sign-in credential. And a
+cookie was chosen over a body field so no client call site can silently forget to send it, and so
+`SameSite=Lax` still delivers it on the top-level GET Stripe uses to return from 3DS.
+
+**Known trade-off:** a legitimate buyer whose 2-hour cookie expires mid-checkout now gets the 403
+and must log in, rather than silently completing as a guest. That is the safe direction, and it is
+the same answer registration would give them.
+
+The smoke script asserts **both** halves — the attack is blocked AND a fresh registrant still binds
+— because blocking the attack by breaking checkout would not be a fix. It exits non-zero if either
+regresses.

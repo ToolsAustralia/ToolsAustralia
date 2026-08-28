@@ -135,6 +135,27 @@ that is the number that picks the provider, not headline price.
 Env required in `.env.local`: `SMS_ENABLED`, `MOBILE_MESSAGE_API_USERNAME`,
 `MOBILE_MESSAGE_API_PASSWORD`, `MOBILE_MESSAGE_SENDER`.
 
+## Vulnerability repros — `smoke-*` scripts that exit 1 while the defect is live (2026-08-28)
+
+Two smoke scripts exist to *prove a defect is real*, and then to serve as its acceptance test. Both
+run the real code — no mocks — against an isolated database and Stripe TEST keys (setup in
+[infrastructure/testing.md](../infrastructure/testing.md#isolated-database-repros-envlocal-is-production)).
+Both **hard-refuse** a non-local `MONGODB_URI` or a live Stripe key.
+
+| Script | Proves | Exit while broken |
+| --- | --- | --- |
+| [`smoke-session-from-payment-takeover.ts`](../../scripts/smoke-session-from-payment-takeover.ts) | `/api/stripe/create-payment-intent` binds a **named member's** `stripeCustomerId` for an unauthenticated caller, and `/api/auth/session-from-payment` then mints that member's session from the resulting client secret. Cost to an attacker: one A$1 charge on their own card, knowing only the email. | `1` + `TAKEOVER SUCCEEDED` |
+| [`smoke-shop-abandoned-intent.ts`](../../scripts/smoke-shop-abandoned-intent.ts) | Superseding a pending shop order leaves its PaymentIntent `requires_payment_method`; paying it captures money, `finalizeShopOrder` returns `already_processed` (no stock, no entries, no receipt) and `refundShopOrder` returns `already_refunded`. | `1` + `MONEY TAKEN, NOTHING DELIVERED` |
+
+**These invert on the fix** — when each defect is closed the script must exit `0`, and the branch
+that closes it should say which one it flipped. Keep them: a repro deleted after the fix is a
+regression waiting to happen, and both are cheap to re-run.
+
+**The takeover repro must go over HTTP.** Calling the route handler in-process throws
+`headers() was called outside a request scope` and the script's own logic then reports the chain as
+safely broken — a false negative that looked exactly like a pass. It now targets `REPRO_BASE`
+(default `http://localhost:3100`).
+
 ## ⚠️ TEMPORARY: MyRewards SSO test harness (REMOVE before merge)
 
 `src/app/dev/rewards-sso/` — a throwaway dev page at **`/dev/rewards-sso`** (404 outside `development`, so it only runs on localhost — never on a deployed build) to manually verify the gated MyRewards SSO hand-off (`POST /api/partner-discount/sso`). **Flagged for removal** — delete the folder when done; the real entry button is part of the new rewards UI. Kept **uncommitted** (local-only) so it can't ship.

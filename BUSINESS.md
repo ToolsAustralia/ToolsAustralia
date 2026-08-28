@@ -592,7 +592,7 @@ Two parallel concepts coexist under this umbrella:
 - **`RedeemableIssuance`** — the unit of bonus entries granted to a user. Payload is **entries only** (`entriesAmount`) — not prizes, partner discounts, or shipping. Scoped by `monthKey`, expires via `expiresAt`. Unique on `(campaignId, userId)`. See [src/models/RedeemableIssuance.ts](src/models/RedeemableIssuance.ts).
 - **`MilestoneReward` + `MilestoneIssuance`** — tier-based grants. `milestoneType` ∈ `spend-amount | entries-gained | loyalty-days`, each with a `threshold` and an `entriesAmount`. Per-user-per-cycle (unique on `milestoneRewardId × userId × achievementCycle`), supports `isRecurring` for repeatable tiers.
 - **Wallet is event-based, not balance-based.** `RedeemablesWalletService` reads `status: "active"` issuances at query time — no aggregate counter on the User.
-- **Full refunds claw back redeemables tied to the refunded payment — redeemed or not.** Milestone issuances granted by the refunded payment are revoked; already-redeemed ones are first un-redeemed (granted entries and draw entries removed) and then revoked ([`MilestoneService.revokeIssuancesFromPaymentEvent`](src/services/milestones/MilestoneService.ts)). A monthly coupon redeemed *on* the refunded purchase is un-redeemed back to `active` (its entries removed). Only reversal steps that **fail** surface in `RefundProcessed.data.reversalIssues[]` for admin attention; partial refunds are recorded as `RefundPartial` with **no** benefit reversal (§9c). See [`docs/rewards-redeemables/rules.md`](docs/rewards-redeemables/rules.md).
+- **Full refunds claw back redeemables tied to the refunded payment — redeemed or not.** Milestone issuances granted by the refunded payment are revoked; already-redeemed ones are first un-redeemed (granted entries and draw entries removed) and then revoked ([`MilestoneService.revokeIssuancesFromPaymentEvent`](src/services/milestones/MilestoneService.ts)). A monthly coupon redeemed *on* the refunded purchase is un-redeemed back to `active` (its entries removed). Only reversal steps that **fail** surface in `RefundProcessed.data.reversalIssues[]` for admin attention; partial refunds are recorded as `RefundPartial` with **no** benefit reversal (§9c). See [`docs/rewards-redeemables/rules.md`](docs/rewards-redeemables/rules.md). **A refund takes those entries back exactly once (corrected 2026-08-28).** From **2026-04-21** (commit `aa2b1257`, which introduced both halves at once) until this date — roughly **four months**, not the one-day window first assumed — refunding a purchase that carried a campaign code reversed its entries **twice** — a 100-entry code removed 200, `accumulatedEntries` could go negative, and the second removal was not scoped to the refunded purchase's draw, so it could strip entries a member had legitimately earned in an **earlier, unrefunded** draw. Both campaign arms (monthly-coupon and milestone) were affected. The ledger now owns the entry reversal and the redemption service only restores the redemption record; the milestone **auto-grant** path is unchanged and still reverses its own. Members refunded in that window may hold understated entry counts — a data check is warranted, separately from this fix. See [`docs/payment/gotchas.md`](docs/payment/gotchas.md).
 - **Purchase-gated coupons need a real in-window purchase EVENT.** A campaign coupon's `purchaseRequirement` (`none` / `membership` / `one-time` / `any`) is enforced by `hasQualifyingPurchase(...)`, and **every leg is an event check bounded by the campaign window `[startsAt, endsAt|now]`**: `membership` needs a subscription **purchased in-window** (`subscription.startDate` — set on join/resubscribe, both charged), and `one-time` / `any` need a one-time package bought in-window. Merely *being* an active member does **not** qualify (2026-07-07 fix: the previous state check let every recipient of an all-active-subscribers campaign with a `membership`/`any` requirement claim instantly with zero purchase — found via the owner's `testpurchase` coupon). A coupon is also **not** redeemable off a lifetime entry balance or an old subscription — the even older `accumulatedEntries === 0` proxy had the same class of hole. The intended flow for existing members is carrying the code **on** a purchase: the webhook redeems it via this same predicate right after the purchase persists. Enforced in lockstep by both `RedemptionService` (the burn) and `RedeemablesWalletService` (the wallet's `isRedeemableNow`; its projection selects the full `subscription` subdoc). Known caveat (accepted): a downgrade also resets `startDate` without a charge. See [src/utils/redeemables/purchase-eligibility.ts](src/utils/redeemables/purchase-eligibility.ts).
 - LIVE end-to-end: admins run campaigns, and users claim coupons from the `/my-account/rewards` claimables surface ([RewardsClaimables](src/components/sections/rewards/RewardsClaimables.tsx) → `POST /api/redeemables/redeem`) — shipped with the 2026-07-02 dashboard-rewards redesign. These §8b surfaces are **not** behind the §8a pause flag (none of the `/api/redeemables/*` routes call `guardRewardsEnabled`); the `rewardsEnabled` flag pauses only the §8a points surfaces — the legacy `/rewards` page and `/api/rewards/*` (503).
 
@@ -863,6 +863,52 @@ All LIVE.
 ## 12. Fraud & risk controls
 
 A real ops concern with admin tooling around it. Authoritative spec: [docs/billing-stripe/architecture.md](docs/billing-stripe/architecture.md).
+
+### 12-pre-b. A shop order and its payment now die together (fixed 2026-08-28)
+
+Retiring a superseded shop order used to leave its Stripe PaymentIntent **payable**. A buyer who
+changed their cart and then paid from the older tab was charged, received nothing — no entries, no
+fulfilment, no receipt — and the admin refund tool reported the order as *already refunded*, so staff
+could not put it right. It was reproduced end to end before being fixed.
+
+The rules now:
+
+- An order is retired **only after** its PaymentIntent is provably cancelled. If the intent cannot be
+  killed, the order stays `pending` rather than becoming an unaccountable liability.
+- `cancelled` carries a **reason** (`stock_loss`, `refunded`, `abandoned`, `payment_failed`). Only the
+  first two mean the customer's money was returned. Nothing may infer a refund from the status alone.
+- If money does land on a retired order — a Stripe-side race, or a pre-2026-08-28 row — it is
+  **automatically refunded in full** and the customer is emailed, rather than kept.
+- The stale-order sweep (`cleanup-abandoned-shop-orders`) cancels intents too. Its list of
+  "can never be paid" states wrongly included four payable ones, including the state every fresh
+  intent starts in.
+
+**Still to correct:** the customer's order history and checkout success page label any `cancelled`
+order "Refund issued", which is now wrong for `abandoned` / `payment_failed` — it tells someone
+money came back when they were never charged. See CUSTOMER.md §Order history.
+
+### 12-pre. Guest checkout must PROVE the email it buys under (closed 2026-08-28)
+
+The two guest purchase endpoints (`create-payment-intent`, `create-one-time-purchase`) accept an
+email without a session — they must, because registering in step 1 does not log anyone in. Until
+2026-08-28 they took that email **on trust**, so anyone who knew a member's address could have a
+PaymentIntent bound to that member's Stripe customer; combined with the new sign-in-after-payment
+step, that yielded a **full account takeover for the price of one minimum charge**. It was
+reproduced end to end before being closed.
+
+The business rules now in force:
+
+- A purchase may act for an existing account only when the buyer is **signed in**, or carries the
+  short-lived proof cookie `/api/auth/register` issues on success (valid 2 hours). That is proof
+  because registration **refuses** any email that already has an account.
+- An unauthenticated buyer naming an email that already has an account is **refused with
+  "Please log in to continue"** rather than allowed through as a guest — otherwise the payment would
+  still be attributed to that account.
+- A genuinely new email is unaffected and still checks out as a guest.
+
+**Consequence to be aware of:** a buyer who sits on the checkout page for more than two hours is
+asked to log in rather than completing silently. Accepted deliberately as the safe direction.
+See [`docs/payment/gotchas.md`](docs/payment/gotchas.md).
 
 ### 12a. The block → allowlist loop
 

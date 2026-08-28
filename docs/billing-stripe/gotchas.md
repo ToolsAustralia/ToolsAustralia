@@ -854,3 +854,20 @@ Since 2026-08-27 the customer's bonus-entry `campaignCode` is written onto the c
 That stamp lands before the confirm, so a fresh retrieve always sees it. Switching either handler to the event payload — or to `parent.subscription_details.metadata`, which is a snapshot of the same thing — reintroduces the exact production defect that fix closed: **the customer sees APPLIED, is charged, and receives nothing, with no error logged anywhere.**
 
 If you are optimizing these calls, the invariant to preserve is "read the object's metadata as of the moment the grant runs", not "avoid a retrieve". Regression cover: `npm run e2e:bonus-code` (all three legs) plus `npm run test:campaign-code-checkout`. See [payment/gotchas.md](../payment/gotchas.md#the-applied-discount-code-was-thrown-away-at-checkout-fixed-2026-08-27).
+
+## The two guest purchase routes must resolve identity through one helper (2026-08-28)
+
+`create-payment-intent` and `create-one-time-purchase` both accept a caller-supplied `userEmail`
+without requiring a session. Both used to resolve it with a bare `User.findOne({ email })`, which
+was an account takeover — see
+[payment/gotchas.md](../payment/gotchas.md#account-takeover-an-unauthenticated-caller-could-bind-any-members-stripe-customer-fixed-2026-08-28).
+
+Both now call `resolvePurchaseIdentity` from
+[`src/utils/payment/checkout-identity.ts`](../../src/utils/payment/checkout-identity.ts) and must
+handle its `must_authenticate` outcome by returning **403 `ACCOUNT_EXISTS_LOGIN_REQUIRED`**.
+
+**If you add another route that takes an email and creates a Stripe customer or PaymentIntent, it
+must go through the same helper.** Two routes shared this hole; a third would reopen it. Do not
+reintroduce an email lookup for identity anywhere in this domain — `create-subscription`,
+`create-one-time-purchase-existing-user` and the shop checkout all require a session and must keep
+doing so.

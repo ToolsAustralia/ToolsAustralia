@@ -79,11 +79,26 @@ export async function refundShopOrder(params: {
   if (!order) return { status: "order_not_found" };
 
   if (order.status === "cancelled") {
-    // The stock-loss path already refunds and sets cancelled. Refunding again would
-    // attempt a second refund against the same PaymentIntent.
-    return { status: "already_refunded", orderNumber: order.orderNumber };
-  }
-  if (!REFUNDABLE.includes(order.status)) {
+    // Only two of the four cancel causes actually returned money. Answering
+    // "already_refunded" for all of them told staff a customer had been made whole when
+    // they had not — the one thing that made the superseded-order bug unrecoverable by
+    // hand. Branch on the recorded reason, not the status.
+    if (order.cancellationReason === "stock_loss" || order.cancellationReason === "refunded") {
+      // These paths already refunded. A second refund against the same PaymentIntent
+      // would fail at Stripe anyway.
+      return { status: "already_refunded", orderNumber: order.orderNumber };
+    }
+    if (order.cancellationReason === "abandoned" || order.cancellationReason === "payment_failed") {
+      // Retired without ever being paid — there is nothing to give back. If money DID
+      // land on one of these, `finalizeShopOrder` refunds it and flips the reason to
+      // `refunded`, so this branch stays honest.
+      return { status: "not_refundable", orderNumber: order.orderNumber };
+    }
+    // Cancelled before `cancellationReason` existed: we cannot prove either way, so fall
+    // through to the refund and let STRIPE be the authority — it rejects a double refund,
+    // which is a far better failure than falsely reporting the customer as repaid.
+    // Deliberately bypasses the REFUNDABLE check below, which excludes `cancelled`.
+  } else if (!REFUNDABLE.includes(order.status)) {
     // `pending` is unpaid — there is nothing to give back.
     return { status: "not_refundable", orderNumber: order.orderNumber };
   }
