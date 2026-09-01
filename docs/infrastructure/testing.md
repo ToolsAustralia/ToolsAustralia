@@ -634,3 +634,9 @@ Two coverage gaps worth knowing, both deliberate:
   can never take that branch — because a bypass leaking into production removes every spend guard.
 - The verification/login **routes** are not covered because they do not exist yet. Design:
   [the verification spec](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+## `test:ad-url-mismatch` added (2026-09-01)
+
+| Script | Kind | Notes |
+|---|---|---|
+| `test:ad-url-mismatch` | pure unit | `src/utils/admin/__tests__/adUrlMismatchCheck.test.ts` (`tsx`, no env/DB). Fences `resolveAdUrlBrands` + `checkAdUrlMismatch` (`src/utils/admin/adUrlMismatchCheck.ts`) — the admin ad-URL mismatch check behind `CampaignTreeTable`'s per-ad warning icon. 18 assertions: the real production case (a STIHL campaign pointed at `/promotions/makita`) flags `mismatch`; the GearWrench-toolbox-on-a-bare-Milwaukee-page case (legitimate — a missing `?toolbox=` is never a finding) stays `ok`; slug and `?toolbox=`/`?toolset=` param forms resolve the same brand set; `unknown://` placeholders and ambiguous (0-or-2+ brand) naming both resolve to `unknown`, never `ok`; multi-URL/carousel ads are `ok` if any URL matches; and a mutation check demonstrates a naive campaign-name-only comparator WOULD flag the GearWrench case while this rule does not. See `docs/admin/frontend.md`, "Ad-URL mismatch check + Ads Manager deep link".
