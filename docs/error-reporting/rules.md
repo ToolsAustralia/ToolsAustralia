@@ -41,8 +41,25 @@ level. Three recurring shapes:
 - **It is a business outcome, not a system fault.** A card decline means the customer needs
   a different card, not that engineering broke something. Detect these with
   `isExpectedPaymentDeclineError(error)` from `error-severity-classifier.ts` rather than
-  matching on message text at the call site — declines are still captured in full by
-  `ErrorLoggingService`, correctly graded `medium`.
+  matching on message text at the call site.
+
+  **Downgrading the log level is only safe where an `ErrorReport` is still written. It is
+  not everywhere.** Check before you quieten one:
+
+  | Path | After the decline branch | Our record of the decline |
+  |---|---|---|
+  | [`/api/stripe/create-one-time-purchase-existing-user`](../../src/app/api/stripe/create-one-time-purchase-existing-user/route.ts) (~L601-610) | falls through to an **unconditional** `ErrorLoggingService.logError` | `ErrorReport`, graded `medium` — queryable in admin |
+  | [`/api/mini-draw/purchase`](../../src/app/api/mini-draw/purchase/route.ts) (~L496-511) | `return NextResponse.json(…, { status: 400 })` **immediately** | **none** — Stripe's dashboard only |
+  | [`/api/upsell/purchase`](../../src/app/api/upsell/purchase/route.ts) (~L663-678) | `return NextResponse.json(…, { status: 400 })` **immediately** | **none** — Stripe's dashboard only |
+
+  The two payment-intent-creation catches sit *above* their route's `ErrorLoggingService`
+  call and return before reaching it, so on those two paths a decline leaves no row in our
+  own systems at all — the `console.warn` is stripped in production and there is nothing
+  else. That is a deliberate accepted trade (Stripe is the system of record for a decline,
+  and declines are high-volume), but it means **this rule does not license quietening a
+  decline on a path with no `ErrorReport` behind it**. If you add a decline branch, either
+  land it above an unconditional `logError` or say in the code comment that Stripe is the
+  only record.
 
 The same applies to a validation rejection: a Zod failure on a signup form is the form
 working, and it answers with a 400. Log the message at `warn`, never the stack at `error`.
