@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { formatInTimeZone } from "date-fns-tz";
 import connectDB from "@/lib/mongodb";
-import { writeSlidingWindow } from "@/services/admin/dashboard-stats/DashboardStatsSnapshotWriter";
+import {
+  writeSlidingWindow,
+  resolveAdChannelRestatementWindowDays,
+} from "@/services/admin/dashboard-stats/DashboardStatsSnapshotWriter";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +50,15 @@ const SLIDING_WINDOW_DAYS = 90;
  * a successful fetch over the stored value, and only PRESERVES the prior value when a provider
  * errors — so a re-run corrects a stale day and can never blank a good one.
  *
+ * ⚠️ ONLY THE NEWEST ~10 DAYS ARE RE-FETCHED FROM THE AD PROVIDERS. All 90 days are still
+ * written (revenue and user counts are local Mongo aggregates and cost no quota), but a day
+ * outside `AD_CHANNEL_RESTATEMENT_WINDOW_DAYS` that already has stored `adChannels` reuses that
+ * stored value instead of calling Meta. 90 days × 3 runs was ~270 Meta calls/day to rewrite
+ * numbers that closed months ago, and it exhausted Meta's per-app hourly quota
+ * ("Application request limit reached") 9–13×/day. A settled day with NO stored value is still
+ * fetched — see `resolveAdChannelsForDate`. The correction described above is unaffected: the
+ * day being corrected is yesterday, comfortably inside the window.
+ *
  * ⚠️ IF YOU MOVE `sync-tiktok-ads`, MOVE THIS TOO — it must stay after it. And do NOT "fix"
  * this by moving the TikTok sync earlier instead: before 14:00 UTC the AEST day has not
  * finished, so an earlier sync would record a genuinely incomplete day rather than a settled
@@ -81,10 +93,19 @@ export async function GET(request: NextRequest) {
     });
 
     const failed = results.filter((r) => !r.ok);
+    // adFetched / adReused are the ONLY visible proof the restatement window is working. If
+    // adFetched creeps back toward `written`, every run is hammering Meta for days that closed
+    // months ago — the shape that exhausted the Marketing API quota ~9–13×/day. `console.log`
+    // is stripped from production builds, so this rides the existing console.error line.
+    const adFetched = results.filter((r) => r.adChannelSource === "fetched").length;
+    const adReused = results.filter((r) => r.adChannelSource === "reused").length;
     console.error("[cron dashboard-stats-daily-snapshot] complete", {
       today: todayKey,
       windowDays: SLIDING_WINDOW_DAYS,
+      adRestatementWindowDays: resolveAdChannelRestatementWindowDays(),
       written: results.length - failed.length,
+      adFetched,
+      adReused,
       failed: failed.length,
     });
 
@@ -92,7 +113,10 @@ export async function GET(request: NextRequest) {
       ok: failed.length === 0,
       today: todayKey,
       windowDays: SLIDING_WINDOW_DAYS,
+      adRestatementWindowDays: resolveAdChannelRestatementWindowDays(),
       written: results.length - failed.length,
+      adFetched,
+      adReused,
       failed: failed.map((f) => ({ date: f.date, error: f.error })),
     });
   } catch (err) {
