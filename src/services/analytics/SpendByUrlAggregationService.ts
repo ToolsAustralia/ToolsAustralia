@@ -202,6 +202,26 @@ export interface SpendByUrlDetailRow {
   rawUrls?: string[];
 }
 
+/**
+ * The minimum an ad has to carry for the ad-URL brand check — naming, destination, spend.
+ *
+ * Deliberately NOT `SpendByUrlDetailRow`: that shape exists to render the drill-down table
+ * (impressions, clicks, cpc, roas, ad format, adset ids) and costs a query per canonical URL to
+ * assemble. The brand-row roll-up needs none of it. See `getAdUrlCheckRows`.
+ */
+export interface AdUrlCheckAdRow {
+  adId: string;
+  /** Authoritative for the check's brand naming; `adName` is consulted only when this names none. */
+  campaignName?: string;
+  adName?: string;
+  /** How this ad's spend is bucketed — the same key `LandingPageMetricsDaily` rows carry. */
+  canonicalUrl?: string;
+  /** Every URL on the creative, query strings INTACT. What the check actually reads (spec B1). */
+  rawUrls?: string[];
+  /** This ad's spend across the window, so a finding can say what it cost. */
+  spendCents: number;
+}
+
 export interface SpendByUrlDetailResult {
   meta: {
     canonicalUrls: string[];
@@ -596,6 +616,89 @@ export class SpendByUrlAggregationService {
         if (fa !== fb) return fa - fb;
         return b.spendCents - a.spendCents;
       });
+  }
+
+  /**
+   * ONE row per ad that ran in the window, carrying only what the ad-URL brand check needs.
+   *
+   * ── Why this exists rather than reusing `getSpendByUrlDetailForCanonicalUrls` ────────────
+   *
+   * The brand table needs a per-BRAND roll-up of the ad-URL check on page load, for every row
+   * at once. The drill-down method above is the wrong tool for that: it is scoped to a set of
+   * canonical URLs, so answering "every brand" means calling it once per brand, and each call
+   * issues one `AdDestination` query PER URL plus a full per-day insights read. That is the
+   * modal's cost, deliberately paid once when a reader opens ONE brand — running it for all of
+   * them on page load would be a straight performance regression.
+   *
+   * This method is account-wide and fixed-cost instead: ONE grouped aggregation (the `$group`
+   * runs in Mongo, so ~30 daily rows per ad collapse before they cross the wire) plus ONE
+   * `AdDestination` read keyed by the ad ids that grouping returned. Two queries per platform
+   * per request, both index-covered ({adAccountId, date} and the {platform, adId} unique key),
+   * regardless of how many brands the table shows.
+   *
+   * `canonicalUrl` is the SAME key `buildLandingPageDailyDocs` buckets spend under, so an ad's
+   * finding lands in exactly the brand row its spend landed in — the two cannot drift apart.
+   *
+   * ⚠️ The `.select()` below MUST keep `rawUrls`. The check reads the raw, query-intact URLs,
+   * never `canonicalUrl` (`canonicalizeLandingUrl` strips the `?toolbox=`/`?toolset=` the check
+   * depends on) — dropping the field would silently make every ad read "unknown". Same footgun
+   * as `collectAdIdsAndDestsForCanonicalUrl` above.
+   */
+  async getAdUrlCheckRows(
+    platform: "meta" | "tiktok",
+    adAccountId: string,
+    since: string,
+    until: string
+  ): Promise<AdUrlCheckAdRow[]> {
+    const InsightsModel = platform === "tiktok" ? TikTokAdInsightsDaily : MetaAdInsightsDaily;
+
+    /**
+     * `$addToSet` rather than `$last`: campaign/ad names are denormalized onto every daily
+     * insights row and can be null on some of them, so "the last one" can be a null even when a
+     * real name exists elsewhere in the window. Collecting the distinct values and taking the
+     * first non-empty in JS reproduces the drill-down's "latest-non-null wins" intent without
+     * paying for a `$sort`. A renamed-mid-window ad yields two values; either resolves the same
+     * brand in practice, and an ambiguous name is "unknown" to the check anyway.
+     */
+    const grouped = await InsightsModel.aggregate<{
+      _id: string;
+      campaignNames: Array<string | null>;
+      adNames: Array<string | null>;
+      spendCents: number;
+    }>([
+      { $match: { adAccountId, date: { $gte: since, $lte: until } } },
+      {
+        $group: {
+          _id: "$adId",
+          campaignNames: { $addToSet: "$campaignName" },
+          adNames: { $addToSet: "$adName" },
+          spendCents: { $sum: "$spendCents" },
+        },
+      },
+    ]).exec();
+
+    const adIds = grouped.map((g) => g._id).filter(Boolean);
+    if (adIds.length === 0) return [];
+
+    const dests = await AdDestination.find({ platform, adAccountId, adId: { $in: adIds } })
+      .select("adId canonicalUrl rawUrls")
+      .lean();
+    const destByAd = new Map(dests.map((d) => [d.adId, d]));
+
+    const firstNamed = (values: Array<string | null>): string | undefined =>
+      values.find((v): v is string => typeof v === "string" && v.trim().length > 0);
+
+    return grouped.map((g) => {
+      const dest = destByAd.get(g._id);
+      return {
+        adId: g._id,
+        campaignName: firstNamed(g.campaignNames ?? []),
+        adName: firstNamed(g.adNames ?? []),
+        canonicalUrl: dest?.canonicalUrl ?? undefined,
+        rawUrls: dest?.rawUrls ?? undefined,
+        spendCents: g.spendCents,
+      };
+    });
   }
 
   /**

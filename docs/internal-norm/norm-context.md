@@ -2864,6 +2864,23 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
 
 `meta.blendedPlatformRevenue: true` warns that under `basis=platform` with `platform=all`, the same purchase may be claimed by both platforms — that revenue and ROAS read high.
 
+**`adUrlIssues` — wrong-brand and typo'd ads hiding inside a row (added 2026-09-01).** A row MAY carry an optional `adUrlIssues` object. It is **absent whenever there is nothing to report**, and that absence covers two different states on purpose: the row is clean, OR none of its ads could be checked at all (no resolved landing URL). **Never read a missing `adUrlIssues` as an all-clear** — say "no issue reported", not "no issues".
+
+```ts
+adUrlIssues?: {
+  mismatchAdCount: number,          // ads NAMED for another brand but landing on this one's page
+  unrecognisedParamAdCount: number, // ads carrying a ?toolbox=/?toolset= value naming no brand (a typo)
+  checkedAdCount: number,           // ads in this row that had a URL to check — the denominator
+  mismatchSpend: number,            // AUD carried by the mismatched ads, weighted like the row's `spend`
+  mismatchBrands: string[],         // e.g. ["stihl"] on a Makita row
+  unrecognisedValues: string[],     // e.g. ["milwakee"]
+}
+```
+
+The two counts are **independent defect classes with different fixes — never add them together**. A mismatch means the campaign/ad naming resolves to one brand and the landing URL positively contradicts it (the real case: `Draw 10 | Sales | STIHL | Sep 2026` spending against `/promotions/makita`, which only showed up as bad Makita ROAS). An unrecognised param means the URL shape is right but the value names nothing, so the landing page silently served its default instead of the toolbox the ad promised. One ad can be both, either, or neither. A missing `?toolbox=` is never a finding.
+
+Computed by `checkAdUrlMismatch` (`src/utils/admin/adUrlMismatchCheck.ts`), the same rule the admin ad drill-down icons use, rolled up through the same lane allocation the row's spend went through. Counts are whole ads even when the row's spend is a fractional toolbox share; only `mismatchSpend` is weighted.
+
 **Data source**: `BrandPerformanceService` (`src/services/analytics/BrandPerformanceService.ts`), the same service the admin Overview card uses. Spend from `LandingPageMetricsDaily` via `SpendByUrlAggregationService`; outcomes from `PaymentEvent`; toolbox mix from `PromoAnalyticsRepository.getToolboxMixByToolsetPage`. Lane bucketing is shared with the Page Analytics toolbox rollup via `src/utils/metrics/brand-lane.ts`, guarded by `npm run test:brand-performance-reconciliation`.
 
 **Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Read-only. Rate limit 10/min. An unconfigured ad platform contributes no spend rather than erroring.

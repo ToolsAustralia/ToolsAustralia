@@ -303,3 +303,100 @@ A bare `/promotions/<toolset>` page has no toolbox in either key, so spend follo
 `BrandPerformanceService` now fetches the mix only when `lane === "toolbox" && basis === "built-prize"`; the pure builder treats an empty mix as "use the page default", so the invariant holds without a second code path. Pinned by `testSpendAndRevenueAreKeyedTheSameWay` in `test:brand-performance`.
 
 ⚠️ **Consequence to read the table with:** under Toolbox × Landing page, every bare-toolset page's spend *and* revenue now sit on that page's default toolbox (today, Milwaukee). That view therefore answers "what did the pages I bought return?", not "which toolbox do buyers want" — the second question is the Built-prize basis, and only it.
+## Ad-URL issue roll-up on brand rows (2026-09-01)
+
+`BrandPerformanceRow` gained an optional `adUrlIssues` — the per-brand roll-up of the ad-URL
+brand check (`checkAdUrlMismatch`, `src/utils/admin/adUrlMismatchCheck.ts`), so the admin Brand
+Performance table can badge a row that is hiding a wrong-brand ad without anyone opening its
+modal. The rendering side is in `docs/admin/frontend.md`.
+
+### Why the ad-level data needed new plumbing
+
+`BrandSpendSource.rows` carry `{ canonicalUrl, spendCents, revenueCents, conversions }` and
+nothing else — **no campaign name, no ad name, no adId**. Spend is aggregated per canonical URL
+by design (`LandingPageMetricsDaily`), so the service literally could not run a check that keys
+off campaign/ad naming. The naming lives one level down, in the per-ad insights rows.
+
+Two shapes were possible; the response was extended rather than adding a second endpoint:
+
+- **Chosen — extend the brand-performance response.** The finding has to land in the *same* row
+  its spend landed in, and the only way to guarantee that is to reuse the same
+  `allocateBrandLanes(canonicalUrl, lane, mixBySlug)` call the spend went through, in the same
+  pass. A separate aggregate would have to be given the same `lane`/`platform`/window/mix inputs
+  and re-derive the allocation — a second copy of the bucketing rule that can drift, plus a
+  second round trip whose freshness could disagree with the table it decorates.
+- **Rejected — a second lightweight request from the card.** Same work, more surface, and it
+  would show badges appearing a beat after the numbers they annotate.
+
+### `SpendByUrlAggregationService.getAdUrlCheckRows` — fixed cost, not per-brand
+
+The obvious reuse (`getSpendByUrlDetailForCanonicalUrls`, what the modal calls) is scoped to a
+set of canonical URLs, so covering every brand means calling it once per brand, and each call
+issues one `AdDestination` query **per URL** plus a full per-day insights read. That is the
+modal's cost, paid deliberately when a reader opens one brand; running it for all of them on page
+load is a straight performance regression.
+
+`getAdUrlCheckRows(platform, adAccountId, since, until)` is account-wide and costs **two queries
+per platform per request**, independent of brand count:
+
+1. a `$group` on `MetaAdInsightsDaily`/`TikTokAdInsightsDaily` (index `{adAccountId, date}`) that
+   collapses ~30 daily rows per ad into one before anything crosses the wire, carrying
+   `campaignNames`/`adNames` (`$addToSet`, so a null on the last day cannot hide a real name
+   present earlier) and summed `spendCents`;
+2. one `AdDestination.find({ platform, adAccountId, adId: { $in } })` on the `{platform, adId}`
+   unique index, `.select("adId canonicalUrl rawUrls")`.
+
+⚠️ **That `.select()` must keep `rawUrls`.** The check reads the raw, query-intact URLs — a
+`?toolbox=`/`?toolset=` selection is stripped from `canonicalUrl` — so dropping the field would
+make every ad silently read "unknown" and no badge would ever appear. Same footgun as
+`collectAdIdsAndDestsForCanonicalUrl`.
+
+Measured on production (2026-09-01, window 2026-08-01→2026-09-01, from a local machine to Atlas):
+Meta 847 ads in ~1.5–2.0s, TikTok 299 ads in ~0.9s — the same order as the `getAggregatedSpendByUrl`
+read already in the request, roughly doubling the spend-side query time. The route's
+`maxDuration` is 60s. The check runs for the **current window only**; the comparison window
+passes `adUrlCheck: false`, since no badge renders for a prior period. The whole block is
+wrapped in a `try/catch` that swallows: like the freshness sync, losing a supplementary badge
+must never blank a table that is correct without it.
+
+### The two units are weighted differently, on purpose
+
+Under `lane=toolbox`, a bare `/promotions/<toolset>` page's spend splits across several toolbox
+rows by weight. The roll-up follows that split for **spend** (`mismatchSpend` is comparable to
+the `spend` cell printed beside it) but **not for counts**: there is no such thing as 0.4 of a
+wrong-brand ad, and a reader who opens the drill-down finds the whole ad sitting there. Each lane
+an ad touches counts it once, whole. Pinned by `testToolboxLaneWeightsSpendButNotAdCounts`.
+
+### Absent, never zeroed
+
+`adUrlIssues` is omitted when a row is clean **and** when none of its ads could be checked (no
+resolved destination — unverifiable, not clean). The two states have nothing true in common, and
+a zeroed object would be a badge-shaped all-clear on ads the check never looked at. Tests:
+`testCleanBrandHasNoIssuesObject`, `testUncheckableAdsProduceNoIssuesAndNoFalseClean`,
+`testMissingAdChecksLeaveEveryRowSilent` (`npm run test:brand-performance`).
+
+### Verified against production
+
+Window 2026-08-01 → 2026-09-01, `lane=toolset`, both platforms, 1,146 ads checked:
+
+| Brand | Spend | Badge |
+|---|---|---|
+| Milwaukee | $53,912.13 | — |
+| **Makita** | $18,377.79 | **mismatch 8/234 ($766.02, `stihl`) · typo 84 (`milwakee`)** |
+| HiKOKI | $6,600.04 | — |
+| Dewalt | $6,034.71 | — |
+| STIHL | $615.32 | — |
+| Ryobi | $119.45 | — |
+| Unattributed | $250.22 | — |
+
+All 8 mismatches are the genuine `Draw 10 | Sales | STIHL | Sep 2026` → `/promotions/makita`
+case, matching the 8 the checker itself found on the same data — the roll-up adds no findings of
+its own and loses none. Under `lane=toolbox` the same 8 land on Milwaukee, which is where that
+page's spend lands under the page-default model.
+
+### Norm mirror
+
+`analytics.brand-performance` exposes `adUrlIssues` too (optional in
+`src/lib/internal-norm/schemas/brand-performance.ts`, spread into the route's projection only
+when present). No PII: counts, AUD, and brand slugs.
+

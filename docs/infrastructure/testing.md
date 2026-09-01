@@ -641,3 +641,31 @@ Two coverage gaps worth knowing, both deliberate:
 | Script | Kind | Notes |
 |---|---|---|
 | `test:ad-url-mismatch` | pure unit | `src/utils/admin/__tests__/adUrlMismatchCheck.test.ts` (`tsx`, no env/DB). Fences `resolveAdUrlBrands` + `checkAdUrlMismatch` + `findUnrecognisedAdUrlParams` (`src/utils/admin/adUrlMismatchCheck.ts`) — the admin ad-URL mismatch check behind `CampaignTreeTable`'s per-ad icons. 27 assertions across two defect classes: (1) brand mismatch — the real production case (a STIHL campaign pointed at `/promotions/makita`) flags `mismatch`; the GearWrench-toolbox-on-a-bare-Milwaukee-page case (legitimate — a missing `?toolbox=` is never a finding) stays `ok`; slug and `?toolbox=`/`?toolset=` param forms resolve the same brand set; `unknown://` placeholders and ambiguous (0-or-2+ brand) naming both resolve to `unknown`, never `ok`; multi-URL/carousel ads are `ok` if any URL matches; a mutation check demonstrates a naive campaign-name-only comparator WOULD flag the GearWrench case while this rule does not. (2) unrecognised param value (added same day after production audit found 84 ads carrying `?toolbox=milwakee`) — a typo'd `?toolbox=`/`?toolset=` value is its own signal (`unrecognisedParamValues`), independent of `verdict`: it surfaces alongside a clean `ok` AND alongside a genuine `mismatch` in the same result, never causes either on its own, treats `?toolbox=cash` (the prize-builder's legitimate opt-out) as clean, and a second mutation check proves the pre-change brand-set resolution alone cannot distinguish a typo'd param from an absent one. See `docs/admin/frontend.md`, "Ad-URL mismatch check + Ads Manager deep link" and its "Second signal" subsection.
+
+## `test:ads-manager-url` added (2026-09-01)
+
+| Script | Kind | Notes |
+|---|---|---|
+| `test:ads-manager-url` | pure unit | `src/utils/admin/__tests__/adsManagerUrl.test.ts` (`tsx`, no env/DB). Fences `buildAdsManagerAdUrl` (`src/utils/admin/adsManagerUrl.ts`) — the admin "Ads Manager" deep link on ad rows in `CampaignTreeTable`. The URL under test is the **owner's own working URL**, copied from a live Ads Manager session on 2026-09-01 and parameterised; the previous shape was assumed, never opened, and landed on a filtered ad list instead of the ad's edit screen. 6 tests: the full URL is reproduced character for character; the path is `/adsmanager/manage/ads/edit/standalone`; the `act_` prefix is stripped and an already-bare id survives; the ad id appears in BOTH `filter_set` and `selected_ad_ids`; Meta's own `filter_set` encoding is preserved exactly (`%1E` record separators, `%22` quotes, **literal** `[`/`]` — asserting `%5B`/`%5D` never appear, because a blanket `encodeURIComponent` would "tidy" the format we know works into one we cannot test); and a missing `business_id` omits the parameter rather than emitting it blank, still yielding a parseable URL with no dangling `&`. There is no way to open Meta from CI, so this test is the only guard against silently regressing the link again. |
+
+Also in this change, `src/services/analytics/__tests__/brand-performance.test.ts`
+(`npm run test:brand-performance`) gained six cases for the per-brand ad-URL issue roll-up — the
+production STIHL-inside-Makita case badges the row; a clean brand and a brand whose ads have no
+resolved destination BOTH produce no badge (and no all-clear); a typo'd `?toolbox=` badges
+independently of the brand check; the toolbox lane weights the reported spend but never the ad
+counts; and missing ad data degrades to silence.
+
+## `FACEBOOK_BUSINESS_ID` / `NEXT_PUBLIC_FACEBOOK_BUSINESS_ID` registered (2026-09-01)
+
+The Meta Business Manager id that owns the ad account, used ONLY to build the admin Ads Manager
+deep link — never for API calls. Server var plus its `NEXT_PUBLIC_` twin, the same pairing
+`src/config/featureFlags.ts` uses; the link is built in a **client** component, so the public one
+is the one that must actually be set. Both are declared in `.env.example`, values set in the main
+folder's `.env.local` and in each worktree's.
+
+⚠️ **Vercel needs it too.** `.env.local` never merges and Vercel is configured independently
+(CLAUDE.md §9) — until `NEXT_PUBLIC_FACEBOOK_BUSINESS_ID` is added there, production renders the
+link without a `business_id`. That degrades rather than breaks (the parameter is omitted and Meta
+resolves the business from the session), but an account belonging to several businesses may land
+the reader on a chooser instead of the ad.
+

@@ -83,6 +83,7 @@
     "test:discount-visit": "tsx src/utils/partner-discounts/__tests__/record-discount-visit.test.ts",
     "test:brand-lane": "tsx src/utils/metrics/__tests__/brand-lane.test.ts",
     "test:ad-url-mismatch": "tsx src/utils/admin/__tests__/adUrlMismatchCheck.test.ts",
+    "test:ads-manager-url": "tsx src/utils/admin/__tests__/adsManagerUrl.test.ts",
     "test:staff-route-access": "tsx src/utils/security/__tests__/staff-route-access.test.ts",
     "test:user-mini-draw-filters": "tsx src/utils/admin/__tests__/user-mini-draw-filters.test.ts",
     "test:brand-performance": "tsx src/services/analytics/__tests__/brand-performance.test.ts",
