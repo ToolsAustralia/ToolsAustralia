@@ -125,8 +125,17 @@ export async function POST(request: NextRequest) {
         }
       );
 
-      // "no_visit_row" is an expected outcome (dedup race, TTL, no landing beacon) — not an error.
-      if (!outcome.recorded && outcome.reason !== "no_visit_row") {
+      // "no_visit_row" (dedup race, TTL, no landing beacon) and "no_anonymous_id" (a visitor
+      // with no `ta_anon_id` cookie — blocked cookies, a privacy browser, a bot) are EXPECTED
+      // outcomes, not errors: there is no row to attach the build to and nothing a fix could
+      // recover. Matches the identical guard in the sibling beacon
+      // (`discount-page-engagement/route.ts`), which excluded both from the start; omitting
+      // "no_anonymous_id" here put ~210 non-events a month into Vercel's error stream.
+      if (
+        !outcome.recorded &&
+        outcome.reason !== "no_visit_row" &&
+        outcome.reason !== "no_anonymous_id"
+      ) {
         console.error("[promo-prize-build] recordPrizeBuild failed:", outcome.reason);
       }
     } catch (error) {

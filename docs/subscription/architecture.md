@@ -55,7 +55,130 @@ Per CLAUDE.md's strict layering:
 | `src/services/subscription/**` | Cancel logic, pause-collection logic, Stripe-ref repair logic. Pure-policy helpers split out for tests. |
 | `src/utils/subscription/**`, `src/utils/membership/**` | Pure helpers (active-package resolution, benefit lookup, downgrade benefit preservation). |
 | `src/models/{User,MembershipPackage,MembershipRenewalCycle,MembershipStatusHistory,ChargeJobLock}.ts` | Mongoose schemas. See [models.md](./models.md). |
-| `src/hooks/use{StripeSubscription,Memberships,ActivePackage,MembershipModal}.ts` | React hooks — read-only views of subscription state. |
+| `src/hooks/use{StripeSubscription,Memberships,ActivePackage}.ts` | React hooks — read-only views of subscription state. |
+| `src/hooks/useMembershipModal.ts` | React hook — modal open/close state; `openModal` / `openModalWithPackageSelectionFirst` also run the subscription-creation gate and `router.push` away when blocked (see below). Not read-only. |
+
+### The modal-open chokepoint owns the subscription gate (2026-09-01)
+
+`useMembershipModal.openModal` / `openModalWithPackageSelectionFirst` call
+`resolveSubscriptionCreationGate` before opening, and `router.push` the member to their
+membership page instead when the answer is no.
+
+The gate covers every call that passes the plan through the function's own argument —
+package cards and the `/membership` abandoned-checkout deep-link both call it that way
+today. It does **not** see a plan set any other way: a caller that does
+`setSelectedPlan(plan)` and then calls `openModal()` with no argument bypasses the check,
+because the gate only reads its own `plan` / `defaultPlan` argument, never `selectedPlan`
+state — by design, so the picker stays reachable for a blocking-sub member buying a
+**pack** (see below). As of 2026-09-01, `MembershipSection.tsx`'s deep-link and global-
+`openMembershipModal`-event handlers and `my-account/page-client.tsx`'s global-event
+handler all pass the plan through the argument, so the gate covers them too. The one
+remaining live instance of the bypass shape is `useMajorDrawEntryCta.ts`'s `openEntryFlow`
+(`setSelectedPlan(correctPlan)` + a bare `openModal()`, ~line 373) — safe today only
+because `correctPlan` there is guaranteed a one-time plan whenever the user has a
+blocking subscription (the gate allows one-time regardless), and can only be a
+subscription plan when the user has none (the gate allows any plan for a non-blocking
+user). That is an invariant of that caller, not of `openModal` itself — re-verify it
+before adding a second caller of this shape.
+
+A plan-less open is deliberately allowed through: the picker is how a member with a
+blocking subscription buys a **pack**, which is permitted. If that same member instead
+picks a SUBSCRIPTION tier from the picker — or the open-time gate above let a
+subscription plan through because `userLoading` was still true when it ran — a second
+check backstops step 2: `stepTwoGate` in
+[`MembershipModal/index.tsx`](../../src/components/modals/MembershipModal/index.tsx#L1253)
+re-runs the same gate immediately before the payment pre-warm fires and redirects
+instead of letting the pre-warm 409 silently.
+
+#### `openModalWithPackageSelectionFirst` does not gate on its `defaultPlan`
+
+`openModalWithPackageSelectionFirst(defaultPlan)` always asks the gate as if the open were
+plan-less (`isSubscriptionPlan: false`), which the gate always allows. `defaultPlan` is the
+tier **we** recommend, parked *behind* the picker so that backing out lands on a real
+package instead of an empty payment step — it is not the member's choice, so it must not
+decide whether they may open the picker at all. Gating on it would have denied `paused` /
+`unpaid` / `past_due` members the pack path from draw-results, the dashboard, and the
+rewards page (all three pass a recommended tier that way), and would have made the two
+global `openMembershipModal` listeners disagree for identical input — `MembershipSection`
+passes `plan ?? undefined` (plan-less → picker opens) while `my-account/page-client.tsx`
+substitutes a tier (would have been blocked).
+
+The step-2 pre-warm backstop guards whatever the member actually **selects** from the
+picker. That is the correct layer: it is the first moment a real choice exists.
+
+The gate call itself is kept rather than dropped, so this stays a single chokepoint — a
+future block that does not depend on the plan type would apply here too.
+
+#### The gate reads state at CALL time, not capture time (fixed 2026-09-01)
+
+**Where the gate's input comes from.** `readGateUser()` in
+[`useMembershipModal.ts`](../../src/hooks/useMembershipModal.ts) reads the user from the
+**query cache** at call time — `queryClient.getQueryData(queryKeys.users.detail(id))` —
+and falls back to the last rendered `userData` when the cache has nothing usable.
+`userLoading` and the user **id** still come from `gateInputsRef`, a ref refreshed every
+render. The selection itself is
+[`selectGateUser`](../../src/utils/subscription/subscription-creation-gate.ts), a pure
+helper fenced by `npm run test:subscription-gate`; the gate's decision logic is untouched.
+
+This was a deterministic bug, not a race. `my-account/membership/page-client.tsx`'s
+past-due tier switch awaits `invalidateQueries(users.detail)` and *then* calls
+`openModal(plan)`. The click had captured `openModal` while the member was — by definition
+— `past_due`. So the gate still read `past_due` and pushed `?open=payment`, even though
+`switchTierPastDue.ts:68` had by then set the subscription to `canceled` and voided its
+invoice: the member landed on a payment sheet for a subscription that no longer existed.
+
+**Why the ref alone did not fix it — this took two attempts.** The first fix moved
+`userData` into a render-assigned ref, on the reasoning that a ref refreshed every render
+is current. It is not, at that call site, because **no render has happened yet**. React
+Query notifies subscribers through `notifyManager`, whose scheduler is
+`systemSetTimeoutZero` — a **macrotask** (`@tanstack/query-core@5.90.2`,
+`build/modern/notifyManager.js:3`) — and React then schedules the render itself on another.
+The continuation after `await invalidateQueries(...)` is a **microtask**, so it runs first
+and the ref still holds `past_due`; the ref catches up one macrotask too late. The **cache**
+is written synchronously before `invalidateQueries` resolves, so it is already current at
+the call. Both sides use the same key, verified: `UserContext` reads `useUserData(userId)` →
+`queryKeys.users.detail(id)` = `["users", id]`, exactly what the switch invalidates.
+
+**The allow-bias is preserved.** A cache miss falls back to the rendered user — it never
+invents a blocking status — and a malformed cache entry is rejected by a runtime type guard
+rather than asserted, so it degrades to the fallback instead of being read as a status the
+gate would act on. A guest, cancelled, expired, or still-loading user is unaffected.
+
+Fixing it at the chokepoint (rather than at that one call site) disarms the same trap for
+every future async caller *through that door*; deferring the `openModal` call at the call
+site would have traded a deterministic bug for a timing race and left the trap armed. Both
+callbacks go through `readGateUser`, so a future block in
+`openModalWithPackageSelectionFirst` inherits the fix. Stable callback identity is a side
+benefit — no consumer relies on it changing, since the hook returns a fresh object literal
+each render anyway.
+
+**The chokepoint was not the only door, and saying otherwise was the first version's
+mistake.** `MembershipModal/index.tsx` calls the gate twice more — the step-2 pre-warm
+backstop and the pre-warm's `onError` fallback — and both read `userData` from
+`useUserContext()` directly, so the backstop could strand a member exactly the same way
+whenever the modal was **already mounted** (it is masked on a first open only because
+`LazyMembershipModal`'s dynamic import outlasts the pending macrotask). Both were pointed at
+the same source; see
+[shared-ui/gotchas.md → Both gate calls in this file read the query CACHE](../shared-ui/gotchas.md).
+**The rule for any new caller:** `resolveSubscriptionCreationGate` must be fed
+`selectGateUser(...)`, never a raw render value — the gate is only as fresh as its input.
+
+**Known limitation: a failed or paused refetch still strands them.** The cache read only
+helps if the invalidate actually **refetches and succeeds**. `refetchQueries` swallows the
+error (`promise = promise.catch(noop)`) and resolves a **paused** query immediately
+(`query.state.fetchStatus === "paused" ? Promise.resolve() : promise`) — both at
+`@tanstack/query-core/build/modern/queryClient.js:175,177`. So if the refetch 500s or the
+member is offline, the `await` resolves normally with `past_due` **still in cache**, the
+gate blocks, and they are stranded exactly as before. The `await` cannot distinguish that
+from success. This is **not a regression** — it is precisely the old behaviour, and the
+server guard remains the real backstop — but it is the case that would still reach a
+customer, so do not read the fix as "cannot happen any more".
+
+A live observer on `["users", id]` is also required: `refetchQueries` filters out disabled
+queries (`queryClient.js:172`), and `useUserData` is `enabled: !!userId`. There is one
+whenever a member is signed in — `UserProvider` mounts `useUserData(userId)` globally in
+[`providers.tsx`](../../src/app/providers.tsx) — and a caller *outside* that provider cannot
+occur, because `useUserContext()` throws there.
 
 ## Source-of-truth split
 

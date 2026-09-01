@@ -516,7 +516,9 @@ Client-side Klaviyo calls — [LoginModal](../../src/components/modals/LoginModa
 
 ## MembershipModal pre-warm toast removed — single actionable toast only
 
-The MembershipModal auto-creates a subscription on open (background pre-warm) so checkout is faster on purchase click. Previously, if a stale `EXISTING_SUBSCRIPTION` (409) was returned during this pre-warm, it would immediately surface an `EXISTING_SUBSCRIPTION` error toast — followed by a second "Active Subscription Found" toast if the user then clicked Purchase. This produced two toasts for a single user action. The pre-warm path now only logs the 409 response and does not show a toast; the single actionable "Active Subscription Found" toast on the purchase-click path is the only one displayed. Its **"Manage Subscription"** action deep-links to **`/my-account?open=subscription`**, which opens the **Manage-membership bottom sheet** on arrival (handled in `my-account/page.tsx`) — not just the dashboard home.
+The MembershipModal auto-creates a subscription on open (background pre-warm) so checkout is faster on purchase click. Previously, if a stale `EXISTING_SUBSCRIPTION` (409) was returned during this pre-warm, it would immediately surface an `EXISTING_SUBSCRIPTION` error toast — followed by a second "Active Subscription Found" toast if the user then clicked Purchase. This produced two toasts for a single user action. The pre-warm path now only logs the 409 response and does not show a toast; the single actionable "Active Subscription Found" toast on the purchase-click path is the only one displayed.
+
+> **Superseded twice since.** (1) The pre-warm's silent branch was restored to a toast on 2026-09-01 — see "MembershipModal step-2 pre-warm is gated, and never fails silently" below for why, and for the narrow duplicate-toast case that replaces the one this entry removed. (2) The purchase-click toast's **"Manage Subscription"** action no longer deep-links to a fixed `/my-account?open=subscription`; it takes its destination from `resolveSubscriptionCreationGate`, so a member in payment recovery lands on the **payment** sheet and everyone else on the **Manage-membership** sheet. Both sheets open on arrival, handled by `my-account/membership/page-client.tsx`.
 
 ## Confirm-time card declines surface the real reason in three modals (2026-07-16)
 
@@ -1516,3 +1518,127 @@ type-size nit for viewport zoom on every iPhone.
 _(The shop's sort control used pattern 2 until 2026-08-28 and now uses pattern 1; no
 component in `src/` currently ships the transparent-select trick, so pattern 2 is
 documented here rather than pointed at a live example.)_
+
+## MembershipModal step-2 pre-warm is gated, and never fails silently (2026-09-01)
+
+The step-2 effect pre-creates the subscription to obtain a card-form client secret. It now
+calls `resolveSubscriptionCreationGate` first: a member with a live membership is toasted
+and redirected instead of pre-warming into a guaranteed 409.
+
+The pre-warm's `EXISTING_SUBSCRIPTION` branch previously logged `console.warn` and showed
+nothing, on the reasoning that the purchase-click handler was "the single source" of the
+message. That reasoning failed in practice — with no client secret the card form never
+renders, so there is frequently no purchase click to make, and the member simply sat at a
+blank payment step. It now shows the same "Active Subscription Found" toast.
+
+**Do not restore the silent branch.** The two call sites do not carry the same
+double-toast guarantee: the step-2 backstop calls `onClose()` and redirects, so it
+closes the modal and the purchase-click handler's own `EXISTING_SUBSCRIPTION` toast
+cannot also fire. The pre-warm's `onError` branch only toasts — it does not close the
+modal — so the purchase-click handler stays reachable and could show a second,
+identical toast if the member clicks purchase anyway. That is an accepted, narrow edge
+case (one duplicate toast, not a silent dead end), not a reason to bring back the
+silent branch.
+
+**All THREE "Active Subscription Found" toasts now route through the gate (2026-09-01,
+review follow-up).** There are three, not two: the two above (both behind the shared
+`showExistingSubscriptionToast` helper in the step-2 effect) plus a **pre-existing** one on
+the purchase-click 409 path much further down `index.tsx` (~L5334). That third one still
+hard-coded `router.push("/my-account/membership?open=subscription")`, so a member in payment
+recovery who reached the purchase-click 409 landed on the plan sheet instead of the payment
+sheet — the exact defect already fixed at the other two sites. Its action now resolves
+`resolveSubscriptionCreationGate` and pushes `gate.redirectTo` (falling back to
+`MANAGE_SUBSCRIPTION_PATH` if the gate reads "allowed", i.e. the status changed since the
+409). Its **body copy is deliberately untouched** — it renders a server-supplied
+`errorMessage`, unlike the other two which carry a fixed string.
+
+If a fourth "you already have a membership" surface ever appears, take the destination from
+the gate. Never hard-code a sheet: which sheet is right depends on whether the member owes
+us money, and that is exactly what the gate already knows.
+
+**Both gate calls in this file read the query CACHE, not the last render (2026-09-01,
+review follow-up).** `stepTwoGate` (the backstop above) and the pre-warm's `onError`
+fallback both used to pass `userData` straight from `useUserContext()`. That is the same
+defect fixed at the open-time chokepoint in `useMembershipModal`, through a different door:
+the past-due tier switch on `/my-account/membership` calls `openModal(plan)` in the
+**microtask** continuation after `await invalidateQueries(users.detail)`, while React Query
+notifies on a **macrotask** and React schedules the render on another — so no render has
+happened and `userData` still says `past_due` for a member the switch already canceled.
+`stepTwoGate` would then fire the toast, `onClose()`, and
+`router.push("?open=payment")`: a payment sheet for a subscription that no longer exists.
+
+**Why it was invisible on the mainline, and when it bites.** `LazyMembershipModal` mounts
+the modal only on first open, and awaiting that dynamic chunk import outlasts the pending
+macrotask — so on a first open, context *is* fresh by the time the effect runs. The bug
+needs the modal **already mounted**: a past-due member buys a one-time pack (allowed by
+design), closes it, then does the tier switch. `currentStep` survives a close, so the
+pre-warm effect can run on the very next commit against the stale value. A "harmless because
+of an unrelated import delay" guard is not a guard.
+
+Both now call `readGateUser()`, which reads
+[`selectGateUser`](../../src/utils/subscription/subscription-creation-gate.ts)'s choice of
+cache-then-rendered-user. It reads through a **ref** (not the effect closure) so the async
+`onError` path also gets the latest rendered user, and it depends only on `[queryClient]`
+so its identity is stable — deliberately, because the pre-warm effect must **not** gain a
+`userData` dependency (see the LATENT COUPLING note at the `stepTwoGate` call site).
+
+The two calls are **not** equally severe, and the difference is worth keeping straight:
+
+| Call | Stale how | What it costs |
+| --- | --- | --- |
+| `stepTwoGate` | No render yet at the microtask continuation | **Strands the member** — toast + `onClose()` + redirect to a sheet for a dead subscription |
+| pre-warm `onError` | Closure captured when the effect ran, now a network round-trip old | **Only picks the toast's destination.** It cannot strand anyone: it runs *because* the server returned `EXISTING_SUBSCRIPTION`, so a blocking subscription provably exists, and it neither closes the modal nor redirects |
+
+The `onError` one was fixed anyway because it is the same one-line change and it decides the
+payment-vs-plan sheet split for a member who may have moved between `past_due` and `active`
+during that round-trip — but it was never the stranding bug, and calling it one would
+overstate it.
+
+## MembershipModal: the on-hold pack-step nudge, and why its render condition is two-part (2026-09-01)
+
+A member in payment recovery (`past_due` / `unpaid`) who opens a one-time / Additional
+pack in `MembershipModal` (`index.tsx`, step 2) now sees an inline amber note above that step's
+content offering reactivation, with the real settle amount and the real entries figure — not a
+blocker, the pack purchase stays fully allowed either way.
+
+**The numbers are not computed here.** `onHoldPreview` is derived via `useMemo(() =>
+getPastDueRenewalPreview((userData ?? {}) as unknown as IUser), [userData])`, immediately below
+the `useUserContext()` destructure. This is the exact same canonical util
+(`src/utils/subscription/past-due-renewal-preview.ts`) that already drives the dashboard's
+past-due note, the resolve sheet/popup (`usePastDueResolve`), the renewal-failure email, and the
+Klaviyo `past_due_renewal_entries` property — so this note can never disagree with any of those
+four surfaces. It returns `{ entries: null, cost: null }` for anyone NOT in payment recovery,
+which is what scopes the note away from active members and guests on its own — no separate auth
+or status check needed.
+
+**The render condition is deliberately two-part: `onHoldPreview.cost != null &&
+!isSubscriptionPlan(activePlan)`.** The first half scopes to payment recovery. The second half
+scopes to a *pack*, not a membership purchase — this same step also renders for a member
+re-subscribing to a membership tier (e.g. via the `switch-tier-past-due` teardown), and that path
+already has its own dedicated recovery UI (`RenewalFailedModal` / `PastDueResolvePanel`); this
+nudge is not meant to double up there. `isSubscriptionPlan` is imported from
+`@/utils/subscription/subscription-creation-gate` — the single source this branch already uses
+to answer "is this plan a membership or a pack" (also used by the subscription-creation gate
+itself) — rather than a second, hand-rolled `activePlan.period === "one-time"` check that could
+drift from it.
+
+**Why the note sits above the whole step-2 block, not pixel-adjacent to the purchase button.**
+The button itself lives in a sibling file, `PaymentStep.tsx`, which this change does not touch.
+The note is rendered as a JSX sibling in `index.tsx`, immediately before `<PaymentStep />`,
+inside the same `{currentStep === 2 && (...)}` block (now wrapped in a fragment). Placement is
+therefore enforced **behaviourally** by the render condition above (it can only ever appear
+while looking at a pack, in payment recovery) rather than by DOM adjacency to the button —
+tightening the condition is what makes "an inline note on the pack step" true regardless of
+which file the button lives in.
+
+**Copy is legally constrained (CLAUDE.md rule 11 / spec §4.5 option A).** The note states the
+membership's *own* price and entries (`onHoldPreview.cost` / `onHoldPreview.entries`) and never
+prints the pack's price or entry count (`activePlan.price` / entries are never read in this
+block) — no "cheaper than this pack" / "more entries than this pack" comparison, since a
+price-against-entries juxtaposition reads as per-entry pricing, which rule 11 bans. Two copy
+variants guard against ever rendering `$null` / `null free entries`: the full sentence only when
+`entries` also resolves, a fallback sentence (no entries figure) otherwise.
+
+See `docs/subscription/frontend.md` → "On-hold nudge on the pack step" for the full write-up
+(this entry is the shared-ui pointer; that one is the fuller cross-reference to the subscription
+docs this feature is otherwise part of).

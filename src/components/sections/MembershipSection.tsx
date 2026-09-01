@@ -23,6 +23,11 @@ import {
   isOneTimeBestValuePlanId,
 } from "@/utils/membership/additional-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
+import { isSubscriptionRecoveryStatus } from "@/utils/integrations/klaviyo/klaviyo-renewal-entries-preview";
+import {
+  resolveSubscriptionCreationGate,
+  isSubscriptionPlan,
+} from "@/utils/subscription/subscription-creation-gate";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import type { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
@@ -128,8 +133,10 @@ function MembershipSection({
   // The host-controlled callback wraps the open in the major-draw purchase gate.
   useMembershipModalDeepLink((plan) => {
     whenGatesOpenElseGateModal(() => {
-      membershipModal.setSelectedPlan(plan);
-      membershipModal.openModal();
+      // Pass the plan so the subscription gate in `openModal` actually sees it.
+      // `setSelectedPlan(plan)` + a bare `openModal()` looks equivalent but bypasses the
+      // gate: a plan-less open is treated as "not a subscription" on purpose.
+      membershipModal.openModal(plan);
     });
   });
 
@@ -161,19 +168,24 @@ function MembershipSection({
       membershipModal.openModalWithPackageSelectionFirst(plan);
       return;
     }
-    if (plan) {
-      membershipModal.setSelectedPlan(plan);
-    }
-    membershipModal.openModal();
+    // Pass the plan through — see the note on the deep-link callback above.
+    membershipModal.openModal(plan ?? undefined);
   });
 
   // Check if user has an active subscription (only for recurring subscription plans)
   const hasActiveSubscription = userData?.subscription?.isActive || false;
   const currentUserSubscription = userData?.subscriptionPackageData;
 
-  // past_due users have a subscription that blocks new purchases - show "Update payment" not "Enter Now"
+  // A member in payment recovery has a subscription that blocks new purchases — show them
+  // "Update payment", not "Enter Now". This is the SAME predicate the gate routes on
+  // (isSubscriptionRecoveryStatus = past_due OR unpaid), so the label a member reads and
+  // the sheet they are delivered to can never disagree. Until 2026-09-01 this tested
+  // past_due alone, so an `unpaid` member read "Enter Now" and was then sent to the
+  // payment sheet anyway.
   const hasBlockingSub = hasBlockingSubscription(userData);
-  const isPastDue = (userData?.subscription as { status?: string } | undefined)?.status === "past_due";
+  const isInPaymentRecovery = isSubscriptionRecoveryStatus(
+    (userData?.subscription as { status?: string } | undefined)?.status
+  );
 
   // Check if user has access to additional packages (subscription OR current draw entries)
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
@@ -297,9 +309,12 @@ function MembershipSection({
 
   // Determine plan hierarchy for subscription management
   const getPlanHierarchy = (plan: LocalMembershipPlan) => {
-    // past_due users cannot purchase - they must resolve payment first
-    const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
-    const cannotPurchaseDueToBlocking = hasBlockingSub && isSubscriptionPlan;
+    // past_due users cannot purchase - they must resolve payment first.
+    // Uses the shared helper (the local name is `planIsSubscription` only because a local
+    // `isSubscriptionPlan` would shadow the import) — one definition of "is this a membership
+    // tier?", so the label logic here can never drift from the gate that routes the click.
+    const planIsSubscription = isSubscriptionPlan(plan);
+    const cannotPurchaseDueToBlocking = hasBlockingSub && planIsSubscription;
 
     if (!hasActiveSubscription || !currentUserSubscription || plan.period === "one-time") {
       return {
@@ -327,32 +342,18 @@ function MembershipSection({
   // Handle plan selection and open modal
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
     whenGatesOpenElseGateModal(() => {
-      const hierarchy = getPlanHierarchy(plan);
-      const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
-
-      // A past-due (blocking) member can't start a new SUBSCRIPTION — resolve payment first → /my-account.
-      // But a one-time/Additional pack is a standalone purchase (no sub conflict; the "Get more entries"
-      // flow already allows it), so only bounce subscription taps — matching useMembershipCardCta.onSelect.
-      if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
-        router.push("/my-account");
-        return;
-      }
-
-      // If user has active subscription and this is a downgrade, navigate to my-account
-      if (hasActiveSubscription && hierarchy.isDowngrade) {
-        router.push("/my-account");
-        return;
-      }
-
-      // If user has active subscription and this is an upgrade, navigate to my-account
-      if (hasActiveSubscription && hierarchy.isUpgrade) {
-        router.push("/my-account");
-        return;
-      }
-
-      // If user has active subscription and this is the current plan, navigate to my-account
-      if (hasActiveSubscription && hierarchy.isCurrent) {
-        router.push("/my-account");
+      // Routing decision comes from the shared gate, NOT from getPlanHierarchy. The
+      // hierarchy flags return all-false whenever the relationship cannot be determined
+      // (missing subscriptionPackageData, an equal-price tier switch, user data still
+      // loading) — and because every bounce was `hasActiveSubscription && hierarchy.isX`,
+      // those cases fell through into the new-subscription flow and 409'd at step 2.
+      // getPlanHierarchy still drives the CTA LABEL below; it just no longer routes.
+      const gate = resolveSubscriptionCreationGate(userData, {
+        isSubscriptionPlan: isSubscriptionPlan(plan),
+        userLoading,
+      });
+      if (!gate.allowed) {
+        router.push(gate.redirectTo);
         return;
       }
 
@@ -589,9 +590,10 @@ function MembershipSection({
     const locked = !hasAccessToAdditionalPackages && !!plan.isAdditional;
     const current = isCurrentSubscription(plan);
     const hierarchy = getPlanHierarchy(plan);
-    const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
+    // Shared helper, same as getPlanHierarchy — local name avoids shadowing the import.
+    const planIsSubscription = isSubscriptionPlan(plan);
     let ctaLabel = "Enter Now";
-    if (hasBlockingSub && isPastDue && isSubscriptionPlan) ctaLabel = "Update payment";
+    if (hasBlockingSub && isInPaymentRecovery && planIsSubscription) ctaLabel = "Update payment";
     else if (hasActiveSubscription && activeTab === "membership") {
       if (hierarchy.isCurrent) ctaLabel = "Current Plan";
       else if (hierarchy.isDowngrade) ctaLabel = `Downgrade to ${getPackageDisplayName(plan)}`;

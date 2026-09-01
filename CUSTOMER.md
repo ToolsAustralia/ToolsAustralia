@@ -354,6 +354,12 @@ This is the most important and non-obvious behaviour. Registering in **step 1** 
 
 The register route even hard-codes `isAuthenticated: false` in its Klaviyo "Started Checkout" event "because this path runs at registration submit and the user is, by definition, a guest" ([register/route.ts:109-111](src/app/api/auth/register/route.ts#L109)). Documented at [docs/auth/gotchas.md:26-50](docs/auth/gotchas.md#L26).
 
+_2026-09-01 — logging only, no change to what a customer sees or to what is stored:_ a
+registration rejected by validation (most often a mistyped email) is logged at `warn` with
+just the field message, instead of `error` with a full `ZodError` dump. **The customer-facing
+behaviour is unchanged** — same 400, same `{ error, field }` body, same inline message on the
+form. See [docs/auth/gotchas.md](docs/auth/gotchas.md).
+
 ### 4a-bis. The step-1 → step-2 bridge is now proven by a cookie (2026-08-28)
 
 Because step 1 does not log anyone in, step 2's payment call has no session and has to name the
@@ -548,6 +554,18 @@ Two distinct paths via `POST /api/stripe/renew-subscription`:
 - **Resubscribe (`create_new`)** — fully-expired member, new charge, new subscription. **Fields:** `subscription.*` reset; `subscription.lastMonthAccumulatedEntries` survives so entry history carries over.
 
 For the branch logic (retry_payment / reactivate / create_new) see [BUSINESS.md §10i](BUSINESS.md).
+
+_2026-09-01 — membership journey:_ a member who already holds a live membership (active / past-due / paused / unpaid / trialing) can no longer walk into the new-subscription checkout by **tapping a membership tier**. Every such tap now sends them to **/my-account/membership** instead: the plan sheet, or the **payment** sheet when they are in payment recovery (past due *or* unpaid — both owe us money, and the plan sheet cannot take it). That covers the `/membership` package cards, the `/membership` Klaviyo abandoned-checkout deep-link, the dashboard’s plan-carrying membership event, and tapping a tier card on any page that hosts the shared package-cards component — home, `/promotions/[slug]`, and 15+ others — which previously dumped a blocked tap on the bare `/my-account` dashboard, a page with no plan controls at all.
+
+**What is deliberately NOT blocked: the package picker.** The “Select Your Package” picker stays open to everyone, including a member with a live membership, because the picker is how they buy a one-time or Additional **pack** — and buying a pack while a membership is live has always been allowed. This is why the promotions hero “Enter Now”, the draw-results CTA, the dashboard “Become a member” event, and the rewards page’s “Become a member” CTA (`/my-account/rewards`) all still open the picker exactly as before, even though each of them parks a recommended tier (Foreman) behind it so that backing out lands on a real package rather than an empty payment step. That parked tier is **our** recommendation, not the customer’s choice, so it does not decide whether they may open the picker. If they then pick a membership tier from the picker, that is a real choice and it is caught one step later, before any payment is set up.
+
+**Two related fixes the same day.** A member in payment recovery who used the **change-tier** control on `/my-account/membership` was being left on a payment sheet for a subscription that had already been closed as part of the switch — they now continue into the ordinary flow for the tier they picked, as intended. And the “Active Subscription Found” message shown if a purchase is refused because a membership already exists now takes them to the **payment** sheet when they are in payment recovery, instead of always the plan sheet. Both of those, and the tier-card button label below, take their answer from the same definition of “in payment recovery”.
+
+_On the change-tier fix, in plain English:_ picking a different tier while past due cannot move the existing membership across, so we **close the old membership first** and then start the new one. For a moment in the middle, the member has just been closed but the screen has not caught up — and the check that decides “do you already have a membership?” was reading the screen’s copy rather than the freshly-saved answer. It saw a member who still owed us money and sent them to **pay for a membership that had just been closed**: a dead end on a real payment screen, with a plan they had already agreed to buy left unbought. The check now reads the freshly-saved answer, so the member goes straight on to paying for the tier they actually chose. **What they see now:** tap a different tier while past due → confirm the switch → the normal join flow for the new tier, in one go. **What they saw before:** the same tap ended on a payment screen that could not complete. If the freshly-saved answer is not available for any reason, the check falls back to the old reading — it will never wrongly *stop* someone from joining, which is the failure that matters more. Guests, cancelled and expired members were never affected.
+
+**And the button now says what it will do.** A membership tier card shown to a member whose payment has failed reads **“Update payment”** instead of “Enter Now”. That was already true for a *past-due* member; it now also covers a member marked *unpaid* — the step past past-due — who until now read “Enter Now” on the card and was taken to the payment screen anyway. Nothing about what they can buy changed, and no new wording was written: this is the label the situation already had, now reaching everyone who is in it.
+
+See [docs/subscription/frontend.md](docs/subscription/frontend.md) for the mechanism. Guests and cancelled/expired members are unaffected and can subscribe exactly as before.
 
 ---
 

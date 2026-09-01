@@ -9,7 +9,12 @@
 **Theme:** `theme={isDark ? "dark" : "light"}` driven by `useHtmlDarkForUi()`. Dark = electric dark background; light = branded vivid card background.
 
 **CTA text:** computed in the section map callback and passed as `ctaLabel` to the card. The mapping is:
-- `"Update payment"` — blocking subscription (`hasBlockingSub`) + `past_due` + subscription-type plan
+- `"Update payment"` — blocking subscription (`hasBlockingSub`) + **in payment recovery** + subscription-type plan.
+  "In payment recovery" is `isSubscriptionRecoveryStatus` (`past_due` **or** `unpaid`) — the same
+  predicate `resolveSubscriptionCreationGate` routes on, so the label and the destination always
+  answer the same question. It tested `past_due` alone until 2026-09-01, which meant an `unpaid`
+  member read "Enter Now" and was then delivered to the payment sheet. `useMembershipCardCta`
+  carries the identical condition in `ctaLabelFor`.
 - `"Current Plan"` / `"Upgrade to …"` / `"Downgrade to …"` — active subscription on membership tab, based on `getPlanHierarchy`
 - `"Enter Now"` — default (new subscription, one-time tab, non-blocking states)
 
@@ -402,9 +407,27 @@ Both branches now carry their destination sheet:
 | Member state | Tap | Goes to |
 |---|---|---|
 | Active subscriber, tier is an upgrade / downgrade / current | subscription tier | `/my-account/membership?open=subscription` → **Manage** sheet |
-| Past due, blocking sub | subscription tier | `/my-account/membership?open=payment` → **Payment** sheet |
-| Past due | one-time / Additional pack | purchase modal (unchanged — a standalone purchase, not a second subscription) |
+| In payment recovery (`past_due` **or** `unpaid`) | subscription tier | `/my-account/membership?open=payment` → **Payment** sheet |
+| In payment recovery | one-time / Additional pack | purchase modal (unchanged — a standalone purchase, not a second subscription) |
 | Everyone else | any | purchase modal (unchanged) |
+
+**2026-09-01 — the mechanism behind the top two rows changed; this hook's own destinations did not.**
+`onSelect` no longer computes those two rows itself from `hierarchy()` / `hasBlockingSub`.
+It calls the same `resolveSubscriptionCreationGate` that
+[`useMembershipModal.openModal` / `openModalWithPackageSelectionFirst`](./architecture.md#the-modal-open-chokepoint-owns-the-subscription-gate-2026-09-01)
+already run — see [shared-ui/patterns.md → Membership CTA: hierarchy labels the button, the
+gate routes the click](../shared-ui/patterns.md#membership-cta-hierarchy-labels-the-button-the-gate-routes-the-click-2026-09-01)
+for why: `hierarchy()`'s flags return all-false whenever the tier relationship can't be
+determined, and every bounce here used to be `hasActiveSubscription && hierarchy.isX`, so
+those undetermined cases fell through into the new-subscription flow and 409'd at the
+payment step. `hierarchy()` still drives `ctaLabelFor`'s **label** — it just no longer
+routes. `MembershipSection.handlePlanSelect` (the shared 15+-page component) got the
+identical MECHANISM change — but **not** an identical destination one. Its four bounces
+previously pushed to the bare `/my-account` dashboard, not `/my-account/membership`, so
+this is a real destination change: every page that renders `MembershipSection` (home,
+`/promotions/[slug]`, and 15+ others) now sends a blocked package-card tap to the
+membership page's manage/payment sheet instead of the bare dashboard. See
+[CUSTOMER.md](../../CUSTOMER.md) for the customer-facing framing.
 
 The `?open=subscription\|payment` deep link is handled by
 [`my-account/membership/page-client.tsx`](../../src/app/(site)/my-account/membership/page-client.tsx),
@@ -413,8 +436,47 @@ there is no second spelling for this. It cleans the URL after opening.
 
 **Every "manage my plan" hand-off now shares that one destination**: this hook, the
 rewards-return banner, the header package-detail modal, and the payment-failure toast in
-MembershipModal. If you add a fifth, point it at `/my-account/membership`, not the dashboard.
-Full before/after table: [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+MembershipModal. Full before/after table: [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+
+**The fifth hand-off, added 2026-09-01, is the modal-open chokepoint itself.** Rather than one
+more call site pointing at `/my-account/membership` by hand, `useMembershipModal.openModal` /
+`openModalWithPackageSelectionFirst` now run `resolveSubscriptionCreationGate` on every call
+across the whole app and redirect there when blocked — see
+[subscription/architecture.md → The modal-open chokepoint owns the subscription gate](./architecture.md#the-modal-open-chokepoint-owns-the-subscription-gate-2026-09-01).
+This hook and `MembershipSection` still bounce early (so a blocked tap never flashes the
+modal open first), but a caller that skips both and opens the modal directly is now caught
+at the chokepoint too. If you add a sixth hand-off, you no longer have to remember to point
+it anywhere — passing the plan through `openModal(plan)` is enough.
+
+**Three corrections to that chokepoint landed the same day (2026-09-01), after review:**
+
+1. **`unpaid` now reaches the payment sheet.** The branch tested `status === "past_due"`
+   alone, so an `unpaid` member was sent to the change-tier sheet — a screen that cannot
+   take their money. It now calls `isSubscriptionRecoveryStatus`
+   ([klaviyo-renewal-entries-preview.ts](../../src/utils/integrations/klaviyo/klaviyo-renewal-entries-preview.ts)),
+   the repo's one owner of the `past_due` + `unpaid` pair, which the on-hold pack-step nudge
+   on this same branch already used. The gate's blocked `reason` is `"recovery"` (was
+   `"past_due"`, which stopped describing what it matched). `npm run test:subscription-gate`
+   now asserts the expected `reason` **and** `redirectTo` for **every** status in the
+   exported `BLOCKING_SUBSCRIPTION_STATUSES`, so a newly added status fails until routed.
+2. **`openModalWithPackageSelectionFirst` no longer gates on its `defaultPlan`** — see
+   [architecture.md → `openModalWithPackageSelectionFirst` does not gate on its
+   `defaultPlan`](./architecture.md#openmodalwithpackageselectionfirst-does-not-gate-on-its-defaultplan).
+3. **The gate reads current state, not captured state** — see
+   [architecture.md → The gate reads state at CALL time](./architecture.md#the-gate-reads-state-at-call-time-not-capture-time-fixed-2026-09-01).
+   This is what unbroke the past-due tier switch on `/my-account/membership`.
+   **It took two attempts, and the first one is a trap worth naming.** Moving `userData`
+   into a ref refreshed every render looks sufficient and is not: the switch calls
+   `openModal(plan)` in the **microtask** continuation after
+   `await invalidateQueries(users.detail)`, while React Query's `notifyManager` schedules
+   its notification on a **macrotask** and React schedules the render on another — so at
+   that call **no render has happened** and the ref still held `past_due`. The gate now
+   reads the **query cache** (`getQueryData(queryKeys.users.detail(id))`), which *is*
+   written synchronously before that await resolves, and falls back to the rendered
+   `userData` on a miss. The selection is a pure helper, `selectGateUser`, unit-tested by
+   `npm run test:subscription-gate` — including a case asserting the stale-ref input still
+   blocks, so the test cannot pass for the wrong reason. **"Refreshed every render" is not
+   "read at call time" when no render has happened yet.**
 
 ## `useStripeSubscription.attachTypedCode` — stamping the applied code before the charge (2026-08-27)
 ## `convertToLocalPlan` carries the catalog id (2026-08-21)
@@ -503,3 +565,48 @@ code into the browser.
 Regression cover: `e2e/specs/membership/bonus-code-journey.spec.ts` (`npm run e2e:bonus-code`) drives
 the real journey — mint, apply at checkout, real Stripe TEST-mode charge — and reads the granted
 entries out of the **draw**, not off the receipt. It was red for this defect before the fix.
+
+## On-hold nudge on the pack step (2026-09-01)
+
+A member in payment recovery who opens a one-time / Additional pack sees an inline amber note on
+`MembershipModal` step 2 offering reactivation, with the real settle amount and the real entries
+figure from **`getPastDueRenewalPreview`**
+([src/utils/subscription/past-due-renewal-preview.ts](../../src/utils/subscription/past-due-renewal-preview.ts))
+— the same source as the dashboard note, the resolve sheet/popup, the renewal-failure email and the
+Klaviyo `past_due_renewal_entries` property (see the "Renewal preview note" entry above). Do not
+recompute either number here; a fifth source can disagree with the other four.
+
+`onHoldPreview` is derived with `useMemo(() => getPastDueRenewalPreview((userData ?? {}) as unknown
+as IUser), [userData])` immediately below the `useUserContext()` destructure in `index.tsx` — the
+same client-side idiom as `RenewalFailedModal/usePastDueResolve.ts`.
+
+**Render condition is two-part: `onHoldPreview.cost != null && !isSubscriptionPlan(activePlan)`.**
+The util returns `{ entries: null, cost: null }` for anyone NOT in payment recovery, which scopes
+the note away from active members and guests on its own. `isSubscriptionPlan` (imported from
+`@/utils/subscription/subscription-creation-gate`, the single source this branch already uses for
+"is this plan a membership or a pack") excludes a membership purchase/reactivation on the same
+step — that path has its own dedicated recovery UI (`RenewalFailedModal` / `PastDueResolvePanel`).
+Together the two conditions make this precisely "an inline note on the pack step" **by behaviour**:
+it can only ever render while looking at a pack, while in payment recovery — regardless of where
+the pack's purchase button lives in the file tree.
+
+It is a **note, not a blocker** — the pack purchase button (rendered by `PaymentStep`, a sibling
+file this change does not touch) stays fully usable either way; the note renders as a JSX sibling
+immediately above `<PaymentStep />` in the same step-2 block. Two copy variants: the full sentence
+when `entries` also resolves, and a fallback sentence (no entries figure) when it doesn't — both
+guard against ever rendering `$null` or `null free entries`.
+
+**Copy is legally constrained** — see spec §4.5 option A and CLAUDE.md rule 11. It states the
+membership's own price and entries; it does **not** print the pack's price or entry count, and does
+**not** author a "cheaper than this pack" / "more entries than this pack" comparison — the reader
+already has the pack's numbers on the same screen, and an explicit price-against-entries
+juxtaposition reads as per-entry pricing, which rule 11 bans outright.
+
+Verified: `npm run test:klaviyo-renewal-preview` (covers the entries figure this renders) and
+`npm run test:subscription-gate` (unaffected — this is a note, not a gate change).
+
+**Fuller shared-ui cross-reference:** [shared-ui/gotchas.md → "MembershipModal: the on-hold
+pack-step nudge, and why its render condition is two-part"](../shared-ui/gotchas.md) — that is the
+doc the domain manifest actually maps `MembershipModal/index.tsx` edits to (its
+`src/components/modals/**` glob, not this domain's more specific modal-folder list), so treat it
+as the primary home and this section as the subscription-side pointer.

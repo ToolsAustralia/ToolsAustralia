@@ -880,3 +880,29 @@ must go through the same helper.** Two routes shared this hole; a third would re
 reintroduce an email lookup for identity anywhere in this domain — `create-subscription`,
 `create-one-time-purchase-existing-user` and the shop checkout all require a session and must keep
 doing so.
+
+## Card declines log at `warn`; real Stripe faults still log at `error` (2026-09-01)
+
+The purchase routes catch every failure from one `try` block, so an issuer decline and a
+genuine Stripe fault used to produce the same `console.error`. A decline is a business
+outcome — the customer needs a different card, not an engineer — and it is already captured
+in full by `ErrorLoggingService` in the `ErrorReport` collection, correctly graded `medium`.
+
+Affected call sites now branch on
+`isExpectedPaymentDeclineError(error)` from
+`src/utils/error-reporting/error-severity-classifier.ts`:
+
+- `stripe/create-one-time-purchase-existing-user`
+- `stripe/pay-failed-invoice`
+- `mini-draw/purchase`, `upsell/purchase` (same helper, their own domains)
+
+**Use the helper — do not match on message text at the call site.** It wraps the existing,
+tested `isExpectedPaymentDecline` (decline_code → known card-error codes → message hints),
+covered by `npm run test:payment-decline-severity`. A false positive here silences a real
+Stripe fault, which is why the test asserts the negative cases (`No such customer`,
+`api_connection_error`, `rate_limit`) as hard as the positive ones.
+
+`pay-failed-invoice` additionally treats `invoice_already_paid` and "this invoice can no
+longer be paid" as expected: **the branches immediately below that catch turn both into a
+200 success response**, so logging them as errors was reporting a failure the endpoint had
+already decided was fine.

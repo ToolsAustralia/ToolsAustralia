@@ -641,3 +641,44 @@ a bug. A separate "reset controls" affordance owns the everything case.
 sheet, it sidesteps `select { font-size: 16px !important }` entirely — see
 [gotchas.md](./gotchas.md). One sort control per breakpoint: the desktop card's `Dropdown` above
 `lg`, the sheet below it. Three lookalike pickers on one page is the state both files started in.
+
+## Membership CTA: hierarchy labels the button, the gate routes the click (2026-09-01)
+
+`getPlanHierarchy` / `hierarchy()` answer "is this tier the member's current / an upgrade /
+a downgrade?" and drive the **button label only**. Routing is decided by
+`resolveSubscriptionCreationGate`.
+
+They were previously the same decision, and that was the bug: the hierarchy flags return
+all-false whenever the relationship cannot be determined, so an equal-price tier switch,
+missing `subscriptionPackageData`, or a click before `UserContext` resolved all fell
+through into the new-subscription checkout and 409'd at the payment step.
+
+A label may be wrong-ish and cost nothing; a wrong route costs a purchase. Keep them
+separate.
+
+**One definition of "is this a membership tier?" (review follow-up, same day).** Both sides
+of that split now call the shared
+[`isSubscriptionPlan`](../../src/utils/subscription/subscription-creation-gate.ts) helper.
+`MembershipSection.tsx` had kept two inline copies of the expression
+(`plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time")`) — one in
+`getPlanHierarchy`, one in `renderPlanCard` — while already importing the helper for its
+routing call. Both are now `const planIsSubscription = isSubscriptionPlan(plan)` (the local
+name only avoids shadowing the import). The substitution is behaviour-identical: the helper
+adds a null-plan guard and `?? ""` on `name`, and `LocalMembershipPlan.name` is a required
+`string`, so no live call can differ. There is now no inline copy left anywhere in `src/`.
+
+That matters precisely because label and route are separate: if the two ever answered
+"is this a subscription?" differently, a card could read **"Update payment"** and still open
+the purchase modal, or read **"Enter Now"** and redirect. The affected labels are
+`"Update payment"` / `"Current Plan"` / `"Upgrade to X"` / `"Downgrade to X"`, rendered by
+this component on 15+ pages, with no component test runner to catch a regression.
+
+**Separate does not mean unrelated: where they overlap, they share the predicate.** The
+`"Update payment"` label and the payment-sheet route are two answers to one question —
+*is this member in payment recovery?* — so both now call `isSubscriptionRecoveryStatus`
+(`past_due` **or** `unpaid`): `MembershipSection.tsx` via `isInPaymentRecovery`, and
+`useMembershipCardCta.ts` via the same name inside `ctaLabelFor`. The label tested
+`past_due` alone until 2026-09-01, so an `unpaid` member read **"Enter Now"** on a tier
+card and was then delivered to the payment sheet. That is this rule's own failure mode
+arriving from the other direction: keeping label and route *independent* is right, keeping
+them *inconsistent* is not. Where one fact drives both, take it from one helper.

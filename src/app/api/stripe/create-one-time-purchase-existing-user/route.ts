@@ -34,6 +34,7 @@ import { extractRequestContext } from "@/utils/tracking/facebook-helpers";
 import { extractTikTokContext } from "@/utils/tracking/tiktok-helpers";
 import { safeEventSourceUrl } from "@/utils/tracking/event-source-url";
 import { CampaignCodeValidationService } from "@/services/redeemables/CampaignCodeValidationService";
+import { isExpectedPaymentDeclineError } from "@/utils/error-reporting/error-severity-classifier";
 
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -597,7 +598,15 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("❌ One-time purchase creation failed:", error);
+    // An issuer decline is an expected outcome, not a fault — `warn` (stripped in
+    // production) keeps it out of the error stream. Anything else still logs as an error.
+    // The `ErrorLoggingService.logError` call below is unconditional either way, so the
+    // decline is still captured with full context in the `ErrorReport` collection.
+    if (isExpectedPaymentDeclineError(error)) {
+      console.warn("One-time purchase declined by issuer:", error);
+    } else {
+      console.error("❌ One-time purchase creation failed:", error);
+    }
 
     // ✅ OPTIMIZED: Auto-log error for monitoring (fire-and-forget, non-blocking)
     // Don't await - let it run in background without blocking error response
