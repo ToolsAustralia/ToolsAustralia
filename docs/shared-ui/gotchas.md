@@ -1556,6 +1556,44 @@ If a fourth "you already have a membership" surface ever appears, take the desti
 the gate. Never hard-code a sheet: which sheet is right depends on whether the member owes
 us money, and that is exactly what the gate already knows.
 
+**Both gate calls in this file read the query CACHE, not the last render (2026-09-01,
+review follow-up).** `stepTwoGate` (the backstop above) and the pre-warm's `onError`
+fallback both used to pass `userData` straight from `useUserContext()`. That is the same
+defect fixed at the open-time chokepoint in `useMembershipModal`, through a different door:
+the past-due tier switch on `/my-account/membership` calls `openModal(plan)` in the
+**microtask** continuation after `await invalidateQueries(users.detail)`, while React Query
+notifies on a **macrotask** and React schedules the render on another — so no render has
+happened and `userData` still says `past_due` for a member the switch already canceled.
+`stepTwoGate` would then fire the toast, `onClose()`, and
+`router.push("?open=payment")`: a payment sheet for a subscription that no longer exists.
+
+**Why it was invisible on the mainline, and when it bites.** `LazyMembershipModal` mounts
+the modal only on first open, and awaiting that dynamic chunk import outlasts the pending
+macrotask — so on a first open, context *is* fresh by the time the effect runs. The bug
+needs the modal **already mounted**: a past-due member buys a one-time pack (allowed by
+design), closes it, then does the tier switch. `currentStep` survives a close, so the
+pre-warm effect can run on the very next commit against the stale value. A "harmless because
+of an unrelated import delay" guard is not a guard.
+
+Both now call `readGateUser()`, which reads
+[`selectGateUser`](../../src/utils/subscription/subscription-creation-gate.ts)'s choice of
+cache-then-rendered-user. It reads through a **ref** (not the effect closure) so the async
+`onError` path also gets the latest rendered user, and it depends only on `[queryClient]`
+so its identity is stable — deliberately, because the pre-warm effect must **not** gain a
+`userData` dependency (see the LATENT COUPLING note at the `stepTwoGate` call site).
+
+The two calls are **not** equally severe, and the difference is worth keeping straight:
+
+| Call | Stale how | What it costs |
+| --- | --- | --- |
+| `stepTwoGate` | No render yet at the microtask continuation | **Strands the member** — toast + `onClose()` + redirect to a sheet for a dead subscription |
+| pre-warm `onError` | Closure captured when the effect ran, now a network round-trip old | **Only picks the toast's destination.** It cannot strand anyone: it runs *because* the server returned `EXISTING_SUBSCRIPTION`, so a blocking subscription provably exists, and it neither closes the modal nor redirects |
+
+The `onError` one was fixed anyway because it is the same one-line change and it decides the
+payment-vs-plan sheet split for a member who may have moved between `past_due` and `active`
+during that round-trip — but it was never the stranding bug, and calling it one would
+overstate it.
+
 ## MembershipModal: the on-hold pack-step nudge, and why its render condition is two-part (2026-09-01)
 
 A member in payment recovery (`past_due` / `unpaid`) who opens a one-time / Additional

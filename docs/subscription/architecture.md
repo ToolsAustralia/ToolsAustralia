@@ -145,17 +145,40 @@ rather than asserted, so it degrades to the fallback instead of being read as a 
 gate would act on. A guest, cancelled, expired, or still-loading user is unaffected.
 
 Fixing it at the chokepoint (rather than at that one call site) disarms the same trap for
-every future async caller; deferring the `openModal` call at the call site would have traded
-a deterministic bug for a timing race and left the trap armed. Both callbacks go through
-`readGateUser`, so a future block in `openModalWithPackageSelectionFirst` inherits the fix.
-Stable callback identity is a side benefit — no consumer relies on it changing, since the
-hook returns a fresh object literal each render anyway.
+every future async caller *through that door*; deferring the `openModal` call at the call
+site would have traded a deterministic bug for a timing race and left the trap armed. Both
+callbacks go through `readGateUser`, so a future block in
+`openModalWithPackageSelectionFirst` inherits the fix. Stable callback identity is a side
+benefit — no consumer relies on it changing, since the hook returns a fresh object literal
+each render anyway.
 
-**Known limitation.** The cache read only helps if the invalidate actually **refetches**,
-which needs a live observer on `["users", id]`. There is one: `UserProvider` mounts
-`useUserData(userId)` globally in [`providers.tsx`](../../src/app/providers.tsx). An async
-caller that opens the modal from a context outside that provider would fall back to the
-rendered user and see the old behaviour.
+**The chokepoint was not the only door, and saying otherwise was the first version's
+mistake.** `MembershipModal/index.tsx` calls the gate twice more — the step-2 pre-warm
+backstop and the pre-warm's `onError` fallback — and both read `userData` from
+`useUserContext()` directly, so the backstop could strand a member exactly the same way
+whenever the modal was **already mounted** (it is masked on a first open only because
+`LazyMembershipModal`'s dynamic import outlasts the pending macrotask). Both were pointed at
+the same source; see
+[shared-ui/gotchas.md → Both gate calls in this file read the query CACHE](../shared-ui/gotchas.md).
+**The rule for any new caller:** `resolveSubscriptionCreationGate` must be fed
+`selectGateUser(...)`, never a raw render value — the gate is only as fresh as its input.
+
+**Known limitation: a failed or paused refetch still strands them.** The cache read only
+helps if the invalidate actually **refetches and succeeds**. `refetchQueries` swallows the
+error (`promise = promise.catch(noop)`) and resolves a **paused** query immediately
+(`query.state.fetchStatus === "paused" ? Promise.resolve() : promise`) — both at
+`@tanstack/query-core/build/modern/queryClient.js:175,177`. So if the refetch 500s or the
+member is offline, the `await` resolves normally with `past_due` **still in cache**, the
+gate blocks, and they are stranded exactly as before. The `await` cannot distinguish that
+from success. This is **not a regression** — it is precisely the old behaviour, and the
+server guard remains the real backstop — but it is the case that would still reach a
+customer, so do not read the fix as "cannot happen any more".
+
+A live observer on `["users", id]` is also required: `refetchQueries` filters out disabled
+queries (`queryClient.js:172`), and `useUserData` is `enabled: !!userId`. There is one
+whenever a member is signed in — `UserProvider` mounts `useUserData(userId)` globally in
+[`providers.tsx`](../../src/app/providers.tsx) — and a caller *outside* that provider cannot
+occur, because `useUserContext()` throws there.
 
 ## Source-of-truth split
 

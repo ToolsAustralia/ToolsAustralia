@@ -60,6 +60,7 @@ import {
 } from "@/utils/payment/typed-code-at-checkout";
 import {
   resolveSubscriptionCreationGate,
+  selectGateUser,
   MANAGE_SUBSCRIPTION_PATH,
   isSubscriptionPlan,
 } from "@/utils/subscription/subscription-creation-gate";
@@ -674,6 +675,39 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
   const queryClient = useQueryClient();
 
+  /**
+   * The user the two gate calls below judge: the query-cache entry if there is one, else the
+   * last rendered `userData`. Same source and same fallback semantics as the open-time
+   * chokepoint in `useMembershipModal` — see `selectGateUser`
+   * (utils/subscription/subscription-creation-gate.ts) for why the cache is the only source
+   * that is current at an `await invalidateQueries(...)` continuation.
+   *
+   * WHY IT IS NEEDED HERE TOO. Fixing the chokepoint alone does not cover this file. On the
+   * mainline this is harmless: `LazyMembershipModal` mounts only on first open, and awaiting
+   * that dynamic chunk import outlasts React Query's pending macrotask, so context is fresh
+   * by the time this effect first runs. It bites when the modal is ALREADY MOUNTED — a
+   * past-due member buys a one-time pack (allowed by design), closes it, then does the tier
+   * switch. `currentStep` survives a close, so the pre-warm effect can run on the very next
+   * commit still reading `past_due`, and strand them on `?open=payment` for a subscription
+   * the switch had already canceled: the same defect as the chokepoint, through another door.
+   *
+   * Reads through a REF rather than the closure so the async `onError` path gets the latest
+   * rendered user too, and depends only on `[queryClient]` (stable) so its identity never
+   * changes. That last part matters: the pre-warm effect deliberately does NOT depend on
+   * `userData` (see the LATENT COUPLING note at the `stepTwoGate` call), and this must not
+   * quietly make it.
+   */
+  const gateUserRef = useRef(userData);
+  gateUserRef.current = userData;
+  const readGateUser = useCallback(() => {
+    const renderedUser = gateUserRef.current;
+    const userId = renderedUser?._id;
+    return selectGateUser(
+      userId ? queryClient.getQueryData(queryKeys.users.detail(userId)) : undefined,
+      renderedUser
+    );
+  }, [queryClient]);
+
   const invalidateUserCaches = useCallback(
     (userId: string) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(userId) });
@@ -1282,7 +1316,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         // focus (useUserQueries.ts `useUserData`, refetchOnWindowFocus: true), so adding
         // "incomplete" to that list would start evicting members mid-checkout who are
         // holding a live client secret. Check both before changing either.
-        const stepTwoGate = resolveSubscriptionCreationGate(userData, {
+        const stepTwoGate = resolveSubscriptionCreationGate(readGateUser(), {
           isSubscriptionPlan: true,
           userLoading: false,
         });
@@ -1355,7 +1389,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             // came here to pay us, and sending them to the wrong sheet defeats the point
             // of that split. Fall back to MANAGE_SUBSCRIPTION_PATH only if the gate now
             // reads "allowed" (status changed since this pre-warm fired).
-            const fallbackGate = resolveSubscriptionCreationGate(userData, {
+            const fallbackGate = resolveSubscriptionCreationGate(readGateUser(), {
               isSubscriptionPlan: true,
               userLoading: false,
             });
