@@ -641,3 +641,17 @@ a bug. A separate "reset controls" affordance owns the everything case.
 sheet, it sidesteps `select { font-size: 16px !important }` entirely — see
 [gotchas.md](./gotchas.md). One sort control per breakpoint: the desktop card's `Dropdown` above
 `lg`, the sheet below it. Three lookalike pickers on one page is the state both files started in.
+
+## Membership CTA: hierarchy labels the button, the gate routes the click (2026-09-01)
+
+`getPlanHierarchy` / `hierarchy()` answer "is this tier the member's current / an upgrade /
+a downgrade?" and drive the **button label only**. Routing is decided by
+`resolveSubscriptionCreationGate`.
+
+They were previously the same decision, and that was the bug: the hierarchy flags return
+all-false whenever the relationship cannot be determined, so an equal-price tier switch,
+missing `subscriptionPackageData`, or a click before `UserContext` resolved all fell
+through into the new-subscription checkout and 409'd at the payment step.
+
+A label may be wrong-ish and cost nothing; a wrong route costs a purchase. Keep them
+separate.

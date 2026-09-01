@@ -250,8 +250,9 @@ export default function MyAccountPage() {
           membershipModal.openModalWithPackageSelectionFirst(plan ?? getRecommendedSubscriptionPlan());
           return;
         }
-        membershipModal.setSelectedPlan(plan);
-        membershipModal.openModal();
+        // Pass the plan through so the subscription gate sees it (a bare openModal()
+        // is treated as "not a subscription" and would skip the check).
+        membershipModal.openModal(plan);
       });
     };
 

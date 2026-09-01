@@ -372,6 +372,11 @@ export function useMajorDrawEntryCta(): UseMajorDrawEntryCtaResult {
           if (correctPlan) {
             membershipModal.setSelectedPlan(correctPlan);
             membershipModal.openModal();
+          } else if (hasBlockingSubscription(userData)) {
+            // A member with a live subscription must never land behind a RECOMMENDED
+            // SUBSCRIPTION plan — that is the 409 path. With no one-time plan resolved
+            // yet, open the picker with nothing pre-selected so they can choose a pack.
+            membershipModal.openModalWithPackageSelectionFirst();
           } else {
             // No concrete one-time plan resolved yet → let the user pick, with the recommended
             // subscription behind the picker so there is never an empty payment step.

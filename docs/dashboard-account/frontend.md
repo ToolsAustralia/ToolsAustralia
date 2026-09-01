@@ -35,6 +35,18 @@
 > (`selectedPlan || getHeavyDutyPack()`); `MembershipSection`'s plan-less listener branch still bare-opens
 > (pre-existing, A/B-configured surface — flagged, not touched).
 
+> **The plan-carrying branch of this same listener also bypassed the subscription gate (2026-09-01, closed).**
+> `handleOpenMembershipModal`’s non-picker branch (`event.detail.plan` truthy, `packageSelectionFirst` falsy) used
+> to do `membershipModal.setSelectedPlan(plan); membershipModal.openModal();` — a plan-less `openModal()` reads as
+> "not a subscription" by design (see [subscription/architecture.md → The modal-open chokepoint owns the
+> subscription gate](../subscription/architecture.md#the-modal-open-chokepoint-owns-the-subscription-gate-2026-09-01)),
+> so this call silently skipped `resolveSubscriptionCreationGate` even though a plan was already known. Now it
+> passes the plan straight through: `membershipModal.openModal(plan)`. **No live dispatcher into this branch
+> changes behaviour today** — every one either sends a one-time pack (gate always allows) or fires while the
+> member has no blocking subscription (also allowed); see [subscription/frontend.md](../subscription/frontend.md)
+> for the full trace, including the one dashboard-CTA case that *does* change (the picker fallback in
+> `useMajorDrawEntryCta`, already gated since Task 2 via the picker-first branch above — not this one).
+
 > **Rewards page: locked-coupon unlock routing (2026-07-06):** `my-account/rewards/page.tsx` wires
 > `RewardsClaimables onUnlock={onUnlockCoupon}` — a locked purchase-required coupon opens the qualifying
 > purchase flow with the code carried: `membership`-required → `membershipModal.openModal()` (membership

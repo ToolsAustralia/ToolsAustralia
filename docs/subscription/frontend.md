@@ -406,6 +406,19 @@ Both branches now carry their destination sheet:
 | Past due | one-time / Additional pack | purchase modal (unchanged — a standalone purchase, not a second subscription) |
 | Everyone else | any | purchase modal (unchanged) |
 
+**2026-09-01 — the mechanism behind the top two rows changed, the destinations did not.**
+`onSelect` no longer computes those two rows itself from `hierarchy()` / `hasBlockingSub`.
+It calls the same `resolveSubscriptionCreationGate` that
+[`useMembershipModal.openModal` / `openModalWithPackageSelectionFirst`](./architecture.md#the-modal-open-chokepoint-owns-the-subscription-gate-2026-09-01)
+already run — see [shared-ui/patterns.md → Membership CTA: hierarchy labels the button, the
+gate routes the click](../shared-ui/patterns.md#membership-cta-hierarchy-labels-the-button-the-gate-routes-the-click-2026-09-01)
+for why: `hierarchy()`'s flags return all-false whenever the tier relationship can't be
+determined, and every bounce here used to be `hasActiveSubscription && hierarchy.isX`, so
+those undetermined cases fell through into the new-subscription flow and 409'd at the
+payment step. `hierarchy()` still drives `ctaLabelFor`'s **label** — it just no longer
+routes. `MembershipSection.handlePlanSelect` (the shared 15+-page component) got the
+identical change.
+
 The `?open=subscription\|payment` deep link is handled by
 [`my-account/membership/page-client.tsx`](../../src/app/(site)/my-account/membership/page-client.tsx),
 which mirrors the dashboard's existing handler and reuses its **exact** param vocabulary —
@@ -413,8 +426,17 @@ there is no second spelling for this. It cleans the URL after opening.
 
 **Every "manage my plan" hand-off now shares that one destination**: this hook, the
 rewards-return banner, the header package-detail modal, and the payment-failure toast in
-MembershipModal. If you add a fifth, point it at `/my-account/membership`, not the dashboard.
-Full before/after table: [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+MembershipModal. Full before/after table: [dashboard-account/frontend.md](../dashboard-account/frontend.md).
+
+**The fifth hand-off, added 2026-09-01, is the modal-open chokepoint itself.** Rather than one
+more call site pointing at `/my-account/membership` by hand, `useMembershipModal.openModal` /
+`openModalWithPackageSelectionFirst` now run `resolveSubscriptionCreationGate` on every call
+across the whole app and redirect there when blocked — see
+[subscription/architecture.md → The modal-open chokepoint owns the subscription gate](./architecture.md#the-modal-open-chokepoint-owns-the-subscription-gate-2026-09-01).
+This hook and `MembershipSection` still bounce early (so a blocked tap never flashes the
+modal open first), but a caller that skips both and opens the modal directly is now caught
+at the chokepoint too. If you add a sixth hand-off, you no longer have to remember to point
+it anywhere — passing the plan through `openModal(plan)` is enough.
 
 ## `useStripeSubscription.attachTypedCode` — stamping the applied code before the charge (2026-08-27)
 ## `convertToLocalPlan` carries the catalog id (2026-08-21)

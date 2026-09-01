@@ -23,6 +23,10 @@ import {
   isOneTimeBestValuePlanId,
 } from "@/utils/membership/additional-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
+import {
+  resolveSubscriptionCreationGate,
+  isSubscriptionPlan,
+} from "@/utils/subscription/subscription-creation-gate";
 import PackageInclusionsExpanded from "@/components/modals/PackageInclusionsSlideUp";
 import type { VariantConfig } from "@/models/ab-testing/Variant";
 import { useVariantContext } from "@/components/ab-testing/VariantProvider";
@@ -128,8 +132,10 @@ function MembershipSection({
   // The host-controlled callback wraps the open in the major-draw purchase gate.
   useMembershipModalDeepLink((plan) => {
     whenGatesOpenElseGateModal(() => {
-      membershipModal.setSelectedPlan(plan);
-      membershipModal.openModal();
+      // Pass the plan so the subscription gate in `openModal` actually sees it.
+      // `setSelectedPlan(plan)` + a bare `openModal()` looks equivalent but bypasses the
+      // gate: a plan-less open is treated as "not a subscription" on purpose.
+      membershipModal.openModal(plan);
     });
   });
 
@@ -161,10 +167,8 @@ function MembershipSection({
       membershipModal.openModalWithPackageSelectionFirst(plan);
       return;
     }
-    if (plan) {
-      membershipModal.setSelectedPlan(plan);
-    }
-    membershipModal.openModal();
+    // Pass the plan through — see the note on the deep-link callback above.
+    membershipModal.openModal(plan ?? undefined);
   });
 
   // Check if user has an active subscription (only for recurring subscription plans)
@@ -327,32 +331,18 @@ function MembershipSection({
   // Handle plan selection and open modal
   const handlePlanSelect = (plan: LocalMembershipPlan) => {
     whenGatesOpenElseGateModal(() => {
-      const hierarchy = getPlanHierarchy(plan);
-      const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
-
-      // A past-due (blocking) member can't start a new SUBSCRIPTION — resolve payment first → /my-account.
-      // But a one-time/Additional pack is a standalone purchase (no sub conflict; the "Get more entries"
-      // flow already allows it), so only bounce subscription taps — matching useMembershipCardCta.onSelect.
-      if (hasBlockingSub && isPastDue && isSubscriptionPlan) {
-        router.push("/my-account");
-        return;
-      }
-
-      // If user has active subscription and this is a downgrade, navigate to my-account
-      if (hasActiveSubscription && hierarchy.isDowngrade) {
-        router.push("/my-account");
-        return;
-      }
-
-      // If user has active subscription and this is an upgrade, navigate to my-account
-      if (hasActiveSubscription && hierarchy.isUpgrade) {
-        router.push("/my-account");
-        return;
-      }
-
-      // If user has active subscription and this is the current plan, navigate to my-account
-      if (hasActiveSubscription && hierarchy.isCurrent) {
-        router.push("/my-account");
+      // Routing decision comes from the shared gate, NOT from getPlanHierarchy. The
+      // hierarchy flags return all-false whenever the relationship cannot be determined
+      // (missing subscriptionPackageData, an equal-price tier switch, user data still
+      // loading) — and because every bounce was `hasActiveSubscription && hierarchy.isX`,
+      // those cases fell through into the new-subscription flow and 409'd at step 2.
+      // getPlanHierarchy still drives the CTA LABEL below; it just no longer routes.
+      const gate = resolveSubscriptionCreationGate(userData, {
+        isSubscriptionPlan: isSubscriptionPlan(plan),
+        userLoading,
+      });
+      if (!gate.allowed) {
+        router.push(gate.redirectTo);
         return;
       }
 

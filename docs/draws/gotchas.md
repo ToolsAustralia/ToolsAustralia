@@ -342,3 +342,11 @@ client is unchanged either way, so the buyer-facing behaviour is identical.
 
 Rationale and the shared helper's contract live in
 [billing-stripe gotchas](../billing-stripe/gotchas.md).
+
+## The entry CTA never pre-selects a subscription for a member who has one (2026-09-01)
+
+`useMajorDrawEntryCta` diverts a member with a blocking subscription to a one-time pack.
+Its fallback — when no one-time plan has resolved yet — used to open the picker behind
+`getRecommendedSubscriptionPlan()`, putting exactly the member it had just diverted back
+in front of a membership tier. It now opens the picker with nothing pre-selected for that
+member. Guests are unaffected.
