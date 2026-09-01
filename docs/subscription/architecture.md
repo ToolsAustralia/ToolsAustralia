@@ -69,12 +69,17 @@ package cards and the `/membership` abandoned-checkout deep-link both call it th
 today. It does **not** see a plan set any other way: a caller that does
 `setSelectedPlan(plan)` and then calls `openModal()` with no argument bypasses the check,
 because the gate only reads its own `plan` / `defaultPlan` argument, never `selectedPlan`
-state. Three live call sites still use that bypass shape today (`MembershipSection.tsx`'s
-deep-link and global-`openMembershipModal`-event handlers, `my-account/page-client.tsx`'s
-global-event handler) — **Task 4 converts them** to pass the plan through the argument,
-closing the gap. It is not exploitable today (the server still rejects the create), but
-neither this doc nor the code comment should claim more coverage than the code actually
-has.
+state — by design, so the picker stays reachable for a blocking-sub member buying a
+**pack** (see below). As of 2026-09-01, `MembershipSection.tsx`'s deep-link and global-
+`openMembershipModal`-event handlers and `my-account/page-client.tsx`'s global-event
+handler all pass the plan through the argument, so the gate covers them too. The one
+remaining live instance of the bypass shape is `useMajorDrawEntryCta.ts`'s `openEntryFlow`
+(`setSelectedPlan(correctPlan)` + a bare `openModal()`, ~line 373) — safe today only
+because `correctPlan` there is guaranteed a one-time plan whenever the user has a
+blocking subscription (the gate allows one-time regardless), and can only be a
+subscription plan when the user has none (the gate allows any plan for a non-blocking
+user). That is an invariant of that caller, not of `openModal` itself — re-verify it
+before adding a second caller of this shape.
 
 A plan-less open is deliberately allowed through: the picker is how a member with a
 blocking subscription buys a **pack**, which is permitted. A dedicated pre-warm backstop

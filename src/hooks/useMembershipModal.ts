@@ -44,16 +44,20 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
    */
   const openModal = useCallback(
     (plan?: LocalMembershipPlan) => {
-      // Gate covers every call that passes the plan through THIS function's own argument
-      // — package cards and the /membership deep-link do that today. It does NOT see a
-      // plan set any other way: a caller that does `setSelectedPlan(plan)` and then calls
-      // `openModal()` with no argument bypasses this check, because a plan-less open reads
-      // as "not a subscription" below and the gate never inspects `selectedPlan` state.
-      // Three live call sites still use that bypass shape (MembershipSection.tsx's
-      // deep-link + global-event handlers, my-account/page-client.tsx's global-event
-      // handler) — Task 4 converts them to pass the plan through the argument, closing
-      // this gap. Not exploitable today (the server still rejects the create), but this
-      // comment should not claim more coverage than the code has.
+      // The gate covers every call that passes the plan through THIS function's own
+      // argument — package cards, the `/membership` abandoned-checkout deep-link, and
+      // (since 2026-09-01) the global `openMembershipModal`-event handlers in
+      // MembershipSection.tsx and my-account/page-client.tsx all call it that way now.
+      // It still does NOT see a plan set any other way: a caller that does
+      // `setSelectedPlan(plan)` and then calls `openModal()` with no argument still
+      // bypasses this check, BY DESIGN — see spec D6 below for why that has to stay open.
+      // The one remaining live instance of that shape is `useMajorDrawEntryCta.ts`'s
+      // `openEntryFlow` (`setSelectedPlan(correctPlan)` + a bare `openModal()`,
+      // ~line 373). It is safe only because of an invariant of THAT caller, not of this
+      // function: `correctPlan` there is a ONE-TIME plan whenever the user has a blocking
+      // subscription (gate allows one-time regardless), and can only be a SUBSCRIPTION
+      // plan when the user has none (gate allows any plan for a non-blocking user). Verify
+      // that still holds before adding a second caller of this bypass shape.
       //
       // A plan-less open is NOT treated as a subscription (spec D6): it opens the picker,
       // and the picker is how a blocking-sub member buys a PACK, which is allowed and is

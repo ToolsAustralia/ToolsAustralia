@@ -406,7 +406,7 @@ Both branches now carry their destination sheet:
 | Past due | one-time / Additional pack | purchase modal (unchanged — a standalone purchase, not a second subscription) |
 | Everyone else | any | purchase modal (unchanged) |
 
-**2026-09-01 — the mechanism behind the top two rows changed, the destinations did not.**
+**2026-09-01 — the mechanism behind the top two rows changed; this hook's own destinations did not.**
 `onSelect` no longer computes those two rows itself from `hierarchy()` / `hasBlockingSub`.
 It calls the same `resolveSubscriptionCreationGate` that
 [`useMembershipModal.openModal` / `openModalWithPackageSelectionFirst`](./architecture.md#the-modal-open-chokepoint-owns-the-subscription-gate-2026-09-01)
@@ -417,7 +417,12 @@ determined, and every bounce here used to be `hasActiveSubscription && hierarchy
 those undetermined cases fell through into the new-subscription flow and 409'd at the
 payment step. `hierarchy()` still drives `ctaLabelFor`'s **label** — it just no longer
 routes. `MembershipSection.handlePlanSelect` (the shared 15+-page component) got the
-identical change.
+identical MECHANISM change — but **not** an identical destination one. Its four bounces
+previously pushed to the bare `/my-account` dashboard, not `/my-account/membership`, so
+this is a real destination change: every page that renders `MembershipSection` (home,
+`/promotions/[slug]`, and 15+ others) now sends a blocked package-card tap to the
+membership page's manage/payment sheet instead of the bare dashboard. See
+[CUSTOMER.md](../../CUSTOMER.md) for the customer-facing framing.
 
 The `?open=subscription\|payment` deep link is handled by
 [`my-account/membership/page-client.tsx`](../../src/app/(site)/my-account/membership/page-client.tsx),
