@@ -81,6 +81,10 @@ export const GET = withNorm(
       newMembershipRevenuePct: r.newMembershipRevenuePct,
       byCategory: r.byCategory,
       platforms: r.platforms,
+      // Spread, not a nullable field: the shape is absent when there is nothing to report, so
+      // Norm reads "no finding" as "the key isn't there" rather than as a zero it might quote
+      // back as an all-clear on ads that were never verifiable.
+      ...(r.adUrlIssues ? { adUrlIssues: r.adUrlIssues } : {}),
     });
 
     return ctx.ok({

@@ -3,11 +3,12 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { getBrandLaneDisplay } from "@/config/promo-landing-slugs";
-import { Tags, RotateCw, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Tags, RotateCw, SlidersHorizontal, ChevronDown, AlertTriangle, SpellCheck2 } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { subDays } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  Badge,
   Card,
   SectionTitle,
   DataTable,
@@ -17,6 +18,7 @@ import {
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useBrandPerformance } from "@/hooks/queries/useBrandPerformance";
 import type {
+  BrandAdUrlIssues,
   BrandPerformanceBasis,
   BrandPerformancePlatformScope,
   BrandPerformanceRow,
@@ -102,6 +104,70 @@ function maskStyle(src: string, color: string): CSSProperties {
     WebkitMaskSize: "contain",
     maskSize: "contain",
   };
+}
+
+/** Human casing for a resolved brand slug in a tooltip (e.g. "stihl" -> "Stihl"). */
+function titleCaseBrand(brand: string): string {
+  return brand.charAt(0).toUpperCase() + brand.slice(1);
+}
+
+/**
+ * Ad-URL defect badge on a brand row.
+ *
+ * ── Why this is on the ROW and not only in the modal ─────────────────────────────────────
+ *
+ * "Draw 10 | Sales | STIHL | Sep 2026" spent against `/promotions/makita`. On the table it was
+ * invisible: it just made Makita's ROAS bad. The only way to see it was to open Makita's ad
+ * breakdown and read the campaign names — which nobody does on a row that merely looks weak.
+ * The row now says so itself.
+ *
+ * ── Why there is no "clean" state ────────────────────────────────────────────────────────
+ *
+ * Nothing renders when `adUrlIssues` is absent, and the server omits it for a clean row AND for
+ * a row whose ads could not be checked. A badge is only believed if it is rare; a tick on every
+ * other row would be scanned past, and a tick on unverifiable ads would be a false assurance.
+ *
+ * The two icons match `CampaignTreeTable`'s per-ad icons exactly — red `AlertTriangle` for a
+ * wrong-brand ad, amber `SpellCheck2` for a typo'd `?toolbox=`/`?toolset=` value — so a reader
+ * who drills in meets the same vocabulary rather than having to learn a second one.
+ */
+function AdUrlIssueBadges({
+  issues,
+  fmtCompact,
+}: {
+  issues: BrandAdUrlIssues;
+  fmtCompact: (value: number) => string;
+}) {
+  const parts: string[] = [];
+  if (issues.mismatchAdCount > 0) {
+    const brands = issues.mismatchBrands.map(titleCaseBrand).join(", ") || "another brand";
+    parts.push(
+      `${issues.mismatchAdCount} of ${issues.checkedAdCount} ads here are named for ${brands} but land on this brand's page — ${fmtCompact(issues.mismatchSpend)} of this row's spend`,
+    );
+  }
+  if (issues.unrecognisedParamAdCount > 0) {
+    parts.push(
+      `${issues.unrecognisedParamAdCount} ad${issues.unrecognisedParamAdCount === 1 ? "" : "s"} carry an unrecognised toolbox/toolset value (${issues.unrecognisedValues.join(", ")}), so the page fell back to its default`,
+    );
+  }
+  const title = `${parts.join(" · ")}. Open the row for the per-ad breakdown.`;
+
+  return (
+    <span className="inline-flex items-center gap-1 shrink-0" role="img" aria-label={title} title={title}>
+      {issues.mismatchAdCount > 0 && (
+        <Badge tone="danger" className="px-1.5 num">
+          <AlertTriangle className="w-2.5 h-2.5" aria-hidden strokeWidth={2.5} />
+          {issues.mismatchAdCount}
+        </Badge>
+      )}
+      {issues.unrecognisedParamAdCount > 0 && (
+        <Badge tone="warning" className="px-1.5 num">
+          <SpellCheck2 className="w-2.5 h-2.5" aria-hidden strokeWidth={2.5} />
+          {issues.unrecognisedParamAdCount}
+        </Badge>
+      )}
+    </span>
+  );
 }
 
 export default function BrandPerformanceCard({
@@ -260,7 +326,7 @@ export default function BrandPerformanceCard({
       const ink = display.markColor;
 
       return (
-        <div className="flex items-center min-h-[2rem]">
+        <div className="flex items-center gap-2 min-h-[2rem]">
           {!d.logoPath ? (
             <span className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-300">
               {d.displayName}
@@ -303,6 +369,7 @@ export default function BrandPerformanceCard({
               )}
             </span>
           )}
+          {d.adUrlIssues && <AdUrlIssueBadges issues={d.adUrlIssues} fmtCompact={fmtCompact} />}
         </div>
       );
     }
@@ -528,6 +595,14 @@ export default function BrandPerformanceCard({
                         <span className="ml-1.5 text-3xs text-neutral-400 dark:text-neutral-500">
                           no brand in URL / no signup attribution
                         </span>
+                        {unattributed.adUrlIssues && (
+                          <span className="ml-1.5 align-middle">
+                            <AdUrlIssueBadges
+                              issues={unattributed.adUrlIssues}
+                              fmtCompact={fmtCompact}
+                            />
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 px-2 text-right text-xs">—</td>
                       <td className="py-2 px-2 text-right num text-xs">

@@ -2279,14 +2279,14 @@ same as before.
 **`CampaignTreeTable` renders three things per ad row**, gated on that same URL-data presence:
 1. **The real URL(s)**, RAW form (path + query, host trimmed) — a carousel/multi-URL ad shows
    every URL, not just the first.
-2. **"Ads Manager" link** (`buildAdsManagerAdUrl`, exported from `CampaignTreeTable.tsx`) —
-   `https://adsmanager.facebook.com/adsmanager/manage/ads?act=<adAccountId, act_ prefix
-   stripped>&selected_ad_ids=<adId>`, opened `target="_blank" rel="noopener noreferrer"`. Gated
-   on `platform === "meta"` (Meta-only deep link) AND `adAccountId` being present — the table
-   gained both as new optional props, threaded from `BrandPerformanceAdsModal`'s
-   `data.meta.adAccountId` (already returned by the detail endpoint; nothing new fetched).
-   **`assumed`, not verified against a live account** — flagged to the owner; the shape lives in
-   exactly one place so a correction is a one-line change.
+2. **"Ads Manager" link** (`buildAdsManagerAdUrl`, now in
+   `src/utils/admin/adsManagerUrl.ts`) — opens the ad's **edit** screen,
+   `target="_blank" rel="noopener noreferrer"`. Gated on `platform === "meta"` (Meta-only deep
+   link) AND `adAccountId` being present — the table gained both as new optional props,
+   threaded from `BrandPerformanceAdsModal`'s `data.meta.adAccountId` (already returned by the
+   detail endpoint; nothing new fetched). ~~`assumed`, not verified against a live account~~
+   **Corrected 2026-09-01 to the owner's own working URL** — the original shape landed on a
+   filtered ad LIST, not the ad. See "Ads Manager deep link" below.
 3. **The verdict icon** — `mismatch`: a red `AlertTriangle` with an accessible title naming both
    brands ("Campaign names Stihl; URL points at Makita"). `unknown`: a muted grey `HelpCircle`,
    deliberately quiet. `ok`: nothing — the entire point is that a warning is rare and therefore
@@ -2346,3 +2346,75 @@ URL with no param at all both report nothing; `?toolbox=cash` is never flagged; 
 BOTH a brand mismatch and typo'd surfaces both signals in one result; and the mutation test
 proving the pre-change code (brand-set resolution alone) cannot distinguish a typo from an
 absent param.
+
+### Third surface: the brand-row roll-up badge (2026-09-01)
+
+**The complaint this fixes.** Makita's row read 0.15x ROAS on $330 spend and 1 purchase. Nothing
+on the row said why. Opening its ad-breakdown modal revealed a campaign named
+`Draw 10 | Sales | STIHL | Sep 2026` spending against `/promotions/makita` — a wrong-brand ad
+hiding inside another brand's spend. The per-ad icons above only exist *inside* the modal, and
+nobody opens a modal on a row that merely looks weak. The row now says so itself.
+
+**What renders.** In `BrandPerformanceCard`'s Brand cell, beside the wordmark: up to two kit
+`Badge`s, using the SAME icons and colours as the per-ad icons in `CampaignTreeTable` so a reader
+who drills in meets one vocabulary, not two.
+
+| Badge | Icon / tone | Means |
+|---|---|---|
+| `⚠ 8` | red `AlertTriangle`, `tone="danger"` | 8 ads in this row are named for a different brand |
+| `abc 84` | amber `SpellCheck2`, `tone="warning"` | 84 ads carry an unrecognised `?toolbox=`/`?toolset=` value |
+
+One `title`/`aria-label` covers both, naming the offending brands, the typo'd values, the
+denominator, and the spend at stake — e.g. *"8 of 234 ads here are named for Stihl but land on
+this brand's page — $766 of this row's spend · 84 ads carry an unrecognised toolbox/toolset value
+(milwakee), so the page fell back to its default. Open the row for the per-ad breakdown."* The
+same badges render on the `Unattributed` footer row.
+
+⚠️ **There is deliberately no "clean" state.** The server omits `adUrlIssues` entirely when a row
+has no finding, and it omits it for exactly the same reason when a row's ads could not be checked
+at all (no resolved destination). Both render nothing. A green tick on every clean row would
+train the reader to scan past the column; a tick on unverifiable ads would be a false assurance.
+`checkedAdCount` (the denominator) exists only *inside* a badge that is already showing.
+
+**The check is not reimplemented.** `BrandPerformanceService` imports `checkAdUrlMismatch` from
+`src/utils/admin/adUrlMismatchCheck.ts` — the same validated module the per-ad icons use — and
+only rolls its result up. See `docs/metrics-analytics/backend.md` for the plumbing (why the
+modal's per-brand query was NOT reused) and the weighting rule.
+
+### Ads Manager deep link — corrected to the owner's real URL (2026-09-01)
+
+`buildAdsManagerAdUrl` **moved out of `CampaignTreeTable.tsx`** into
+[`src/utils/admin/adsManagerUrl.ts`](../../src/utils/admin/adsManagerUrl.ts) (a pure util, so it
+is testable without mounting React) and its shape was replaced. The previous URL was `assumed`
+and landed on a filtered ad *list*; the owner supplied the URL that actually opens the ad's
+**edit** screen, and the helper now reproduces it character for character:
+
+```
+https://adsmanager.facebook.com/adsmanager/manage/ads/edit/standalone
+  ?act=<adAccountId, act_ prefix stripped>
+  &business_id=<FACEBOOK_BUSINESS_ID>
+  &filter_set=SEARCH_BY_ADGROUP_IDS-STRING_SET%1EANY%1E[%22<adId>%22]
+  &selected_ad_ids=<adId>
+  &nav_source=no_referrer
+  &current_step=0
+```
+
+⚠️ **The encoding is hand-written on purpose.** `%1E` is the ASCII record separator Meta uses as
+the delimiter inside `filter_set`; in the working URL the square brackets are **literal** while
+the quotes are `%22`. A blanket `encodeURIComponent` would also encode the brackets (`%5B`/`%5D`)
+— it may well still work, but we cannot test a variation from here, so the format that is known
+to work is reproduced exactly. `npm run test:ads-manager-url` pins every one of those choices.
+
+**`business_id` is configuration, not derivable.** It comes from `FACEBOOK_BUSINESS_ID` with the
+`NEXT_PUBLIC_FACEBOOK_BUSINESS_ID` twin (the link is built in a client component, so the public
+one is the one that must be set — same server/client pairing `src/config/featureFlags.ts` uses).
+Both are registered in `.env.example`. When it is **unset the parameter is omitted** and the rest
+of the link is built unchanged rather than emitting `business_id=` empty or dropping the link;
+Meta usually resolves the business from the signed-in session. That fallback is `assumed`, not
+verified — an account under several businesses may land on a chooser.
+
+**`src/services/facebook-ads-health/healthInsights.ts` builds a similar link and was NOT touched**
+— it targets **adsets** on a different host (`business.facebook.com/adsmanager/manage/adsets`),
+which is a different shape with a different verification story. It is very likely the same class
+of assumed URL and worth confirming with the owner on the same pass, but it is out of scope here.
+

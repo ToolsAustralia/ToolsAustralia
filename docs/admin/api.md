@@ -942,3 +942,11 @@ Ad spend and return per **brand lane**, backing the Overview's Brand Performance
 `unattributed` holds spend/outcomes that resolved to no lane and **is included in `totals`** — that is what keeps the Total reconciled with the ad account and with the Overview revenue card.
 
 `maxDuration = 60`: on-read freshness may sync trailing days, and `compare` doubles the outcome aggregation.
+
+### `adUrlIssues` on a row (2026-09-01)
+
+Rows MAY carry an optional `adUrlIssues` — the per-brand roll-up of the ad-URL brand check, so the table can badge a row hiding a wrong-brand ad without anyone opening its modal (`{ mismatchAdCount, unrecognisedParamAdCount, checkedAdCount, mismatchSpend, mismatchBrands[], unrecognisedValues[] }`).
+
+⚠️ **Absent is not "clean".** The field is omitted when the row has no finding AND when none of its ads could be checked (no resolved landing URL). Both states render nothing; there is deliberately no all-clear value, because a badge is only believed if it is rare and a tick on unverifiable ads would be a false assurance.
+
+Computed for the **current window only** — a `comparison` row never carries it, since no badge renders for a prior period. Two extra queries per platform (`SpendByUrlAggregationService.getAdUrlCheckRows`), fixed cost regardless of brand count, wrapped in a `try/catch` that degrades to silence: the rows are correct without the badge. Full rationale in `docs/metrics-analytics/backend.md`; rendering in `docs/admin/frontend.md`. Mirrored to Norm at `GET /v1/analytics/brand-performance`.

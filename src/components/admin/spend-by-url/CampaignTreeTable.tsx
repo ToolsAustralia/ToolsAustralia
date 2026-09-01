@@ -8,6 +8,7 @@ import type {
   PackagesFocusAdNode,
 } from "@/hooks/queries/usePackagesFocusBreakdown";
 import { checkAdUrlMismatch } from "@/utils/admin/adUrlMismatchCheck";
+import { buildAdsManagerAdUrl } from "@/utils/admin/adsManagerUrl";
 import { cn } from "@/utils/cn";
 
 const COL_SPAN = 5;
@@ -52,7 +53,8 @@ export interface CampaignTreeTableProps {
   emptyMessage?: string;
   /**
    * Which ad platform `campaigns` belongs to. Gates the "Open in Ads Manager" link — Meta only,
-   * since the deep link (`buildAdsManagerAdUrl`) is a Meta Ads Manager URL. Omitted by callers
+   * since the deep link (`buildAdsManagerAdUrl`, `src/utils/admin/adsManagerUrl.ts`) is a Meta
+   * Ads Manager URL. Omitted by callers
    * that don't carry per-ad URL data (e.g. the KPI modal's per-bucket trees), which also skips
    * the ad-URL mismatch icon (see `hasUrlInfo` below).
    */
@@ -83,18 +85,6 @@ function shortenRawUrl(url: string): string {
   } catch {
     return url;
   }
-}
-
-/**
- * Meta Ads Manager deep link for one ad (spec B7, `docs/superpowers/specs/
- * 2026-09-01-coupon-audience-and-ad-url-check-design.md`).
- *
- * `assumed`, NOT verified against a live account — confirm on first click. Kept as the ONE
- * place this shape is written so a correction, if needed, is a one-line change here.
- */
-export function buildAdsManagerAdUrl(adAccountId: string, adId: string): string {
-  const bareAccountId = adAccountId.replace(/^act_/, "");
-  return `https://adsmanager.facebook.com/adsmanager/manage/ads?act=${encodeURIComponent(bareAccountId)}&selected_ad_ids=${encodeURIComponent(adId)}`;
 }
 
 /** Human casing for a resolved brand slug in a tooltip/aria-label (e.g. "stihl" -> "Stihl"). */

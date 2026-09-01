@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildBrandPerformanceWindow,
   zeroBrandRow,
+  type BrandAdUrlCheckSource,
   type BrandOutcomeEvent,
   type BrandSpendSource,
 } from "../BrandPerformanceService";
@@ -56,6 +57,27 @@ function build(over: Partial<Parameters<typeof buildBrandPerformanceWindow>[0]>)
     events: [],
     ...over,
   });
+}
+
+/**
+ * Ad rows for the ad-URL check roll-up, in the shape `getAdUrlCheckRows` returns them.
+ * `rawUrls` is what the check reads — the canonical form has the query stripped off it.
+ */
+function ads(
+  platform: "meta" | "tiktok",
+  rows: Array<{
+    adId: string;
+    campaignName?: string;
+    adName?: string;
+    canonicalUrl?: string;
+    rawUrls?: string[];
+    spendCents?: number;
+  }>,
+): BrandAdUrlCheckSource {
+  return {
+    platform,
+    ads: rows.map((r) => ({ ...r, spendCents: r.spendCents ?? 0 })),
+  };
 }
 
 function rowFor(result: ReturnType<typeof build>, laneId: string) {
@@ -370,6 +392,175 @@ function testTotalUserCountIsDistinctAcrossLanes() {
   assert.equal(oneTime?.userCount, 1, "buyers are distinct — summing per-lane counts would say 2");
 }
 
+/**
+ * The production case this roll-up exists for: "Draw 10 | Sales | STIHL | Sep 2026" spending
+ * against `/promotions/makita`. On the table it was invisible — it just made Makita's ROAS look
+ * bad — and the only way to see it was to open Makita's per-ad modal and read campaign names.
+ */
+function testMismatchedAdBadgesTheBrandRowItSpendsIn() {
+  const result = build({
+    spend: [spend("meta", [[`${ORIGIN}/promotions/makita`, 33_000]])],
+    adChecks: [
+      ads("meta", [
+        {
+          adId: "1",
+          campaignName: "Draw 10 | Sales | STIHL | Sep 2026",
+          canonicalUrl: `${ORIGIN}/promotions/makita`,
+          rawUrls: [`${ORIGIN}/promotions/makita`],
+          spendCents: 15_700,
+        },
+        {
+          adId: "2",
+          campaignName: "Draw 10 | Sales | Makita | Sep 2026",
+          canonicalUrl: `${ORIGIN}/promotions/makita`,
+          rawUrls: [`${ORIGIN}/promotions/makita`],
+          spendCents: 17_300,
+        },
+      ]),
+    ],
+  });
+
+  const issues = rowFor(result, "makita").adUrlIssues;
+  assert.ok(issues, "a brand row with a wrong-brand ad must carry adUrlIssues");
+  assert.equal(issues.mismatchAdCount, 1);
+  assert.equal(issues.checkedAdCount, 2, "the clean ad is the denominator, not a finding");
+  assert.deepEqual(issues.mismatchBrands, ["stihl"], "the badge must name the brand the ad is FOR");
+  assert.equal(
+    issues.mismatchSpend,
+    157,
+    "spend must be the mismatched ad's alone, in AUD — the reader compares it to the Spend cell",
+  );
+  assert.equal(issues.unrecognisedParamAdCount, 0);
+}
+
+/** A clean brand renders nothing at all — no badge, and no all-clear either. */
+function testCleanBrandHasNoIssuesObject() {
+  const result = build({
+    spend: [spend("meta", [[`${ORIGIN}/promotions/ryobi`, 10_000]])],
+    adChecks: [
+      ads("meta", [
+        {
+          adId: "1",
+          campaignName: "Draw 10 | Sales | Ryobi | Sep 2026",
+          canonicalUrl: `${ORIGIN}/promotions/ryobi`,
+          rawUrls: [`${ORIGIN}/promotions/ryobi?toolbox=kincrome`],
+          spendCents: 10_000,
+        },
+      ]),
+    ],
+  });
+
+  assert.equal(
+    rowFor(result, "ryobi").adUrlIssues,
+    undefined,
+    "a clean row must omit adUrlIssues entirely — a zeroed object would render a badge-shaped nothing",
+  );
+}
+
+/**
+ * The dangerous case. An ad with no resolved destination cannot be checked, so the row must
+ * look exactly like a clean one: silent. Reporting "0 problems" here would be an assurance the
+ * check never established.
+ */
+function testUncheckableAdsProduceNoIssuesAndNoFalseClean() {
+  const result = build({
+    spend: [spend("meta", [[`${ORIGIN}/promotions/dewalt`, 5_000]])],
+    adChecks: [
+      ads("meta", [
+        // No destination doc at all: the sync writes an unknown:// placeholder and no rawUrls.
+        { adId: "1", campaignName: "Draw 10 | Sales | STIHL | Sep 2026", spendCents: 5_000 },
+        // A destination that resolves no recognised brand — checkable, but says nothing.
+        {
+          adId: "2",
+          campaignName: "Draw 10 | Sales | STIHL | Sep 2026",
+          canonicalUrl: "unknown://meta-ad/2",
+          rawUrls: ["unknown://meta-ad/2"],
+          spendCents: 0,
+        },
+      ]),
+    ],
+  });
+
+  assert.equal(
+    rowFor(result, "dewalt").adUrlIssues,
+    undefined,
+    "an unverifiable ad is neither a finding nor an all-clear",
+  );
+}
+
+/**
+ * A typo'd `?toolbox=` is a SEPARATE defect from a wrong-brand ad — different fix, different
+ * icon — so it must be able to badge a row whose brand check is otherwise perfectly clean.
+ */
+function testTypoedParamBadgesIndependentlyOfBrandMismatch() {
+  const result = build({
+    spend: [spend("meta", [[`${ORIGIN}/promotions/makita`, 20_000]])],
+    adChecks: [
+      ads("meta", [
+        {
+          adId: "1",
+          campaignName: "Draw 10 | Sales | Makita | Sep 2026",
+          canonicalUrl: `${ORIGIN}/promotions/makita`,
+          rawUrls: [`${ORIGIN}/promotions/makita?toolbox=milwakee`],
+          spendCents: 20_000,
+        },
+      ]),
+    ],
+  });
+
+  const issues = rowFor(result, "makita").adUrlIssues;
+  assert.ok(issues, "a typo'd param alone must still badge the row");
+  assert.equal(issues.mismatchAdCount, 0, "the brand check is clean and must stay clean");
+  assert.equal(issues.mismatchSpend, 0);
+  assert.equal(issues.unrecognisedParamAdCount, 1);
+  assert.deepEqual(issues.unrecognisedValues, ["milwakee"]);
+}
+
+/**
+ * Under the toolbox lane a bare toolset page's spend splits across rows. Counts must NOT be
+ * split with it — there is no such thing as 0.4 of a wrong-brand ad, and the drill-down would
+ * show the whole ad — but the SPEND figure must be, or it would not reconcile with the Spend
+ * cell printed beside it.
+ */
+function testToolboxLaneWeightsSpendButNotAdCounts() {
+  const result = build({
+    lane: "toolbox",
+    basis: "built-prize",
+    spend: [spend("meta", [[`${ORIGIN}/promotions/makita`, 40_000]])],
+    toolboxMix: [
+      { slug: "makita", toolbox: "kincrome", visitors: 3 },
+      { slug: "makita", toolbox: "sidchrome", visitors: 1 },
+    ],
+    adChecks: [
+      ads("meta", [
+        {
+          adId: "1",
+          campaignName: "Draw 10 | Sales | STIHL | Sep 2026",
+          canonicalUrl: `${ORIGIN}/promotions/makita`,
+          rawUrls: [`${ORIGIN}/promotions/makita`],
+          spendCents: 40_000,
+        },
+      ]),
+    ],
+  });
+
+  const kincrome = rowFor(result, "kincrome").adUrlIssues;
+  const sidchrome = rowFor(result, "sidchrome").adUrlIssues;
+  assert.ok(kincrome && sidchrome, "both lanes carrying the ad's spend must carry its finding");
+  assert.equal(kincrome.mismatchAdCount, 1, "counted whole in each lane it touches");
+  assert.equal(sidchrome.mismatchAdCount, 1);
+  assert.equal(kincrome.mismatchSpend, 300, "3/4 of $400");
+  assert.equal(sidchrome.mismatchSpend, 100, "1/4 of $400");
+}
+
+/** No ad data supplied at all (e.g. the platform read failed) degrades to silence, not zeros. */
+function testMissingAdChecksLeaveEveryRowSilent() {
+  const result = build({
+    spend: [spend("meta", [[`${ORIGIN}/promotions/ryobi`, 10_000]])],
+  });
+  assert.equal(rowFor(result, "ryobi").adUrlIssues, undefined);
+}
+
 function testZeroBrandRowShape() {
   const server = zeroBrandRow("ryobi", "toolset", "landing-page");
   assert.equal(server.spend, 0);
@@ -399,6 +590,12 @@ function run() {
   testCashPrizeIsDroppedIntoUnattributed();
   testTotalUserCountIsDistinctAcrossLanes();
   testZeroBrandRowShape();
+  testMismatchedAdBadgesTheBrandRowItSpendsIn();
+  testCleanBrandHasNoIssuesObject();
+  testUncheckableAdsProduceNoIssuesAndNoFalseClean();
+  testTypoedParamBadgesIndependentlyOfBrandMismatch();
+  testToolboxLaneWeightsSpendButNotAdCounts();
+  testMissingAdChecksLeaveEveryRowSilent();
   console.log("brand-performance tests passed");
 }
 

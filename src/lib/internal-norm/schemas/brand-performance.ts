@@ -26,6 +26,32 @@ const BrandCategorySchema = z.object({
 });
 
 /**
+ * Ad-URL defects among a brand row's ads — the roll-up of `checkAdUrlMismatch`.
+ *
+ * ABSENT (not zeroed) when the row is clean OR when none of its ads could be checked. There is
+ * deliberately no "all clear" value: the two states have nothing true in common, and reporting
+ * a zero for an unverifiable row would assert something the check never established.
+ *
+ * Two independent defect classes with different fixes — never add them together:
+ *   mismatch      the campaign/ad naming names one brand and the landing URL contradicts it
+ *                 (a wrong-brand ad spending inside this row).
+ *   unrecognised  a `?toolbox=`/`?toolset=` value naming no known brand — a typo, so the
+ *   param         landing page silently served its default instead of what the ad promised.
+ */
+const BrandAdUrlIssuesSchema = z.object({
+  mismatchAdCount: z.number(),
+  unrecognisedParamAdCount: z.number(),
+  /** Ads in this row that had a landing URL to check at all — the denominator. */
+  checkedAdCount: z.number(),
+  /** AUD spend carried by the mismatched ads, weighted the same way the row's `spend` is. */
+  mismatchSpend: z.number(),
+  /** Brands the mismatched ads are NAMED for, e.g. ["stihl"] on a Makita row. */
+  mismatchBrands: z.array(z.string()),
+  /** The unrecognised values themselves, e.g. ["milwakee"]. */
+  unrecognisedValues: z.array(z.string()),
+});
+
+/**
  * A brand row. Count fields are `number`, not `int`: under the toolbox lane a bare
  * `/promotions/<toolset>` page's spend and conversions are SPLIT across lanes in proportion to
  * the toolbox mix its visitors actually built, which yields fractional per-row counts. The
@@ -45,6 +71,8 @@ const BrandPerformanceRowSchema = z.object({
   newMembershipRevenuePct: z.number().nullable(),
   byCategory: z.array(BrandCategorySchema), // empty under basis=platform
   platforms: z.array(z.enum(["meta", "tiktok"])),
+  /** Present ONLY when this row's ads have a finding. Absent = clean or unverifiable. */
+  adUrlIssues: BrandAdUrlIssuesSchema.optional(),
 });
 
 export const NormBrandPerformanceSchema = z.object({
