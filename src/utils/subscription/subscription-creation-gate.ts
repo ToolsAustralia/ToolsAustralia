@@ -17,15 +17,22 @@
  */
 
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
+import { isSubscriptionRecoveryStatus } from "@/utils/integrations/klaviyo/klaviyo-renewal-entries-preview";
 
 /** Plan-management sheet — an active member changing tier. */
 export const MANAGE_SUBSCRIPTION_PATH = "/my-account/membership?open=subscription";
-/** Payment sheet — a past-due member who needs to settle. */
+/** Payment sheet — a member in payment recovery (`past_due` / `unpaid`) who needs to settle. */
 export const MANAGE_PAYMENT_PATH = "/my-account/membership?open=payment";
 
 export type SubscriptionCreationGateResult =
   | { allowed: true }
-  | { allowed: false; reason: "past_due" | "blocking"; redirectTo: string };
+  /**
+   * `recovery` = in payment recovery (`past_due` OR `unpaid`) — the repo-wide name for that
+   * pair, owned by `isSubscriptionRecoveryStatus`. It was `past_due` until 2026-09-01, when
+   * the branch below started (correctly) covering `unpaid` too and the old name stopped
+   * describing what it matched.
+   */
+  | { allowed: false; reason: "recovery" | "blocking"; redirectTo: string };
 
 /**
  * True when a plan is a recurring membership tier rather than a one-time / Additional pack.
@@ -48,8 +55,12 @@ export function resolveSubscriptionCreationGate(
   // Unknown status must not bounce guests, who are the majority (spec D7).
   if (opts.userLoading) return { allowed: true };
   if (!hasBlockingSubscription(user)) return { allowed: true };
-  if (user?.subscription?.status === "past_due") {
-    return { allowed: false, reason: "past_due", redirectTo: MANAGE_PAYMENT_PATH };
+  // Payment recovery is `past_due` OR `unpaid` — one shared predicate, never a restated
+  // status list. `unpaid` used to fall through to the change-tier sheet, which cannot take
+  // the member's money; the on-hold nudge on the pack step already routes `unpaid` to the
+  // payment sheet through this same helper, so the two now agree.
+  if (isSubscriptionRecoveryStatus(user?.subscription?.status)) {
+    return { allowed: false, reason: "recovery", redirectTo: MANAGE_PAYMENT_PATH };
   }
   return { allowed: false, reason: "blocking", redirectTo: MANAGE_SUBSCRIPTION_PATH };
 }

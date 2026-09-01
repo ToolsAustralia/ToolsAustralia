@@ -402,8 +402,8 @@ Both branches now carry their destination sheet:
 | Member state | Tap | Goes to |
 |---|---|---|
 | Active subscriber, tier is an upgrade / downgrade / current | subscription tier | `/my-account/membership?open=subscription` → **Manage** sheet |
-| Past due, blocking sub | subscription tier | `/my-account/membership?open=payment` → **Payment** sheet |
-| Past due | one-time / Additional pack | purchase modal (unchanged — a standalone purchase, not a second subscription) |
+| In payment recovery (`past_due` **or** `unpaid`) | subscription tier | `/my-account/membership?open=payment` → **Payment** sheet |
+| In payment recovery | one-time / Additional pack | purchase modal (unchanged — a standalone purchase, not a second subscription) |
 | Everyone else | any | purchase modal (unchanged) |
 
 **2026-09-01 — the mechanism behind the top two rows changed; this hook's own destinations did not.**
@@ -442,6 +442,24 @@ This hook and `MembershipSection` still bounce early (so a blocked tap never fla
 modal open first), but a caller that skips both and opens the modal directly is now caught
 at the chokepoint too. If you add a sixth hand-off, you no longer have to remember to point
 it anywhere — passing the plan through `openModal(plan)` is enough.
+
+**Three corrections to that chokepoint landed the same day (2026-09-01), after review:**
+
+1. **`unpaid` now reaches the payment sheet.** The branch tested `status === "past_due"`
+   alone, so an `unpaid` member was sent to the change-tier sheet — a screen that cannot
+   take their money. It now calls `isSubscriptionRecoveryStatus`
+   ([klaviyo-renewal-entries-preview.ts](../../src/utils/integrations/klaviyo/klaviyo-renewal-entries-preview.ts)),
+   the repo's one owner of the `past_due` + `unpaid` pair, which the on-hold pack-step nudge
+   on this same branch already used. The gate's blocked `reason` is `"recovery"` (was
+   `"past_due"`, which stopped describing what it matched). `npm run test:subscription-gate`
+   now asserts the expected `reason` **and** `redirectTo` for **every** status in the
+   exported `BLOCKING_SUBSCRIPTION_STATUSES`, so a newly added status fails until routed.
+2. **`openModalWithPackageSelectionFirst` no longer gates on its `defaultPlan`** — see
+   [architecture.md → `openModalWithPackageSelectionFirst` does not gate on its
+   `defaultPlan`](./architecture.md#openmodalwithpackageselectionfirst-does-not-gate-on-its-defaultplan).
+3. **The gate reads current state, not captured state** — see
+   [architecture.md → The gate reads state at CALL time](./architecture.md#the-gate-reads-state-at-call-time-not-capture-time-fixed-2026-09-01).
+   This is what unbroke the past-due tier switch on `/my-account/membership`.
 
 ## `useStripeSubscription.attachTypedCode` — stamping the applied code before the charge (2026-08-27)
 ## `convertToLocalPlan` carries the catalog id (2026-08-21)

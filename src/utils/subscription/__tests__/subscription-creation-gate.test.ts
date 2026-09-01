@@ -76,31 +76,63 @@ async function main() {
     );
   });
 
-  // --- must block ---
-  await test("every BLOCKING_SUBSCRIPTION_STATUSES value blocks a subscription open", () => {
+  // --- must block, AND land on the right sheet ---
+  //
+  // `.allowed === false` alone is not enough. `unpaid` blocked correctly for weeks while
+  // being sent to the CHANGE-TIER sheet, which cannot take a recovering member's money —
+  // the assertion never looked at where they landed, so nothing failed. Every blocking
+  // status therefore declares its expected reason AND destination by name.
+  //
+  // Iterate the EXPORTED constant, not a copy: a newly added blocking status has no entry
+  // here and fails this test until someone decides where it should route.
+  const EXPECTED_BLOCK: Record<string, { reason: string; redirectTo: string }> = {
+    // In payment recovery → the payment sheet. They came to pay us.
+    past_due: { reason: "recovery", redirectTo: MANAGE_PAYMENT_PATH },
+    unpaid: { reason: "recovery", redirectTo: MANAGE_PAYMENT_PATH },
+    // Holding a live subscription → the plan sheet (change tier / cancel).
+    active: { reason: "blocking", redirectTo: MANAGE_SUBSCRIPTION_PATH },
+    trialing: { reason: "blocking", redirectTo: MANAGE_SUBSCRIPTION_PATH },
+    paused: { reason: "blocking", redirectTo: MANAGE_SUBSCRIPTION_PATH },
+  };
+
+  await test("every BLOCKING_SUBSCRIPTION_STATUSES value blocks AND routes to the named sheet", () => {
     for (const status of BLOCKING_SUBSCRIPTION_STATUSES) {
+      const expected = EXPECTED_BLOCK[status];
+      assert.ok(
+        expected,
+        `${status} is a blocking status with no expected reason/redirect declared — add it to EXPECTED_BLOCK and make sure the gate routes it somewhere that can actually help that member`
+      );
       const r = resolveSubscriptionCreationGate({ subscription: { status } }, sub);
       assert.equal(r.allowed, false, `${status} must block`);
+      if (r.allowed === false) {
+        assert.equal(r.reason, expected.reason, `${status} reason`);
+        assert.equal(r.redirectTo, expected.redirectTo, `${status} redirectTo`);
+      }
     }
   });
 
-  await test("past_due routes to the payment sheet, other blocking to the plan sheet", () => {
-    const pastDue = resolveSubscriptionCreationGate({ subscription: { status: "past_due" } }, sub);
-    assert.equal(pastDue.allowed, false);
-    if (pastDue.allowed === false) {
-      assert.equal(pastDue.reason, "past_due");
-      assert.equal(pastDue.redirectTo, MANAGE_PAYMENT_PATH);
-    }
-    const active = resolveSubscriptionCreationGate({ subscription: { status: "active" } }, sub);
-    assert.equal(active.allowed, false);
-    if (active.allowed === false) {
-      assert.equal(active.reason, "blocking");
-      assert.equal(active.redirectTo, MANAGE_SUBSCRIPTION_PATH);
+  await test("the two payment-sheet statuses are exactly the shared recovery pair", async () => {
+    // The gate must not restate the status list — it delegates to the one predicate that
+    // already owns "in payment recovery" repo-wide. If that pair changes, this fails.
+    const { isSubscriptionRecoveryStatus } = await import(
+      "@/utils/integrations/klaviyo/klaviyo-renewal-entries-preview"
+    );
+    for (const status of BLOCKING_SUBSCRIPTION_STATUSES) {
+      const r = resolveSubscriptionCreationGate({ subscription: { status } }, sub);
+      const goesToPayment = r.allowed === false && r.redirectTo === MANAGE_PAYMENT_PATH;
+      assert.equal(
+        goesToPayment,
+        isSubscriptionRecoveryStatus(status),
+        `${status}: payment-sheet routing must match isSubscriptionRecoveryStatus`
+      );
     }
   });
 
   // --- isSubscriptionPlan ---
-  await test("isSubscriptionPlan matches the two inlined copies it replaces", () => {
+  // No inline copy of this expression survives anywhere in src/ as of 2026-09-01 — the last
+  // two (MembershipSection's getPlanHierarchy + renderPlanCard) now call this helper. These
+  // cases pin the behaviour those copies had, so the de-duplication stays behaviour-identical.
+  await test("isSubscriptionPlan matches the inlined copies it replaced", () => {
     assert.equal(isSubscriptionPlan({ period: "mo", name: "Tradie" }), true);
     assert.equal(isSubscriptionPlan({ period: "one-time", name: "Apprentice" }), false);
     assert.equal(isSubscriptionPlan({ period: "mo", name: "One-Time Boost" }), false);

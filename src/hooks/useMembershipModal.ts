@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useRouter } from "next/navigation";
 import { useUserContext } from "@/contexts/UserContext";
@@ -17,6 +17,10 @@ interface UseMembershipModalReturn {
    * `defaultPlan` is the tier we recommend FOR the user (Foreman) — it sits behind the picker so
    * dismissing lands on a real, payable package instead of an empty payment step. Omit it to open
    * on a placeholder, which is what the dashboard CTAs do.
+   *
+   * Deliberately NOT gated on `defaultPlan`: the picker is how a member with a blocking
+   * subscription buys a pack, and the parked default is not their choice. The step-2 pre-warm
+   * backstop guards whatever they actually pick — see the implementation comment.
    */
   openModalWithPackageSelectionFirst: (defaultPlan?: LocalMembershipPlan) => void;
   closeModal: () => void;
@@ -37,6 +41,28 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
 
   const router = useRouter();
   const { userData, loading: userLoading } = useUserContext();
+
+  /**
+   * The gate must read the user's state AT CALL TIME, not at the time the callback was
+   * captured — so it lives in a ref refreshed on every render rather than in the callbacks'
+   * closures.
+   *
+   * The bug this closes was deterministic, not a race. `my-account/membership/page-client.tsx`'s
+   * past-due tier switch does `await invalidateQueries(users.detail)` and THEN calls
+   * `openModal(plan)`. The click captured `openModal` while the member was — by definition —
+   * `past_due`; awaiting a refetch cannot refresh an already-captured closure, so the gate
+   * still read `past_due` and redirected to `?open=payment`. By then the switch had already
+   * succeeded and the subscription was `canceled` with its invoice voided, stranding the
+   * member on a payment sheet for a subscription that no longer existed. Any future async
+   * caller (refetch → open) would have hit the same trap, which is why this is fixed here and
+   * not at that one call site.
+   *
+   * Stabilising both callbacks' identity is a side benefit, not the point. No consumer
+   * depends on that identity changing when `userData` does: the hook returns a fresh object
+   * literal every render anyway, so effects keyed on the returned object re-run regardless.
+   */
+  const gateInputsRef = useRef({ userData, userLoading });
+  gateInputsRef.current = { userData, userLoading };
 
   /**
    * Open the membership modal with an optional plan
@@ -67,9 +93,10 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
       // `stepTwoGate` in MembershipModal/index.tsx (~line 1253) re-runs this same gate
       // immediately before the payment pre-warm fires and redirects instead of letting
       // the pre-warm 409 silently.
-      const gate = resolveSubscriptionCreationGate(userData, {
+      const { userData: currentUserData, userLoading: currentUserLoading } = gateInputsRef.current;
+      const gate = resolveSubscriptionCreationGate(currentUserData, {
         isSubscriptionPlan: plan ? isSubscriptionPlan(plan) : false,
-        userLoading,
+        userLoading: currentUserLoading,
       });
       if (!gate.allowed) {
         router.push(gate.redirectTo);
@@ -82,7 +109,7 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
       }
       setIsModalOpen(true);
     },
-    [router, userData, userLoading]
+    [router]
   );
 
   /**
@@ -91,14 +118,36 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
    * `defaultPlan` is the recommended tier, pre-selected BEHIND the picker: the user still chooses,
    * but backing out of the picker leaves them on a real package rather than a placeholder payment
    * step. Called with no argument the behaviour is the original one (no plan at all).
+   *
+   * Because that default is ours and not theirs, it is not gated — see below.
    */
   const openModalWithPackageSelectionFirst = useCallback(
     (defaultPlan?: LocalMembershipPlan) => {
-      // Same gate. `defaultPlan` sits BEHIND the picker, so it only blocks when the
-      // caller explicitly pre-selects a membership tier for a blocking-sub member.
-      const gate = resolveSubscriptionCreationGate(userData, {
-        isSubscriptionPlan: defaultPlan ? isSubscriptionPlan(defaultPlan) : false,
-        userLoading,
+      // This function does NOT gate on `defaultPlan` — it always asks the gate as if the
+      // open were plan-less (`isSubscriptionPlan: false`), which the gate always allows.
+      //
+      // Why: `defaultPlan` is not a user choice. It is the tier we recommend, parked BEHIND
+      // the picker purely so that backing out of the picker lands on a real package instead
+      // of an empty payment step. Semantically that is the same plan-less open spec D6
+      // deliberately leaves open, and for D6's exact reason — the picker is how a member with
+      // a blocking subscription buys a PACK, which is allowed and is live revenue. Gating on
+      // the parked default would deny `paused` / `unpaid` / `past_due` members that path from
+      // draw-results, the dashboard and the rewards page, and would make the two global
+      // `openMembershipModal` listeners disagree for identical input (one passes the plan
+      // through, one substitutes a tier).
+      //
+      // What guards the picker instead: `stepTwoGate` in MembershipModal/index.tsx (~line
+      // 1285) re-runs this same gate on whatever the member ACTUALLY selects, immediately
+      // before the payment pre-warm fires. A subscription tier chosen from the picker is
+      // caught there — which is the right layer for that decision, because that is the first
+      // moment a real choice exists.
+      //
+      // The gate call is kept (rather than dropped) so this stays a chokepoint: a future
+      // reason to block that does not depend on the plan type would apply here too.
+      const { userData: currentUserData, userLoading: currentUserLoading } = gateInputsRef.current;
+      const gate = resolveSubscriptionCreationGate(currentUserData, {
+        isSubscriptionPlan: false,
+        userLoading: currentUserLoading,
       });
       if (!gate.allowed) {
         router.push(gate.redirectTo);
@@ -109,7 +158,7 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
       setOpenWithPackageSelectionFirst(true);
       setIsModalOpen(true);
     },
-    [router, userData, userLoading]
+    [router]
   );
 
   /**

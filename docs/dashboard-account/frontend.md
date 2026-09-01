@@ -44,8 +44,20 @@
 > passes the plan straight through: `membershipModal.openModal(plan)`. **No live dispatcher into this branch
 > changes behaviour today** — every one either sends a one-time pack (gate always allows) or fires while the
 > member has no blocking subscription (also allowed); see [subscription/frontend.md](../subscription/frontend.md)
-> for the full trace, including the one dashboard-CTA case that *does* change (the picker fallback in
-> `useMajorDrawEntryCta`, already gated since Task 2 via the picker-first branch above — not this one).
+> for the full trace.
+>
+> **Correction (same day, review follow-up): the picker branch does NOT redirect, and never did in the
+> shipped branch.** This entry and its sibling in [CUSTOMER.md](../../CUSTOMER.md) briefly claimed that the
+> rare "no one-time pack resolved yet" fallback — where `handleOpenMembershipModal` substitutes
+> `getRecommendedSubscriptionPlan()` and calls `openModalWithPackageSelectionFirst(plan ?? recommended)` —
+> would send a member with a live membership to `/my-account/membership` instead of opening the picker. That
+> was true for a few hours only. `openModalWithPackageSelectionFirst` now deliberately does **not** gate on
+> its `defaultPlan` (see [subscription/architecture.md → `openModalWithPackageSelectionFirst` does not gate on
+> its `defaultPlan`](../subscription/architecture.md#openmodalwithpackageselectionfirst-does-not-gate-on-its-defaultplan)),
+> because that default is *our* recommendation parked behind the picker, not the member's choice — and the
+> picker is how a member with a blocking subscription buys a **pack**. So this dashboard CTA opens the picker
+> for everyone, exactly as it did before the gate existed. What guards it is the step-2 pre-warm backstop,
+> which re-runs the gate on whatever the member actually selects.
 
 > **Rewards page: locked-coupon unlock routing (2026-07-06):** `my-account/rewards/page.tsx` wires
 > `RewardsClaimables onUnlock={onUnlockCoupon}` — a locked purchase-required coupon opens the qualifying

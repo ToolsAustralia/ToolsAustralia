@@ -90,6 +90,41 @@ check backstops step 2: `stepTwoGate` in
 re-runs the same gate immediately before the payment pre-warm fires and redirects
 instead of letting the pre-warm 409 silently.
 
+#### `openModalWithPackageSelectionFirst` does not gate on its `defaultPlan`
+
+`openModalWithPackageSelectionFirst(defaultPlan)` always asks the gate as if the open were
+plan-less (`isSubscriptionPlan: false`), which the gate always allows. `defaultPlan` is the
+tier **we** recommend, parked *behind* the picker so that backing out lands on a real
+package instead of an empty payment step — it is not the member's choice, so it must not
+decide whether they may open the picker at all. Gating on it would have denied `paused` /
+`unpaid` / `past_due` members the pack path from draw-results, the dashboard, and the
+rewards page (all three pass a recommended tier that way), and would have made the two
+global `openMembershipModal` listeners disagree for identical input — `MembershipSection`
+passes `plan ?? undefined` (plan-less → picker opens) while `my-account/page-client.tsx`
+substitutes a tier (would have been blocked).
+
+The step-2 pre-warm backstop guards whatever the member actually **selects** from the
+picker. That is the correct layer: it is the first moment a real choice exists.
+
+The gate call itself is kept rather than dropped, so this stays a single chokepoint — a
+future block that does not depend on the plan type would apply here too.
+
+#### The gate reads state at CALL time, not capture time (fixed 2026-09-01)
+
+`userData` / `userLoading` live in a ref refreshed every render (`gateInputsRef`), and both
+callbacks read the ref rather than their closures; `router` is their only dependency.
+
+This was a deterministic bug, not a race. `my-account/membership/page-client.tsx`'s
+past-due tier switch awaits `invalidateQueries(users.detail)` and *then* calls
+`openModal(plan)`. The click had captured `openModal` while the member was — by definition
+— `past_due`, and awaiting a refetch cannot refresh an already-captured closure. So the
+gate still read `past_due` and pushed `?open=payment`, even though
+`switchTierPastDue.ts:68` had by then set the subscription to `canceled` and voided its
+invoice: the member landed on a payment sheet for a subscription that no longer existed.
+Fixing it at the chokepoint (rather than at that one call site) disarms the same trap for
+every future async caller. Stable callback identity is a side benefit — no consumer relies
+on it changing, since the hook returns a fresh object literal each render anyway.
+
 ## Source-of-truth split
 
 - **Stripe is truth for billing facts** — current period end, status (`active`/`past_due`/`canceled`/...), `pause_collection`, invoice history.
