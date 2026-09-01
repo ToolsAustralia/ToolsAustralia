@@ -26,4 +26,5 @@ export {
   BonusCodeAudienceService,
   type BonusCodeAudienceRow,
   type BonusCodeAudienceSampleUser,
+  type BonusCodeAudienceBuckets,
 } from "./BonusCodeAudienceService";

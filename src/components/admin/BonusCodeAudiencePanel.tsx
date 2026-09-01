@@ -7,6 +7,13 @@ interface AudienceSampleUser {
   userId: string;
   userName: string;
   userEmail: string;
+  qualifiedAt: string | null;
+}
+
+interface AudienceBuckets {
+  last30: number;
+  last90: number;
+  allTime: number;
 }
 
 interface AudienceRow {
@@ -16,7 +23,7 @@ interface AudienceRow {
   campaignId: string | null;
   campaignActive: boolean | null;
   entriesAmount: number | null;
-  addressableCount: number;
+  addressable: AudienceBuckets;
   sample: AudienceSampleUser[];
   issuedCount: number;
   redeemedCount: number;
@@ -33,18 +40,40 @@ const TRIGGER_LABEL: Record<AudienceRow["trigger"], string> = {
  * signal is a fire-and-forget Klaviyo emit that never writes the selected
  * package back onto the User document (see BonusCodeAudienceService). The
  * count shown is the nearest signal our own data holds — never-converted,
- * zero-entry accounts — which is an UPPER BOUND, not an exact reconstruction.
+ * zero-entry accounts, bucketed by registration date — which is an UPPER
+ * BOUND, not an exact reconstruction.
+ *
+ * Calibrated 2026-09-01 against Klaviyo's own "Started Checkout" metric (id
+ * TZevX2, Australia/Sydney): 6,888 / 5,902 / 9,612 unique profiles for
+ * Jun / Jul / Aug 2026. This proxy's own last-30-day count on the same date
+ * was 7,120 — about 74% of Klaviyo's August figure, same order of magnitude
+ * (contrast the all-time count, which was ~4.7x Klaviyo's monthly number).
+ * Read as defensible for rough planning, not exact — likely low because it
+ * only sees NEW registrations, missing an existing plain account's later
+ * checkout attempt or an authed member selecting a package. See the report
+ * for the full comparison.
  */
 const TRIGGER_CAVEAT: Partial<Record<AudienceRow["trigger"], string>> = {
   "checkout-start":
-    "Approximate — no \"started checkout\" event is stored. Counts every never-converted, zero-entry account, so it reads high relative to the other two triggers.",
+    "Approximate — no \"started checkout\" event is stored. Counts every never-converted, zero-entry account by registration date. Calibrated 2026-09-01 against Klaviyo's own Started Checkout metric: this proxy's last-30-day count (7,120) was ~74% of Klaviyo's August figure (9,612) — same ballpark, defensible for planning but not exact.",
 };
+
+function formatQualifiedAt(iso: string | null) {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-AU", { year: "numeric", month: "short", day: "2-digit" });
+}
 
 /**
  * Admin card: "how many customers can each webhook-minted bonus code reach".
- * A FORECAST of the addressable population per trigger, not a count of current
- * holders — see BonusCodeAudienceService for why. Read-only; this panel cannot
- * mint, issue, or redeem anything.
+ * A FORECAST of the addressable population per trigger, bucketed by how
+ * recently the customer qualified — last 30 days and last 90 days are the
+ * actionable numbers (the Klaviyo flow behind each trigger fires 2.5–17 days
+ * after qualifying, so it cannot reach someone who qualified months ago);
+ * all-time is kept only as a ceiling. See BonusCodeAudienceService for the
+ * per-trigger qualifying-date field. Read-only; this panel cannot mint,
+ * issue, or redeem anything.
  */
 export default function BonusCodeAudiencePanel() {
   const [rows, setRows] = useState<AudienceRow[]>([]);
@@ -84,7 +113,9 @@ export default function BonusCodeAudiencePanel() {
             </h3>
             <p className="text-gray-600 dark:text-neutral-400 mt-1 text-xs sm:text-sm">
               How many customers each webhook-minted code (BACKIN200 / LOCKIN100 / EXTRA100) can
-              reach right now — a forecast, not a count of who currently holds the code.
+              still reach, bucketed by how recently they qualified — the marketing flow only fires
+              2.5–17 days after that, so last 30/90 days is the actionable pool. All-time is a
+              ceiling, not a target.
             </p>
           </div>
           <button
@@ -143,11 +174,28 @@ export default function BonusCodeAudiencePanel() {
                   </span>
                 </div>
 
-                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                {/* Addressable pool leads with the ACTIONABLE recency buckets; all-time is
+                    visually secondary (smaller, muted) — it's a ceiling, never the headline. */}
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-md bg-red-50 px-2 py-1.5 dark:bg-red-950/20 border border-red-100 dark:border-red-900/40">
+                    <span className="text-red-700 dark:text-red-300 font-medium">Last 30 days</span>
+                    <p className="mt-0.5 text-lg font-bold text-gray-900 dark:text-neutral-100 tabular-nums">
+                      {row.addressable.last30.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-red-50/60 px-2 py-1.5 dark:bg-red-950/10 border border-red-100/70 dark:border-red-900/25">
+                    <span className="text-red-700/80 dark:text-red-300/80 font-medium">Last 90 days</span>
+                    <p className="mt-0.5 text-lg font-bold text-gray-900 dark:text-neutral-100 tabular-nums">
+                      {row.addressable.last90.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                   <div className="rounded-md bg-gray-50 px-2 py-1.5 dark:bg-neutral-800/80">
-                    <span className="text-gray-500 dark:text-neutral-400">Addressable</span>
+                    <span className="text-gray-500 dark:text-neutral-400">All-time ceiling</span>
                     <p className="mt-0.5 text-base font-bold text-gray-900 dark:text-neutral-100 tabular-nums">
-                      {row.addressableCount.toLocaleString()}
+                      {row.addressable.allTime.toLocaleString()}
                     </p>
                   </div>
                   <div className="rounded-md bg-gray-50 px-2 py-1.5 dark:bg-neutral-800/80">
@@ -180,7 +228,7 @@ export default function BonusCodeAudiencePanel() {
                     >
                       {expandedTrigger === row.trigger
                         ? "Hide sample"
-                        : `View sample (${row.sample.length} of ${row.addressableCount.toLocaleString()})`}
+                        : `View sample (${row.sample.length} of ${row.addressable.allTime.toLocaleString()} all-time)`}
                     </button>
                     {expandedTrigger === row.trigger && (
                       <div className="mt-2 overflow-x-auto">
@@ -193,6 +241,9 @@ export default function BonusCodeAudiencePanel() {
                               <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-neutral-300">
                                 Email
                               </th>
+                              <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-neutral-300">
+                                Qualified
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-neutral-800">
@@ -203,6 +254,9 @@ export default function BonusCodeAudiencePanel() {
                                 </td>
                                 <td className="px-2 py-1 text-gray-600 dark:text-neutral-300">
                                   {user.userEmail}
+                                </td>
+                                <td className="px-2 py-1 text-gray-600 dark:text-neutral-300 whitespace-nowrap">
+                                  {formatQualifiedAt(user.qualifiedAt)}
                                 </td>
                               </tr>
                             ))}

@@ -1,7 +1,7 @@
 /**
  * bonus-code-audience.test.ts
  *
- * Pins two things about `BonusCodeAudienceService` / `bonusCodeAudienceFilter.ts`:
+ * Pins four things about `BonusCodeAudienceService` / `bonusCodeAudienceFilter.ts`:
  *
  * 1. THE CODE MAP IS READ FROM CONFIG, NEVER RESTATED. A second literal
  *    `"cancel-click": "BACKIN200"`-shaped entry anywhere in the audience files
@@ -14,7 +14,19 @@
  *    `member`, a deactivated account). No DB connection — the filters are pure
  *    Mongo query OBJECTS, so this test interprets them against plain JS
  *    fixtures with a small evaluator scoped to exactly the operators the
- *    builders use ($and/$or/$ne/$exists/$in, dotted paths).
+ *    builders use ($and/$or/$ne/$exists/$gte/$in, dotted paths incl. into arrays).
+ * 3. RECENCY SCOPING actually narrows the population — a customer who qualified
+ *    before the cutoff is excluded from a `qualifiedSince`-scoped filter even
+ *    though they still match the unscoped (all-time) one, for both single-
+ *    collection triggers (`checkout-start`, `one-time-purchase`).
+ * 4. CANCEL-CLICK'S "not resubscribed" CHECK USES `autoRenew`, NOT `isActive`
+ *    (found sanity-checking the recency buckets against production, 2026-09-01).
+ *    A default self-service cancel is cancel-at-period-end:
+ *    `subscription.isActive` stays `true` until the already-paid period
+ *    actually lapses, so keying "has not resubscribed" off `isActive` silently
+ *    excludes every recent canceller for as long as their grace window lasts —
+ *    exactly the customers this trigger exists to reach. See
+ *    `hasNotResubscribedOr`'s doc comment in `bonusCodeAudienceFilter.ts`.
  *
  * Pure: no DB, no network.
  */
@@ -26,7 +38,10 @@ import {
   buildCheckoutStartAudienceFilter,
   buildOneTimePurchaseAudienceFilter,
   CANCEL_CLICK_FLOW_EVENT_FILTER,
+  cutoffDate,
+  hasNotResubscribedOr,
   notCurrentlyActiveSubscriberOr,
+  RECENCY_WINDOW_DAYS,
 } from "../../../utils/redeemables/bonusCodeAudienceFilter";
 import { BONUS_CODE_BY_TRIGGER } from "../../../config/bonusCodes";
 
@@ -43,11 +58,46 @@ function check(name: string, actual: boolean, expected: boolean) {
 
 type PlainDoc = Record<string, unknown>;
 
+/**
+ * Resolves a dotted path, replicating Mongo's own semantics for a path that
+ * descends INTO an array via a non-index field name (e.g. `oneTimePackages.purchaseDate`):
+ * it projects that field across every element, and the match below then applies
+ * "ANY element satisfies" — exactly how a real Mongo dotted-path match behaves,
+ * without needing a real database to prove it.
+ */
 function getPath(obj: unknown, dottedPath: string): unknown {
-  return dottedPath.split(".").reduce<unknown>((acc, key) => {
-    if (acc == null) return undefined;
-    return (acc as Record<string, unknown>)[key];
-  }, obj);
+  return resolveSegments(obj, dottedPath.split("."));
+}
+
+function resolveSegments(value: unknown, segments: string[]): unknown {
+  if (segments.length === 0) return value;
+  if (value == null) return undefined;
+  const [head, ...rest] = segments;
+  if (Array.isArray(value) && !/^\d+$/.test(head)) {
+    return value.map((item) => resolveSegments(item, [head, ...rest]));
+  }
+  return resolveSegments((value as Record<string, unknown>)[head], rest);
+}
+
+function toComparable(value: unknown): number | unknown {
+  return value instanceof Date ? value.getTime() : value;
+}
+
+/** `actual` may be a plain value OR an array of projected values (see getPath above). */
+function valueMatches(actual: unknown, expected: unknown): boolean {
+  if (Array.isArray(actual)) return actual.some((v) => valueMatches(v, expected));
+  if (expected !== null && typeof expected === "object" && !Array.isArray(expected)) {
+    return Object.entries(expected as Record<string, unknown>).every(([op, opVal]) => {
+      if (op === "$ne") return actual !== opVal;
+      if (op === "$exists") return opVal ? actual !== undefined : actual === undefined;
+      if (op === "$gte") {
+        if (actual == null) return false;
+        return (toComparable(actual) as number) >= (toComparable(opVal) as number);
+      }
+      throw new Error(`bonus-code-audience.test.ts evaluator: unsupported operator "${op}"`);
+    });
+  }
+  return actual === expected;
 }
 
 function evaluateClause(doc: PlainDoc, clause: Record<string, unknown>): boolean {
@@ -60,15 +110,7 @@ function evaluateClause(doc: PlainDoc, clause: Record<string, unknown>): boolean
     // check is the step-2 USER-side narrowing (isActive / subscription.isActive).
     if (key === "_id") return true;
 
-    const actual = getPath(doc, key);
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      return Object.entries(value as Record<string, unknown>).every(([op, opVal]) => {
-        if (op === "$ne") return actual !== opVal;
-        if (op === "$exists") return opVal ? actual !== undefined : actual === undefined;
-        throw new Error(`bonus-code-audience.test.ts evaluator: unsupported operator "${op}"`);
-      });
-    }
-    return actual === value;
+    return valueMatches(getPath(doc, key), value);
   });
 }
 
@@ -174,9 +216,22 @@ async function run() {
     true
   );
   check(
-    "committed a cancellation but has since resubscribed -> NOT addressable (already renewed; not part of the forecast)",
-    matches({ _id: memberId, isActive: true, subscription: { isActive: true } }, cancelClickFilter),
+    "committed a cancellation but has GENUINELY resubscribed (autoRenew back on) -> NOT addressable (already renewed; not part of the forecast)",
+    matches({ _id: memberId, isActive: true, subscription: { isActive: true, autoRenew: true } }, cancelClickFilter),
     false
+  );
+  check(
+    // THE BUG THIS SECTION EXISTS TO CATCH (2026-09-01). cancelSubscription defaults to
+    // cancelAtPeriodEnd: true, which sets autoRenew: false immediately but leaves
+    // subscription.isActive: true until the already-paid period actually lapses — so a
+    // customer who cancelled ten minutes ago, mid-grace-period, is NOT a resubscriber and
+    // must still be addressable. Using notCurrentlyActiveSubscriberOr (isActive) here
+    // instead of hasNotResubscribedOr (autoRenew) silently excluded this entire cohort —
+    // caught against production, where it cut the last-30-day cancel-click count from
+    // several hundred down to double digits.
+    "cancelled but still mid-grace-period (isActive still true, autoRenew already false) -> addressable, NOT a resubscriber",
+    matches({ _id: memberId, isActive: true, subscription: { isActive: true, autoRenew: false } }, cancelClickFilter),
+    true
   );
   check(
     "deactivated account -> NOT addressable",
@@ -184,9 +239,57 @@ async function run() {
     false
   );
 
-  console.log("\nSHARED HELPER — notCurrentlyActiveSubscriberOr matches the 'inactive' branch shape used elsewhere");
+  console.log("\nSHARED HELPERS — the two 'not currently X' clauses are DIFFERENT on purpose");
   const orClauses = notCurrentlyActiveSubscriberOr();
-  check("carries exactly three clauses (no subscription field / null / isActive not true)", orClauses.length === 3, true);
+  check("notCurrentlyActiveSubscriberOr carries exactly three clauses (no subscription field / null / isActive not true)", orClauses.length === 3, true);
+  const resubscribeClauses = hasNotResubscribedOr();
+  check("hasNotResubscribedOr carries exactly three clauses (no subscription field / null / autoRenew not true)", resubscribeClauses.length === 3, true);
+  check(
+    "hasNotResubscribedOr's third clause keys off autoRenew, NOT isActive — the field that actually distinguishes the two questions",
+    JSON.stringify(resubscribeClauses[2]) === JSON.stringify({ "subscription.autoRenew": { $ne: true } }),
+    true
+  );
+
+  console.log("\nRECENCY BUCKETING (2026-09-01) — an all-time count overstates the actionable pool by an order of magnitude");
+
+  const NOW = new Date("2026-09-01T00:00:00.000Z");
+  check(
+    "cutoffDate(now, 30) is exactly 30*24h before now — pure epoch-millisecond arithmetic, no ambient clock",
+    cutoffDate(NOW, 30).getTime() === NOW.getTime() - 30 * 24 * 60 * 60 * 1000,
+    true
+  );
+  check("RECENCY_WINDOW_DAYS names the two windows the card leads with", RECENCY_WINDOW_DAYS.last30 === 30 && RECENCY_WINDOW_DAYS.last90 === 90, true);
+
+  const cutoff30 = cutoffDate(NOW, RECENCY_WINDOW_DAYS.last30);
+  const recentGuest = { isActive: true, createdAt: new Date("2026-08-20T00:00:00.000Z") }; // 12 days ago
+  const staleGuest = { isActive: true, createdAt: new Date("2026-03-01T00:00:00.000Z") }; // ~6 months ago
+
+  const checkoutStartAllTime = buildCheckoutStartAudienceFilter() as Record<string, unknown>;
+  const checkoutStart30 = buildCheckoutStartAudienceFilter({ qualifiedSince: cutoff30 }) as Record<string, unknown>;
+  check("a guest who registered 12 days ago is in the all-time checkout-start pool", matches(recentGuest, checkoutStartAllTime), true);
+  check("...and is ALSO in the last-30-day pool", matches(recentGuest, checkoutStart30), true);
+  check("a guest who registered ~6 months ago is STILL in the all-time pool (that's the point of keeping it)", matches(staleGuest, checkoutStartAllTime), true);
+  check(
+    "...but is EXCLUDED from the last-30-day pool — the Klaviyo flow could never have reached them this window",
+    matches(staleGuest, checkoutStart30),
+    false
+  );
+
+  const recentBuyer = { isActive: true, oneTimePackages: [{ purchaseDate: new Date("2026-08-25T00:00:00.000Z") }] }; // 7 days ago
+  const staleBuyer = { isActive: true, oneTimePackages: [{ purchaseDate: new Date("2026-01-01T00:00:00.000Z") }] }; // ~8 months ago
+  const oneTimeAllTime = buildOneTimePurchaseAudienceFilter() as Record<string, unknown>;
+  const oneTime30 = buildOneTimePurchaseAudienceFilter({ qualifiedSince: cutoff30 }) as Record<string, unknown>;
+  check("bought a one-time pack 7 days ago -> in both the all-time and last-30-day pools", matches(recentBuyer, oneTimeAllTime) && matches(recentBuyer, oneTime30), true);
+  check("bought a one-time pack ~8 months ago -> in the all-time pool", matches(staleBuyer, oneTimeAllTime), true);
+  check("...but NOT in the last-30-day pool", matches(staleBuyer, oneTime30), false);
+  check(
+    "a customer with BOTH an old and a recent purchase counts by their MOST RECENT one (any-element $gte match)",
+    matches(
+      { isActive: true, oneTimePackages: [{ purchaseDate: new Date("2026-01-01T00:00:00.000Z") }, { purchaseDate: new Date("2026-08-30T00:00:00.000Z") }] },
+      oneTime30
+    ),
+    true
+  );
 
   if (failures > 0) {
     console.error(`\n${failures} assertion(s) failed`);
