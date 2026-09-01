@@ -1537,3 +1537,52 @@ modal — so the purchase-click handler stays reachable and could show a second,
 identical toast if the member clicks purchase anyway. That is an accepted, narrow edge
 case (one duplicate toast, not a silent dead end), not a reason to bring back the
 silent branch.
+
+## MembershipModal: the on-hold pack-step nudge, and why its render condition is two-part (2026-09-01)
+
+A member in payment recovery (`past_due` / `unpaid` / paused) who opens a one-time / Additional
+pack in `MembershipModal` (`index.tsx`, step 2) now sees an inline amber note above that step's
+content offering reactivation, with the real settle amount and the real entries figure — not a
+blocker, the pack purchase stays fully allowed either way.
+
+**The numbers are not computed here.** `onHoldPreview` is derived via `useMemo(() =>
+getPastDueRenewalPreview((userData ?? {}) as unknown as IUser), [userData])`, immediately below
+the `useUserContext()` destructure. This is the exact same canonical util
+(`src/utils/subscription/past-due-renewal-preview.ts`) that already drives the dashboard's
+past-due note, the resolve sheet/popup (`usePastDueResolve`), the renewal-failure email, and the
+Klaviyo `past_due_renewal_entries` property — so this note can never disagree with any of those
+four surfaces. It returns `{ entries: null, cost: null }` for anyone NOT in payment recovery,
+which is what scopes the note away from active members and guests on its own — no separate auth
+or status check needed.
+
+**The render condition is deliberately two-part: `onHoldPreview.cost != null &&
+!isSubscriptionPlan(activePlan)`.** The first half scopes to payment recovery. The second half
+scopes to a *pack*, not a membership purchase — this same step also renders for a member
+re-subscribing to a membership tier (e.g. via the `switch-tier-past-due` teardown), and that path
+already has its own dedicated recovery UI (`RenewalFailedModal` / `PastDueResolvePanel`); this
+nudge is not meant to double up there. `isSubscriptionPlan` is imported from
+`@/utils/subscription/subscription-creation-gate` — the single source this branch already uses
+to answer "is this plan a membership or a pack" (also used by the subscription-creation gate
+itself) — rather than a second, hand-rolled `activePlan.period === "one-time"` check that could
+drift from it.
+
+**Why the note sits above the whole step-2 block, not pixel-adjacent to the purchase button.**
+The button itself lives in a sibling file, `PaymentStep.tsx`, which this change does not touch.
+The note is rendered as a JSX sibling in `index.tsx`, immediately before `<PaymentStep />`,
+inside the same `{currentStep === 2 && (...)}` block (now wrapped in a fragment). Placement is
+therefore enforced **behaviourally** by the render condition above (it can only ever appear
+while looking at a pack, in payment recovery) rather than by DOM adjacency to the button —
+tightening the condition is what makes "an inline note on the pack step" true regardless of
+which file the button lives in.
+
+**Copy is legally constrained (CLAUDE.md rule 11 / spec §4.5 option A).** The note states the
+membership's *own* price and entries (`onHoldPreview.cost` / `onHoldPreview.entries`) and never
+prints the pack's price or entry count (`activePlan.price` / entries are never read in this
+block) — no "cheaper than this pack" / "more entries than this pack" comparison, since a
+price-against-entries juxtaposition reads as per-entry pricing, which rule 11 bans. Two copy
+variants guard against ever rendering `$null` / `null free entries`: the full sentence only when
+`entries` also resolves, a fallback sentence (no entries figure) otherwise.
+
+See `docs/subscription/frontend.md` → "On-hold nudge on the pack step" for the full write-up
+(this entry is the shared-ui pointer; that one is the fuller cross-reference to the subscription
+docs this feature is otherwise part of).

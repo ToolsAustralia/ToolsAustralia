@@ -749,6 +749,11 @@ This is the **customer-facing** counterpart to §9e's admin past-due tool — th
 
 > **Note** — this past-due *renewal recovery* (force-charge the existing overdue invoice) is a different code path from the §10i *reactivation* of a `canceled` subscription, even though both surface "reactivated" copy.
 
+_2026-09-01: a member in payment recovery who opens a one-time / Additional pack now sees
+an inline reactivation prompt showing the settle amount and the free entries that land
+when it clears. It is a prompt, not a block — the pack purchase is still allowed. No
+price, tier, entry allocation or recovery rule changed._
+
 ### 10f. Contact verification — what it actually gates
 
 **Updated 2026-08-27.** Members must now finish profile setup holding **at least one verified

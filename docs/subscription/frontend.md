@@ -530,3 +530,48 @@ code into the browser.
 Regression cover: `e2e/specs/membership/bonus-code-journey.spec.ts` (`npm run e2e:bonus-code`) drives
 the real journey — mint, apply at checkout, real Stripe TEST-mode charge — and reads the granted
 entries out of the **draw**, not off the receipt. It was red for this defect before the fix.
+
+## On-hold nudge on the pack step (2026-09-01)
+
+A member in payment recovery who opens a one-time / Additional pack sees an inline amber note on
+`MembershipModal` step 2 offering reactivation, with the real settle amount and the real entries
+figure from **`getPastDueRenewalPreview`**
+([src/utils/subscription/past-due-renewal-preview.ts](../../src/utils/subscription/past-due-renewal-preview.ts))
+— the same source as the dashboard note, the resolve sheet/popup, the renewal-failure email and the
+Klaviyo `past_due_renewal_entries` property (see the "Renewal preview note" entry above). Do not
+recompute either number here; a fifth source can disagree with the other four.
+
+`onHoldPreview` is derived with `useMemo(() => getPastDueRenewalPreview((userData ?? {}) as unknown
+as IUser), [userData])` immediately below the `useUserContext()` destructure in `index.tsx` — the
+same client-side idiom as `RenewalFailedModal/usePastDueResolve.ts`.
+
+**Render condition is two-part: `onHoldPreview.cost != null && !isSubscriptionPlan(activePlan)`.**
+The util returns `{ entries: null, cost: null }` for anyone NOT in payment recovery, which scopes
+the note away from active members and guests on its own. `isSubscriptionPlan` (imported from
+`@/utils/subscription/subscription-creation-gate`, the single source this branch already uses for
+"is this plan a membership or a pack") excludes a membership purchase/reactivation on the same
+step — that path has its own dedicated recovery UI (`RenewalFailedModal` / `PastDueResolvePanel`).
+Together the two conditions make this precisely "an inline note on the pack step" **by behaviour**:
+it can only ever render while looking at a pack, while in payment recovery — regardless of where
+the pack's purchase button lives in the file tree.
+
+It is a **note, not a blocker** — the pack purchase button (rendered by `PaymentStep`, a sibling
+file this change does not touch) stays fully usable either way; the note renders as a JSX sibling
+immediately above `<PaymentStep />` in the same step-2 block. Two copy variants: the full sentence
+when `entries` also resolves, and a fallback sentence (no entries figure) when it doesn't — both
+guard against ever rendering `$null` or `null free entries`.
+
+**Copy is legally constrained** — see spec §4.5 option A and CLAUDE.md rule 11. It states the
+membership's own price and entries; it does **not** print the pack's price or entry count, and does
+**not** author a "cheaper than this pack" / "more entries than this pack" comparison — the reader
+already has the pack's numbers on the same screen, and an explicit price-against-entries
+juxtaposition reads as per-entry pricing, which rule 11 bans outright.
+
+Verified: `npm run test:klaviyo-renewal-preview` (covers the entries figure this renders) and
+`npm run test:subscription-gate` (unaffected — this is a note, not a gate change).
+
+**Fuller shared-ui cross-reference:** [shared-ui/gotchas.md → "MembershipModal: the on-hold
+pack-step nudge, and why its render condition is two-part"](../shared-ui/gotchas.md) — that is the
+doc the domain manifest actually maps `MembershipModal/index.tsx` edits to (its
+`src/components/modals/**` glob, not this domain's more specific modal-folder list), so treat it
+as the primary home and this section as the subscription-side pointer.

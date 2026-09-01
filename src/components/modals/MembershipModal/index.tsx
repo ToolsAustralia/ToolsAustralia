@@ -61,6 +61,7 @@ import {
 import {
   resolveSubscriptionCreationGate,
   MANAGE_SUBSCRIPTION_PATH,
+  isSubscriptionPlan,
 } from "@/utils/subscription/subscription-creation-gate";
 
 /**
@@ -175,6 +176,8 @@ import { isStripeNoiseError } from "@/utils/payment/stripe/is-stripe-noise-error
 import { markErrorHandled, isErrorHandled } from "@/utils/payment/stripe/error-handled-marker";
 import { recoverSetupIntent } from "@/utils/payment/stripe/setup-intent-recovery";
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
+import type { IUser } from "@/models/User";
+import { getPastDueRenewalPreview } from "@/utils/subscription/past-due-renewal-preview";
 
 import StepIndicator from "./StepIndicator";
 import WinnerStrip from "./WinnerStrip";
@@ -645,6 +648,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     return activePlan;
   }, [activePlan, resolvedOneTimeMultiplier, resolvedMembershipMultiplier, isMemberForPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
+  // { entries: null, cost: null } for anyone NOT in payment recovery, so this both
+  // supplies the numbers and scopes the on-hold nudge on the pack step: an ACTIVE
+  // member buying a pack sees nothing (they already hold the membership and need no
+  // nudge), and neither does a guest.
+  //
+  // The cast matches the established client-side idiom at
+  // `RenewalFailedModal/usePastDueResolve.ts:82` — the util is typed against IUser but
+  // reads only `subscription.status` / `subscription.packageId`, both present on the
+  // client UserData. Do not widen the util's signature for this one caller.
+  const onHoldPreview = useMemo(
+    () => getPastDueRenewalPreview((userData ?? {}) as unknown as IUser),
+    [userData]
+  );
   const { gatesClosed, openGateClosedModal } = useMajorDrawPurchaseGate();
   const { trackInitiateCheckout } = usePixelTracking();
   const { trackKlaviyoStartedCheckout } = useKlaviyoTracking();
@@ -5614,6 +5630,52 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
                 {/* Step 2: Billing Info */}
                 {currentStep === 2 && (
+                  <>
+                    {/* On-hold nudge: a member in payment recovery who opens a
+                        one-time / Additional pack sees an inline note offering
+                        reactivation with the real settle amount + entries figure.
+                        `onHoldPreview.cost` is null for anyone NOT in payment
+                        recovery, which is what scopes this away from active
+                        members and guests — no separate status check needed.
+                        `!isSubscriptionPlan(activePlan)` is the second half of the
+                        gate: it excludes a membership purchase/reactivation on this
+                        same step (that has its own dedicated recovery UI —
+                        RenewalFailedModal / PastDueResolvePanel), so this note can
+                        only ever render on a pack, regardless of where its purchase
+                        button lives. Reuses the single source for "is this plan a
+                        subscription" (also used by the gate itself) rather than
+                        hand-rolling a period check here.
+                        It is a note, not a blocker: the pack purchase button
+                        below stays fully usable either way. */}
+                    {onHoldPreview.cost != null && !isSubscriptionPlan(activePlan) && (
+                      <div className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+                        <p className="font-semibold text-amber-900 dark:text-amber-200">
+                          Membership on hold
+                        </p>
+                        <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
+                          {onHoldPreview.entries != null ? (
+                            <>
+                              Settle <b>${onHoldPreview.cost}</b> to reactivate your
+                              membership — <b>{onHoldPreview.entries} free entries</b> land
+                              as soon as it clears, and your partner discounts come back.
+                            </>
+                          ) : (
+                            <>
+                              Settle <b>${onHoldPreview.cost}</b> to reactivate your
+                              membership — your partner discounts, entries &amp; member
+                              offers are paused until your renewal clears.
+                            </>
+                          )}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => router.push("/my-account/membership?open=payment")}
+                          className="mt-2 font-semibold text-amber-900 underline underline-offset-2 dark:text-amber-200"
+                        >
+                          Reactivate membership
+                        </button>
+                      </div>
+                    )}
                   <PaymentStep
                     isAuthenticated={isAuthenticated}
                     activePlan={activePlan}
@@ -5668,6 +5730,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     onSubmit={handleSubmit}
                     onPackageChange={handlePackageChange}
                   />
+                  </>
                 )}
 
                 {/* Security Section - Only visible in payment step (no border).
