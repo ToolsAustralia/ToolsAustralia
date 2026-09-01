@@ -354,6 +354,12 @@ This is the most important and non-obvious behaviour. Registering in **step 1** 
 
 The register route even hard-codes `isAuthenticated: false` in its Klaviyo "Started Checkout" event "because this path runs at registration submit and the user is, by definition, a guest" ([register/route.ts:109-111](src/app/api/auth/register/route.ts#L109)). Documented at [docs/auth/gotchas.md:26-50](docs/auth/gotchas.md#L26).
 
+_2026-09-01 — logging only, no change to what a customer sees or to what is stored:_ a
+registration rejected by validation (most often a mistyped email) is logged at `warn` with
+just the field message, instead of `error` with a full `ZodError` dump. **The customer-facing
+behaviour is unchanged** — same 400, same `{ error, field }` body, same inline message on the
+form. See [docs/auth/gotchas.md](docs/auth/gotchas.md).
+
 ### 4a-bis. The step-1 → step-2 bridge is now proven by a cookie (2026-08-28)
 
 Because step 1 does not log anyone in, step 2's payment call has no session and has to name the

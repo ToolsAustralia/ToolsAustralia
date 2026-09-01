@@ -344,7 +344,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-08-28",
+  "lastModified": "2026-08-31",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -413,7 +413,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/queries/admin/useAllowlistStats.ts",
         "src/utils/billing/declineCodeLabels.ts"
       ],
-      "lastVerified": "2026-08-28"
+      "lastVerified": "2026-08-31"
     },
     "payment": {
       "docs": "docs/payment/",
@@ -462,7 +462,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useMiniDrawPurchase.ts",
         "src/hooks/usePastDrawsData.ts"
       ],
-      "lastVerified": "2026-08-26"
+      "lastVerified": "2026-08-31"
     },
     "rewards-redeemables": {
       "docs": "docs/rewards-redeemables/",
@@ -598,7 +598,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/generated/upsellImageManifest.ts",
         "scripts/build-upsell-image-manifest.ts"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-08-31"
     },
     "cart-shop-products": {
       "docs": "docs/cart-shop-products/",
@@ -640,7 +640,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useErrorRecovery.ts",
         "src/lib/errors/**"
       ],
-      "lastVerified": "2026-06-10"
+      "lastVerified": "2026-08-31"
     },
     "auth": {
       "docs": "docs/auth/",
@@ -669,7 +669,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/migrate-seed-staff-roles.ts",
         "src/contexts/UserContext.tsx"
       ],
-      "lastVerified": "2026-08-28"
+      "lastVerified": "2026-08-31"
     },
     "email": {
       "docs": "docs/email/",
@@ -732,7 +732,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useAttribution.ts",
         "src/hooks/useUTMPersistence.ts"
       ],
-      "lastVerified": "2026-08-26"
+      "lastVerified": "2026-08-31"
     },
     "ab-testing": {
       "docs": "docs/ab-testing/",

@@ -18,6 +18,7 @@ import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata"
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
+import { isExpectedPaymentDeclineError } from "@/utils/error-reporting/error-severity-classifier";
 import { enforceMajorDrawOpenForNewPurchasesOr403 } from "@/utils/draws/major-draw-gate-http";
 
 /**
@@ -660,7 +661,13 @@ async function handleOneClickPurchase(
         idempotencyKey: stripeIdempotencyKey ?? `pi_upsell_oc_${offer.id}_${user._id}_${Date.now()}`,
       });
     } catch (stripeError) {
-      console.error("Stripe payment intent creation failed:", stripeError);
+      // An issuer decline is an expected outcome, not a fault — `warn` (stripped in
+      // production) keeps it out of the error stream. Anything else still logs as an error.
+      if (isExpectedPaymentDeclineError(stripeError)) {
+        console.warn("Stripe payment intent declined (upsell):", stripeError);
+      } else {
+        console.error("Stripe payment intent creation failed:", stripeError);
+      }
       return NextResponse.json(
         {
           error: "Payment processing failed",

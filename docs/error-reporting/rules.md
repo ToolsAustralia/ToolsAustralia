@@ -8,6 +8,45 @@ Per CLAUDE.md, this domain is the canonical error system. Don't add Sentry, Data
 
 Per CLAUDE.md, production builds strip `console.{log,info,debug,warn}` (`next.config.ts` `compiler.removeConsole`). Use `console.error` only for things that must survive. Anything else → `ErrorReport`.
 
+**`console.error` means "a human should act", not "something happened".** Because it is the
+only level that survives the production build, it is tempting to reach for it whenever you
+want a line to be visible on Vercel. Don't. Vercel groups every `console.error` into the
+project's runtime-errors list, so each non-error you put there is one more thing between a
+reader and a real fault — and a list nobody trusts is a list nobody reads.
+
+Before writing `console.error`, ask: *if this fires at 3am, is there something to do about
+it?* If the answer is no, it is not an error:
+
+| It is… | Use | Why |
+| --- | --- | --- |
+| A fault a human must act on | `console.error` | Survives the build; belongs in the error list |
+| A success / "job done" line | `console.log` | Stripped in production. Vercel already logs the invocation |
+| An expected outcome (see R6) | `console.warn` | Kept for local debugging, stripped in production |
+| A user-facing error worth analysing | `ErrorReport` | Structured, deduped, queryable, carries user context |
+
+A one-line-per-run cron heartbeat is a legitimate exception — see
+[gotchas G-LOG-1](./gotchas.md).
+
+## R6. Expected outcomes are not errors
+
+An outcome the code already handles is not a fault, and must not be logged at `error`
+level. Three recurring shapes:
+
+- **The caller recovers.** A failed Klaviyo idempotency pre-check
+  (`src/lib/klaviyo.ts`, `critical: false`) falls through to create/update; nothing is
+  lost. The outage signal lives in the *critical* Klaviyo calls, which still log at `error`.
+- **There is nothing to act on.** A tracking beacon from a visitor with no `ta_anon_id`
+  cookie (blocked cookies, a bot) has no row to attach to. Both promo beacons exclude
+  `no_anonymous_id` and `no_visit_row` from their failure log.
+- **It is a business outcome, not a system fault.** A card decline means the customer needs
+  a different card, not that engineering broke something. Detect these with
+  `isExpectedPaymentDeclineError(error)` from `error-severity-classifier.ts` rather than
+  matching on message text at the call site — declines are still captured in full by
+  `ErrorLoggingService`, correctly graded `medium`.
+
+The same applies to a validation rejection: a Zod failure on a signup form is the form
+working, and it answers with a 400. Log the message at `warn`, never the stack at `error`.
+
 ## R3. Sanitise before report
 
 When capturing payment / auth-related errors, redact:

@@ -329,3 +329,16 @@ MembershipRenewalCycle { createdAt >= <window>, status: "succeeded", billingReas
 **…but the charge-side anchor has its own blind spot, so the script reads Stripe too.** `MembershipRenewalCycle` is written by the *same* handler that failed (`index.ts:3614`), and only **after** its first Stripe call (`index.ts:3474`) — a 429 on that call leaves no cycle row either. `upsertRenewalCycleFromPaidInvoice` also returns early unless `billing_reason === "subscription_cycle"` (`membershipAnalyticsPersistence.ts:43`), so a lost grant on a `subscription_create`/`subscription_update` invoice in the same burst is equally invisible. A second pass therefore lists **paid Stripe invoices** in the window and checks each against `PaymentEvent` — the only anchor that cannot lie by omission. It is report-only: non-cycle invoices have different entry maths (promo multiplier, resubscribe) and are never auto-granted.
 
 **Generalised rule:** *the record written by the failing code path can never be your only evidence that the path ran.* Each anchor rules out a different failure — the ledger cannot see a handler that died before writing it, and Mongo cannot see a handler that died before writing anything. Agreement between the money side and the ledger side is what turns a count into a fact.
+
+## Mini-draw payment declines log at `warn` (2026-09-01)
+
+`POST /api/mini-draw/purchase` wraps `paymentIntents.create` in a `try`/`catch` that
+previously logged every failure — including routine card declines — at `console.error`.
+
+It now branches on `isExpectedPaymentDeclineError` from
+`src/utils/error-reporting/error-severity-classifier.ts`: an issuer decline logs at `warn`
+(stripped in production), anything else still logs at `error`. The 400 response to the
+client is unchanged either way, so the buyer-facing behaviour is identical.
+
+Rationale and the shared helper's contract live in
+[billing-stripe gotchas](../billing-stripe/gotchas.md).

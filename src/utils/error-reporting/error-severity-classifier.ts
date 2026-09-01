@@ -199,6 +199,29 @@ export function isExpectedPaymentDecline(opts: {
 }
 
 /**
+ * `isExpectedPaymentDecline` for a raw caught `unknown` from a Stripe call.
+ *
+ * The purchase routes catch every failure from `paymentIntents.create` / `invoices.pay` in
+ * one `catch` and log it at `console.error`. That is right for a genuine system fault and
+ * wrong for an issuer decline: a customer's card being refused is a routine business
+ * outcome, it is already captured with full context by `ErrorLoggingService` (the
+ * `ErrorReport` collection holds them, correctly graded `medium`), and it is not
+ * engineering-actionable. Logging declines at error level put ~34 of them a week into
+ * Vercel's error stream alongside real faults.
+ *
+ * Shape matches the established extraction in `create-one-time-purchase/route.ts`.
+ */
+export function isExpectedPaymentDeclineError(error: unknown): boolean {
+  if (error === null || typeof error !== "object") return false;
+  const stripeError = error as { code?: string; decline_code?: string; message?: string };
+  return isExpectedPaymentDecline({
+    errorCode: stripeError.code,
+    declineCode: stripeError.decline_code,
+    message: stripeError.message,
+  });
+}
+
+/**
  * Classify error severity based on category and characteristics
  * 
  * @param error - The error object to classify

@@ -525,3 +525,43 @@ pointing at them. Without it this fix would have recreated the silent-skip bug i
 **They still self-heal.** Fixing the underlying data bumps `user.updatedAt`, so the incremental
 sweep picks them up on its own. And once the initial drain completes,
 `{ klaviyoSyncedAt: { $exists: false } }` is the standing query for "never successfully synced".
+
+## Non-fatal Klaviyo failures log at `warn`, not `error` (2026-09-01)
+
+`KlaviyoService.retryRequest` takes a `{ label, critical }` context. When `critical: false`,
+exhausting the retries logs at **`console.warn`** — visible locally, stripped from
+production by `compiler.removeConsole`.
+
+The only current `critical: false` caller is the **profile idempotency pre-check**: an
+optimisation that looks a profile up so the upsert can avoid a 409. When it fails the caller
+falls straight through to create/update, so nothing is lost. It used to log at `error`
+purely so it would survive the production build, which made it the single largest entry in
+Vercel's runtime-error list — ~407 in 7 days for an event with no consequence.
+
+**Do not "restore" it to `error` to investigate a Klaviyo problem.** The outage signal is
+the *critical* path, which still logs at `error`: `❌ Klaviyo <label> failed after N
+attempts` and `❌ Klaviyo profile create failed after N attempts`. If Klaviyo is down, those
+fire. If only the pre-check is failing, nothing is broken.
+
+## `adsetMetadataFetcher` no longer dumps raw Meta payloads (2026-09-01)
+
+Four `console.error` calls that serialised first-page adset objects and the distinct
+`learning_stage_info.status` set were one-off instrumentation for working out what Meta
+actually returns for `learning_stage_info` / `last_significant_edit`. That mapping is settled
+and the dumps were ~128 entries a week in the error stream.
+
+What remains is a single `console.log` shape summary (counts only, stripped in production).
+The `firstPageRaw` accumulator that existed only to feed the dumps is gone — if you need to
+re-inspect Meta's raw shape, add it back temporarily behind a local run, don't ship it.
+
+## Both promo beacons treat a missing `ta_anon_id` as expected (2026-09-01)
+
+`promo-prize-build` and `discount-page-engagement` both skip logging when
+`recordX` returns `no_anonymous_id` or `no_visit_row`. Middleware mints `ta_anon_id` on every
+non-API, non-static request, so a beacon without one is a visitor with cookies blocked, a
+privacy browser, or a bot — there is no row to attach the event to and no fix that would
+recover it.
+
+`promo-prize-build` originally excluded only `no_visit_row`, which put ~210 non-events a
+month into the error stream. **Keep the two beacons' guards identical** — they are the same
+mechanism and should fail the same way.

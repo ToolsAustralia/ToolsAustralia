@@ -1063,7 +1063,16 @@ export async function POST(request: NextRequest) {
 
     return registrationResponse;
   } catch (error) {
-    console.error("❌ Registration error:", error);
+    // A Zod failure here is someone mistyping their email in the signup form — the handler
+    // answers it with a 400 and a field-level message, which is the feature working. It is
+    // not a server fault, so it logs at `warn` (stripped in production) and without the
+    // stack: at `error` level it was ~73 entries a week in Vercel, each one a full ZodError
+    // dump of a typo. Everything else still logs as a real error.
+    if (error instanceof z.ZodError) {
+      console.warn("Registration rejected by validation:", error.issues[0]?.message);
+    } else {
+      console.error("❌ Registration error:", error);
+    }
 
     // Handle Zod validation errors
     if (error instanceof z.ZodError) {

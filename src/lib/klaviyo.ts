@@ -656,8 +656,16 @@ class KlaviyoClient {
           const label = context?.label ?? "request";
           if (context?.critical === false) {
             // Caller recovers from this (e.g. upsert falls back to create/update on a failed
-            // pre-check) — log non-fatal so it isn't mistaken for a lost profile/event.
-            console.error(
+            // pre-check) — nothing is lost, so this is `console.warn`: kept for local
+            // debugging, stripped from production by `compiler.removeConsole`.
+            //
+            // It used to be `console.error` purely so it would survive that stripping, which
+            // made it the single largest entry in Vercel's error stream (~407 in 7 days)
+            // for an event that by construction has no consequence. Dropping it from
+            // production loses no signal: if Klaviyo is genuinely down, the CRITICAL calls
+            // fail too, and those still log via the `else` branch below ("❌ Klaviyo
+            // <label> failed after N attempts") — that is the outage indicator to watch.
+            console.warn(
               `⚠️ Klaviyo ${label} failed after ${maxRetries} attempts (non-fatal — caller recovers):`,
               lastError.message,
               errorDetails

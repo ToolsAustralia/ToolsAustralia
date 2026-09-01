@@ -172,3 +172,14 @@ they redeemed against (Dec–May) are completed and their winners already drawn.
 time with `npm run find:missing-retention-entries -- --prod [--csv]`.
 
 Ordering is pinned by `npm run test:retention-grant-order`.
+
+## Upsell payment declines log at `warn` (2026-09-01)
+
+`POST /api/upsell/purchase` branches its `paymentIntents.create` catch on
+`isExpectedPaymentDeclineError` from
+`src/utils/error-reporting/error-severity-classifier.ts`: an issuer decline logs at `warn`
+(stripped in production), a genuine Stripe fault still logs at `error`. The 400 response
+shape is unchanged.
+
+Rationale and the shared helper's contract live in
+[billing-stripe gotchas](../billing-stripe/gotchas.md).
