@@ -58,6 +58,7 @@ import {
   typedCodeRefusalCopy,
   type PurchaseRequirementStop,
 } from "@/utils/payment/typed-code-at-checkout";
+import { resolveSubscriptionCreationGate } from "@/utils/subscription/subscription-creation-gate";
 
 /**
  * The code state `handleSubmit` actually charges on, settled once at the click.
@@ -1187,6 +1188,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       if (isSubscription && !isCreatingSubscriptionRef.current) {
         const currentPackageId = packageId || null;
 
+        // Shared by the step-2 backstop below and the pre-warm's EXISTING_SUBSCRIPTION
+        // branch further down — one place builds the "Active Subscription Found" toast
+        // so the two call sites can't drift apart.
+        const showExistingSubscriptionToast = (redirectTo: string) => {
+          showToast({
+            type: "error",
+            title: "Active Subscription Found",
+            message:
+              "You already have a membership. Manage or update it from your account.",
+            duration: 10000,
+            action: {
+              label: "Manage Subscription",
+              onClick: () => router.push(redirectTo),
+            },
+          });
+        };
+
         if (
           subscriptionCreatedRef.current &&
           subscriptionPackageIdRef.current !== null &&
@@ -1227,6 +1245,21 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           } catch {
             // Ignore sessionStorage parse errors
           }
+        }
+
+        // Backstop for the user-data load race (spec D7). The chokepoint gate in
+        // useMembershipModal runs at OPEN time; if UserContext had not resolved then, a
+        // member could still reach this step. Firing the pre-warm here would produce a
+        // guaranteed 409 and leave them staring at a payment step with no card form.
+        const stepTwoGate = resolveSubscriptionCreationGate(userData, {
+          isSubscriptionPlan: true,
+          userLoading: false,
+        });
+        if (!stepTwoGate.allowed) {
+          showExistingSubscriptionToast(stepTwoGate.redirectTo);
+          onClose();
+          router.push(stepTwoGate.redirectTo);
+          return;
         }
 
         if (!paymentIntentClientSecret) {
@@ -1279,10 +1312,13 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             err instanceof Error ? err.message : "Failed to create subscription. Please try again.";
 
           if (errCode === "EXISTING_SUBSCRIPTION") {
-            // Background pre-warm: do NOT toast here. The purchase-click handler
-            // ("Active Subscription Found") is the single source of this message,
-            // so the user sees exactly one actionable toast.
-            console.warn("[MembershipModal] pre-warm blocked by EXISTING_SUBSCRIPTION (toast deferred to purchase click)");
+            // Reaching here means both the open-time gate and the step-2 backstop were
+            // beaten (a status change mid-session, or user data that never resolved).
+            // This used to log and show NOTHING, leaving the member at a payment step
+            // with no card form and no explanation — the deferred-toast reasoning only
+            // held while the purchase click could still surface it, and with no client
+            // secret there is often nothing to click.
+            showExistingSubscriptionToast("/my-account/membership?open=subscription");
           } else {
             showToast({
               type: "error",

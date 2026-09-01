@@ -1516,3 +1516,18 @@ type-size nit for viewport zoom on every iPhone.
 _(The shop's sort control used pattern 2 until 2026-08-28 and now uses pattern 1; no
 component in `src/` currently ships the transparent-select trick, so pattern 2 is
 documented here rather than pointed at a live example.)_
+
+## MembershipModal step-2 pre-warm is gated, and never fails silently (2026-09-01)
+
+The step-2 effect pre-creates the subscription to obtain a card-form client secret. It now
+calls `resolveSubscriptionCreationGate` first: a member with a live membership is toasted
+and redirected instead of pre-warming into a guaranteed 409.
+
+The pre-warm's `EXISTING_SUBSCRIPTION` branch previously logged `console.warn` and showed
+nothing, on the reasoning that the purchase-click handler was "the single source" of the
+message. That reasoning failed in practice — with no client secret the card form never
+renders, so there is frequently no purchase click to make, and the member simply sat at a
+blank payment step. It now shows the same "Active Subscription Found" toast.
+
+**Do not restore the silent branch.** If you are worried about double-toasting, the
+redirect closes the modal, so the purchase-click handler cannot also fire.
