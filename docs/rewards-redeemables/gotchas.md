@@ -612,3 +612,61 @@ Read the full write-up, including what was deliberately left alone, in
 already reversed both the counter and the draw entries. Passing it wrongly in either direction is
 silent — `true` when nothing reversed leaves a member holding refunded entries; `false` when the
 ledger already did takes them twice.
+
+## 188 members were shown a Claim button the server refused — the wallet had its own copy of the rule (2026-09-01)
+
+**Symptom.** 188 members held an `ANZACDAY25` coupon for 25 free entries that rendered with an
+**enabled Claim button**. Tapping it failed. `RedemptionService.redeem` answered
+`campaign_not_active` every time.
+
+**Cause — a partial copy, not a missing check.** `RedeemablesWalletService` computed
+`isRedeemableNow` from its own hand-written campaign test:
+
+```ts
+campaign != null && campaign.isActive !== false   // the old wallet
+```
+
+while the redeem path called the shared predicate:
+
+```ts
+isCampaignRedeemable(campaign, now)               // isActive && startsAt <= now && (neverExpires || personalWindow || endsAt >= now)
+```
+
+The wallet had **one third** of it. `endsAt` never entered the wallet's answer, so a campaign that had
+ended but was still flagged active looked live to the wallet and dead to the server. The comment
+sitting above the expression said it required `isActive` "too" *in order to mirror*
+`isCampaignRedeemable` — the drift was documented as if it were the mirror.
+
+**The production state that made it bite.** Campaign **ANZAC DAY 25** (`ANZACDAY25`):
+`startsAt` 2026-04-24, `endsAt` **2026-04-27T10:00Z**, `neverExpires: false`, no `validForHours`,
+`isActive: **true**` (never switched off after the promo). 452 of its issuances had been minted with
+the far-future sentinel `expiresAt` `9999-12-31T23:59:59.999Z` — stamped before an expiry was
+configured on the campaign, which was edited mid-run (`updatedAt` 2026-04-27T08:51). Of those 452,
+**264 were already redeemed and 188 were still `status: "active"`**. So for those 188 rows *every*
+condition the wallet checked passed: active status, an expiry in the year 9999, no purchase
+requirement, a campaign that existed and was `isActive`.
+
+Three independent mistakes had to line up, which is why it survived four months: (1) a campaign left
+active past its end date, (2) issuances stamped with a sentinel expiry, (3) a wallet that did not ask
+the shared predicate. Only the third is a code defect, and fixing it alone stops the bad button
+regardless of what the other two do next.
+
+**The fix.** `isRedeemableNow` now calls `isCampaignRedeemable(campaign, now)` — the same function,
+the same arguments, the same answer as the redeem path. The issuance-level conditions stay in the
+wallet because they have no equivalent inside that predicate (row status, this customer's own
+`expiresAt`, the purchase gate, the refund gate). Rule:
+[rules.md R12](./rules.md#r12-the-wallet-must-not-re-implement-redeemability--it-must-call-the-same-predicate-the-redeem-path-calls-2026-09-01).
+
+**The generalised lesson.** A read surface that decides whether to *offer* an action, and a write
+surface that decides whether to *allow* it, must consult one predicate — not two implementations of
+one idea. Copying "just the bit we need" from a shared rule is how a UI starts lying: the copy is
+correct on the day it is written, and every later amendment to the real rule silently skips it.
+A comment claiming a hand-rolled expression "mirrors" a shared function is not evidence that it does;
+either call the function or explain, per condition, why this site legitimately differs.
+
+**The data was a separate defect.** The 452 sentinel `expiresAt` values are simply wrong and are
+repaired by `scripts/fix-redeemable-issuance-expiry.ts` (dry-run by default). That script does not fix
+the button — the code change does — but until it runs, support tooling and admin exports show a
+year-9999 deadline on a coupon that died in April, and 312 rows sit at `status: "active"` with a past
+expiry. See
+[docs/infrastructure/backend.md](../infrastructure/backend.md#fixredeemable-issuance-expiry-2026-09-01).

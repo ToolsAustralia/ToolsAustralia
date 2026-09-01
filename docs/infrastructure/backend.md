@@ -253,3 +253,67 @@ key, so a leftover temporary one from an older run is cleaned up too).
 
 **Exit codes:** `0` applied or already correct · `2` refused by a pre-flight check, or the swap did
 not reach the expected end state · `3` fatal.
+
+## `fix:redeemable-issuance-expiry` (2026-09-01)
+
+[`scripts/fix-redeemable-issuance-expiry.ts`](../../scripts/fix-redeemable-issuance-expiry.ts) — repairs
+`RedeemableIssuance` rows whose stored `expiresAt` is the far-future sentinel
+(`9999-12-31T23:59:59.999Z`) even though their campaign has a real, finite `endsAt`, then marks
+genuinely-lapsed rows `status: "expired"`.
+
+**Why it exists.** Campaign **ANZAC DAY 25** (`ANZACDAY25`) ran 2026-04-24 → `endsAt`
+2026-04-27T10:00Z with `neverExpires: false` and no `validForHours`, but was left `isActive: true`.
+452 of its issuances had been minted with the sentinel expiry *before* an expiry was configured on the
+campaign (it was edited mid-run). Those rows therefore carry a deadline in the year 9999 for a coupon
+that died in April, which is wrong everywhere it is read — support tooling, admin exports, the
+"expires <date>" line, and the claimable/past split.
+
+**This is NOT the fix for the Claim button.** That was a code defect in
+`RedeemablesWalletService` (it hand-rolled a partial copy of `isCampaignRedeemable`), fixed
+separately — see [rewards-redeemables/rules.md R12](../rewards-redeemables/rules.md). This script only
+makes the stored dates true.
+
+**Two passes.**
+
+1. `expiresAt` ≥ year 9999 → set to the campaign's own `endsAt`.
+2. `expiresAt < now` **and** `status: "active"` → set `status: "expired"`. In a live run this
+   naturally picks up the rows pass 1 just re-dated; a **dry** run reports that group separately,
+   because pass 1 wrote nothing and pass 2's query cannot see them yet.
+
+**Scope guard — what keeps it off a legitimate never-expiring grant.** Only issuances whose campaign
+has ALL of: `neverExpires` not true (a never-expiring campaign's sentinel expiry is *correct*), **no
+personal window** (`validForHours` unset — a trigger campaign's issuance `expiresAt` is that
+customer's own emailed deadline and the campaign's `endsAt` is only a minting backstop), and a real
+finite `endsAt` that is not itself the open-ended year-9999 sentinel. The filter is applied in memory
+using the app's own `personalWindowGoverns` / `isOpenEndedDate` helpers rather than re-expressed as
+Mongo predicates — re-expressing a shared rule is exactly the class of drift that caused the incident.
+Sentinel detection is a **year threshold**, not equality, for the same reason `isOpenEndedDate` is:
+an `endsAt` that has round-tripped through the admin form's `datetime-local` picker comes back as a
+different instant.
+
+**Safety.** DRY-RUN BY DEFAULT — nothing is written without `--apply`. Idempotent (each pass's filter
+stops matching a row it has already fixed, so re-runs converge). Up-front counts, ~20 progress lines
+per pass with `processed/total (%) · rate/sec · ETA`, an append-mode CSV audit row for every row
+touched (default `temp/readonly/`), and exit codes `0` clean · `2` per-row errors · `3` outer/fatal ·
+`1` unhandled.
+
+| Script | What it does |
+|---|---|
+| `npm run fix:redeemable-issuance-expiry:dry` | Local DB, plan only (the default) |
+| `npm run fix:redeemable-issuance-expiry` | Local DB, live writes |
+| `npm run fix:redeemable-issuance-expiry:prod:dry` | **Production, plan only — run this first** |
+| `npm run fix:redeemable-issuance-expiry:prod` | Production, live writes |
+
+Options: `--apply`, `--prod`, `--campaign=CODE` (restrict to one campaign, e.g. `ANZACDAY25`),
+`--limit=N`, `--out-dir=PATH`, `--no-csv`.
+
+**Production dry run, 2026-09-01** (read-only): 452 rows in pass 1, all `ANZACDAY25`
+(264 `redeemed` + 188 `active`); pass 2 found 124 rows already past expiry and would expire a further
+188 that pass 1 re-dates into the past — 312 in total. The redeemed rows are re-dated too: their
+entries were granted long ago and are untouched, only the wrong stored deadline is corrected, and the
+summary calls that group out explicitly so the operator sees it before running live.
+
+**A note on `status: "expired"`.** No other code path in the app writes that status — the redeem and
+re-arm gates key off `expiresAt`, never the status string (see `decideRearm` rule 2 in
+[bonus-code-policy.ts](../../src/utils/redeemables/bonus-code-policy.ts)). Pass 2 therefore changes no
+behaviour; it makes the stored status agree with the stored date.

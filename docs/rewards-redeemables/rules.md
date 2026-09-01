@@ -183,6 +183,11 @@ re-test `isCampaignRedeemable`/`personalWindowGoverns` in isolation (that's
 `test:bonus-code-policy`'s job); it proves each call site actually **consults** those predicates,
 including the purchase-ceiling override and the message reaching the real `POST` handler.
 
+**There is a FIFTH consult point, and it is the one that drifted.** `RedeemablesWalletService`
+reads the campaign window a second time to decide whether to show an enabled Claim button; until
+2026-09-01 it hand-rolled a partial copy of `isCampaignRedeemable` that never looked at `endsAt` — see
+[R12](#r12-the-wallet-must-not-re-implement-redeemability--it-must-call-the-same-predicate-the-redeem-path-calls-2026-09-01).
+
 ## R10. A duplicate-key error is classified by WHICH index collided, never by campaign mode (2026-08-27)
 
 `RedeemableIssuance` carries two unique indexes — `(campaignId, userId)` and `(campaignId, code)` —
@@ -243,3 +248,67 @@ attach was lost, and a rising rate means the attach path needs attention even th
 
 Regression coverage: `npm run test:checkout-intent-recovery` (the service pair) and
 `npm run test:attach-typed-code` §7 (the ordering — intent before Stripe).
+
+## R12. The wallet must not RE-IMPLEMENT redeemability — it must CALL the same predicate the redeem path calls (2026-09-01)
+
+`RedeemablesWalletService.getUserWallet` computes `isRedeemableNow`, and that flag is the only thing
+standing between a customer and an **enabled "Claim" button**. `RedemptionService.redeem` decides
+whether the tap is honoured. **When the two disagree, the customer taps a button that fails** — and
+what they take away is that our site is broken, not that their coupon lapsed.
+
+So the campaign half of the wallet's answer is not computed in the wallet. It is delegated whole to
+`isCampaignRedeemable(campaign, now)`
+([bonus-code-policy.ts](../../src/utils/redeemables/bonus-code-policy.ts)) — imported, called, never
+re-spelled — exactly as site 1 of [R9](#r9-the-four-campaign-window-truncation-sites-must-agree) does.
+
+### What went wrong
+
+The wallet used to spell out its own PARTIAL copy: `campaign != null && campaign.isActive !== false`.
+`isCampaignRedeemable` checks `isActive`, **and** `startsAt <= now`, **and** — for a legacy
+(non-`validForHours`, non-`neverExpires`) campaign — `endsAt >= now`. The wallet's copy never
+consulted `endsAt`. Worse, the comment above it claimed it required `isActive` *"too"* in order to
+mirror `isCampaignRedeemable`, which made the missing two-thirds read as deliberate.
+
+Campaign **ANZAC DAY 25** (`ANZACDAY25`) then supplied every remaining condition at once. It ran
+2026-04-24 → `endsAt` 2026-04-27T10:00Z, `neverExpires: false`, no `validForHours` — but was left
+`isActive: true`. 452 of its issuances had been minted carrying the far-future sentinel `expiresAt`
+(`9999-12-31T23:59:59.999Z`) from before an expiry was configured on the campaign (it was edited
+mid-run, `updatedAt` 2026-04-27T08:51), and **188 of those were still `status: "active"`** four months
+later. Every condition the wallet actually checked passed. 188 members were shown an enabled Claim
+button on 25 free entries, and `RedemptionService` refused every tap with `campaign_not_active`.
+
+### What the wallet still decides for itself
+
+Only the conditions that are genuinely the **issuance's** own and have no equivalent inside the
+campaign predicate:
+
+| Kept in the wallet | Why it is not the campaign's business |
+|---|---|
+| `issuance.status === "active"` | This row's own state. |
+| `resolvedExpiresAt > now` | THIS customer's deadline, which under a personal window deliberately outlives the campaign's `endsAt` minting backstop (R9). |
+| `meetsPurchaseRequirement` | `hasQualifyingPurchase`, with the same personal-window ceiling override site 3 of R9 applies. |
+| `campaign != null` | An orphaned issuance (campaign row deleted) has nothing to ask, and must not become claimable by default. |
+| `!(isPersonalWindow && redeemedEverAt)` | The refund-restores-`active` gate ([R3b](#r3b-a-refunded-personal-window-grant-is-spent-on-the-redeem-side-too-2026-08-25)). |
+
+Two behaviour changes fell out of delegating, both correct and both in the fail-closed direction: a
+campaign whose `startsAt` is still in the future is no longer claimable (the server refuses it too),
+and an `isActive` that is *missing* rather than `false` now reads as not-redeemable instead of
+redeemable.
+
+### The data was NOT the bug
+
+The 188 wrong `expiresAt` values were a **separate** defect, and correcting them is not what stops
+the button — the code change is. `scripts/fix-redeemable-issuance-expiry.ts` repairs the stored dates
+so support tooling, admin exports and the claimable/past split stop showing a year-9999 deadline on a
+coupon that died in April (see
+[docs/infrastructure/backend.md](../infrastructure/backend.md#fixredeemable-issuance-expiry-2026-09-01)).
+Do not reach for that script as the remedy for a wrong Claim button; reach for this rule.
+
+### Regression coverage
+
+`npm run test:campaign-window`, **Site 3''**. The ended-campaign row must not be `isRedeemableNow`
+**and** `RedemptionService` must refuse it — asserted in the same block, so the two sides are pinned
+*together* rather than separately. An inverse case asserts a genuinely live campaign still yields
+`isRedeemableNow: true`, so the delegation cannot silently kill every claim. Mutation-checked: putting
+`campaign.isActive !== false` back turns exactly that one assertion red.
+

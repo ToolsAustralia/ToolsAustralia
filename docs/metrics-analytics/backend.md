@@ -180,6 +180,20 @@ carousels and TikTok Smart+ creatives, which legitimately rotate destinations �
 split ad's entire spend to whichever URL happened to sort first is a plausible-looking wrong
 number. Unanimous multi-URL destinations classify normally, so the common case is unaffected.
 
+### Per-ad `rawUrls` on the detail row (2026-09-01)
+
+`SpendByUrlAggregationService.getSpendByUrlDetailForCanonicalUrls`/`getSpendByUrlDetailFormatted`
+now emit `rawUrls?: string[]` on `SpendByUrlDetailRow`/`SpendByUrlDetailAggRow`, sourced from the
+SAME `AdDestination` doc `canonicalUrl` already came from — `AdDestination.find()` there carries
+no `.select()`, so the full document (including `rawUrls`) was already being fetched; it was
+simply never put on the row. Unlike `canonicalUrl`, `rawUrls` is NOT query-stripped — it is the
+field the admin ad-URL mismatch check reads (`src/utils/admin/adUrlMismatchCheck.ts`, consumed
+by `CampaignTreeTable.tsx`; see `docs/admin/frontend.md`, "Ad-URL mismatch check + Ads Manager
+deep link"), because a `?toolbox=`/`?toolset=` selection is invisible on the canonical form.
+`getSpendByUrlDetailFormatted`'s row mapping is an explicit include-list (existing comment: "a
+field added upstream is DROPPED here unless it is named") — `rawUrls` was added there
+deliberately, not by the default spread.
+
 ## Dashboard redesign
 
 (Migrated stub from `docs/dashboard-redesign-implementation.md` — _TODO: read root._)

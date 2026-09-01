@@ -146,7 +146,9 @@ export function spendByUrlDetailRowsFingerprint(rows: SpendByUrlDetailRow[]): st
  * the packages-focus breakdown endpoint, so BrandPerformanceAdsModal and
  * AdSpendFocusModal render through one CampaignTreeTable. Detail rows are
  * pre-aggregated per ad, so node totals are simple sums; each ad node carries
- * its packagesFocus for badge display + chip filtering.
+ * its packagesFocus for badge display + chip filtering, and its canonicalUrl +
+ * rawUrls (unmodified, query intact) so CampaignTreeTable can render the real landing
+ * URL and run the ad-URL mismatch check (`src/utils/admin/adUrlMismatchCheck.ts`).
  */
 export function groupSpendByUrlDetailRowsByCampaign(rows: SpendByUrlDetailRow[]): PackagesFocusCampaignNode[] {
   const toTotals = (acc: { spendCents: number; revenueCents: number; conversions: number; impressions: number; clicks: number }): PackagesFocusTotals => {
@@ -178,7 +180,15 @@ export function groupSpendByUrlDetailRowsByCampaign(rows: SpendByUrlDetailRow[])
     add(s.acc, r);
     const adAcc = newAcc();
     add(adAcc, r);
-    s.ads.push({ adId: r.adId, adName: r.adName, adFormat: r.adFormat, totals: toTotals(adAcc), packagesFocus: r.packagesFocus, canonicalUrl: r.canonicalUrl });
+    s.ads.push({
+      adId: r.adId,
+      adName: r.adName,
+      adFormat: r.adFormat,
+      totals: toTotals(adAcc),
+      packagesFocus: r.packagesFocus,
+      canonicalUrl: r.canonicalUrl,
+      rawUrls: r.rawUrls,
+    });
     c.adsets.set(sid, s);
     campaigns.set(cid, c);
   }

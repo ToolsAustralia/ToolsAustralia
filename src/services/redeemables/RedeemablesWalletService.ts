@@ -4,7 +4,7 @@ import MilestoneIssuance from "@/models/MilestoneIssuance";
 import MilestoneReward from "@/models/MilestoneReward";
 import User from "@/models/User";
 import { hasQualifyingPurchase } from "@/utils/redeemables/purchase-eligibility";
-import { personalWindowGoverns } from "@/utils/redeemables/bonus-code-policy";
+import { isCampaignRedeemable, personalWindowGoverns } from "@/utils/redeemables/bonus-code-policy";
 import { formatExpiryLabelAEST } from "@/utils/common/timezone";
 import { CampaignService, LEGACY_MISSING_EXPIRY } from "./CampaignService";
 
@@ -81,11 +81,14 @@ export class RedeemablesWalletService {
     ]);
 
     const campaignIds = redeemableIssuances.map((i) => i.campaignId);
-    // isActive and validForHours MUST be selected: isActive gates isRedeemableNow
-    // below (a deactivated campaign must not show an enabled Claim button the
-    // server then refuses) and validForHours feeds personalWindowGoverns for the
-    // expiry-label fallback. A .select() omission here silently defeats both —
-    // the fields read back as `undefined`, not a type error.
+    // EVERY ARGUMENT `isCampaignRedeemable` READS MUST BE SELECTED — isActive,
+    // startsAt, endsAt, neverExpires, validForHours — because isRedeemableNow
+    // below delegates the whole campaign half to it (a campaign the server would
+    // refuse must not show an enabled Claim button). validForHours additionally
+    // feeds personalWindowGoverns for the expiry-label fallback. A .select()
+    // omission here silently defeats both: the field reads back as `undefined`,
+    // not a type error, and `undefined` endsAt makes the predicate return false
+    // for every legacy campaign — i.e. it fails CLOSED, hiding live claims.
     const campaigns = await MonthlyEntryCampaign.find({ _id: { $in: campaignIds } })
       .select(
         "name displayLabel requiresPurchase purchaseRequirement code neverExpires startsAt endsAt validForHours isActive"
@@ -167,22 +170,43 @@ export class RedeemablesWalletService {
         neverExpires,
         source: "monthly-coupon",
         expiresAtLabel: formatExpiryLabelAEST(resolvedExpiresAt),
-        // A deactivated or orphaned campaign must not show an enabled Claim
-        // button that the server then refuses (isCampaignRedeemable requires
-        // isActive too) — require the campaign to exist and be active here.
+        // THE CAMPAIGN HALF IS NOT DECIDED HERE. It is delegated verbatim to
+        // `isCampaignRedeemable` — the SAME function `RedemptionService.redeem`
+        // gates on (RedemptionService.ts, `campaign_not_active`). Do not inline
+        // any part of it back into this expression, however small: that is the
+        // exact defect this call replaced.
         //
-        // `!issuance.redeemedEverAt` under a personal window mirrors the gate
-        // RedemptionService.redeem now enforces: a refund restores status to
-        // "active" and $unsets redeemedAt, so without this the wallet would
-        // render an ENABLED Claim button on a grant the server will refuse —
-        // and, before that gate existed, would actually re-grant. Legacy
-        // monthly-coupon campaigns keep today's restore-on-refund behaviour.
+        // Incident that proved it (2026-09-01): this expression used to spell
+        // out its own partial copy — `campaign.isActive !== false` and nothing
+        // else — so it never consulted `endsAt`. Campaign ANZAC DAY 25
+        // (`ANZACDAY25`) ended 2026-04-27 but was left `isActive: true`, and 188
+        // members held `status: "active"` issuances stamped with the far-future
+        // sentinel expiry from before an expiry was configured. Every condition
+        // in the old expression passed, so the wallet rendered an ENABLED Claim
+        // button on 25 entries that `isCampaignRedeemable` then refused.
+        //
+        // `campaign != null` stays: an orphaned issuance (campaign deleted) has
+        // nothing to ask, and must not become claimable by default.
+        //
+        // The remaining conditions are genuinely the ISSUANCE's own, and have no
+        // equivalent inside the campaign predicate:
+        //  - `status === "active"` / `resolvedExpiresAt > now` — this row's state
+        //    and this customer's deadline, which under a personal window is
+        //    deliberately allowed to outlive the campaign's `endsAt` backstop.
+        //  - `meetsPurchaseRequirement` — computed above with the same
+        //    personal-window ceiling override RedemptionService applies.
+        //  - `!issuance.redeemedEverAt` under a personal window mirrors the gate
+        //    RedemptionService.redeem enforces: a refund restores status to
+        //    "active" and $unsets redeemedAt, so without this the wallet would
+        //    render an ENABLED Claim button on a grant the server will refuse —
+        //    and, before that gate existed, would actually re-grant. Legacy
+        //    monthly-coupon campaigns keep today's restore-on-refund behaviour.
         isRedeemableNow:
           issuance.status === "active" &&
           resolvedExpiresAt > now &&
           meetsPurchaseRequirement &&
           campaign != null &&
-          campaign.isActive !== false &&
+          isCampaignRedeemable(campaign, now) &&
           !(isPersonalWindow && issuance.redeemedEverAt),
       };
     });

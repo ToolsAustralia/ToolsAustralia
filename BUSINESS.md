@@ -468,6 +468,21 @@ eligibility moment. Those two moments are typically 2.5–17 days apart.
    A customer can sit in one of these flows for days without a code existing. Nothing is written for
    them, and nothing is spent, until the flow fires that webhook.
 
+   **Admin now sees the status, not just the mechanism (2026-09-01, reworked same day).**
+   `GET /api/admin/monthly-coupon/trigger-audience` (admin > Promo Management > Redeemables tab)
+   leads with each trigger's REAL issuance state — how many customers already hold the code
+   (have access to it), how many can still redeem it (`isCampaignRedeemable`, never hand-rolled),
+   how many have redeemed, and how many lapsed unused. Production, 2026-09-01: all three codes
+   sit at 0 issued / 0 still-redeemable / 0 redeemed / 0 lapsed — correct, not broken, since
+   marketing has not published the flows yet; the panel renders a plain "not minted yet" state
+   rather than blank tiles. A secondary, collapsed "potential reach" section keeps the
+   addressable-population forecast (reconstructed from `CancellationFlowEvent`,
+   `User.oneTimePackages`, `User.subscription`, not Klaviyo) for planning — `BACKIN200` 517 /
+   `EXTRA100` 368 / `LOCKIN100` 7,120 addressable in the last 30 days as of this date (the last
+   one is a documented **upper bound**, calibrated against Klaviyo's own Started Checkout metric
+   at ~74% of its August figure — same ballpark, not exact). See
+   [docs/rewards-redeemables/api.md](docs/rewards-redeemables/api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-status-2026-09-01-reworked).
+
 The entries the code carries are, as everywhere else, a **free inclusion** — the customer buys the
 membership or the pack, never the entries (§1).
 
@@ -534,9 +549,10 @@ cron route filters out any campaign with a personal window; `isUserEligibleForCa
 without an explicit trigger (so the wallet read path cannot self-enrol a member); and
 `issueCampaignToUsers` refuses `issuedBy: "cron"` outright.
 
-**Status: built and wired to the webhook, inert until an admin creates the campaigns AND marketing
-publishes the flows.** No campaign carrying `BACKIN200` / `LOCKIN100` / `EXTRA100` exists yet, so
-every call is currently a no-op and no customer sees anything. **There are no longer any server-side
+**Status: built and wired to the webhook; the three campaigns exist and are active, but marketing has
+not published the flows yet, so every call is still a no-op and no customer sees anything (corrected
+2026-09-01 — this line previously said no campaign existed; verified in production: `BACKIN200` /
+`LOCKIN100` / `EXTRA100` all `isActive: true`, 0 issuances and 0 webhook calls each).** **There are no longer any server-side
 mint call sites** — the cancel service, the payment path and the guest-registration helper each used
 to mint directly, and all three were removed on 2026-08-26; the webhook endpoint is the only door.
 What those places still owe the feature is the Klaviyo event that puts the customer into the flow.
@@ -596,6 +612,7 @@ Two parallel concepts coexist under this umbrella:
 - **Wallet is event-based, not balance-based.** `RedeemablesWalletService` reads `status: "active"` issuances at query time — no aggregate counter on the User.
 - **Full refunds claw back redeemables tied to the refunded payment — redeemed or not.** Milestone issuances granted by the refunded payment are revoked; already-redeemed ones are first un-redeemed (granted entries and draw entries removed) and then revoked ([`MilestoneService.revokeIssuancesFromPaymentEvent`](src/services/milestones/MilestoneService.ts)). A monthly coupon redeemed *on* the refunded purchase is un-redeemed back to `active` (its entries removed). Only reversal steps that **fail** surface in `RefundProcessed.data.reversalIssues[]` for admin attention; partial refunds are recorded as `RefundPartial` with **no** benefit reversal (§9c). See [`docs/rewards-redeemables/rules.md`](docs/rewards-redeemables/rules.md). **A refund takes those entries back exactly once (corrected 2026-08-28).** From **2026-04-21** (commit `aa2b1257`, which introduced both halves at once) until this date — roughly **four months**, not the one-day window first assumed — refunding a purchase that carried a campaign code reversed its entries **twice** — a 100-entry code removed 200, `accumulatedEntries` could go negative, and the second removal was not scoped to the refunded purchase's draw, so it could strip entries a member had legitimately earned in an **earlier, unrefunded** draw. Both campaign arms (monthly-coupon and milestone) were affected. The ledger now owns the entry reversal and the redemption service only restores the redemption record; the milestone **auto-grant** path is unchanged and still reverses its own. Members refunded in that window may hold understated entry counts — a data check is warranted, separately from this fix. See [`docs/payment/gotchas.md`](docs/payment/gotchas.md).
 - **Purchase-gated coupons need a real in-window purchase EVENT.** A campaign coupon's `purchaseRequirement` (`none` / `membership` / `one-time` / `any`) is enforced by `hasQualifyingPurchase(...)`, and **every leg is an event check bounded by the campaign window `[startsAt, endsAt|now]`**: `membership` needs a subscription **purchased in-window** (`subscription.startDate` — set on join/resubscribe, both charged), and `one-time` / `any` need a one-time package bought in-window. Merely *being* an active member does **not** qualify (2026-07-07 fix: the previous state check let every recipient of an all-active-subscribers campaign with a `membership`/`any` requirement claim instantly with zero purchase — found via the owner's `testpurchase` coupon). A coupon is also **not** redeemable off a lifetime entry balance or an old subscription — the even older `accumulatedEntries === 0` proxy had the same class of hole. The intended flow for existing members is carrying the code **on** a purchase: the webhook redeems it via this same predicate right after the purchase persists. Enforced in lockstep by both `RedemptionService` (the burn) and `RedeemablesWalletService` (the wallet's `isRedeemableNow`; its projection selects the full `subscription` subdoc). Known caveat (accepted): a downgrade also resets `startDate` without a charge. See [src/utils/redeemables/purchase-eligibility.ts](src/utils/redeemables/purchase-eligibility.ts).
+- **The Claim button and the redeem endpoint now ask the same question (2026-09-01).** No policy changed — a coupon has always stopped being redeemable when its campaign closes — but the wallet that renders the button used to check only that the campaign existed and was switched on, never its end date. A campaign left switched on past its end date therefore showed an **enabled Claim button that the server refused**: 188 members held a 25-entry `ANZACDAY25` coupon in that state for four months. `RedeemablesWalletService` now calls the same `isCampaignRedeemable` predicate `RedemptionService` gates on, so the offer and the outcome cannot diverge. Operational lesson for whoever runs campaigns: **switch a campaign off when it ends** — leaving `isActive: true` past `endsAt` no longer produces a broken button, but it still leaves a dead coupon sitting in members' wallets. See [docs/rewards-redeemables/rules.md](docs/rewards-redeemables/rules.md) R12.
 - LIVE end-to-end: admins run campaigns, and users claim coupons from the `/my-account/rewards` claimables surface ([RewardsClaimables](src/components/sections/rewards/RewardsClaimables.tsx) → `POST /api/redeemables/redeem`) — shipped with the 2026-07-02 dashboard-rewards redesign. These §8b surfaces are **not** behind the §8a pause flag (none of the `/api/redeemables/*` routes call `guardRewardsEnabled`); the `rewardsEnabled` flag pauses only the §8a points surfaces — the legacy `/rewards` page and `/api/rewards/*` (503).
 
 ---

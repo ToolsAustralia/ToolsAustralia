@@ -96,6 +96,14 @@ export interface SpendByUrlDetailRow {
   packagesFocus: "membership" | "one-time" | "unclassified";
   /** The canonical landing URL this ad points at. Undefined when the destination is unresolved. */
   canonicalUrl?: string;
+  /**
+   * Every URL on this ad's creative, unmodified (query strings intact) — unlike `canonicalUrl`,
+   * which is origin+path only. The ad-URL mismatch check (`src/utils/admin/adUrlMismatchCheck.ts`)
+   * reads this field, never `canonicalUrl`, because a `?toolbox=`/`?toolset=` selection is
+   * invisible on the canonical form. Multiple entries = a carousel/multi-URL ad. Undefined when
+   * the destination is unresolved.
+   */
+  rawUrls?: string[];
 }
 
 export interface SpendByUrlDetailResponse {
