@@ -82,8 +82,13 @@ user). That is an invariant of that caller, not of `openModal` itself — re-ver
 before adding a second caller of this shape.
 
 A plan-less open is deliberately allowed through: the picker is how a member with a
-blocking subscription buys a **pack**, which is permitted. A dedicated pre-warm backstop
-for that path is planned as a follow-up task and is **not on this branch yet**.
+blocking subscription buys a **pack**, which is permitted. If that same member instead
+picks a SUBSCRIPTION tier from the picker — or the open-time gate above let a
+subscription plan through because `userLoading` was still true when it ran — a second
+check backstops step 2: `stepTwoGate` in
+[`MembershipModal/index.tsx`](../../src/components/modals/MembershipModal/index.tsx#L1253)
+re-runs the same gate immediately before the payment pre-warm fires and redirects
+instead of letting the pre-warm 409 silently.
 
 ## Source-of-truth split
 

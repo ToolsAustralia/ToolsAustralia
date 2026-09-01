@@ -61,8 +61,12 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
       //
       // A plan-less open is NOT treated as a subscription (spec D6): it opens the picker,
       // and the picker is how a blocking-sub member buys a PACK, which is allowed and is
-      // live revenue. A dedicated pre-warm backstop for that path is planned as a
-      // follow-up task and is not on this branch yet.
+      // live revenue. If a blocking-sub member instead picks a SUBSCRIPTION tier from
+      // that picker — or the gate above allowed a subscription plan through because
+      // `userLoading` was still true when this ran — a second check backstops step 2:
+      // `stepTwoGate` in MembershipModal/index.tsx (~line 1253) re-runs this same gate
+      // immediately before the payment pre-warm fires and redirects instead of letting
+      // the pre-warm 409 silently.
       const gate = resolveSubscriptionCreationGate(userData, {
         isSubscriptionPlan: plan ? isSubscriptionPlan(plan) : false,
         userLoading,
