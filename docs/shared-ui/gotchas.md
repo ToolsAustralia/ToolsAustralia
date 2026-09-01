@@ -1540,7 +1540,7 @@ silent branch.
 
 ## MembershipModal: the on-hold pack-step nudge, and why its render condition is two-part (2026-09-01)
 
-A member in payment recovery (`past_due` / `unpaid` / paused) who opens a one-time / Additional
+A member in payment recovery (`past_due` / `unpaid`) who opens a one-time / Additional
 pack in `MembershipModal` (`index.tsx`, step 2) now sees an inline amber note above that step's
 content offering reactivation, with the real settle amount and the real entries figure — not a
 blocker, the pack purchase stays fully allowed either way.

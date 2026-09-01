@@ -5645,9 +5645,12 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                         button lives. Reuses the single source for "is this plan a
                         subscription" (also used by the gate itself) rather than
                         hand-rolling a period check here.
+                        `!isPlaceholderPlan` excludes the skeleton payment step shown
+                        before a plan is selected (placeholderPlan is declared
+                        `period: "one-time"`, which would otherwise slip the gate above).
                         It is a note, not a blocker: the pack purchase button
                         below stays fully usable either way. */}
-                    {onHoldPreview.cost != null && !isSubscriptionPlan(activePlan) && (
+                    {onHoldPreview.cost != null && !isSubscriptionPlan(activePlan) && !isPlaceholderPlan && (
                       <div className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
                         <p className="font-semibold text-amber-900 dark:text-amber-200">
                           Membership on hold
@@ -5669,7 +5672,15 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                         </p>
                         <button
                           type="button"
-                          onClick={() => router.push("/my-account/membership?open=payment")}
+                          onClick={() => {
+                            // Same-route deep link: on /my-account/membership itself the page
+                            // doesn't unmount, so the deep-linked payment sheet would open
+                            // BEHIND this still-open modal and nothing would visibly happen.
+                            // Close first, matching the sibling precedent at :1290-1292
+                            // (showExistingSubscriptionToast(...); onClose(); router.push(...)).
+                            onClose();
+                            router.push("/my-account/membership?open=payment");
+                          }}
                           className="mt-2 font-semibold text-amber-900 underline underline-offset-2 dark:text-amber-200"
                         >
                           Reactivate membership
