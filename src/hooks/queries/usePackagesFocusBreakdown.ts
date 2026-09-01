@@ -26,6 +26,13 @@ export interface PackagesFocusAdNode {
    * the destination is unresolved — the same condition that makes `packagesFocus` "unclassified".
    */
   canonicalUrl?: string;
+  /**
+   * Every URL on this ad's creative, unmodified (query strings intact); not emitted by the
+   * breakdown endpoint today — set by the prize modal's mixed-bucket tree, same as
+   * `canonicalUrl`/`packagesFocus`. Feeds the ad-URL mismatch check in `CampaignTreeTable`,
+   * which needs the query string (`?toolbox=`/`?toolset=`) that `canonicalUrl` strips.
+   */
+  rawUrls?: string[];
 }
 
 export interface PackagesFocusAdsetNode {

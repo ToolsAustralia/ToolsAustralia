@@ -191,6 +191,15 @@ export interface SpendByUrlDetailRow {
    * that makes `packagesFocus` "unclassified".
    */
   canonicalUrl?: string;
+  /**
+   * Every URL discovered on this ad's creative, UNMODIFIED (query strings intact) — as opposed
+   * to `canonicalUrl`, which `canonicalizeLandingUrl` deliberately strips to origin+path for
+   * spend grouping. The ad-URL mismatch check (`resolveAdUrlBrands`/`checkAdUrlMismatch` in
+   * `src/utils/admin/adUrlMismatchCheck.ts`) reads THIS field, never `canonicalUrl` — a
+   * `?toolbox=`/`?toolset=` selection is invisible on the canonical form (spec B1). Multiple
+   * entries mean a carousel/multi-URL ad. Undefined when the destination is unresolved.
+   */
+  rawUrls?: string[];
 }
 
 export interface SpendByUrlDetailResult {
@@ -237,6 +246,8 @@ export type SpendByUrlDetailAggRow = {
   adFormat: "video" | "static" | "carousel" | "unknown";
   /** The canonical landing URL this ad points at; undefined when the destination is unresolved. */
   canonicalUrl?: string;
+  /** Every URL on this ad's creative, unmodified — see `SpendByUrlDetailRow.rawUrls`. */
+  rawUrls?: string[];
 };
 
 /**
@@ -409,6 +420,12 @@ export class SpendByUrlAggregationService {
 
   /**
    * Resolve ad ids and destination docs for one canonical URL (same rules as legacy drill-down).
+   *
+   * NO `.select()` here — the query below returns the FULL `AdDestination` document,
+   * `rawUrls` included. Verified 2026-09-01 (spec threading row T2): a projection that
+   * dropped `rawUrls` would make it arrive `undefined` everywhere downstream and every ad
+   * would silently read "unknown" in the ad-URL mismatch check. Do not add a `.select()`
+   * here without adding `rawUrls` to it.
    */
   private async collectAdIdsAndDestsForCanonicalUrl(
     platform: "meta" | "tiktok",
@@ -558,6 +575,7 @@ export class SpendByUrlAggregationService {
           adId,
           // Already resolved per ad in `mergedDestByAd` — it was simply never emitted.
           canonicalUrl: dest?.canonicalUrl ?? undefined,
+          rawUrls: dest?.rawUrls ?? undefined,
           adName: v.adName,
           campaignId: v.campaignId,
           campaignName: v.campaignName,
@@ -704,6 +722,7 @@ export class SpendByUrlAggregationService {
           packagesFocus: r.packagesFocus,
           // Explicit include-list — a field added upstream is DROPPED here unless it is named.
           canonicalUrl: r.canonicalUrl,
+          rawUrls: r.rawUrls,
         };
       }),
     };

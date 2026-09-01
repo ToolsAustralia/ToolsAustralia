@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, AlertTriangle, HelpCircle, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/admin/ui";
 import type {
   PackagesFocusCampaignNode,
   PackagesFocusAdNode,
 } from "@/hooks/queries/usePackagesFocusBreakdown";
+import { checkAdUrlMismatch } from "@/utils/admin/adUrlMismatchCheck";
 import { cn } from "@/utils/cn";
 
 const COL_SPAN = 5;
@@ -49,34 +50,64 @@ export interface CampaignTreeTableProps {
   campaigns: PackagesFocusCampaignNode[];
   ariaLabel?: string;
   emptyMessage?: string;
+  /**
+   * Which ad platform `campaigns` belongs to. Gates the "Open in Ads Manager" link — Meta only,
+   * since the deep link (`buildAdsManagerAdUrl`) is a Meta Ads Manager URL. Omitted by callers
+   * that don't carry per-ad URL data (e.g. the KPI modal's per-bucket trees), which also skips
+   * the ad-URL mismatch icon (see `hasUrlInfo` below).
+   */
+  platform?: "meta" | "tiktok";
+  /** Meta ad account id (with or without the `act_` prefix), for the Ads Manager link. */
+  adAccountId?: string;
 }
 
 /**
  * Expandable campaign → ad set → ad tree, styled like SpendByUrlAdBreakdownTable.
  * Reused by the Ad Spend KPI modal (per-bucket) and Task 9's prize modal (mixed).
  */
+
 /**
- * The readable part of a canonical landing URL — path + any trailing segment, origin dropped.
- *
- * Every row in a drill-down shares an origin, so showing it costs horizontal space on the
- * narrowest column and tells the reader nothing. `unknown://` placeholders (an ad whose
- * destination never resolved) are shown verbatim, because "unknown" IS the useful signal there.
- * The full URL stays in the `title` attribute.
+ * The readable part of a landing URL, RAW form — path + query, origin dropped. Every row in a
+ * drill-down shares an origin, so showing it costs horizontal space and tells the reader
+ * nothing. Unlike a query-stripped canonical form, this keeps a `?toolbox=`/`?toolset=`
+ * selection visible — it's the evidence a reader checks the mismatch icon's verdict against.
+ * `unknown://` placeholders (an ad whose destination never resolved) are shown verbatim,
+ * because "unknown" IS the useful signal there. The full URL stays in the `title` attribute.
  */
-function shortenLandingUrl(url: string): string {
+function shortenRawUrl(url: string): string {
   if (url.startsWith("unknown://")) return url;
   try {
     const u = new URL(url);
-    return u.pathname === "/" ? u.hostname : u.pathname;
+    const path = u.pathname === "/" ? u.hostname : u.pathname;
+    return u.search ? `${path}${u.search}` : path;
   } catch {
     return url;
   }
+}
+
+/**
+ * Meta Ads Manager deep link for one ad (spec B7, `docs/superpowers/specs/
+ * 2026-09-01-coupon-audience-and-ad-url-check-design.md`).
+ *
+ * `assumed`, NOT verified against a live account — confirm on first click. Kept as the ONE
+ * place this shape is written so a correction, if needed, is a one-line change here.
+ */
+export function buildAdsManagerAdUrl(adAccountId: string, adId: string): string {
+  const bareAccountId = adAccountId.replace(/^act_/, "");
+  return `https://adsmanager.facebook.com/adsmanager/manage/ads?act=${encodeURIComponent(bareAccountId)}&selected_ad_ids=${encodeURIComponent(adId)}`;
+}
+
+/** Human casing for a resolved brand slug in a tooltip/aria-label (e.g. "stihl" -> "Stihl"). */
+function titleCaseBrand(brand: string): string {
+  return brand.charAt(0).toUpperCase() + brand.slice(1);
 }
 
 export default function CampaignTreeTable({
   campaigns,
   ariaLabel = "Campaign breakdown",
   emptyMessage,
+  platform,
+  adAccountId,
 }: CampaignTreeTableProps) {
   const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
   const [expandedAdsets, setExpandedAdsets] = useState<Set<string>>(new Set());
@@ -214,6 +245,31 @@ export default function CampaignTreeTable({
                         {adsetOpen &&
                           adset.ads.map((ad) => {
                             const focus = ad.packagesFocus ? FOCUS_BADGE[ad.packagesFocus] : null;
+
+                            // `packagesFocus` is only ever set by the mixed-brand tree
+                            // (BrandPerformanceAdsModal's per-ad detail rows always carry it);
+                            // the KPI modal's per-bucket trees never populate URL data at all,
+                            // so there is nothing to check or show there.
+                            const hasUrlInfo = ad.packagesFocus !== undefined;
+                            const rawUrlsForCheck: string[] =
+                              ad.rawUrls && ad.rawUrls.length > 0
+                                ? ad.rawUrls
+                                : ad.canonicalUrl
+                                  ? [ad.canonicalUrl]
+                                  : [];
+                            const mismatch = hasUrlInfo
+                              ? checkAdUrlMismatch({
+                                  campaignName: campaign.campaignName,
+                                  adName: ad.adName,
+                                  urls: rawUrlsForCheck,
+                                })
+                              : null;
+
+                            const adsManagerHref =
+                              platform === "meta" && adAccountId
+                                ? buildAdsManagerAdUrl(adAccountId, ad.adId)
+                                : null;
+
                             return (
                               <tr
                                 key={`${adsetKey}:${ad.adId}`}
@@ -234,18 +290,67 @@ export default function CampaignTreeTable({
                                         {ad.adFormat}
                                       </span>
                                       {focus && <Badge tone={focus.tone}>{focus.label}</Badge>}
+                                      {adsManagerHref && (
+                                        <a
+                                          href={adsManagerHref}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-0.5 text-3xs font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                        >
+                                          Ads Manager
+                                          <ExternalLink className="w-2.5 h-2.5" aria-hidden />
+                                        </a>
+                                      )}
                                     </span>
-                                    {/* Which landing URL this ad actually bought. A brand
-                                        drill-down unions several URLs into one list, so the
-                                        header's "5 landing URLs" is unreadable without it.
-                                        Path only — the origin is the same on every row and
-                                        would push the ad name out of view. */}
-                                    {ad.canonicalUrl && (
+                                    {/* Which landing URL(s) this ad actually bought — the RAW
+                                        form (query intact), not the query-stripped canonical
+                                        form, so a `?toolbox=`/`?toolset=` selection stays
+                                        visible. A brand drill-down unions several URLs into one
+                                        list, so the header's "5 landing URLs" is unreadable
+                                        without this. Multiple entries = a carousel/multi-URL ad
+                                        (spec B6) — every URL is shown, not just the first. */}
+                                    {rawUrlsForCheck.length > 0 && (
+                                      <div className="mt-0.5 flex items-start gap-1 min-w-0">
+                                        {mismatch && mismatch.verdict === "mismatch" && (
+                                          <span
+                                            className="shrink-0 mt-0.5"
+                                            role="img"
+                                            aria-label={`Ad-URL mismatch: campaign names ${titleCaseBrand(mismatch.campaignBrand ?? "")}; URL points at ${mismatch.urlBrands.map(titleCaseBrand).join(", ") || "no recognised brand"}`}
+                                            title={`Campaign names ${titleCaseBrand(mismatch.campaignBrand ?? "")}; URL points at ${mismatch.urlBrands.map(titleCaseBrand).join(", ") || "no recognised brand"}`}
+                                          >
+                                            <AlertTriangle
+                                              className="w-3 h-3 text-red-600 dark:text-red-400"
+                                              aria-hidden
+                                            />
+                                          </span>
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          {rawUrlsForCheck.map((url, i) => (
+                                            <span
+                                              key={i}
+                                              className="block font-mono text-3xs text-sky-700 dark:text-sky-400 truncate"
+                                              title={url}
+                                            >
+                                              {shortenRawUrl(url)}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {/* Unknown: either no destination resolved for this ad at
+                                        all, or campaign/ad naming didn't yield exactly one
+                                        brand. Muted and quiet by design — the whole value of the
+                                        mismatch icon above is that a warning is rare, so this
+                                        state must never compete with it visually. */}
+                                    {mismatch && mismatch.verdict === "unknown" && (
                                       <span
-                                        className="mt-0.5 block font-mono text-3xs text-sky-700 dark:text-sky-400 truncate"
-                                        title={ad.canonicalUrl}
+                                        className="mt-0.5 flex items-center gap-1 text-3xs text-gray-400 dark:text-neutral-600"
+                                        role="img"
+                                        aria-label="Ad-URL brand check: unknown — destination or naming could not be verified"
+                                        title="Ad-URL brand check: unknown — destination or naming could not be verified"
                                       >
-                                        {shortenLandingUrl(ad.canonicalUrl)}
+                                        <HelpCircle className="w-2.5 h-2.5 shrink-0" aria-hidden />
+                                        {rawUrlsForCheck.length === 0 && "No landing URL resolved"}
                                       </span>
                                     )}
                                   </div>

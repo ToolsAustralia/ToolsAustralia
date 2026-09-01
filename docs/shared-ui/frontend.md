@@ -2299,3 +2299,13 @@ create call is skipped and the code therefore never reaches the server — see `
 
 `PackagesGrid`'s input now uppercases on change, matching `CouponRow` — the two surfaces used to
 behave differently for identical typing.
+
+## `BrandPerformanceAdsModal` threads `platform` + `adAccountId` to `CampaignTreeTable` (2026-09-01)
+
+Small plumbing addition, not a behavior change to this modal itself: `BrandPerformanceAdsModal.tsx`
+now passes its live `platform` chip state and `data?.meta?.adAccountId` (already returned by
+`useSpendByUrlDetailMany` — nothing new fetched) down to `CampaignTreeTable` as two new optional
+props. This is what lets that table's ad rows show the "Open in Ads Manager" link and run the
+ad-URL mismatch check — both documented in `docs/admin/frontend.md`, "Ad-URL mismatch check + Ads
+Manager deep link", since the actual behavior lives in `CampaignTreeTable.tsx` (admin domain), not
+here.
