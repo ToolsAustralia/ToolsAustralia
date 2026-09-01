@@ -1,13 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { ChevronRight, ChevronDown, AlertTriangle, HelpCircle, ExternalLink, SpellCheck2 } from "lucide-react";
-import { Badge } from "@/components/admin/ui";
+import { Badge, AdUrlIssueBadge } from "@/components/admin/ui";
 import type {
   PackagesFocusCampaignNode,
   PackagesFocusAdNode,
 } from "@/hooks/queries/usePackagesFocusBreakdown";
-import { checkAdUrlMismatch } from "@/utils/admin/adUrlMismatchCheck";
+import {
+  computeAdUrlInfo,
+  rollupAdUrlIssues,
+  type AdUrlInfo,
+  type AdUrlIssueRollup,
+} from "@/utils/admin/adUrlIssueRollup";
 import { buildAdsManagerAdUrl } from "@/utils/admin/adsManagerUrl";
 import { cn } from "@/utils/cn";
 
@@ -92,6 +97,26 @@ function titleCaseBrand(brand: string): string {
   return brand.charAt(0).toUpperCase() + brand.slice(1);
 }
 
+/**
+ * The `title`/`aria-label` for a campaign or ad-set roll-up badge — same phrasing family as the
+ * per-ad icon's own title and the brand-row badge's, scaled to "this campaign"/"this ad set" so
+ * the reader knows what to expand without opening it first.
+ */
+function rollupIssueTitle(rollup: AdUrlIssueRollup, scope: "campaign" | "ad set"): string {
+  const parts: string[] = [];
+  if (rollup.mismatchAdCount > 0) {
+    parts.push(
+      `${rollup.mismatchAdCount} of ${rollup.checkedAdCount} ads in this ${scope} are named for a different brand than the page they land on`,
+    );
+  }
+  if (rollup.unrecognisedParamAdCount > 0) {
+    parts.push(
+      `${rollup.unrecognisedParamAdCount} ad${rollup.unrecognisedParamAdCount === 1 ? "" : "s"} in this ${scope} carry an unrecognised toolbox/toolset value`,
+    );
+  }
+  return `${parts.join(" · ")}. Expand to find them.`;
+}
+
 export default function CampaignTreeTable({
   campaigns,
   ariaLabel = "Campaign breakdown",
@@ -117,6 +142,50 @@ export default function CampaignTreeTable({
       else next.add(key);
       return next;
     });
+
+  /**
+   * Every ad's URL info, computed ONCE per ad regardless of expand state — the campaign/ad-set
+   * roll-up badges below need every ad's verdict even while collapsed, not just the ones
+   * currently rendered. Keyed the same way ad rows already are (`${campaignId}:${adsetId}:${adId}`).
+   */
+  const adUrlInfoByKey = useMemo(() => {
+    const map = new Map<string, AdUrlInfo>();
+    for (const campaign of campaigns) {
+      for (const adset of campaign.adsets) {
+        for (const ad of adset.ads) {
+          map.set(
+            `${campaign.campaignId}:${adset.adsetId}:${ad.adId}`,
+            computeAdUrlInfo(campaign.campaignName, ad),
+          );
+        }
+      }
+    }
+    return map;
+  }, [campaigns]);
+
+  /**
+   * Campaign- and ad-set-level roll-ups, aggregated from the SAME per-ad verdicts above — never
+   * recomputed, never re-derived by a second rule (`rollupAdUrlIssues` only aggregates). A
+   * campaign/ad-set with zero flagged ads rolls up to zero counts, so `AdUrlIssueBadge` renders
+   * nothing for it — the trail (brand → campaign → ad set → ad) only lights up where a problem
+   * actually is.
+   */
+  const { adsetRollups, campaignRollups } = useMemo(() => {
+    const adsetRollups = new Map<string, AdUrlIssueRollup>();
+    const campaignRollups = new Map<string, AdUrlIssueRollup>();
+    for (const campaign of campaigns) {
+      const campaignVerdicts: Array<AdUrlInfo["mismatch"]> = [];
+      for (const adset of campaign.adsets) {
+        const adsetVerdicts = adset.ads.map(
+          (ad) => adUrlInfoByKey.get(`${campaign.campaignId}:${adset.adsetId}:${ad.adId}`)?.mismatch ?? null,
+        );
+        adsetRollups.set(`${campaign.campaignId}:${adset.adsetId}`, rollupAdUrlIssues(adsetVerdicts));
+        campaignVerdicts.push(...adsetVerdicts);
+      }
+      campaignRollups.set(campaign.campaignId, rollupAdUrlIssues(campaignVerdicts));
+    }
+    return { adsetRollups, campaignRollups };
+  }, [campaigns, adUrlInfoByKey]);
 
   if (campaigns.length === 0) {
     return (
@@ -152,6 +221,7 @@ export default function CampaignTreeTable({
         <tbody>
           {campaigns.map((campaign) => {
             const campaignOpen = expandedCampaigns.has(campaign.campaignId);
+            const campaignRollup = campaignRollups.get(campaign.campaignId);
             return (
               <React.Fragment key={campaign.campaignId}>
                 {/* Campaign row */}
@@ -175,6 +245,13 @@ export default function CampaignTreeTable({
                         <span className="block font-mono text-3xs sm:text-2xs text-gray-500 dark:text-neutral-500 truncate">
                           {campaign.campaignId}
                         </span>
+                        {campaignRollup && (
+                          <AdUrlIssueBadge
+                            counts={campaignRollup}
+                            title={rollupIssueTitle(campaignRollup, "campaign")}
+                            className="mt-0.5"
+                          />
+                        )}
                       </span>
                     </button>
                   </td>
@@ -196,6 +273,7 @@ export default function CampaignTreeTable({
                   campaign.adsets.map((adset) => {
                     const adsetKey = `${campaign.campaignId}:${adset.adsetId}`;
                     const adsetOpen = expandedAdsets.has(adsetKey);
+                    const adsetRollup = adsetRollups.get(adsetKey);
                     return (
                       <React.Fragment key={adsetKey}>
                         {/* Ad set row */}
@@ -219,6 +297,13 @@ export default function CampaignTreeTable({
                                 <span className="block font-mono text-3xs sm:text-2xs text-gray-500 dark:text-neutral-500 truncate">
                                   {adset.adsetId}
                                 </span>
+                                {adsetRollup && (
+                                  <AdUrlIssueBadge
+                                    counts={adsetRollup}
+                                    title={rollupIssueTitle(adsetRollup, "ad set")}
+                                    className="mt-0.5"
+                                  />
+                                )}
                               </span>
                             </button>
                           </td>
@@ -240,20 +325,14 @@ export default function CampaignTreeTable({
                             // (BrandPerformanceAdsModal's per-ad detail rows always carry it);
                             // the KPI modal's per-bucket trees never populate URL data at all,
                             // so there is nothing to check or show there.
-                            const hasUrlInfo = ad.packagesFocus !== undefined;
-                            const rawUrlsForCheck: string[] =
-                              ad.rawUrls && ad.rawUrls.length > 0
-                                ? ad.rawUrls
-                                : ad.canonicalUrl
-                                  ? [ad.canonicalUrl]
-                                  : [];
-                            const mismatch = hasUrlInfo
-                              ? checkAdUrlMismatch({
-                                  campaignName: campaign.campaignName,
-                                  adName: ad.adName,
-                                  urls: rawUrlsForCheck,
-                                })
-                              : null;
+                            //
+                            // Looked up, not recomputed: `adUrlInfoByKey` already ran
+                            // `checkAdUrlMismatch` for every ad exactly once (see above), which
+                            // also feeds the campaign/ad-set roll-up badges — this is the same
+                            // result, not a second call.
+                            const adUrlInfo = adUrlInfoByKey.get(`${adsetKey}:${ad.adId}`);
+                            const rawUrlsForCheck: string[] = adUrlInfo?.rawUrls ?? [];
+                            const mismatch = adUrlInfo?.mismatch ?? null;
 
                             const adsManagerHref =
                               platform === "meta" && adAccountId

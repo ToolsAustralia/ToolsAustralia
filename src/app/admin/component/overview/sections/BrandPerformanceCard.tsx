@@ -3,12 +3,12 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import { getBrandLaneDisplay } from "@/config/promo-landing-slugs";
-import { Tags, RotateCw, SlidersHorizontal, ChevronDown, AlertTriangle, SpellCheck2 } from "lucide-react";
+import { Tags, RotateCw, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { formatInTimeZone } from "date-fns-tz";
 import { subDays } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Badge,
+  AdUrlIssueBadge,
   Card,
   SectionTitle,
   DataTable,
@@ -112,9 +112,9 @@ function titleCaseBrand(brand: string): string {
 }
 
 /**
- * Ad-URL defect badge on a brand row.
+ * `title`/`aria-label` text for the brand-row ad-URL-issue badge.
  *
- * ── Why this is on the ROW and not only in the modal ─────────────────────────────────────
+ * ── Why the badge is on the ROW and not only in the modal ────────────────────────────────
  *
  * "Draw 10 | Sales | STIHL | Sep 2026" spent against `/promotions/makita`. On the table it was
  * invisible: it just made Makita's ROAS bad. The only way to see it was to open Makita's ad
@@ -127,17 +127,11 @@ function titleCaseBrand(brand: string): string {
  * a row whose ads could not be checked. A badge is only believed if it is rare; a tick on every
  * other row would be scanned past, and a tick on unverifiable ads would be a false assurance.
  *
- * The two icons match `CampaignTreeTable`'s per-ad icons exactly — red `AlertTriangle` for a
- * wrong-brand ad, amber `SpellCheck2` for a typo'd `?toolbox=`/`?toolset=` value — so a reader
- * who drills in meets the same vocabulary rather than having to learn a second one.
+ * The badge markup itself is the shared `AdUrlIssueBadge` (`@/components/admin/ui`) — the SAME
+ * component `CampaignTreeTable`'s campaign/ad-set roll-ups use, so a reader who drills in meets
+ * one vocabulary (and one mobile treatment) everywhere, not four slightly different ones.
  */
-function AdUrlIssueBadges({
-  issues,
-  fmtCompact,
-}: {
-  issues: BrandAdUrlIssues;
-  fmtCompact: (value: number) => string;
-}) {
+function brandAdUrlIssueTitle(issues: BrandAdUrlIssues, fmtCompact: (value: number) => string): string {
   const parts: string[] = [];
   if (issues.mismatchAdCount > 0) {
     const brands = issues.mismatchBrands.map(titleCaseBrand).join(", ") || "another brand";
@@ -150,24 +144,7 @@ function AdUrlIssueBadges({
       `${issues.unrecognisedParamAdCount} ad${issues.unrecognisedParamAdCount === 1 ? "" : "s"} carry an unrecognised toolbox/toolset value (${issues.unrecognisedValues.join(", ")}), so the page fell back to its default`,
     );
   }
-  const title = `${parts.join(" · ")}. Open the row for the per-ad breakdown.`;
-
-  return (
-    <span className="inline-flex items-center gap-1 shrink-0" role="img" aria-label={title} title={title}>
-      {issues.mismatchAdCount > 0 && (
-        <Badge tone="danger" className="px-1.5 num">
-          <AlertTriangle className="w-2.5 h-2.5" aria-hidden strokeWidth={2.5} />
-          {issues.mismatchAdCount}
-        </Badge>
-      )}
-      {issues.unrecognisedParamAdCount > 0 && (
-        <Badge tone="warning" className="px-1.5 num">
-          <SpellCheck2 className="w-2.5 h-2.5" aria-hidden strokeWidth={2.5} />
-          {issues.unrecognisedParamAdCount}
-        </Badge>
-      )}
-    </span>
-  );
+  return `${parts.join(" · ")}. Open the row for the per-ad breakdown.`;
 }
 
 export default function BrandPerformanceCard({
@@ -369,7 +346,9 @@ export default function BrandPerformanceCard({
               )}
             </span>
           )}
-          {d.adUrlIssues && <AdUrlIssueBadges issues={d.adUrlIssues} fmtCompact={fmtCompact} />}
+          {d.adUrlIssues && (
+            <AdUrlIssueBadge counts={d.adUrlIssues} title={brandAdUrlIssueTitle(d.adUrlIssues, fmtCompact)} />
+          )}
         </div>
       );
     }
@@ -591,17 +570,17 @@ export default function BrandPerformanceCard({
                   {unattributed && (
                     <tr className="border-t border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400">
                       <td className="py-2 px-2 text-left text-xs">
-                        Unattributed
-                        <span className="ml-1.5 text-3xs text-neutral-400 dark:text-neutral-500">
-                          no brand in URL / no signup attribution
-                        </span>
+                        {/* The "no brand in URL / no signup attribution" explanation moved into
+                            `title` (2026-09-01) — it was costing width the mobile columns need
+                            more; it's still reachable on hover/long-press, same pattern as the
+                            Basis control's tooltip above. */}
+                        <span title="No brand in URL / no signup attribution">Unattributed</span>
                         {unattributed.adUrlIssues && (
-                          <span className="ml-1.5 align-middle">
-                            <AdUrlIssueBadges
-                              issues={unattributed.adUrlIssues}
-                              fmtCompact={fmtCompact}
-                            />
-                          </span>
+                          <AdUrlIssueBadge
+                            counts={unattributed.adUrlIssues}
+                            title={brandAdUrlIssueTitle(unattributed.adUrlIssues, fmtCompact)}
+                            className="ml-1.5 align-middle"
+                          />
                         )}
                       </td>
                       <td className="py-2 px-2 text-right text-xs">—</td>

@@ -821,7 +821,7 @@ Part of the admin Overview reskin (plan `docs/superpowers/plans/2026-06-01-admin
 Membership vs one-time landing-URL split surfaced across the Overview (data contract: [api.md — packages-focus](./api.md); domain background: `docs/metrics-analytics/`).
 
 - **Ad Spend + ROAS KPI tiles are now clickable** (`KpiGrid.tsx`): both share one `adSpendFocusOpen` state (both show the `active` ring while open) and open **[src/components/modals/AdSpendFocusModal.tsx](../../src/components/modals/AdSpendFocusModal.tsx)** — platform chips (Meta live / TikTok renders a dashed "awaiting URL mapping" box), Membership / One-time summary tiles (spend headline; revenue · ROAS · conversions subline; Unclassified tile only when its spend > 0) doubling as the focus-tab selector (default **One-time**), then a campaign → ad-set → ad tree for the selected bucket. An amber notice renders when `detail.complete === false` ("per-campaign detail covers {availableSince} onwards" — the per-ad insights TTL floor); the summary tiles always cover the full range. Revenue is Meta-reported, same basis as the ROAS KPI headline. `KpiGrid` gained `startDate?/endDate?` props (passed by `DashboardOverview` as `customStartDate || undefined` etc.) and resolves the concrete AEST window via [src/utils/admin/resolveAestDateWindow.ts](../../src/utils/admin/resolveAestDateWindow.ts) — the same helper `PrizePerformanceCard` now uses (its two inline date memos were extracted into it, behavior-identical).
-- **[src/components/admin/spend-by-url/CampaignTreeTable.tsx](../../src/components/admin/spend-by-url/CampaignTreeTable.tsx)** — shared expandable campaign → ad-set → ad tree (columns Name | Spend | Revenue | ROAS | Conv.; ROAS emerald ≥ 3 else amber; ad rows show adId mono over adName, an adFormat chip, and a focus `Badge` when the node carries `packagesFocus` — info "One-time" / neutral "Membership" / warning "Unclassified"). Node types come from `usePackagesFocusBreakdown`; consumed by `AdSpendFocusModal` (server-built tree) and `PrizePerformanceAdsModal` (client-grouped tree). ~~Known kit limitation: `DataTable`/tree row clicks are mouse-only (no keyboard handler).~~ **Fixed 2026-07-24 (panel F-017)** in `DataTable` itself: when (and only when) an `onRowClick` is supplied, rows get `tabIndex=0`, `role="button"`, an Enter/Space `onKeyDown` (Space `preventDefault`s so it activates instead of scrolling), and a `focus-visible` ring. Non-interactive tables stay out of the tab order. Every `DataTable` consumer — including `AdvertisingPlatformCard` — inherits this; `CampaignTreeTable`'s own custom tree rows are separate and still need the same treatment if they gain click handlers. **Ad-URL mismatch check + Ads Manager link added 2026-09-01** — see "Ad-URL mismatch check + Ads Manager deep link" below.
+- **[src/components/admin/spend-by-url/CampaignTreeTable.tsx](../../src/components/admin/spend-by-url/CampaignTreeTable.tsx)** — shared expandable campaign → ad-set → ad tree (columns Name | Spend | Revenue | ROAS | Conv.; ROAS emerald ≥ 3 else amber; ad rows show adId mono over adName, an adFormat chip, and a focus `Badge` when the node carries `packagesFocus` — info "One-time" / neutral "Membership" / warning "Unclassified"). Node types come from `usePackagesFocusBreakdown`; consumed by `AdSpendFocusModal` (server-built tree) and `PrizePerformanceAdsModal` (client-grouped tree). ~~Known kit limitation: `DataTable`/tree row clicks are mouse-only (no keyboard handler).~~ **Fixed 2026-07-24 (panel F-017)** in `DataTable` itself: when (and only when) an `onRowClick` is supplied, rows get `tabIndex=0`, `role="button"`, an Enter/Space `onKeyDown` (Space `preventDefault`s so it activates instead of scrolling), and a `focus-visible` ring. Non-interactive tables stay out of the tab order. Every `DataTable` consumer — including `AdvertisingPlatformCard` — inherits this; `CampaignTreeTable`'s own custom tree rows are separate and still need the same treatment if they gain click handlers. **Ad-URL mismatch check + Ads Manager link added 2026-09-01** — see "Ad-URL mismatch check + Ads Manager deep link" below. **Campaign/ad-set roll-up badges added 2026-09-01** — a collapsed campaign or ad-set row now badges when any ad beneath it is flagged (`src/utils/admin/adUrlIssueRollup.ts`), and the badge shrinks to a bare icon (no count) below `sm` — see "Fourth surface: campaign/ad-set roll-up badges inside the modal" below.
 - **Prize Performance row click → upgraded [`PrizePerformanceAdsModal`](../../src/components/modals/PrizePerformanceAdsModal.tsx)** — `PrizePerformanceCard` attaches each brand's `canonicalUrls` to its row (captured before the zero-row filter, so every rendered row carries them) and opens the modal via the kit `DataTable`'s `onRowClick`. The modal keeps its original props + `useSpendByUrlDetailMany` source and adds: brand-level Membership / One-time summary tiles (Unclassified only when present), focus chips (All / Membership / One-time / Unclassified) filtering ONE mixed tree (each ad badges with its own focus — unlike the KPI modal's pre-split buckets), platform chips (TikTok = awaiting box, no fetch), and the client-side grouper `groupSpendByUrlDetailRowsByCampaign` ([spendByUrlAdBreakdown.ts](../../src/utils/admin/spendByUrlAdBreakdown.ts)) producing the same node shape `CampaignTreeTable` renders.
 - **Facebook Ads → Spend by URL surfaces** (`SpendByUrlSection.tsx`, `SpendByUrlAdBreakdownTable.tsx`): a non-interactive focus summary strip above the toolbar (Membership / One-time / + Unclassified tiles from `usePackagesFocusBreakdown`; hidden when the range isn't ready, on query error, or when total focus spend is 0), per-URL-row `M $x` / `OT $y` split chips under the URL (only when the row carries the `packagesFocus` split), and a focus `Badge` under the ad name in the per-ad drill-down table (membership/one-time only — no new column, COL_SPANs unchanged).
 
@@ -2380,6 +2380,79 @@ train the reader to scan past the column; a tick on unverifiable ads would be a 
 `src/utils/admin/adUrlMismatchCheck.ts` — the same validated module the per-ad icons use — and
 only rolls its result up. See `docs/metrics-analytics/backend.md` for the plumbing (why the
 modal's per-brand query was NOT reused) and the weighting rule.
+
+### Fourth surface: campaign/ad-set roll-up badges inside the modal (2026-09-01)
+
+**The complaint this fixes.** The brand-row badge (above) says Makita has 7 wrong-brand ads and
+53 typos, but `BrandPerformanceAdsModal` gave no way to find WHICH campaign or ad set to open —
+every collapsed campaign/ad-set row in `CampaignTreeTable` looked identical, so finding the 7 ads
+meant expanding all of them by hand. The trail brand → campaign → ad set → ad now stays unbroken:
+a campaign or ad set containing at least one flagged ad now badges too, using the same
+`AdUrlIssueBadge`.
+
+**New pure module: `src/utils/admin/adUrlIssueRollup.ts`.** Two exports:
+- `computeAdUrlInfo(campaignName, ad)` — the exact per-ad computation `CampaignTreeTable` already
+  did inline (resolve `rawUrls`/`canonicalUrl`, call `checkAdUrlMismatch` when the ad carries
+  `packagesFocus`), extracted so it runs **exactly once per ad**.
+- `rollupAdUrlIssues(verdicts: Array<CheckAdUrlMismatchResult | null>)` — aggregates a list of
+  already-computed verdicts into `{ mismatchAdCount, unrecognisedParamAdCount, checkedAdCount }`.
+  `null` (an ad with no URL data at all) contributes to none of the three counts — same rule as
+  the brand-row badge: unverifiable is not clean and must not manufacture a badge.
+
+Neither function calls `checkAdUrlMismatch` more than once per ad, and neither re-derives the
+rule — `adUrlMismatchCheck.ts` is imported, never restated. Tests:
+`src/utils/admin/__tests__/adUrlIssueRollup.test.ts` (`npm run test:ad-url-issue-rollup`) —
+one bad ad in a campaign badges it; an all-clean campaign badges nothing; an ad with no URL data
+is excluded from the denominator rather than reading as clean or broken; a mismatch and a typo on
+the same ad both surface; and an ad-set's roll-up and its parent campaign's roll-up are shown to
+aggregate the same per-ad verdicts (the campaign catches an ad set's finding even when scanned as
+a whole).
+
+**`CampaignTreeTable` wiring.** A `useMemo` walks the whole `campaigns` tree once building
+`adUrlInfoByKey` (`${campaignId}:${adsetId}:${adId}` → `AdUrlInfo`) regardless of expand state —
+the roll-up badges need every ad's verdict even while collapsed, not just the currently-rendered
+ones. A second `useMemo` folds those into `adsetRollups`/`campaignRollups` maps via
+`rollupAdUrlIssues`. The ad row itself now looks its verdict up from `adUrlInfoByKey` instead of
+calling `checkAdUrlMismatch` inline — same result, computed once, shared three ways (ad icon,
+ad-set badge, campaign badge).
+
+**Shared `AdUrlIssueBadge` component, not four copies.** The badge markup (moved into
+`src/components/admin/ui/Badge.tsx`, exported via the `ui` barrel) is now ONE definition used by
+the brand row, the Unattributed footer row (both in `BrandPerformanceCard.tsx`), and the new
+campaign/ad-set rows in `CampaignTreeTable.tsx` — each caller only builds the `title` text (which
+varies: the brand-row title names spend and brands the roll-up module doesn't carry) and passes
+`counts: { mismatchAdCount, unrecognisedParamAdCount }`. One definition means the mobile
+treatment below is automatically consistent everywhere, rather than needing to be re-applied at
+each call site.
+
+**Mobile: bare icon, no count.** Below `sm`, `AdUrlIssueBadge` hides the count (`hidden
+sm:inline`) and shrinks its own padding (`px-1 sm:px-1.5`, `gap-0.5 sm:gap-1` between the two
+badges when both render) — a phone can otherwise only fit a column or two of `CampaignTreeTable`
+/ the Brand Performance table before horizontal scroll, and the badge's numbers were costing
+width a numeric column needed. `title`/`aria-label` still carry the full count and explanation at
+every breakpoint (hover, long-press, and screen readers are unaffected); `sm:` and up shows the
+count inline again. `Badge` itself (`src/components/admin/ui/Badge.tsx`) was changed to build its
+className with `cn()` (clsx + tailwind-merge) instead of raw string concatenation, so a caller's
+override (e.g. shrinking the built-in `px-2` to `px-1`) resolves deterministically rather than
+depending on Tailwind's generated-CSS order.
+
+**Where to look (no browser available for this change):** open a brand with known ad-URL issues
+(Makita, per the production audit above) from the Brand Performance table, expand its modal, and
+confirm: (1) a collapsed campaign row badges when ANY ad beneath it is flagged, and shows nothing
+when all its ads are clean; (2) the same for a collapsed ad-set row; (3) at a phone width (< 640
+px / Tailwind `sm`), every badge (brand row, Unattributed row, campaign row, ad-set row) shows the
+icon only, no number, and the table shows at least one more numeric column than before; (4)
+hovering or long-pressing a mobile badge still reveals the full count/explanation via
+`title`/`aria-label`; (5) the per-ad icon and its own row's URL text are unchanged.
+
+### Unattributed row label shortened (2026-09-01)
+
+`BrandPerformanceCard`'s footer "Unattributed" row read `Unattributed  no brand in URL / no
+signup attribution` inline — the explanatory tail cost width the mobile columns needed more. The
+explanation moved into a `title` attribute on the label (`<span title="No brand in URL / no
+signup attribution">Unattributed</span>`), the same tooltip pattern the Basis control already
+uses on this card (`<span title={BASIS_HINT[basis]}>`). Still reachable on hover/long-press;
+nothing else about the row (its `adUrlIssues` badge, its totals) changed.
 
 ### Ads Manager deep link — corrected to the owner's real URL (2026-09-01)
 
