@@ -111,19 +111,51 @@ future block that does not depend on the plan type would apply here too.
 
 #### The gate reads state at CALL time, not capture time (fixed 2026-09-01)
 
-`userData` / `userLoading` live in a ref refreshed every render (`gateInputsRef`), and both
-callbacks read the ref rather than their closures; `router` is their only dependency.
+**Where the gate's input comes from.** `readGateUser()` in
+[`useMembershipModal.ts`](../../src/hooks/useMembershipModal.ts) reads the user from the
+**query cache** at call time — `queryClient.getQueryData(queryKeys.users.detail(id))` —
+and falls back to the last rendered `userData` when the cache has nothing usable.
+`userLoading` and the user **id** still come from `gateInputsRef`, a ref refreshed every
+render. The selection itself is
+[`selectGateUser`](../../src/utils/subscription/subscription-creation-gate.ts), a pure
+helper fenced by `npm run test:subscription-gate`; the gate's decision logic is untouched.
 
 This was a deterministic bug, not a race. `my-account/membership/page-client.tsx`'s
 past-due tier switch awaits `invalidateQueries(users.detail)` and *then* calls
 `openModal(plan)`. The click had captured `openModal` while the member was — by definition
-— `past_due`, and awaiting a refetch cannot refresh an already-captured closure. So the
-gate still read `past_due` and pushed `?open=payment`, even though
+— `past_due`. So the gate still read `past_due` and pushed `?open=payment`, even though
 `switchTierPastDue.ts:68` had by then set the subscription to `canceled` and voided its
 invoice: the member landed on a payment sheet for a subscription that no longer existed.
+
+**Why the ref alone did not fix it — this took two attempts.** The first fix moved
+`userData` into a render-assigned ref, on the reasoning that a ref refreshed every render
+is current. It is not, at that call site, because **no render has happened yet**. React
+Query notifies subscribers through `notifyManager`, whose scheduler is
+`systemSetTimeoutZero` — a **macrotask** (`@tanstack/query-core@5.90.2`,
+`build/modern/notifyManager.js:3`) — and React then schedules the render itself on another.
+The continuation after `await invalidateQueries(...)` is a **microtask**, so it runs first
+and the ref still holds `past_due`; the ref catches up one macrotask too late. The **cache**
+is written synchronously before `invalidateQueries` resolves, so it is already current at
+the call. Both sides use the same key, verified: `UserContext` reads `useUserData(userId)` →
+`queryKeys.users.detail(id)` = `["users", id]`, exactly what the switch invalidates.
+
+**The allow-bias is preserved.** A cache miss falls back to the rendered user — it never
+invents a blocking status — and a malformed cache entry is rejected by a runtime type guard
+rather than asserted, so it degrades to the fallback instead of being read as a status the
+gate would act on. A guest, cancelled, expired, or still-loading user is unaffected.
+
 Fixing it at the chokepoint (rather than at that one call site) disarms the same trap for
-every future async caller. Stable callback identity is a side benefit — no consumer relies
-on it changing, since the hook returns a fresh object literal each render anyway.
+every future async caller; deferring the `openModal` call at the call site would have traded
+a deterministic bug for a timing race and left the trap armed. Both callbacks go through
+`readGateUser`, so a future block in `openModalWithPackageSelectionFirst` inherits the fix.
+Stable callback identity is a side benefit — no consumer relies on it changing, since the
+hook returns a fresh object literal each render anyway.
+
+**Known limitation.** The cache read only helps if the invalidate actually **refetches**,
+which needs a live observer on `["users", id]`. There is one: `UserProvider` mounts
+`useUserData(userId)` globally in [`providers.tsx`](../../src/app/providers.tsx). An async
+caller that opens the modal from a context outside that provider would fall back to the
+rendered user and see the old behaviour.
 
 ## Source-of-truth split
 

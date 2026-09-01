@@ -465,6 +465,18 @@ it anywhere — passing the plan through `openModal(plan)` is enough.
 3. **The gate reads current state, not captured state** — see
    [architecture.md → The gate reads state at CALL time](./architecture.md#the-gate-reads-state-at-call-time-not-capture-time-fixed-2026-09-01).
    This is what unbroke the past-due tier switch on `/my-account/membership`.
+   **It took two attempts, and the first one is a trap worth naming.** Moving `userData`
+   into a ref refreshed every render looks sufficient and is not: the switch calls
+   `openModal(plan)` in the **microtask** continuation after
+   `await invalidateQueries(users.detail)`, while React Query's `notifyManager` schedules
+   its notification on a **macrotask** and React schedules the render on another — so at
+   that call **no render has happened** and the ref still held `past_due`. The gate now
+   reads the **query cache** (`getQueryData(queryKeys.users.detail(id))`), which *is*
+   written synchronously before that await resolves, and falls back to the rendered
+   `userData` on a miss. The selection is a pure helper, `selectGateUser`, unit-tested by
+   `npm run test:subscription-gate` — including a case asserting the stale-ref input still
+   blocks, so the test cannot pass for the wrong reason. **"Refreshed every render" is not
+   "read at call time" when no render has happened yet.**
 
 ## `useStripeSubscription.attachTypedCode` — stamping the applied code before the charge (2026-08-27)
 ## `convertToLocalPlan` carries the catalog id (2026-08-21)

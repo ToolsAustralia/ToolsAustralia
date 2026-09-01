@@ -26,6 +26,7 @@ const test = (name: string, fn: () => void | Promise<void>) => {
 async function main() {
   const {
     resolveSubscriptionCreationGate,
+    selectGateUser,
     isSubscriptionPlan,
     MANAGE_PAYMENT_PATH,
     MANAGE_SUBSCRIPTION_PATH,
@@ -137,6 +138,83 @@ async function main() {
     assert.equal(isSubscriptionPlan({ period: "one-time", name: "Apprentice" }), false);
     assert.equal(isSubscriptionPlan({ period: "mo", name: "One-Time Boost" }), false);
     assert.equal(isSubscriptionPlan({ period: "mo", name: "ONE-TIME PACK" }), false);
+  });
+
+  // --- selectGateUser: WHICH user the gate judges ---
+  //
+  // The gate's decision logic was never wrong. Its INPUT was. `useMembershipModal` kept
+  // `userData` in a ref refreshed every render, and the past-due tier switch on
+  // /my-account/membership calls `openModal(plan)` in the MICROTASK continuation after
+  // `await invalidateQueries(users.detail)` — before React Query's macrotask notification,
+  // and so before any render. The ref therefore still said `past_due` for a member the
+  // server had already set to `canceled`, and the gate correctly blocked a status that was
+  // no longer true, stranding them on a payment sheet for a voided subscription.
+  //
+  // The query CACHE is written synchronously before that await resolves, so it is current
+  // where the ref is not. These cases pin the selection, not the decision.
+
+  const STALE_PAST_DUE = { _id: "u1", subscription: { status: "past_due" } };
+  const FRESH_CANCELED = { _id: "u1", subscription: { status: "canceled" } };
+
+  await test("THE BUG: fresh cache beats a stale past_due ref, so the switched member is not blocked", () => {
+    const user = selectGateUser(FRESH_CANCELED, STALE_PAST_DUE);
+    assert.equal(user?.subscription?.status, "canceled");
+    // End-to-end through the real gate: this is the redirect that stranded them.
+    const gate = resolveSubscriptionCreationGate(user, sub);
+    assert.equal(gate.allowed, true, "a canceled member must be able to subscribe to the new tier");
+    // And prove the old input is what failed, so this test cannot pass for the wrong reason.
+    const oldBehaviour = resolveSubscriptionCreationGate(STALE_PAST_DUE, sub);
+    assert.equal(oldBehaviour.allowed, false);
+    if (oldBehaviour.allowed === false) {
+      assert.equal(oldBehaviour.redirectTo, MANAGE_PAYMENT_PATH);
+    }
+  });
+
+  await test("cache MISS falls back to the rendered user — never to a blocking default", () => {
+    // A miss must not invent state. It hands the gate exactly what the old code used, so a
+    // miss can only ever be as good as before, never worse.
+    assert.equal(selectGateUser(undefined, STALE_PAST_DUE)?.subscription?.status, "past_due");
+    assert.equal(selectGateUser(null, FRESH_CANCELED)?.subscription?.status, "canceled");
+    // Guest: nothing anywhere → allowed. The expensive regression stays closed.
+    assert.equal(selectGateUser(undefined, null), null);
+    assert.equal(resolveSubscriptionCreationGate(selectGateUser(undefined, null), sub).allowed, true);
+    assert.equal(resolveSubscriptionCreationGate(selectGateUser(undefined, undefined), sub).allowed, true);
+  });
+
+  await test("a cached user whose subscription the server CLEARED is used, not discarded", () => {
+    // The teardown can leave the payload with no `subscription` at all. That is a valid,
+    // non-blocking user — falling back to the stale blocking ref here would re-open the bug.
+    const cleared = { _id: "u1" };
+    assert.deepEqual(selectGateUser(cleared, STALE_PAST_DUE), cleared);
+    assert.equal(resolveSubscriptionCreationGate(selectGateUser(cleared, STALE_PAST_DUE), sub).allowed, true);
+    assert.deepEqual(selectGateUser({ _id: "u1", subscription: undefined }, STALE_PAST_DUE), {
+      _id: "u1",
+      subscription: undefined,
+    });
+  });
+
+  await test("a malformed cache entry degrades to the fallback instead of being read as a status", () => {
+    // getQueryData is typed `unknown` for a reason. Nothing here may throw, and nothing may
+    // be asserted into the gate as a status it would then act on.
+    for (const garbage of ["past_due", 42, true, Symbol("x"), () => {}]) {
+      assert.deepEqual(selectGateUser(garbage, FRESH_CANCELED), FRESH_CANCELED, String(garbage.toString()));
+    }
+    assert.deepEqual(selectGateUser({ subscription: "past_due" }, FRESH_CANCELED), FRESH_CANCELED);
+    assert.deepEqual(selectGateUser({ subscription: { status: 42 } }, FRESH_CANCELED), FRESH_CANCELED);
+    // Rejected shapes fall back — they must not become a blocking status of their own.
+    assert.equal(resolveSubscriptionCreationGate(selectGateUser({ subscription: 1 }, null), sub).allowed, true);
+  });
+
+  await test("selection is inert for every non-recovery case — it changes the input, never the answer", () => {
+    // Same value on both sides: the gate's verdict must be identical to reading either one.
+    for (const status of [...BLOCKING_SUBSCRIPTION_STATUSES, "canceled", "expired"]) {
+      const user = { subscription: { status } };
+      assert.deepEqual(
+        resolveSubscriptionCreationGate(selectGateUser(user, user), sub),
+        resolveSubscriptionCreationGate(user, sub),
+        `${status}: selection must not alter the decision`
+      );
+    }
   });
 
   if (failures > 0) {

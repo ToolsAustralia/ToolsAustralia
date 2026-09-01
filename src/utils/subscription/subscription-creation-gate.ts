@@ -24,6 +24,13 @@ export const MANAGE_SUBSCRIPTION_PATH = "/my-account/membership?open=subscriptio
 /** Payment sheet — a member in payment recovery (`past_due` / `unpaid`) who needs to settle. */
 export const MANAGE_PAYMENT_PATH = "/my-account/membership?open=payment";
 
+/**
+ * The only shape the gate reads. Deliberately NOT `UserData` — the gate asks one question
+ * of one field, and the narrow type is what lets `selectGateUser` hand it a value it has
+ * actually checked instead of an unverified cast.
+ */
+export type SubscriptionCreationGateUser = { subscription?: { status?: string } } | null | undefined;
+
 export type SubscriptionCreationGateResult =
   | { allowed: true }
   /**
@@ -46,8 +53,55 @@ export function isSubscriptionPlan(
   return !(plan.name ?? "").toLowerCase().includes("one-time");
 }
 
+/**
+ * True only when `value` really is the shape `SubscriptionCreationGateUser` claims.
+ *
+ * A user with no `subscription` at all passes — that is a legitimate gate user (a guest, or
+ * a member whose subscription the server just cleared), and rejecting it would send the
+ * caller back to a staler value. Anything whose `subscription`/`status` is the wrong runtime
+ * type is rejected rather than asserted, so a malformed cache entry degrades to the fallback
+ * instead of being read as a status the gate then acts on.
+ */
+function isSubscriptionCreationGateUser(value: unknown): value is { subscription?: { status?: string } } {
+  if (typeof value !== "object" || value === null) return false;
+  const subscription = (value as { subscription?: unknown }).subscription;
+  if (subscription === undefined || subscription === null) return true;
+  if (typeof subscription !== "object") return false;
+  const status = (subscription as { status?: unknown }).status;
+  return status === undefined || typeof status === "string";
+}
+
+/**
+ * Which user the gate should judge: the one in the query cache if there is one, else the
+ * last one a render saw.
+ *
+ * WHY THIS EXISTS. `my-account/membership/page-client.tsx` awaits
+ * `invalidateQueries(users.detail)` and THEN calls `openModal(plan)`. Reading the user from
+ * a ref refreshed every render is not enough there, because no render has happened yet:
+ * React Query notifies subscribers through `notifyManager`, whose scheduler is
+ * `systemSetTimeoutZero` — a MACROTASK — and React then schedules the render itself on
+ * another. The continuation after `await` is a MICROTASK, so it runs first and the ref still
+ * holds the pre-refetch value. The CACHE, by contrast, is written synchronously before
+ * `invalidateQueries` resolves, so it is already current at the call. Verified against the
+ * installed `@tanstack/query-core@5.90.2`.
+ *
+ * BIAS, unchanged from the gate itself: when in doubt, prefer the value that can only ALLOW.
+ * A cache miss falls back to the rendered user; it never invents a blocking status. Nothing
+ * here decides anything — `resolveSubscriptionCreationGate` still owns the decision, this
+ * only chooses which of two inputs it gets.
+ *
+ * `cachedUser` is `unknown` because that is what `QueryClient.getQueryData` returns, and
+ * casting it would defeat the point of checking it.
+ */
+export function selectGateUser(
+  cachedUser: unknown,
+  renderedUser: SubscriptionCreationGateUser
+): SubscriptionCreationGateUser {
+  return isSubscriptionCreationGateUser(cachedUser) ? cachedUser : renderedUser;
+}
+
 export function resolveSubscriptionCreationGate(
-  user: { subscription?: { status?: string } } | null | undefined,
+  user: SubscriptionCreationGateUser,
   opts: { isSubscriptionPlan: boolean; userLoading: boolean }
 ): SubscriptionCreationGateResult {
   // A pack is a standalone purchase, not a second subscription — always allowed (spec D5).

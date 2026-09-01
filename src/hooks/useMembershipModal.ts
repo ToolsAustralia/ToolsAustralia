@@ -1,9 +1,12 @@
 import { useState, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
 import { useRouter } from "next/navigation";
 import { useUserContext } from "@/contexts/UserContext";
+import { queryKeys } from "@/lib/queryKeys";
 import {
   resolveSubscriptionCreationGate,
+  selectGateUser,
   isSubscriptionPlan,
 } from "@/utils/subscription/subscription-creation-gate";
 
@@ -40,6 +43,7 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
   const [openWithPackageSelectionFirst, setOpenWithPackageSelectionFirst] = useState(false);
 
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { userData, loading: userLoading } = useUserContext();
 
   /**
@@ -60,9 +64,38 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
    * Stabilising both callbacks' identity is a side benefit, not the point. No consumer
    * depends on that identity changing when `userData` does: the hook returns a fresh object
    * literal every render anyway, so effects keyed on the returned object re-run regardless.
+   *
+   * The ref alone was NOT enough, and this is the part that took two attempts. "Refreshed
+   * every render" only helps once a render has happened, and at that `await` continuation
+   * none has: React Query notifies subscribers through `notifyManager`, whose scheduler is
+   * `systemSetTimeoutZero` (a MACROTASK), and React then schedules the render on another.
+   * The continuation after `await` is a MICROTASK and therefore runs first, with the ref
+   * still holding `past_due`. `readGateUser` below closes that by reading the query cache,
+   * which IS written synchronously before `invalidateQueries` resolves. The ref remains the
+   * right source for `userLoading` and for the user id.
    */
   const gateInputsRef = useRef({ userData, userLoading });
   gateInputsRef.current = { userData, userLoading };
+
+  /**
+   * The user the gate judges: the query cache entry if there is one, else the last rendered
+   * `userData`. Both callbacks go through this, so the chokepoint is uniformly current — a
+   * future block in `openModalWithPackageSelectionFirst` that DOES depend on user state
+   * inherits the fix rather than re-arming the trap.
+   *
+   * Same key on both sides, verified: `UserContext` reads `useUserData(userId)` →
+   * `queryKeys.users.detail(id)` = `["users", id]`, which is exactly the key the past-due
+   * switch invalidates. `getQueryData` returns `unknown`; `selectGateUser` checks it rather
+   * than casting.
+   */
+  const readGateUser = useCallback(() => {
+    const { userData: renderedUser } = gateInputsRef.current;
+    const userId = renderedUser?._id;
+    return selectGateUser(
+      userId ? queryClient.getQueryData(queryKeys.users.detail(userId)) : undefined,
+      renderedUser
+    );
+  }, [queryClient]);
 
   /**
    * Open the membership modal with an optional plan
@@ -93,10 +126,9 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
       // `stepTwoGate` in MembershipModal/index.tsx (~line 1253) re-runs this same gate
       // immediately before the payment pre-warm fires and redirects instead of letting
       // the pre-warm 409 silently.
-      const { userData: currentUserData, userLoading: currentUserLoading } = gateInputsRef.current;
-      const gate = resolveSubscriptionCreationGate(currentUserData, {
+      const gate = resolveSubscriptionCreationGate(readGateUser(), {
         isSubscriptionPlan: plan ? isSubscriptionPlan(plan) : false,
-        userLoading: currentUserLoading,
+        userLoading: gateInputsRef.current.userLoading,
       });
       if (!gate.allowed) {
         router.push(gate.redirectTo);
@@ -109,7 +141,7 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
       }
       setIsModalOpen(true);
     },
-    [router]
+    [router, readGateUser]
   );
 
   /**
@@ -143,11 +175,14 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
       // moment a real choice exists.
       //
       // The gate call is kept (rather than dropped) so this stays a chokepoint: a future
-      // reason to block that does not depend on the plan type would apply here too.
-      const { userData: currentUserData, userLoading: currentUserLoading } = gateInputsRef.current;
-      const gate = resolveSubscriptionCreationGate(currentUserData, {
+      // reason to block that does not depend on the plan type would apply here too. It goes
+      // through `readGateUser` for the same reason — so that future block reads the CURRENT
+      // user, not the last rendered one. Today the gate short-circuits on
+      // `isSubscriptionPlan: false` before it looks at either, so this is inert; it is here
+      // so the chokepoint does not have one correct half and one stale half.
+      const gate = resolveSubscriptionCreationGate(readGateUser(), {
         isSubscriptionPlan: false,
-        userLoading: currentUserLoading,
+        userLoading: gateInputsRef.current.userLoading,
       });
       if (!gate.allowed) {
         router.push(gate.redirectTo);
@@ -158,7 +193,7 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
       setOpenWithPackageSelectionFirst(true);
       setIsModalOpen(true);
     },
-    [router]
+    [router, readGateUser]
   );
 
   /**
