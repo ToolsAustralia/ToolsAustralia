@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronRight, ChevronDown, AlertTriangle, HelpCircle, ExternalLink } from "lucide-react";
+import { ChevronRight, ChevronDown, AlertTriangle, HelpCircle, ExternalLink, SpellCheck2 } from "lucide-react";
 import { Badge } from "@/components/admin/ui";
 import type {
   PackagesFocusCampaignNode,
@@ -320,6 +320,25 @@ export default function CampaignTreeTable({
                                           >
                                             <AlertTriangle
                                               className="w-3 h-3 text-red-600 dark:text-red-400"
+                                              aria-hidden
+                                            />
+                                          </span>
+                                        )}
+                                        {/* A typo'd ?toolbox=/?toolset= value (e.g. "milwakee") is a
+                                            DIFFERENT problem from a brand mismatch — the URL shape is
+                                            right, one character is wrong — so it gets its own colour
+                                            (amber, not red) and can appear alongside EITHER the
+                                            mismatch icon above or a clean "ok" row; it never implies
+                                            or masks a brand mismatch. */}
+                                        {mismatch && mismatch.unrecognisedParamValues.length > 0 && (
+                                          <span
+                                            className="shrink-0 mt-0.5"
+                                            role="img"
+                                            aria-label={`Unrecognised ${mismatch.unrecognisedParamValues[0].param} value: '${mismatch.unrecognisedParamValues[0].value}'${mismatch.unrecognisedParamValues.length > 1 ? ` (+${mismatch.unrecognisedParamValues.length - 1} more)` : ""}`}
+                                            title={`Unrecognised ${mismatch.unrecognisedParamValues[0].param} value: '${mismatch.unrecognisedParamValues[0].value}'${mismatch.unrecognisedParamValues.length > 1 ? ` (+${mismatch.unrecognisedParamValues.length - 1} more)` : ""}`}
+                                          >
+                                            <SpellCheck2
+                                              className="w-3 h-3 text-amber-600 dark:text-amber-400"
                                               aria-hidden
                                             />
                                           </span>

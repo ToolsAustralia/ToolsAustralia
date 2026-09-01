@@ -2284,3 +2284,53 @@ same as before.
 from the main Spend by URL section rather than the Brand Performance modal) — out of scope for
 this change; the 46 `unknown://` Meta ads that table can show are unaffected. `AD_URL_CHECK_BRANDS`
 and `checkAdUrlMismatch` are exported and reusable if that surface wants the same check later.
+
+**Validated against production, same day:** run against 665 live ads, 8 `mismatch`es — all the
+genuine STIHL case — and **zero false positives** (GearWrench correctly stayed clean). That is
+the bar the spec set (B3/B4), met on real data, not just the fixture set.
+
+### Second signal: unrecognised `?toolbox=`/`?toolset=` values (2026-09-01)
+
+Running the check against production surfaced a second, independent defect class: **84 ads carry
+`?toolbox=milwakee`** — a misspelling of "milwaukee" — out of 1,406 ads carrying a toolbox/toolset
+param (448 `kincrome`, 394 `gearwrench`, 364 `sidchrome`, 116 `milwaukee`, **84 `milwakee`**, 29
+`toolset=milwaukee`, 12 `toolset=dewalt`). This is a DIFFERENT problem from a brand mismatch: the
+URL shape is right and the param is doing its job of pre-selecting a toolbox, but the value names
+no brand, so the landing page silently falls back to its default instead of the toolbox the ad
+promised — a live conversion leak, on 6% of parameterised ads, invisible to both the brand-mismatch
+check above (URL shape is fine) and to `resolveAdUrlBrands` alone (an unrecognised value was always
+silently dropped, indistinguishable from the param being absent).
+
+**`findUnrecognisedAdUrlParams(url)`** (also in `adUrlMismatchCheck.ts`) returns every
+`{ param: "toolbox" | "toolset", value }` pair present in a URL that matches no known brand.
+`?toolbox=cash` — the prize-builder's legitimate opt-out (`CASH_OPTION` in
+`src/components/sections/promo/prize-selection/constants.ts`) — is explicitly excluded; it names
+no brand on purpose and must never read as a typo. `CheckAdUrlMismatchResult` gained
+`unrecognisedParamValues: UnrecognisedParamValue[]` (always an array, never `undefined`) — a
+**companion field, not a fourth verdict**: it is computed once, independent of `verdict`, and
+spliced unchanged into every return branch, so a typo can surface alongside a clean `ok` (a good
+brand match with a broken param still needs fixing) or a genuine `mismatch` (both problems can
+coexist on one ad, and neither is allowed to hide the other). Absence of the param is still never
+a finding — the same B4 rule, now proven by an explicit mutation-style test showing
+`resolveAdUrlBrands` alone cannot tell `?toolbox=milwakee` apart from no param at all; only
+`findUnrecognisedAdUrlParams` can.
+
+`CampaignTreeTable` renders it as a fourth, visually distinct affordance — an amber `SpellCheck2`
+icon (never red, so it reads as "different kind of problem" from the mismatch `AlertTriangle` at
+a glance) with a title naming the offending value, e.g. `Unrecognised toolbox value: 'milwakee'`.
+It sits beside, not instead of, the mismatch icon when both apply.
+
+⚠️ **Both signals share `AD_URL_CHECK_BRANDS` as their one brand registry**
+(`TOOLSET_LANDING_SLUGS` + `TOOLBOX_LANE_ORDER` in `src/config/promo-landing-slugs.ts`, derived
+not restated — same T3 threading risk as the brand-mismatch check). A brand genuinely missing
+from those two constants would make EVERY `?toolbox=`/`?toolset=` value naming it read as
+"unrecognised" here — i.e. all of that brand's parameterised ads would report as typo'd, even
+though every one of them is spelled correctly. Add the brand to `promo-landing-slugs.ts` first;
+both checks pick it up automatically.
+
+Tests (same file, `npm run test:ad-url-mismatch`): the real production case
+(`/promotions/makita?toolbox=milwakee`) reports the typo; a clean `?toolbox=kincrome` and a bare
+URL with no param at all both report nothing; `?toolbox=cash` is never flagged; an ad that is
+BOTH a brand mismatch and typo'd surfaces both signals in one result; and the mutation test
+proving the pre-change code (brand-set resolution alone) cannot distinguish a typo from an
+absent param.

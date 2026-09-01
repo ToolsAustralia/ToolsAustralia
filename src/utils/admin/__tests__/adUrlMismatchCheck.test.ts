@@ -11,6 +11,9 @@ import assert from "node:assert/strict";
  *  - the GearWrench false positive a naive campaign-name check would raise is NOT flagged
  *  - a missing `?toolbox=` is never a finding (spec B4)
  *  - `unknown://` placeholders and ambiguous naming both resolve to "unknown", never "ok"
+ *  - a typo'd `?toolbox=`/`?toolset=` value (e.g. `milwakee`) is its own signal
+ *    (`unrecognisedParamValues`), independent of `verdict` in both directions: it surfaces
+ *    alongside a clean `ok` or a genuine `mismatch`, and never causes either on its own
  *
  * Run: npm run test:ad-url-mismatch
  */
@@ -27,7 +30,7 @@ const test = (name: string, fn: () => void) => {
 };
 
 async function main() {
-  const { resolveAdUrlBrands, checkAdUrlMismatch, AD_URL_CHECK_BRANDS } = await import(
+  const { resolveAdUrlBrands, checkAdUrlMismatch, findUnrecognisedAdUrlParams, AD_URL_CHECK_BRANDS } = await import(
     "@/utils/admin/adUrlMismatchCheck"
   );
 
@@ -211,6 +214,94 @@ async function main() {
     // The real rule, reading rawUrls (which carry the query): correctly says ok.
     const real = checkAdUrlMismatch({ campaignName, urls: [rawUrl] });
     assert.equal(real.verdict, "ok", "the real rule must NOT reproduce the naive false positive");
+  });
+
+  // ── findUnrecognisedAdUrlParams / unrecognisedParamValues — the second defect class ─────
+  // Production audit (2026-09-01): 84 ads carry ?toolbox=milwakee — a misspelling of
+  // "milwaukee". A typo is a DIFFERENT problem from a brand mismatch (the URL shape is right,
+  // one character is wrong) and must be its own signal, never folded into `verdict`.
+
+  test("REAL CASE: /promotions/makita?toolbox=milwakee -> the typo is reported", () => {
+    const found = findUnrecognisedAdUrlParams(`${ORIGIN}/promotions/makita?toolbox=milwakee`);
+    assert.deepEqual(found, [{ param: "toolbox", value: "milwakee" }]);
+  });
+
+  test("/promotions/milwaukee?toolbox=kincrome -> clean, no typo signal", () => {
+    assert.deepEqual(findUnrecognisedAdUrlParams(`${ORIGIN}/promotions/milwaukee?toolbox=kincrome`), []);
+  });
+
+  test("no toolbox param at all -> still clean; absence is never a finding (owner ruling)", () => {
+    assert.deepEqual(findUnrecognisedAdUrlParams(`${ORIGIN}/promotions/milwaukee`), []);
+  });
+
+  test("?toolbox=cash (the prize-builder's legitimate opt-out) is never reported as a typo", () => {
+    assert.deepEqual(findUnrecognisedAdUrlParams(`${ORIGIN}/promotions/milwaukee?toolbox=cash`), []);
+  });
+
+  test("?toolset= typo is reported too, independently of ?toolbox=", () => {
+    assert.deepEqual(findUnrecognisedAdUrlParams(`${ORIGIN}/promotions/ryobi?toolset=dwalt`), [
+      { param: "toolset", value: "dwalt" },
+    ]);
+  });
+
+  test("checkAdUrlMismatch surfaces the typo via unrecognisedParamValues on an otherwise-ok ad", () => {
+    const result = checkAdUrlMismatch({
+      campaignName: "Makita Push",
+      urls: [`${ORIGIN}/promotions/makita?toolbox=milwakee`],
+    });
+    assert.equal(result.verdict, "ok", "the brand check must not be dragged down by the param typo");
+    assert.deepEqual(result.unrecognisedParamValues, [
+      { param: "toolbox", value: "milwakee", url: `${ORIGIN}/promotions/makita?toolbox=milwakee` },
+    ]);
+  });
+
+  test("BOTH a brand mismatch AND a typo'd param -> both signals surface, neither masks the other", () => {
+    const url = `${ORIGIN}/promotions/makita?toolbox=milwakee`;
+    const result = checkAdUrlMismatch({ campaignName: "Draw 10 | Sales | STIHL | Sep 2026", urls: [url] });
+    assert.equal(result.verdict, "mismatch", "STIHL naming vs a makita/milwakee URL is still a genuine brand mismatch");
+    assert.equal(result.campaignBrand, "stihl");
+    assert.deepEqual(result.unrecognisedParamValues, [{ param: "toolbox", value: "milwakee", url }]);
+  });
+
+  test("an unrecognised param never downgrades an otherwise-unknown ad's verdict, and never appears out of nowhere", () => {
+    // Ambiguous naming (2 brands) -> unknown regardless; the typo still surfaces independently.
+    const result = checkAdUrlMismatch({
+      campaignName: "STIHL vs Makita Comparison",
+      urls: [`${ORIGIN}/promotions/makita?toolbox=milwakee`],
+    });
+    assert.equal(result.verdict, "unknown");
+    assert.deepEqual(result.unrecognisedParamValues, [
+      { param: "toolbox", value: "milwakee", url: `${ORIGIN}/promotions/makita?toolbox=milwakee` },
+    ]);
+  });
+
+  test("a clean ad reports an empty unrecognisedParamValues array (never undefined)", () => {
+    const result = checkAdUrlMismatch({
+      campaignName: "Draw 9 | Sales | GearWrench",
+      urls: [`${ORIGIN}/promotions/milwaukee?toolbox=gearwrench`],
+    });
+    assert.deepEqual(result.unrecognisedParamValues, []);
+  });
+
+  test("MUTATION CHECK 2: the old brand-set resolution alone cannot tell a typo'd ?toolbox= apart from an absent one", () => {
+    // Before this change, resolveAdUrlBrands (and therefore checkAdUrlMismatch's verdict) was
+    // the ONLY signal available — and it treats a typo'd param exactly like a missing one,
+    // because an unrecognised value was simply dropped, never reported. That is the gap this
+    // change closes: the two cases are indistinguishable on brand set alone...
+    const withTypo = sorted(resolveAdUrlBrands(`${ORIGIN}/promotions/makita?toolbox=milwakee`));
+    const withNoParam = sorted(resolveAdUrlBrands(`${ORIGIN}/promotions/makita`));
+    assert.deepEqual(
+      withTypo,
+      withNoParam,
+      "pre-change code (brand-set resolution) cannot tell a typo'd param apart from an absent one"
+    );
+    assert.deepEqual(withTypo, ["makita"]);
+
+    // ...but findUnrecognisedAdUrlParams (the new code) DOES tell them apart:
+    assert.deepEqual(findUnrecognisedAdUrlParams(`${ORIGIN}/promotions/makita?toolbox=milwakee`), [
+      { param: "toolbox", value: "milwakee" },
+    ]);
+    assert.deepEqual(findUnrecognisedAdUrlParams(`${ORIGIN}/promotions/makita`), []);
   });
 
   if (failures > 0) {

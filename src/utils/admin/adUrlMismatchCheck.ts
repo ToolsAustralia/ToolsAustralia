@@ -28,6 +28,26 @@ import { TOOLSET_LANDING_SLUGS, TOOLBOX_LANE_ORDER } from "@/config/promo-landin
  * flagged when the URL POSITIVELY commits to a *different* toolbox. A toolset brand (including
  * Milwaukee, which is both) is always checked against the URL's toolset, because a resolvable
  * `/promotions/<slug>` URL always names a toolset — there is no "missing toolset" case.
+ *
+ * ## A second, independent defect class: the unrecognised param value (2026-09-01)
+ *
+ * Production audit found 84 ads carrying `?toolbox=milwakee` — a misspelling of "milwaukee".
+ * `resolveAdUrlBrands` silently drops an unrecognised param value (it just isn't a brand), which
+ * makes a typo indistinguishable from the param being absent altogether — but the two are NOT
+ * the same: an absent `?toolbox=` is normal (the page falls back to its default, which is
+ * correct behaviour), while a *typo'd* one means the ad-buyer's intended toolbox selection
+ * silently fell back to that same default instead of being honoured. That is a live conversion
+ * leak, invisible to the brand-mismatch check above (the URL shape is right, one character is
+ * wrong) and to `resolveAdUrlBrands` (which was never asked "did this param exist and fail to
+ * resolve"). `findUnrecognisedAdUrlParams`/`CheckAdUrlMismatchResult.unrecognisedParamValues`
+ * report it as an INDEPENDENT signal — never folded into `verdict` — because a brand mismatch
+ * and a typo'd param are different problems with different fixes (fix the campaign/destination
+ * vs. fix the character), and either can occur with or without the other.
+ *
+ * ⚠️ Both signals share `AD_URL_CHECK_BRANDS` as their brand registry. A brand genuinely missing
+ * from `TOOLSET_LANDING_SLUGS`/`TOOLBOX_LANE_ORDER` (`src/config/promo-landing-slugs.ts`) would
+ * make every one of its `?toolbox=`/`?toolset=` values read as "unrecognised" here — i.e. its
+ * ads would ALL report as typo'd. Add a new brand there first.
  */
 
 /** The toolset (power-tool) axis — always present on a resolvable `/promotions/<slug>` URL. */
@@ -55,11 +75,28 @@ const TOOLBOX_ONLY_BRAND_SET = new Set<string>(
   AD_URL_CHECK_TOOLBOX_BRANDS.filter((brand) => !TOOLSET_BRAND_SET.has(brand))
 );
 
+/**
+ * `?toolbox=cash` is the prize-builder's legitimate opt-out (`CASH_OPTION` in
+ * `src/components/sections/promo/prize-selection/constants.ts`, `VALID_TOOLBOX_QUERY_VALUES` in
+ * `prize-selection/utils.ts`) — a real, valid value that names no brand on purpose. It must
+ * never be reported as an unrecognised/typo'd value. There is no toolset equivalent: every valid
+ * `?toolset=` value names a real toolset brand.
+ */
+const TOOLBOX_CASH_OPT_OUT = "cash";
+
 interface ParsedAdUrl {
   /** Recognised brand segments of the `/promotions/<slug>` path, in order (e.g. [milwaukee, kincrome]). */
   slugBrandSegments: string[];
   toolboxParamBrand?: string;
   toolsetParamBrand?: string;
+  /**
+   * The raw `?toolbox=` value, lowercased/trimmed, whenever the param is present at all —
+   * regardless of whether it resolved to a brand. Undefined when the param is absent or empty.
+   * Used to tell "typo'd value" apart from "no value" (`toolboxParamBrand` alone cannot).
+   */
+  toolboxParamRaw?: string;
+  /** Same as `toolboxParamRaw`, for `?toolset=`. */
+  toolsetParamRaw?: string;
 }
 
 /**
@@ -93,14 +130,54 @@ function parseAdUrl(url: string): ParsedAdUrl {
     : [];
 
   const params = new URLSearchParams(search);
-  const toolboxParamRaw = params.get("toolbox")?.toLowerCase().trim();
-  const toolsetParamRaw = params.get("toolset")?.toLowerCase().trim();
+  // `|| undefined` (not just optional chaining) so an explicit-but-empty `?toolbox=` reads the
+  // same as an absent one — an empty value is not a typo, it's nothing.
+  const toolboxParamRaw = params.get("toolbox")?.toLowerCase().trim() || undefined;
+  const toolsetParamRaw = params.get("toolset")?.toLowerCase().trim() || undefined;
 
   return {
     slugBrandSegments,
     toolboxParamBrand: toolboxParamRaw && ALL_BRAND_SET.has(toolboxParamRaw) ? toolboxParamRaw : undefined,
     toolsetParamBrand: toolsetParamRaw && ALL_BRAND_SET.has(toolsetParamRaw) ? toolsetParamRaw : undefined,
+    toolboxParamRaw,
+    toolsetParamRaw,
   };
+}
+
+/**
+ * `?toolbox=`/`?toolset=` values on ONE parsed URL that match no known brand and are not the
+ * `cash` opt-out — almost always a typo (`?toolbox=milwakee`). A URL with no such param at all,
+ * or whose param already resolved to a brand, contributes nothing here — absence and a good
+ * value are both clean.
+ */
+function unrecognisedParamsOf(parsed: ParsedAdUrl): Array<{ param: "toolbox" | "toolset"; value: string }> {
+  const out: Array<{ param: "toolbox" | "toolset"; value: string }> = [];
+  if (
+    parsed.toolboxParamRaw !== undefined &&
+    parsed.toolboxParamBrand === undefined &&
+    parsed.toolboxParamRaw !== TOOLBOX_CASH_OPT_OUT
+  ) {
+    out.push({ param: "toolbox", value: parsed.toolboxParamRaw });
+  }
+  if (parsed.toolsetParamRaw !== undefined && parsed.toolsetParamBrand === undefined) {
+    out.push({ param: "toolset", value: parsed.toolsetParamRaw });
+  }
+  return out;
+}
+
+/**
+ * `?toolbox=`/`?toolset=` values on ONE landing URL that match no known brand — almost always a
+ * typo, e.g. `?toolbox=milwakee` (found on 84 production ads, a misspelling of "milwaukee").
+ *
+ * This is a DIFFERENT problem from a brand mismatch (`checkAdUrlMismatch`'s `verdict`): the URL
+ * SHAPE is right and the param is doing its job of pre-selecting a toolbox, but the value it
+ * carries names nothing, so the landing page silently falls back to its default instead of the
+ * one the ad promised. Fix is different too — the character, not the campaign or the
+ * destination. Returns `[]` when the param is absent (never a finding, same rule as the
+ * brand-mismatch check) or already resolves to a real brand.
+ */
+export function findUnrecognisedAdUrlParams(url: string): Array<{ param: "toolbox" | "toolset"; value: string }> {
+  return unrecognisedParamsOf(parseAdUrl(url));
 }
 
 function allBrandsOf(parsed: ParsedAdUrl): string[] {
@@ -177,12 +254,30 @@ export interface CheckAdUrlMismatchInput {
   urls: string[];
 }
 
+/**
+ * A `?toolbox=`/`?toolset=` value present on one of the ad's URLs but matching no known brand —
+ * almost always a typo (e.g. `toolbox=milwakee`). Independent of `verdict`: it is reported
+ * whether the ad's brand check comes back `ok`, `mismatch`, or `unknown`, and it never causes
+ * one of those to change — a good brand match with a typo'd param still reports both; an
+ * unrecognised param never gets silently downgraded into `unknown` on its own.
+ */
+export interface UnrecognisedParamValue {
+  /** Which query param carried the value. */
+  param: "toolbox" | "toolset";
+  /** The raw value, lowercased/trimmed, that matched no brand in `AD_URL_CHECK_BRANDS`. */
+  value: string;
+  /** Which of the input `urls` carried it, verbatim — useful when an ad has more than one (carousel). */
+  url: string;
+}
+
 export interface CheckAdUrlMismatchResult {
   verdict: AdUrlMismatchVerdict;
   /** The single brand the campaign/ad naming resolved to. Absent when naming was ambiguous (0 or 2+ brands) — always an "unknown" verdict in that case. */
   campaignBrand?: string;
   /** Union of every brand resolved across all `urls`. */
   urlBrands: string[];
+  /** Typo'd `?toolbox=`/`?toolset=` values found across all `urls`. `[]` when none — always present so callers never need `?? []`. */
+  unrecognisedParamValues: UnrecognisedParamValue[];
 }
 
 type UrlEvaluation = "match" | "contradiction" | "silent";
@@ -217,25 +312,30 @@ function evaluateUrlAgainstBrand(url: string, namedBrand: string): UrlEvaluation
 export function checkAdUrlMismatch(input: CheckAdUrlMismatchInput): CheckAdUrlMismatchResult {
   const urls = input.urls ?? [];
   const urlBrands = [...new Set(urls.flatMap((url) => resolveAdUrlBrands(url)))];
+  // Computed ONCE, up front, and spliced into every branch below unchanged — this signal is
+  // independent of `verdict` by construction: nothing past this line is allowed to alter it.
+  const unrecognisedParamValues: UnrecognisedParamValue[] = urls.flatMap((url) =>
+    findUnrecognisedAdUrlParams(url).map((p) => ({ ...p, url }))
+  );
   const namedBrand = resolveNamedBrand(input.campaignName, input.adName);
 
   if (!namedBrand) {
-    return { verdict: "unknown", urlBrands };
+    return { verdict: "unknown", urlBrands, unrecognisedParamValues };
   }
 
   const anyUrlResolved = urls.some((url) => resolveAdUrlBrands(url).length > 0);
   if (!anyUrlResolved) {
-    return { verdict: "unknown", campaignBrand: namedBrand, urlBrands };
+    return { verdict: "unknown", campaignBrand: namedBrand, urlBrands, unrecognisedParamValues };
   }
 
   const evaluations = urls.map((url) => evaluateUrlAgainstBrand(url, namedBrand));
   if (evaluations.includes("match")) {
-    return { verdict: "ok", campaignBrand: namedBrand, urlBrands };
+    return { verdict: "ok", campaignBrand: namedBrand, urlBrands, unrecognisedParamValues };
   }
   if (evaluations.includes("contradiction")) {
-    return { verdict: "mismatch", campaignBrand: namedBrand, urlBrands };
+    return { verdict: "mismatch", campaignBrand: namedBrand, urlBrands, unrecognisedParamValues };
   }
   // Every resolved URL was "silent" for this brand: namedBrand is toolbox-only and no URL
   // committed to a toolbox at all. Spec B4 — a missing `?toolbox=` is never a finding.
-  return { verdict: "ok", campaignBrand: namedBrand, urlBrands };
+  return { verdict: "ok", campaignBrand: namedBrand, urlBrands, unrecognisedParamValues };
 }
