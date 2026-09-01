@@ -27,6 +27,15 @@
  *    excludes every recent canceller for as long as their grace window lasts —
  *    exactly the customers this trigger exists to reach. See
  *    `hasNotResubscribedOr`'s doc comment in `bonusCodeAudienceFilter.ts`.
+ * 5. THE ISSUANCE-STATE FILTERS (2026-09-01, primary-view rework) are
+ *    EXHAUSTIVE and NON-OVERLAPPING: `stillRedeemable` + `redeemed` +
+ *    `expiredOrLapsed` must reconcile to every row exactly once, for both a
+ *    redeemable and a non-redeemable campaign — asserted against a
+ *    representative status/expiry matrix, not just spot-checked individual
+ *    cases. Also pins that the campaign-redeemability question is answered by
+ *    a single `isCampaignRedeemable(...)` value threaded in, never
+ *    re-evaluated per row — the exact hand-rolled-copy mistake fixed on this
+ *    branch at `d9350a23` (docs/rewards-redeemables/rules.md R12).
  *
  * Pure: no DB, no network.
  */
@@ -36,7 +45,10 @@ import mongoose from "mongoose";
 import {
   buildCancelClickUserFilter,
   buildCheckoutStartAudienceFilter,
+  buildExpiredOrLapsedIssuanceFilter,
   buildOneTimePurchaseAudienceFilter,
+  buildRedeemedIssuanceFilter,
+  buildStillRedeemableIssuanceFilter,
   CANCEL_CLICK_FLOW_EVENT_FILTER,
   cutoffDate,
   hasNotResubscribedOr,
@@ -83,21 +95,51 @@ function toComparable(value: unknown): number | unknown {
   return value instanceof Date ? value.getTime() : value;
 }
 
+/** True only for a plain `{ $op: ... }` clause object — NOT a Date or a
+ *  mongoose ObjectId, both of which are `typeof === "object"` but are
+ *  EQUALITY VALUES in a filter (e.g. `{ campaignId: someObjectId }`), never
+ *  operator containers. Detected by constructor name rather than
+ *  `instanceof` so this file needs no mongoose ObjectId import of its own. */
+function isOperatorObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  if (value instanceof Date) return false;
+  const ctorName = (value as { constructor?: { name?: string } }).constructor?.name;
+  if (ctorName === "ObjectId" || ctorName === "ObjectID") return false;
+  return true;
+}
+
+/** Literal equality, value-based rather than reference-based for Dates/ObjectIds
+ *  — matches how Mongo itself compares them. */
+function equalsLiteral(actual: unknown, expected: unknown): boolean {
+  if (expected instanceof Date) return actual instanceof Date && actual.getTime() === expected.getTime();
+  const expectedCtorName = (expected as { constructor?: { name?: string } })?.constructor?.name;
+  if (expectedCtorName === "ObjectId" || expectedCtorName === "ObjectID") return String(actual) === String(expected);
+  return actual === expected;
+}
+
 /** `actual` may be a plain value OR an array of projected values (see getPath above). */
 function valueMatches(actual: unknown, expected: unknown): boolean {
   if (Array.isArray(actual)) return actual.some((v) => valueMatches(v, expected));
-  if (expected !== null && typeof expected === "object" && !Array.isArray(expected)) {
-    return Object.entries(expected as Record<string, unknown>).every(([op, opVal]) => {
+  if (isOperatorObject(expected)) {
+    return Object.entries(expected).every(([op, opVal]) => {
       if (op === "$ne") return actual !== opVal;
       if (op === "$exists") return opVal ? actual !== undefined : actual === undefined;
       if (op === "$gte") {
         if (actual == null) return false;
         return (toComparable(actual) as number) >= (toComparable(opVal) as number);
       }
+      if (op === "$gt") {
+        if (actual == null) return false;
+        return (toComparable(actual) as number) > (toComparable(opVal) as number);
+      }
+      if (op === "$lte") {
+        if (actual == null) return false;
+        return (toComparable(actual) as number) <= (toComparable(opVal) as number);
+      }
       throw new Error(`bonus-code-audience.test.ts evaluator: unsupported operator "${op}"`);
     });
   }
-  return actual === expected;
+  return equalsLiteral(actual, expected);
 }
 
 function evaluateClause(doc: PlainDoc, clause: Record<string, unknown>): boolean {
@@ -146,6 +188,13 @@ async function run() {
   check(
     "BONUS_CODE_BY_TRIGGER still names exactly the three triggers this service resolves",
     Object.keys(BONUS_CODE_BY_TRIGGER).sort().join(",") === "cancel-click,checkout-start,one-time-purchase",
+    true
+  );
+  check(
+    "BonusCodeAudienceService imports and calls isCampaignRedeemable — never hand-rolls campaign redeemability (the d9350a23 mistake)",
+    /from\s+["']@\/utils\/redeemables\/bonus-code-policy["']/.test(serviceSource) &&
+      serviceSource.includes("isCampaignRedeemable") &&
+      /isCampaignRedeemable\(\s*campaign\s*,\s*now\s*\)/.test(serviceSource),
     true
   );
 
@@ -290,6 +339,100 @@ async function run() {
     ),
     true
   );
+
+  console.log("\nISSUANCE STATE (2026-09-01) — the PRIMARY view: who already minted it, who can still redeem, who redeemed");
+
+  const campaignId = new mongoose.Types.ObjectId();
+  const ISSUANCE_NOW = new Date("2026-09-01T00:00:00.000Z");
+  const future = new Date("2026-09-05T00:00:00.000Z");
+  const past = new Date("2026-08-01T00:00:00.000Z");
+
+  const stillRedeemableFilter = buildStillRedeemableIssuanceFilter(campaignId, ISSUANCE_NOW) as Record<string, unknown>;
+  check(
+    "active row, window still open -> still redeemable",
+    matches({ campaignId, status: "active", expiresAt: future }, stillRedeemableFilter),
+    true
+  );
+  check(
+    "active row, window already closed -> NOT still redeemable (this row's own half only; campaign-level gating is separate)",
+    matches({ campaignId, status: "active", expiresAt: past }, stillRedeemableFilter),
+    false
+  );
+  check(
+    "redeemed row -> NOT still redeemable",
+    matches({ campaignId, status: "redeemed", expiresAt: future }, stillRedeemableFilter),
+    false
+  );
+
+  const redeemedFilter = buildRedeemedIssuanceFilter(campaignId) as Record<string, unknown>;
+  check("redeemed row -> matches the redeemed filter", matches({ campaignId, status: "redeemed" }, redeemedFilter), true);
+  check("active row -> does NOT match the redeemed filter", matches({ campaignId, status: "active" }, redeemedFilter), false);
+
+  console.log("\n  ...campaign STILL redeemable (isCampaignRedeemable === true)");
+  const lapsedWhileCampaignLive = buildExpiredOrLapsedIssuanceFilter(campaignId, ISSUANCE_NOW, true) as Record<
+    string,
+    unknown
+  >;
+  check("expired status -> lapsed", matches({ campaignId, status: "expired", expiresAt: past }, lapsedWhileCampaignLive), true);
+  check("cancelled status -> lapsed", matches({ campaignId, status: "cancelled", expiresAt: future }, lapsedWhileCampaignLive), true);
+  check(
+    "active row whose OWN window closed -> lapsed",
+    matches({ campaignId, status: "active", expiresAt: past }, lapsedWhileCampaignLive),
+    true
+  );
+  check(
+    "active row whose own window is STILL open -> NOT lapsed (it's still-redeemable's job)",
+    matches({ campaignId, status: "active", expiresAt: future }, lapsedWhileCampaignLive),
+    false
+  );
+  check("redeemed row -> NOT lapsed", matches({ campaignId, status: "redeemed", expiresAt: future }, lapsedWhileCampaignLive), false);
+
+  console.log("\n  ...campaign NO LONGER redeemable (isCampaignRedeemable === false, e.g. admin deactivated it)");
+  const lapsedWhileCampaignDead = buildExpiredOrLapsedIssuanceFilter(campaignId, ISSUANCE_NOW, false) as Record<
+    string,
+    unknown
+  >;
+  check(
+    "active row whose OWN window is still open -> STILL counted as lapsed, because the campaign itself is done (matches isCampaignRedeemable's own precedence: campaign state overrides a per-row deadline)",
+    matches({ campaignId, status: "active", expiresAt: future }, lapsedWhileCampaignDead),
+    true
+  );
+  check("redeemed row -> still NOT lapsed even when the campaign is dead", matches({ campaignId, status: "redeemed", expiresAt: future }, lapsedWhileCampaignDead), false);
+
+  console.log("\n  ...reconciliation: every row lands in EXACTLY ONE of the three buckets, both campaign states");
+  const statusMatrix: { status: string; expiresAt: Date }[] = [
+    { status: "active", expiresAt: future },
+    { status: "active", expiresAt: past },
+    { status: "redeemed", expiresAt: future },
+    { status: "redeemed", expiresAt: past },
+    { status: "expired", expiresAt: past },
+    { status: "expired", expiresAt: future },
+    { status: "cancelled", expiresAt: future },
+    { status: "cancelled", expiresAt: past },
+  ];
+  for (const campaignRedeemable of [true, false]) {
+    const stillFilter = buildStillRedeemableIssuanceFilter(campaignId, ISSUANCE_NOW) as Record<string, unknown>;
+    const redeemFilter = buildRedeemedIssuanceFilter(campaignId) as Record<string, unknown>;
+    const lapsedFilter = buildExpiredOrLapsedIssuanceFilter(campaignId, ISSUANCE_NOW, campaignRedeemable) as Record<
+      string,
+      unknown
+    >;
+    for (const row of statusMatrix) {
+      const doc = { campaignId, ...row };
+      // "still redeemable" additionally requires the campaign to be redeemable —
+      // that gate lives in the SERVICE (a single isCampaignRedeemable call), not
+      // in this per-row filter, so it is applied here in the test too.
+      const inStill = campaignRedeemable && matches(doc, stillFilter);
+      const inRedeemed = matches(doc, redeemFilter);
+      const inLapsed = matches(doc, lapsedFilter);
+      const bucketsHit = [inStill, inRedeemed, inLapsed].filter(Boolean).length;
+      check(
+        `campaignRedeemable=${campaignRedeemable} status=${row.status} expiresAt=${row.expiresAt > ISSUANCE_NOW ? "future" : "past"} lands in EXACTLY ONE bucket`,
+        bucketsHit === 1,
+        true
+      );
+    }
+  }
 
   if (failures > 0) {
     console.error(`\n${failures} assertion(s) failed`);

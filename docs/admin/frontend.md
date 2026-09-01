@@ -69,19 +69,31 @@ The modal refuses to submit while an image is still a `File` rather than a Cloud
 `ImageUpload` uploads on drop, so a pending upload would otherwise be dropped from the payload
 on save.
 
-## Bonus Code Audience Reach panel (2026-09-01)
+## Bonus Code Status panel (2026-09-01, reworked)
 
 `BonusCodeAudiencePanel` (`src/components/admin/BonusCodeAudiencePanel.tsx`) is mounted above
 `MonthlyRedeemablesCampaignPanel` in `PromoManagement`'s "Redeemables" tab — the same place the
 existing coupon analytics live. Read-only, self-contained `fetch` (same pattern as its sibling
-panel, not a TanStack Query hook): calls `GET /api/admin/monthly-coupon/trigger-audience` and
-renders, per webhook-minted bonus-code trigger (`cancel-click` / `checkout-start` /
-`one-time-purchase`), the addressable customer **count** (a forecast — see
-[docs/rewards-redeemables/api.md](../rewards-redeemables/api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-audience-forecast-2026-09-01)),
-current issued/redeemed counts, and an expandable **bounded sample** (25 max) of matching
-customers by name/email. The `checkout-start` row carries a visible caveat — that count is a
-documented approximation and reads far larger than the other two (no "started checkout" event
-is persisted in Mongo). This view cannot mint, issue, or redeem anything.
+panel, not a TanStack Query hook): calls `GET /api/admin/monthly-coupon/trigger-audience`.
+
+**Leads with real issuance state (the owner's own ask), not the forecast.** Per trigger
+(`cancel-click` / `checkout-start` / `one-time-purchase`), four primary tiles: **Minted**
+(`issuance.issuedCount` — granted, any status, "they have access to it"), **Still redeemable**
+(green), **Redeemed** (red, plus entries granted), **Expired / lapsed** (amber — the number that
+tells the owner the flow is minting faster than customers act). Each of the three states below
+"Minted" has its own expandable, bounded (25 max) sample table with name/email/entries/date.
+
+**All-zeros empty state.** All three campaigns sit at 0 issuances in production as of
+2026-09-01 — when `issuance.issuedCount === 0`, the panel renders a plain dashed-border "No
+{CODE} codes minted yet" message instead of zero-filled tiles, so it reads as "nothing yet, not
+broken."
+
+**The addressable-population forecast (the panel's ENTIRE content in the first version) is
+demoted, not deleted** — a native `<details>` "Potential reach (forecast, not current
+holders) ▸" section per row, collapsed by default, holding the same last-30/90-day + all-time
+figures, the `checkout-start` calibration caveat, and its own bounded sample. Full contract:
+[docs/rewards-redeemables/api.md](../rewards-redeemables/api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-status-2026-09-01-reworked).
+This view cannot mint, issue, or redeem anything.
 
 ## Monthly Redeemables Campaign panel — `validForHours` (2026-08-25; renamed from `validForDays` 2026-08-26)
 

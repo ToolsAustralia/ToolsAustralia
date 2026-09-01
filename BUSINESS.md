@@ -468,14 +468,20 @@ eligibility moment. Those two moments are typically 2.5–17 days apart.
    A customer can sit in one of these flows for days without a code existing. Nothing is written for
    them, and nothing is spent, until the flow fires that webhook.
 
-   **Admin now sees the reach, not just the mechanism (2026-09-01).** Before a single email sends,
+   **Admin now sees the status, not just the mechanism (2026-09-01, reworked same day).**
    `GET /api/admin/monthly-coupon/trigger-audience` (admin > Promo Management > Redeemables tab)
-   forecasts, per trigger, how many customers it can currently reach — reconstructed from our own
-   collections (`CancellationFlowEvent`, `User.oneTimePackages`, `User.subscription`), not Klaviyo.
-   Production, 2026-09-01: `BACKIN200` 1,513 · `EXTRA100` 2,524 · `LOCKIN100` 45,407 (the last one is a
-   documented **upper bound** — no "started checkout" event is persisted in Mongo, so it counts every
-   never-converted account, not only guests who picked a package). See
-   [docs/rewards-redeemables/api.md](docs/rewards-redeemables/api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-audience-forecast-2026-09-01).
+   leads with each trigger's REAL issuance state — how many customers already hold the code
+   (have access to it), how many can still redeem it (`isCampaignRedeemable`, never hand-rolled),
+   how many have redeemed, and how many lapsed unused. Production, 2026-09-01: all three codes
+   sit at 0 issued / 0 still-redeemable / 0 redeemed / 0 lapsed — correct, not broken, since
+   marketing has not published the flows yet; the panel renders a plain "not minted yet" state
+   rather than blank tiles. A secondary, collapsed "potential reach" section keeps the
+   addressable-population forecast (reconstructed from `CancellationFlowEvent`,
+   `User.oneTimePackages`, `User.subscription`, not Klaviyo) for planning — `BACKIN200` 517 /
+   `EXTRA100` 368 / `LOCKIN100` 7,120 addressable in the last 30 days as of this date (the last
+   one is a documented **upper bound**, calibrated against Klaviyo's own Started Checkout metric
+   at ~74% of its August figure — same ballpark, not exact). See
+   [docs/rewards-redeemables/api.md](docs/rewards-redeemables/api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-status-2026-09-01-reworked).
 
 The entries the code carries are, as everywhere else, a **free inclusion** — the customer buys the
 membership or the pack, never the entries (§1).

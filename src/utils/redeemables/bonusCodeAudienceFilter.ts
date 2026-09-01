@@ -51,10 +51,21 @@
  * qualified on/after it, omit it for the all-time ceiling. Each trigger's
  * "qualifying instant" is picked from what that trigger's data actually offers
  * — see `BonusCodeAudienceService` for which field and why per trigger.
+ *
+ * WHAT THE OWNER ACTUALLY WANTS IS ISSUANCE STATE, NOT THE FORECAST
+ * (2026-09-01, second correction — the coordinator's first read of the ask was
+ * wrong, not the owner's). Everything above this paragraph answers "how many
+ * customers COULD this trigger reach" — useful context, but demoted to a
+ * secondary "potential reach" section. The owner's actual want, in his own
+ * words: "those who already minted it... those already have access to it...
+ * and number of who redeemed." That is `RedeemableIssuance` state, not the
+ * addressable population — see `buildStillRedeemableIssuanceFilter` /
+ * `buildRedeemedIssuanceFilter` / `buildExpiredOrLapsedIssuanceFilter` below.
  */
 import type { FilterQuery } from "mongoose";
 import type mongoose from "mongoose";
 import type { IUser } from "@/models/User";
+import type { IRedeemableIssuance } from "@/models/RedeemableIssuance";
 
 /** The two recency windows the admin card leads with (all-time is the ceiling, unbounded). */
 export const RECENCY_WINDOW_DAYS = { last30: 30, last90: 90 } as const;
@@ -210,4 +221,82 @@ export function buildCancelClickUserFilter(
     isActive: true,
     $or: hasNotResubscribedOr(),
   } as FilterQuery<IUser>;
+}
+
+// ─── ISSUANCE STATE — the PRIMARY view (2026-09-01) ────────────────────────
+//
+// "Those who already minted it... already have access to it... and who
+// redeemed." Three exhaustive, non-overlapping buckets over a campaign's
+// `RedeemableIssuance` rows, every row landing in exactly one:
+//
+//   redeemed            — status === "redeemed"
+//   stillRedeemable     — status === "active" AND this row's own window is
+//                         still open AND the CAMPAIGN itself is still
+//                         redeemable (isCampaignRedeemable — never hand-rolled)
+//   expiredOrLapsed     — everything else: status === "expired", status ===
+//                         "cancelled", a status === "active" row whose own
+//                         window has closed, OR (when the campaign itself is
+//                         no longer redeemable) EVERY non-redeemed row
+//                         regardless of its own window — matching
+//                         `isCampaignRedeemable`'s own precedence, where an
+//                         inactive/ended campaign overrides a per-row deadline.
+//
+// `campaignRedeemable` is evaluated ONCE per campaign via
+// `isCampaignRedeemable(campaign, now)` (`@/utils/redeemables/bonus-code-policy`)
+// and threaded into `buildExpiredOrLapsedIssuanceFilter` — never re-derived
+// here. That is the exact hand-rolled-copy mistake fixed on this branch at
+// `d9350a23` (see docs/rewards-redeemables/rules.md R12): a second, partial
+// reimplementation of campaign redeemability drifted from the real one and
+// showed 188 members an enabled Claim button the server would refuse.
+//
+// purchaseRequirement / redeemedEverAt are DELIBERATELY not folded in here —
+// `verified` in production 2026-09-01: all three trigger campaigns carry
+// `purchaseRequirement: "none"`, so `hasQualifyingPurchase` always passes and
+// adding it would be dead code; `redeemedEverAt` only diverges from `status`
+// on a refunded-then-restored row, which cannot coexist with `status:
+// "active"` under normal operation. If a future campaign sets a real
+// `purchaseRequirement`, this predicate would need `hasQualifyingPurchase`
+// added — flagged here so it is not silently wrong later.
+
+/** "Still redeemable" — this row's own half of the check. Campaign redeemability
+ *  is a SEPARATE, single evaluation (see module comment above), not folded in
+ *  here, because it is a per-CAMPAIGN fact, not a per-issuance Mongo clause. */
+export function buildStillRedeemableIssuanceFilter(
+  campaignId: mongoose.Types.ObjectId,
+  now: Date
+): FilterQuery<IRedeemableIssuance> {
+  return {
+    campaignId,
+    status: "active",
+    expiresAt: { $gt: now },
+  } as FilterQuery<IRedeemableIssuance>;
+}
+
+export function buildRedeemedIssuanceFilter(
+  campaignId: mongoose.Types.ObjectId
+): FilterQuery<IRedeemableIssuance> {
+  return { campaignId, status: "redeemed" } as FilterQuery<IRedeemableIssuance>;
+}
+
+/**
+ * Everything issued that is neither still-redeemable nor redeemed. Must stay
+ * the exact logical complement of the other two filters over `{ campaignId }`
+ * — see the reconciliation test (`issuedCount === stillRedeemableCount +
+ * redeemedCount + expiredOrLapsedCount`) in `bonus-code-audience.test.ts`.
+ */
+export function buildExpiredOrLapsedIssuanceFilter(
+  campaignId: mongoose.Types.ObjectId,
+  now: Date,
+  campaignRedeemable: boolean
+): FilterQuery<IRedeemableIssuance> {
+  if (!campaignRedeemable) {
+    // The campaign itself is done (inactive, not yet started, or past its
+    // legacy endsAt) — every non-redeemed row is lapsed, regardless of its
+    // own per-row window, matching isCampaignRedeemable's own precedence.
+    return { campaignId, status: { $ne: "redeemed" } } as FilterQuery<IRedeemableIssuance>;
+  }
+  return {
+    campaignId,
+    $or: [{ status: "expired" }, { status: "cancelled" }, { status: "active", expiresAt: { $lte: now } }],
+  } as FilterQuery<IRedeemableIssuance>;
 }

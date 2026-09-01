@@ -1,46 +1,56 @@
 /**
  * BonusCodeAudienceService.ts
  *
- * Read-only forecast of "how many customers can this trigger reach", per
- * webhook-minted bonus code (`docs/superpowers/specs/2026-09-01-coupon-audience-and-ad-url-check-design.md`
- * §A). NEVER mints, issues, or redeems anything — every query here is a `find`
- * / `countDocuments` / `aggregate`/`distinct` read.
+ * Read-only view of each webhook-minted bonus code's ACTUAL issuance state —
+ * who already has it, who can still redeem it, who has redeemed it, and how
+ * many grants lapsed unused. NEVER mints, issues, or redeems anything — every
+ * query here is a `find` / `countDocuments` / `aggregate` / `distinct` read.
  *
- * WHY A FORECAST, NOT A HOLDER COUNT. All three campaigns (`BACKIN200` /
- * `LOCKIN100` / `EXTRA100`) sit at 0 `RedeemableIssuance` rows and 0
- * `BonusCodeWebhookCall` rows in production as of 2026-09-01 — a "who currently
- * holds this code" view renders empty today and stays near-empty between sends.
- * The addressable-population count is what answers "the numbers that can renew"
- * before minting starts; issued/redeemed counts are surfaced alongside so the
- * same card becomes the real number once it does.
+ * THE PRIMARY QUESTION (2026-09-01, reworked — the owner corrected the ask).
+ * The first version of this service led with a FORECAST of who a trigger
+ * could reach. That answered a question nobody asked. The owner's own words:
+ * "what i want is to see those who already minted it not those are just
+ * qualified meaning those already have access to it... and number of who
+ * redeemed." So `BonusCodeAudienceRow.issuance` — real `RedeemableIssuance`
+ * state — is now the PRIMARY payload:
  *
- * WHY RECENCY-BUCKETED, NOT JUST ALL-TIME (2026-09-01 correction). The Klaviyo
- * flow behind each trigger fires 2.5–17 days after the customer qualifies
- * (`docs/rewards-redeemables/patterns.md` P7) — it does not reach back further
- * than that. A customer who qualified eight months ago already either got their
- * flow send or never will; an all-time count includes them and overstates the
- * actionable pool by an order of magnitude (verified against Klaviyo's own
- * `Started Checkout` metric: ~6–10k/month vs. an all-time LOCKIN100 proxy count
- * of 45,407 — see the caveat text and `docs/rewards-redeemables/api.md`). So
- * every row returns THREE counts — `last30`, `last90`, `allTime` — bucketed by
- * each trigger's own qualifying instant (see `resolveXAudience` below for which
- * field and why, per trigger). All-time is kept as a ceiling, never the
- * headline.
+ *   - `issuedCount`            — granted, any status (they have access to it).
+ *   - `stillRedeemableCount`   — of those, `status: "active"`, this row's own
+ *     window still open, AND the campaign itself still redeemable. The
+ *     campaign half is `isCampaignRedeemable(campaign, now)`
+ *     (`@/utils/redeemables/bonus-code-policy`) — NEVER hand-rolled. A partial
+ *     copy of that exact check is the bug fixed on this branch at `d9350a23`
+ *     (188 members shown an enabled Claim button the server would refuse —
+ *     see docs/rewards-redeemables/rules.md R12). Repeating that mistake here
+ *     would recreate it on the admin side.
+ *   - `redeemedCount` / `redeemedEntries` — actually redeemed, and the free
+ *     entries granted as a result.
+ *   - `expiredOrLapsedCount`   — granted, window closed, never used. The
+ *     number that tells the owner the flow is minting faster than customers
+ *     are acting.
+ *
+ * All three campaigns (`BACKIN200` / `LOCKIN100` / `EXTRA100`) sit at ZERO
+ * `RedeemableIssuance` rows in production as of 2026-09-01 — verified again
+ * after this rework (the coordinator ran a live expiry cleanup and deactivated
+ * `ANZACDAY25` in between; neither touches these three, which still have 0
+ * issuances). Every primary number therefore renders 0 today. That is
+ * correct, not a bug — the UI must render a plain "not minted yet" empty
+ * state rather than zero-tiles that look broken.
+ *
+ * THE FORECAST IS DEMOTED, NOT DELETED. `addressable` (recency-bucketed
+ * potential reach — how many customers a trigger COULD reach if minting
+ * started) is still computed and returned, for the "potential reach" section
+ * the UI now renders collapsed/secondary. See
+ * `@/utils/redeemables/bonusCodeAudienceFilter` for the predicates and the
+ * `checkout-start` approximation. The `autoRenew`-vs-`isActive` fix found
+ * while building the recency buckets stands unchanged — it was a genuine
+ * catch, independent of this rework.
  *
  * THE TRIGGER -> CODE MAP IS READ, NEVER RESTATED. `BONUS_CODE_BY_TRIGGER`
- * (`@/config/bonusCodes`) is the only place these three strings are spelled —
- * see that file's own header for why a second copy is dangerous.
+ * (`@/config/bonusCodes`) is the only place these three strings are spelled.
  *
- * AUDIENCE PREDICATES live in `@/utils/redeemables/bonusCodeAudienceFilter`
- * (pure, DB-free, testable) — this service only wires them to the actual
- * collections. See that file's header for the reasoning behind each one and the
- * one approximation (`checkout-start`, where no persisted event log exists).
- *
- * NOT WIRED TO KLAVIYO. The Klaviyo comparison above is a documented, manually
- * gathered calibration figure (in doc comments / the report only) — this
- * service never makes a third-party call. Adding one here is scope this task
- * was explicitly told not to take on: rate limits and a new failure mode on a
- * read-only admin page nobody asked to depend on Klaviyo's uptime.
+ * NOT WIRED TO KLAVIYO. Any Klaviyo comparison figures live in doc comments /
+ * the report only — this service makes no third-party call.
  */
 import mongoose from "mongoose";
 import MonthlyEntryCampaign from "@/models/MonthlyEntryCampaign";
@@ -49,10 +59,14 @@ import CancellationFlowEvent from "@/models/CancellationFlowEvent";
 import User from "@/models/User";
 import { BONUS_CODE_BY_TRIGGER } from "@/config/bonusCodes";
 import type { BonusCodeTrigger } from "@/utils/redeemables/bonus-code-policy";
+import { isCampaignRedeemable } from "@/utils/redeemables/bonus-code-policy";
 import {
   buildCancelClickUserFilter,
   buildCheckoutStartAudienceFilter,
+  buildExpiredOrLapsedIssuanceFilter,
   buildOneTimePurchaseAudienceFilter,
+  buildRedeemedIssuanceFilter,
+  buildStillRedeemableIssuanceFilter,
   CANCEL_CLICK_FLOW_EVENT_FILTER,
   cutoffDate,
   RECENCY_WINDOW_DAYS,
@@ -69,6 +83,8 @@ const SAMPLE_LIMIT = 25;
  *  admin surface (name + email; this is an internal admin tool, not the Norm
  *  PII boundary, which is stricter by design). */
 const USER_SAMPLE_PROJECTION = "_id firstName lastName email";
+
+// ─── SECONDARY: the addressable-population forecast (demoted 2026-09-01) ───
 
 export interface BonusCodeAudienceSampleUser {
   userId: string;
@@ -89,25 +105,6 @@ export interface BonusCodeAudienceBuckets {
   allTime: number;
 }
 
-export interface BonusCodeAudienceRow {
-  trigger: BonusCodeTrigger;
-  /** Read from BONUS_CODE_BY_TRIGGER — never a second literal. */
-  code: string;
-  /** Whether an active `MonthlyEntryCampaign` currently carries this code. */
-  campaignFound: boolean;
-  campaignId: string | null;
-  campaignActive: boolean | null;
-  entriesAmount: number | null;
-  /** The forecast, bucketed by recency. `allTime` is the ceiling, not the headline. */
-  addressable: BonusCodeAudienceBuckets;
-  /** Bounded preview of the ALL-TIME population, most-recently-qualified first — never the full list. */
-  sample: BonusCodeAudienceSampleUser[];
-  /** Current RedeemableIssuance rows for this campaign, any status. */
-  issuedCount: number;
-  /** Current RedeemableIssuance rows with status "redeemed". */
-  redeemedCount: number;
-}
-
 interface AudienceResolution {
   buckets: BonusCodeAudienceBuckets;
   sample: BonusCodeAudienceSampleUser[];
@@ -120,7 +117,7 @@ type LeanUserSampleDoc = {
   email?: string;
 };
 
-function toSampleUser(
+function toAudienceSampleUser(
   user: LeanUserSampleDoc,
   qualifiedAt: Date | null | undefined
 ): BonusCodeAudienceSampleUser {
@@ -136,10 +133,6 @@ function toSampleUser(
  * checkout-start -> LOCKIN100. Qualifying instant: `User.createdAt`
  * (registration) — see `bonusCodeAudienceFilter.ts` for why this is the only
  * timestamp available for this proxy.
- *
- * Single-collection: each bucket is one `countDocuments` with the recency
- * cutoff folded straight into the Mongo filter (server-side, no document
- * materialization), plus one bounded `.find()` for the sample.
  */
 async function resolveCheckoutStartAudience(now: Date): Promise<AudienceResolution> {
   const [last30, last90, allTime, sample] = await Promise.all([
@@ -158,14 +151,13 @@ async function resolveCheckoutStartAudience(now: Date): Promise<AudienceResoluti
   ]);
   return {
     buckets: { last30, last90, allTime },
-    sample: sample.map((user) => toSampleUser(user, user.createdAt)),
+    sample: sample.map((user) => toAudienceSampleUser(user, user.createdAt)),
   };
 }
 
 /**
  * one-time-purchase -> EXTRA100. Qualifying instant: the MOST RECENT
- * `oneTimePackages[].purchaseDate` — a real event date, not a proxy (see
- * `bonusCodeAudienceFilter.ts`).
+ * `oneTimePackages[].purchaseDate` — a real event date, not a proxy.
  */
 async function resolveOneTimePurchaseAudience(now: Date): Promise<AudienceResolution> {
   const [last30, last90, allTime, sample] = await Promise.all([
@@ -192,24 +184,13 @@ async function resolveOneTimePurchaseAudience(now: Date): Promise<AudienceResolu
         .map((pkg) => pkg.purchaseDate)
         .filter((d): d is Date => Boolean(d));
       const mostRecent = dates.length > 0 ? new Date(Math.max(...dates.map((d) => d.getTime()))) : null;
-      return toSampleUser(user, mostRecent);
+      return toAudienceSampleUser(user, mostRecent);
     }),
   };
 }
 
 /**
- * cancel-click -> BACKIN200. Qualifying instant: `CancellationFlowEvent.endedAt`
- * — `verified` as the reliable commit timestamp; see the field's doc comment in
- * `bonusCodeAudienceFilter.ts` for the grep that proved it.
- *
- * Two collections, so this cannot be a single server-side `countDocuments` per
- * bucket the way the other two triggers are. Instead: pull every
- * `(userId, mostRecentEndedAt)` pair ONCE — bounded by how many people have
- * ever committed a self-service cancellation (a few thousand at most, an order
- * of magnitude below the User collection itself, so this is not the unbounded
- * `.find()` CLAUDE.md's performance footgun #3 warns about) — narrow to the
- * User-side "not currently an active subscriber" eligibility with an `_id`-only
- * projection, then bucket in application code from that small, bounded set.
+ * cancel-click -> BACKIN200. Qualifying instant: `CancellationFlowEvent.endedAt`.
  */
 async function resolveCancelClickAudience(now: Date): Promise<AudienceResolution> {
   const cancelledUsers = await CancellationFlowEvent.aggregate<{ _id: mongoose.Types.ObjectId; qualifiedAt: Date }>([
@@ -251,7 +232,7 @@ async function resolveCancelClickAudience(now: Date): Promise<AudienceResolution
   const sample = sampleIds
     .map(({ userId, qualifiedAt }) => {
       const user = sampleUserById.get(userId.toString());
-      return user ? toSampleUser(user, qualifiedAt) : null;
+      return user ? toAudienceSampleUser(user, qualifiedAt) : null;
     })
     .filter((row): row is BonusCodeAudienceSampleUser => row !== null);
 
@@ -267,51 +248,212 @@ const AUDIENCE_RESOLVERS: Record<BonusCodeTrigger, (now: Date) => Promise<Audien
   "one-time-purchase": resolveOneTimePurchaseAudience,
 };
 
-interface IssuanceRollup {
+// ─── PRIMARY: actual issuance state ─────────────────────────────────────────
+
+export interface BonusCodeIssuanceSampleUser {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  entriesAmount: number;
+  /** ISO string. `redeemedAt` for the redeemed sample; `expiresAt` for the
+   *  still-redeemable (soonest-expiring first) and expired/lapsed
+   *  (most-recently-lapsed first) samples. */
+  at: string | null;
+}
+
+export interface BonusCodeIssuanceState {
+  /** Granted, any status — "they have access to it". */
   issuedCount: number;
+  /** status: "active", this row's own window open, AND the campaign itself
+   *  still redeemable (isCampaignRedeemable — never hand-rolled). */
+  stillRedeemableCount: number;
+  /** Actually redeemed. */
   redeemedCount: number;
+  /** Free entries granted as a result of those redemptions. */
+  redeemedEntries: number;
+  /** Granted, window closed (or the campaign itself no longer redeemable), never used. */
+  expiredOrLapsedCount: number;
+  stillRedeemableSample: BonusCodeIssuanceSampleUser[];
+  redeemedSample: BonusCodeIssuanceSampleUser[];
+  expiredOrLapsedSample: BonusCodeIssuanceSampleUser[];
+}
+
+const EMPTY_ISSUANCE_STATE: BonusCodeIssuanceState = {
+  issuedCount: 0,
+  stillRedeemableCount: 0,
+  redeemedCount: 0,
+  redeemedEntries: 0,
+  expiredOrLapsedCount: 0,
+  stillRedeemableSample: [],
+  redeemedSample: [],
+  expiredOrLapsedSample: [],
+};
+
+type LeanIssuanceSampleDoc = {
+  _id: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId;
+  entriesAmount: number;
+  redeemedAt?: Date;
+  expiresAt?: Date;
+};
+
+/** Resolves one bounded, PII-projected issuance sample: query RedeemableIssuance
+ *  with an explicit `.select()`, then join User with the same include-list every
+ *  sibling admin service in this domain uses. Never a bare `.find()` on either
+ *  collection. */
+async function resolveIssuanceSample(
+  filter: Record<string, unknown>,
+  sort: Record<string, 1 | -1>,
+  atField: "redeemedAt" | "expiresAt"
+): Promise<BonusCodeIssuanceSampleUser[]> {
+  const rows = await RedeemableIssuance.find(filter)
+    .select(`_id userId entriesAmount ${atField}`)
+    .sort(sort)
+    .limit(SAMPLE_LIMIT)
+    .lean<LeanIssuanceSampleDoc[]>();
+  if (rows.length === 0) return [];
+
+  const userIds = rows.map((row) => row.userId);
+  const users = await User.find({ _id: { $in: userIds } })
+    .select(USER_SAMPLE_PROJECTION)
+    .lean<LeanUserSampleDoc[]>();
+  const userById = new Map(users.map((u) => [u._id.toString(), u]));
+
+  return rows
+    .map((row) => {
+      const user = userById.get(row.userId.toString());
+      if (!user) return null;
+      const at = row[atField];
+      return {
+        userId: user._id.toString(),
+        userName: `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Unknown User",
+        userEmail: user.email || "Unknown Email",
+        entriesAmount: row.entriesAmount,
+        at: at ? at.toISOString() : null,
+      };
+    })
+    .filter((row): row is BonusCodeIssuanceSampleUser => row !== null);
+}
+
+type LeanCampaignForRedeemability = {
+  _id: mongoose.Types.ObjectId;
+  code: string;
+  isActive: boolean;
+  entriesAmount: number;
+  startsAt: Date;
+  endsAt?: Date | null;
+  neverExpires: boolean;
+  validForHours?: number | null;
+};
+
+/**
+ * The primary payload: real `RedeemableIssuance` state for one campaign.
+ * `campaignRedeemable` is computed ONCE via `isCampaignRedeemable` and threaded
+ * into every query that needs it — never re-evaluated or re-derived per row.
+ */
+async function resolveIssuanceState(
+  campaign: LeanCampaignForRedeemability | null,
+  now: Date
+): Promise<BonusCodeIssuanceState> {
+  if (!campaign) return EMPTY_ISSUANCE_STATE;
+
+  const campaignId = campaign._id;
+  const campaignRedeemable = isCampaignRedeemable(campaign, now);
+
+  const stillRedeemableFilter = buildStillRedeemableIssuanceFilter(campaignId, now);
+  const redeemedFilter = buildRedeemedIssuanceFilter(campaignId);
+  const expiredOrLapsedFilter = buildExpiredOrLapsedIssuanceFilter(campaignId, now, campaignRedeemable);
+
+  const [
+    issuedCount,
+    redeemedCount,
+    redeemedEntriesAgg,
+    stillRedeemableCount,
+    expiredOrLapsedCount,
+    stillRedeemableSample,
+    redeemedSample,
+    expiredOrLapsedSample,
+  ] = await Promise.all([
+    RedeemableIssuance.countDocuments({ campaignId }),
+    RedeemableIssuance.countDocuments(redeemedFilter),
+    RedeemableIssuance.aggregate<{ _id: null; total: number }>([
+      { $match: redeemedFilter },
+      { $group: { _id: null, total: { $sum: "$entriesAmount" } } },
+    ]),
+    campaignRedeemable ? RedeemableIssuance.countDocuments(stillRedeemableFilter) : Promise.resolve(0),
+    RedeemableIssuance.countDocuments(expiredOrLapsedFilter),
+    campaignRedeemable
+      ? resolveIssuanceSample(stillRedeemableFilter, { expiresAt: 1 }, "expiresAt")
+      : Promise.resolve([]),
+    resolveIssuanceSample(redeemedFilter, { redeemedAt: -1 }, "redeemedAt"),
+    resolveIssuanceSample(expiredOrLapsedFilter, { expiresAt: -1 }, "expiresAt"),
+  ]);
+
+  return {
+    issuedCount,
+    stillRedeemableCount,
+    redeemedCount,
+    redeemedEntries: redeemedEntriesAgg[0]?.total ?? 0,
+    expiredOrLapsedCount,
+    stillRedeemableSample,
+    redeemedSample,
+    expiredOrLapsedSample,
+  };
+}
+
+// ─── The combined row ────────────────────────────────────────────────────────
+
+export interface BonusCodeAudienceRow {
+  trigger: BonusCodeTrigger;
+  /** Read from BONUS_CODE_BY_TRIGGER — never a second literal. */
+  code: string;
+  /** Whether an active `MonthlyEntryCampaign` currently carries this code. */
+  campaignFound: boolean;
+  campaignId: string | null;
+  campaignActive: boolean | null;
+  entriesAmount: number | null;
+  /** PRIMARY. Real issuance state — who already has it, who can still redeem,
+   *  who redeemed, who lapsed. */
+  issuance: BonusCodeIssuanceState;
+  /** SECONDARY / demoted. The addressable-population forecast — how many
+   *  customers this trigger COULD reach, bucketed by recency. `allTime` is a
+   *  ceiling, never the headline. See bonusCodeAudienceFilter.ts. */
+  addressable: BonusCodeAudienceBuckets;
+  /** Bounded preview of the ALL-TIME addressable population — never the full list. */
+  sample: BonusCodeAudienceSampleUser[];
 }
 
 export class BonusCodeAudienceService {
   /**
-   * Per trigger: code, campaign status, recency-bucketed addressable counts +
-   * bounded sample, and current issuance/redemption counts. Read-only — never
-   * mints, issues, or redeems.
+   * Per trigger: code, campaign status, real issuance state (primary), and the
+   * addressable-population forecast (secondary). Read-only — never mints,
+   * issues, or redeems.
    *
-   * `now` is injectable (defaults to the real clock) so bucket boundaries are
-   * testable without waiting on the calendar — matches this domain's existing
-   * "no ambient clock" convention (`bonus-code-policy.ts`, `CampaignService`).
+   * `now` is injectable (defaults to the real clock) so bucket/redeemability
+   * boundaries are testable without waiting on the calendar — matches this
+   * domain's existing "no ambient clock" convention (`bonus-code-policy.ts`,
+   * `CampaignService`).
    */
   static async getAudienceForAllTriggers(now: Date = new Date()): Promise<BonusCodeAudienceRow[]> {
     const triggers = Object.keys(BONUS_CODE_BY_TRIGGER) as BonusCodeTrigger[];
     const codes = triggers.map((trigger) => BONUS_CODE_BY_TRIGGER[trigger]);
 
+    // isCampaignRedeemable needs isActive/startsAt/endsAt/neverExpires/validForHours —
+    // every field it reads must be selected, or it silently reads undefined at
+    // runtime with no type error (the exact trap rules.md R12 documents).
     const campaigns = await MonthlyEntryCampaign.find({ code: { $in: codes } })
-      .select("_id code isActive entriesAmount")
-      .lean<{ _id: mongoose.Types.ObjectId; code: string; isActive: boolean; entriesAmount: number }[]>();
+      .select("_id code isActive entriesAmount startsAt endsAt neverExpires validForHours")
+      .lean<LeanCampaignForRedeemability[]>();
     const campaignByCode = new Map(campaigns.map((c) => [c.code, c]));
-    const campaignIds = campaigns.map((c) => c._id);
 
-    const issuanceAgg = campaignIds.length
-      ? await RedeemableIssuance.aggregate<{ _id: mongoose.Types.ObjectId } & IssuanceRollup>([
-          { $match: { campaignId: { $in: campaignIds } } },
-          {
-            $group: {
-              _id: "$campaignId",
-              issuedCount: { $sum: 1 },
-              redeemedCount: { $sum: { $cond: [{ $eq: ["$status", "redeemed"] }, 1, 0] } },
-            },
-          },
-        ])
-      : [];
-    const issuanceByCampaignId = new Map(issuanceAgg.map((row) => [row._id.toString(), row]));
-
-    const audiences = await Promise.all(triggers.map((trigger) => AUDIENCE_RESOLVERS[trigger](now)));
+    const [audiences, issuanceStates] = await Promise.all([
+      Promise.all(triggers.map((trigger) => AUDIENCE_RESOLVERS[trigger](now))),
+      Promise.all(triggers.map((trigger) => resolveIssuanceState(campaignByCode.get(BONUS_CODE_BY_TRIGGER[trigger]) ?? null, now))),
+    ]);
 
     return triggers.map((trigger, index) => {
       const code = BONUS_CODE_BY_TRIGGER[trigger];
       const campaign = campaignByCode.get(code) ?? null;
-      const issuance = campaign ? issuanceByCampaignId.get(String(campaign._id)) : undefined;
       const { buckets, sample } = audiences[index];
 
       return {
@@ -321,10 +463,9 @@ export class BonusCodeAudienceService {
         campaignId: campaign ? String(campaign._id) : null,
         campaignActive: campaign ? campaign.isActive : null,
         entriesAmount: campaign ? campaign.entriesAmount : null,
+        issuance: issuanceStates[index],
         addressable: buckets,
         sample,
-        issuedCount: issuance?.issuedCount ?? 0,
-        redeemedCount: issuance?.redeemedCount ?? 0,
       };
     });
   }
