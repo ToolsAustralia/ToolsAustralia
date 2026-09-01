@@ -468,6 +468,15 @@ eligibility moment. Those two moments are typically 2.5–17 days apart.
    A customer can sit in one of these flows for days without a code existing. Nothing is written for
    them, and nothing is spent, until the flow fires that webhook.
 
+   **Admin now sees the reach, not just the mechanism (2026-09-01).** Before a single email sends,
+   `GET /api/admin/monthly-coupon/trigger-audience` (admin > Promo Management > Redeemables tab)
+   forecasts, per trigger, how many customers it can currently reach — reconstructed from our own
+   collections (`CancellationFlowEvent`, `User.oneTimePackages`, `User.subscription`), not Klaviyo.
+   Production, 2026-09-01: `BACKIN200` 1,513 · `EXTRA100` 2,524 · `LOCKIN100` 45,407 (the last one is a
+   documented **upper bound** — no "started checkout" event is persisted in Mongo, so it counts every
+   never-converted account, not only guests who picked a package). See
+   [docs/rewards-redeemables/api.md](docs/rewards-redeemables/api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-audience-forecast-2026-09-01).
+
 The entries the code carries are, as everywhere else, a **free inclusion** — the customer buys the
 membership or the pack, never the entries (§1).
 
@@ -534,9 +543,10 @@ cron route filters out any campaign with a personal window; `isUserEligibleForCa
 without an explicit trigger (so the wallet read path cannot self-enrol a member); and
 `issueCampaignToUsers` refuses `issuedBy: "cron"` outright.
 
-**Status: built and wired to the webhook, inert until an admin creates the campaigns AND marketing
-publishes the flows.** No campaign carrying `BACKIN200` / `LOCKIN100` / `EXTRA100` exists yet, so
-every call is currently a no-op and no customer sees anything. **There are no longer any server-side
+**Status: built and wired to the webhook; the three campaigns exist and are active, but marketing has
+not published the flows yet, so every call is still a no-op and no customer sees anything (corrected
+2026-09-01 — this line previously said no campaign existed; verified in production: `BACKIN200` /
+`LOCKIN100` / `EXTRA100` all `isActive: true`, 0 issuances and 0 webhook calls each).** **There are no longer any server-side
 mint call sites** — the cancel service, the payment path and the guest-registration helper each used
 to mint directly, and all three were removed on 2026-08-26; the webhook endpoint is the only door.
 What those places still owe the feature is the Klaviyo event that puts the customer into the flow.

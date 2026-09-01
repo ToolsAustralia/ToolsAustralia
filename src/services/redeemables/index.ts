@@ -22,3 +22,8 @@ export {
   type FilterCampaignAudienceResult,
   type FilteredAudienceUserRow,
 } from "./MonthlyCouponQueryService";
+export {
+  BonusCodeAudienceService,
+  type BonusCodeAudienceRow,
+  type BonusCodeAudienceSampleUser,
+} from "./BonusCodeAudienceService";

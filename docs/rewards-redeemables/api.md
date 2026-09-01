@@ -296,6 +296,62 @@ Under `/api/admin/**` (in [admin](../admin/)):
 - Campaign management (create, run, audit)
 - CSV bulk import
 - Redemption analytics
+- Trigger audience forecast (below)
+
+### `GET /api/admin/monthly-coupon/trigger-audience` — bonus-code audience forecast (2026-09-01)
+
+Read-only; never mints, issues, or redeems. Requires `rewards.view`. Delegates to
+`BonusCodeAudienceService.getAudienceForAllTriggers()` and returns one row per trigger
+(`cancel-click` / `checkout-start` / `one-time-purchase`) reading `BONUS_CODE_BY_TRIGGER`
+(`src/config/bonusCodes.ts`) — never a restated map:
+
+```ts
+{
+  success: true,
+  data: Array<{
+    trigger: "cancel-click" | "checkout-start" | "one-time-purchase";
+    code: string;                    // BACKIN200 / LOCKIN100 / EXTRA100
+    campaignFound: boolean;
+    campaignId: string | null;
+    campaignActive: boolean | null;
+    entriesAmount: number | null;
+    addressableCount: number;        // the forecast — see below
+    sample: Array<{ userId: string; userName: string; userEmail: string }>; // bounded, 25 max
+    issuedCount: number;             // RedeemableIssuance rows, any status
+    redeemedCount: number;           // RedeemableIssuance rows, status "redeemed"
+  }>
+}
+```
+
+**Why a forecast, not a holder count.** All three campaigns sit at 0 issuances / 0 webhook
+calls in production as of 2026-09-01 (verified live), so a "who currently holds this code"
+view renders empty. `addressableCount` answers the owner's actual question — "how many
+customers can this trigger reach" — using the same "flow | who enters it" definitions
+already written in BUSINESS.md / CUSTOMER.md, reconstructed from our own collections
+(never Klaviyo, which owns *when* a flow fires, not *who exists*):
+
+| Trigger | Population | Source |
+|---|---|---|
+| `cancel-click` | Committed a self-service cancellation (`CancellationFlowEvent.outcome === "cancelled"`) and has not since resubscribed | `CancellationFlowEvent` + `User.subscription.isActive` |
+| `one-time-purchase` | Bought a one-time pack, holds no active membership | `User.oneTimePackages` (the same field `hasQualifyingPurchase` / R9 already treats as authoritative for this fact) + `User.subscription.isActive` |
+| `checkout-start` | **Approximation** — no "started checkout" event is persisted anywhere in Mongo (the guest-path emit is fire-and-forget straight to Klaviyo; the selected `packageId` is read from the registration request body and never written onto the `User` document). Proxy: an active, registered account with zero `accumulatedEntries` and no active subscription — the same "never converted" signal `isPlainAccount` (`src/app/api/auth/register/route.ts`) already uses. **This over-counts** — it also matches a guest who registered via Google OAuth or an affiliate link with no package in sight — and reads roughly 18× larger than the other two triggers in production (45,407 vs. 1,513 / 2,524 as of 2026-09-01) for exactly that reason. Read it as an upper bound, not a precise reconstruction. |
+
+Predicates live in `src/utils/redeemables/bonusCodeAudienceFilter.ts` (pure Mongo-filter
+builders, no DB — see that file's header for the full reasoning and the trigger-eligibility
+cross-check) and are pinned by `npm run test:bonus-code-audience`.
+
+**Sample is bounded, count is exact.** `addressableCount` is a real `countDocuments`; `sample`
+is `.find().select("_id firstName lastName email").limit(25)` — the same PII shape
+`RedemptionAnalyticsService` / `MonthlyCouponQueryService.filterCampaignAudience` already use
+for this admin surface. No unprojected `.find()` — see CLAUDE.md performance footgun #3.
+
+Rendered by `BonusCodeAudiencePanel` (`src/components/admin/`), mounted above
+`MonthlyRedeemablesCampaignPanel` in the admin "Redeemables" tab (`PromoManagement.tsx`).
+
+**Not mirrored to Norm.** A new admin read under `/api/admin/**` should be flagged for the
+owner per CLAUDE.md rule 10 rather than silently skipped — flagging it here: this could be
+mirrored to Norm (a read-only "how many customers can this bonus code reach" question is
+exactly Norm's shape) but is not wired as part of this change.
 
 ### `validForHours` contract (create/update campaign)
 

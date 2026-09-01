@@ -16,6 +16,7 @@ import PromoBannerTextList from "@/components/admin/PromoBannerTextList";
 import AdminAlternatingMultiplierModal from "@/components/modals/AdminAlternatingMultiplierModal";
 import AlternatingMultiplierList from "@/components/admin/AlternatingMultiplierList";
 import MonthlyRedeemablesCampaignPanel from "@/components/admin/MonthlyRedeemablesCampaignPanel";
+import BonusCodeAudiencePanel from "@/components/admin/BonusCodeAudiencePanel";
 import MilestoneRewardsPanel from "@/components/admin/MilestoneRewardsPanel";
 import { UpsellMultiplierPanel } from "@/components/admin/UpsellMultiplierPanel";
 import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
@@ -102,7 +103,12 @@ export default function PromoManagement() {
         </div>
 
         <div className="space-y-3 sm:space-y-4">
-          {activeTab === "redeemables" && <MonthlyRedeemablesCampaignPanel />}
+          {activeTab === "redeemables" && (
+            <>
+              <BonusCodeAudiencePanel />
+              <MonthlyRedeemablesCampaignPanel />
+            </>
+          )}
 
           {activeTab === "milestones" && <MilestoneRewardsPanel />}
 

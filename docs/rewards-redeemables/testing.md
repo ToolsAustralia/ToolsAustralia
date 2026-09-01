@@ -6,6 +6,7 @@
 |---|---|
 | `npm run test:redeemables` | Redeemables service tests under [src/services/redeemables/__tests__/](../../src/services/redeemables/__tests__/) |
 | `npm run test:redeemables-purchase-gate` | [purchase-eligibility.test.ts](../../src/utils/redeemables/__tests__/purchase-eligibility.test.ts) — 16 assertions covering `hasQualifyingPurchase(...)` across all four `purchaseRequirement` values, window bounds (inclusive `startsAt`/`endsAt`, `neverExpires` → `now`), and the regression that an active member does NOT auto-pass a `"one-time"` requirement. |
+| `npm run test:bonus-code-audience` | pure | [bonus-code-audience.test.ts](../../src/services/redeemables/__tests__/bonus-code-audience.test.ts) — `BonusCodeAudienceService` / `bonusCodeAudienceFilter.ts`. Two things: (1) a source-level guard that none of the audience files restate a `"trigger": "CODE"` literal (the map is read from `config/bonusCodes.ts` only); (2) each of the three pure filter builders evaluated against the same fixture shapes `trigger-eligibility.test.ts` uses (`noSubscription`, `justCancelled`, an active member, a deactivated account) via a small in-test Mongo-filter evaluator — no DB connection. |
 
 ### Per-customer bonus codes
 
