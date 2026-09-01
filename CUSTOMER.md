@@ -555,13 +555,7 @@ Two distinct paths via `POST /api/stripe/renew-subscription`:
 
 For the branch logic (retry_payment / reactivate / create_new) see [BUSINESS.md §10i](BUSINESS.md).
 
-_2026-09-01 — membership journey:_ a member who already holds a live membership
-(active / past-due / paused / unpaid / trialing) is no longer taken into the
-new-subscription checkout from a hero CTA or an old abandoned-checkout email. They are
-sent to **/my-account/membership** — the plan sheet, or the **payment** sheet if they are
-past due. Buying a one-time or Additional **pack** is unchanged and still allowed while a
-membership is live. Guests and cancelled/expired members are unaffected and can subscribe
-exactly as before.
+_2026-09-01 — membership journey:_ a member who already holds a live membership (active / past-due / paused / unpaid / trialing) can no longer walk into the new-subscription checkout from the `/membership` package cards, the `/membership` Klaviyo abandoned-checkout deep-link, or the rewards page's "Become a member" CTA (`/my-account/rewards`) — all three now send them to **/my-account/membership** instead: the plan sheet, or the **payment** sheet if they are past due. A promotions-page hero "Enter Now" CTA is mostly unaffected — for a blocking member it already resolves to a one-time pack rather than a membership tier, so it still opens normally; only the rare case where no pack has resolved yet now redirects instead of opening an empty picker. Buying a one-time or Additional **pack** is unchanged and still allowed while a membership is live. Guests and cancelled/expired members are unaffected and can subscribe exactly as before.
 
 ---
 

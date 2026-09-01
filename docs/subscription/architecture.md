@@ -55,7 +55,8 @@ Per CLAUDE.md's strict layering:
 | `src/services/subscription/**` | Cancel logic, pause-collection logic, Stripe-ref repair logic. Pure-policy helpers split out for tests. |
 | `src/utils/subscription/**`, `src/utils/membership/**` | Pure helpers (active-package resolution, benefit lookup, downgrade benefit preservation). |
 | `src/models/{User,MembershipPackage,MembershipRenewalCycle,MembershipStatusHistory,ChargeJobLock}.ts` | Mongoose schemas. See [models.md](./models.md). |
-| `src/hooks/use{StripeSubscription,Memberships,ActivePackage,MembershipModal}.ts` | React hooks — read-only views of subscription state. |
+| `src/hooks/use{StripeSubscription,Memberships,ActivePackage}.ts` | React hooks — read-only views of subscription state. |
+| `src/hooks/useMembershipModal.ts` | React hook — modal open/close state; `openModal` / `openModalWithPackageSelectionFirst` also run the subscription-creation gate and `router.push` away when blocked (see below). Not read-only. |
 
 ### The modal-open chokepoint owns the subscription gate (2026-09-01)
 
@@ -63,15 +64,21 @@ Per CLAUDE.md's strict layering:
 `resolveSubscriptionCreationGate` before opening, and `router.push` the member to their
 membership page instead when the answer is no.
 
-The gate lives **here, not in the callers**, because there are four ways into this modal
-and three of them (the Klaviyo abandoned-checkout deep-link, the global
-`openMembershipModal` event, and the package-picker open) never ran the card-click guard.
-Adding a fifth entry point now inherits the gate for free — that is the point of the
-placement.
+The gate covers every call that passes the plan through the function's own argument —
+package cards and the `/membership` abandoned-checkout deep-link both call it that way
+today. It does **not** see a plan set any other way: a caller that does
+`setSelectedPlan(plan)` and then calls `openModal()` with no argument bypasses the check,
+because the gate only reads its own `plan` / `defaultPlan` argument, never `selectedPlan`
+state. Three live call sites still use that bypass shape today (`MembershipSection.tsx`'s
+deep-link and global-`openMembershipModal`-event handlers, `my-account/page-client.tsx`'s
+global-event handler) — **Task 4 converts them** to pass the plan through the argument,
+closing the gap. It is not exploitable today (the server still rejects the create), but
+neither this doc nor the code comment should claim more coverage than the code actually
+has.
 
 A plan-less open is deliberately allowed through: the picker is how a member with a
-blocking subscription buys a **pack**, which is permitted. The step-2 pre-warm backstop
-guards that path.
+blocking subscription buys a **pack**, which is permitted. A dedicated pre-warm backstop
+for that path is planned as a follow-up task and is **not on this branch yet**.
 
 ## Source-of-truth split
 

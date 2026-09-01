@@ -44,14 +44,21 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
    */
   const openModal = useCallback(
     (plan?: LocalMembershipPlan) => {
-      // THE gate. Every entry point — package cards, the Klaviyo abandoned-checkout
-      // deep-link, the global `openMembershipModal` event — funnels through here, which
-      // is why the check lives at this chokepoint and not in the callers. Three of the
-      // four entry points used to skip the card-click guard entirely.
+      // Gate covers every call that passes the plan through THIS function's own argument
+      // — package cards and the /membership deep-link do that today. It does NOT see a
+      // plan set any other way: a caller that does `setSelectedPlan(plan)` and then calls
+      // `openModal()` with no argument bypasses this check, because a plan-less open reads
+      // as "not a subscription" below and the gate never inspects `selectedPlan` state.
+      // Three live call sites still use that bypass shape (MembershipSection.tsx's
+      // deep-link + global-event handlers, my-account/page-client.tsx's global-event
+      // handler) — Task 4 converts them to pass the plan through the argument, closing
+      // this gap. Not exploitable today (the server still rejects the create), but this
+      // comment should not claim more coverage than the code has.
       //
       // A plan-less open is NOT treated as a subscription (spec D6): it opens the picker,
       // and the picker is how a blocking-sub member buys a PACK, which is allowed and is
-      // live revenue. The step-2 pre-warm backstop guards that path instead.
+      // live revenue. A dedicated pre-warm backstop for that path is planned as a
+      // follow-up task and is not on this branch yet.
       const gate = resolveSubscriptionCreationGate(userData, {
         isSubscriptionPlan: plan ? isSubscriptionPlan(plan) : false,
         userLoading,
