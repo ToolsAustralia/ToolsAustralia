@@ -516,7 +516,9 @@ Client-side Klaviyo calls — [LoginModal](../../src/components/modals/LoginModa
 
 ## MembershipModal pre-warm toast removed — single actionable toast only
 
-The MembershipModal auto-creates a subscription on open (background pre-warm) so checkout is faster on purchase click. Previously, if a stale `EXISTING_SUBSCRIPTION` (409) was returned during this pre-warm, it would immediately surface an `EXISTING_SUBSCRIPTION` error toast — followed by a second "Active Subscription Found" toast if the user then clicked Purchase. This produced two toasts for a single user action. The pre-warm path now only logs the 409 response and does not show a toast; the single actionable "Active Subscription Found" toast on the purchase-click path is the only one displayed. Its **"Manage Subscription"** action deep-links to **`/my-account?open=subscription`**, which opens the **Manage-membership bottom sheet** on arrival (handled in `my-account/page.tsx`) — not just the dashboard home.
+The MembershipModal auto-creates a subscription on open (background pre-warm) so checkout is faster on purchase click. Previously, if a stale `EXISTING_SUBSCRIPTION` (409) was returned during this pre-warm, it would immediately surface an `EXISTING_SUBSCRIPTION` error toast — followed by a second "Active Subscription Found" toast if the user then clicked Purchase. This produced two toasts for a single user action. The pre-warm path now only logs the 409 response and does not show a toast; the single actionable "Active Subscription Found" toast on the purchase-click path is the only one displayed.
+
+> **Superseded twice since.** (1) The pre-warm's silent branch was restored to a toast on 2026-09-01 — see "MembershipModal step-2 pre-warm is gated, and never fails silently" below for why, and for the narrow duplicate-toast case that replaces the one this entry removed. (2) The purchase-click toast's **"Manage Subscription"** action no longer deep-links to a fixed `/my-account?open=subscription`; it takes its destination from `resolveSubscriptionCreationGate`, so a member in payment recovery lands on the **payment** sheet and everyone else on the **Manage-membership** sheet. Both sheets open on arrival, handled by `my-account/membership/page-client.tsx`.
 
 ## Confirm-time card declines surface the real reason in three modals (2026-07-16)
 
@@ -1537,6 +1539,22 @@ modal — so the purchase-click handler stays reachable and could show a second,
 identical toast if the member clicks purchase anyway. That is an accepted, narrow edge
 case (one duplicate toast, not a silent dead end), not a reason to bring back the
 silent branch.
+
+**All THREE "Active Subscription Found" toasts now route through the gate (2026-09-01,
+review follow-up).** There are three, not two: the two above (both behind the shared
+`showExistingSubscriptionToast` helper in the step-2 effect) plus a **pre-existing** one on
+the purchase-click 409 path much further down `index.tsx` (~L5334). That third one still
+hard-coded `router.push("/my-account/membership?open=subscription")`, so a member in payment
+recovery who reached the purchase-click 409 landed on the plan sheet instead of the payment
+sheet — the exact defect already fixed at the other two sites. Its action now resolves
+`resolveSubscriptionCreationGate` and pushes `gate.redirectTo` (falling back to
+`MANAGE_SUBSCRIPTION_PATH` if the gate reads "allowed", i.e. the status changed since the
+409). Its **body copy is deliberately untouched** — it renders a server-supplied
+`errorMessage`, unlike the other two which carry a fixed string.
+
+If a fourth "you already have a membership" surface ever appears, take the destination from
+the gate. Never hard-code a sheet: which sheet is right depends on whether the member owes
+us money, and that is exactly what the gate already knows.
 
 ## MembershipModal: the on-hold pack-step nudge, and why its render condition is two-part (2026-09-01)
 

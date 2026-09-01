@@ -5340,11 +5340,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           action: {
             label: "Manage Subscription",
             onClick: () => {
-              // Open the Manage-membership bottom sheet on arrival (the ?open=subscription
-              // deep-link is handled by my-account/membership/page-client.tsx), so the user
-              // lands straight on update-payment / change-tier / cancel — not a page they
-              // then have to navigate from.
-              router.push("/my-account/membership?open=subscription");
+              // Open the right membership bottom sheet on arrival (the ?open=subscription /
+              // ?open=payment deep-links are handled by my-account/membership/page-client.tsx),
+              // so the user lands straight on update-payment / change-tier / cancel — not a
+              // page they then have to navigate from.
+              //
+              // WHICH sheet comes from the gate, not a hardcoded path: a member in payment
+              // recovery must land on the PAYMENT sheet — they came here to pay us, and the
+              // change-tier sheet cannot take their money. Same treatment as the pre-warm's
+              // EXISTING_SUBSCRIPTION branch above. Fall back to the plan sheet only if the
+              // gate now reads "allowed" (status changed since this 409).
+              const fallbackGate = resolveSubscriptionCreationGate(userData, {
+                isSubscriptionPlan: true,
+                userLoading: false,
+              });
+              router.push(
+                fallbackGate.allowed ? MANAGE_SUBSCRIPTION_PATH : fallbackGate.redirectTo
+              );
             },
           },
         });

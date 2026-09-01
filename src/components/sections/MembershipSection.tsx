@@ -301,9 +301,12 @@ function MembershipSection({
 
   // Determine plan hierarchy for subscription management
   const getPlanHierarchy = (plan: LocalMembershipPlan) => {
-    // past_due users cannot purchase - they must resolve payment first
-    const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
-    const cannotPurchaseDueToBlocking = hasBlockingSub && isSubscriptionPlan;
+    // past_due users cannot purchase - they must resolve payment first.
+    // Uses the shared helper (the local name is `planIsSubscription` only because a local
+    // `isSubscriptionPlan` would shadow the import) — one definition of "is this a membership
+    // tier?", so the label logic here can never drift from the gate that routes the click.
+    const planIsSubscription = isSubscriptionPlan(plan);
+    const cannotPurchaseDueToBlocking = hasBlockingSub && planIsSubscription;
 
     if (!hasActiveSubscription || !currentUserSubscription || plan.period === "one-time") {
       return {
@@ -579,9 +582,10 @@ function MembershipSection({
     const locked = !hasAccessToAdditionalPackages && !!plan.isAdditional;
     const current = isCurrentSubscription(plan);
     const hierarchy = getPlanHierarchy(plan);
-    const isSubscriptionPlan = plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time");
+    // Shared helper, same as getPlanHierarchy — local name avoids shadowing the import.
+    const planIsSubscription = isSubscriptionPlan(plan);
     let ctaLabel = "Enter Now";
-    if (hasBlockingSub && isPastDue && isSubscriptionPlan) ctaLabel = "Update payment";
+    if (hasBlockingSub && isPastDue && planIsSubscription) ctaLabel = "Update payment";
     else if (hasActiveSubscription && activeTab === "membership") {
       if (hierarchy.isCurrent) ctaLabel = "Current Plan";
       else if (hierarchy.isDowngrade) ctaLabel = `Downgrade to ${getPackageDisplayName(plan)}`;

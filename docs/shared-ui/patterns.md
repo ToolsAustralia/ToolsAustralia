@@ -655,3 +655,20 @@ through into the new-subscription checkout and 409'd at the payment step.
 
 A label may be wrong-ish and cost nothing; a wrong route costs a purchase. Keep them
 separate.
+
+**One definition of "is this a membership tier?" (review follow-up, same day).** Both sides
+of that split now call the shared
+[`isSubscriptionPlan`](../../src/utils/subscription/subscription-creation-gate.ts) helper.
+`MembershipSection.tsx` had kept two inline copies of the expression
+(`plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time")`) — one in
+`getPlanHierarchy`, one in `renderPlanCard` — while already importing the helper for its
+routing call. Both are now `const planIsSubscription = isSubscriptionPlan(plan)` (the local
+name only avoids shadowing the import). The substitution is behaviour-identical: the helper
+adds a null-plan guard and `?? ""` on `name`, and `LocalMembershipPlan.name` is a required
+`string`, so no live call can differ. There is now no inline copy left anywhere in `src/`.
+
+That matters precisely because label and route are separate: if the two ever answered
+"is this a subscription?" differently, a card could read **"Update payment"** and still open
+the purchase modal, or read **"Enter Now"** and redirect. The affected labels are
+`"Update payment"` / `"Current Plan"` / `"Upgrade to X"` / `"Downgrade to X"`, rendered by
+this component on 15+ pages, with no component test runner to catch a regression.
