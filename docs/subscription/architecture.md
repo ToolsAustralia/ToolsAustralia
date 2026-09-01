@@ -57,6 +57,22 @@ Per CLAUDE.md's strict layering:
 | `src/models/{User,MembershipPackage,MembershipRenewalCycle,MembershipStatusHistory,ChargeJobLock}.ts` | Mongoose schemas. See [models.md](./models.md). |
 | `src/hooks/use{StripeSubscription,Memberships,ActivePackage,MembershipModal}.ts` | React hooks — read-only views of subscription state. |
 
+### The modal-open chokepoint owns the subscription gate (2026-09-01)
+
+`useMembershipModal.openModal` / `openModalWithPackageSelectionFirst` call
+`resolveSubscriptionCreationGate` before opening, and `router.push` the member to their
+membership page instead when the answer is no.
+
+The gate lives **here, not in the callers**, because there are four ways into this modal
+and three of them (the Klaviyo abandoned-checkout deep-link, the global
+`openMembershipModal` event, and the package-picker open) never ran the card-click guard.
+Adding a fifth entry point now inherits the gate for free — that is the point of the
+placement.
+
+A plan-less open is deliberately allowed through: the picker is how a member with a
+blocking subscription buys a **pack**, which is permitted. The step-2 pre-warm backstop
+guards that path.
+
 ## Source-of-truth split
 
 - **Stripe is truth for billing facts** — current period end, status (`active`/`past_due`/`canceled`/...), `pause_collection`, invoice history.

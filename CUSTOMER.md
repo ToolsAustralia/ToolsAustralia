@@ -555,6 +555,14 @@ Two distinct paths via `POST /api/stripe/renew-subscription`:
 
 For the branch logic (retry_payment / reactivate / create_new) see [BUSINESS.md §10i](BUSINESS.md).
 
+_2026-09-01 — membership journey:_ a member who already holds a live membership
+(active / past-due / paused / unpaid / trialing) is no longer taken into the
+new-subscription checkout from a hero CTA or an old abandoned-checkout email. They are
+sent to **/my-account/membership** — the plan sheet, or the **payment** sheet if they are
+past due. Buying a one-time or Additional **pack** is unchanged and still allowed while a
+membership is live. Guests and cancelled/expired members are unaffected and can subscribe
+exactly as before.
+
 ---
 
 ## 6. Entries & draw participation

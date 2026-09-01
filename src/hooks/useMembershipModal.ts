@@ -1,5 +1,11 @@
 import { useState, useCallback } from "react";
 import { LocalMembershipPlan } from "@/utils/membership/membership-adapters";
+import { useRouter } from "next/navigation";
+import { useUserContext } from "@/contexts/UserContext";
+import {
+  resolveSubscriptionCreationGate,
+  isSubscriptionPlan,
+} from "@/utils/subscription/subscription-creation-gate";
 
 interface UseMembershipModalReturn {
   isModalOpen: boolean;
@@ -29,18 +35,40 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
   const [selectedPlan, setSelectedPlan] = useState<LocalMembershipPlan | null>(defaultPlan || null);
   const [openWithPackageSelectionFirst, setOpenWithPackageSelectionFirst] = useState(false);
 
+  const router = useRouter();
+  const { userData, loading: userLoading } = useUserContext();
+
   /**
    * Open the membership modal with an optional plan
    * @param plan - Optional plan to pre-select when opening the modal
    */
-  const openModal = useCallback((plan?: LocalMembershipPlan) => {
-    console.log("🎯 Opening MembershipModal", plan ? `with plan: ${plan.name}` : "with default plan");
-    setOpenWithPackageSelectionFirst(false);
-    if (plan) {
-      setSelectedPlan(plan);
-    }
-    setIsModalOpen(true);
-  }, []);
+  const openModal = useCallback(
+    (plan?: LocalMembershipPlan) => {
+      // THE gate. Every entry point — package cards, the Klaviyo abandoned-checkout
+      // deep-link, the global `openMembershipModal` event — funnels through here, which
+      // is why the check lives at this chokepoint and not in the callers. Three of the
+      // four entry points used to skip the card-click guard entirely.
+      //
+      // A plan-less open is NOT treated as a subscription (spec D6): it opens the picker,
+      // and the picker is how a blocking-sub member buys a PACK, which is allowed and is
+      // live revenue. The step-2 pre-warm backstop guards that path instead.
+      const gate = resolveSubscriptionCreationGate(userData, {
+        isSubscriptionPlan: plan ? isSubscriptionPlan(plan) : false,
+        userLoading,
+      });
+      if (!gate.allowed) {
+        router.push(gate.redirectTo);
+        return;
+      }
+
+      setOpenWithPackageSelectionFirst(false);
+      if (plan) {
+        setSelectedPlan(plan);
+      }
+      setIsModalOpen(true);
+    },
+    [router, userData, userLoading]
+  );
 
   /**
    * Open the membership modal with package selection shown first (same as Enter now on promotions page).
@@ -49,12 +77,25 @@ export const useMembershipModal = (defaultPlan?: LocalMembershipPlan): UseMember
    * but backing out of the picker leaves them on a real package rather than a placeholder payment
    * step. Called with no argument the behaviour is the original one (no plan at all).
    */
-  const openModalWithPackageSelectionFirst = useCallback((defaultPlan?: LocalMembershipPlan) => {
-    console.log("🎯 Opening MembershipModal with package selection first");
-    setSelectedPlan(defaultPlan ?? null);
-    setOpenWithPackageSelectionFirst(true);
-    setIsModalOpen(true);
-  }, []);
+  const openModalWithPackageSelectionFirst = useCallback(
+    (defaultPlan?: LocalMembershipPlan) => {
+      // Same gate. `defaultPlan` sits BEHIND the picker, so it only blocks when the
+      // caller explicitly pre-selects a membership tier for a blocking-sub member.
+      const gate = resolveSubscriptionCreationGate(userData, {
+        isSubscriptionPlan: defaultPlan ? isSubscriptionPlan(defaultPlan) : false,
+        userLoading,
+      });
+      if (!gate.allowed) {
+        router.push(gate.redirectTo);
+        return;
+      }
+
+      setSelectedPlan(defaultPlan ?? null);
+      setOpenWithPackageSelectionFirst(true);
+      setIsModalOpen(true);
+    },
+    [router, userData, userLoading]
+  );
 
   /**
    * Close the membership modal and reset state
