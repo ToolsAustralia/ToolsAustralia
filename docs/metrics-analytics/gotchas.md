@@ -104,8 +104,20 @@ it. Two preconditions, and both were false in production until 2026-07-29:
 2. The deployment's env must have `TIKTOK_ADVERTISER_ID` + `TIKTOK_MARKETING_ACCESS_TOKEN`, or
    the provider returns `error` and preserves whatever was stored (i.e. nothing).
 
-So the usual fix is to backfill the INSIGHTS and let the nightly window catch up. To make it
-visible immediately instead of waiting a day:
+⚠️ **Self-healing now only reaches back ~10 days (2026-09-01).** Since the ad-channel
+restatement window landed, the cron only re-fetches days inside
+`AD_CHANNEL_RESTATEMENT_WINDOW_DAYS` (10) — older days reuse their stored `adChannels` unless
+that stored value is absent/empty, in which case they are still fetched. Concretely: a day that
+already has a **facebook** key but no **tiktok** key counts as "usable" and will NOT pick up
+newly-backfilled TikTok insights on its own. So backfilling insights older than ~10 days no
+longer self-heals via the nightly cron — run
+`npm run backfill:dashboard-stats-snapshots -- --start-date … --end-date …` for that range (the
+backfill passes no restatement window, so it always fetches). See
+[admin/gotchas.md](../admin/gotchas.md#only-the-newest-10-days-are-re-fetched-from-the-ad-providers-2026-09-01).
+
+So the usual fix is to backfill the INSIGHTS and let the nightly window catch up (within ~10
+days) or re-run the snapshot backfill for older ranges. To make it visible immediately instead
+of waiting a day:
 
 ```bash
 npm run backfill:dashboard-stats-snapshots -- --start-date 2026-07-24 --end-date 2026-07-28

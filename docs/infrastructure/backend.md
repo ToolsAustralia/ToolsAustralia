@@ -177,6 +177,23 @@ refused outside `KLAVIYO_MODE=production` unless this is `"true"`. Events are un
 they carry a `[DEV]` prefix. Set it explicitly for a sanctioned ops backfill, never in a
 script. Registered in `.env.example`.
 
+## New env var: `DASHBOARD_STATS_AD_RESTATEMENT_WINDOW_DAYS` (2026-09-01)
+
+Optional. How many trailing complete AEST days `/api/cron/dashboard-stats-daily-snapshot`
+re-fetches from the ad providers on each run; older days reuse their stored `adChannels`
+instead of calling Meta. **Unset → 10**; below 1 or unparseable also falls back to 10.
+
+It exists because the cron rewrote a **90-day** window **three times a day** — ~270 Meta
+Marketing API calls/day for days that cannot change — and Meta's per-app hourly limit was
+being exhausted 9–13×/day. 10 covers the 7-day-click attribution window plus margin, and
+strictly contains the 8-day window `sync-meta-ads` / `sync-tiktok-ads` themselves re-pull.
+Widening is always the safe direction (it just fetches more). Registered in `.env.example`;
+set it in Vercel **and** every `.env.local` if you ever change it (CLAUDE.md §9). Full
+reasoning and the branch that must never be "optimised" away:
+[admin/gotchas.md](../admin/gotchas.md#only-the-newest-10-days-are-re-fetched-from-the-ad-providers-2026-09-01).
+
+New npm script alongside it: `npm run test:dashboard-stats-ad-restatement`.
+
 ## `migrate:remove-upsell-stats` (2026-08-27)
 
 Strips the dead `upsellStats` sub-document from every user after the upsell tracker was

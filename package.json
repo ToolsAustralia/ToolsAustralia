@@ -347,6 +347,7 @@
     "test:dashboard-stats-aggregator": "tsx src/services/admin/dashboard-stats/__tests__/revenueAggregator.test.ts",
     "test:dashboard-stats-dst": "tsx src/services/admin/dashboard-stats/__tests__/dstBoundary.test.ts",
     "test:dashboard-stats-window": "tsx src/services/admin/dashboard-stats/__tests__/slidingWindowExcludesToday.test.ts",
+    "test:dashboard-stats-ad-restatement": "tsx src/services/admin/dashboard-stats/__tests__/adChannelRestatementWindow.test.ts",
     "test:dashboard-stats-reader": "tsx src/services/admin/dashboard-stats/__tests__/snapshotReader.test.ts",
     "test:dashboard-stats-schema": "tsx src/services/admin/dashboard-stats/__tests__/snapshotSchema.test.ts",
     "test:dashboard-stats-service": "tsx src/services/admin/__tests__/DashboardStatsService.test.ts",
