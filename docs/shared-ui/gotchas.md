@@ -1529,5 +1529,11 @@ message. That reasoning failed in practice — with no client secret the card fo
 renders, so there is frequently no purchase click to make, and the member simply sat at a
 blank payment step. It now shows the same "Active Subscription Found" toast.
 
-**Do not restore the silent branch.** If you are worried about double-toasting, the
-redirect closes the modal, so the purchase-click handler cannot also fire.
+**Do not restore the silent branch.** The two call sites do not carry the same
+double-toast guarantee: the step-2 backstop calls `onClose()` and redirects, so it
+closes the modal and the purchase-click handler's own `EXISTING_SUBSCRIPTION` toast
+cannot also fire. The pre-warm's `onError` branch only toasts — it does not close the
+modal — so the purchase-click handler stays reachable and could show a second,
+identical toast if the member clicks purchase anyway. That is an accepted, narrow edge
+case (one duplicate toast, not a silent dead end), not a reason to bring back the
+silent branch.

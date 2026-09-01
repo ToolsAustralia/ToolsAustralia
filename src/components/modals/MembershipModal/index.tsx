@@ -58,7 +58,10 @@ import {
   typedCodeRefusalCopy,
   type PurchaseRequirementStop,
 } from "@/utils/payment/typed-code-at-checkout";
-import { resolveSubscriptionCreationGate } from "@/utils/subscription/subscription-creation-gate";
+import {
+  resolveSubscriptionCreationGate,
+  MANAGE_SUBSCRIPTION_PATH,
+} from "@/utils/subscription/subscription-creation-gate";
 
 /**
  * The code state `handleSubmit` actually charges on, settled once at the click.
@@ -1251,6 +1254,18 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
         // useMembershipModal runs at OPEN time; if UserContext had not resolved then, a
         // member could still reach this step. Firing the pre-warm here would produce a
         // guaranteed 409 and leave them staring at a payment step with no card form.
+        //
+        // LATENT COUPLING: this call sits outside the `!paymentIntentClientSecret` guard
+        // below, and `paymentIntentClientSecret` is in this effect's dependency array — so
+        // a successful pre-warm (or any other listed dep changing, e.g. a package-tier
+        // switch) re-runs this effect and re-evaluates the gate against whatever `userData`
+        // is current then, even though `userData` itself isn't a listed dependency. Not a
+        // self-eviction today because the subscription THIS pre-warm just created sits in
+        // Stripe's "incomplete" status, which BLOCKING_SUBSCRIPTION_STATUSES excludes
+        // (subscription-helpers.ts) — but `userData`'s query already refetches on window
+        // focus (useUserQueries.ts `useUserData`, refetchOnWindowFocus: true), so adding
+        // "incomplete" to that list would start evicting members mid-checkout who are
+        // holding a live client secret. Check both before changing either.
         const stepTwoGate = resolveSubscriptionCreationGate(userData, {
           isSubscriptionPlan: true,
           userLoading: false,
@@ -1318,7 +1333,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             // with no card form and no explanation — the deferred-toast reasoning only
             // held while the purchase click could still surface it, and with no client
             // secret there is often nothing to click.
-            showExistingSubscriptionToast("/my-account/membership?open=subscription");
+            //
+            // Re-resolve the gate rather than hardcoding a path: a past-due member must
+            // land on the payment sheet (?open=payment), not the change-tier sheet — they
+            // came here to pay us, and sending them to the wrong sheet defeats the point
+            // of that split. Fall back to MANAGE_SUBSCRIPTION_PATH only if the gate now
+            // reads "allowed" (status changed since this pre-warm fired).
+            const fallbackGate = resolveSubscriptionCreationGate(userData, {
+              isSubscriptionPlan: true,
+              userLoading: false,
+            });
+            showExistingSubscriptionToast(
+              fallbackGate.allowed ? MANAGE_SUBSCRIPTION_PATH : fallbackGate.redirectTo
+            );
           } else {
             showToast({
               type: "error",
