@@ -444,6 +444,7 @@
     "test:staff-activity": "tsx src/lib/__tests__/staff-activity.test.ts",
     "test:session-invalidation": "tsx src/lib/__tests__/session-invalidation.test.ts",
     "test:membership-display-status": "tsx src/utils/subscription/__tests__/membership-display-status.test.ts",
+    "test:subscription-gate": "tsx src/utils/subscription/__tests__/subscription-creation-gate.test.ts",
     "migrate:create-norm": "tsx scripts/migrations/2026-05-20-create-norm-user-and-role.ts",
     "migrate:backfill-users-view-detail:dry": "tsx scripts/migrations/2026-08-13-backfill-users-view-detail.ts",
     "migrate:backfill-users-view-detail": "tsx scripts/migrations/2026-08-13-backfill-users-view-detail.ts --apply",
