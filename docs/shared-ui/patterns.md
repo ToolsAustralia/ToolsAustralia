@@ -672,3 +672,13 @@ That matters precisely because label and route are separate: if the two ever ans
 the purchase modal, or read **"Enter Now"** and redirect. The affected labels are
 `"Update payment"` / `"Current Plan"` / `"Upgrade to X"` / `"Downgrade to X"`, rendered by
 this component on 15+ pages, with no component test runner to catch a regression.
+
+**Separate does not mean unrelated: where they overlap, they share the predicate.** The
+`"Update payment"` label and the payment-sheet route are two answers to one question —
+*is this member in payment recovery?* — so both now call `isSubscriptionRecoveryStatus`
+(`past_due` **or** `unpaid`): `MembershipSection.tsx` via `isInPaymentRecovery`, and
+`useMembershipCardCta.ts` via the same name inside `ctaLabelFor`. The label tested
+`past_due` alone until 2026-09-01, so an `unpaid` member read **"Enter Now"** on a tier
+card and was then delivered to the payment sheet. That is this rule's own failure mode
+arriving from the other direction: keeping label and route *independent* is right, keeping
+them *inconsistent* is not. Where one fact drives both, take it from one helper.

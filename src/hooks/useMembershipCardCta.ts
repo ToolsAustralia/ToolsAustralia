@@ -18,6 +18,7 @@ import {
 import { getPackageDisplayName } from "@/utils/membership/getDisplayName";
 import { buildCheckoutResumeUrl } from "@/utils/integrations/klaviyo/checkout-resume-url";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
+import { isSubscriptionRecoveryStatus } from "@/utils/integrations/klaviyo/klaviyo-renewal-entries-preview";
 import { hasAdditionalPackageAccess } from "@/utils/membership/has-additional-package-access";
 import { selectOneTimeDrawerPackages } from "@/utils/membership/additional-package-mapping";
 import {
@@ -73,7 +74,9 @@ export function useMembershipCardCta(
   const oneTimeMultiplier = useResolvedMultiplier("one-time-packages") ?? 1;
 
   const hasActiveSubscription = userData?.subscription?.isActive || false;
-  const isPastDue = userData?.subscription?.status === "past_due";
+  // Payment recovery is past_due OR unpaid — the same predicate the gate routes on, so
+  // "Update payment" reaches exactly the members who will be sent to the payment sheet.
+  const isInPaymentRecovery = isSubscriptionRecoveryStatus(userData?.subscription?.status);
   const hasBlockingSub = hasBlockingSubscription(userData);
   const hasAccessToAdditional = hasAdditionalPackageAccess(userData, userMajorDrawStats);
   const currentPrice = userData?.subscriptionPackageData?.price ?? 0;
@@ -128,7 +131,7 @@ export function useMembershipCardCta(
   };
 
   const ctaLabelFor = (p: LocalMembershipPlan): string => {
-    if (hasBlockingSub && isPastDue && isSubscriptionPlan(p)) return "Update payment";
+    if (hasBlockingSub && isInPaymentRecovery && isSubscriptionPlan(p)) return "Update payment";
     if (hasActiveSubscription && isSubscriptionPlan(p)) {
       const h = hierarchy(p);
       if (h.isCurrent) return "Current Plan";

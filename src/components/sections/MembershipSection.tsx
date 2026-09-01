@@ -23,6 +23,7 @@ import {
   isOneTimeBestValuePlanId,
 } from "@/utils/membership/additional-package-mapping";
 import { hasBlockingSubscription } from "@/utils/subscription/subscription-helpers";
+import { isSubscriptionRecoveryStatus } from "@/utils/integrations/klaviyo/klaviyo-renewal-entries-preview";
 import {
   resolveSubscriptionCreationGate,
   isSubscriptionPlan,
@@ -175,9 +176,16 @@ function MembershipSection({
   const hasActiveSubscription = userData?.subscription?.isActive || false;
   const currentUserSubscription = userData?.subscriptionPackageData;
 
-  // past_due users have a subscription that blocks new purchases - show "Update payment" not "Enter Now"
+  // A member in payment recovery has a subscription that blocks new purchases — show them
+  // "Update payment", not "Enter Now". This is the SAME predicate the gate routes on
+  // (isSubscriptionRecoveryStatus = past_due OR unpaid), so the label a member reads and
+  // the sheet they are delivered to can never disagree. Until 2026-09-01 this tested
+  // past_due alone, so an `unpaid` member read "Enter Now" and was then sent to the
+  // payment sheet anyway.
   const hasBlockingSub = hasBlockingSubscription(userData);
-  const isPastDue = (userData?.subscription as { status?: string } | undefined)?.status === "past_due";
+  const isInPaymentRecovery = isSubscriptionRecoveryStatus(
+    (userData?.subscription as { status?: string } | undefined)?.status
+  );
 
   // Check if user has access to additional packages (subscription OR current draw entries)
   const hasAccessToAdditionalPackages = hasAdditionalPackageAccess(userData, userMajorDrawStats);
@@ -585,7 +593,7 @@ function MembershipSection({
     // Shared helper, same as getPlanHierarchy — local name avoids shadowing the import.
     const planIsSubscription = isSubscriptionPlan(plan);
     let ctaLabel = "Enter Now";
-    if (hasBlockingSub && isPastDue && planIsSubscription) ctaLabel = "Update payment";
+    if (hasBlockingSub && isInPaymentRecovery && planIsSubscription) ctaLabel = "Update payment";
     else if (hasActiveSubscription && activeTab === "membership") {
       if (hierarchy.isCurrent) ctaLabel = "Current Plan";
       else if (hierarchy.isDowngrade) ctaLabel = `Downgrade to ${getPackageDisplayName(plan)}`;

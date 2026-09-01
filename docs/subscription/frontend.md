@@ -9,7 +9,12 @@
 **Theme:** `theme={isDark ? "dark" : "light"}` driven by `useHtmlDarkForUi()`. Dark = electric dark background; light = branded vivid card background.
 
 **CTA text:** computed in the section map callback and passed as `ctaLabel` to the card. The mapping is:
-- `"Update payment"` — blocking subscription (`hasBlockingSub`) + `past_due` + subscription-type plan
+- `"Update payment"` — blocking subscription (`hasBlockingSub`) + **in payment recovery** + subscription-type plan.
+  "In payment recovery" is `isSubscriptionRecoveryStatus` (`past_due` **or** `unpaid`) — the same
+  predicate `resolveSubscriptionCreationGate` routes on, so the label and the destination always
+  answer the same question. It tested `past_due` alone until 2026-09-01, which meant an `unpaid`
+  member read "Enter Now" and was then delivered to the payment sheet. `useMembershipCardCta`
+  carries the identical condition in `ctaLabelFor`.
 - `"Current Plan"` / `"Upgrade to …"` / `"Downgrade to …"` — active subscription on membership tab, based on `getPlanHierarchy`
 - `"Enter Now"` — default (new subscription, one-time tab, non-blocking states)
 
