@@ -85,7 +85,10 @@ export function ComboHero({
             ‹ BACK TO FULL PRIZE
           </button>
         ) : (
-          <span className="absolute left-[11px] top-[11px] z-[2] inline-block whitespace-nowrap rounded-full border border-[#18a94d]/50 bg-white/90 px-2.5 py-[5px] font-poppins text-[8px] font-bold leading-none tracking-[0.14em] text-[var(--pbc-cash-dark)] shadow-[0_4px_12px_-4px_rgba(0,0,0,.3)]">
+          // Bottom-right, not top-left: it clears the zoom control (top-right) and never
+          // coexists with the single-item caption (bottom-left), which only renders while a
+          // previewTile is selected — the exact case that hides this badge.
+          <span className="absolute bottom-[11px] right-[11px] z-[2] inline-block whitespace-nowrap rounded-full border border-[#18a94d]/50 bg-white/90 px-2.5 py-[5px] font-poppins text-[8px] font-bold leading-none tracking-[0.14em] text-[var(--pbc-cash-dark)] shadow-[0_4px_12px_-4px_rgba(0,0,0,.3)]">
             ✓ THIS IS WHAT YOU WIN
           </span>
         )}
