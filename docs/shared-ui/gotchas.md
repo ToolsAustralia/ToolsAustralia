@@ -1642,3 +1642,25 @@ variants guard against ever rendering `$null` / `null free entries`: the full se
 See `docs/subscription/frontend.md` → "On-hold nudge on the pack step" for the full write-up
 (this entry is the shared-ui pointer; that one is the fuller cross-reference to the subscription
 docs this feature is otherwise part of).
+
+## ComboHero's four stage corners are all spoken for (2026-09-02)
+
+`src/components/sections/promo/prize-selection/ComboHero.tsx` positions four things absolutely
+inside the same `relative` card, and three of them are only conditionally present — so "that
+corner looks free" is not a safe read:
+
+| Corner | Occupant | Present when |
+| --- | --- | --- |
+| top-left | `‹ BACK TO FULL PRIZE` button | `previewTile` set |
+| top-right | zoom control (`ZoomIcon`) | always |
+| bottom-left | single-item caption (`previewTile.alt`, `max-w-[70%]`) | `previewTile` set |
+| bottom-right | `✓ THIS IS WHAT YOU WIN` chip | `previewTile` **not** set |
+
+The badge moved from top-left to bottom-right on 2026-09-02. It is safe there precisely because
+it and the bottom-left caption are **mutually exclusive** — the caption only renders while a
+preview tile is selected, which is the one case that hides the badge. Anything added to a corner
+in future needs the same check against the other three, not just the one it lands in.
+
+Note the comment above the chip sits in a ternary's expression position (`) : ( … )`), so `//`
+is a real JS comment. The same `//` moved a few lines down into JSX **children** position would
+render as visible text on a customer-facing page with no error anywhere — use `{/* … */}` there.

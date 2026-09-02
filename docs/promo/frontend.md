@@ -419,7 +419,7 @@ notes further down this file about those mechanisms are historical.
 | `PrizeBuilderCard.tsx` | Public surface. Controlled — takes `{toolbox, toolset, isCash}` + callbacks; owns no state. |
 | `SelectorReel.tsx` | One coverflow lane (generic over `{id, accent, isNew?}`), arrows + Left/Right/Home/End keys. |
 | `ReelCards.tsx` | The two card bodies (`ToolboxReelCard`, `ToolsetReelCard`) + the masked `BrandMark`. |
-| `ComboHero.tsx` | The composite render, "✓ THIS IS WHAT YOU WIN", "+ $5,000 CASH INCLUDED", "DRAWN …". |
+| `ComboHero.tsx` | The composite render, "✓ THIS IS WHAT YOU WIN" (bottom-right of the stage since 2026-09-02), "+ $5,000 CASH INCLUDED", "DRAWN …". |
 | `PrizeContentsStrip.tsx` | "What's in this prize" thumbnails + "View full details →". |
 | `PrizeBuilderCta.tsx` | "Enter now →", the bundle ⇄ cash toggle, the inline-SVG secure-checkout bar. |
 | `prize-builder-model.ts` | **All** pure derivations — reel geometry, accent, hero/caption copy, preview grid. No React. |
