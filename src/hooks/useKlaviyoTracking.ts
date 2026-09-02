@@ -49,7 +49,7 @@ export interface KlaviyoIdentifyParams {
  *
  * @example
  * ```tsx
- * const { identify, trackPurchase, trackAddToCart } = useKlaviyoTracking();
+ * const { identify, trackAddToCart } = useKlaviyoTracking();
  *
  * // Identify user after login (snake_case keys match Klaviyo standard fields)
  * identify({
@@ -58,14 +58,16 @@ export interface KlaviyoIdentifyParams {
  *   last_name: user.lastName,
  * });
  *
- * // Track purchase (event params are snake_case)
- * trackPurchase({
+ * // Track an add-to-cart (event params are snake_case)
+ * trackAddToCart({
  *   value: 99.99,
  *   currency: "AUD",
- *   order_id: "order_123",
  *   product_id: "prod_123",
  * });
  * ```
+ *
+ * NOTE: no `trackPurchase` — Klaviyo `Placed Order` is server-side only. See the
+ * comment beside `trackAddToCart` below.
  */
 export function useKlaviyoTracking() {
   /**
@@ -104,37 +106,20 @@ export function useKlaviyoTracking() {
     }
   }, []);
 
-  /**
-   * Track a purchase event in Klaviyo
-   * Standard Klaviyo event for completed purchases.
+  /*
+   * NOTE: there is deliberately no `trackPurchase` here.
    *
-   * @param params - Purchase event parameters (value, currency, order_id, product_id, etc.)
+   * Klaviyo `Placed Order` is emitted SERVER-SIDE ONLY — from the Stripe webhook via
+   * `trackPlacedOrder` (packages) and `trackShopPlacedOrder` (merchandise). A
+   * browser-side purchase emit was removed on 2026-09-02: it had zero callers, and
+   * wiring it up would have DOUBLE-COUNTED every sale against the authoritative
+   * webhook event, since neither path sets a Klaviyo `unique_id`. It also omitted the
+   * `is_renewal` discriminator every other Placed Order carries.
+   *
+   * Do not re-add one. If a client-side purchase signal is ever genuinely needed, it
+   * needs a different event name and a deduplication story first.
+   * See docs/tracking/KLAVIYO_INTEGRATION.md.
    */
-  const trackPurchase = useCallback((params: KlaviyoEventParams) => {
-    try {
-      const items = params.product_id
-        ? [
-            {
-              product_id: params.product_id,
-              product_name: params.product_name,
-              value: params.value,
-              quantity: params.num_items ?? 1,
-            },
-          ]
-        : [];
-      trackKlaviyoEvent("Placed Order", {
-        ...params,
-        currency: params.currency || "AUD",
-        item_count: params.num_items ?? 1,
-        items,
-      });
-    } catch (error) {
-      // Silently fail - don't break user experience
-      if (process.env.NODE_ENV === "development") {
-        console.error("❌ Klaviyo: Error tracking purchase", error);
-      }
-    }
-  }, []);
 
   /**
    * Track an "Add to Cart" event in Klaviyo
@@ -370,7 +355,6 @@ export function useKlaviyoTracking() {
   return {
     identify,
     track,
-    trackPurchase,
     trackAddToCart,
     trackRemoveFromCart,
     trackViewContent,

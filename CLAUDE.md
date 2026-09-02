@@ -730,7 +730,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useKlaviyoTracking.ts",
         "src/hooks/usePixelTracking.ts",
         "src/hooks/useAttribution.ts",
-        "src/hooks/useUTMPersistence.ts"
+        "src/hooks/useUTMPersistence.ts",
+        "src/docs/KLAVIYO_INTEGRATION.md"
       ],
       "lastVerified": "2026-08-31"
     },

@@ -230,7 +230,8 @@ propagate to every branch and worktree on merge.
 
 > **Corrected 2026-07-31.** This section previously described `.env.example` as "opt-in, not
 > exhaustive… currently `STRIPE_WORKER_INTERNAL_SECRET`". That has not been true for a long
-> time — it declares **97** vars today — and it contradicted CLAUDE.md §9, which is the rule
+> time — it declares **121** vars as of 2026-09-02 (`grep -c '^[A-Z_][A-Z0-9_]*=' .env.example`;
+> the "97" previously written here was already stale) — and it contradicted CLAUDE.md §9, which is the rule
 > that actually governs. Believing the old text would mean adding a var and never registering
 > it, which is exactly the drift `npm run check:env` exists to catch.
 

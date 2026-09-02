@@ -200,6 +200,14 @@ export function trackShopPlacedOrder(params: {
       "Order ID": params.orderNumber,
       order_type: "shop",
       order_number: params.orderNumber,
+      // Merchandise is never a subscription renewal. ALWAYS emitted (never omitted for
+      // the false case) because Klaviyo treats a missing property as "not set", which
+      // does not match an `EQUALS false` / `= 0` filter — so an absent flag silently
+      // drops every merch sale out of the "Marketing Revenue" custom metric
+      // (= Placed Order WHERE is_renewal = 0). Same contract as createPlacedOrderEvent,
+      // see klaviyo-events.ts:731-736. `billing_reason` stays absent: merchandise is
+      // not Stripe-subscription-originated, matching the one-time / mini / upsell row.
+      is_renewal: false,
       ...(params.userId ? { user_id: params.userId } : {}),
       items: params.items.map((line) => ({
         ProductID: line.sku ?? line.productId,

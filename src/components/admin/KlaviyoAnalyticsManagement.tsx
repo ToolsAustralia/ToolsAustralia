@@ -16,6 +16,14 @@ import { subDays } from "date-fns";
  * split) in the middle, and the SERVER-SIDE Klaviyo hourly revenue (SHARED-1) at
  * the bottom. Campaign/flow revenue is Klaviyo's own attribution and will NOT match
  * the server-side klaviyo_email/sms totals used elsewhere — both are labeled.
+ *
+ * ⚠️ The campaign/flow revenue figures INCLUDE automated subscription renewals — in the
+ * window sampled on 2026-09-02, ~2/3 of attributed revenue was renewals. That is why the
+ * card subtitles say "incl. renewals": it is not acquisition revenue and must never be
+ * presented as such. We cannot fix the number here — Klaviyo's Reporting API accepts a
+ * custom renewals-excluded conversion metric and then returns base numbers anyway (see
+ * resolveConversionMetricId in src/services/admin/klaviyo/klaviyoReporting.ts), so the
+ * honest split exists in the Klaviyo UI only. Labelling is the available remedy.
  */
 interface EntityRow extends Record<string, unknown> {
   id: string;
@@ -238,12 +246,12 @@ export default function KlaviyoAnalyticsManagement() {
       {/* Revenue tables */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <Card className="p-5 min-w-0">
-          <SectionTitle title="Campaigns" subtitle={`Klaviyo-attributed revenue · ${rangeLabel.toLowerCase()}`} icon={Mail} />
+          <SectionTitle title="Campaigns" subtitle={`Klaviyo-attributed revenue · incl. renewals · ${rangeLabel.toLowerCase()}`} icon={Mail} />
           <DataTable<EntityRow> columns={ENTITY_COLUMNS} rows={campaignRows} renderCell={renderEntity} />
           {!isLoading && campaignRows.length === 0 && <p className="text-sm text-neutral-400 mt-3">No campaign revenue in range.</p>}
         </Card>
         <Card className="p-5 min-w-0">
-          <SectionTitle title="Flows" subtitle={`Klaviyo-attributed revenue · ${rangeLabel.toLowerCase()}`} icon={Zap} />
+          <SectionTitle title="Flows" subtitle={`Klaviyo-attributed revenue · incl. renewals · ${rangeLabel.toLowerCase()}`} icon={Zap} />
           <DataTable<EntityRow> columns={ENTITY_COLUMNS} rows={flowRows} renderCell={renderEntity} />
           {!isLoading && flowRows.length === 0 && <p className="text-sm text-neutral-400 mt-3">No flow revenue in range.</p>}
         </Card>

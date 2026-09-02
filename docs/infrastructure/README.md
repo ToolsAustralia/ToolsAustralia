@@ -4,6 +4,21 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 
 > `.gitignore` ignores `/claudeDesign` — the local-only Claude Design handoff reference (design HTML/JS prototypes), which is not part of the codebase. `eslint.config.mjs` also ignores `claudeDesign/**` (the folder is still on disk, so ESLint would otherwise lint the concept JS and fail `npm run lint` with ~100 errors).
 
+> `.env.example` — `KLAVIYO_CONVERSION_METRIC_ID` (added 2026-09-02) is declared **blank on purpose
+> and is currently INERT — setting it changes no number.** It was meant to point the admin Klaviyo
+> tab at the account's custom "Marketing Revenue" metric (Placed Order WHERE `is_renewal = 0`).
+> Verified against the live account: `campaign-values-reports` / `flow-values-reports` **accept** a
+> custom metric id, return HTTP 200, and return base "Placed Order" numbers anyway — 92 campaigns,
+> A$188,451.81, identical to the cent under both ids. Controls prove the fault is Klaviyo's, not
+> ours: a different *real* metric id does move the numbers, and a bogus id 400s. The aggregates
+> endpoint rejects custom metrics outright. **Consequence: the admin Klaviyo tab always shows
+> renewal-inclusive revenue** (~2/3 renewals in the sampled window) — never label it acquisition
+> revenue. It is registered rather than deleted so the name stays discoverable and so a future real
+> event-metric id can be dropped in with no code change; it therefore needs a matching **blank**
+> `KLAVIYO_CONVERSION_METRIC_ID=` line in each `.env.local`, or `npm run check:env` reports it
+> MISSING and exits 1. Vercel needs nothing — the read site does `?.trim()`, so blank and absent are
+> identical. See [the 2026-09-02 spec](../superpowers/specs/2026-09-02-klaviyo-shop-is-renewal-design.md).
+
 > `.env.example` — `NEXT_PUBLIC_PARTNER_DISCOUNT_SSO_ENABLED` is the client twin of the server-only `PARTNER_DISCOUNT_SSO_ENABLED` (which gates the SSO route). Client-rendered portal buttons can only read `NEXT_PUBLIC_*`, so set both to the same value. Read via `partnerDiscountSsoEnabled()` in `src/config/featureFlags.ts`.
 
 > `.env.example` — `NEXT_PUBLIC_DASHBOARD_STREAK_PREVIEW` is **local-dev only**: lights the Membership Streak dashboard surfaces while git ships their flags dark (`src/config/dashboardFeatures.ts` reads it via `STREAK_PREVIEW`). Never set in Vercel — production launches by flipping the committed flags (streak launch runbook step 4).

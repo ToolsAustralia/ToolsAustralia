@@ -1241,7 +1241,7 @@ null | {
 ```
 **Inputs**: `range` (optional, default `last_30_days`).
 
-**Data source**: Klaviyo Reporting API (campaign/flow values-reports + metadata), via `getKlaviyoAnalytics`. Revenue is Klaviyo-attributed `conversion_value` (acquisition; renewals excluded).
+**Data source**: Klaviyo Reporting API (campaign/flow values-reports + metadata), via `getKlaviyoAnalytics`. Revenue is Klaviyo-attributed `conversion_value` on the base **"Placed Order"** metric — it **INCLUDES automated subscription renewals** (~2/3 of attributed revenue in the window sampled 2026-09-02). **Do not describe this as acquisition revenue.** A renewals-excluded "Marketing Revenue" metric exists in the Klaviyo account, but Klaviyo's Reporting API accepts a custom conversion metric id and then returns base numbers regardless (verified 2026-09-02), so that split is reachable in the Klaviyo UI only and is **not** what this endpoint returns.
 
 **Constraints**: `read` tier. `requiredPermission: facebookAds.view`. **Rate limit 2/min** — Klaviyo Reporting is heavily throttled; do not poll. Read-only. No PII (campaign / flow entities only). On upstream throttle the call may surface a 5xx error — retry after a short backoff.
 
