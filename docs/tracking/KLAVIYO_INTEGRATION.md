@@ -119,7 +119,14 @@ This split is intentional:
 
 Klaviyo's automatic revenue attribution will credit a Placed Order to whichever flow/campaign the user most recently engaged with inside the attribution window (default: 5 days email / 24 h SMS) — regardless of whether the order was user-initiated or an automated renewal. That means a welcome email can show "$X attributed revenue" that's partially renewals which would have fired anyway.
 
-To make honest reporting possible, every `Placed Order` event carries an `is_renewal: boolean` property (built by [createPlacedOrderEvent](src/utils/integrations/klaviyo/klaviyo-events.ts) → wired from `billingReason === "subscription_cycle"` at the [grantBenefits callsite](src/utils/payment/payment-processing.ts)). For Stripe-originated orders the raw `billing_reason` is also emitted (`"subscription_create"`, `"subscription_cycle"`, `"subscription_update"`, `"manual"`).
+To make honest reporting possible, every `Placed Order` event carries an `is_renewal: boolean` property. There are **two** emitters and both set it:
+
+- **Package-shaped orders** — [createPlacedOrderEvent](src/utils/integrations/klaviyo/klaviyo-events.ts), wired from `billingReason === "subscription_cycle"` at the [grantBenefits callsite](src/utils/payment/payment-processing.ts). For Stripe-originated orders the raw `billing_reason` is also emitted (`"subscription_create"`, `"subscription_cycle"`, `"subscription_update"`, `"manual"`).
+- **Merchandise orders** — [trackShopPlacedOrder](src/utils/integrations/klaviyo/klaviyo-revenue-service.ts), which hard-codes `is_renewal: false` (merch is never a renewal) and emits no `billing_reason`.
+
+**`Placed Order` is emitted SERVER-SIDE ONLY.** A browser-side `trackPurchase` helper existed on the `useKlaviyoTracking` hook and was **deleted on 2026-09-02**: it had zero callers, and wiring it up would have double-counted every sale against the authoritative webhook event (neither path sets a Klaviyo `unique_id`, so nothing would have deduped them). It also omitted `is_renewal`. Do not re-add a client-side purchase emit; if one is ever genuinely needed it requires a different event name and a deduplication story first.
+
+⚠️ **The property must always be PRESENT, never omitted for the `false` case.** Klaviyo treats a missing property as "not set", which does **not** match an `EQUALS false` / `= 0` filter. An omitted flag silently drops the order out of any metric built on it, with no error anywhere. This is not theoretical: `trackShopPlacedOrder` shipped without the flag on 2026-08-27 and every merchandise sale would have been invisible to Marketing Revenue — caught and fixed 2026-09-02 before the shop took its first order. Both emitters are now fenced by `npm run test:klaviyo-canonical`.
 
 | Order type | `is_renewal` | `billing_reason` |
 |---|---|---|
@@ -127,8 +134,11 @@ To make honest reporting possible, every `Placed Order` event carries an `is_ren
 | Automated monthly renewal | `true` | `"subscription_cycle"` |
 | Upgrade / downgrade proration | `false` | `"subscription_update"` |
 | One-time / mini-draw / upsell | `false` | (omitted) |
+| Merchandise (shop) | `false` | (omitted) |
 
 **Default Klaviyo metrics still see all revenue** — `is_renewal` is purely additive. To get a "new revenue only" report, create a custom metric in Klaviyo (Account → Metrics → Create) keyed on `Placed Order` with the condition `is_renewal EQUALS false`. Use that one for "what is this campaign actually driving" analysis; use the default `Placed Order` metric for LTV and total revenue.
+
+⚠️ **That custom metric is readable in the Klaviyo UI ONLY — the Reporting API cannot see it.** Verified 2026-09-02 against the live account. The metric exists (id `01KSSZVD0B3GYG7BGVE7PNCA4N`, "Marketing Revenue", filter `is_renewal = 0` numeric). `campaign-values-reports` / `flow-values-reports` **accept** it as `conversion_metric_id`, return HTTP 200, and then return **base `Placed Order` numbers anyway** — 92 campaigns, A$188,451.81, identical to the cent under both metric ids. Controls: a different real metric (`SVLZpF`) *does* change the numbers, so the parameter is honoured; a bogus id returns `400 "Passed in conversion metric does not exist"`, so ids are validated and the custom one passes. The aggregates endpoint rejects custom metrics outright (`400 "Custom metrics are not supported for this API."`) and additionally refuses to filter the base metric on `is_renewal` at all. **There is therefore no API route to the renewals-excluded split** — quote it from the UI, or emit a real second event (see the spec's non-goal, `Placed Non-Recurring Order`). Full evidence: [2026-09-02 spec](../superpowers/specs/2026-09-02-klaviyo-shop-is-renewal-design.md).
 
 Refund linking is unaffected — `Refunded Order` continues to link by `Order ID` only.
 
