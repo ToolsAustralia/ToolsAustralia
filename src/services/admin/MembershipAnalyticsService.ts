@@ -17,6 +17,7 @@ import { fetchNetBenefitsGrantedInRange } from "@/utils/payment/payment-event-ne
 import type { MembershipAnalyticsBundle } from "@/types/admin/membershipAnalytics";
 import type { TrendData } from "@/types/admin/trend-types";
 import { summarizeRenewalProgress } from "@/utils/admin/renewalProgress";
+import { summarizeRenewalCohort } from "@/utils/admin/renewalCohort";
 
 export const SUBSCRIPTION_PACKAGE_IDS = ["tradie-subscription", "foreman-subscription", "boss-subscription"] as const;
 
@@ -80,22 +81,69 @@ export class MembershipAnalyticsService {
     void options?.asOfDate;
     const precomputedRenewals = options?.precomputedRenewals;
 
-    const [expectedRenewalsInRange, failedRenewalInvoicesInRange, becamePastDueIds] = await Promise.all([
-      MembershipRenewalCycle.countDocuments({
-        billingReason: "subscription_cycle",
-        dueAt: { $gte: startDate, $lte: endDate },
-      }),
-      MembershipRenewalCycle.countDocuments({
-        billingReason: "subscription_cycle",
-        status: "failed",
-        failedAt: { $gte: startDate, $lte: endDate },
-      }),
+    // The renewal cohort is anchored to `dueAt` — the members whose renewal fell due in this
+    // range — so its numerator and denominator describe the same people. MembershipRenewalCycle
+    // is written REACTIVELY (a row appears only once Stripe emits an invoice; no row is ever
+    // dated in the future), so it cannot supply the still-to-come half on its own. That half
+    // comes from the live schedule on User.subscription.endDate. The two sets are disjoint: a
+    // renewal that lands rolls endDate forward a month, so a member is in one or the other.
+    // `isOpen` only picks the label for the leftover slice ("still to come" vs "did not renew").
+    // It deliberately does NOT narrow the pending window — see below.
+    const rangeIsOpen = endDate > new Date();
+
+    const [cycleStatusRows, failedInvoiceAttemptsInRange, becamePastDueIds, pendingInRange] =
+      await Promise.all([
+        MembershipRenewalCycle.aggregate<{ _id: string; n: number }>([
+          {
+            $match: {
+              billingReason: "subscription_cycle",
+              dueAt: { $gte: startDate, $lte: endDate },
+            },
+          },
+          { $group: { _id: "$status", n: { $sum: 1 } } },
+        ]),
+        // Retry-inflated ATTEMPT count, kept for the Norm gateway. Not a member count — dunning
+        // rewrites `failedAt` on old invoices, so this runs far ahead of the cohort's
+        // failedInRange (124 vs 20 on 2026-09-02).
+        MembershipRenewalCycle.countDocuments({
+          billingReason: "subscription_cycle",
+          status: "failed",
+          failedAt: { $gte: startDate, $lte: endDate },
+        }),
         MembershipStatusHistory.distinct("userId", {
           membershipStatus: "past_due",
           effectiveAt: { $gte: startDate, $lte: endDate },
           source: { $in: ["webhook_invoice_payment_failed", "backfill_user_pastDueAt"] },
         }),
-    ]);
+        // Scheduled over the WHOLE range, never from `now`.
+        //
+        // Anchoring this to `now` looks right and is wrong: Stripe finalises a renewal invoice
+        // about an hour after the cycle boundary, so between those two moments a member is past
+        // their scheduled time (dropped from a now-anchored window) but has no cycle row yet
+        // (not in the aggregation either). They fall out of BOTH sets and the day's total sags —
+        // observed live, 102 → 98 over a few minutes.
+        //
+        // Over the full range the two sets stay disjoint and their union stays stable, because a
+        // member LEAVES this set exactly when they enter the other: a renewal that lands rolls
+        // endDate forward a month, and one that fails flips the user to past_due, which
+        // getActiveSubscriptionFilter (status ∈ active|trialing, autoRenew ≠ false) excludes.
+        // Verified: 0 users overlap between the two sets for today.
+        //
+        // Not skipped for closed ranges either. It settles to ~0 on its own, and when it does
+        // not, the leftover is a real anomaly — a member still active and auto-renewing whose
+        // renewal date passed without Stripe ever invoicing them. That is worth surfacing as
+        // "did not renew" rather than defining away with a branch.
+        User.countDocuments({
+          ...getActiveSubscriptionFilter(),
+          "subscription.endDate": { $gte: startDate, $lte: endDate },
+        }),
+      ]);
+
+    const renewalCohort = summarizeRenewalCohort({
+      statusCounts: Object.fromEntries(cycleStatusRows.map((r) => [String(r._id), r.n])),
+      pendingInRange,
+      isOpen: rangeIsOpen,
+    });
 
     const scheduledCancellationQuery =
       dateRange === "all-time"
@@ -161,10 +209,10 @@ export class MembershipAnalyticsService {
     const renewalProgress = await this.getCurrentCycleRenewalProgress();
 
     return {
-      expectedRenewalsInRange,
+      renewalCohort,
       successfulRenewalsInRange,
       successfulRenewalUserCount,
-      failedRenewalInvoicesInRange,
+      failedInvoiceAttemptsInRange,
       becamePastDueInRange: becamePastDueIds.length,
       cancellationsInRange: cancellationRows.length,
       cancelledMembershipRevenueImpact,

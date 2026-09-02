@@ -31,8 +31,8 @@ import { CHANNEL_CHIP_CLASS } from "@/components/admin/promo-analytics/UTMCampai
 import { getToolbox } from "@/components/sections/promo/prize-selection";
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
-import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { AdminLayoutDateRangeShell } from "@/app/admin/component/AdminLayoutDateRangeShell";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
 import { useCurrentAndLastDrawDates, useMajorDrawsForDateRange } from "@/hooks/queries/useAdminQueries";
 import { getWebsiteLaunchDateUTC } from "@/utils/common/timezone";
@@ -96,7 +96,7 @@ export default function PromoAnalyticsManagement() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { slotEl } = useAdminDateToolbarSlot();
   const [dateRange, setDateRange] = useState<DateRange>("today");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -372,14 +372,13 @@ export default function PromoAnalyticsManagement() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Promo Page Analytics</h2>
-        {isLgUp ? <div className="flex items-center gap-2">{promoDateRangeToggle}</div> : null}
       </div>
-      {!isLgUp && slotEl
-        ? createPortal(<AdminMobileLayoutDateRangeShell>{promoDateRangeToggle}</AdminMobileLayoutDateRangeShell>, slotEl)
+      {slotEl
+        ? createPortal(<AdminLayoutDateRangeShell>{promoDateRangeToggle}</AdminLayoutDateRangeShell>, slotEl)
         : null}
-      {!isLgUp && !slotEl ? (
-        <div className="lg:hidden">
-          <AdminMobileLayoutDateRangeShell>{promoDateRangeToggle}</AdminMobileLayoutDateRangeShell>
+      {!slotEl ? (
+        <div>
+          <AdminLayoutDateRangeShell>{promoDateRangeToggle}</AdminLayoutDateRangeShell>
         </div>
       ) : null}
 

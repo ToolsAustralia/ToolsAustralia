@@ -32,8 +32,8 @@ import { useFacebookAdsInsights, useHourlyInsights } from "@/hooks/queries/useFa
 import type { DateRangeOption, InsightLevel, FacebookAdsBreakdownItem } from "@/types/facebook-ads";
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
-import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { AdminLayoutDateRangeShell } from "@/app/admin/component/AdminLayoutDateRangeShell";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import CustomDateRangeModal from "./CustomDateRangeModal";
 import { useMajorDrawsForDateRange, useCurrentAndLastDrawDates } from "@/hooks/queries/useAdminQueries";
@@ -67,7 +67,7 @@ export default function FacebookAdsManagement() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { slotEl } = useAdminDateToolbarSlot();
 
   // State management - synced with URL params
   const [dateRange, setDateRange] = useState<DateRange>("today");
@@ -1392,39 +1392,29 @@ export default function FacebookAdsManagement() {
             )}
             {(viewMode === "ads" || viewMode === "spend-by-url" || viewMode === "health") && (
               <>
-                {!isLgUp && slotEl
+                {slotEl
                   ? createPortal(
-                      <AdminMobileLayoutDateRangeShell>
+                      <AdminLayoutDateRangeShell>
                         <DateRangeDropdown
                           selectedRange={dateRange}
                           onRangeChange={handleDateRangeChange}
                           onCustomClick={() => setIsCustomDateModalOpen(true)}
                           displayDate={displayDate || undefined}
                         />
-                      </AdminMobileLayoutDateRangeShell>,
+                      </AdminLayoutDateRangeShell>,
                       slotEl
                     )
                   : null}
-                {!isLgUp && !slotEl ? (
+                {!slotEl ? (
                   <div className="flex-shrink-0 min-w-0 w-full max-w-full">
-                    <AdminMobileLayoutDateRangeShell>
+                    <AdminLayoutDateRangeShell>
                       <DateRangeDropdown
                         selectedRange={dateRange}
                         onRangeChange={handleDateRangeChange}
                         onCustomClick={() => setIsCustomDateModalOpen(true)}
                         displayDate={displayDate || undefined}
                       />
-                    </AdminMobileLayoutDateRangeShell>
-                  </div>
-                ) : null}
-                {isLgUp ? (
-                  <div className="flex-shrink-0 min-w-0 max-w-full sm:w-auto">
-                    <DateRangeDropdown
-                      selectedRange={dateRange}
-                      onRangeChange={handleDateRangeChange}
-                      onCustomClick={() => setIsCustomDateModalOpen(true)}
-                      displayDate={displayDate || undefined}
-                    />
+                    </AdminLayoutDateRangeShell>
                   </div>
                 ) : null}
               </>

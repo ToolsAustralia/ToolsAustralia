@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type ElementType } from "react";
+import { useMemo, useRef, useState, type ElementType, type ReactNode } from "react";
 import {
   DollarSign,
   TrendingUp,
@@ -12,7 +12,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Image from "next/image";
-import { MetricCard, Popover, TrendPill, type Tone } from "@/components/admin/ui";
+import { MetricCard, Popover, SegmentedBar, TrendPill, type Tone } from "@/components/admin/ui";
 import { getPackageIcon, type PackageIconData } from "@/utils/images/package-icons";
 import { tierColorByPackageId } from "./tierColors";
 import AdSpendFocusModal from "@/components/modals/AdSpendFocusModal";
@@ -57,7 +57,19 @@ const moneyWhole = (n: number) => `$${n.toLocaleString("en-AU")}`;
 /** Exact AUD — full value, thousands separators, no k/M compacting, decimals only if present. */
 const moneyExact = (n: number) => `$${n.toLocaleString("en-AU", { maximumFractionDigits: 2 })}`;
 
-type BreakdownRow = { id: string; label: string; color: string; value: number; icon?: PackageIconData };
+type BreakdownRow = {
+  id: string;
+  label: string;
+  color: string;
+  value: number;
+  icon?: PackageIconData;
+  /** Overrides the default money formatting. Needed by any card whose breakdown is COUNTS —
+   *  without it a row of "31 members" renders as "$31". */
+  format?: (n: number) => string;
+};
+
+/** Plain count formatting for breakdown rows that are not money. */
+const countFmt = (n: number) => n.toLocaleString("en-AU");
 
 /**
  * A KPI tile that owns its own popover anchor + open state.
@@ -66,7 +78,9 @@ type BreakdownRow = { id: string; label: string; color: string; value: number; i
 function KpiCard({
   title,
   value,
+  valueAside,
   sub,
+  footer,
   icon,
   tone,
   trend,
@@ -76,7 +90,9 @@ function KpiCard({
 }: {
   title: string;
   value: string;
+  valueAside?: string;
   sub?: string;
+  footer?: ReactNode;
   icon: ElementType;
   tone: Tone;
   trend?: number | null;
@@ -92,7 +108,9 @@ function KpiCard({
       <MetricCard
         title={title}
         value={value}
+        valueAside={valueAside}
         sub={sub}
+        footer={footer}
         icon={icon}
         tone={tone}
         trend={trend}
@@ -136,7 +154,7 @@ function KpiCard({
                     </span>
                   </span>
                   <span className="text-xs font-bold text-neutral-900 dark:text-white num shrink-0">
-                    {moneyExact(row.value)}
+                    {(row.format ?? moneyExact)(row.value)}
                   </span>
                 </div>
               ))
@@ -254,21 +272,103 @@ export default function KpiGrid({
   )} at risk${dateRange === "all-time" ? " (scheduled)" : ""}`;
 
   // ---- Renewals ----
-  // Headline = renewals in the SELECTED range (filter-driven) — renewed + past due.
-  // Sub = current billing-cycle progress (cycle-anchored, filter-independent).
+  // ONE cohort, three outcomes: the members whose renewal fell DUE in the selected range.
+  // The card used to divide a payment-time numerator (succeededDistinctMembers) by a due-time
+  // denominator, which described two different groups of people — Stripe finalises a renewal
+  // invoice ~1h after the cycle boundary, so a late-night renewal is charged the next day.
+  // succeededDistinctMembers is still shown, but in the popover, away from the fraction.
   const rp = users?.renewalProgress;
   const mr = users?.membershipRenewals;
+  const cohort = mr?.renewalCohort;
   const renewalRate: number | null = rp?.rate ?? null;
-  // Only the renewed count is the big headline number; the "renewed · N past due"
-  // words ride along as small muted aside text so they don't dominate the tile.
-  const renewalValue = (mr?.succeededDistinctMembers ?? 0).toLocaleString("en-AU");
-  const renewalAside = `renewed · ${(mr?.becamePastDueInRange ?? 0).toLocaleString("en-AU")} past due`;
+
+  const renewalValue = (cohort?.landedInRange ?? 0).toLocaleString("en-AU");
+  // The date tag sits once on the section header (see `rangeTag`), so the card says "due", not
+  // "due today" — a custom range would otherwise read "due nov 2025 – present".
+  const renewalAside =
+    cohort && cohort.dueInRange > 0 ? `of ${cohort.dueInRange.toLocaleString("en-AU")} due` : undefined;
+
+  // Remainder = due − landed − failed. Derived, NOT read from pendingInRange: dueInRange counts
+  // every cycle status, so a status in neither numerator (e.g. `refunded`) belongs in the grey
+  // segment rather than silently vanishing from the total.
+  const renewalRemainder = cohort
+    ? Math.max(0, cohort.dueInRange - cohort.landedInRange - cohort.failedInRange)
+    : 0;
+  const remainderLabel = cohort?.isOpen ? "to come" : "did not renew";
+
   const renewalSub =
-    rp && rp.base > 0
-      ? `Cycle: ${renewalRate != null ? `${renewalRate.toFixed(1)}%` : "—"} · ${rp.renewed.toLocaleString("en-AU")}/${rp.base.toLocaleString("en-AU")}`
-      : renewalRate != null
-        ? `Cycle: ${renewalRate.toFixed(1)}%`
-        : "No active cycle";
+    !cohort || cohort.dueInRange === 0
+      ? "No renewals due"
+      : cohort.collectionRate == null
+        ? "None attempted yet"
+        : `${cohort.collectionRate.toFixed(1)}% collected of those attempted`;
+
+  const renewalFooter =
+    cohort && cohort.dueInRange > 0 ? (
+      <div className="space-y-1.5">
+        <SegmentedBar
+          total={cohort.dueInRange}
+          label={`${cohort.landedInRange} landed, ${cohort.failedInRange} failed, ${renewalRemainder} ${remainderLabel}`}
+          segments={[
+            { key: "landed", value: cohort.landedInRange, className: "bg-emerald-500" },
+            { key: "failed", value: cohort.failedInRange, className: "bg-red-500" },
+          ]}
+        />
+        <div className="flex flex-wrap gap-x-2.5 gap-y-1 text-2xs font-medium text-neutral-500 dark:text-neutral-400">
+          <span className="inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-sm bg-emerald-500 shrink-0" />
+            {cohort.landedInRange.toLocaleString("en-AU")} landed
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-sm bg-red-500 shrink-0" />
+            {cohort.failedInRange.toLocaleString("en-AU")} failed
+          </span>
+          {/* Hidden at zero: on a settled past range every member has an outcome, and a
+              standing "0 did not renew" implies a category that isn't doing any work. */}
+          {renewalRemainder > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-sm bg-neutral-300 dark:bg-neutral-600 shrink-0" />
+              {renewalRemainder.toLocaleString("en-AU")} {remainderLabel}
+            </span>
+          )}
+        </div>
+      </div>
+    ) : undefined;
+
+  // Popover rows are COUNTS, so each carries `format: countFmt` — the default is money.
+  // "Payments received" is the old headline: it ties to the Revenue card's membershipRenewal
+  // row, so it stays reachable, but it is a different cohort and must not sit beside the fraction.
+  const renewalBreakdown: BreakdownRow[] = cohort
+    ? [
+        { id: "landed", label: "Landed", color: "#10b981", value: cohort.landedInRange, format: countFmt },
+        { id: "failed", label: "Failed", color: "#ef4444", value: cohort.failedInRange, format: countFmt },
+        ...(renewalRemainder > 0
+          ? [
+              {
+                id: "remainder",
+                label: cohort.isOpen ? "Still to come" : "Did not renew",
+                color: "#a3a3a3",
+                value: renewalRemainder,
+                format: countFmt,
+              },
+            ]
+          : []),
+        {
+          id: "payments",
+          label: "Payments received in range",
+          color: "#eab308",
+          value: mr?.succeededDistinctMembers ?? 0,
+          format: countFmt,
+        },
+        {
+          id: "cycle",
+          label: rp && rp.base > 0 ? `Billing cycle · ${renewalRate != null ? `${renewalRate.toFixed(1)}%` : "—"}` : "Billing cycle",
+          color: "#6366f1",
+          value: rp?.renewed ?? 0,
+          format: (n) => (rp && rp.base > 0 ? `${countFmt(n)}/${countFmt(rp.base)}` : "—"),
+        },
+      ]
+    : [];
 
   // ---- New-member ROAS (new-membership revenue ÷ ad spend) ----
   // Reuses the existing snapshot membership-new revenue + Facebook ad spend already on
@@ -379,13 +479,15 @@ export default function KpiGrid({
             tone="indigo"
             loading={showStatsSkeleton}
           />
-          <MetricCard
+          <KpiCard
             title="Renewals"
             value={renewalValue}
             valueAside={renewalAside}
             sub={renewalSub}
+            footer={renewalFooter}
             icon={RefreshCw}
             tone="emerald"
+            breakdown={renewalBreakdown}
             loading={showStatsSkeleton}
           />
           <MetricCard

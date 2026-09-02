@@ -9,7 +9,7 @@
 | [src/app/api/admin/](../../src/app/api/admin/) | Admin API routes — catch-all for routes not owned by another domain |
 | [src/features/admin/](../../src/features/admin/) | Admin feature modules |
 | [src/server/admin/](../../src/server/admin/) | Server-only admin code (e.g. `chargePastDueJob.ts` chunked-charge engine, `chargePastDueShared.ts`) |
-| [src/hooks/useAdminMobileDateToolbarSlot.ts](../../src/hooks/useAdminMobileDateToolbarSlot.ts) | Admin-specific UX hook |
+| [src/hooks/useAdminDateToolbarSlot.ts](../../src/hooks/useAdminDateToolbarSlot.ts) | Admin-specific UX hook |
 
 ## Auth
 

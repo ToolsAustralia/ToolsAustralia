@@ -264,3 +264,43 @@ Continuity rules (spec §2): recovered past-due keeps; retention pause freezes (
 `ChargeJobLock` (model) is a **single-document** distributed lock used to serialise the past-due charge job, ensuring only one instance of the operational charge run executes at a time across deployments. The doc's `_id` is hard-coded to `"charge-job-lock"`. See [models.md](./models.md#chargejoblock).
 
 > _TODO: locate the cron entry that uses `ChargeJobLock` (likely under `src/lib/jobs/` or `src/app/api/cron/`) and document its schedule + behaviour. Cross-reference [infrastructure](../infrastructure/) when those docs exist._
+
+## Renewal cohort metrics — due-time vs payment-time (2026-09-02)
+
+`MembershipAnalyticsService.getAnalyticsBundle` returns a `renewalCohort` describing the
+renewals **due** in a range and their outcomes. Shaping is in the pure
+[`summarizeRenewalCohort`](../../src/utils/admin/renewalCohort.ts) (`npm run test:renewal-cohort`);
+the admin card that consumes it is documented in [admin/frontend.md](../admin/frontend.md).
+
+**Two clocks, and they are not interchangeable.** Stripe finalises a renewal invoice roughly an
+hour after the cycle boundary, so a renewal due at 23:30 is charged the next day:
+
+| Field | Clock | Meaning |
+| --- | --- | --- |
+| `renewalCohort.landedInRange` | **due-time** (`dueAt`) | Members whose renewal fell due in range and collected |
+| `successfulRenewalsInRange` / `successfulRenewalUserCount` | **payment-time** | Renewal payments received in range — what the revenue card ties to |
+
+These legitimately differ (32 vs 43 on a live day). **Never divide one by the other** — that
+mismatch is exactly the bug this work replaced.
+
+**`failedInvoiceAttemptsInRange` counts ATTEMPTS, not members.** It keys off `failedAt`, which
+dunning rewrites on every retry of an older invoice: 129 attempts against 21 members actually
+due, on the same day. It was previously named `failedInvoicesInRange`; the rename makes the
+distinction visible next to the cohort's `failedInRange`. For members, always use
+`renewalCohort.failedInRange`.
+
+**`MembershipRenewalCycle` is reactive, not a schedule.** Rows exist only once Stripe emits an
+invoice (`stripeInvoiceId` is `required, unique`) — there are **zero** rows dated in the future,
+and nothing writes the `"expected"` status the enum permits. Anything needing a forward view of
+renewals must read `User.subscription.endDate`, as the cohort's pending half does. The field
+formerly called `expectedRenewalsInRange` was removed for asserting a forecast this table cannot
+provide; it had also been mirrored to Norm under that name.
+
+**Recovery rewrites history.** `upsertRenewalCycleFromPaidInvoice` sets `status: "succeeded"` on
+the **existing** row, so a failed cycle later recovered by dunning flips in place and a past
+range's `failedInRange` decreases over time. Intended (it answers "did they eventually pay?"),
+but it means these figures are not reproducible from a screenshot.
+
+Computed **live** on every range — never from `DashboardStatsDailySnapshot`, which covers revenue
+buckets only. `MembershipRenewalCycle` holds data from 2026-01-26; earlier ranges return zeros,
+which is genuine absence rather than an error.

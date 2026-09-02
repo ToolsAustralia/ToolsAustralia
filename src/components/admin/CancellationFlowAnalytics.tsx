@@ -21,8 +21,8 @@ import CancellationReasonUsersModal from "@/components/admin/CancellationReasonU
 import { DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
-import { AdminMobileLayoutDateRangeShell } from "@/app/admin/component/AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { AdminLayoutDateRangeShell } from "@/app/admin/component/AdminLayoutDateRangeShell";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import { useCancellationFlowAnalytics } from "@/hooks/queries/admin/useCancellationFlowAnalytics";
 import {
   useCurrentAndLastDrawDates,
@@ -90,7 +90,7 @@ export default function CancellationFlowAnalytics() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { slotEl } = useAdminDateToolbarSlot();
 
   const [dateRange, setDateRange] = useState<DateRange>("today");
   const [startDate, setStartDate] = useState<string>("");
@@ -244,17 +244,16 @@ export default function CancellationFlowAnalytics() {
       {/* Header + date filter */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Cancellation Flow</h2>
-        {isLgUp ? <div className="flex items-center gap-2">{dateRangeToggle}</div> : null}
       </div>
-      {!isLgUp && slotEl
+      {slotEl
         ? createPortal(
-            <AdminMobileLayoutDateRangeShell>{dateRangeToggle}</AdminMobileLayoutDateRangeShell>,
+            <AdminLayoutDateRangeShell>{dateRangeToggle}</AdminLayoutDateRangeShell>,
             slotEl
           )
         : null}
-      {!isLgUp && !slotEl ? (
-        <div className="lg:hidden">
-          <AdminMobileLayoutDateRangeShell>{dateRangeToggle}</AdminMobileLayoutDateRangeShell>
+      {!slotEl ? (
+        <div>
+          <AdminLayoutDateRangeShell>{dateRangeToggle}</AdminLayoutDateRangeShell>
         </div>
       ) : null}
 

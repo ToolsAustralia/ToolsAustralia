@@ -669,3 +669,18 @@ link without a `business_id`. That degrades rather than breaks (the parameter is
 resolves the business from the session), but an account belonging to several businesses may land
 the reader on a chooser instead of the ad.
 
+### `test:renewal-cohort` (2026-09-02)
+
+`npm run test:renewal-cohort` → [`src/utils/admin/__tests__/renewalCohort.test.ts`](../../src/utils/admin/__tests__/renewalCohort.test.ts).
+Pure, no DB/env — it drives `summarizeRenewalCohort` over a status-bucket map.
+
+The case worth copying is the **identity trap**. `dueInRange` sums *every* status bucket, so
+`due > landed + failed + pending` is a legal state and the test asserts it directly: a `refunded`
+bucket must keep `dueInRange` unchanged while appearing in neither numerator, and an
+`some_new_status` bucket must behave identically. Deriving the denominator from the numerators
+instead would silently delete those members from the day's total — the kind of defect that shows
+up as a plausible smaller number rather than an error.
+
+It also pins `collectionRate` as `null` (never `0`) in **both** empty states — no renewals due,
+and renewals due but none attempted yet — because `0%` on a quiet morning reads as total
+collection failure.

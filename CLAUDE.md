@@ -344,7 +344,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-09-01",
+  "lastModified": "2026-09-02",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -378,7 +378,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/useOpenMembershipModalListener.ts",
         "src/app/(site)/membership/**"
       ],
-      "lastVerified": "2026-09-01"
+      "lastVerified": "2026-09-02"
     },
     "billing-stripe": {
       "docs": "docs/billing-stripe/",
@@ -861,7 +861,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/hooks/usePrefetching.ts",
         "src/hooks/useConfetti.ts"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-09-02"
     },
     "internal-norm": {
       "docs": "docs/internal-norm/",
@@ -883,7 +883,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-09-02"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -907,12 +907,12 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/utils/admin/**",
         "src/types/admin/**",
         "src/types/admin.ts",
-        "src/hooks/useAdminMobileDateToolbarSlot.ts",
+        "src/hooks/useAdminDateToolbarSlot.ts",
         "src/hooks/useAdminDateFilter.ts",
         "src/models/DashboardStatsDailySnapshot.ts",
         "src/services/admin/dashboard-stats/**"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-09-02"
     },
     "dashboard-account": {
       "docs": "docs/dashboard-account/",
