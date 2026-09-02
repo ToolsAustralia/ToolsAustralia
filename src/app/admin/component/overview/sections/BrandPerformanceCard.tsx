@@ -8,6 +8,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { subDays } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  AdUrlIssueBadge,
   Card,
   SectionTitle,
   DataTable,
@@ -17,6 +18,7 @@ import {
 import { useMetricsFormatting } from "@/hooks/useMetricsFormatting";
 import { useBrandPerformance } from "@/hooks/queries/useBrandPerformance";
 import type {
+  BrandAdUrlIssues,
   BrandPerformanceBasis,
   BrandPerformancePlatformScope,
   BrandPerformanceRow,
@@ -102,6 +104,47 @@ function maskStyle(src: string, color: string): CSSProperties {
     WebkitMaskSize: "contain",
     maskSize: "contain",
   };
+}
+
+/** Human casing for a resolved brand slug in a tooltip (e.g. "stihl" -> "Stihl"). */
+function titleCaseBrand(brand: string): string {
+  return brand.charAt(0).toUpperCase() + brand.slice(1);
+}
+
+/**
+ * `title`/`aria-label` text for the brand-row ad-URL-issue badge.
+ *
+ * ── Why the badge is on the ROW and not only in the modal ────────────────────────────────
+ *
+ * "Draw 10 | Sales | STIHL | Sep 2026" spent against `/promotions/makita`. On the table it was
+ * invisible: it just made Makita's ROAS bad. The only way to see it was to open Makita's ad
+ * breakdown and read the campaign names — which nobody does on a row that merely looks weak.
+ * The row now says so itself.
+ *
+ * ── Why there is no "clean" state ────────────────────────────────────────────────────────
+ *
+ * Nothing renders when `adUrlIssues` is absent, and the server omits it for a clean row AND for
+ * a row whose ads could not be checked. A badge is only believed if it is rare; a tick on every
+ * other row would be scanned past, and a tick on unverifiable ads would be a false assurance.
+ *
+ * The badge markup itself is the shared `AdUrlIssueBadge` (`@/components/admin/ui`) — the SAME
+ * component `CampaignTreeTable`'s campaign/ad-set roll-ups use, so a reader who drills in meets
+ * one vocabulary (and one mobile treatment) everywhere, not four slightly different ones.
+ */
+function brandAdUrlIssueTitle(issues: BrandAdUrlIssues, fmtCompact: (value: number) => string): string {
+  const parts: string[] = [];
+  if (issues.mismatchAdCount > 0) {
+    const brands = issues.mismatchBrands.map(titleCaseBrand).join(", ") || "another brand";
+    parts.push(
+      `${issues.mismatchAdCount} of ${issues.checkedAdCount} ads here are named for ${brands} but land on this brand's page — ${fmtCompact(issues.mismatchSpend)} of this row's spend`,
+    );
+  }
+  if (issues.unrecognisedParamAdCount > 0) {
+    parts.push(
+      `${issues.unrecognisedParamAdCount} ad${issues.unrecognisedParamAdCount === 1 ? "" : "s"} carry an unrecognised toolbox/toolset value (${issues.unrecognisedValues.join(", ")}), so the page fell back to its default`,
+    );
+  }
+  return `${parts.join(" · ")}. Open the row for the per-ad breakdown.`;
 }
 
 export default function BrandPerformanceCard({
@@ -260,7 +303,7 @@ export default function BrandPerformanceCard({
       const ink = display.markColor;
 
       return (
-        <div className="flex items-center min-h-[2rem]">
+        <div className="flex items-center gap-2 min-h-[2rem]">
           {!d.logoPath ? (
             <span className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-300">
               {d.displayName}
@@ -302,6 +345,9 @@ export default function BrandPerformanceCard({
                 />
               )}
             </span>
+          )}
+          {d.adUrlIssues && (
+            <AdUrlIssueBadge counts={d.adUrlIssues} title={brandAdUrlIssueTitle(d.adUrlIssues, fmtCompact)} />
           )}
         </div>
       );
@@ -524,10 +570,18 @@ export default function BrandPerformanceCard({
                   {unattributed && (
                     <tr className="border-t border-neutral-200 dark:border-neutral-700 text-neutral-500 dark:text-neutral-400">
                       <td className="py-2 px-2 text-left text-xs">
-                        Unattributed
-                        <span className="ml-1.5 text-3xs text-neutral-400 dark:text-neutral-500">
-                          no brand in URL / no signup attribution
-                        </span>
+                        {/* The "no brand in URL / no signup attribution" explanation moved into
+                            `title` (2026-09-01) — it was costing width the mobile columns need
+                            more; it's still reachable on hover/long-press, same pattern as the
+                            Basis control's tooltip above. */}
+                        <span title="No brand in URL / no signup attribution">Unattributed</span>
+                        {unattributed.adUrlIssues && (
+                          <AdUrlIssueBadge
+                            counts={unattributed.adUrlIssues}
+                            title={brandAdUrlIssueTitle(unattributed.adUrlIssues, fmtCompact)}
+                            className="ml-1.5 align-middle"
+                          />
+                        )}
                       </td>
                       <td className="py-2 px-2 text-right text-xs">—</td>
                       <td className="py-2 px-2 text-right num text-xs">

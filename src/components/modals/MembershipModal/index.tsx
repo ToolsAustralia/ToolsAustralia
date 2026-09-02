@@ -58,6 +58,12 @@ import {
   typedCodeRefusalCopy,
   type PurchaseRequirementStop,
 } from "@/utils/payment/typed-code-at-checkout";
+import {
+  resolveSubscriptionCreationGate,
+  selectGateUser,
+  MANAGE_SUBSCRIPTION_PATH,
+  isSubscriptionPlan,
+} from "@/utils/subscription/subscription-creation-gate";
 
 /**
  * The code state `handleSubmit` actually charges on, settled once at the click.
@@ -171,6 +177,8 @@ import { isStripeNoiseError } from "@/utils/payment/stripe/is-stripe-noise-error
 import { markErrorHandled, isErrorHandled } from "@/utils/payment/stripe/error-handled-marker";
 import { recoverSetupIntent } from "@/utils/payment/stripe/setup-intent-recovery";
 import { getStatePreservationInstructions } from "@/utils/payment/stripe/payment-state-preservation";
+import type { IUser } from "@/models/User";
+import { getPastDueRenewalPreview } from "@/utils/subscription/past-due-renewal-preview";
 
 import StepIndicator from "./StepIndicator";
 import WinnerStrip from "./WinnerStrip";
@@ -641,6 +649,19 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
     return activePlan;
   }, [activePlan, resolvedOneTimeMultiplier, resolvedMembershipMultiplier, isMemberForPromo]);
   const { isAuthenticated, userData, isMember } = useUserContext();
+  // { entries: null, cost: null } for anyone NOT in payment recovery, so this both
+  // supplies the numbers and scopes the on-hold nudge on the pack step: an ACTIVE
+  // member buying a pack sees nothing (they already hold the membership and need no
+  // nudge), and neither does a guest.
+  //
+  // The cast matches the established client-side idiom at
+  // `RenewalFailedModal/usePastDueResolve.ts:82` — the util is typed against IUser but
+  // reads only `subscription.status` / `subscription.packageId`, both present on the
+  // client UserData. Do not widen the util's signature for this one caller.
+  const onHoldPreview = useMemo(
+    () => getPastDueRenewalPreview((userData ?? {}) as unknown as IUser),
+    [userData]
+  );
   const { gatesClosed, openGateClosedModal } = useMajorDrawPurchaseGate();
   const { trackInitiateCheckout } = usePixelTracking();
   const { trackKlaviyoStartedCheckout } = useKlaviyoTracking();
@@ -653,6 +674,39 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
   const { showLoading, hideLoading, showSuccess } = useLoading();
 
   const queryClient = useQueryClient();
+
+  /**
+   * The user the two gate calls below judge: the query-cache entry if there is one, else the
+   * last rendered `userData`. Same source and same fallback semantics as the open-time
+   * chokepoint in `useMembershipModal` — see `selectGateUser`
+   * (utils/subscription/subscription-creation-gate.ts) for why the cache is the only source
+   * that is current at an `await invalidateQueries(...)` continuation.
+   *
+   * WHY IT IS NEEDED HERE TOO. Fixing the chokepoint alone does not cover this file. On the
+   * mainline this is harmless: `LazyMembershipModal` mounts only on first open, and awaiting
+   * that dynamic chunk import outlasts React Query's pending macrotask, so context is fresh
+   * by the time this effect first runs. It bites when the modal is ALREADY MOUNTED — a
+   * past-due member buys a one-time pack (allowed by design), closes it, then does the tier
+   * switch. `currentStep` survives a close, so the pre-warm effect can run on the very next
+   * commit still reading `past_due`, and strand them on `?open=payment` for a subscription
+   * the switch had already canceled: the same defect as the chokepoint, through another door.
+   *
+   * Reads through a REF rather than the closure so the async `onError` path gets the latest
+   * rendered user too, and depends only on `[queryClient]` (stable) so its identity never
+   * changes. That last part matters: the pre-warm effect deliberately does NOT depend on
+   * `userData` (see the LATENT COUPLING note at the `stepTwoGate` call), and this must not
+   * quietly make it.
+   */
+  const gateUserRef = useRef(userData);
+  gateUserRef.current = userData;
+  const readGateUser = useCallback(() => {
+    const renderedUser = gateUserRef.current;
+    const userId = renderedUser?._id;
+    return selectGateUser(
+      userId ? queryClient.getQueryData(queryKeys.users.detail(userId)) : undefined,
+      renderedUser
+    );
+  }, [queryClient]);
 
   const invalidateUserCaches = useCallback(
     (userId: string) => {
@@ -1187,6 +1241,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
       if (isSubscription && !isCreatingSubscriptionRef.current) {
         const currentPackageId = packageId || null;
 
+        // Shared by the step-2 backstop below and the pre-warm's EXISTING_SUBSCRIPTION
+        // branch further down — one place builds the "Active Subscription Found" toast
+        // so the two call sites can't drift apart.
+        const showExistingSubscriptionToast = (redirectTo: string) => {
+          showToast({
+            type: "error",
+            title: "Active Subscription Found",
+            message:
+              "You already have a membership. Manage or update it from your account.",
+            duration: 10000,
+            action: {
+              label: "Manage Subscription",
+              onClick: () => router.push(redirectTo),
+            },
+          });
+        };
+
         if (
           subscriptionCreatedRef.current &&
           subscriptionPackageIdRef.current !== null &&
@@ -1227,6 +1298,33 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           } catch {
             // Ignore sessionStorage parse errors
           }
+        }
+
+        // Backstop for the user-data load race (spec D7). The chokepoint gate in
+        // useMembershipModal runs at OPEN time; if UserContext had not resolved then, a
+        // member could still reach this step. Firing the pre-warm here would produce a
+        // guaranteed 409 and leave them staring at a payment step with no card form.
+        //
+        // LATENT COUPLING: this call sits outside the `!paymentIntentClientSecret` guard
+        // below, and `paymentIntentClientSecret` is in this effect's dependency array — so
+        // a successful pre-warm (or any other listed dep changing, e.g. a package-tier
+        // switch) re-runs this effect and re-evaluates the gate against whatever `userData`
+        // is current then, even though `userData` itself isn't a listed dependency. Not a
+        // self-eviction today because the subscription THIS pre-warm just created sits in
+        // Stripe's "incomplete" status, which BLOCKING_SUBSCRIPTION_STATUSES excludes
+        // (subscription-helpers.ts) — but `userData`'s query already refetches on window
+        // focus (useUserQueries.ts `useUserData`, refetchOnWindowFocus: true), so adding
+        // "incomplete" to that list would start evicting members mid-checkout who are
+        // holding a live client secret. Check both before changing either.
+        const stepTwoGate = resolveSubscriptionCreationGate(readGateUser(), {
+          isSubscriptionPlan: true,
+          userLoading: false,
+        });
+        if (!stepTwoGate.allowed) {
+          showExistingSubscriptionToast(stepTwoGate.redirectTo);
+          onClose();
+          router.push(stepTwoGate.redirectTo);
+          return;
         }
 
         if (!paymentIntentClientSecret) {
@@ -1279,10 +1377,25 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             err instanceof Error ? err.message : "Failed to create subscription. Please try again.";
 
           if (errCode === "EXISTING_SUBSCRIPTION") {
-            // Background pre-warm: do NOT toast here. The purchase-click handler
-            // ("Active Subscription Found") is the single source of this message,
-            // so the user sees exactly one actionable toast.
-            console.warn("[MembershipModal] pre-warm blocked by EXISTING_SUBSCRIPTION (toast deferred to purchase click)");
+            // Reaching here means both the open-time gate and the step-2 backstop were
+            // beaten (a status change mid-session, or user data that never resolved).
+            // This used to log and show NOTHING, leaving the member at a payment step
+            // with no card form and no explanation — the deferred-toast reasoning only
+            // held while the purchase click could still surface it, and with no client
+            // secret there is often nothing to click.
+            //
+            // Re-resolve the gate rather than hardcoding a path: a past-due member must
+            // land on the payment sheet (?open=payment), not the change-tier sheet — they
+            // came here to pay us, and sending them to the wrong sheet defeats the point
+            // of that split. Fall back to MANAGE_SUBSCRIPTION_PATH only if the gate now
+            // reads "allowed" (status changed since this pre-warm fired).
+            const fallbackGate = resolveSubscriptionCreationGate(readGateUser(), {
+              isSubscriptionPlan: true,
+              userLoading: false,
+            });
+            showExistingSubscriptionToast(
+              fallbackGate.allowed ? MANAGE_SUBSCRIPTION_PATH : fallbackGate.redirectTo
+            );
           } else {
             showToast({
               type: "error",
@@ -5261,11 +5374,23 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
           action: {
             label: "Manage Subscription",
             onClick: () => {
-              // Open the Manage-membership bottom sheet on arrival (the ?open=subscription
-              // deep-link is handled by my-account/membership/page-client.tsx), so the user
-              // lands straight on update-payment / change-tier / cancel — not a page they
-              // then have to navigate from.
-              router.push("/my-account/membership?open=subscription");
+              // Open the right membership bottom sheet on arrival (the ?open=subscription /
+              // ?open=payment deep-links are handled by my-account/membership/page-client.tsx),
+              // so the user lands straight on update-payment / change-tier / cancel — not a
+              // page they then have to navigate from.
+              //
+              // WHICH sheet comes from the gate, not a hardcoded path: a member in payment
+              // recovery must land on the PAYMENT sheet — they came here to pay us, and the
+              // change-tier sheet cannot take their money. Same treatment as the pre-warm's
+              // EXISTING_SUBSCRIPTION branch above. Fall back to the plan sheet only if the
+              // gate now reads "allowed" (status changed since this 409).
+              const fallbackGate = resolveSubscriptionCreationGate(userData, {
+                isSubscriptionPlan: true,
+                userLoading: false,
+              });
+              router.push(
+                fallbackGate.allowed ? MANAGE_SUBSCRIPTION_PATH : fallbackGate.redirectTo
+              );
             },
           },
         });
@@ -5551,6 +5676,63 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
 
                 {/* Step 2: Billing Info */}
                 {currentStep === 2 && (
+                  <>
+                    {/* On-hold nudge: a member in payment recovery who opens a
+                        one-time / Additional pack sees an inline note offering
+                        reactivation with the real settle amount + entries figure.
+                        `onHoldPreview.cost` is null for anyone NOT in payment
+                        recovery, which is what scopes this away from active
+                        members and guests — no separate status check needed.
+                        `!isSubscriptionPlan(activePlan)` is the second half of the
+                        gate: it excludes a membership purchase/reactivation on this
+                        same step (that has its own dedicated recovery UI —
+                        RenewalFailedModal / PastDueResolvePanel), so this note can
+                        only ever render on a pack, regardless of where its purchase
+                        button lives. Reuses the single source for "is this plan a
+                        subscription" (also used by the gate itself) rather than
+                        hand-rolling a period check here.
+                        `!isPlaceholderPlan` excludes the skeleton payment step shown
+                        before a plan is selected (placeholderPlan is declared
+                        `period: "one-time"`, which would otherwise slip the gate above).
+                        It is a note, not a blocker: the pack purchase button
+                        below stays fully usable either way. */}
+                    {onHoldPreview.cost != null && !isSubscriptionPlan(activePlan) && !isPlaceholderPlan && (
+                      <div className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+                        <p className="font-semibold text-amber-900 dark:text-amber-200">
+                          Membership on hold
+                        </p>
+                        <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
+                          {onHoldPreview.entries != null ? (
+                            <>
+                              Settle <b>${onHoldPreview.cost}</b> to reactivate your
+                              membership — <b>{onHoldPreview.entries} free entries</b> land
+                              as soon as it clears, and your partner discounts come back.
+                            </>
+                          ) : (
+                            <>
+                              Settle <b>${onHoldPreview.cost}</b> to reactivate your
+                              membership — your partner discounts, entries &amp; member
+                              offers are paused until your renewal clears.
+                            </>
+                          )}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Same-route deep link: on /my-account/membership itself the page
+                            // doesn't unmount, so the deep-linked payment sheet would open
+                            // BEHIND this still-open modal and nothing would visibly happen.
+                            // Close first, matching the sibling precedent at :1290-1292
+                            // (showExistingSubscriptionToast(...); onClose(); router.push(...)).
+                            onClose();
+                            router.push("/my-account/membership?open=payment");
+                          }}
+                          className="mt-2 font-semibold text-amber-900 underline underline-offset-2 dark:text-amber-200"
+                        >
+                          Reactivate membership
+                        </button>
+                      </div>
+                    )}
                   <PaymentStep
                     isAuthenticated={isAuthenticated}
                     activePlan={activePlan}
@@ -5605,6 +5787,7 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
                     onSubmit={handleSubmit}
                     onPackageChange={handlePackageChange}
                   />
+                  </>
                 )}
 
                 {/* Security Section - Only visible in payment step (no border).

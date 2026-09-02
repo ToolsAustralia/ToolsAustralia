@@ -56,7 +56,6 @@ This project uses Klaviyo's onsite JavaScript for client-side tracking alongside
 - React hook: `src/hooks/useKlaviyoTracking.ts`
   - High-level helpers for common flows:
     - `identify`
-    - `trackPurchase`
     - `trackAddToCart`
     - `trackRemoveFromCart`
     - `trackViewContent`

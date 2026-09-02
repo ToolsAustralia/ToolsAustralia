@@ -352,3 +352,17 @@ could not be signed. The buyer simply falls through to the true-guest path at ch
 
 Full rationale, the three-outcome contract, and the JWT-audience separation from the `auto-login`
 bridge token: [payment/gotchas.md](../payment/gotchas.md#account-takeover-an-unauthenticated-caller-could-bind-any-members-stripe-customer-fixed-2026-08-28).
+
+## Registration validation failures log at `warn`, without the stack (2026-09-01)
+
+`POST /api/auth/register` catches `ZodError` separately from real faults. A Zod failure here
+is a person mistyping their email: the handler answers with a 400 and a field-level message,
+which is the form working as designed.
+
+It previously hit `console.error("❌ Registration error:", error)` *before* the ZodError
+branch, so every typo dumped a full `ZodError` — issue array, regex pattern and all — into
+Vercel's runtime-error list, ~73 a week. It now logs `error.issues[0].message` at `warn`
+(stripped in production). Every non-Zod failure still logs at `error` exactly as before.
+
+If you are debugging a registration problem, the 400 response body carries the same `error`
+and `field` the log would have shown.

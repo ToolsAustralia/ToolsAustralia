@@ -126,6 +126,25 @@ This prevents double-counting when both API and webhook fire on the same lifecyc
 
 `MembershipStatusHistory.dedupeKey` is a sparse-unique index. Any caller writing a status row should compute a dedupe key like `${userId}:${effectiveAt.toISOString()}:${source}` so a webhook retry doesn't double-write.
 
+## P-GATE. One subscription-creation gate, shared with the server
+
+`resolveSubscriptionCreationGate` (`src/utils/subscription/subscription-creation-gate.ts`)
+is the single answer to "can this user start a new subscription?". It wraps
+`hasBlockingSubscription` — the same helper the server's `checkCanCreateSubscription`
+uses — so the client cannot disagree with the server.
+
+**Never re-derive this from `subscription.isActive` or a price comparison.** That is what
+the code did before 2026-09-01, and because `isActive` and the five blocking statuses are
+different questions, members were routed into a new-subscription checkout that the server
+then rejected with a 409 at the payment step (309 production occurrences, 277 members).
+
+Bias is deliberately toward **allow**: a false block stops a guest subscribing, which is a
+worse regression than the bug. The server guard is the real backstop.
+
+Covered by `npm run test:subscription-gate`, which iterates
+`BLOCKING_SUBSCRIPTION_STATUSES` — adding a status to that constant fails the test until
+it is handled here.
+
 ## Cursor agent boundary
 
 The Cursor `.cursor/agents/stripe-billing.md` subagent owns this domain (and all `lib/stripe.ts` work). Read its boundary description before non-trivial changes — the orchestrator rule (`.cursor/rules/orchestrator.mdc`) requires QA review for changes touching payments / subscriptions / DB schema.

@@ -50,6 +50,7 @@ import { RedemptionService } from "../RedemptionService";
 import { RedeemablesWalletService } from "../RedeemablesWalletService";
 import { CampaignCodeValidationService } from "../CampaignCodeValidationService";
 import { formatExpiryLabelAEST } from "@/utils/common/timezone";
+import { NEVER_EXPIRES_ISSUANCE_DATE } from "@/utils/redeemables/bonus-code-policy";
 
 const RUN_ID = Date.now();
 const NOW = new Date();
@@ -58,6 +59,13 @@ const BACKSTOP_PASSED = new Date(NOW.getTime() - 10 * 24 * 60 * 60 * 1000); // c
 const PURCHASE_AFTER_BACKSTOP = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000); // 5 days ago — after endsAt, before now
 const PERSONAL_STILL_VALID = new Date(NOW.getTime() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
 const PERSONAL_ALREADY_EXPIRED = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000); // 1 day ago
+const FUTURE_ENDS_AT = new Date(NOW.getTime() + 5 * 24 * 60 * 60 * 1000); // campaign endsAt, still open
+/**
+ * The far-future sentinel `expiresAt` production rows carry when they were minted
+ * before an expiry was configured. Same instant as NEVER_EXPIRES_ISSUANCE_DATE —
+ * copied rather than aliased so a fixture can never mutate the shared constant.
+ */
+const SENTINEL_EXPIRY = new Date(NEVER_EXPIRES_ISSUANCE_DATE.getTime());
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -281,6 +289,81 @@ async function run() {
         item!.isRedeemableNow,
         true
       );
+    }
+
+    console.log("\nSite 3'' — the wallet DELEGATES the campaign half, so it cannot offer a claim the server refuses (ANZACDAY25 regression)");
+    {
+      // PRODUCTION SHAPE, REPRODUCED EXACTLY. Campaign ANZAC DAY 25
+      // (`ANZACDAY25`) ran 2026-04-24 -> endsAt 2026-04-27T10:00Z with
+      // neverExpires false and NO validForHours, but was left `isActive: true`.
+      // 452 of its issuances had been minted with the far-future sentinel
+      // expiry before an expiry was configured; 188 were still status "active".
+      //
+      // Pre-fix, RedeemablesWalletService spelled out its own PARTIAL copy of
+      // isCampaignRedeemable — `campaign.isActive !== false` and nothing else —
+      // so `endsAt` never entered the wallet's answer. Every condition passed
+      // and 188 members were shown an ENABLED Claim button on 25 entries that
+      // RedemptionService then refused with `campaign_not_active`.
+      //
+      // MUTATION-CHECKED 2026-09-01: restoring `campaign.isActive !== false` in
+      // place of `isCampaignRedeemable(campaign, now)` turns the third assertion
+      // below red (`expected: false, actual: true`) while every other assertion
+      // in this suite stays green. That is the whole point of the fixture — the
+      // campaign IS active, so an isActive-only gate cannot see the defect.
+      const user = await makeUser("anzac-ended");
+      // makeCampaign's defaults ARE the ANZAC shape: endsAt = BACKSTOP_PASSED
+      // (10 days ago), neverExpires false, isActive true, validForHours unset.
+      const campaign = await makeCampaign("ANZ1", { campaignMode: "unique" });
+      const issuance = await makeIssuance(
+        campaign._id as unknown as mongoose.Types.ObjectId,
+        user._id as unknown as mongoose.Types.ObjectId,
+        { code: campaign.code, expiresAt: SENTINEL_EXPIRY }
+      );
+
+      const wallet = await RedeemablesWalletService.getUserWallet(String(user._id));
+      const item = wallet.items.find((i) => i.issuanceId === String(issuance._id));
+      assert.ok(item, "wallet must return the manually-created issuance");
+      // The two preconditions that made this bite, asserted rather than assumed:
+      // if a future change expires the row or deactivates the campaign, the
+      // headline assertion below would pass for the WRONG reason.
+      check(
+        "precondition — row is active with a far-future expiry, so every issuance-level gate passes",
+        [item!.status, item!.expiresAt.getTime() > NOW.getTime()],
+        ["active", true]
+      );
+      check(
+        "precondition — the campaign is still isActive: true, the ONLY campaign gate the old code had",
+        campaign.isActive,
+        true
+      );
+      check("wallet isRedeemableNow FALSE — the passed endsAt is now consulted", item!.isRedeemableNow, false);
+
+      // THE INVARIANT, stated as an assertion: whatever the wallet says about a
+      // campaign, the redeem path must say the same. Pre-fix these disagreed.
+      const result = await RedemptionService.redeem({ userId: String(user._id), code: campaign.code });
+      check("…and the server agrees — no button the server would refuse", result, {
+        success: false,
+        reason: "campaign_not_active",
+      });
+    }
+
+    console.log("\nSite 3'' — inverse: a genuinely live campaign still yields an enabled Claim button");
+    {
+      // The other half of the fix: delegating to isCampaignRedeemable must not
+      // silently kill every claim. Same row shape as above — active, sentinel
+      // expiry — with the ONE difference that the campaign's window is open.
+      const user = await makeUser("anzac-live");
+      const campaign = await makeCampaign("ANZ2", { campaignMode: "unique", endsAt: FUTURE_ENDS_AT });
+      const issuance = await makeIssuance(
+        campaign._id as unknown as mongoose.Types.ObjectId,
+        user._id as unknown as mongoose.Types.ObjectId,
+        { code: campaign.code, expiresAt: SENTINEL_EXPIRY }
+      );
+
+      const wallet = await RedeemablesWalletService.getUserWallet(String(user._id));
+      const item = wallet.items.find((i) => i.issuanceId === String(issuance._id));
+      assert.ok(item, "wallet must return the manually-created issuance");
+      check("wallet isRedeemableNow TRUE — a live campaign is unaffected by the fix", item!.isRedeemableNow, true);
     }
 
     console.log("\nSite 4 — CampaignCodeValidationService: personal window still valid at checkout despite endsAt passed");

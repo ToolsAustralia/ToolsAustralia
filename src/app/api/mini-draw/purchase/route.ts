@@ -17,6 +17,7 @@ import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata"
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
 import { ErrorLoggingService } from "@/services/error-reporting/ErrorLoggingService";
+import { isExpectedPaymentDeclineError } from "@/utils/error-reporting/error-severity-classifier";
 
 const miniDrawPurchaseSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
@@ -493,7 +494,13 @@ async function handleOneClickPurchase(
       //   status: paymentIntent.status,
       // });
     } catch (stripeError) {
-      console.error("❌ Stripe payment intent creation failed:", stripeError);
+      // An issuer decline is an expected outcome, not a fault — `warn` (stripped in
+      // production) keeps it out of the error stream. Anything else still logs as an error.
+      if (isExpectedPaymentDeclineError(stripeError)) {
+        console.warn("Stripe payment intent declined (mini-draw):", stripeError);
+      } else {
+        console.error("❌ Stripe payment intent creation failed:", stripeError);
+      }
       return NextResponse.json(
         {
           success: false,

@@ -343,6 +343,7 @@ npm run test:cancel-incomplete-subscription # helper only cancels real `incomple
 npm run test:http-rejection-severity # pure classifier: 5xx→high, coded 4xx→medium, skip <400/401/403/404/429/codeless-4xx
 npm run test:session-invalidation    # fences shouldInvalidateSession (src/lib/queries.ts): only 401 and 404+USER_NOT_FOUND force-sign-out; 403 must NEVER (staff roles with partial permissions 403 routinely — re-adding it auto-logs staff out seconds after login). See docs/client-state/gotchas.md.
 npm run test:membership-display-status # fences deriveMembershipDisplayStatus (src/utils/subscription/subscription-helpers.ts) — the admin user-detail header badge derivation: past_due wins over cancelled-while-past-due, trialing displays as Active, active+autoRenew:false = scheduled_cancel, incomplete/unknown → guest. Pure — no DB/env.
+npm run test:subscription-gate       # fences resolveSubscriptionCreationGate (src/utils/subscription/subscription-creation-gate.ts) — the client-side "can this user start a NEW subscription?" gate, wrapping the SAME hasBlockingSubscription the server's checkCanCreateSubscription uses so client and server can't disagree (309 production EXISTING_SUBSCRIPTION 409s / 277 members before this existed). Guest/no-user, terminal statuses (canceled/incomplete/expired), a pack purchase under every blocking status, and userLoading all must resolve allowed:true; every BLOCKING_SUBSCRIPTION_STATUSES value must block, with past_due routing to MANAGE_PAYMENT_PATH and other blocking statuses to MANAGE_SUBSCRIPTION_PATH. Pure — no DB/env. See docs/subscription/patterns.md "P-GATE".
 npm run test:klaviyo-canonical       # fences canonical property names for new Klaviyo events (added 2026-05-28). Fails when new event drifts to legacy aliases (package_tier/amount/purchase_date/etc.). See docs/tracking/KLAVIYO_INTEGRATION.md "Canonical property names".
 npm run test:invoice-generated-gate  # fences shouldEmitInvoiceGenerated(billing_reason): the server-side "Invoice Generated" receipt EMITs for subscription_create + one-time/mini/upsell (undefined billing_reason) and SKIPs subscription_cycle/threshold (renewal → Membership Renewal flow) + subscription_update (upgrade → webhook). Guards the 2026-07 move off the dropped-prone client-side /api/invoice/finalize path against re-introducing dropped receipts or double-emails.
 npm run test:activity-log-keyset     # fences the admin activity-feed keyset pagination (compareActivitiesNewestFirst + paginateActivitiesByCursor): pages are contiguous (no overlap/gap), ties break by id, and — the core invariant — paginating with a page's cursor returns the SAME window after newer rows are prepended. Locks out the offset-drift duplicate-row bug the feed had before 2026-07.
@@ -634,6 +635,39 @@ Two coverage gaps worth knowing, both deliberate:
   can never take that branch — because a bypass leaking into production removes every spend guard.
 - The verification/login **routes** are not covered because they do not exist yet. Design:
   [the verification spec](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+## `test:ad-url-mismatch` added (2026-09-01)
+
+| Script | Kind | Notes |
+|---|---|---|
+| `test:ad-url-mismatch` | pure unit | `src/utils/admin/__tests__/adUrlMismatchCheck.test.ts` (`tsx`, no env/DB). Fences `resolveAdUrlBrands` + `checkAdUrlMismatch` + `findUnrecognisedAdUrlParams` (`src/utils/admin/adUrlMismatchCheck.ts`) — the admin ad-URL mismatch check behind `CampaignTreeTable`'s per-ad icons. 27 assertions across two defect classes: (1) brand mismatch — the real production case (a STIHL campaign pointed at `/promotions/makita`) flags `mismatch`; the GearWrench-toolbox-on-a-bare-Milwaukee-page case (legitimate — a missing `?toolbox=` is never a finding) stays `ok`; slug and `?toolbox=`/`?toolset=` param forms resolve the same brand set; `unknown://` placeholders and ambiguous (0-or-2+ brand) naming both resolve to `unknown`, never `ok`; multi-URL/carousel ads are `ok` if any URL matches; a mutation check demonstrates a naive campaign-name-only comparator WOULD flag the GearWrench case while this rule does not. (2) unrecognised param value (added same day after production audit found 84 ads carrying `?toolbox=milwakee`) — a typo'd `?toolbox=`/`?toolset=` value is its own signal (`unrecognisedParamValues`), independent of `verdict`: it surfaces alongside a clean `ok` AND alongside a genuine `mismatch` in the same result, never causes either on its own, treats `?toolbox=cash` (the prize-builder's legitimate opt-out) as clean, and a second mutation check proves the pre-change brand-set resolution alone cannot distinguish a typo'd param from an absent one. See `docs/admin/frontend.md`, "Ad-URL mismatch check + Ads Manager deep link" and its "Second signal" subsection.
+
+## `test:ads-manager-url` added (2026-09-01)
+
+| Script | Kind | Notes |
+|---|---|---|
+| `test:ads-manager-url` | pure unit | `src/utils/admin/__tests__/adsManagerUrl.test.ts` (`tsx`, no env/DB). Fences `buildAdsManagerAdUrl` (`src/utils/admin/adsManagerUrl.ts`) — the admin "Ads Manager" deep link on ad rows in `CampaignTreeTable`. The URL under test is the **owner's own working URL**, copied from a live Ads Manager session on 2026-09-01 and parameterised; the previous shape was assumed, never opened, and landed on a filtered ad list instead of the ad's edit screen. 6 tests: the full URL is reproduced character for character; the path is `/adsmanager/manage/ads/edit/standalone`; the `act_` prefix is stripped and an already-bare id survives; the ad id appears in BOTH `filter_set` and `selected_ad_ids`; Meta's own `filter_set` encoding is preserved exactly (`%1E` record separators, `%22` quotes, **literal** `[`/`]` — asserting `%5B`/`%5D` never appear, because a blanket `encodeURIComponent` would "tidy" the format we know works into one we cannot test); and a missing `business_id` omits the parameter rather than emitting it blank, still yielding a parseable URL with no dangling `&`. There is no way to open Meta from CI, so this test is the only guard against silently regressing the link again. |
+
+Also in this change, `src/services/analytics/__tests__/brand-performance.test.ts`
+(`npm run test:brand-performance`) gained six cases for the per-brand ad-URL issue roll-up — the
+production STIHL-inside-Makita case badges the row; a clean brand and a brand whose ads have no
+resolved destination BOTH produce no badge (and no all-clear); a typo'd `?toolbox=` badges
+independently of the brand check; the toolbox lane weights the reported spend but never the ad
+counts; and missing ad data degrades to silence.
+
+## `FACEBOOK_BUSINESS_ID` / `NEXT_PUBLIC_FACEBOOK_BUSINESS_ID` registered (2026-09-01)
+
+The Meta Business Manager id that owns the ad account, used ONLY to build the admin Ads Manager
+deep link — never for API calls. Server var plus its `NEXT_PUBLIC_` twin, the same pairing
+`src/config/featureFlags.ts` uses; the link is built in a **client** component, so the public one
+is the one that must actually be set. Both are declared in `.env.example`, values set in the main
+folder's `.env.local` and in each worktree's.
+
+⚠️ **Vercel needs it too.** `.env.local` never merges and Vercel is configured independently
+(CLAUDE.md §9) — until `NEXT_PUBLIC_FACEBOOK_BUSINESS_ID` is added there, production renders the
+link without a `business_id`. That degrades rather than breaks (the parameter is omitted and Meta
+resolves the business from the session), but an account belonging to several businesses may land
+the reader on a chooser instead of the ad.
 
 ### `test:renewal-cohort` (2026-09-02)
 

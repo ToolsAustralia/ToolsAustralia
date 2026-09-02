@@ -68,6 +68,33 @@ you extend this.
 The modal refuses to submit while an image is still a `File` rather than a Cloudinary URL —
 `ImageUpload` uploads on drop, so a pending upload would otherwise be dropped from the payload
 on save.
+
+## Bonus Code Status panel (2026-09-01, reworked)
+
+`BonusCodeAudiencePanel` (`src/components/admin/BonusCodeAudiencePanel.tsx`) is mounted above
+`MonthlyRedeemablesCampaignPanel` in `PromoManagement`'s "Redeemables" tab — the same place the
+existing coupon analytics live. Read-only, self-contained `fetch` (same pattern as its sibling
+panel, not a TanStack Query hook): calls `GET /api/admin/monthly-coupon/trigger-audience`.
+
+**Leads with real issuance state (the owner's own ask), not the forecast.** Per trigger
+(`cancel-click` / `checkout-start` / `one-time-purchase`), four primary tiles: **Minted**
+(`issuance.issuedCount` — granted, any status, "they have access to it"), **Still redeemable**
+(green), **Redeemed** (red, plus entries granted), **Expired / lapsed** (amber — the number that
+tells the owner the flow is minting faster than customers act). Each of the three states below
+"Minted" has its own expandable, bounded (25 max) sample table with name/email/entries/date.
+
+**All-zeros empty state.** All three campaigns sit at 0 issuances in production as of
+2026-09-01 — when `issuance.issuedCount === 0`, the panel renders a plain dashed-border "No
+{CODE} codes minted yet" message instead of zero-filled tiles, so it reads as "nothing yet, not
+broken."
+
+**The addressable-population forecast (the panel's ENTIRE content in the first version) is
+demoted, not deleted** — a native `<details>` "Potential reach (forecast, not current
+holders) ▸" section per row, collapsed by default, holding the same last-30/90-day + all-time
+figures, the `checkout-start` calibration caveat, and its own bounded sample. Full contract:
+[docs/rewards-redeemables/api.md](../rewards-redeemables/api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-status-2026-09-01-reworked).
+This view cannot mint, issue, or redeem anything.
+
 ## Monthly Redeemables Campaign panel — `validForHours` (2026-08-25; renamed from `validForDays` 2026-08-26)
 
 `MonthlyRedeemablesCampaignPanel` (Admin > Redeemable Coupons, `src/components/admin/MonthlyRedeemablesCampaignPanel.tsx`)
@@ -794,7 +821,7 @@ Part of the admin Overview reskin (plan `docs/superpowers/plans/2026-06-01-admin
 Membership vs one-time landing-URL split surfaced across the Overview (data contract: [api.md — packages-focus](./api.md); domain background: `docs/metrics-analytics/`).
 
 - **Ad Spend + ROAS KPI tiles are now clickable** (`KpiGrid.tsx`): both share one `adSpendFocusOpen` state (both show the `active` ring while open) and open **[src/components/modals/AdSpendFocusModal.tsx](../../src/components/modals/AdSpendFocusModal.tsx)** — platform chips (Meta live / TikTok renders a dashed "awaiting URL mapping" box), Membership / One-time summary tiles (spend headline; revenue · ROAS · conversions subline; Unclassified tile only when its spend > 0) doubling as the focus-tab selector (default **One-time**), then a campaign → ad-set → ad tree for the selected bucket. An amber notice renders when `detail.complete === false` ("per-campaign detail covers {availableSince} onwards" — the per-ad insights TTL floor); the summary tiles always cover the full range. Revenue is Meta-reported, same basis as the ROAS KPI headline. `KpiGrid` gained `startDate?/endDate?` props (passed by `DashboardOverview` as `customStartDate || undefined` etc.) and resolves the concrete AEST window via [src/utils/admin/resolveAestDateWindow.ts](../../src/utils/admin/resolveAestDateWindow.ts) — the same helper `PrizePerformanceCard` now uses (its two inline date memos were extracted into it, behavior-identical).
-- **[src/components/admin/spend-by-url/CampaignTreeTable.tsx](../../src/components/admin/spend-by-url/CampaignTreeTable.tsx)** — shared expandable campaign → ad-set → ad tree (columns Name | Spend | Revenue | ROAS | Conv.; ROAS emerald ≥ 3 else amber; ad rows show adId mono over adName, an adFormat chip, and a focus `Badge` when the node carries `packagesFocus` — info "One-time" / neutral "Membership" / warning "Unclassified"). Node types come from `usePackagesFocusBreakdown`; consumed by `AdSpendFocusModal` (server-built tree) and `PrizePerformanceAdsModal` (client-grouped tree). ~~Known kit limitation: `DataTable`/tree row clicks are mouse-only (no keyboard handler).~~ **Fixed 2026-07-24 (panel F-017)** in `DataTable` itself: when (and only when) an `onRowClick` is supplied, rows get `tabIndex=0`, `role="button"`, an Enter/Space `onKeyDown` (Space `preventDefault`s so it activates instead of scrolling), and a `focus-visible` ring. Non-interactive tables stay out of the tab order. Every `DataTable` consumer — including `AdvertisingPlatformCard` — inherits this; `CampaignTreeTable`'s own custom tree rows are separate and still need the same treatment if they gain click handlers.
+- **[src/components/admin/spend-by-url/CampaignTreeTable.tsx](../../src/components/admin/spend-by-url/CampaignTreeTable.tsx)** — shared expandable campaign → ad-set → ad tree (columns Name | Spend | Revenue | ROAS | Conv.; ROAS emerald ≥ 3 else amber; ad rows show adId mono over adName, an adFormat chip, and a focus `Badge` when the node carries `packagesFocus` — info "One-time" / neutral "Membership" / warning "Unclassified"). Node types come from `usePackagesFocusBreakdown`; consumed by `AdSpendFocusModal` (server-built tree) and `PrizePerformanceAdsModal` (client-grouped tree). ~~Known kit limitation: `DataTable`/tree row clicks are mouse-only (no keyboard handler).~~ **Fixed 2026-07-24 (panel F-017)** in `DataTable` itself: when (and only when) an `onRowClick` is supplied, rows get `tabIndex=0`, `role="button"`, an Enter/Space `onKeyDown` (Space `preventDefault`s so it activates instead of scrolling), and a `focus-visible` ring. Non-interactive tables stay out of the tab order. Every `DataTable` consumer — including `AdvertisingPlatformCard` — inherits this; `CampaignTreeTable`'s own custom tree rows are separate and still need the same treatment if they gain click handlers. **Ad-URL mismatch check + Ads Manager link added 2026-09-01** — see "Ad-URL mismatch check + Ads Manager deep link" below. **Campaign/ad-set roll-up badges added 2026-09-01** — a collapsed campaign or ad-set row now badges when any ad beneath it is flagged (`src/utils/admin/adUrlIssueRollup.ts`), and the badge shrinks to a bare icon (no count) below `sm` — see "Fourth surface: campaign/ad-set roll-up badges inside the modal" below.
 - **Prize Performance row click → upgraded [`PrizePerformanceAdsModal`](../../src/components/modals/PrizePerformanceAdsModal.tsx)** — `PrizePerformanceCard` attaches each brand's `canonicalUrls` to its row (captured before the zero-row filter, so every rendered row carries them) and opens the modal via the kit `DataTable`'s `onRowClick`. The modal keeps its original props + `useSpendByUrlDetailMany` source and adds: brand-level Membership / One-time summary tiles (Unclassified only when present), focus chips (All / Membership / One-time / Unclassified) filtering ONE mixed tree (each ad badges with its own focus — unlike the KPI modal's pre-split buckets), platform chips (TikTok = awaiting box, no fetch), and the client-side grouper `groupSpendByUrlDetailRowsByCampaign` ([spendByUrlAdBreakdown.ts](../../src/utils/admin/spendByUrlAdBreakdown.ts)) producing the same node shape `CampaignTreeTable` renders.
 - **Facebook Ads → Spend by URL surfaces** (`SpendByUrlSection.tsx`, `SpendByUrlAdBreakdownTable.tsx`): a non-interactive focus summary strip above the toolbar (Membership / One-time / + Unclassified tiles from `usePackagesFocusBreakdown`; hidden when the range isn't ready, on query error, or when total focus spend is 0), per-URL-row `M $x` / `OT $y` split chips under the URL (only when the row carries the `packagesFocus` split), and a focus `Badge` under the ad name in the per-ad drill-down table (membership/one-time only — no new column, COL_SPANs unchanged).
 
@@ -2205,6 +2232,264 @@ campaign that has no backstop at all.
 precedence if the `neverExpires` / `validForHours` mutual-exclusion guard is deleted — and that guard
 exists in six places and is not being removed, so the pair can never coexist and the order can never
 lie. If a future change ever does remove it, this branch order must be revisited in the same edit.
+
+## Ad-URL mismatch check + Ads Manager deep link (2026-09-01)
+
+**The problem.** `Draw 10 | Sales | STIHL | Sep 2026` sent 567 visits (98% of that campaign) to
+`/promotions/makita` in production — verified by hand, invisible in the admin. A naive
+campaign-name-vs-URL comparison flags ~90% false positives, because prizes have TWO independent
+brand axes (toolset: ryobi/milwaukee/dewalt/makita/hikoki/stihl; toolbox:
+sidchrome/kincrome/milwaukee/gearwrench) and the toolbox half is expressed either as a second
+slug segment (`/promotions/milwaukee-kincrome`) or a `?toolbox=`/`?toolset=` query param
+(`/promotions/milwaukee?toolbox=kincrome`) — both mean the same thing, and a URL simply not
+committing to a toolbox is normal, not a finding. Full decision record: `docs/superpowers/specs/
+2026-09-01-coupon-audience-and-ad-url-check-design.md`, section B.
+
+**Pure check, in `src/utils/admin/adUrlMismatchCheck.ts`.** `resolveAdUrlBrands(url)` returns the
+brand set from slug segments AND query params, unioned. `checkAdUrlMismatch({ campaignName,
+adName, urls })` returns `{ verdict: "ok" | "mismatch" | "unknown", campaignBrand?, urlBrands
+}`. `mismatch` fires ONLY on a positive contradiction: naming resolves to exactly one brand, at
+least one URL resolves a brand at all, and none of the URLs either name that brand or are silent
+about its axis (a toolbox-only brand like GearWrench whose URL never commits to a toolbox is
+`ok`, never `mismatch` — a toolset brand's axis is always present on a resolvable
+`/promotions/<slug>` URL, so it has no equivalent leniency). Everything else (0-or-2+ brands in
+the naming, no resolvable URL brand anywhere — including `unknown://meta-ad/<id>` placeholders,
+multi-URL/carousel ads where no URL matches vs. any URL matching) resolves to `unknown` or `ok`.
+The brand list (`AD_URL_CHECK_BRANDS`) is derived from `TOOLSET_LANDING_SLUGS` +
+`TOOLBOX_LANE_ORDER` (`src/config/promo-landing-slugs.ts`), never hand-restated — a brand
+missing from that registry would silently read "unknown" forever. Tests:
+`src/utils/admin/__tests__/adUrlMismatchCheck.test.ts` (`npm run test:ad-url-mismatch`),
+including the real STIHL case, the GearWrench false positive, and a mutation check proving a
+naive campaign-name-only comparator WOULD flag GearWrench while this rule does not.
+
+**Reads `rawUrls`, never `canonicalUrl`.** `canonicalizeLandingUrl` deliberately strips the query
+for spend grouping, so a `?toolbox=`/`?toolset=` selection is invisible on `canonicalUrl`. Data
+change: `SpendByUrlAggregationService`'s `SpendByUrlDetailRow`/`SpendByUrlDetailAggRow` gained a
+`rawUrls?: string[]` field, populated from the SAME `AdDestination` doc `canonicalUrl` already
+came from (`getSpendByUrlDetailForCanonicalUrls`) — the `AdDestination.find()` query there has no
+`.select()`, so `rawUrls` was already being fetched, just never emitted. `rawUrls` then threads
+`SpendByUrlDetailRow` (hook) → `PackagesFocusAdNode` (`usePackagesFocusBreakdown.ts`) →
+`groupSpendByUrlDetailRowsByCampaign` (`spendByUrlAdBreakdown.ts`) → `CampaignTreeTable`. It is
+present ONLY on ad nodes built by the mixed-brand tree (`BrandPerformanceAdsModal`'s per-ad
+detail rows, which always carry `packagesFocus`) — the KPI modal's per-bucket trees
+(`PackagesFocusBreakdownService`) never populate per-ad URL data, so `CampaignTreeTable` gates
+the whole URL/link/icon block on `ad.packagesFocus !== undefined` and renders nothing there,
+same as before.
+
+**`CampaignTreeTable` renders three things per ad row**, gated on that same URL-data presence:
+1. **The real URL(s)**, RAW form (path + query, host trimmed) — a carousel/multi-URL ad shows
+   every URL, not just the first.
+2. **"Ads Manager" link** (`buildAdsManagerAdUrl`, now in
+   `src/utils/admin/adsManagerUrl.ts`) — opens the ad's **edit** screen,
+   `target="_blank" rel="noopener noreferrer"`. Gated on `platform === "meta"` (Meta-only deep
+   link) AND `adAccountId` being present — the table gained both as new optional props,
+   threaded from `BrandPerformanceAdsModal`'s `data.meta.adAccountId` (already returned by the
+   detail endpoint; nothing new fetched). ~~`assumed`, not verified against a live account~~
+   **Corrected 2026-09-01 to the owner's own working URL** — the original shape landed on a
+   filtered ad LIST, not the ad. See "Ads Manager deep link" below.
+3. **The verdict icon** — `mismatch`: a red `AlertTriangle` with an accessible title naming both
+   brands ("Campaign names Stihl; URL points at Makita"). `unknown`: a muted grey `HelpCircle`,
+   deliberately quiet. `ok`: nothing — the entire point is that a warning is rare and therefore
+   believed; a table that decorates every "ok" row trains the reader to ignore the icon.
+
+**Not wired into `SpendByUrlAdBreakdownTable.tsx`** (the OTHER per-URL drill-down table, reached
+from the main Spend by URL section rather than the Brand Performance modal) — out of scope for
+this change; the 46 `unknown://` Meta ads that table can show are unaffected. `AD_URL_CHECK_BRANDS`
+and `checkAdUrlMismatch` are exported and reusable if that surface wants the same check later.
+
+**Validated against production, same day:** run against 665 live ads, 8 `mismatch`es — all the
+genuine STIHL case — and **zero false positives** (GearWrench correctly stayed clean). That is
+the bar the spec set (B3/B4), met on real data, not just the fixture set.
+
+### Second signal: unrecognised `?toolbox=`/`?toolset=` values (2026-09-01)
+
+Running the check against production surfaced a second, independent defect class: **84 ads carry
+`?toolbox=milwakee`** — a misspelling of "milwaukee" — out of 1,406 ads carrying a toolbox/toolset
+param (448 `kincrome`, 394 `gearwrench`, 364 `sidchrome`, 116 `milwaukee`, **84 `milwakee`**, 29
+`toolset=milwaukee`, 12 `toolset=dewalt`). This is a DIFFERENT problem from a brand mismatch: the
+URL shape is right and the param is doing its job of pre-selecting a toolbox, but the value names
+no brand, so the landing page silently falls back to its default instead of the toolbox the ad
+promised — a live conversion leak, on 6% of parameterised ads, invisible to both the brand-mismatch
+check above (URL shape is fine) and to `resolveAdUrlBrands` alone (an unrecognised value was always
+silently dropped, indistinguishable from the param being absent).
+
+**`findUnrecognisedAdUrlParams(url)`** (also in `adUrlMismatchCheck.ts`) returns every
+`{ param: "toolbox" | "toolset", value }` pair present in a URL that matches no known brand.
+`?toolbox=cash` — the prize-builder's legitimate opt-out (`CASH_OPTION` in
+`src/components/sections/promo/prize-selection/constants.ts`) — is explicitly excluded; it names
+no brand on purpose and must never read as a typo. `CheckAdUrlMismatchResult` gained
+`unrecognisedParamValues: UnrecognisedParamValue[]` (always an array, never `undefined`) — a
+**companion field, not a fourth verdict**: it is computed once, independent of `verdict`, and
+spliced unchanged into every return branch, so a typo can surface alongside a clean `ok` (a good
+brand match with a broken param still needs fixing) or a genuine `mismatch` (both problems can
+coexist on one ad, and neither is allowed to hide the other). Absence of the param is still never
+a finding — the same B4 rule, now proven by an explicit mutation-style test showing
+`resolveAdUrlBrands` alone cannot tell `?toolbox=milwakee` apart from no param at all; only
+`findUnrecognisedAdUrlParams` can.
+
+`CampaignTreeTable` renders it as a fourth, visually distinct affordance — an amber `SpellCheck2`
+icon (never red, so it reads as "different kind of problem" from the mismatch `AlertTriangle` at
+a glance) with a title naming the offending value, e.g. `Unrecognised toolbox value: 'milwakee'`.
+It sits beside, not instead of, the mismatch icon when both apply.
+
+⚠️ **Both signals share `AD_URL_CHECK_BRANDS` as their one brand registry**
+(`TOOLSET_LANDING_SLUGS` + `TOOLBOX_LANE_ORDER` in `src/config/promo-landing-slugs.ts`, derived
+not restated — same T3 threading risk as the brand-mismatch check). A brand genuinely missing
+from those two constants would make EVERY `?toolbox=`/`?toolset=` value naming it read as
+"unrecognised" here — i.e. all of that brand's parameterised ads would report as typo'd, even
+though every one of them is spelled correctly. Add the brand to `promo-landing-slugs.ts` first;
+both checks pick it up automatically.
+
+Tests (same file, `npm run test:ad-url-mismatch`): the real production case
+(`/promotions/makita?toolbox=milwakee`) reports the typo; a clean `?toolbox=kincrome` and a bare
+URL with no param at all both report nothing; `?toolbox=cash` is never flagged; an ad that is
+BOTH a brand mismatch and typo'd surfaces both signals in one result; and the mutation test
+proving the pre-change code (brand-set resolution alone) cannot distinguish a typo from an
+absent param.
+
+### Third surface: the brand-row roll-up badge (2026-09-01)
+
+**The complaint this fixes.** Makita's row read 0.15x ROAS on $330 spend and 1 purchase. Nothing
+on the row said why. Opening its ad-breakdown modal revealed a campaign named
+`Draw 10 | Sales | STIHL | Sep 2026` spending against `/promotions/makita` — a wrong-brand ad
+hiding inside another brand's spend. The per-ad icons above only exist *inside* the modal, and
+nobody opens a modal on a row that merely looks weak. The row now says so itself.
+
+**What renders.** In `BrandPerformanceCard`'s Brand cell, beside the wordmark: up to two kit
+`Badge`s, using the SAME icons and colours as the per-ad icons in `CampaignTreeTable` so a reader
+who drills in meets one vocabulary, not two.
+
+| Badge | Icon / tone | Means |
+|---|---|---|
+| `⚠ 8` | red `AlertTriangle`, `tone="danger"` | 8 ads in this row are named for a different brand |
+| `abc 84` | amber `SpellCheck2`, `tone="warning"` | 84 ads carry an unrecognised `?toolbox=`/`?toolset=` value |
+
+One `title`/`aria-label` covers both, naming the offending brands, the typo'd values, the
+denominator, and the spend at stake — e.g. *"8 of 234 ads here are named for Stihl but land on
+this brand's page — $766 of this row's spend · 84 ads carry an unrecognised toolbox/toolset value
+(milwakee), so the page fell back to its default. Open the row for the per-ad breakdown."* The
+same badges render on the `Unattributed` footer row.
+
+⚠️ **There is deliberately no "clean" state.** The server omits `adUrlIssues` entirely when a row
+has no finding, and it omits it for exactly the same reason when a row's ads could not be checked
+at all (no resolved destination). Both render nothing. A green tick on every clean row would
+train the reader to scan past the column; a tick on unverifiable ads would be a false assurance.
+`checkedAdCount` (the denominator) exists only *inside* a badge that is already showing.
+
+**The check is not reimplemented.** `BrandPerformanceService` imports `checkAdUrlMismatch` from
+`src/utils/admin/adUrlMismatchCheck.ts` — the same validated module the per-ad icons use — and
+only rolls its result up. See `docs/metrics-analytics/backend.md` for the plumbing (why the
+modal's per-brand query was NOT reused) and the weighting rule.
+
+### Fourth surface: campaign/ad-set roll-up badges inside the modal (2026-09-01)
+
+**The complaint this fixes.** The brand-row badge (above) says Makita has 7 wrong-brand ads and
+53 typos, but `BrandPerformanceAdsModal` gave no way to find WHICH campaign or ad set to open —
+every collapsed campaign/ad-set row in `CampaignTreeTable` looked identical, so finding the 7 ads
+meant expanding all of them by hand. The trail brand → campaign → ad set → ad now stays unbroken:
+a campaign or ad set containing at least one flagged ad now badges too, using the same
+`AdUrlIssueBadge`.
+
+**New pure module: `src/utils/admin/adUrlIssueRollup.ts`.** Two exports:
+- `computeAdUrlInfo(campaignName, ad)` — the exact per-ad computation `CampaignTreeTable` already
+  did inline (resolve `rawUrls`/`canonicalUrl`, call `checkAdUrlMismatch` when the ad carries
+  `packagesFocus`), extracted so it runs **exactly once per ad**.
+- `rollupAdUrlIssues(verdicts: Array<CheckAdUrlMismatchResult | null>)` — aggregates a list of
+  already-computed verdicts into `{ mismatchAdCount, unrecognisedParamAdCount, checkedAdCount }`.
+  `null` (an ad with no URL data at all) contributes to none of the three counts — same rule as
+  the brand-row badge: unverifiable is not clean and must not manufacture a badge.
+
+Neither function calls `checkAdUrlMismatch` more than once per ad, and neither re-derives the
+rule — `adUrlMismatchCheck.ts` is imported, never restated. Tests:
+`src/utils/admin/__tests__/adUrlIssueRollup.test.ts` (`npm run test:ad-url-issue-rollup`) —
+one bad ad in a campaign badges it; an all-clean campaign badges nothing; an ad with no URL data
+is excluded from the denominator rather than reading as clean or broken; a mismatch and a typo on
+the same ad both surface; and an ad-set's roll-up and its parent campaign's roll-up are shown to
+aggregate the same per-ad verdicts (the campaign catches an ad set's finding even when scanned as
+a whole).
+
+**`CampaignTreeTable` wiring.** A `useMemo` walks the whole `campaigns` tree once building
+`adUrlInfoByKey` (`${campaignId}:${adsetId}:${adId}` → `AdUrlInfo`) regardless of expand state —
+the roll-up badges need every ad's verdict even while collapsed, not just the currently-rendered
+ones. A second `useMemo` folds those into `adsetRollups`/`campaignRollups` maps via
+`rollupAdUrlIssues`. The ad row itself now looks its verdict up from `adUrlInfoByKey` instead of
+calling `checkAdUrlMismatch` inline — same result, computed once, shared three ways (ad icon,
+ad-set badge, campaign badge).
+
+**Shared `AdUrlIssueBadge` component, not four copies.** The badge markup (moved into
+`src/components/admin/ui/Badge.tsx`, exported via the `ui` barrel) is now ONE definition used by
+the brand row, the Unattributed footer row (both in `BrandPerformanceCard.tsx`), and the new
+campaign/ad-set rows in `CampaignTreeTable.tsx` — each caller only builds the `title` text (which
+varies: the brand-row title names spend and brands the roll-up module doesn't carry) and passes
+`counts: { mismatchAdCount, unrecognisedParamAdCount }`. One definition means the mobile
+treatment below is automatically consistent everywhere, rather than needing to be re-applied at
+each call site.
+
+**Mobile: bare icon, no count.** Below `sm`, `AdUrlIssueBadge` hides the count (`hidden
+sm:inline`) and shrinks its own padding (`px-1 sm:px-1.5`, `gap-0.5 sm:gap-1` between the two
+badges when both render) — a phone can otherwise only fit a column or two of `CampaignTreeTable`
+/ the Brand Performance table before horizontal scroll, and the badge's numbers were costing
+width a numeric column needed. `title`/`aria-label` still carry the full count and explanation at
+every breakpoint (hover, long-press, and screen readers are unaffected); `sm:` and up shows the
+count inline again. `Badge` itself (`src/components/admin/ui/Badge.tsx`) was changed to build its
+className with `cn()` (clsx + tailwind-merge) instead of raw string concatenation, so a caller's
+override (e.g. shrinking the built-in `px-2` to `px-1`) resolves deterministically rather than
+depending on Tailwind's generated-CSS order.
+
+**Where to look (no browser available for this change):** open a brand with known ad-URL issues
+(Makita, per the production audit above) from the Brand Performance table, expand its modal, and
+confirm: (1) a collapsed campaign row badges when ANY ad beneath it is flagged, and shows nothing
+when all its ads are clean; (2) the same for a collapsed ad-set row; (3) at a phone width (< 640
+px / Tailwind `sm`), every badge (brand row, Unattributed row, campaign row, ad-set row) shows the
+icon only, no number, and the table shows at least one more numeric column than before; (4)
+hovering or long-pressing a mobile badge still reveals the full count/explanation via
+`title`/`aria-label`; (5) the per-ad icon and its own row's URL text are unchanged.
+
+### Unattributed row label shortened (2026-09-01)
+
+`BrandPerformanceCard`'s footer "Unattributed" row read `Unattributed  no brand in URL / no
+signup attribution` inline — the explanatory tail cost width the mobile columns needed more. The
+explanation moved into a `title` attribute on the label (`<span title="No brand in URL / no
+signup attribution">Unattributed</span>`), the same tooltip pattern the Basis control already
+uses on this card (`<span title={BASIS_HINT[basis]}>`). Still reachable on hover/long-press;
+nothing else about the row (its `adUrlIssues` badge, its totals) changed.
+
+### Ads Manager deep link — corrected to the owner's real URL (2026-09-01)
+
+`buildAdsManagerAdUrl` **moved out of `CampaignTreeTable.tsx`** into
+[`src/utils/admin/adsManagerUrl.ts`](../../src/utils/admin/adsManagerUrl.ts) (a pure util, so it
+is testable without mounting React) and its shape was replaced. The previous URL was `assumed`
+and landed on a filtered ad *list*; the owner supplied the URL that actually opens the ad's
+**edit** screen, and the helper now reproduces it character for character:
+
+```
+https://adsmanager.facebook.com/adsmanager/manage/ads/edit/standalone
+  ?act=<adAccountId, act_ prefix stripped>
+  &business_id=<FACEBOOK_BUSINESS_ID>
+  &filter_set=SEARCH_BY_ADGROUP_IDS-STRING_SET%1EANY%1E[%22<adId>%22]
+  &selected_ad_ids=<adId>
+  &nav_source=no_referrer
+  &current_step=0
+```
+
+⚠️ **The encoding is hand-written on purpose.** `%1E` is the ASCII record separator Meta uses as
+the delimiter inside `filter_set`; in the working URL the square brackets are **literal** while
+the quotes are `%22`. A blanket `encodeURIComponent` would also encode the brackets (`%5B`/`%5D`)
+— it may well still work, but we cannot test a variation from here, so the format that is known
+to work is reproduced exactly. `npm run test:ads-manager-url` pins every one of those choices.
+
+**`business_id` is configuration, not derivable.** It comes from `FACEBOOK_BUSINESS_ID` with the
+`NEXT_PUBLIC_FACEBOOK_BUSINESS_ID` twin (the link is built in a client component, so the public
+one is the one that must be set — same server/client pairing `src/config/featureFlags.ts` uses).
+Both are registered in `.env.example`. When it is **unset the parameter is omitted** and the rest
+of the link is built unchanged rather than emitting `business_id=` empty or dropping the link;
+Meta usually resolves the business from the signed-in session. That fallback is `assumed`, not
+verified — an account under several businesses may land on a chooser.
+
+**`src/services/facebook-ads-health/healthInsights.ts` builds a similar link and was NOT touched**
+— it targets **adsets** on a different host (`business.facebook.com/adsmanager/manage/adsets`),
+which is a different shape with a different verification story. It is very likely the same class
+of assumed URL and worth confirming with the owner on the same pass, but it is out of scope here.
 
 ## Renewals KPI — one cohort, three outcomes (2026-09-02)
 

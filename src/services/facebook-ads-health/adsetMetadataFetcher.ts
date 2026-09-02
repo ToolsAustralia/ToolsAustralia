@@ -159,9 +159,6 @@ export async function fetchAdsetMetadata(
   // recently archived, or campaign-paused. The aggregator joins this metadata by
   // adsetId, and any missing adset surfaces as "Unknown" status in the UI.
   const results: AdsetMetadata[] = [];
-  // Capture the first page's raw items so the diagnostic dump below can show
-  // exactly what Meta is returning for last_significant_edit + learning_stage_info.
-  let firstPageRaw: MetaAdsetApiResponse["data"] | null = null;
   let url:
     | string
     | null = `https://graph.facebook.com/v21.0/${adAccountId}/adsets?fields=${fields}&limit=200&access_token=${accessToken}`;
@@ -174,7 +171,6 @@ export async function fetchAdsetMetadata(
       throw new Error(`Meta adsets API error: ${res.status}`);
     }
     const body: MetaAdsetApiResponse = await res.json();
-    if (firstPageRaw === null) firstPageRaw = body.data ?? [];
     for (const item of body.data || []) {
       const learningInfo = item.learning_stage_info;
       const status = learningInfo?.status;
@@ -224,31 +220,16 @@ export async function fetchAdsetMetadata(
     hasMetaAnchor: results.filter((r) => r.learningStageLastSigEditTs !== null).length,
     neither: results.filter((r) => r.lastSignificantEdit === null && r.createdTime === null).length,
   };
-  console.error(
+  // One-line shape summary. `console.log`, not `console.error`: a successful fetch is not
+  // an error, and production strips `log` — so this is a dev aid only. The four
+  // `console.error` dumps that used to live here (raw first-3 adset payloads and the
+  // distinct-status set) were one-off instrumentation for working out what Meta actually
+  // sends for `learning_stage_info` / `last_significant_edit`. That mapping is settled and
+  // the dumps were the single largest source of noise in Vercel's error stream — ~128
+  // entries a week, several of them full JSON payloads. A genuine fetch failure still
+  // throws and logs above.
+  console.log(
     `[adsetMetadataFetcher] fetched ${results.length} adsets — learning_stage_info breakdown: ${JSON.stringify(breakdown)} — anchor availability: ${JSON.stringify(editBreakdown)}`,
-  );
-  // Sample adsets that ACTUALLY have learning data — the first-3-regardless
-  // version was picking paused/low-spend adsets where Meta returns nothing.
-  // We want to see what shape Meta sends WHEN it sends learning_stage_info,
-  // so we filter to those first.
-  const withLearningInfo = (firstPageRaw ?? []).filter((it) => it.learning_stage_info);
-  const withEditField = (firstPageRaw ?? []).filter((it) => it.last_significant_edit !== undefined);
-  console.error(
-    `[adsetMetadataFetcher] first-3 with learning_stage_info: ${JSON.stringify(withLearningInfo.slice(0, 3))}`,
-  );
-  console.error(
-    `[adsetMetadataFetcher] first-3 with last_significant_edit: ${JSON.stringify(withEditField.slice(0, 3))}`,
-  );
-  // Distinct status values we received — surfaces the "unknown status" cases
-  // (the 136 adsets that have last_sig_edit_ts but a status string we're
-  // currently mapping to null).
-  const distinctStatuses = new Set<string>();
-  for (const it of firstPageRaw ?? []) {
-    const s = it.learning_stage_info?.status;
-    if (s != null) distinctStatuses.add(s);
-  }
-  console.error(
-    `[adsetMetadataFetcher] distinct learning_stage_info.status values seen: ${JSON.stringify([...distinctStatuses])}`,
   );
 
   return results;

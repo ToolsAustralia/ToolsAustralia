@@ -47,6 +47,7 @@ import { mintCurrentCycleInvoice } from "@/services/subscription/mintCurrentCycl
 import { classifyMemberResolveMintOutcome } from "@/utils/payment/recovery/member-resolve-mint-policy";
 import { acquireRecoveryClaim, releaseRecoveryClaim } from "@/utils/payment/recovery/recovery-claim";
 import { getPackageById } from "@/data/membershipPackages";
+import { isExpectedPaymentDeclineError } from "@/utils/error-reporting/error-severity-classifier";
 
 export async function POST(_request: NextRequest) {
   try {
@@ -506,7 +507,24 @@ export async function POST(_request: NextRequest) {
               return typeof error === "object" && error !== null;
             };
 
-            console.error("Error using stripe.invoices.pay() to get PaymentIntent:", payError);
+            // Three outcomes reach this catch and only one is a fault:
+            //   - an issuer decline (the member's card was refused — routine, and the whole
+            //     point of this endpoint is that their last payment failed),
+            //   - `invoice_already_paid` / an unpayable invoice, which the branches below
+            //     turn straight back into a 200 success,
+            //   - anything else, which is a genuine error.
+            // Logging all three at `error` level put declines and already-settled invoices
+            // into Vercel's error stream — including a "failure" that returns success.
+            const payErrorCode =
+              isStripeError(payError) && typeof payError.code === "string" ? payError.code : undefined;
+            const isAlreadySettled =
+              payErrorCode === "invoice_already_paid" ||
+              (payError instanceof Error && payError.message.includes("no longer be paid"));
+            if (isExpectedPaymentDeclineError(payError) || isAlreadySettled) {
+              console.warn("stripe.invoices.pay() did not complete (expected):", payError);
+            } else {
+              console.error("Error using stripe.invoices.pay() to get PaymentIntent:", payError);
+            }
 
             // If invoice was already paid, that's okay
             if (isStripeError(payError) && payError.code === "invoice_already_paid") {
