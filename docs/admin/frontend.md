@@ -97,7 +97,7 @@ question ("How this coupon ends") with three shapes**; see
 
 ## Repeat Purchases tab (2026-07-09)
 
-`repeat-purchases` — a new **Analytics** group tab (`RepeatPurchaseAnalytics`, `src/components/admin/RepeatPurchaseAnalytics.tsx`), gated by `pageAnalytics.view`. Measures one-time-package buyers who came back and bought again (the one-time equivalent of renewal analytics). Structure mirrors `AllPlatformsManagement`: a right-aligned `AdminDateRangeToolbar` (default `all-time`; cohort filter = first-purchase date) → a 6-tile `MetricCard` KPI grid (one-time buyers / repeat buyers / repeat rate / median days to return / repeat revenue / became members) → a `BarList` of first→second-purchase gap buckets + a "return rate by window" table (matured denominators) → a Users `Card` with a `Segmented` (All / Returned / Not yet returned) + bucket chips + `DataTable` whose User cell is a `ClickableUserDisplay` opening the shared User Detail modal. Loading = `MetricCard` skeletons + pulse bars; empty/error = inline messages. All styling is paired light/`dark:` Tailwind from the `@/components/admin/ui` kit (no chart library). Registered in `adminTabs.ts` (Analytics group), rendered + subtitled in `AdminPage.tsx`, and added to `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` so the date dropdown portals into the mobile header. Data via `useRepeatPurchaseSummary` / `useRepeatPurchaseUsers` (see [client-state](../client-state/patterns.md)).
+`repeat-purchases` — a new **Analytics** group tab (`RepeatPurchaseAnalytics`, `src/components/admin/RepeatPurchaseAnalytics.tsx`), gated by `pageAnalytics.view`. Measures one-time-package buyers who came back and bought again (the one-time equivalent of renewal analytics). Structure mirrors `AllPlatformsManagement`: a right-aligned `AdminDateRangeToolbar` (default `all-time`; cohort filter = first-purchase date) → a 6-tile `MetricCard` KPI grid (one-time buyers / repeat buyers / repeat rate / median days to return / repeat revenue / became members) → a `BarList` of first→second-purchase gap buckets + a "return rate by window" table (matured denominators) → a Users `Card` with a `Segmented` (All / Returned / Not yet returned) + bucket chips + `DataTable` whose User cell is a `ClickableUserDisplay` opening the shared User Detail modal. Loading = `MetricCard` skeletons + pulse bars; empty/error = inline messages. All styling is paired light/`dark:` Tailwind from the `@/components/admin/ui` kit (no chart library). Registered in `adminTabs.ts` (Analytics group), rendered + subtitled in `AdminPage.tsx`, and added to `ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR` so the date dropdown portals into the mobile header. Data via `useRepeatPurchaseSummary` / `useRepeatPurchaseUsers` (see [client-state](../client-state/patterns.md)).
 
 **Users table specifics.** Two `Segmented` filters (return status: All / Returned / Not yet returned, and membership: Any / Members / Non-members — the latter filters on the `becameMember` conversion flag so it reconciles with the "Became members" KPI) plus bucket chips; all combine and drive both the list and the CSV export. Columns: User · First purchase · Days to return · One-time buys · **Last purchase** · Total spent · Member?. It shows First + **Last** (most-recent) purchase rather than First + Second, because for the ~65% of repeat buyers with exactly two purchases the second *is* the last, so two date columns would duplicate — "Days to return" already carries the reconversion timing. `DataTable` sort works because each table row exposes **primitive sort-keys** matching the column keys (`first`/`days`/`count`/`last`/`spent` as numbers) with the source row carried on `src` for `renderCell` (not-returned users sort their `days` to the end via a `MAX_SAFE_INTEGER` sentinel). The list pages 50-at-a-time with a **Load more** button (`useInfiniteQuery` facade). An **Export CSV** button in the card header downloads the whole current-filter cohort via `/users/export` (blob + `content-disposition` filename, the `UserExportModal` download idiom).
 
@@ -623,7 +623,7 @@ prop elsewhere in this file. Options are `"light"` (labelled "Light (control)") 
 - `UserDetailModal.tsx` — user detail / edit (Subscription tab is here, with Cancel button)
 - `ChargePastDueModal.tsx` — bulk past-due retry. **Self-drives the chunked job loop:** on confirm (`CHARGE`) it POSTs `{ action: "start" }`, then loops `{ action: "chunk", runId }` until `done`, rendering a **live progress bar** (processed / total) with succeeded / failed / skipped counts and collected revenue. A **Stop** button (and closing the modal mid-run) flips a `stoppedRef` that breaks the loop and fires `{ action: "abort" }` so the lock is released. The completed view is fed by `loadRunResults(runId)` → `GET /api/admin/charge-past-due/runs/[runId]` (run totals + per-invoice rows). Prop is now **`onCompleted?`** (was `onConfirm`) — called once the run finishes or stops so the parent ([`UsersManagement.tsx`](../../src/components/admin/UsersManagement.tsx)) can refresh the user list. See [api.md](./api.md#post-apiadmininvoicescharge-past-due--chunked-charge-job).
 - `BlockedTransactionsManagement.tsx` — blocked-card / Stripe allowlist admin UI. Mongo-backed: reads via `useBlockedCards(filter)` (cursor-paginated against the persisted `BlockedTransaction` collection). Hook returns `{ rows, total, hasMore, isLoading, isFetching, isFetchingNextPage, fetchNextPage, refetch, error }`. The table card shows a "Showing X of Y" counter and a "Load more" button at the bottom. Query errors surface in an amber banner above the filters card. Eligibility badges: auto-eligible / already-allowlisted / fraud-signal / permanent-issue / not-member. The "Allowlist with override" button bypasses every filter (records `manual_admin_override`). The dataset uses the narrower `outcome.type === "blocked"` filter (matches Stripe Dashboard's "Blocked" pill). Service contract: [billing-stripe/architecture.md](../billing-stripe/architecture.md#service-inventory--allowlistservice).
-  - **Filters (2026-05-07)**: date range matches `/admin/past-due-history` exactly — `DateRangeToggle` chips (Today / Yesterday / Current Draw / Last Draw / All Time / Custom) with `useAdminMobileDateToolbarSlot()` portaling on mobile, draw-aware presets via `useCurrentAndLastDrawDates()`, custom range via `CustomDateRangeModal` with `useMajorDrawsForDateRange()` highlighting. Plus an **email substring search** (debounced 300ms, server-side regex), an **eligibility multi-select** (auto-eligible / already-allowlisted / fraud-signal / permanent-issue / skipped — not member), and a **decline-code multi-select** grouped by Recoverable / Fraud signals / Permanent issues / Other (options from [src/utils/billing/declineCodeLabels.ts](../../src/utils/billing/declineCodeLabels.ts)).
+  - **Filters (2026-05-07)**: date range matches `/admin/past-due-history` exactly — `DateRangeToggle` chips (Today / Yesterday / Current Draw / Last Draw / All Time / Custom) with `useAdminDateToolbarSlot()` portaling on mobile, draw-aware presets via `useCurrentAndLastDrawDates()`, custom range via `CustomDateRangeModal` with `useMajorDrawsForDateRange()` highlighting. Plus an **email substring search** (debounced 300ms, server-side regex), an **eligibility multi-select** (auto-eligible / already-allowlisted / fraud-signal / permanent-issue / skipped — not member), and a **decline-code multi-select** grouped by Recoverable / Fraud signals / Permanent issues / Other (options from [src/utils/billing/declineCodeLabels.ts](../../src/utils/billing/declineCodeLabels.ts)).
   - **Metric cards**: Total blocked (current filters) · Auto-eligible · Skipped — filter · **Total on allowlist** (all-time, all active fingerprints, driven by `useAllowlistStats()` against `GET /api/admin/allowlist/stats`).
   - **Email column** is clickable via `ClickableUserDisplay` — opens the same `UserDetailModal` the users + past-due-history tabs use. `BlockedRow.userId` is resolved server-side in `listBlocked` (joins `User` by `stripeCustomerId` then `customerEmail`); guests render as plain text.
   - **Eligibility verdict** is computed by the shared mapper [src/utils/admin/blockedTransactionEligibility.ts](../../src/utils/admin/blockedTransactionEligibility.ts) so the post-join filter and the in-row badge can never disagree.
@@ -815,7 +815,7 @@ Every admin page that previously rendered the chip-bar `DateRangeToggle` now ren
 - [FacebookAdsManagement.tsx](../../src/components/admin/FacebookAdsManagement.tsx) (all three render spots — mobile portal, mobile inline, desktop)
 
 Mechanics of the swap, identical at every call site:
-- The toggle-only props (`collapsed`, `onExpand`, `className`) are dropped — `DateRangeDropdown` owns its own open state and is content-sized. The mobile full-width treatment came from `className="w-full"`; it's gone, matching how the Overview already renders the dropdown content-sized inside `AdminMobileLayoutDateRangeShell`.
+- The toggle-only props (`collapsed`, `onExpand`, `className`) are dropped — `DateRangeDropdown` owns its own open state and is content-sized. The mobile full-width treatment came from `className="w-full"`; it's gone, matching how the Overview already renders the dropdown content-sized inside `AdminLayoutDateRangeShell`.
 - `onRangeChange` simplifies to `(range) => updateDateFilter(range)` — the dropdown never emits `"custom"` through `onRangeChange` (the "Custom range…" row fires `onCustomClick`), so the old `if (range === "custom") …` branch is removed as dead.
 - `displayDate`, `selectedRange`, `onCustomClick` (→ `CustomDateRangeModal`) are unchanged. Accent stays the dropdown default red, matching the Overview.
 
@@ -887,7 +887,7 @@ After the reskin, the legacy Overview sections and their now-orphaned siblings w
 
 ### Components
 
-- [src/app/admin/component/PastDueChargeHistory.tsx](../../src/app/admin/component/PastDueChargeHistory.tsx) — top-level page component. UI mirrors the rest of admin: page-title row with a `DateRangeToggle` on desktop (portaled into `useAdminMobileDateToolbarSlot()` on mobile), four `MetricCard`s (Bulk runs / Invoices attempted / Succeeded / Revenue recovered) summarising the runs in the selected range, then two stacked card tables — **Bulk Runs** (from `GET /api/admin/charge-past-due/runs`) and **Manual Retries** (from `GET /api/admin/charge-past-due/manual-retries`) — both wrapped in the standard `bg-white dark:bg-neutral-900 rounded-xl shadow-sm border` shell with header row + count. Run/retry status badges use the same emerald/red/amber palette as `BlockedTransactionsManagement`. The "Custom Range" preset opens [`CustomDateRangeModal`](../../src/components/admin/CustomDateRangeModal.tsx); presets `today`/`yesterday`/`current-draw`/`last-draw`/`all-time` are wired the same way as `PromoAnalyticsManagement` (AEST timezone via `formatInTimeZone`, `getWebsiteLaunchDateUTC()` for `all-time`, draw dates from `useCurrentAndLastDrawDates`). Default range is **Last 30 days** (initial state: `dateRange: "custom"` with `startDate = subDays(today, 29)` and `endDate = today`). Clicking a bulk-run row opens `PastDueChargeHistoryDrawer`.
+- [src/app/admin/component/PastDueChargeHistory.tsx](../../src/app/admin/component/PastDueChargeHistory.tsx) — top-level page component. UI mirrors the rest of admin: page-title row with a `DateRangeToggle` on desktop (portaled into `useAdminDateToolbarSlot()` on mobile), four `MetricCard`s (Bulk runs / Invoices attempted / Succeeded / Revenue recovered) summarising the runs in the selected range, then two stacked card tables — **Bulk Runs** (from `GET /api/admin/charge-past-due/runs`) and **Manual Retries** (from `GET /api/admin/charge-past-due/manual-retries`) — both wrapped in the standard `bg-white dark:bg-neutral-900 rounded-xl shadow-sm border` shell with header row + count. Run/retry status badges use the same emerald/red/amber palette as `BlockedTransactionsManagement`. The "Custom Range" preset opens [`CustomDateRangeModal`](../../src/components/admin/CustomDateRangeModal.tsx); presets `today`/`yesterday`/`current-draw`/`last-draw`/`all-time` are wired the same way as `PromoAnalyticsManagement` (AEST timezone via `formatInTimeZone`, `getWebsiteLaunchDateUTC()` for `all-time`, draw dates from `useCurrentAndLastDrawDates`). Default range is **Last 30 days** (initial state: `dateRange: "custom"` with `startDate = subDays(today, 29)` and `endDate = today`). Clicking a bulk-run row opens `PastDueChargeHistoryDrawer`.
 
   **Manual Retries — grouped-by-user UX.** Rows are no longer flat; they're collapsed into one row per user via `groupChargeAttemptsByUser` from [src/utils/admin/groupChargeAttemptsByUser.ts](../../src/utils/admin/groupChargeAttemptsByUser.ts). The summary row shows last-attempt time, admin label, user (rendered with `<ClickableUserDisplay>` so clicking the email opens `UserDetailModal`), attempt count + per-status breakdown (`N✓ N✗ N⏭`), latest-status badge, and total amount. A chevron toggles a nested table with per-attempt rows (When / Invoice / Status / Amount / Error / Action). Stranded-error rows still expose the `Recover` button + checkbox; the group-row checkbox toggles all stranded attempts for that user (supports `indeterminate` state).
 
@@ -1050,7 +1050,7 @@ Success (green) and error (red) panels use `{color}-50` light backgrounds with `
 
 | Hook | Purpose |
 |---|---|
-| `useAdminMobileDateToolbarSlot()` | Admin-specific date toolbar mobile UX |
+| `useAdminDateToolbarSlot()` | Admin-specific date toolbar mobile UX |
 | `useUpsellMultipliersQuery()` | GET singleton upsell multiplier config |
 | `useUpsellMultipliersMutation()` | PUT updated multiplier triple, invalidates query |
 | (admin queries via `useAdminQueries.ts`) | TanStack Query hooks for admin data |
@@ -1113,7 +1113,7 @@ this modal.
 
 [src/components/admin/CancellationFlowAnalytics.tsx](../../src/components/admin/CancellationFlowAnalytics.tsx) is a **read-only** panel mounted as the `cancellation-flow` tab in the Analytics sidebar group (`AdminSidebar` group `analytics`, rendered by `AdminPage` on `selectedTab === "cancellation-flow"`). No mutations, no charts library. Styled with the standard analytics primitives — `MetricCard` for top stats, `bg-white … rounded-lg sm:rounded-xl shadow-sm … border` section wrappers, `bg-gray-50` table heads, `font-mono tabular-nums` numeric cells — to keep visual parity with `PromoAnalyticsManagement` and the rest of the Analytics group.
 
-**Date filter.** The tab is registered in `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` ([adminMobileDateToolbarSlot.ts](../../src/app/admin/component/adminMobileDateToolbarSlot.ts)) so it gets the shared mobile date strip under the admin header. Component owns `dateRange` / `startDate` / `endDate` state synced with URL params (same pattern as `PromoAnalyticsManagement`); default range is **today**. `current-draw` / `last-draw` hydrate from `useCurrentAndLastDrawDates`; `custom` opens `CustomDateRangeModal`. The component sends AEST `yyyy-MM-dd` values via the hook; the route handler converts them to UTC bounds (`startDate` → start of day AEST, `endDate` → start of next AEST day for the exclusive upper bound).
+**Date filter.** The tab is registered in `ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR` ([adminDateToolbarSlot.ts](../../src/app/admin/component/adminDateToolbarSlot.ts)) so it gets the shared mobile date strip under the admin header. Component owns `dateRange` / `startDate` / `endDate` state synced with URL params (same pattern as `PromoAnalyticsManagement`); default range is **today**. `current-draw` / `last-draw` hydrate from `useCurrentAndLastDrawDates`; `custom` opens `CustomDateRangeModal`. The component sends AEST `yyyy-MM-dd` values via the hook; the route handler converts them to UTC bounds (`startDate` → start of day AEST, `endDate` → start of next AEST day for the exclusive upper bound).
 
 Sections: three top cards (Triggered / Save rate / Saved); funnel with four CSS bars (Reached offer → Accepted → Cancelled → Abandoned; the "Reached reason" step is omitted because it is always equal to Triggered); a **Reason × outcome** table (count, share %, Saved, Cancelled, Abandoned per reason) — **rows with `count > 0` are clickable** and open `CancellationReasonUsersModal` (see below) scoped to the currently-selected date range; an **"Other" reasons (free text)** table listing every `reason === "other"` event's `reasonText` with outcome chip, AEST timestamp, and **a User column** that renders a `ClickableUserDisplay` (email + optional name subtext) opening the standard `AdminUserModal` via `useAdminUserModal` — falls back to a plain "—" when the event has no `userId`; a 2-card retention summary (Retained 90d %, Pending); and a **90-day retention by offer** table (offer | saved | retained | churned | pending | retained %) showing which offers produce durable saves vs delayed churn. Retained % = `retained ÷ (retained + churned)` over matured saves (“—” when none matured). Short note under the funnel surfaces `pastDueExcludedFromOfferConversion` when non-zero.
 
@@ -1307,7 +1307,7 @@ For reference, a live probe of TikTok's `/report/integrated/get/` on 2026-07-29 
 
 ### Shared admin date filter (2026-06-03)
 
-- **`useAdminDateFilter(initial)`** (`src/hooks/useAdminDateFilter.ts`) + **`AdminDateRangeToolbar`** (`src/components/admin/`) — packages the date-preset logic the Facebook Ads tab does inline so the **All-Platforms / TikTok / Snapchat** tabs share **one** source of truth for the AEST math (every preset — today / yesterday / current-draw / last-draw / all-time / custom — resolves to `yyyy-MM-dd` in `Australia/Sydney`; the initial preset resolves synchronously so date-gated queries enable on first paint, draw presets fill in via an effect once `useCurrentAndLastDrawDates` loads). The toolbar renders the shared `DateRangeDropdown` + `CustomDateRangeModal`, portaling into the mobile header slot when the tab is in `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` (now includes `all-platforms`/`tiktok-ads`/`snapchat-ads`), else inline. Local state only (no URL sync). _(Superseded 2026-08-19 — URL sync is now opt-in via `{ syncToUrl: true }`, the Overview uses it, and the toolbar is sticky on desktop.)_ The **Klaviyo** tab does **not** use this — it has its own keyword selector (above).
+- **`useAdminDateFilter(initial)`** (`src/hooks/useAdminDateFilter.ts`) + **`AdminDateRangeToolbar`** (`src/components/admin/`) — packages the date-preset logic the Facebook Ads tab does inline so the **All-Platforms / TikTok / Snapchat** tabs share **one** source of truth for the AEST math (every preset — today / yesterday / current-draw / last-draw / all-time / custom — resolves to `yyyy-MM-dd` in `Australia/Sydney`; the initial preset resolves synchronously so date-gated queries enable on first paint, draw presets fill in via an effect once `useCurrentAndLastDrawDates` loads). The toolbar renders the shared `DateRangeDropdown` + `CustomDateRangeModal`, portaling into the mobile header slot when the tab is in `ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR` (now includes `all-platforms`/`tiktok-ads`/`snapchat-ads`), else inline. Local state only (no URL sync). _(Superseded 2026-08-19 — URL sync is now opt-in via `{ syncToUrl: true }`, the Overview uses it, and the toolbar is sticky on desktop.)_ The **Klaviyo** tab does **not** use this — it has its own keyword selector (above).
 
 ## Overview MER card — platform selector + mobile text sizing (2026-06-04)
 
@@ -1916,7 +1916,7 @@ Phase 1 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-an
 **The single control** is `AdminDateRangeToolbar` + `useAdminDateFilter`, now used by **every** date-filtered tab including the Overview.
 
 - **Sticky on desktop.** The `isLgUp` branch is `sticky top-0 z-30` with `-mx-4 lg:-mx-6 -mt-4 lg:-mt-6` + matching padding, cancelling the scroll container's `p-4 lg:p-6` so the pinned bar spans the full content width and rows scroll *under* it. Previously only the Overview was sticky; All-Platforms / TikTok / Snapchat / Repeat-Purchases scrolled their filter off-screen.
-- **Mobile is unchanged** and always-visible by construction — the dropdown portals into `ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID`, which `AdminPage` renders in the header *above* the scroll container.
+- **Mobile is unchanged** and always-visible by construction — the dropdown portals into `ADMIN_DATE_TOOLBAR_SLOT_ID`, which `AdminPage` renders in the header *above* the scroll container.
 - **`leading` prop.** Tabs with their own controls on that row (TikTok's Ads / Spend-by-URL switch) pass them as `leading` so they ride *inside* the sticky bar. See the footgun below for why they cannot simply share a wrapper.
 
 ⚠️ **Render `AdminDateRangeToolbar` as a DIRECT child of the tab's root element.** A sticky element can only travel within its own parent's box, so the old `<div className="flex justify-end">{toolbar}</div>` wrapper — sized to the control itself — pins it to nothing. All four consumers had that wrapper and all four were unwrapped. The second way to lose it silently is a clipping/containing ancestor (`overflow` ≠ `visible`, or `transform`/`filter`/`contain`). Neither failure throws; verify visually when adding a new tab.
@@ -1929,7 +1929,7 @@ The `backdrop-blur-sm` on the sticky bar *does* create a containing block for ab
 
 **Behaviour note:** the Overview's custom-range *trigger label* is now the hook's compact `"1 Jun – 30 Jun"` rather than its old `"Jun 1 - Jun 30, 2025"` — the same string the other four tabs already showed. The longer form is still used for the per-card KPI tag (`formatAbbreviatedDate`, kept local to `DashboardOverview`).
 
-**Klaviyo and A/B Testing are deliberately still absent** from `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR`: neither uses this filter (Klaviyo drives its own `hourRange`; A/B Testing has no date filter). Adding them would mount an empty header slot.
+**Klaviyo and A/B Testing are deliberately still absent** from `ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR`: neither uses this filter (Klaviyo drives its own `hourRange`; A/B Testing has no date filter). Adding them would mount an empty header slot.
 
 ## Prize performance → Brand performance (2026-08-19)
 
@@ -2205,3 +2205,80 @@ campaign that has no backstop at all.
 precedence if the `neverExpires` / `validForHours` mutual-exclusion guard is deleted — and that guard
 exists in six places and is not being removed, so the pair can never coexist and the order can never
 lie. If a future change ever does remove it, this branch order must be revisited in the same edit.
+
+## Renewals KPI — one cohort, three outcomes (2026-09-02)
+
+The Overview Renewals tile used to read **"40 renewed · 20 past due"** with a billing-cycle
+line underneath. Those two numbers came from **different cohorts over different clocks**, so
+neither divided into the other and the card could not answer "how is today's renewal run
+going?".
+
+It is now anchored to a single cohort: **the members whose renewal fell DUE in the selected
+range** (`MembershipRenewalCycle.dueAt`), showing what became of that same group.
+
+```
+RENEWALS
+32  of 99 due
+[■■■■■■■■□□□□□□·················]
+● 32 landed   ● 21 failed   ○ 46 to come
+60.4% collected of those attempted
+```
+
+**Where the denominator comes from.** `MembershipRenewalCycle` is written *reactively* — a row
+appears only once Stripe emits an invoice, and **no row is ever dated in the future**. So the
+table alone cannot say how many renewals a day expects. `dueInRange` is the union of two
+disjoint sets:
+
+| Half | Source |
+| --- | --- |
+| Already invoiced | `MembershipRenewalCycle` aggregated by status, `dueAt` in range |
+| Still scheduled | `User.subscription.endDate` in range, under `getActiveSubscriptionFilter()` |
+
+They cannot overlap: a renewal that lands rolls `endDate` forward a month, and one that fails
+flips the user to `past_due`, which the filter excludes. Measured overlap for a live day: **0**.
+
+**Three traps the shape exists to avoid.**
+
+1. **`dueInRange` is NOT `landed + failed + pending`.** It sums *every* status bucket, so a
+   status in neither numerator (`refunded`, or anything added later) stays in the denominator
+   and renders as an unexplained grey slice instead of silently vanishing from the day's total.
+   The card derives its leftover as `due − landed − failed` for the same reason.
+2. **The pending window is the WHOLE range, never `[now, end]`.** Stripe finalises a renewal
+   invoice ~1h after the cycle boundary; a now-anchored window drops members inside that gap
+   from *both* sets and the denominator sags through the day (observed live: 102 → 98 in
+   minutes). Over the full range the union is stable — a member leaves one set exactly when
+   they enter the other.
+3. **`collectionRate` is `landed / (landed + failed)`, not `landed / dueInRange`.** Over the
+   full denominator the rate can only reach 100% at day's end, so it reads as failure all
+   morning regardless of how collection actually went. `null` — rendered "None attempted yet" —
+   when nothing has been attempted, never `0%`.
+
+**`isOpen` picks the leftover's label only** ("still to come" while the range is open, "did not
+renew" once closed) — it does **not** gate the pending query. On a settled range the pending
+count reaches 0 on its own; when it does not, the leftover is a genuine anomaly (a member still
+active and auto-renewing whose renewal date passed without Stripe invoicing them) and is worth
+surfacing rather than branching away. The leftover legend item and popover row are hidden at
+zero so a settled day does not carry a meaningless "0 did not renew".
+
+**The old headline is still reachable.** `succeededDistinctMembers` — renewal *payments*
+received in range — ties to the Revenue card's `membershipRenewal` row, so it moved into the
+tile's click-through popover as **"Payments received in range"**. It is a payment-time cohort
+and legitimately differs from `landedInRange` (43 vs 32 on a live day); the two must never be
+divided into each other.
+
+**Historical days improve.** A failed cycle that dunning later recovers flips the *same row* to
+`succeeded`, so a past range's failure count decreases over time. That is the desired reading
+("did they eventually pay?"), but it does mean a screenshot is not reproducible later.
+
+Implementation: [`summarizeRenewalCohort`](../../src/utils/admin/renewalCohort.ts) (pure,
+`npm run test:renewal-cohort`) ← [`MembershipAnalyticsService.getAnalyticsBundle`](../../src/services/admin/MembershipAnalyticsService.ts)
+← [`DashboardStatsService`](../../src/services/admin/DashboardStatsService.ts) →
+[`KpiGrid`](../../src/app/admin/component/overview/sections/KpiGrid.tsx). Computed **live** on
+every range — it is not snapshot-backed, so no `DashboardStatsDailySnapshot` version bump was
+needed. UI additions: `MetricCard.footer` and
+[`SegmentedBar`](../../src/components/admin/ui/SegmentedBar.tsx).
+
+⚠️ `KpiCard`'s breakdown rows format as **money** by default (`moneyExact`). A card whose
+breakdown is counts must pass `format` per row or "32 members" renders as "$32".
+
+Design spec: [2026-09-02-admin-dashboard-ux-design.md](../superpowers/specs/2026-09-02-admin-dashboard-ux-design.md).

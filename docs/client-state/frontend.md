@@ -176,3 +176,26 @@ model has never had. **Add the field to the model first**, then here.
 
 Render `entriesGranted` (what was actually granted, written once by the webhook) rather than
 `includedEntries × quantity × multiplier`, or a later multiplier change would restate history.
+
+## `AdminDashboardStats.users.membershipRenewals` — cohort shape (2026-09-02)
+
+[`useAdminQueries.ts`](../../src/hooks/queries/useAdminQueries.ts) `membershipRenewals` was
+reshaped around a single cohort:
+
+```ts
+membershipRenewals?: {
+  renewalCohort: { dueInRange; landedInRange; failedInRange; pendingInRange; isOpen; collectionRate };
+  succeededInRange: number;              // payment-time — a DIFFERENT cohort
+  succeededDistinctMembers: number;      // payment-time
+  failedInvoiceAttemptsInRange: number;  // retry attempts, not members
+  becamePastDueInRange: number;
+}
+```
+
+`expectedInRange` was **removed** (it was never a forecast) and `failedInvoicesInRange` renamed
+to `failedInvoiceAttemptsInRange`. `succeededInRange` **must stay** — `periodComparisonModel.ts`
+reads it for the Period Comparison card.
+
+⚠️ `renewalCohort.landedInRange` and `succeededDistinctMembers` measure different clocks (due-time
+vs payment-time) and legitimately differ; never divide one by the other. Full semantics in
+[admin/frontend.md](../admin/frontend.md) and [subscription/backend.md](../subscription/backend.md).

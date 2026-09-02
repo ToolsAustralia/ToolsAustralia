@@ -18,10 +18,22 @@ export const NormDashboardStatsSchema = z.object({
     totalScheduledCancellation: z.number(),
     dropOffRate: z.number(),
     periodChurnRate: z.number().nullable(),
+    // Anchored to the renewals DUE in range (`dueAt`), so numerator and denominator describe
+    // the same members. `expectedInRange` was removed: it counted only cycles Stripe had already
+    // invoiced, so for an in-progress range it was never the forecast its name promised.
     membershipRenewals: z.object({
-      expectedInRange: z.number(),
+      /** Cycles due in range (all statuses) + members still scheduled in the remainder. */
+      dueInRange: z.number(),
+      landedInRange: z.number(),
+      /** Members whose renewal due in range failed. Not retry attempts. */
+      failedInRange: z.number(),
+      pendingInRange: z.number(),
+      /** landed / (landed + failed) as 0–100, 1dp; null when nothing was attempted. */
+      collectionRate: z.number().nullable(),
+      /** Payment-time count — a different cohort from landedInRange. Ties to revenue. */
       succeededInRange: z.number(),
-      failedInvoicesInRange: z.number(),
+      /** Failed-invoice ATTEMPTS, inflated by dunning retries. Use failedInRange for members. */
+      failedInvoiceAttemptsInRange: z.number(),
       becamePastDueInRange: z.number(),
     }),
   }),

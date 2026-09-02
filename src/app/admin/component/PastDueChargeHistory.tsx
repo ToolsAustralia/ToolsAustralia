@@ -21,8 +21,8 @@ import { MetricCard } from "@/components/admin/metrics/shared/MetricCard";
 import { type DateRange } from "@/components/admin/DateRangeToggle";
 import { DateRangeDropdown } from "@/components/admin/overview/DateRangeDropdown";
 import CustomDateRangeModal from "@/components/admin/CustomDateRangeModal";
-import { AdminMobileLayoutDateRangeShell } from "./AdminMobileLayoutDateRangeShell";
-import { useAdminMobileDateToolbarSlot } from "@/hooks/useAdminMobileDateToolbarSlot";
+import { AdminLayoutDateRangeShell } from "./AdminLayoutDateRangeShell";
+import { useAdminDateToolbarSlot } from "@/hooks/useAdminDateToolbarSlot";
 import {
   useCurrentAndLastDrawDates,
   useMajorDrawsForDateRange,
@@ -106,7 +106,7 @@ function RetryStatusBadge({ status }: { status: string }) {
 }
 
 export default function PastDueChargeHistory() {
-  const { isLgUp, slotEl } = useAdminMobileDateToolbarSlot();
+  const { slotEl } = useAdminDateToolbarSlot();
 
   const initialRange = useMemo(() => defaultLast30Days(), []);
   const [dateRange, setDateRange] = useState<DateRange>("custom");
@@ -286,18 +286,17 @@ export default function PastDueChargeHistory() {
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">
           Past-Due Charge History
         </h2>
-        {isLgUp ? <div className="flex items-center gap-2">{dateRangeToggle}</div> : null}
       </div>
 
-      {!isLgUp && slotEl
+      {slotEl
         ? createPortal(
-            <AdminMobileLayoutDateRangeShell>{dateRangeToggle}</AdminMobileLayoutDateRangeShell>,
+            <AdminLayoutDateRangeShell>{dateRangeToggle}</AdminLayoutDateRangeShell>,
             slotEl
           )
         : null}
-      {!isLgUp && !slotEl ? (
-        <div className="lg:hidden">
-          <AdminMobileLayoutDateRangeShell>{dateRangeToggle}</AdminMobileLayoutDateRangeShell>
+      {!slotEl ? (
+        <div>
+          <AdminLayoutDateRangeShell>{dateRangeToggle}</AdminLayoutDateRangeShell>
         </div>
       ) : null}
 

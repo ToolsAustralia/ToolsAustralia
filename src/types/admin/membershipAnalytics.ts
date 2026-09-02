@@ -2,9 +2,16 @@
  * Admin membership analytics — metric definitions and API shapes.
  *
  * Semantics:
- * - expectedRenewalsInRange: renewal cycles (Stripe subscription_cycle) with billing period end (`dueAt`) in [start, end].
+ * - renewalCohort: everything anchored to the renewals DUE in [start, end] (`dueAt`), so its
+ *   numerator and denominator describe the same members. See
+ *   docs/superpowers/specs/2026-09-02-admin-dashboard-ux-design.md.
  * - successfulRenewalsInRange: net membership BenefitsGranted with billingReason subscription_cycle in [start, end] (matches revenue card).
- * - failedRenewalInvoicesInRange: renewal cycles marked failed with failedAt in range.
+ *   A DIFFERENT cohort from renewalCohort.landedInRange — payment-time, not due-time. The two
+ *   legitimately differ because Stripe finalises a renewal invoice ~1h after the cycle boundary,
+ *   so a late-night renewal is charged the next day. Never divide one by the other.
+ * - failedInvoiceAttemptsInRange: renewal cycles marked failed with failedAt in range. An ATTEMPT
+ *   count, inflated by dunning retries (124 attempts vs 20 members due on 2026-09-02) — NOT a
+ *   count of members. For members, use renewalCohort.failedInRange.
  * - becamePastDueInRange: distinct users who transitioned to past_due per MembershipStatusHistory in range.
  * - cancellationsInRange: users with subscription.cancelledAt in [start, end] (active accounts).
  * - cancelledMembershipRevenueImpact: sum of catalog membership prices for those users (MRR-style loss proxy).
@@ -23,11 +30,37 @@ export type MembershipNormalizedStatus =
   | "incomplete_expired"
   | "none";
 
+/**
+ * The renewals DUE in the selected range, and what became of them.
+ *
+ * Anchored to `MembershipRenewalCycle.dueAt` plus the live forward schedule on
+ * `User.subscription.endDate`. Those two sources are disjoint by construction: a renewal that
+ * lands rolls `endDate` forward a month, so a member sits in one or the other, never both.
+ */
+export interface RenewalCohort {
+  /** Denominator: every renewal cycle due in range (ALL statuses) + those still scheduled.
+   *  NOT landedInRange + failedInRange + pendingInRange — a status in neither numerator
+   *  (e.g. `refunded`) stays here rather than vanishing from the day's total. */
+  dueInRange: number;
+  /** Cycles due in range with status `succeeded` or `recovered`. */
+  landedInRange: number;
+  /** Cycles due in range with status `failed`. Members, not retry attempts. */
+  failedInRange: number;
+  /** Active auto-renewing members scheduled in the remainder of the range; 0 once it closes. */
+  pendingInRange: number;
+  /** Range end is still in the future → the remainder is "to come", else "did not renew". */
+  isOpen: boolean;
+  /** landed / (landed + failed) as a 0–100 percentage (1 dp); null when nothing was attempted.
+   *  Deliberately NOT landed/dueInRange — that only reaches 100% at day's end regardless of how
+   *  collection actually went, so it reads as failure all morning. */
+  collectionRate: number | null;
+}
+
 export interface MembershipRenewalMetrics {
-  expectedRenewalsInRange: number;
+  renewalCohort: RenewalCohort;
   successfulRenewalsInRange: number;
   successfulRenewalUserCount: number;
-  failedRenewalInvoicesInRange: number;
+  failedInvoiceAttemptsInRange: number;
   becamePastDueInRange: number;
 }
 

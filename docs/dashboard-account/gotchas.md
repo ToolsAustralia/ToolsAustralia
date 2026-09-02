@@ -39,7 +39,7 @@ The 2026-07 revamp removed the tabbed Settings IA (`?tab=subscription`/`payment`
 
 ## Mobile date toolbar slot
 
-[useAdminMobileDateToolbarSlot](../admin/frontend.md) is admin-only despite the "dashboard" sounding name — admin's date filtering UI for mobile. Don't confuse with member dashboard.
+[useAdminDateToolbarSlot](../admin/frontend.md) is admin-only despite the "dashboard" sounding name — it resolves the admin header's date-filter portal slot. Don't confuse with member dashboard. _(Renamed 2026-09-02 from `useAdminMobileDateToolbarSlot`: the slot is no longer mobile-only.)_
 
 ## Cross-domain data freshness
 

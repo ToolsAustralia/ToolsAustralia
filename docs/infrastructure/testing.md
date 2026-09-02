@@ -634,3 +634,19 @@ Two coverage gaps worth knowing, both deliberate:
   can never take that branch — because a bypass leaking into production removes every spend guard.
 - The verification/login **routes** are not covered because they do not exist yet. Design:
   [the verification spec](../superpowers/specs/2026-08-25-mobile-verification-and-sms-login-design.md).
+
+### `test:renewal-cohort` (2026-09-02)
+
+`npm run test:renewal-cohort` → [`src/utils/admin/__tests__/renewalCohort.test.ts`](../../src/utils/admin/__tests__/renewalCohort.test.ts).
+Pure, no DB/env — it drives `summarizeRenewalCohort` over a status-bucket map.
+
+The case worth copying is the **identity trap**. `dueInRange` sums *every* status bucket, so
+`due > landed + failed + pending` is a legal state and the test asserts it directly: a `refunded`
+bucket must keep `dueInRange` unchanged while appearing in neither numerator, and an
+`some_new_status` bucket must behave identically. Deriving the denominator from the numerators
+instead would silently delete those members from the day's total — the kind of defect that shows
+up as a plausible smaller number rather than an error.
+
+It also pins `collectionRate` as `null` (never `0`) in **both** empty states — no renewals due,
+and renewals due but none attempted yet — because `0%` on a quiet morning reads as total
+collection failure.

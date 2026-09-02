@@ -565,11 +565,21 @@ export class DashboardStatsService {
       });
     } catch (maErr) {
       console.error("⚠️ Error fetching membership analytics bundle:", maErr);
+      // Every key the response shape reads must exist here, or a membership-analytics failure
+      // ships `undefined` to the client and the Renewals card renders NaN — at exactly the
+      // moment nobody is looking at it.
       membershipAnalytics = {
-        expectedRenewalsInRange: 0,
+        renewalCohort: {
+          dueInRange: 0,
+          landedInRange: 0,
+          failedInRange: 0,
+          pendingInRange: 0,
+          isOpen: false,
+          collectionRate: null,
+        },
         successfulRenewalsInRange: 0,
         successfulRenewalUserCount: 0,
-        failedRenewalInvoicesInRange: 0,
+        failedInvoiceAttemptsInRange: 0,
         becamePastDueInRange: 0,
         cancellationsInRange: 0,
         cancelledMembershipRevenueImpact: 0,
@@ -595,10 +605,12 @@ export class DashboardStatsService {
         ...(periodChurnRate != null && { periodChurnRate }),
         ...(dropOffRateTrend && { dropOffRateTrend }),
         membershipRenewals: {
-          expectedInRange: membershipAnalytics.expectedRenewalsInRange,
+          renewalCohort: membershipAnalytics.renewalCohort,
+          // Payment-time, not due-time — this is the figure the Revenue card's membershipRenewal
+          // row ties to, and `periodComparisonModel` reads `succeededInRange`. Keep both.
           succeededInRange: membershipAnalytics.successfulRenewalsInRange,
           succeededDistinctMembers: membershipAnalytics.successfulRenewalUserCount,
-          failedInvoicesInRange: membershipAnalytics.failedRenewalInvoicesInRange,
+          failedInvoiceAttemptsInRange: membershipAnalytics.failedInvoiceAttemptsInRange,
           becamePastDueInRange: membershipAnalytics.becamePastDueInRange,
         },
         cancellationImpact: {

@@ -590,9 +590,27 @@ Monetary fields here are in **cents** (`spendCents` / `revenueCents`), unlike mo
     dropOffRate: number,                    // percent: scheduledCancellation / (active + scheduledCancellation)
     periodChurnRate: number | null,         // percent of active subs that cancelled within dateRange; null for all-time
     membershipRenewals: {
-      expectedInRange: number,              // active subs due to renew within dateRange
-      succeededInRange: number,             // of those, how many succeeded
-      failedInvoicesInRange: number,        // renewal invoices that failed (declined cards etc.)
+      // ── The COHORT: renewals DUE within dateRange, and what became of them. These four
+      //    describe the same members, so they divide into each other safely.
+      dueInRange: number,                   // renewals due in dateRange: already-invoiced cycles
+                                            //   (every status) + members still scheduled in the
+                                            //   remainder of the range
+      landedInRange: number,                // of those, collected (succeeded or recovered)
+      failedInRange: number,                // of those, failed. MEMBERS, not retry attempts
+      pendingInRange: number,               // of those, not yet attempted; 0 once the range closes
+      collectionRate: number | null,        // landed / (landed + failed), 0-100, 1dp.
+                                            //   NOT landed/dueInRange — null when nothing attempted
+      // ── NOT part of the cohort. Do not divide these by dueInRange.
+      succeededInRange: number,             // renewal PAYMENTS received within dateRange. A
+                                            //   different cohort from landedInRange: Stripe
+                                            //   finalises a renewal invoice ~1h after the cycle
+                                            //   boundary, so a late-night renewal is charged the
+                                            //   next day. This is the figure that ties to
+                                            //   revenue.breakdown.membershipRenewal
+      failedInvoiceAttemptsInRange: number, // failed renewal invoice ATTEMPTS, inflated by dunning
+                                            //   retries on older invoices (124 attempts vs 20
+                                            //   members due on 2026-09-02). Never report this as
+                                            //   a member count — use failedInRange
       becamePastDueInRange: number          // subs that entered past_due status within dateRange
     }
   },
