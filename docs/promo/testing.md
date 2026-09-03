@@ -9,10 +9,12 @@
 
 ## Landing asset inventory
 
-`npm run check:promo-landing-assets` verifies all 104 shipped landing WebPs are on disk
-(5 brands × 3 toolboxes × 3 tiers × 2 viewports, plus the evergreen collage and the `bg-*`
-stage backgrounds). It models light-only, `final-hours`-free reality — see
-[architecture.md](architecture.md).
+`npm run check:promo-landing-assets` verifies all 294 shipped landing WebPs are on disk
+(6 brands × 4 toolboxes × 3 tiers {base, `drawn-tomorrow`, `drawn-tonight`} × 2 viewports × 2 modes
+= 288, plus the 2 evergreen collages and the 4 `bg-*` stage backgrounds). It models a both-modes,
+`final-hours`-free reality — see [architecture.md](architecture.md). `URGENCIES` there was cut to
+`[null]` while the draw-9 tier art was withdrawn and restored on 2026-09-03; it and
+`testKinTbDrawnTiersResolveAndFinalHoursCollapses` must move together or the tree half-ships.
 
 ## End-to-end
 

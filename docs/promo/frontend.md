@@ -843,6 +843,11 @@ removed and `hikoki-*` added to `LANDING_HERO_MAP`). Notes:
   good -cpu-used 4 <clip>.webm` (matches `scripts/convert-drawn-tonight-tomorrow-videos.ts`'s own
   WebM encode step, which additionally handles the numbered art-team export layout for the drawn
   tiers specifically — see that script's header comment before reusing it for a new asset drop).
+  **But the clips actually shipping today were not encoded that way.** Draw 9 and the 2026-09-03
+  draw-10 urgency export both use **`-crf 34`** (`convert-draw9-landing-videos.ts` and
+  `convert-draw10-urgency-landing-assets.ts`), and their MP4s are a **stream copy** of the export,
+  not a re-encode. When regenerating one by hand, match the neighbouring files in the same brand
+  folder rather than this line.
   Regression test: `npm run test:landing-video-resolver`.
 
   <details><summary>Historical: mp4-only note (2026-06-27, no longer accurate)</summary>
