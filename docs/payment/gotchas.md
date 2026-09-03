@@ -115,6 +115,37 @@ When the user has multiple invoices on a paused subscription, `subscription.late
 
 See [billing-stripe gotchas](../billing-stripe/gotchas.md#missing-invoice-while-paused).
 
+## `invoices.pay()` throwing does NOT mean there is no collectable PaymentIntent (fixed 2026-09)
+
+`stripe.invoices.pay()` throws whenever it could not settle the charge itself, and several of
+those outcomes leave a **perfectly confirmable PI on the invoice**: 3DS/SCA required
+(`invoice_payment_intent_requires_action` → PI is `requires_action`), no default payment method
+(→ `requires_payment_method`), or a decline that already attached a retryable PI.
+
+`pay-failed-invoice`'s recovery step used to fire **only when the error message contained
+`"default_payment_method"`**. A 3DS error says nothing of the kind and carries **no top-level
+`payment_intent`** (it is on `raw`), so it skipped recovery, reached the bottom of the ladder with
+`paymentIntent` still null, and returned a **500 "Failed to initialize payment"** — while the
+invoice held a `requires_action` PI that `usePastDueResolve` already knows how to confirm. Every
+production 500 in the week to 2026-09-03 was this; one member retried 7× in 16 minutes on
+2026-09-02 and was blocked every time.
+
+Recovery is now keyed on the real question — *is there a confirmable PI?* — not on error phrasing.
+Two rules make that safe:
+
+1. **`classifyStripeInvoicePayInitFailure` is consulted FIRST.** When Stripe says the invoice can
+   no longer be paid, that is authoritative and we must not go hunting for a PI to resurrect it
+   with. `invoiceData.invoice` is a **cached** read that was `open` when we called `pay()`, so its
+   status cannot catch this — only the error can.
+2. **The freshly retrieved invoice judges the recovered PI**, never the cached copy.
+
+Use `selectConfirmableInvoicePaymentIntent`, **not** `dropNonConfirmableInvoicePaymentIntent`, on
+any path whose result becomes a `client_secret` for the browser. They differ deliberately on
+non-payable invoices: `drop…` answers "may `invoices.pay` attach a *fresh* PI?" and so passes a PI
+through untouched on a void invoice (nothing downstream will collect); `select…` answers "may this
+PI go to the browser?" and refuses it. Using `drop…` in the recovery path would have shipped a void
+invoice's stale `client_secret` to a member. Pinned by `npm run test:invoice-pi-recovery`.
+
 ## 3DS challenge timing
 
 The 3DS challenge flow involves a redirect away from our domain and back. Edge cases:
