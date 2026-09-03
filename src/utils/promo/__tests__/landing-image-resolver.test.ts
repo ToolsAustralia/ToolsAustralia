@@ -119,23 +119,26 @@ function testGwTbResolvesWhereArtExistsAndDegradesForRyobi() {
 }
 
 /**
- * Draw 10 (2026-08-26): the -drawn-tomorrow / -drawn-tonight art was WITHDRAWN for every
- * brand — all 160 files baked `& $5K CASH` into the headline and draw 10 removed that bonus.
- * So all three countdown tiers now behave the way -final-hours always has: the resolver drops
- * the tier and serves the base hero.
+ * Draw 10 (2026-08-26): the -drawn-tomorrow / -drawn-tonight art was WITHDRAWN for every brand
+ * — all 160 files baked `& $5K CASH` into the headline and draw 10 removed that bonus — so all
+ * three countdown tiers behaved the way -final-hours always has, dropping to the base hero.
  *
- * The assertion is deliberately the STRONGER one — not merely 'resolves to something real',
- * but 'carries no countdown suffix at all'. If replacement art is dropped in without this
- * test being updated, it goes red and tells you to restore URGENCIES in
- * scripts/check-landing-hero-assets.mjs rather than silently half-shipping.
+ * 2026-09-03: the replacement art landed, so the two drawn tiers must now SURVIVE as a suffix
+ * again and only -final-hours collapses. That is the tripwire working as designed: the previous
+ * version of this test asserted 'carries no countdown suffix at all' precisely so that dropping
+ * replacement art in without restoring URGENCIES in scripts/check-landing-hero-assets.mjs would
+ * go red rather than silently half-ship. It went red, both halves were restored together.
  */
 function testKinTbDrawnTiersResolveAndFinalHoursCollapses() {
   for (const brand of LANDING_BRANDS) {
-    for (const urgency of ["drawn-tomorrow", "drawn-tonight", "final-hours"] as const) {
+    for (const urgency of ["drawn-tomorrow", "drawn-tonight"] as const) {
       const url = resolveLandingHeroImage(brand, "light", "desktop", "kinTB", urgency);
-      assert.ok(!url.includes(urgency), `${brand} kinTB ${urgency} should collapse to base, got ${url}`);
+      assert.ok(url.endsWith(`-${urgency}.webp`), `${brand} kinTB ${urgency} must keep its tier suffix, got ${url}`);
       assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
     }
+    const finalHours = resolveLandingHeroImage(brand, "light", "desktop", "kinTB", "final-hours");
+    assert.ok(!finalHours.includes("final-hours"), `${brand} kinTB final-hours should collapse to base, got ${finalHours}`);
+    assert.ok(LANDING_IMAGE_MANIFEST.has(finalHours), `${finalHours} must exist in manifest`);
   }
 }
 
@@ -170,20 +173,27 @@ function testAllVariantsExistInManifest() {
  * suffix SURVIVES is what actually catches a missing/misnamed drawn asset.
  */
 function testDrawnTiersResolveToRealArtEverywhere() {
-  // Renamed in spirit for draw 10: the drawn tiers no longer HAVE art (see the kinTB block
-  // above), so what must hold everywhere is that dropping the tier still lands on a real,
-  // manifest-backed base hero for every brand x toolbox x viewport — never a broken URL and
-  // never the evergreen collage, which would show the wrong prize.
+  // Restored to its full strength for the 2026-09-03 draw-10 urgency export, which completed the
+  // set: 6 brands x 4 toolboxes x 2 viewports x 2 modes x 2 tiers = 192 stills, no gaps. So the
+  // suffix must SURVIVE everywhere — the weaker "resolves to something in the manifest" passes
+  // even when a tier silently collapses to the base hero, which is exactly the half-shipped state
+  // this is here to catch.
   for (const brand of LANDING_BRANDS) {
     for (const suffix of ["milTB", "sidTB", "kinTB", "gwTB"] as const) {
       for (const viewport of ["desktop", "mobile"] as const) {
-        for (const urgency of ["drawn-tomorrow", "drawn-tonight"] as const) {
-          const url = resolveLandingHeroImage(brand, "light", viewport, suffix, urgency);
-          assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
-          assert.ok(
-            url.includes(`/${brand}/`),
-            `${brand}/${suffix}/${viewport} ${urgency} fell through to another brand, got ${url}`
-          );
+        for (const mode of ["light", "dark"] as const) {
+          for (const urgency of ["drawn-tomorrow", "drawn-tonight"] as const) {
+            const url = resolveLandingHeroImage(brand, mode, viewport, suffix, urgency);
+            assert.ok(LANDING_IMAGE_MANIFEST.has(url), `${url} must exist in manifest`);
+            assert.ok(
+              url.endsWith(`-${urgency}.webp`),
+              `${brand}/${suffix}/${viewport}/${mode} ${urgency} lost its tier suffix, got ${url}`
+            );
+            assert.ok(
+              url.includes(`/${brand}/`),
+              `${brand}/${suffix}/${viewport} ${urgency} fell through to another brand, got ${url}`
+            );
+          }
         }
       }
     }

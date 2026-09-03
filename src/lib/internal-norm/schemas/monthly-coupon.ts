@@ -36,7 +36,9 @@ const SegmentConfigProjectionSchema = z
   })
   .optional();
 
-const MonthlyCampaignRowSchema = z.object({
+// Exported so the route can validate row-by-row and drop a malformed campaign instead of
+// letting withNorm's whole-response validation 500 the entire list. See the route comment.
+export const MonthlyCampaignRowSchema = z.object({
   id: z.string(),
   monthKey: z.string(), // YYYY-MM
   name: z.string(),

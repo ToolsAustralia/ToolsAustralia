@@ -523,9 +523,10 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/convert-draw9-landing-to-webp.ts",
         "scripts/convert-draw9-landing-videos.ts",
         "scripts/convert-draw10-landing-assets.ts",
+        "scripts/convert-draw10-urgency-landing-assets.ts",
         "src/docs/PROMOTION_ANALYTICS.md"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-09-03"
     },
     "affiliate": {
       "docs": "docs/affiliate/",
@@ -885,7 +886,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "eslint/rules/norm-must-import-service.js",
         "eslint/rules/index.js"
       ],
-      "lastVerified": "2026-09-02"
+      "lastVerified": "2026-09-03"
     },
     "admin": {
       "docs": "docs/admin/",
@@ -1051,7 +1052,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "e2e/**",
         "playwright.config.ts"
       ],
-      "lastVerified": "2026-08-27"
+      "lastVerified": "2026-09-03"
     }
   }
 }

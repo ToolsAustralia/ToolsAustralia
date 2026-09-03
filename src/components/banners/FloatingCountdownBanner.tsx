@@ -1,53 +1,20 @@
 "use client";
 
-import React, { useState, useEffect, Suspense, type ReactNode } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { m, AnimatePresence } from "framer-motion";
 import { X, Lock } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { DEFAULT_PRIZE_SLUG } from "@/config/prize-summaries";
-import { useCurrentMajorDraw, useNextDraw } from "@/hooks/queries/useMajorDrawQueries";
-import { useLeafTimer } from "@/hooks/useLeafTimer";
+import { useMajorDrawCountdown } from "@/hooks/useMajorDrawCountdown";
+import { useResolvedMultiplier } from "@/hooks/queries/usePromoQueries";
+import { MajorDrawCountdownLeaf } from "@/components/banners/MajorDrawCountdownLeaf";
+import PromoBadgeImage from "@/components/ui/PromoBadgeImage";
+import type { PromoMultiplier } from "@/types/promo-multiplier";
 import { cn } from "@/utils/cn";
 import { addRAFScrollListener } from "@/utils/dom/listenerHelpers";
 
 interface FloatingCountdownBannerProps {
   className?: string;
-}
-
-interface FloatingTimeLeft {
-  days: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
-}
-
-// Leaf component owning the 1s tick. Lives inside the host shell — host's
-// scroll-visibility and other state stay in the host without being re-rendered
-// on every tick. The leaf computes timeLeft + isExpired and passes them to the
-// render prop.
-function FloatingCountdownLeaf({
-  targetMs,
-  render,
-}: {
-  targetMs: number | null;
-  render: (state: { timeLeft: FloatingTimeLeft; isExpired: boolean }) => ReactNode;
-}) {
-  const now = useLeafTimer(1000);
-  let timeLeft: FloatingTimeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
-  let isExpired = true;
-  if (targetMs !== null && !Number.isNaN(targetMs)) {
-    const difference = targetMs - now;
-    if (difference > 0) {
-      timeLeft = {
-        days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-        minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((difference % (1000 * 60)) / 1000),
-      };
-      isExpired = false;
-    }
-  }
-  return <>{render({ timeLeft, isExpired })}</>;
 }
 
 const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ className = "" }) => {
@@ -57,48 +24,44 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false); // For hover/click override
   const [isDismissed, setIsDismissed] = useState(false);
-  const [isReady, setIsReady] = useState(false); // Wait for data to load
-  const [drawName, setDrawName] = useState<string | null>(null);
-  const [nextDrawName, setNextDrawName] = useState<string | null>(null);
   const [isVisibleOnScroll, setIsVisibleOnScroll] = useState(false); // For my-account: hide at top, show when scrolled
   const [isAtBottom, setIsAtBottom] = useState(false); // For my-account: hide at bottom
+  const [heroInView, setHeroInView] = useState(true); // Suppressed while the hero owns the CTA
 
-  const { data: currentMajorDraw, isLoading } = useCurrentMajorDraw();
-  const { data: nextDraw } = useNextDraw();
+  // What we count down to, and what we call it — shared with the hero's in-flow CTA so the two
+  // clocks on this page can never disagree. See useMajorDrawCountdown.
+  const { targetMs, gatesClosed, drawName, nextDrawName, isReady } = useMajorDrawCountdown();
 
-  // Determine gate state
-  const gatesClosed = currentMajorDraw?.status !== "active";
+  // Same entries multiplier the package cards and the hero CTA show — one hook, so a promo
+  // lights up every surface at once. Only rendered above 1x: "1x PROMO" advertises nothing.
+  const membershipMultiplier = useResolvedMultiplier("membership-packages", "display");
+  const hasMultiplier = typeof membershipMultiplier === "number" && membershipMultiplier > 1;
 
-  // Countdown target — the actual 1s tick happens inside <FloatingCountdownLeaf>
-  // so this host doesn't re-render every second. When gates closed we count
-  // down to the next draw's activationDate; otherwise to the current drawDate.
-  const targetDateString =
-    gatesClosed && nextDraw?.activationDate ? nextDraw.activationDate : currentMajorDraw?.drawDate;
-  const targetMs = targetDateString ? new Date(targetDateString).getTime() : null;
-
-  // Only show when data is ready
+  /**
+   * Stay out of the way while the hero is on screen (2026-09-03).
+   *
+   * The hero renders its own countdown CTA (`HeroGiveawayCta`), so a fixed overlay on top of it
+   * is both duplicated and in the way — on desktop it covered the brand marquee, on mobile a
+   * large slice of the first screen. Observing the hero element is what makes "past the hero"
+   * mean the actual hero rather than a hard-coded scroll number that breaks the moment the hero
+   * changes height (it is `min-h-screen-svh`, so it already differs per device).
+   *
+   * No hero on the page (any future host) → nothing to wait for, so default to visible.
+   */
   useEffect(() => {
-    if (currentMajorDraw && !isLoading) {
-      // Add small delay to ensure first calculation completes
-      setTimeout(() => setIsReady(true), 100);
+    const hero = document.querySelector(".hero-section");
+    if (!hero) {
+      setHeroInView(false);
+      return;
     }
-  }, [currentMajorDraw, isLoading]);
-
-  // Fetch draw name for display
-  useEffect(() => {
-    if (gatesClosed && nextDraw) {
-      // When gates closed, show next draw name
-      setNextDrawName(nextDraw.name || null);
-      setDrawName(null);
-    } else if (currentMajorDraw) {
-      // When gates open, show current draw name
-      setDrawName(currentMajorDraw.name || null);
-      setNextDrawName(null);
-    } else {
-      setDrawName(null);
-      setNextDrawName(null);
-    }
-  }, [currentMajorDraw, nextDraw, gatesClosed]);
+    const observer = new IntersectionObserver(
+      ([entry]) => setHeroInView(entry.isIntersecting),
+      // A sliver of hero still showing is not "past the hero" — require most of it to be gone.
+      { threshold: 0, rootMargin: "-25% 0px 0px 0px" }
+    );
+    observer.observe(hero);
+    return () => observer.disconnect();
+  }, []);
 
   // On my-account: hide at top, only show when user has scrolled
   const isMyAccountPage = pathname === "/my-account";
@@ -143,8 +106,8 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
     router.push(affiliateCode ? `${target}?aff=${affiliateCode}` : target);
   };
 
-  // Don't render if dismissed or not ready
-  if (isDismissed || !isReady) {
+  // Don't render if dismissed, not ready, or while the hero's own CTA is on screen
+  if (isDismissed || !isReady || heroInView) {
     return null;
   }
 
@@ -157,7 +120,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
 
   return (
     <AnimatePresence>
-      {isReady && !isDismissed && (
+      {isReady && !isDismissed && !heroInView && (
         <m.div
           initial={{ opacity: 0, y: 100 }}
           animate={{ opacity: 1, y: 0 }}
@@ -175,7 +138,12 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
               scale: isCollapsedState ? 0.95 : 1,
             }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            onMouseEnter={() => !isCollapsed && setIsExpanded(true)}
+            // Hover expands the COLLAPSED pill — that is the only state where expanding does
+            // anything. The old guard was `!isCollapsed && setIsExpanded(true)`, i.e. it only
+            // fired when the banner was already expanded, so hovering the pill did nothing and
+            // a click was the only way to open it (owner, 2026-09-03). Click stays for touch,
+            // where there is no hover at all.
+            onMouseEnter={() => setIsExpanded(true)}
             onMouseLeave={() => setIsExpanded(false)}
             onClick={() => {
               if (isCollapsed) setIsExpanded(!isExpanded);
@@ -241,7 +209,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
 
                     {/* Center Column - Countdown */}
                     <div className="text-center sm:col-span-5">
-                      <FloatingCountdownLeaf
+                      <MajorDrawCountdownLeaf
                         targetMs={targetMs}
                         render={({ timeLeft, isExpired }) =>
                           isExpired ? (
@@ -301,12 +269,30 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                     </div>
 
                     {/* Right Column - Action Button */}
-                    <div className="flex justify-center sm:justify-end sm:col-span-3">
+                    <div className="relative flex justify-center sm:justify-end sm:col-span-3">
+                      {/* Entries multiplier, pinned to the CTA's top-right corner. */}
+                      {hasMultiplier && (
+                        <span className="pointer-events-none absolute -top-4 right-0 z-20 rotate-6 sm:-right-2">
+                          <PromoBadgeImage
+                            multiplier={membershipMultiplier as PromoMultiplier}
+                            size="small"
+                            className="h-10 w-auto drop-shadow-lg"
+                          />
+                        </span>
+                      )}
+                      {/* Brighter + heavier than the rest of the panel so the one thing that
+                          converts is the one thing you see first. Matches HeroGiveawayCta's CTA
+                          — same action, same weight, wherever the countdown happens to be. The
+                          sheen sweep is `motion-safe:` only (CLAUDE.md §4 reduced-motion gate). */}
                       <button
                         onClick={handleViewDetails}
-                        className="group bg-gradient-to-r from-yellow-500 via-yellow-600 to-orange-600 hover:from-yellow-600 hover:via-orange-600 hover:to-red-600 text-black px-6 py-2 sm:px-4 sm:py-2 rounded-lg font-semibold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-1 w-[200px] sm:w-auto ring-2 ring-yellow-300/30"
+                        className="group relative overflow-hidden bg-gradient-to-r from-amber-300 via-yellow-400 to-orange-500 text-black px-6 py-3 rounded-xl font-extrabold text-sm shadow-[0_6px_20px_rgba(251,191,36,0.45)] hover:shadow-[0_10px_28px_rgba(251,191,36,0.65)] ring-2 ring-white/70 hover:ring-white transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-1 w-[200px] sm:w-auto focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-200"
                       >
-                        <span>{gatesClosed ? "Visit Page" : "Enter Now"}</span>
+                        <span
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/50 to-transparent motion-safe:group-hover:translate-x-full motion-safe:transition-transform motion-safe:duration-700"
+                        />
+                        <span className="relative">{gatesClosed ? "Visit Page" : "Enter Now"}</span>
                       </button>
                     </div>
                   </div>
@@ -334,7 +320,7 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                       </p>
                     </div>
 
-                    <FloatingCountdownLeaf
+                    <MajorDrawCountdownLeaf
                       targetMs={targetMs}
                       render={({ timeLeft, isExpired }) =>
                         isExpired ? (
@@ -390,12 +376,23 @@ const FloatingCountdownBannerInner: React.FC<FloatingCountdownBannerProps> = ({ 
                             </div>
 
                             {/* Visit Page/Enter Now Button - Same size as countdown cards */}
-                            <button
-                              onClick={handleViewDetails}
-                              className="px-3 py-3 text-xs bg-gradient-to-r from-yellow-500 via-yellow-600 to-orange-600 text-black rounded font-semibold"
-                            >
-                              {gatesClosed ? "Visit Page" : "Enter Now"}
-                            </button>
+                            <span className="relative flex-shrink-0">
+                              {hasMultiplier && (
+                                <span className="pointer-events-none absolute -top-4 -right-3 z-20 rotate-6">
+                                  <PromoBadgeImage
+                                    multiplier={membershipMultiplier as PromoMultiplier}
+                                    size="small"
+                                    className="h-9 w-auto drop-shadow-lg"
+                                  />
+                                </span>
+                              )}
+                              <button
+                                onClick={handleViewDetails}
+                                className="px-4 py-3 text-xs whitespace-nowrap bg-gradient-to-r from-amber-300 via-yellow-400 to-orange-500 text-black rounded-lg font-extrabold shadow-[0_4px_14px_rgba(251,191,36,0.5)] ring-2 ring-white/70 active:translate-y-px transition-all"
+                              >
+                                {gatesClosed ? "Visit Page" : "Enter Now"}
+                              </button>
+                            </span>
                           </div>
                         )
                       }

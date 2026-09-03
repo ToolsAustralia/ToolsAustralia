@@ -3419,6 +3419,34 @@ html[data-tier="mobile"] [data-banner-stuck="true"] .fire::before {
   }
 }
 
+/* ── Hero "Enter Giveaway" continuous sheen ───────────────────────────────────
+   The homepage's main conversion, so it keeps moving after the finite
+   .ta-nudge-attention ring has finished — owner's call (2026-09-03), overriding
+   that utility's "a permanently pulsing button is noise" note for this one CTA.
+
+   Deliberately TRANSFORM-ONLY. The tier freeze above kills always-on animations
+   for mobile/tablet/save-data because they repaint; a translateX on a child
+   overlay is composited, costs no repaint, and can therefore keep running on a
+   phone — which is where this CTA matters most. Do not reimplement it as an
+   animated box-shadow/filter without adding it to that freeze list.
+
+   The sweep sits idle for most of the cycle (the 55%→100% hold) so it reads as
+   an occasional glint rather than a strobe. */
+@media (prefers-reduced-motion: no-preference) {
+  /* The sweep is measured in the HIGHLIGHT's own width, not the button's. The highlight is
+     1/3 of the button and starts at `-left-1/3`, so it must travel 4x its own width just to
+     reach the right edge — an earlier 220% carried it only ~40% across and the shine appeared
+     to die in the middle of the button. 430% clears the far edge before the cycle rests. */
+  @keyframes ta-cta-sheen {
+    0%, 8% { transform: translateX(0); }
+    60%, 100% { transform: translateX(430%); }
+  }
+  .ta-cta-sheen {
+    animation: ta-cta-sheen 3.2s ease-in-out infinite;
+    will-change: transform;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .ta-nudge-pulse {
     animation: ta-nudge-pulse 3s ease-in-out infinite;

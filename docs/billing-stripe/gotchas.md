@@ -914,3 +914,32 @@ at the call site, NOT added to `EXPECTED_DECLINE_ERROR_CODES`**: that set means 
 refused the card", and a 3DS challenge is not a refusal. The distinction is already pinned by
 `payment-error-decline-guidance.test.ts` ("non-card code → null"), and the shared classifier feeds
 four other routes. See [payment gotchas](../payment/gotchas.md) for the recovery-path fix itself.
+
+## A re-bill is a renewal to the money and (until 2026-09-03) nothing to the ledger
+
+`invoice.payment_succeeded` classifies a past-due RE-BILL (`mintCurrentCycleInvoice`) via
+`isRebillPayment` and normalises its `billing_reason` to `subscription_cycle` for revenue, admin
+labels, ROAS, conversion tracking and `isRenewal`. That classification happens roughly 300 lines
+BELOW where the renewal-cycle ledger write used to sit — and the ledger write was gated on the
+**raw** `expandedInvoice.billing_reason`.
+
+Result: a re-bill counted as renewal **revenue** while writing **no ledger row** and granting **no
+Membership Streak month**. It is exactly the failure mode two gates on the same concept produce
+when they read different values, and neither `tsc` nor any test saw it — the visible symptom was
+only that the admin Renewals card sat ~1% under the Revenue card's renewal count.
+
+**Fixed 2026-09-03** by moving the ledger write + streak increment down to just after `isRebill`
+and keying both off the shared `effectiveBillingReason` const. It could not be re-gated in place:
+`isUpgrade` and the Stripe `subscription` object that `isRebillPayment` needs are not resolved
+until after the old position, and hoisting a `subscriptions.retrieve` earlier inside a live
+payment handler is a much larger risk than the bug.
+
+**If you add another recovery path, the rule is:** whatever decides the money must also decide the
+ledger. Pass `billingReasonOverride: "subscription_cycle"` to `upsertRenewalCycleFromPaidInvoice`
+**only** for a classified re-bill — the same invoice shape (`subscription_update`) is also a
+genuine tier upgrade, and filing one of those as a renewal would corrupt revenue, ROAS and the
+member's streak. Guarded by `npm run test:renewal-cycle-rebill` (its critical case is the negative
+one: `subscription_update` with no override writes nothing).
+
+Historical gap left unrepaired by decision: 148 recoveries / $4,900 / 147 members, 2026-07-21 →
+2026-09-03. See `docs/subscription/backend.md` for the streak-backfill trap that leaves behind.
