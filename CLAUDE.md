@@ -829,6 +829,8 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "src/app/globals.css",
         "tailwind.config.ts",
         "src/app/not-found.tsx",
+        "src/app/sitemap.ts",
+        "public/robots.txt",
         "src/app/(site)/page.tsx",
         "src/app/(site)/components/HomeProducts.tsx",
         "src/app/(site)/layout.tsx",
