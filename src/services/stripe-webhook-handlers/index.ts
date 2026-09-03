@@ -3828,33 +3828,15 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
       return { granted: true };
     }
 
-    if (expandedInvoice.billing_reason === "subscription_cycle" && expandedInvoice.id) {
-      let firstTimePaidCycle = false;
-      try {
-        ({ firstTimeSucceeded: firstTimePaidCycle } = await upsertRenewalCycleFromPaidInvoice({
-          invoice: expandedInvoice,
-          userId: new mongoose.Types.ObjectId(String(user._id)),
-          stripeSubscriptionId: subscriptionId,
-        }));
-      } catch (cycleErr) {
-        webhookLog("warn", `Membership renewal cycle (paid) persist failed (non-blocking): ${cycleErr}`);
-      }
-      // Membership Streak: +1 per first-paid renewal cycle (replay-proof via the
-      // ledger pre-image — a redelivered webhook sees "succeeded" and skips).
-      if (firstTimePaidCycle) {
-        try {
-          await User.updateOne({ _id: user._id }, { $inc: { "subscription.streakMonths": 1 } });
-          if (user.subscription) {
-            // Keep the in-memory doc fresh so any later user.save() in this handler can't regress the counter.
-            user.subscription.streakMonths = (user.subscription.streakMonths ?? 0) + 1;
-          }
-          webhookLog("info", `Streak +1 → ${user.subscription?.streakMonths} (cycle invoice ${expandedInvoice.id})`);
-        } catch (streakErr) {
-          // Counter drift is repairable by re-running scripts/backfill-membership-streaks.ts --live
-          console.error(`Streak increment failed for user ${user._id} invoice ${expandedInvoice.id}:`, streakErr);
-        }
-      }
-    }
+    // NOTE: the renewal-cycle ledger write + Membership Streak increment used to sit HERE,
+    // gated on the RAW `expandedInvoice.billing_reason === "subscription_cycle"`. That made a
+    // past-due RE-BILL invisible to the ledger: the mint path collects as "subscription_update",
+    // which the revenue/label side normalizes to a renewal ~300 lines below (`isRebill`) — but
+    // this gate never saw that, so the payment counted as renewal revenue while writing no cycle
+    // row and granting no streak month. Moved down to the classification (search
+    // "RENEWAL-CYCLE LEDGER") so both halves read the SAME effective billing reason.
+    // It could not simply be re-gated in place: `isUpgrade` and the Stripe `subscription` object
+    // that `isRebillPayment` needs are not resolved until after this point.
 
     if (invoiceSubscriptionId && invoiceSubscriptionId !== user.stripeSubscriptionId) {
       webhookLog("info", `Invoice subscription ${invoiceSubscriptionId} (canonical) vs DB stripeSubscriptionId ${user.stripeSubscriptionId ?? "(none)"} — processing payment for invoice subscription`);
@@ -4153,6 +4135,57 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
       billingAnchorRule: subscription.metadata?.billing_anchor_rule,
       previousSubscriptionStatus: previousSubscriptionDbStatus,
     });
+
+    // --- RENEWAL-CYCLE LEDGER + Membership Streak -------------------------------------------
+    // Deliberately placed AFTER `isRebill`, not at the top of the handler where it used to live.
+    //
+    // It keys off the EFFECTIVE billing reason — the same value that decides revenue bucketing,
+    // admin labels, ROAS and the isRenewal flag — so a past-due RE-BILL is recorded as the
+    // renewal it is. Gated on the RAW reason (as it was until 2026-09-03), a re-bill counted as
+    // renewal revenue but wrote no ledger row and granted no streak month: 148 recoveries and
+    // 57 members' streaks went missing between 2026-07-21 (mint shipped) and 2026-09-03.
+    //
+    // The mint re-anchors the member onto a FRESH cycle (billing_cycle_anchor:'now') and voids
+    // the original invoice, so this writes a NEW row dated the recovery — it does not, and must
+    // not, flip the original cycle's `failed` row. That cycle genuinely never collected.
+    //
+    // Safe here: nothing between the old position and this line reads `streakMonths` or the
+    // ledger, and `processPaymentBenefits` is still below.
+    const effectiveBillingReason = effectiveBillingReasonForRebill(expandedInvoice.billing_reason, isRebill);
+
+    if (effectiveBillingReason === "subscription_cycle" && expandedInvoice.id) {
+      let firstTimePaidCycle = false;
+      try {
+        ({ firstTimeSucceeded: firstTimePaidCycle } = await upsertRenewalCycleFromPaidInvoice({
+          invoice: expandedInvoice,
+          userId: new mongoose.Types.ObjectId(String(user._id)),
+          stripeSubscriptionId: subscriptionId,
+          // A re-bill's raw reason is "subscription_update"; persist it as the renewal it is so
+          // the ledger's own `billingReason` filter (every renewal query uses it) still matches.
+          billingReasonOverride: isRebill ? "subscription_cycle" : undefined,
+        }));
+      } catch (cycleErr) {
+        webhookLog("warn", `Membership renewal cycle (paid) persist failed (non-blocking): ${cycleErr}`);
+      }
+      // Membership Streak: +1 per first-paid renewal cycle (replay-proof via the
+      // ledger pre-image — a redelivered webhook sees "succeeded" and skips).
+      if (firstTimePaidCycle) {
+        try {
+          await User.updateOne({ _id: user._id }, { $inc: { "subscription.streakMonths": 1 } });
+          if (user.subscription) {
+            // Keep the in-memory doc fresh so any later user.save() in this handler can't regress the counter.
+            user.subscription.streakMonths = (user.subscription.streakMonths ?? 0) + 1;
+          }
+          webhookLog(
+            "info",
+            `Streak +1 → ${user.subscription?.streakMonths} (${isRebill ? "re-bill" : "cycle"} invoice ${expandedInvoice.id})`,
+          );
+        } catch (streakErr) {
+          // Counter drift is repairable by re-running scripts/backfill-membership-streaks.ts --live
+          console.error(`Streak increment failed for user ${user._id} invoice ${expandedInvoice.id}:`, streakErr);
+        }
+      }
+    }
 
     // --- Anchor-24 clamp for a past-due RE-BILL (parity with the held-draft reanchor block above) ---
     // The held-draft recovery (subscription_cycle) reanchors via shouldReanchorAfterRecovery, which clamps a
@@ -4605,7 +4638,9 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice): Promise<I
       // A re-bill (past-due recovery mint) is a RENEWAL — normalize its "subscription_update" to
       // "subscription_cycle" so every downstream consumer (admin labels, new-vs-renewal revenue/ROAS,
       // Meta/Klaviyo conversion tracking, isRenewal) treats it as one, not a new-acquisition purchase.
-      effectiveBillingReasonForRebill(expandedInvoice.billing_reason, isRebill),
+      // Same const the renewal-cycle ledger write above uses — sharing it is what keeps the money
+      // side and the ledger side from ever disagreeing again, which is the bug this replaced.
+      effectiveBillingReason,
       sessionAttribution,
       {
         skipMembershipFirstCommission: recordMembershipRecurringAffiliate,

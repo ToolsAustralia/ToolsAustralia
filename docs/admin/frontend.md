@@ -2551,9 +2551,18 @@ tile's click-through popover as **"Payments received in range"**. It is a paymen
 and legitimately differs from `landedInRange` (43 vs 32 on a live day); the two must never be
 divided into each other.
 
-**Historical days improve.** A failed cycle that dunning later recovers flips the *same row* to
-`succeeded`, so a past range's failure count decreases over time. That is the desired reading
-("did they eventually pay?"), but it does mean a screenshot is not reproducible later.
+**Historical days improve — via one of the two recovery routes.** A failed cycle that **dunning**
+later recovers flips the *same row* to `succeeded`, so a past range's failure count decreases over
+time; a screenshot is not reproducible later. A **past-due re-bill** behaves differently: it
+re-anchors the member onto a fresh cycle, so it adds a NEW row dated the recovery day and leaves
+the original failure standing. Both are correct — see
+[subscription/backend.md](../subscription/backend.md) for the table.
+
+So the card's leftover slice can move for two different reasons, and a member recovered by re-bill
+shows up as a renewal **due on the day they were recovered**, not on the day they originally
+missed. Before 2026-09-03 those re-bills reached the card not at all (no ledger row was written),
+which is why the Renewals card's landed count could sit ~1% under the Revenue card's renewal
+count on any given day.
 
 Implementation: [`summarizeRenewalCohort`](../../src/utils/admin/renewalCohort.ts) (pure,
 `npm run test:renewal-cohort`) ← [`MembershipAnalyticsService.getAnalyticsBundle`](../../src/services/admin/MembershipAnalyticsService.ts)

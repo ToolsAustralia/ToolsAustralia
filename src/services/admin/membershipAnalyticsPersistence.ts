@@ -25,22 +25,31 @@ function invoicePeriodEndDate(invoice: Stripe.Invoice): Date | null {
 }
 
 /**
- * Upsert renewal cycle when a subscription_cycle invoice is paid.
+ * Upsert renewal cycle when a renewal invoice is paid.
  *
  * Returns `firstTimeSucceeded`: true only when this call transitioned the row
  * INTO paid (pre-image absent / "expected" / "failed"). Webhook replays see a
  * "succeeded"/"recovered" pre-image and get false — the Membership Streak
  * increment keys off this signal (replay-proof by construction).
+ *
+ * `billingReasonOverride` exists for the past-due RE-BILL path: `mintCurrentCycleInvoice`
+ * collects a genuine renewal as Stripe `billing_reason: "subscription_update"`, and the caller
+ * has already classified it (`isRebillPayment`). Without the override this function would both
+ * refuse the invoice outright AND — if it did not — store "subscription_update", which every
+ * renewal query filters out. Callers must pass it ONLY for a classified re-bill; passing it for
+ * a genuine upgrade would file a tier change as a renewal.
  */
 export async function upsertRenewalCycleFromPaidInvoice(input: {
   invoice: Stripe.Invoice;
   userId: mongoose.Types.ObjectId;
   stripeSubscriptionId?: string;
+  billingReasonOverride?: "subscription_cycle";
 }): Promise<{ firstTimeSucceeded: boolean }> {
-  const { invoice, userId, stripeSubscriptionId } = input;
+  const { invoice, userId, stripeSubscriptionId, billingReasonOverride } = input;
   const invoiceId = invoice.id;
   if (!invoiceId) return { firstTimeSucceeded: false };
-  if (invoice.billing_reason !== "subscription_cycle") return { firstTimeSucceeded: false };
+  const effectiveBillingReason = billingReasonOverride ?? invoice.billing_reason;
+  if (effectiveBillingReason !== "subscription_cycle") return { firstTimeSucceeded: false };
 
   const dueAt = invoicePeriodEndDate(invoice);
   if (!dueAt) return { firstTimeSucceeded: false };
@@ -60,7 +69,10 @@ export async function upsertRenewalCycleFromPaidInvoice(input: {
       $set: {
         userId,
         stripeSubscriptionId,
-        billingReason: invoice.billing_reason ?? "subscription_cycle",
+        // The EFFECTIVE reason, so a re-bill is stored as the renewal it is — every renewal
+        // query filters on `billingReason: "subscription_cycle"`, so storing the raw
+        // "subscription_update" here would hide the row from the very reports it exists for.
+        billingReason: effectiveBillingReason,
         status: "succeeded",
         dueAt,
         amountDueCents,

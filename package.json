@@ -171,6 +171,7 @@
     "test:additional-pack-discount": "tsx src/utils/membership/__tests__/additional-pack-discount.test.ts",
     "test:partner-discount-queue": "tsx src/utils/partner-discounts/__tests__/partner-discount-queue.test.ts",
     "test:renewal-progress": "tsx src/utils/admin/__tests__/renewalProgress.test.ts",
+    "test:renewal-cycle-rebill": "tsx src/services/admin/__tests__/renewal-cycle-rebill.test.ts",
     "test:renewal-cohort": "tsx src/utils/admin/__tests__/renewalCohort.test.ts",
     "test:advertising-card-model": "tsx src/app/admin/component/overview/sections/__tests__/advertisingCardModel.test.ts",
     "test:platform-revenue-breakdown": "tsx src/services/admin/__tests__/platformRevenueBreakdown.test.ts",
