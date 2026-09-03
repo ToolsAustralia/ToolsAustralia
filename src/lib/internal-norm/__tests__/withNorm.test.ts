@@ -84,6 +84,30 @@ async function run() {
         ctx.ok({ status: "ok" as const, echo: "should never reach here" }),
     );
 
+    // The responseSchema must PROJECT, not merely validate. Reads bypass the per-permission
+    // grant on the stated grounds that "the PII boundary lives in each endpoint's
+    // responseSchema projection" (withNorm.ts) — so a key the handler emits but the schema
+    // does not declare has to be stripped, or that boundary does not exist. This regressed
+    // once already: ctx.ok validated with safeParse and then serialised the ORIGINAL object,
+    // which shipped customer email + surname out of /v1/cancellation-flow-analytics.
+    // See docs/internal-norm/gotchas.md G11.
+    const handlerLeaky = withNorm(
+      {
+        tier: "read",
+        registryKey: "test.strip",
+        requiredPermission: "facebookAds.view",
+        responseSchema: TestSchema,
+      },
+      async (ctx) =>
+        ctx.ok({
+          status: "ok" as const,
+          echo: "declared",
+          // Undeclared by TestSchema — must not reach the wire.
+          userEmail: "leak@example.com",
+          userLastName: "Leaky",
+        } as unknown as z.infer<typeof TestSchema>),
+    );
+
     // Happy path
     const req = buildRequest("GET", "/api/internal/norm/v1/test/echo", "msg=hi", "");
     const res = await handler(req);
@@ -151,12 +175,31 @@ async function run() {
     assert.equal(bypassLog!.permissionChecked, "users.delete");
     assert.equal(bypassLog!.permissionGranted, true);
 
+    // responseSchema projects: undeclared keys are stripped, declared ones survive.
+    const stripReq = buildRequest("GET", "/api/internal/norm/v1/test/strip", "", "");
+    const stripRes = await handlerLeaky(stripReq);
+    assert.equal(stripRes.status, 200, "leaky handler still returns 200");
+    const stripBody = await stripRes.json();
+    assert.equal(stripBody.data.echo, "declared", "declared field survives the projection");
+    assert.equal(
+      stripBody.data.userEmail,
+      undefined,
+      "undeclared userEmail must be stripped — responseSchema is the PII boundary",
+    );
+    assert.equal(
+      stripBody.data.userLastName,
+      undefined,
+      "undeclared userLastName must be stripped — responseSchema is the PII boundary",
+    );
+
     console.log(
-      "✓ withNorm: happy path + 401 + 403 + read-bypass + NormCallLog written",
+      "✓ withNorm: happy path + 401 + 403 + read-bypass + responseSchema strips undeclared keys + NormCallLog written",
     );
   } finally {
     await NormCallLog.deleteMany({
-      registryKey: { $in: ["test.echo", "test.forbidden", "test.read-bypass"] },
+      registryKey: {
+        $in: ["test.echo", "test.forbidden", "test.read-bypass", "test.strip"],
+      },
     });
     await mongoose.disconnect();
   }
