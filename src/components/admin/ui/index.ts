@@ -10,3 +10,4 @@ export * from "./DataTable";
 export * from "./StatusDot";
 export * from "./PlatformLogos";
 export * from "./ProgressBar";
+export * from "./SegmentedBar";

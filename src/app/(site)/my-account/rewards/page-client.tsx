@@ -119,12 +119,23 @@ export default function RewardsPage() {
           onUpdatePayment={onUpdatePayment}
         />
 
-        {dash.acct !== "none" && userId && (
-          <>
-            <RewardsPartnerQueue />
-            <RewardsClaimables userId={userId} onUnlock={onUnlockCoupon} />
-            <RewardsMilestones acct={dash.acct} months={dash.streakMonths} tierHex={dash.tierHex} />
-          </>
+        {/* Partner queue IS a member feature — showing it to a non-member would promise something
+            untrue, so it stays behind the account-state gate. */}
+        {dash.acct !== "none" && <RewardsPartnerQueue />}
+
+        {/* Claimables are NOT member-only. The three trigger codes (cancel-click / abandoned-checkout /
+            one-time-buyer) are `purchaseRequirement: "none"`, and two of those three cohorts are by
+            definition `acct === "none"` — a member who cancelled and a guest who never joined. Gating
+            this on membership sent them from a marketing email carrying their code straight to a page
+            with no claimables section at all, not even its empty state. The component renders its own
+            truthful empty state ("No rewards to claim"), so a customer holding nothing loses nothing by
+            seeing it, and the burn stays gated server-side by hasQualifyingPurchase either way.
+            Order is unchanged for members: queue → claimables → milestones. */}
+        {userId && <RewardsClaimables userId={userId} onUnlock={onUnlockCoupon} />}
+
+        {/* Milestones ARE a member feature (the streak ladder) — member-only, same reason. */}
+        {dash.acct !== "none" && (
+          <RewardsMilestones acct={dash.acct} months={dash.streakMonths} tierHex={dash.tierHex} />
         )}
       </div>
 

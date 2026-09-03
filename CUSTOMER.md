@@ -100,7 +100,7 @@ Two **ghost states** ride on top of the enum without being in it: `pendingChange
 | Renewal (anchor-24) | Monthly renew; 25th–27th joiners anchored to the 24th | §5.2 · [BUSINESS.md §9b](BUSINESS.md) · [BILLING_ANCHOR_24.md](docs/BILLING_ANCHOR_24.md) |
 | Upgrade / Downgrade | Immediate charge + cycle reset vs. deferred with benefits preserved | §5.3, §5.4 · [BUSINESS.md §10c, §10d](BUSINESS.md) |
 | Auto-renew toggle | Soft-cancel shortcut (`cancel_at_period_end`) | §5.5 · [BUSINESS.md §10a](BUSINESS.md) |
-| Past-due recovery | Self-serve retry → 3DS → update card → pay overdue. **Any failed renewal — including an admin re-bill of a stranded member — fires the "Subscription Renewal Failed" dunning email**, and leaves the member unpaused / in dunning rather than re-freezing them **If Stripe has temporarily blocked the member's card after too many attempts, Pay Now returns a short, dated message — "This card is temporarily blocked after too many attempts. Use a different card, or try again in 3 days." — and the automated charge run also leaves that card alone for 3 days (it is keyed to the card, so adding a new card works straight away).** | §3a · [BUSINESS.md §9i, §10e](BUSINESS.md) · [FAILED_RENEWAL_PAY_NOW.md](docs/FAILED_RENEWAL_PAY_NOW.md) |
+| Past-due recovery | Self-serve retry → 3DS → update card → pay overdue. **The 3DS rung was broken until 2026-09-03**: a member whose bank demanded a 3D Secure challenge got a generic error on Pay Now and could not pay their renewal at all (see [BUSINESS.md §9d](BUSINESS.md)). Pay Now now returns the bank's challenge to the browser like every other 3DS surface. **Any failed renewal — including an admin re-bill of a stranded member — fires the "Subscription Renewal Failed" dunning email**, and leaves the member unpaused / in dunning rather than re-freezing them **If Stripe has temporarily blocked the member's card after too many attempts, Pay Now returns a short, dated message — "This card is temporarily blocked after too many attempts. Use a different card, or try again in 3 days." — and the automated charge run also leaves that card alone for 3 days (it is keyed to the card, so adding a new card works straight away).** | §3a · [BUSINESS.md §9i, §10e](BUSINESS.md) · [FAILED_RENEWAL_PAY_NOW.md](docs/FAILED_RENEWAL_PAY_NOW.md) |
 | Cancellation & retention | CancellationFlowModal; five save-offers, seven reasons. **Streak-stakes step (2026-07-15, dark until streak launch):** non-past-due members see a Membership Streak stakes screen between reason and the offers — loss framing (streak ≥ 2: banked renewals + next milestone + pause-freezes-your-streak) or forward framing (streak 0/1: the ladder); "Continue cancelling" always visible; exit recorded as `stakesAction` with `streakMonthsAtStart` on the event. The pause offer card also states the streak freezes. | §5.6 · [BUSINESS.md §13c](BUSINESS.md) · [docs/subscription/cancellation-flow.md](docs/subscription/cancellation-flow.md) |
 | Reactivate vs Resubscribe | Grace-window reactivate vs. fully-expired win-back | §5.7 · [BUSINESS.md §10i](BUSINESS.md) |
 | Entries & eligibility | How entries are earned; 18+, SA/ACT and employees excluded | §6, §6a · [BUSINESS.md §3](BUSINESS.md) |
@@ -354,6 +354,35 @@ This is the most important and non-obvious behaviour. Registering in **step 1** 
 
 The register route even hard-codes `isAuthenticated: false` in its Klaviyo "Started Checkout" event "because this path runs at registration submit and the user is, by definition, a guest" ([register/route.ts:109-111](src/app/api/auth/register/route.ts#L109)). Documented at [docs/auth/gotchas.md:26-50](docs/auth/gotchas.md#L26).
 
+_2026-09-01 — logging only, no change to what a customer sees or to what is stored:_ a
+registration rejected by validation (most often a mistyped email) is logged at `warn` with
+just the field message, instead of `error` with a full `ZodError` dump. **The customer-facing
+behaviour is unchanged** — same 400, same `{ error, field }` body, same inline message on the
+form. See [docs/auth/gotchas.md](docs/auth/gotchas.md).
+
+### 4a-bis. The step-1 → step-2 bridge is now proven by a cookie (2026-08-28)
+
+Because step 1 does not log anyone in, step 2's payment call has no session and has to name the
+account by **email**. That was exploitable: the purchase endpoints took the email on trust, so anyone
+who knew a member's address could get a payment attached to that member's Stripe customer and — via
+the new "sign you in after you pay" step — end up inside their account for the price of a $1 charge.
+
+`POST /api/auth/register` now sets a short-lived, HttpOnly cookie (`ta_checkout_identity`, 2 hours)
+on success, and the purchase endpoints require it before they will act for an existing account. It is
+proof because registration **refuses** any email that already has an account — so reaching success
+means this browser just created it.
+
+**What a customer actually notices:** nothing, in the normal flow — the cookie is set and sent
+automatically. Two edge cases are visible:
+
+- Someone who tries to buy using an email that already has an account, without being signed in, is
+  told **"This email is already associated with an account. Please log in to continue."** (HTTP 403).
+  This is the same answer registration already gives them.
+- A buyer who leaves checkout open longer than **2 hours** and then pays gets that message instead of
+  silently completing as a guest. They log in and continue; nothing is charged in the meantime.
+
+A genuinely new buyer — an email with no account — is unaffected and still checks out as a guest.
+
 ### 4a-ii. "Your Details" follows the visitor between pages (2026-08-04)
 
 Each page mounts its own copy of the `MembershipModal`, so anything typed into step 1 used to be lost the moment the visitor navigated — someone who started on `/` and then opened the modal on `/promotions/[slug]` or `/membership` faced an empty form again. The four identity fields (first name, last name, email, mobile) are now kept in **`sessionStorage`** (`ta.guestDetails`, owned by [guest-details-storage.ts](src/utils/auth/guest-details-storage.ts)) and refilled when the modal opens.
@@ -526,6 +555,18 @@ Two distinct paths via `POST /api/stripe/renew-subscription`:
 
 For the branch logic (retry_payment / reactivate / create_new) see [BUSINESS.md §10i](BUSINESS.md).
 
+_2026-09-01 — membership journey:_ a member who already holds a live membership (active / past-due / paused / unpaid / trialing) can no longer walk into the new-subscription checkout by **tapping a membership tier**. Every such tap now sends them to **/my-account/membership** instead: the plan sheet, or the **payment** sheet when they are in payment recovery (past due *or* unpaid — both owe us money, and the plan sheet cannot take it). That covers the `/membership` package cards, the `/membership` Klaviyo abandoned-checkout deep-link, the dashboard’s plan-carrying membership event, and tapping a tier card on any page that hosts the shared package-cards component — home, `/promotions/[slug]`, and 15+ others — which previously dumped a blocked tap on the bare `/my-account` dashboard, a page with no plan controls at all.
+
+**What is deliberately NOT blocked: the package picker.** The “Select Your Package” picker stays open to everyone, including a member with a live membership, because the picker is how they buy a one-time or Additional **pack** — and buying a pack while a membership is live has always been allowed. This is why the promotions hero “Enter Now”, the draw-results CTA, the dashboard “Become a member” event, and the rewards page’s “Become a member” CTA (`/my-account/rewards`) all still open the picker exactly as before, even though each of them parks a recommended tier (Foreman) behind it so that backing out lands on a real package rather than an empty payment step. That parked tier is **our** recommendation, not the customer’s choice, so it does not decide whether they may open the picker. If they then pick a membership tier from the picker, that is a real choice and it is caught one step later, before any payment is set up.
+
+**Two related fixes the same day.** A member in payment recovery who used the **change-tier** control on `/my-account/membership` was being left on a payment sheet for a subscription that had already been closed as part of the switch — they now continue into the ordinary flow for the tier they picked, as intended. And the “Active Subscription Found” message shown if a purchase is refused because a membership already exists now takes them to the **payment** sheet when they are in payment recovery, instead of always the plan sheet. Both of those, and the tier-card button label below, take their answer from the same definition of “in payment recovery”.
+
+_On the change-tier fix, in plain English:_ picking a different tier while past due cannot move the existing membership across, so we **close the old membership first** and then start the new one. For a moment in the middle, the member has just been closed but the screen has not caught up — and the check that decides “do you already have a membership?” was reading the screen’s copy rather than the freshly-saved answer. It saw a member who still owed us money and sent them to **pay for a membership that had just been closed**: a dead end on a real payment screen, with a plan they had already agreed to buy left unbought. The check now reads the freshly-saved answer, so the member goes straight on to paying for the tier they actually chose. **What they see now:** tap a different tier while past due → confirm the switch → the normal join flow for the new tier, in one go. **What they saw before:** the same tap ended on a payment screen that could not complete. If the freshly-saved answer is not available for any reason, the check falls back to the old reading — it will never wrongly *stop* someone from joining, which is the failure that matters more. Guests, cancelled and expired members were never affected.
+
+**And the button now says what it will do.** A membership tier card shown to a member whose payment has failed reads **“Update payment”** instead of “Enter Now”. That was already true for a *past-due* member; it now also covers a member marked *unpaid* — the step past past-due — who until now read “Enter Now” on the card and was taken to the payment screen anyway. Nothing about what they can buy changed, and no new wording was written: this is the label the situation already had, now reaching everyone who is in it.
+
+See [docs/subscription/frontend.md](docs/subscription/frontend.md) for the mechanism. Guests and cancelled/expired members are unaffected and can subscribe exactly as before.
+
 ---
 
 ## 6. Entries & draw participation
@@ -689,7 +730,7 @@ A customer participates passively — visiting via an affiliate link stamps `Use
 
 **Legacy points balance — paused/deprecated.** `User.rewardsPoints` and `redemptionHistory` still exist on the model; `entryWallet` is explicitly **deprecated — set to 0** ([User.ts:130-131](src/models/User.ts#L130)). The rewards surface is gated by a feature flag that **defaults OFF** (`rewardsEnabled()` returns false unless `REWARDS_ENABLED`/`NEXT_PUBLIC_REWARDS_ENABLED = "true"`, [featureFlags.ts:27-39](src/config/featureFlags.ts#L27)). When off, reward API routes return HTTP **503** with code `REWARDS_PAUSED` ([rewardsGuard.ts:32-38](src/lib/rewardsGuard.ts#L32)).
 
-**Event-based redeemables ledger (current).** An issuance ledger (not a points balance) — each grant is a discrete `RedeemableIssuance` / `MilestoneIssuance` record. Items auto-issue for active campaigns on wallet read; redeemable when `status === "active"` and not past `expiresAt`. For campaign config, milestone types, and `purchaseRequirement` rules see [docs/rewards-redeemables/](docs/rewards-redeemables/).
+**Event-based redeemables ledger (current).** An issuance ledger (not a points balance) — each grant is a discrete `RedeemableIssuance` / `MilestoneIssuance` record. Items auto-issue for active campaigns on wallet read. A customer can claim one when their own row is still `active` and inside their own `expiresAt`, they meet the `purchaseRequirement`, **and the campaign it came from is itself still open for redemption**. **Corrected 2026-09-01:** that last condition used to be missing from the wallet, which is what a customer actually looks at. A coupon from a campaign that had ended (but was left switched on) showed a working **Claim** button that failed when tapped — 188 members held a 25-entry `ANZACDAY25` coupon in exactly that state. The button and the server now ask the same question, so a coupon the server will refuse is shown as unclaimable rather than as a broken button. Nothing a customer was entitled to changed: those 25 entries were never claimable after the campaign ended in April. For campaign config, milestone types, and `purchaseRequirement` rules see [docs/rewards-redeemables/](docs/rewards-redeemables/).
 
 **Two clocks, and only one of them is the customer's.** A coupon campaign has a *campaign* clock —
 how long we keep handing the code out to new people — and a *customer* clock, how long that one
@@ -709,7 +750,12 @@ which expire 72 hours after they are minted (2026-08-27).
 | `one-time-purchase` | Bought a one-time pack while **not** holding an active membership | `EXTRA100` |
 | `checkout-start` | Registered as a guest with a package selected | `LOCKIN100` |
 
-Customer-visible effect: **the discount email itself**, carrying the code string — hardcoded in the marketing template, made real for that person by the call one step above it. Alongside it we record a `Bonus Code Issued` Klaviyo event holding the code, the free entries it includes and **that customer's own deadline** (the stored instant, formatted in Sydney time, never recomputed — so no copy of the deadline can disagree with the one redemption enforces). **That event is our record, not a message to the customer** (corrected 2026-08-26 — this line used to imply the deadline was emailed): a Klaviyo flow email renders against its own trigger metric, so the three discount templates cannot read the deadline off our event and none of them prints it. One **redeemed** grant per person, per code, for life: a grant that has ever been redeemed is never re-issued, and that survives a refund — the refund takes back the entries and the code stays used, so it is refused at redemption and at checkout, and the wallet shows it as **Redeemed** in the "past" list rather than as a claimable coupon. The check that decides whether a code may be applied at checkout also runs **server-side at payment**, on an id the server resolved, so a customer who applies a code they do not hold is refused **before** they pay rather than silently granted nothing afterwards — this matters because a customer applying a code straight after registering is still a guest at that point. A re-trigger *inside* a live window is a **silent no-op on our side** — nothing is written and **no second `Bonus Code Issued` event fires**; the flow's own discount email may still send, because we sit one step above it and answer "carry on". Either way the deadline is not extended and the code is unchanged, so a second email is harmless in this case — it carries a code that still works. (Corrected 2026-08-26 — this used to say flatly "no second email is sent".) A customer who loses that first email **cannot look the code up anywhere** (corrected 2026-08-26 — this used to say they could find it in their rewards wallet at `/my-account`, and they cannot): the only two surfaces that print a code and its deadline are the `/rewards` wallet, which is behind the rewards pause flag, and a floating widget that has been unmounted since the 2026-07 dashboard revamp. What they *can* see, at [My Account → Rewards](/my-account/rewards), is the reward itself with a Claim button — which is enough to use a code that needs no purchase, and not enough to tell them the code string or the date. **And the deadline is worse off than the code: even the email does not name it.** Before the window lapses there is nowhere a customer can learn their exact date and time; after it lapses, the checkout message names it to a signed-in caller. Anything else has to come from support, which is what Cobber id 86 now tells them. An **unredeemed** code whose window has already lapsed is the one case that can come back: if the customer triggers again later, it is re-armed with a fresh deadline and a new email — they never used the first one, so nothing was spent. The event is emitted only in production, so preview deploys cannot email a real customer or burn their grant.
+*(Internal-only, no customer-facing change: admin can now see, per flow, who already holds the
+code, who can still redeem it, and who has redeemed it — plus a secondary, collapsed forecast of
+how many customers it could reach — [docs/rewards-redeemables/api.md](docs/rewards-redeemables/api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-status-2026-09-01-reworked),
+2026-09-01.)*
+
+Customer-visible effect: **the discount email itself**, carrying the code string — hardcoded in the marketing template, made real for that person by the call one step above it. Alongside it we record a `Bonus Code Issued` Klaviyo event holding the code, the free entries it includes and **that customer's own deadline** (the stored instant, formatted in Sydney time, never recomputed — so no copy of the deadline can disagree with the one redemption enforces). **That event is our record, not a message to the customer** (corrected 2026-08-26 — this line used to imply the deadline was emailed): a Klaviyo flow email renders against its own trigger metric, so the three discount templates cannot read the deadline off our event and none of them prints it. One **redeemed** grant per person, per code, for life: a grant that has ever been redeemed is never re-issued, and that survives a refund — the refund takes back the entries and the code stays used, so it is refused at redemption and at checkout, and the wallet shows it as **Redeemed** in the "past" list rather than as a claimable coupon. **Applying the code no longer depends on pressing the Apply button** (corrected 2026-08-27): typing the code and pressing Purchase now means the same thing — the code is checked at the click and carried onto the payment, and if it is definitely wrong the sale stops once, at no cost, with the reason shown beside the box and a second press going through without it. Before this, a code typed and left unapplied was silently discarded and the customer was charged with nothing attached. The check that decides whether a code may be applied at checkout also runs **server-side at payment**, on an id the server resolved, so a customer who applies a code they do not hold is refused **before** they pay rather than silently granted nothing afterwards — this matters because a customer applying a code straight after registering is still a guest at that point. A re-trigger *inside* a live window is a **silent no-op on our side** — nothing is written and **no second `Bonus Code Issued` event fires**; the flow's own discount email may still send, because we sit one step above it and answer "carry on". Either way the deadline is not extended and the code is unchanged, so a second email is harmless in this case — it carries a code that still works. (Corrected 2026-08-26 — this used to say flatly "no second email is sent".) A customer who loses that first email **cannot look the code up anywhere** (corrected 2026-08-26 — this used to say they could find it in their rewards wallet at `/my-account`, and they cannot): the only two surfaces that print a code and its deadline are the `/rewards` wallet, which is behind the rewards pause flag, and a floating widget that has been unmounted since the 2026-07 dashboard revamp. What they *can* see, at [My Account → Rewards](/my-account/rewards), is the reward itself with a Claim button — which is enough to use a code that needs no purchase, and not enough to tell them the code string or the date. **And the deadline is worse off than the code: even the email does not name it.** Before the window lapses there is nowhere a customer can learn their exact date and time; after it lapses, the checkout message names it to a signed-in caller. Anything else has to come from support, which is what Cobber id 86 now tells them. An **unredeemed** code whose window has already lapsed is the one case that can come back: if the customer triggers again later, it is re-armed with a fresh deadline and a new email — they never used the first one, so nothing was spent. The event is emitted only in production, so preview deploys cannot email a real customer or burn their grant.
 
 The old limitation — that only the **guest** checkout-start moment could enrol, because the authenticated one is emitted client-side and a component cannot reach the database — disappears under the webhook model: what decides whether a customer gets a code is whether they entered the Klaviyo flow, not where the event that put them there was emitted. Two things a customer could notice: a code they never used and whose deadline has passed can be re-issued with a fresh deadline if they qualify again, but **not within 30 days** of the first one — the flows can be re-entered and re-run, and without that cooldown "one grant per person" would quietly become "one per flow re-entry"; and the deadline is now an exact 72 hours, so a code issued at 2:47pm on a Friday dies at 2:47pm on the Monday rather than at 11:59pm. Across a daylight-saving change the displayed time shifts by an hour (a Friday 2pm issue expires Monday 3pm) — that is correct for "exactly 72 hours", and it will look like a bug to anyone who does not know.
 
@@ -739,6 +785,31 @@ customer keeps their unused code either way — what this recovers is the free e
 they just made. If they REMOVE the code before paying, the record is removed with it, and it expires
 after 30 minutes so it can never attach itself to a later purchase or a renewal. This is our own
 record only: nothing new is sent to Klaviyo, Stripe or any other third party.
+
+*A code typed on the wrong kind of package could still be lost — and our own wording sent them
+there (2026-08-27).* Some codes only work on a membership. Type one on a one-time pack and we stop
+once and say "This code is for membership packs only — press Purchase again to continue without it."
+The obvious thing to do next is switch to a membership, where the code is perfectly good. Until this
+fix, that switch was silently fatal: we had filed the code away as "already refused", skipped
+re-checking it, and charged for the membership with the code still sitting in the box looking
+applied and the customer's **one-per-lifetime** free-entry grant quietly gone. We now remember the
+refusal as *this code, on this kind of package*, so switching to a membership asks the question
+again and honours the code. Pressing Purchase a second time on the **same** package still buys, and
+still buys without the code — that promise is unchanged.
+
+*Two of the three kinds of code only reached us on some checkouts (2026-08-27).* The box accepts
+three kinds of code: a mate's referral code, a promo link code, and a bonus code from one of our
+emails. Bonus codes always got through. The other two only travelled if the checkout happened to
+create its payment at the moment you pressed Purchase — and on a membership checkout it usually
+does not, because we set the payment up in the background as soon as you reach the payment step so
+the card form is ready. On those checkouts a referral code was dropped, and pressing **Apply** did
+not save it either. All three kinds now travel the same way bonus codes already did: we hand the
+raw code you typed to our own server at the moment of purchase, and **our server** decides which of
+the three it is and re-checks it against your account. Your browser never gets to claim "this is a
+referral code" — which is what makes it safe. One consequence you can see: the confirmation screen
+only says "Referral code MATE-CODE applied" when the code genuinely reached us. If we could not tell
+(our own timeout, our own outage), we take the payment as always, but we say nothing rather than
+claim something we cannot stand behind.
 
 **What we store about the customer for this:** one row per issuing call — accepted, refused **or** errored — holding a request id, the resolved `userId` where we could resolve one, which of the three flows called, the outcome and the HTTP status, and a **hashed** (never raw) IP of the caller. No email address, no code string and no request body are kept. Rows auto-delete after **90 days**. This is the only record that can answer "why did this customer not get their code?", because there is no admin screen for bonus codes; the refused rows are also how we would notice someone probing the endpoint with a leaked secret. **The endpoint itself tells the caller nothing about the customer** — every customer-state answer (code created, already held, already used, no such account, and the case where the flow sends two identities that name two different accounts) comes back identical, so someone holding the secret cannot use it to find out whether an email address belongs to a Tools Australia customer. That last case used to answer with a distinct status and no longer does (2026-08-26); it is still logged and still written to the audit row, so it is exactly as visible to us as it was.
 
@@ -927,6 +998,7 @@ Before persisting, the webhook runs a **persisted-UTM reconcile** ([reconcilePer
 
 - **`Subscription Cancellation Requested`** — sent the instant a member-initiated cancellation commits. Carries the customer's account id, the tier they are leaving (id, name, tier and monthly price), the time they cancelled and the time their access ends. No new personal information leaves: the email address and name were already on the profile, and the tier and dates are already synced as profile properties. What is new is the *timing* — a cancel-click signal Klaviyo previously never received.
 - **`had_active_subscription` on `One-Time Package Purchased`** — a single true/false recorded at the instant of the purchase, saying whether the buyer already held an active membership. It is the **same** "is this an active member" test the profile already carries, frozen at the moment of purchase rather than describing the customer today: a nurture email sends days later, by which time they may have joined or cancelled in between. It does **not** read any differently in the awkward cases — a member whose membership is paused, or who is behind on payment, counts as *not* active here exactly as they do on the profile, and a member who has scheduled a cancellation but still has access counts as active. Telling those states apart needs the five-state membership status already on the profile, not this flag. It replaces a server-side check removed on 2026-08-26 and cannot be reconstructed afterwards from anything else we hold.
+- **`is_renewal` on merchandise `Placed Order` events** (added 2026-09-02) — merchandise orders now carry `is_renewal: false`, matching every other purchase event. **No new personal information leaves.** This describes the *order* ("was this an automatic monthly renewal?"), not the customer, and for a shop purchase the answer is always no. It exists so marketing reporting can separate revenue a customer chose to spend from revenue that recurred automatically; without it, merchandise sales were silently missing from that report.
 
 **Note:** UTM / converting-platform values are **not** synced as Klaviyo properties — only `brand_interest` (from signup slug) is. **List/consent:** marketing subscribe happens **once at registration**, gated by `acceptsPromotionalEmail`; SMS marketing + transactional subscribe if a phone exists; later syncs update data only, never re-subscribe ([klaviyo-profile-sync.ts:34-70,150-177](src/utils/integrations/klaviyo/klaviyo-profile-sync.ts#L34)). Exception: `syncKlaviyoEmailMarketingFromAdminPreference` re-subscribes or unsubscribes email + SMS *marketing* (transactional SMS untouched) when an admin toggles `acceptsPromotionalEmail` ([klaviyo-profile-sync.ts:81-146](src/utils/integrations/klaviyo/klaviyo-profile-sync.ts#L81), called from the admin users PATCH route `src/app/api/admin/users/[id]/route.ts`); the cancellation flow's retention unsubscribe reuses the same helper with `false` ([RetentionUnsubscribeService.ts](src/services/subscription/RetentionUnsubscribeService.ts)).
 
@@ -990,7 +1062,7 @@ All `/my-account/*` routes require a signed-in session; an unauthenticated visit
 
 A `pending` order stays visible for **one hour** and is then hidden from the customer's own list (`PENDING_GRACE_MS`): a real payment resolves in seconds, so anything still pending was abandoned at the card step and would otherwise sit in their history looking like a second purchase. Staff still see it.
 
-**The money label follows the order's actual state**, on both this page and the checkout success page: `pending` → "Order total", `cancelled` → "Refund issued", otherwise "Total paid". A customer is never told they paid for something that has not been captured, or that money is still theirs after it has been refunded. "Refund issued" rather than "Refunded" is deliberate — the cancel path attempts the refund and swallows a failure, so it is the intent and not a guarantee. GST is shown as **inside** the total (Australian tax-invoice requirement), never added to it.
+**The money label follows the order's actual state**, on both this page and the checkout success page: `pending` → "Order total", `cancelled` → "Refund issued", otherwise "Total paid". ⚠️ **Known wrong since 2026-08-28 — `cancelled` no longer implies a refund.** It has four causes (`Order.cancellationReason`: `stock_loss`, `refunded`, `abandoned`, `payment_failed`) and only the first two involved money at all. A superseded checkout or a failed payment is now correctly recorded as `abandoned` / `payment_failed`, but this label still reads "Refund issued" for them — telling a customer money was returned when they were never charged. The data to fix it exists; the label must branch on `cancellationReason`, not on `status`. Tracked as a follow-up to the shop money-bug fix. A customer is never told they paid for something that has not been captured, or that money is still theirs after it has been refunded. "Refund issued" rather than "Refunded" is deliberate — the cancel path attempts the refund and swallows a failure, so it is the intent and not a guarantee. GST is shown as **inside** the total (Australian tax-invoice requirement), never added to it.
 
 **Free entries on a shop order are shown only above zero.** Merchandise entries currently ship dark at `includedEntries: 0`; "0 free entries" would state a promise we are not making. What is displayed is `entriesGranted` — what the webhook actually granted — not a recomputation, so a later multiplier change cannot restate a customer's history.
 **A refresh at the card step no longer creates a second order (fixed 2026-08-21).** Submitting
@@ -1080,3 +1152,71 @@ now says **partner discounts** everywhere, including the chatbot; the `/my-accou
 URL and the internal `partnerCatalog*` identifiers are unchanged, since those are engine terms a
 customer never sees. Nothing about the entitlement itself changed — same tiers, same percentages,
 same stacking rules (§7a above).
+
+**A customer can see and claim a bonus code without being a member (2026-08-27).** The three
+trigger codes are `purchaseRequirement: "none"`, and two of the three cohorts they target are by
+definition not members — someone who cancelled their membership, and a guest who started a checkout and
+never joined. Until now the rewards page hid its claimables section from exactly those people: they
+received an email carrying a code, opened their account to check it, and saw nothing at all. They can
+now see what they hold and claim it — from the Rewards page, and from a badged Redeem tile on the guest
+dashboard when they are holding something. What they still cannot see anywhere is the code string
+itself or its deadline: that screen shows the reward's name, the number of free entries and a Claim
+button, and no customer-reachable surface prints the code or its expiry today (the emailed copy is the
+only one). Nothing about who may redeem changed: the
+server has always allowed it, and still applies the same checks. What changed is that the app now shows
+them. Members see exactly what they saw before.
+
+**A claim that cannot be delivered is now honest about it, and the code stays theirs (2026-08-27).**
+Free entries have to land somewhere — a prize draw that is open and taking entries. There is a short
+window each month between one draw closing and the next opening, and if the next draw has not been set
+up yet there is nowhere for the entries to go. Until now, a customer who tapped Claim in that window
+was told "200 free entries added to your account", their one-per-lifetime grant was marked used
+forever, and no draw ever received a single entry. Nothing on any screen would have told them
+otherwise.
+
+Now, in that window, nothing is spent. The claim is undone from end to end — the reward goes back to
+claimable, the counter goes back down, the "used" mark is removed — and the customer is told plainly
+that we could not add the entries just now and that their code is still theirs to use. They can come
+back and claim it when the next draw is running. The same applies to a milestone reward claimed by
+hand.
+
+Take Sarah: she cancels on 20 August and gets `BACKIN200`. She taps Claim at 9pm on the 27th, in the
+gap between the August draw finishing and the September one starting. Instead of a false "200 free
+entries added", she sees "We couldn't add your free entries just now — the next giveaway is being set
+up. Your code is still yours, so please try again shortly." At 10pm, once September is live, the same
+tap works and her 200 free entries land in the September draw.
+
+**Giving the code back only happens when we are certain the entries did NOT land (2026-08-27).**
+There is a rarer failure than the one above: we ask for the entries to be added, and the answer never
+comes back. Not "no" — no answer at all, because the connection dropped mid-sentence. The entries may
+be sitting in the draw, or they may not, and from our side the two look identical. Handing the code
+back on that guess is dangerous: if the entries *did* land, the customer claims again and the same
+200 land a second time, in a draw that decides who wins a real prize. Entries in a draw cannot be
+quietly taken out again.
+
+So we now check before undoing anything, and we only undo a claim we can prove delivered nothing.
+When we genuinely cannot tell, nothing is reversed and the customer is told the truth: "Your code has
+been used, but we couldn't confirm your free entries landed. We've logged it for our team to check —
+please don't try again; contact support if you don't see them." That is deliberately the less
+comfortable answer. A claim stuck like this is rare, is logged with everything needed to put it
+right by hand, and a person can fix it; the same entries landing twice in a live prize draw is
+neither rare enough to ignore nor fixable afterwards. The same rule now covers the automatic streak
+rewards and the 100-entry cancellation offer.
+
+**And the receipt no longer claims a code the server refused (2026-08-27).** Someone who registers
+at step 1 of the membership modal is not signed in yet, so the quick code check on the box can only
+say "that code exists" — it cannot see whose it is. Type `EXTRA100`, pick the $25 Apprentice Pack and
+press Purchase without pressing Apply, and the payment step resolves the real account and refuses the
+code, because it was never theirs (or their 72 hours had run out). The purchase still goes through —
+a code check never costs a sale — but the success screen used to print "Campaign code EXTRA100
+applied" anyway, because the code had been *sent* with the order, not because anything accepted it.
+It now prints that line only when the server has actually said yes. The customer keeps the pack they
+bought and simply sees no code line, which is the truth.
+
+**And a customer who is not a member can now SEE the entries they claimed.** Claiming a bonus code
+does not make anyone a member, so a cancelled member or a never-joined guest holds real entries while
+their account still reads "no membership". Their dashboard used to show no entry count at all and their
+Draws tab showed no entry card, so the only confirmation they ever got was the toast that disappeared —
+and the natural conclusion was that the claim had failed. Both screens now show the entry card whenever
+there are entries to show, member or not: the same card, the same number, the same countdown to the
+draw. Being a non-member changes what we offer them next; it does not change what they hold.

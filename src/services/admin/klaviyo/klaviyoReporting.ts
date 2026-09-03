@@ -92,11 +92,34 @@ let cachedConversionMetricId: string | null = null;
 /**
  * Resolve the conversion metric id for the campaign/flow values-reports.
  *
- * Prefers `KLAVIYO_CONVERSION_METRIC_ID` — set this to the account's custom
- * **"Marketing Revenue"** metric (= Placed Order WHERE `is_renewal = 0`, i.e.
- * acquisition revenue, renewals excluded). Custom conversion metrics are NOT
- * returned by `/api/metrics/`, so they must be supplied by id. Falls back to
- * resolving the standard "Placed Order" event metric by name (includes renewals).
+ * Reads `KLAVIYO_CONVERSION_METRIC_ID` first, else resolves the standard
+ * "Placed Order" event metric by name.
+ *
+ * ⚠️ **`KLAVIYO_CONVERSION_METRIC_ID` IS CURRENTLY INERT — setting it changes no
+ * number.** It was added to point at the account's custom "Marketing Revenue" metric
+ * (= Placed Order WHERE `is_renewal = 0`, renewals excluded). Verified 2026-09-02
+ * against the live account: `campaign-values-reports` / `flow-values-reports` ACCEPT a
+ * custom metric id, return HTTP 200, and then return **base "Placed Order" numbers
+ * anyway** — 92 campaigns, A$188,451.81, identical to the cent under both ids
+ * (`last_365_days`, email, grouped by campaign_id). Controls prove it is Klaviyo and
+ * not us: swapping in a different REAL metric (`SVLZpF`) DOES move the numbers, and a
+ * bogus id returns `400 "Passed in conversion metric does not exist"` — so the
+ * parameter is honoured and the custom id is valid; Klaviyo just ignores custom
+ * metrics on this endpoint. The aggregates endpoint rejects them outright
+ * (`400 "Custom metrics are not supported for this API."`) and additionally refuses to
+ * filter the base metric on `is_renewal`, so there is no API route to the split at all.
+ *
+ * **What this means in practice:** the fallback below is what actually runs, and the
+ * revenue it returns **INCLUDES automated renewals** (~2/3 of the attributed total in
+ * the sampled window). Do not label it acquisition revenue. The renewals-excluded
+ * figure is readable in the Klaviyo UI only.
+ *
+ * The env branch is kept deliberately: it costs nothing, and it is the seam a future
+ * real event-metric id (e.g. a `Placed Non-Recurring Order` metric) would slot into
+ * with no code change. Custom conversion metrics are also NOT returned by
+ * `/api/metrics/`, which is why they must be supplied by id in the first place.
+ *
+ * Full evidence: docs/superpowers/specs/2026-09-02-klaviyo-shop-is-renewal-design.md
  */
 export async function resolveConversionMetricId(): Promise<string> {
   if (cachedConversionMetricId) return cachedConversionMetricId;

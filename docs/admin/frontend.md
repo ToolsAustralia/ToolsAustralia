@@ -68,6 +68,33 @@ you extend this.
 The modal refuses to submit while an image is still a `File` rather than a Cloudinary URL —
 `ImageUpload` uploads on drop, so a pending upload would otherwise be dropped from the payload
 on save.
+
+## Bonus Code Status panel (2026-09-01, reworked)
+
+`BonusCodeAudiencePanel` (`src/components/admin/BonusCodeAudiencePanel.tsx`) is mounted above
+`MonthlyRedeemablesCampaignPanel` in `PromoManagement`'s "Redeemables" tab — the same place the
+existing coupon analytics live. Read-only, self-contained `fetch` (same pattern as its sibling
+panel, not a TanStack Query hook): calls `GET /api/admin/monthly-coupon/trigger-audience`.
+
+**Leads with real issuance state (the owner's own ask), not the forecast.** Per trigger
+(`cancel-click` / `checkout-start` / `one-time-purchase`), four primary tiles: **Minted**
+(`issuance.issuedCount` — granted, any status, "they have access to it"), **Still redeemable**
+(green), **Redeemed** (red, plus entries granted), **Expired / lapsed** (amber — the number that
+tells the owner the flow is minting faster than customers act). Each of the three states below
+"Minted" has its own expandable, bounded (25 max) sample table with name/email/entries/date.
+
+**All-zeros empty state.** All three campaigns sit at 0 issuances in production as of
+2026-09-01 — when `issuance.issuedCount === 0`, the panel renders a plain dashed-border "No
+{CODE} codes minted yet" message instead of zero-filled tiles, so it reads as "nothing yet, not
+broken."
+
+**The addressable-population forecast (the panel's ENTIRE content in the first version) is
+demoted, not deleted** — a native `<details>` "Potential reach (forecast, not current
+holders) ▸" section per row, collapsed by default, holding the same last-30/90-day + all-time
+figures, the `checkout-start` calibration caveat, and its own bounded sample. Full contract:
+[docs/rewards-redeemables/api.md](../rewards-redeemables/api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-status-2026-09-01-reworked).
+This view cannot mint, issue, or redeem anything.
+
 ## Monthly Redeemables Campaign panel — `validForHours` (2026-08-25; renamed from `validForDays` 2026-08-26)
 
 `MonthlyRedeemablesCampaignPanel` (Admin > Redeemable Coupons, `src/components/admin/MonthlyRedeemablesCampaignPanel.tsx`)
@@ -97,7 +124,7 @@ question ("How this coupon ends") with three shapes**; see
 
 ## Repeat Purchases tab (2026-07-09)
 
-`repeat-purchases` — a new **Analytics** group tab (`RepeatPurchaseAnalytics`, `src/components/admin/RepeatPurchaseAnalytics.tsx`), gated by `pageAnalytics.view`. Measures one-time-package buyers who came back and bought again (the one-time equivalent of renewal analytics). Structure mirrors `AllPlatformsManagement`: a right-aligned `AdminDateRangeToolbar` (default `all-time`; cohort filter = first-purchase date) → a 6-tile `MetricCard` KPI grid (one-time buyers / repeat buyers / repeat rate / median days to return / repeat revenue / became members) → a `BarList` of first→second-purchase gap buckets + a "return rate by window" table (matured denominators) → a Users `Card` with a `Segmented` (All / Returned / Not yet returned) + bucket chips + `DataTable` whose User cell is a `ClickableUserDisplay` opening the shared User Detail modal. Loading = `MetricCard` skeletons + pulse bars; empty/error = inline messages. All styling is paired light/`dark:` Tailwind from the `@/components/admin/ui` kit (no chart library). Registered in `adminTabs.ts` (Analytics group), rendered + subtitled in `AdminPage.tsx`, and added to `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` so the date dropdown portals into the mobile header. Data via `useRepeatPurchaseSummary` / `useRepeatPurchaseUsers` (see [client-state](../client-state/patterns.md)).
+`repeat-purchases` — a new **Analytics** group tab (`RepeatPurchaseAnalytics`, `src/components/admin/RepeatPurchaseAnalytics.tsx`), gated by `pageAnalytics.view`. Measures one-time-package buyers who came back and bought again (the one-time equivalent of renewal analytics). Structure mirrors `AllPlatformsManagement`: a right-aligned `AdminDateRangeToolbar` (default `all-time`; cohort filter = first-purchase date) → a 6-tile `MetricCard` KPI grid (one-time buyers / repeat buyers / repeat rate / median days to return / repeat revenue / became members) → a `BarList` of first→second-purchase gap buckets + a "return rate by window" table (matured denominators) → a Users `Card` with a `Segmented` (All / Returned / Not yet returned) + bucket chips + `DataTable` whose User cell is a `ClickableUserDisplay` opening the shared User Detail modal. Loading = `MetricCard` skeletons + pulse bars; empty/error = inline messages. All styling is paired light/`dark:` Tailwind from the `@/components/admin/ui` kit (no chart library). Registered in `adminTabs.ts` (Analytics group), rendered + subtitled in `AdminPage.tsx`, and added to `ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR` so the date dropdown portals into the mobile header. Data via `useRepeatPurchaseSummary` / `useRepeatPurchaseUsers` (see [client-state](../client-state/patterns.md)).
 
 **Users table specifics.** Two `Segmented` filters (return status: All / Returned / Not yet returned, and membership: Any / Members / Non-members — the latter filters on the `becameMember` conversion flag so it reconciles with the "Became members" KPI) plus bucket chips; all combine and drive both the list and the CSV export. Columns: User · First purchase · Days to return · One-time buys · **Last purchase** · Total spent · Member?. It shows First + **Last** (most-recent) purchase rather than First + Second, because for the ~65% of repeat buyers with exactly two purchases the second *is* the last, so two date columns would duplicate — "Days to return" already carries the reconversion timing. `DataTable` sort works because each table row exposes **primitive sort-keys** matching the column keys (`first`/`days`/`count`/`last`/`spent` as numbers) with the source row carried on `src` for `renderCell` (not-returned users sort their `days` to the end via a `MAX_SAFE_INTEGER` sentinel). The list pages 50-at-a-time with a **Load more** button (`useInfiniteQuery` facade). An **Export CSV** button in the card header downloads the whole current-filter cohort via `/users/export` (blob + `content-disposition` filename, the `UserExportModal` download idiom).
 
@@ -623,7 +650,7 @@ prop elsewhere in this file. Options are `"light"` (labelled "Light (control)") 
 - `UserDetailModal.tsx` — user detail / edit (Subscription tab is here, with Cancel button)
 - `ChargePastDueModal.tsx` — bulk past-due retry. **Self-drives the chunked job loop:** on confirm (`CHARGE`) it POSTs `{ action: "start" }`, then loops `{ action: "chunk", runId }` until `done`, rendering a **live progress bar** (processed / total) with succeeded / failed / skipped counts and collected revenue. A **Stop** button (and closing the modal mid-run) flips a `stoppedRef` that breaks the loop and fires `{ action: "abort" }` so the lock is released. The completed view is fed by `loadRunResults(runId)` → `GET /api/admin/charge-past-due/runs/[runId]` (run totals + per-invoice rows). Prop is now **`onCompleted?`** (was `onConfirm`) — called once the run finishes or stops so the parent ([`UsersManagement.tsx`](../../src/components/admin/UsersManagement.tsx)) can refresh the user list. See [api.md](./api.md#post-apiadmininvoicescharge-past-due--chunked-charge-job).
 - `BlockedTransactionsManagement.tsx` — blocked-card / Stripe allowlist admin UI. Mongo-backed: reads via `useBlockedCards(filter)` (cursor-paginated against the persisted `BlockedTransaction` collection). Hook returns `{ rows, total, hasMore, isLoading, isFetching, isFetchingNextPage, fetchNextPage, refetch, error }`. The table card shows a "Showing X of Y" counter and a "Load more" button at the bottom. Query errors surface in an amber banner above the filters card. Eligibility badges: auto-eligible / already-allowlisted / fraud-signal / permanent-issue / not-member. The "Allowlist with override" button bypasses every filter (records `manual_admin_override`). The dataset uses the narrower `outcome.type === "blocked"` filter (matches Stripe Dashboard's "Blocked" pill). Service contract: [billing-stripe/architecture.md](../billing-stripe/architecture.md#service-inventory--allowlistservice).
-  - **Filters (2026-05-07)**: date range matches `/admin/past-due-history` exactly — `DateRangeToggle` chips (Today / Yesterday / Current Draw / Last Draw / All Time / Custom) with `useAdminMobileDateToolbarSlot()` portaling on mobile, draw-aware presets via `useCurrentAndLastDrawDates()`, custom range via `CustomDateRangeModal` with `useMajorDrawsForDateRange()` highlighting. Plus an **email substring search** (debounced 300ms, server-side regex), an **eligibility multi-select** (auto-eligible / already-allowlisted / fraud-signal / permanent-issue / skipped — not member), and a **decline-code multi-select** grouped by Recoverable / Fraud signals / Permanent issues / Other (options from [src/utils/billing/declineCodeLabels.ts](../../src/utils/billing/declineCodeLabels.ts)).
+  - **Filters (2026-05-07)**: date range matches `/admin/past-due-history` exactly — `DateRangeToggle` chips (Today / Yesterday / Current Draw / Last Draw / All Time / Custom) with `useAdminDateToolbarSlot()` portaling on mobile, draw-aware presets via `useCurrentAndLastDrawDates()`, custom range via `CustomDateRangeModal` with `useMajorDrawsForDateRange()` highlighting. Plus an **email substring search** (debounced 300ms, server-side regex), an **eligibility multi-select** (auto-eligible / already-allowlisted / fraud-signal / permanent-issue / skipped — not member), and a **decline-code multi-select** grouped by Recoverable / Fraud signals / Permanent issues / Other (options from [src/utils/billing/declineCodeLabels.ts](../../src/utils/billing/declineCodeLabels.ts)).
   - **Metric cards**: Total blocked (current filters) · Auto-eligible · Skipped — filter · **Total on allowlist** (all-time, all active fingerprints, driven by `useAllowlistStats()` against `GET /api/admin/allowlist/stats`).
   - **Email column** is clickable via `ClickableUserDisplay` — opens the same `UserDetailModal` the users + past-due-history tabs use. `BlockedRow.userId` is resolved server-side in `listBlocked` (joins `User` by `stripeCustomerId` then `customerEmail`); guests render as plain text.
   - **Eligibility verdict** is computed by the shared mapper [src/utils/admin/blockedTransactionEligibility.ts](../../src/utils/admin/blockedTransactionEligibility.ts) so the post-join filter and the in-row badge can never disagree.
@@ -794,7 +821,7 @@ Part of the admin Overview reskin (plan `docs/superpowers/plans/2026-06-01-admin
 Membership vs one-time landing-URL split surfaced across the Overview (data contract: [api.md — packages-focus](./api.md); domain background: `docs/metrics-analytics/`).
 
 - **Ad Spend + ROAS KPI tiles are now clickable** (`KpiGrid.tsx`): both share one `adSpendFocusOpen` state (both show the `active` ring while open) and open **[src/components/modals/AdSpendFocusModal.tsx](../../src/components/modals/AdSpendFocusModal.tsx)** — platform chips (Meta live / TikTok renders a dashed "awaiting URL mapping" box), Membership / One-time summary tiles (spend headline; revenue · ROAS · conversions subline; Unclassified tile only when its spend > 0) doubling as the focus-tab selector (default **One-time**), then a campaign → ad-set → ad tree for the selected bucket. An amber notice renders when `detail.complete === false` ("per-campaign detail covers {availableSince} onwards" — the per-ad insights TTL floor); the summary tiles always cover the full range. Revenue is Meta-reported, same basis as the ROAS KPI headline. `KpiGrid` gained `startDate?/endDate?` props (passed by `DashboardOverview` as `customStartDate || undefined` etc.) and resolves the concrete AEST window via [src/utils/admin/resolveAestDateWindow.ts](../../src/utils/admin/resolveAestDateWindow.ts) — the same helper `PrizePerformanceCard` now uses (its two inline date memos were extracted into it, behavior-identical).
-- **[src/components/admin/spend-by-url/CampaignTreeTable.tsx](../../src/components/admin/spend-by-url/CampaignTreeTable.tsx)** — shared expandable campaign → ad-set → ad tree (columns Name | Spend | Revenue | ROAS | Conv.; ROAS emerald ≥ 3 else amber; ad rows show adId mono over adName, an adFormat chip, and a focus `Badge` when the node carries `packagesFocus` — info "One-time" / neutral "Membership" / warning "Unclassified"). Node types come from `usePackagesFocusBreakdown`; consumed by `AdSpendFocusModal` (server-built tree) and `PrizePerformanceAdsModal` (client-grouped tree). ~~Known kit limitation: `DataTable`/tree row clicks are mouse-only (no keyboard handler).~~ **Fixed 2026-07-24 (panel F-017)** in `DataTable` itself: when (and only when) an `onRowClick` is supplied, rows get `tabIndex=0`, `role="button"`, an Enter/Space `onKeyDown` (Space `preventDefault`s so it activates instead of scrolling), and a `focus-visible` ring. Non-interactive tables stay out of the tab order. Every `DataTable` consumer — including `AdvertisingPlatformCard` — inherits this; `CampaignTreeTable`'s own custom tree rows are separate and still need the same treatment if they gain click handlers.
+- **[src/components/admin/spend-by-url/CampaignTreeTable.tsx](../../src/components/admin/spend-by-url/CampaignTreeTable.tsx)** — shared expandable campaign → ad-set → ad tree (columns Name | Spend | Revenue | ROAS | Conv.; ROAS emerald ≥ 3 else amber; ad rows show adId mono over adName, an adFormat chip, and a focus `Badge` when the node carries `packagesFocus` — info "One-time" / neutral "Membership" / warning "Unclassified"). Node types come from `usePackagesFocusBreakdown`; consumed by `AdSpendFocusModal` (server-built tree) and `PrizePerformanceAdsModal` (client-grouped tree). ~~Known kit limitation: `DataTable`/tree row clicks are mouse-only (no keyboard handler).~~ **Fixed 2026-07-24 (panel F-017)** in `DataTable` itself: when (and only when) an `onRowClick` is supplied, rows get `tabIndex=0`, `role="button"`, an Enter/Space `onKeyDown` (Space `preventDefault`s so it activates instead of scrolling), and a `focus-visible` ring. Non-interactive tables stay out of the tab order. Every `DataTable` consumer — including `AdvertisingPlatformCard` — inherits this; `CampaignTreeTable`'s own custom tree rows are separate and still need the same treatment if they gain click handlers. **Ad-URL mismatch check + Ads Manager link added 2026-09-01** — see "Ad-URL mismatch check + Ads Manager deep link" below. **Campaign/ad-set roll-up badges added 2026-09-01** — a collapsed campaign or ad-set row now badges when any ad beneath it is flagged (`src/utils/admin/adUrlIssueRollup.ts`), and the badge shrinks to a bare icon (no count) below `sm` — see "Fourth surface: campaign/ad-set roll-up badges inside the modal" below.
 - **Prize Performance row click → upgraded [`PrizePerformanceAdsModal`](../../src/components/modals/PrizePerformanceAdsModal.tsx)** — `PrizePerformanceCard` attaches each brand's `canonicalUrls` to its row (captured before the zero-row filter, so every rendered row carries them) and opens the modal via the kit `DataTable`'s `onRowClick`. The modal keeps its original props + `useSpendByUrlDetailMany` source and adds: brand-level Membership / One-time summary tiles (Unclassified only when present), focus chips (All / Membership / One-time / Unclassified) filtering ONE mixed tree (each ad badges with its own focus — unlike the KPI modal's pre-split buckets), platform chips (TikTok = awaiting box, no fetch), and the client-side grouper `groupSpendByUrlDetailRowsByCampaign` ([spendByUrlAdBreakdown.ts](../../src/utils/admin/spendByUrlAdBreakdown.ts)) producing the same node shape `CampaignTreeTable` renders.
 - **Facebook Ads → Spend by URL surfaces** (`SpendByUrlSection.tsx`, `SpendByUrlAdBreakdownTable.tsx`): a non-interactive focus summary strip above the toolbar (Membership / One-time / + Unclassified tiles from `usePackagesFocusBreakdown`; hidden when the range isn't ready, on query error, or when total focus spend is 0), per-URL-row `M $x` / `OT $y` split chips under the URL (only when the row carries the `packagesFocus` split), and a focus `Badge` under the ad name in the per-ad drill-down table (membership/one-time only — no new column, COL_SPANs unchanged).
 
@@ -815,7 +842,7 @@ Every admin page that previously rendered the chip-bar `DateRangeToggle` now ren
 - [FacebookAdsManagement.tsx](../../src/components/admin/FacebookAdsManagement.tsx) (all three render spots — mobile portal, mobile inline, desktop)
 
 Mechanics of the swap, identical at every call site:
-- The toggle-only props (`collapsed`, `onExpand`, `className`) are dropped — `DateRangeDropdown` owns its own open state and is content-sized. The mobile full-width treatment came from `className="w-full"`; it's gone, matching how the Overview already renders the dropdown content-sized inside `AdminMobileLayoutDateRangeShell`.
+- The toggle-only props (`collapsed`, `onExpand`, `className`) are dropped — `DateRangeDropdown` owns its own open state and is content-sized. The mobile full-width treatment came from `className="w-full"`; it's gone, matching how the Overview already renders the dropdown content-sized inside `AdminLayoutDateRangeShell`.
 - `onRangeChange` simplifies to `(range) => updateDateFilter(range)` — the dropdown never emits `"custom"` through `onRangeChange` (the "Custom range…" row fires `onCustomClick`), so the old `if (range === "custom") …` branch is removed as dead.
 - `displayDate`, `selectedRange`, `onCustomClick` (→ `CustomDateRangeModal`) are unchanged. Accent stays the dropdown default red, matching the Overview.
 
@@ -887,7 +914,7 @@ After the reskin, the legacy Overview sections and their now-orphaned siblings w
 
 ### Components
 
-- [src/app/admin/component/PastDueChargeHistory.tsx](../../src/app/admin/component/PastDueChargeHistory.tsx) — top-level page component. UI mirrors the rest of admin: page-title row with a `DateRangeToggle` on desktop (portaled into `useAdminMobileDateToolbarSlot()` on mobile), four `MetricCard`s (Bulk runs / Invoices attempted / Succeeded / Revenue recovered) summarising the runs in the selected range, then two stacked card tables — **Bulk Runs** (from `GET /api/admin/charge-past-due/runs`) and **Manual Retries** (from `GET /api/admin/charge-past-due/manual-retries`) — both wrapped in the standard `bg-white dark:bg-neutral-900 rounded-xl shadow-sm border` shell with header row + count. Run/retry status badges use the same emerald/red/amber palette as `BlockedTransactionsManagement`. The "Custom Range" preset opens [`CustomDateRangeModal`](../../src/components/admin/CustomDateRangeModal.tsx); presets `today`/`yesterday`/`current-draw`/`last-draw`/`all-time` are wired the same way as `PromoAnalyticsManagement` (AEST timezone via `formatInTimeZone`, `getWebsiteLaunchDateUTC()` for `all-time`, draw dates from `useCurrentAndLastDrawDates`). Default range is **Last 30 days** (initial state: `dateRange: "custom"` with `startDate = subDays(today, 29)` and `endDate = today`). Clicking a bulk-run row opens `PastDueChargeHistoryDrawer`.
+- [src/app/admin/component/PastDueChargeHistory.tsx](../../src/app/admin/component/PastDueChargeHistory.tsx) — top-level page component. UI mirrors the rest of admin: page-title row with a `DateRangeToggle` on desktop (portaled into `useAdminDateToolbarSlot()` on mobile), four `MetricCard`s (Bulk runs / Invoices attempted / Succeeded / Revenue recovered) summarising the runs in the selected range, then two stacked card tables — **Bulk Runs** (from `GET /api/admin/charge-past-due/runs`) and **Manual Retries** (from `GET /api/admin/charge-past-due/manual-retries`) — both wrapped in the standard `bg-white dark:bg-neutral-900 rounded-xl shadow-sm border` shell with header row + count. Run/retry status badges use the same emerald/red/amber palette as `BlockedTransactionsManagement`. The "Custom Range" preset opens [`CustomDateRangeModal`](../../src/components/admin/CustomDateRangeModal.tsx); presets `today`/`yesterday`/`current-draw`/`last-draw`/`all-time` are wired the same way as `PromoAnalyticsManagement` (AEST timezone via `formatInTimeZone`, `getWebsiteLaunchDateUTC()` for `all-time`, draw dates from `useCurrentAndLastDrawDates`). Default range is **Last 30 days** (initial state: `dateRange: "custom"` with `startDate = subDays(today, 29)` and `endDate = today`). Clicking a bulk-run row opens `PastDueChargeHistoryDrawer`.
 
   **Manual Retries — grouped-by-user UX.** Rows are no longer flat; they're collapsed into one row per user via `groupChargeAttemptsByUser` from [src/utils/admin/groupChargeAttemptsByUser.ts](../../src/utils/admin/groupChargeAttemptsByUser.ts). The summary row shows last-attempt time, admin label, user (rendered with `<ClickableUserDisplay>` so clicking the email opens `UserDetailModal`), attempt count + per-status breakdown (`N✓ N✗ N⏭`), latest-status badge, and total amount. A chevron toggles a nested table with per-attempt rows (When / Invoice / Status / Amount / Error / Action). Stranded-error rows still expose the `Recover` button + checkbox; the group-row checkbox toggles all stranded attempts for that user (supports `indeterminate` state).
 
@@ -1050,7 +1077,7 @@ Success (green) and error (red) panels use `{color}-50` light backgrounds with `
 
 | Hook | Purpose |
 |---|---|
-| `useAdminMobileDateToolbarSlot()` | Admin-specific date toolbar mobile UX |
+| `useAdminDateToolbarSlot()` | Admin-specific date toolbar mobile UX |
 | `useUpsellMultipliersQuery()` | GET singleton upsell multiplier config |
 | `useUpsellMultipliersMutation()` | PUT updated multiplier triple, invalidates query |
 | (admin queries via `useAdminQueries.ts`) | TanStack Query hooks for admin data |
@@ -1113,7 +1140,7 @@ this modal.
 
 [src/components/admin/CancellationFlowAnalytics.tsx](../../src/components/admin/CancellationFlowAnalytics.tsx) is a **read-only** panel mounted as the `cancellation-flow` tab in the Analytics sidebar group (`AdminSidebar` group `analytics`, rendered by `AdminPage` on `selectedTab === "cancellation-flow"`). No mutations, no charts library. Styled with the standard analytics primitives — `MetricCard` for top stats, `bg-white … rounded-lg sm:rounded-xl shadow-sm … border` section wrappers, `bg-gray-50` table heads, `font-mono tabular-nums` numeric cells — to keep visual parity with `PromoAnalyticsManagement` and the rest of the Analytics group.
 
-**Date filter.** The tab is registered in `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` ([adminMobileDateToolbarSlot.ts](../../src/app/admin/component/adminMobileDateToolbarSlot.ts)) so it gets the shared mobile date strip under the admin header. Component owns `dateRange` / `startDate` / `endDate` state synced with URL params (same pattern as `PromoAnalyticsManagement`); default range is **today**. `current-draw` / `last-draw` hydrate from `useCurrentAndLastDrawDates`; `custom` opens `CustomDateRangeModal`. The component sends AEST `yyyy-MM-dd` values via the hook; the route handler converts them to UTC bounds (`startDate` → start of day AEST, `endDate` → start of next AEST day for the exclusive upper bound).
+**Date filter.** The tab is registered in `ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR` ([adminDateToolbarSlot.ts](../../src/app/admin/component/adminDateToolbarSlot.ts)) so it gets the shared mobile date strip under the admin header. Component owns `dateRange` / `startDate` / `endDate` state synced with URL params (same pattern as `PromoAnalyticsManagement`); default range is **today**. `current-draw` / `last-draw` hydrate from `useCurrentAndLastDrawDates`; `custom` opens `CustomDateRangeModal`. The component sends AEST `yyyy-MM-dd` values via the hook; the route handler converts them to UTC bounds (`startDate` → start of day AEST, `endDate` → start of next AEST day for the exclusive upper bound).
 
 Sections: three top cards (Triggered / Save rate / Saved); funnel with four CSS bars (Reached offer → Accepted → Cancelled → Abandoned; the "Reached reason" step is omitted because it is always equal to Triggered); a **Reason × outcome** table (count, share %, Saved, Cancelled, Abandoned per reason) — **rows with `count > 0` are clickable** and open `CancellationReasonUsersModal` (see below) scoped to the currently-selected date range; an **"Other" reasons (free text)** table listing every `reason === "other"` event's `reasonText` with outcome chip, AEST timestamp, and **a User column** that renders a `ClickableUserDisplay` (email + optional name subtext) opening the standard `AdminUserModal` via `useAdminUserModal` — falls back to a plain "—" when the event has no `userId`; a 2-card retention summary (Retained 90d %, Pending); and a **90-day retention by offer** table (offer | saved | retained | churned | pending | retained %) showing which offers produce durable saves vs delayed churn. Retained % = `retained ÷ (retained + churned)` over matured saves (“—” when none matured). Short note under the funnel surfaces `pastDueExcludedFromOfferConversion` when non-zero.
 
@@ -1307,7 +1334,7 @@ For reference, a live probe of TikTok's `/report/integrated/get/` on 2026-07-29 
 
 ### Shared admin date filter (2026-06-03)
 
-- **`useAdminDateFilter(initial)`** (`src/hooks/useAdminDateFilter.ts`) + **`AdminDateRangeToolbar`** (`src/components/admin/`) — packages the date-preset logic the Facebook Ads tab does inline so the **All-Platforms / TikTok / Snapchat** tabs share **one** source of truth for the AEST math (every preset — today / yesterday / current-draw / last-draw / all-time / custom — resolves to `yyyy-MM-dd` in `Australia/Sydney`; the initial preset resolves synchronously so date-gated queries enable on first paint, draw presets fill in via an effect once `useCurrentAndLastDrawDates` loads). The toolbar renders the shared `DateRangeDropdown` + `CustomDateRangeModal`, portaling into the mobile header slot when the tab is in `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` (now includes `all-platforms`/`tiktok-ads`/`snapchat-ads`), else inline. Local state only (no URL sync). _(Superseded 2026-08-19 — URL sync is now opt-in via `{ syncToUrl: true }`, the Overview uses it, and the toolbar is sticky on desktop.)_ The **Klaviyo** tab does **not** use this — it has its own keyword selector (above).
+- **`useAdminDateFilter(initial)`** (`src/hooks/useAdminDateFilter.ts`) + **`AdminDateRangeToolbar`** (`src/components/admin/`) — packages the date-preset logic the Facebook Ads tab does inline so the **All-Platforms / TikTok / Snapchat** tabs share **one** source of truth for the AEST math (every preset — today / yesterday / current-draw / last-draw / all-time / custom — resolves to `yyyy-MM-dd` in `Australia/Sydney`; the initial preset resolves synchronously so date-gated queries enable on first paint, draw presets fill in via an effect once `useCurrentAndLastDrawDates` loads). The toolbar renders the shared `DateRangeDropdown` + `CustomDateRangeModal`, portaling into the mobile header slot when the tab is in `ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR` (now includes `all-platforms`/`tiktok-ads`/`snapchat-ads`), else inline. Local state only (no URL sync). _(Superseded 2026-08-19 — URL sync is now opt-in via `{ syncToUrl: true }`, the Overview uses it, and the toolbar is sticky on desktop.)_ The **Klaviyo** tab does **not** use this — it has its own keyword selector (above).
 
 ## Overview MER card — platform selector + mobile text sizing (2026-06-04)
 
@@ -1916,7 +1943,7 @@ Phase 1 of the [Brand Performance spec](../superpowers/specs/2026-08-19-admin-an
 **The single control** is `AdminDateRangeToolbar` + `useAdminDateFilter`, now used by **every** date-filtered tab including the Overview.
 
 - **Sticky on desktop.** The `isLgUp` branch is `sticky top-0 z-30` with `-mx-4 lg:-mx-6 -mt-4 lg:-mt-6` + matching padding, cancelling the scroll container's `p-4 lg:p-6` so the pinned bar spans the full content width and rows scroll *under* it. Previously only the Overview was sticky; All-Platforms / TikTok / Snapchat / Repeat-Purchases scrolled their filter off-screen.
-- **Mobile is unchanged** and always-visible by construction — the dropdown portals into `ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID`, which `AdminPage` renders in the header *above* the scroll container.
+- **Mobile is unchanged** and always-visible by construction — the dropdown portals into `ADMIN_DATE_TOOLBAR_SLOT_ID`, which `AdminPage` renders in the header *above* the scroll container.
 - **`leading` prop.** Tabs with their own controls on that row (TikTok's Ads / Spend-by-URL switch) pass them as `leading` so they ride *inside* the sticky bar. See the footgun below for why they cannot simply share a wrapper.
 
 ⚠️ **Render `AdminDateRangeToolbar` as a DIRECT child of the tab's root element.** A sticky element can only travel within its own parent's box, so the old `<div className="flex justify-end">{toolbar}</div>` wrapper — sized to the control itself — pins it to nothing. All four consumers had that wrapper and all four were unwrapped. The second way to lose it silently is a clipping/containing ancestor (`overflow` ≠ `visible`, or `transform`/`filter`/`contain`). Neither failure throws; verify visually when adding a new tab.
@@ -1929,7 +1956,7 @@ The `backdrop-blur-sm` on the sticky bar *does* create a containing block for ab
 
 **Behaviour note:** the Overview's custom-range *trigger label* is now the hook's compact `"1 Jun – 30 Jun"` rather than its old `"Jun 1 - Jun 30, 2025"` — the same string the other four tabs already showed. The longer form is still used for the per-card KPI tag (`formatAbbreviatedDate`, kept local to `DashboardOverview`).
 
-**Klaviyo and A/B Testing are deliberately still absent** from `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR`: neither uses this filter (Klaviyo drives its own `hourRange`; A/B Testing has no date filter). Adding them would mount an empty header slot.
+**Klaviyo and A/B Testing are deliberately still absent** from `ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR`: neither uses this filter (Klaviyo drives its own `hourRange`; A/B Testing has no date filter). Adding them would mount an empty header slot.
 
 ## Prize performance → Brand performance (2026-08-19)
 
@@ -2205,3 +2232,347 @@ campaign that has no backstop at all.
 precedence if the `neverExpires` / `validForHours` mutual-exclusion guard is deleted — and that guard
 exists in six places and is not being removed, so the pair can never coexist and the order can never
 lie. If a future change ever does remove it, this branch order must be revisited in the same edit.
+
+## Ad-URL mismatch check + Ads Manager deep link (2026-09-01)
+
+**The problem.** `Draw 10 | Sales | STIHL | Sep 2026` sent 567 visits (98% of that campaign) to
+`/promotions/makita` in production — verified by hand, invisible in the admin. A naive
+campaign-name-vs-URL comparison flags ~90% false positives, because prizes have TWO independent
+brand axes (toolset: ryobi/milwaukee/dewalt/makita/hikoki/stihl; toolbox:
+sidchrome/kincrome/milwaukee/gearwrench) and the toolbox half is expressed either as a second
+slug segment (`/promotions/milwaukee-kincrome`) or a `?toolbox=`/`?toolset=` query param
+(`/promotions/milwaukee?toolbox=kincrome`) — both mean the same thing, and a URL simply not
+committing to a toolbox is normal, not a finding. Full decision record: `docs/superpowers/specs/
+2026-09-01-coupon-audience-and-ad-url-check-design.md`, section B.
+
+**Pure check, in `src/utils/admin/adUrlMismatchCheck.ts`.** `resolveAdUrlBrands(url)` returns the
+brand set from slug segments AND query params, unioned. `checkAdUrlMismatch({ campaignName,
+adName, urls })` returns `{ verdict: "ok" | "mismatch" | "unknown", campaignBrand?, urlBrands
+}`. `mismatch` fires ONLY on a positive contradiction: naming resolves to exactly one brand, at
+least one URL resolves a brand at all, and none of the URLs either name that brand or are silent
+about its axis (a toolbox-only brand like GearWrench whose URL never commits to a toolbox is
+`ok`, never `mismatch` — a toolset brand's axis is always present on a resolvable
+`/promotions/<slug>` URL, so it has no equivalent leniency). Everything else (0-or-2+ brands in
+the naming, no resolvable URL brand anywhere — including `unknown://meta-ad/<id>` placeholders,
+multi-URL/carousel ads where no URL matches vs. any URL matching) resolves to `unknown` or `ok`.
+The brand list (`AD_URL_CHECK_BRANDS`) is derived from `TOOLSET_LANDING_SLUGS` +
+`TOOLBOX_LANE_ORDER` (`src/config/promo-landing-slugs.ts`), never hand-restated — a brand
+missing from that registry would silently read "unknown" forever. Tests:
+`src/utils/admin/__tests__/adUrlMismatchCheck.test.ts` (`npm run test:ad-url-mismatch`),
+including the real STIHL case, the GearWrench false positive, and a mutation check proving a
+naive campaign-name-only comparator WOULD flag GearWrench while this rule does not.
+
+**Reads `rawUrls`, never `canonicalUrl`.** `canonicalizeLandingUrl` deliberately strips the query
+for spend grouping, so a `?toolbox=`/`?toolset=` selection is invisible on `canonicalUrl`. Data
+change: `SpendByUrlAggregationService`'s `SpendByUrlDetailRow`/`SpendByUrlDetailAggRow` gained a
+`rawUrls?: string[]` field, populated from the SAME `AdDestination` doc `canonicalUrl` already
+came from (`getSpendByUrlDetailForCanonicalUrls`) — the `AdDestination.find()` query there has no
+`.select()`, so `rawUrls` was already being fetched, just never emitted. `rawUrls` then threads
+`SpendByUrlDetailRow` (hook) → `PackagesFocusAdNode` (`usePackagesFocusBreakdown.ts`) →
+`groupSpendByUrlDetailRowsByCampaign` (`spendByUrlAdBreakdown.ts`) → `CampaignTreeTable`. It is
+present ONLY on ad nodes built by the mixed-brand tree (`BrandPerformanceAdsModal`'s per-ad
+detail rows, which always carry `packagesFocus`) — the KPI modal's per-bucket trees
+(`PackagesFocusBreakdownService`) never populate per-ad URL data, so `CampaignTreeTable` gates
+the whole URL/link/icon block on `ad.packagesFocus !== undefined` and renders nothing there,
+same as before.
+
+**`CampaignTreeTable` renders three things per ad row**, gated on that same URL-data presence:
+1. **The real URL(s)**, RAW form (path + query, host trimmed) — a carousel/multi-URL ad shows
+   every URL, not just the first.
+2. **"Ads Manager" link** (`buildAdsManagerAdUrl`, now in
+   `src/utils/admin/adsManagerUrl.ts`) — opens the ad's **edit** screen,
+   `target="_blank" rel="noopener noreferrer"`. Gated on `platform === "meta"` (Meta-only deep
+   link) AND `adAccountId` being present — the table gained both as new optional props,
+   threaded from `BrandPerformanceAdsModal`'s `data.meta.adAccountId` (already returned by the
+   detail endpoint; nothing new fetched). ~~`assumed`, not verified against a live account~~
+   **Corrected 2026-09-01 to the owner's own working URL** — the original shape landed on a
+   filtered ad LIST, not the ad. See "Ads Manager deep link" below.
+3. **The verdict icon** — `mismatch`: a red `AlertTriangle` with an accessible title naming both
+   brands ("Campaign names Stihl; URL points at Makita"). `unknown`: a muted grey `HelpCircle`,
+   deliberately quiet. `ok`: nothing — the entire point is that a warning is rare and therefore
+   believed; a table that decorates every "ok" row trains the reader to ignore the icon.
+
+**Not wired into `SpendByUrlAdBreakdownTable.tsx`** (the OTHER per-URL drill-down table, reached
+from the main Spend by URL section rather than the Brand Performance modal) — out of scope for
+this change; the 46 `unknown://` Meta ads that table can show are unaffected. `AD_URL_CHECK_BRANDS`
+and `checkAdUrlMismatch` are exported and reusable if that surface wants the same check later.
+
+**Validated against production, same day:** run against 665 live ads, 8 `mismatch`es — all the
+genuine STIHL case — and **zero false positives** (GearWrench correctly stayed clean). That is
+the bar the spec set (B3/B4), met on real data, not just the fixture set.
+
+### Second signal: unrecognised `?toolbox=`/`?toolset=` values (2026-09-01)
+
+Running the check against production surfaced a second, independent defect class: **84 ads carry
+`?toolbox=milwakee`** — a misspelling of "milwaukee" — out of 1,406 ads carrying a toolbox/toolset
+param (448 `kincrome`, 394 `gearwrench`, 364 `sidchrome`, 116 `milwaukee`, **84 `milwakee`**, 29
+`toolset=milwaukee`, 12 `toolset=dewalt`). This is a DIFFERENT problem from a brand mismatch: the
+URL shape is right and the param is doing its job of pre-selecting a toolbox, but the value names
+no brand, so the landing page silently falls back to its default instead of the toolbox the ad
+promised — a live conversion leak, on 6% of parameterised ads, invisible to both the brand-mismatch
+check above (URL shape is fine) and to `resolveAdUrlBrands` alone (an unrecognised value was always
+silently dropped, indistinguishable from the param being absent).
+
+**`findUnrecognisedAdUrlParams(url)`** (also in `adUrlMismatchCheck.ts`) returns every
+`{ param: "toolbox" | "toolset", value }` pair present in a URL that matches no known brand.
+`?toolbox=cash` — the prize-builder's legitimate opt-out (`CASH_OPTION` in
+`src/components/sections/promo/prize-selection/constants.ts`) — is explicitly excluded; it names
+no brand on purpose and must never read as a typo. `CheckAdUrlMismatchResult` gained
+`unrecognisedParamValues: UnrecognisedParamValue[]` (always an array, never `undefined`) — a
+**companion field, not a fourth verdict**: it is computed once, independent of `verdict`, and
+spliced unchanged into every return branch, so a typo can surface alongside a clean `ok` (a good
+brand match with a broken param still needs fixing) or a genuine `mismatch` (both problems can
+coexist on one ad, and neither is allowed to hide the other). Absence of the param is still never
+a finding — the same B4 rule, now proven by an explicit mutation-style test showing
+`resolveAdUrlBrands` alone cannot tell `?toolbox=milwakee` apart from no param at all; only
+`findUnrecognisedAdUrlParams` can.
+
+`CampaignTreeTable` renders it as a fourth, visually distinct affordance — an amber `SpellCheck2`
+icon (never red, so it reads as "different kind of problem" from the mismatch `AlertTriangle` at
+a glance) with a title naming the offending value, e.g. `Unrecognised toolbox value: 'milwakee'`.
+It sits beside, not instead of, the mismatch icon when both apply.
+
+⚠️ **Both signals share `AD_URL_CHECK_BRANDS` as their one brand registry**
+(`TOOLSET_LANDING_SLUGS` + `TOOLBOX_LANE_ORDER` in `src/config/promo-landing-slugs.ts`, derived
+not restated — same T3 threading risk as the brand-mismatch check). A brand genuinely missing
+from those two constants would make EVERY `?toolbox=`/`?toolset=` value naming it read as
+"unrecognised" here — i.e. all of that brand's parameterised ads would report as typo'd, even
+though every one of them is spelled correctly. Add the brand to `promo-landing-slugs.ts` first;
+both checks pick it up automatically.
+
+Tests (same file, `npm run test:ad-url-mismatch`): the real production case
+(`/promotions/makita?toolbox=milwakee`) reports the typo; a clean `?toolbox=kincrome` and a bare
+URL with no param at all both report nothing; `?toolbox=cash` is never flagged; an ad that is
+BOTH a brand mismatch and typo'd surfaces both signals in one result; and the mutation test
+proving the pre-change code (brand-set resolution alone) cannot distinguish a typo from an
+absent param.
+
+### Third surface: the brand-row roll-up badge (2026-09-01)
+
+**The complaint this fixes.** Makita's row read 0.15x ROAS on $330 spend and 1 purchase. Nothing
+on the row said why. Opening its ad-breakdown modal revealed a campaign named
+`Draw 10 | Sales | STIHL | Sep 2026` spending against `/promotions/makita` — a wrong-brand ad
+hiding inside another brand's spend. The per-ad icons above only exist *inside* the modal, and
+nobody opens a modal on a row that merely looks weak. The row now says so itself.
+
+**What renders.** In `BrandPerformanceCard`'s Brand cell, beside the wordmark: up to two kit
+`Badge`s, using the SAME icons and colours as the per-ad icons in `CampaignTreeTable` so a reader
+who drills in meets one vocabulary, not two.
+
+| Badge | Icon / tone | Means |
+|---|---|---|
+| `⚠ 8` | red `AlertTriangle`, `tone="danger"` | 8 ads in this row are named for a different brand |
+| `abc 84` | amber `SpellCheck2`, `tone="warning"` | 84 ads carry an unrecognised `?toolbox=`/`?toolset=` value |
+
+One `title`/`aria-label` covers both, naming the offending brands, the typo'd values, the
+denominator, and the spend at stake — e.g. *"8 of 234 ads here are named for Stihl but land on
+this brand's page — $766 of this row's spend · 84 ads carry an unrecognised toolbox/toolset value
+(milwakee), so the page fell back to its default. Open the row for the per-ad breakdown."* The
+same badges render on the `Unattributed` footer row.
+
+⚠️ **There is deliberately no "clean" state.** The server omits `adUrlIssues` entirely when a row
+has no finding, and it omits it for exactly the same reason when a row's ads could not be checked
+at all (no resolved destination). Both render nothing. A green tick on every clean row would
+train the reader to scan past the column; a tick on unverifiable ads would be a false assurance.
+`checkedAdCount` (the denominator) exists only *inside* a badge that is already showing.
+
+**The check is not reimplemented.** `BrandPerformanceService` imports `checkAdUrlMismatch` from
+`src/utils/admin/adUrlMismatchCheck.ts` — the same validated module the per-ad icons use — and
+only rolls its result up. See `docs/metrics-analytics/backend.md` for the plumbing (why the
+modal's per-brand query was NOT reused) and the weighting rule.
+
+### Fourth surface: campaign/ad-set roll-up badges inside the modal (2026-09-01)
+
+**The complaint this fixes.** The brand-row badge (above) says Makita has 7 wrong-brand ads and
+53 typos, but `BrandPerformanceAdsModal` gave no way to find WHICH campaign or ad set to open —
+every collapsed campaign/ad-set row in `CampaignTreeTable` looked identical, so finding the 7 ads
+meant expanding all of them by hand. The trail brand → campaign → ad set → ad now stays unbroken:
+a campaign or ad set containing at least one flagged ad now badges too, using the same
+`AdUrlIssueBadge`.
+
+**New pure module: `src/utils/admin/adUrlIssueRollup.ts`.** Two exports:
+- `computeAdUrlInfo(campaignName, ad)` — the exact per-ad computation `CampaignTreeTable` already
+  did inline (resolve `rawUrls`/`canonicalUrl`, call `checkAdUrlMismatch` when the ad carries
+  `packagesFocus`), extracted so it runs **exactly once per ad**.
+- `rollupAdUrlIssues(verdicts: Array<CheckAdUrlMismatchResult | null>)` — aggregates a list of
+  already-computed verdicts into `{ mismatchAdCount, unrecognisedParamAdCount, checkedAdCount }`.
+  `null` (an ad with no URL data at all) contributes to none of the three counts — same rule as
+  the brand-row badge: unverifiable is not clean and must not manufacture a badge.
+
+Neither function calls `checkAdUrlMismatch` more than once per ad, and neither re-derives the
+rule — `adUrlMismatchCheck.ts` is imported, never restated. Tests:
+`src/utils/admin/__tests__/adUrlIssueRollup.test.ts` (`npm run test:ad-url-issue-rollup`) —
+one bad ad in a campaign badges it; an all-clean campaign badges nothing; an ad with no URL data
+is excluded from the denominator rather than reading as clean or broken; a mismatch and a typo on
+the same ad both surface; and an ad-set's roll-up and its parent campaign's roll-up are shown to
+aggregate the same per-ad verdicts (the campaign catches an ad set's finding even when scanned as
+a whole).
+
+**`CampaignTreeTable` wiring.** A `useMemo` walks the whole `campaigns` tree once building
+`adUrlInfoByKey` (`${campaignId}:${adsetId}:${adId}` → `AdUrlInfo`) regardless of expand state —
+the roll-up badges need every ad's verdict even while collapsed, not just the currently-rendered
+ones. A second `useMemo` folds those into `adsetRollups`/`campaignRollups` maps via
+`rollupAdUrlIssues`. The ad row itself now looks its verdict up from `adUrlInfoByKey` instead of
+calling `checkAdUrlMismatch` inline — same result, computed once, shared three ways (ad icon,
+ad-set badge, campaign badge).
+
+**Shared `AdUrlIssueBadge` component, not four copies.** The badge markup (moved into
+`src/components/admin/ui/Badge.tsx`, exported via the `ui` barrel) is now ONE definition used by
+the brand row, the Unattributed footer row (both in `BrandPerformanceCard.tsx`), and the new
+campaign/ad-set rows in `CampaignTreeTable.tsx` — each caller only builds the `title` text (which
+varies: the brand-row title names spend and brands the roll-up module doesn't carry) and passes
+`counts: { mismatchAdCount, unrecognisedParamAdCount }`. One definition means the mobile
+treatment below is automatically consistent everywhere, rather than needing to be re-applied at
+each call site.
+
+**Mobile: bare icon, no count.** Below `sm`, `AdUrlIssueBadge` hides the count (`hidden
+sm:inline`) and shrinks its own padding (`px-1 sm:px-1.5`, `gap-0.5 sm:gap-1` between the two
+badges when both render) — a phone can otherwise only fit a column or two of `CampaignTreeTable`
+/ the Brand Performance table before horizontal scroll, and the badge's numbers were costing
+width a numeric column needed. `title`/`aria-label` still carry the full count and explanation at
+every breakpoint (hover, long-press, and screen readers are unaffected); `sm:` and up shows the
+count inline again. `Badge` itself (`src/components/admin/ui/Badge.tsx`) was changed to build its
+className with `cn()` (clsx + tailwind-merge) instead of raw string concatenation, so a caller's
+override (e.g. shrinking the built-in `px-2` to `px-1`) resolves deterministically rather than
+depending on Tailwind's generated-CSS order.
+
+**Where to look (no browser available for this change):** open a brand with known ad-URL issues
+(Makita, per the production audit above) from the Brand Performance table, expand its modal, and
+confirm: (1) a collapsed campaign row badges when ANY ad beneath it is flagged, and shows nothing
+when all its ads are clean; (2) the same for a collapsed ad-set row; (3) at a phone width (< 640
+px / Tailwind `sm`), every badge (brand row, Unattributed row, campaign row, ad-set row) shows the
+icon only, no number, and the table shows at least one more numeric column than before; (4)
+hovering or long-pressing a mobile badge still reveals the full count/explanation via
+`title`/`aria-label`; (5) the per-ad icon and its own row's URL text are unchanged.
+
+### Unattributed row label shortened (2026-09-01)
+
+`BrandPerformanceCard`'s footer "Unattributed" row read `Unattributed  no brand in URL / no
+signup attribution` inline — the explanatory tail cost width the mobile columns needed more. The
+explanation moved into a `title` attribute on the label (`<span title="No brand in URL / no
+signup attribution">Unattributed</span>`), the same tooltip pattern the Basis control already
+uses on this card (`<span title={BASIS_HINT[basis]}>`). Still reachable on hover/long-press;
+nothing else about the row (its `adUrlIssues` badge, its totals) changed.
+
+### Ads Manager deep link — corrected to the owner's real URL (2026-09-01)
+
+`buildAdsManagerAdUrl` **moved out of `CampaignTreeTable.tsx`** into
+[`src/utils/admin/adsManagerUrl.ts`](../../src/utils/admin/adsManagerUrl.ts) (a pure util, so it
+is testable without mounting React) and its shape was replaced. The previous URL was `assumed`
+and landed on a filtered ad *list*; the owner supplied the URL that actually opens the ad's
+**edit** screen, and the helper now reproduces it character for character:
+
+```
+https://adsmanager.facebook.com/adsmanager/manage/ads/edit/standalone
+  ?act=<adAccountId, act_ prefix stripped>
+  &business_id=<FACEBOOK_BUSINESS_ID>
+  &filter_set=SEARCH_BY_ADGROUP_IDS-STRING_SET%1EANY%1E[%22<adId>%22]
+  &selected_ad_ids=<adId>
+  &nav_source=no_referrer
+  &current_step=0
+```
+
+⚠️ **The encoding is hand-written on purpose.** `%1E` is the ASCII record separator Meta uses as
+the delimiter inside `filter_set`; in the working URL the square brackets are **literal** while
+the quotes are `%22`. A blanket `encodeURIComponent` would also encode the brackets (`%5B`/`%5D`)
+— it may well still work, but we cannot test a variation from here, so the format that is known
+to work is reproduced exactly. `npm run test:ads-manager-url` pins every one of those choices.
+
+**`business_id` is configuration, not derivable.** It comes from `FACEBOOK_BUSINESS_ID` with the
+`NEXT_PUBLIC_FACEBOOK_BUSINESS_ID` twin (the link is built in a client component, so the public
+one is the one that must be set — same server/client pairing `src/config/featureFlags.ts` uses).
+Both are registered in `.env.example`. When it is **unset the parameter is omitted** and the rest
+of the link is built unchanged rather than emitting `business_id=` empty or dropping the link;
+Meta usually resolves the business from the signed-in session. That fallback is `assumed`, not
+verified — an account under several businesses may land on a chooser.
+
+**`src/services/facebook-ads-health/healthInsights.ts` builds a similar link and was NOT touched**
+— it targets **adsets** on a different host (`business.facebook.com/adsmanager/manage/adsets`),
+which is a different shape with a different verification story. It is very likely the same class
+of assumed URL and worth confirming with the owner on the same pass, but it is out of scope here.
+
+## Renewals KPI — one cohort, three outcomes (2026-09-02)
+
+The Overview Renewals tile used to read **"40 renewed · 20 past due"** with a billing-cycle
+line underneath. Those two numbers came from **different cohorts over different clocks**, so
+neither divided into the other and the card could not answer "how is today's renewal run
+going?".
+
+It is now anchored to a single cohort: **the members whose renewal fell DUE in the selected
+range** (`MembershipRenewalCycle.dueAt`), showing what became of that same group.
+
+```
+RENEWALS
+32  of 99 due
+[■■■■■■■■□□□□□□·················]
+● 32 landed   ● 21 failed   ○ 46 to come
+60.4% collected of those attempted
+```
+
+**Where the denominator comes from.** `MembershipRenewalCycle` is written *reactively* — a row
+appears only once Stripe emits an invoice, and **no row is ever dated in the future**. So the
+table alone cannot say how many renewals a day expects. `dueInRange` is the union of two
+disjoint sets:
+
+| Half | Source |
+| --- | --- |
+| Already invoiced | `MembershipRenewalCycle` aggregated by status, `dueAt` in range |
+| Still scheduled | `User.subscription.endDate` in range, under `getActiveSubscriptionFilter()` |
+
+They cannot overlap: a renewal that lands rolls `endDate` forward a month, and one that fails
+flips the user to `past_due`, which the filter excludes. Measured overlap for a live day: **0**.
+
+**Three traps the shape exists to avoid.**
+
+1. **`dueInRange` is NOT `landed + failed + pending`.** It sums *every* status bucket, so a
+   status in neither numerator (`refunded`, or anything added later) stays in the denominator
+   and renders as an unexplained grey slice instead of silently vanishing from the day's total.
+   The card derives its leftover as `due − landed − failed` for the same reason.
+2. **The pending window is the WHOLE range, never `[now, end]`.** Stripe finalises a renewal
+   invoice ~1h after the cycle boundary; a now-anchored window drops members inside that gap
+   from *both* sets and the denominator sags through the day (observed live: 102 → 98 in
+   minutes). Over the full range the union is stable — a member leaves one set exactly when
+   they enter the other.
+3. **`collectionRate` is `landed / (landed + failed)`, not `landed / dueInRange`.** Over the
+   full denominator the rate can only reach 100% at day's end, so it reads as failure all
+   morning regardless of how collection actually went. `null` — rendered "None attempted yet" —
+   when nothing has been attempted, never `0%`.
+
+**`isOpen` picks the leftover's label only** ("still to come" while the range is open, "did not
+renew" once closed) — it does **not** gate the pending query. On a settled range the pending
+count reaches 0 on its own; when it does not, the leftover is a genuine anomaly (a member still
+active and auto-renewing whose renewal date passed without Stripe invoicing them) and is worth
+surfacing rather than branching away. The leftover legend item and popover row are hidden at
+zero so a settled day does not carry a meaningless "0 did not renew".
+
+**The old headline is still reachable.** `succeededDistinctMembers` — renewal *payments*
+received in range — ties to the Revenue card's `membershipRenewal` row, so it moved into the
+tile's click-through popover as **"Payments received in range"**. It is a payment-time cohort
+and legitimately differs from `landedInRange` (43 vs 32 on a live day); the two must never be
+divided into each other.
+
+**Historical days improve — via one of the two recovery routes.** A failed cycle that **dunning**
+later recovers flips the *same row* to `succeeded`, so a past range's failure count decreases over
+time; a screenshot is not reproducible later. A **past-due re-bill** behaves differently: it
+re-anchors the member onto a fresh cycle, so it adds a NEW row dated the recovery day and leaves
+the original failure standing. Both are correct — see
+[subscription/backend.md](../subscription/backend.md) for the table.
+
+So the card's leftover slice can move for two different reasons, and a member recovered by re-bill
+shows up as a renewal **due on the day they were recovered**, not on the day they originally
+missed. Before 2026-09-03 those re-bills reached the card not at all (no ledger row was written),
+which is why the Renewals card's landed count could sit ~1% under the Revenue card's renewal
+count on any given day.
+
+Implementation: [`summarizeRenewalCohort`](../../src/utils/admin/renewalCohort.ts) (pure,
+`npm run test:renewal-cohort`) ← [`MembershipAnalyticsService.getAnalyticsBundle`](../../src/services/admin/MembershipAnalyticsService.ts)
+← [`DashboardStatsService`](../../src/services/admin/DashboardStatsService.ts) →
+[`KpiGrid`](../../src/app/admin/component/overview/sections/KpiGrid.tsx). Computed **live** on
+every range — it is not snapshot-backed, so no `DashboardStatsDailySnapshot` version bump was
+needed. UI additions: `MetricCard.footer` and
+[`SegmentedBar`](../../src/components/admin/ui/SegmentedBar.tsx).
+
+⚠️ `KpiCard`'s breakdown rows format as **money** by default (`moneyExact`). A card whose
+breakdown is counts must pass `format` per row or "32 members" renders as "$32".
+
+Design spec: [2026-09-02-admin-dashboard-ux-design.md](../superpowers/specs/2026-09-02-admin-dashboard-ux-design.md).

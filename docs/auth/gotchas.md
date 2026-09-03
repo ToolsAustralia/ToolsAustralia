@@ -333,3 +333,36 @@ device silently inherits it and is never shown the feature.
 `POST /api/auth/register` used to seed a five-counter `upsellStats` object on every new user.
 The field is deleted from the model — see `docs/upsell/gotchas.md`. `upsellPurchases: []` and
 `upsellHistory: []` are still initialised and remain live.
+
+## Registration now mints a checkout-identity cookie (2026-08-28)
+
+`/api/auth/register` sets an HttpOnly, `SameSite=Lax`, 2-hour cookie `ta_checkout_identity` on its
+**success path only**. It is the proof that this browser controls the email it is about to check out
+with, and the purchase routes refuse to bind an existing account without it.
+
+This works precisely because of a property this route already had: **every earlier branch rejects an
+email that already has an account** ("This email address is already associated with an existing
+account. Please log in instead."). Reaching the success return therefore proves the caller just
+created that account. **If that guarantee is ever relaxed — if registration is allowed to return
+success for a pre-existing email — the cookie stops being proof and the account-takeover fixed on
+2026-08-28 comes straight back.** Treat those rejection branches as load-bearing security, not UX.
+
+Minting is wrapped in try/catch and is non-blocking: registration must not fail because the cookie
+could not be signed. The buyer simply falls through to the true-guest path at checkout.
+
+Full rationale, the three-outcome contract, and the JWT-audience separation from the `auto-login`
+bridge token: [payment/gotchas.md](../payment/gotchas.md#account-takeover-an-unauthenticated-caller-could-bind-any-members-stripe-customer-fixed-2026-08-28).
+
+## Registration validation failures log at `warn`, without the stack (2026-09-01)
+
+`POST /api/auth/register` catches `ZodError` separately from real faults. A Zod failure here
+is a person mistyping their email: the handler answers with a 400 and a field-level message,
+which is the form working as designed.
+
+It previously hit `console.error("❌ Registration error:", error)` *before* the ZodError
+branch, so every typo dumped a full `ZodError` — issue array, regex pattern and all — into
+Vercel's runtime-error list, ~73 a week. It now logs `error.issues[0].message` at `warn`
+(stripped in production). Every non-Zod failure still logs at `error` exactly as before.
+
+If you are debugging a registration problem, the 400 response body carries the same `error`
+and `field` the log would have shown.

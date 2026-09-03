@@ -67,3 +67,30 @@ If you need to reset attribution deliberately (e.g., a test harness), call `sess
 - `route` / `currentUrl` — the **page** the user was on (always set on client-side reports).
 
 Client-side payment errors rarely set `apiEndpoint` (the error never reached a route), so the page URL is the only locator. The admin table now shows page URL as a secondary line under the error message and provides a dedicated **Page URL** filter. The **API** column shows only `apiEndpoint`; an em-dash indicates no API call was involved.
+
+## G-LOG-1. Cron heartbeats are a deliberate `console.error` exception (2026-09-01)
+
+[Rules R2/R6](./rules.md) say `console.error` is for faults a human must act on. Cron
+"I ran and found nothing" heartbeats are the one sanctioned exception, and they are
+deliberate — not oversights to clean up.
+
+The reasoning is spelled out at the clearest example,
+`src/app/api/cron/reconcile-renewal-grants/route.ts`:
+
+> Heartbeat, deliberately at `error` level. A clean run logged via console.log is STRIPPED
+> in production, which makes "ran and found nothing" indistinguishable from "never fired" —
+> and a safety net that cannot prove it ran is not much of a net. One short line a day.
+
+That trade is sound where the log is **one short line per run**. The six crons that do this
+(`reconcile-renewal-grants`, `dashboard-stats-daily-snapshot`, `sync-meta-ads`,
+`sync-tiktok-ads`, and both `cancellation-retention-*`) together produce roughly 96 entries
+a week — legible, and worth the operational certainty.
+
+It stops being sound when the line carries a payload. The `adsetMetadataFetcher` dumps
+removed in the same change were four `console.error`s per run, several serialising whole
+Meta API objects, for ~128 entries a week that no one could act on. **The test is not
+"is this a cron?" but "is this one scannable line, and does its absence leave a real
+question unanswered?"**
+
+If you add a heartbeat: one line, structured counts only, no payloads, and no more than one
+per invocation.

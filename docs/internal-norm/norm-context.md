@@ -590,9 +590,27 @@ Monetary fields here are in **cents** (`spendCents` / `revenueCents`), unlike mo
     dropOffRate: number,                    // percent: scheduledCancellation / (active + scheduledCancellation)
     periodChurnRate: number | null,         // percent of active subs that cancelled within dateRange; null for all-time
     membershipRenewals: {
-      expectedInRange: number,              // active subs due to renew within dateRange
-      succeededInRange: number,             // of those, how many succeeded
-      failedInvoicesInRange: number,        // renewal invoices that failed (declined cards etc.)
+      // ── The COHORT: renewals DUE within dateRange, and what became of them. These four
+      //    describe the same members, so they divide into each other safely.
+      dueInRange: number,                   // renewals due in dateRange: already-invoiced cycles
+                                            //   (every status) + members still scheduled in the
+                                            //   remainder of the range
+      landedInRange: number,                // of those, collected (succeeded or recovered)
+      failedInRange: number,                // of those, failed. MEMBERS, not retry attempts
+      pendingInRange: number,               // of those, not yet attempted; 0 once the range closes
+      collectionRate: number | null,        // landed / (landed + failed), 0-100, 1dp.
+                                            //   NOT landed/dueInRange — null when nothing attempted
+      // ── NOT part of the cohort. Do not divide these by dueInRange.
+      succeededInRange: number,             // renewal PAYMENTS received within dateRange. A
+                                            //   different cohort from landedInRange: Stripe
+                                            //   finalises a renewal invoice ~1h after the cycle
+                                            //   boundary, so a late-night renewal is charged the
+                                            //   next day. This is the figure that ties to
+                                            //   revenue.breakdown.membershipRenewal
+      failedInvoiceAttemptsInRange: number, // failed renewal invoice ATTEMPTS, inflated by dunning
+                                            //   retries on older invoices (124 attempts vs 20
+                                            //   members due on 2026-09-02). Never report this as
+                                            //   a member count — use failedInRange
       becamePastDueInRange: number          // subs that entered past_due status within dateRange
     }
   },
@@ -940,7 +958,7 @@ This is a strict subset of `/v1/dashboard/stats.revenue`. Same data, narrower pa
 
 0d. **`searchTruncated: true` means the numbers are incomplete.** A broad `search` term resolves to at most 1,000 customers, so both `rows` and `totals` become a subset. Say so rather than reporting the figure; re-run with an exact email for a definitive answer.
 
-0e. **Shop rows are structurally supported but currently always empty** — the shop has not launched (0 `Order` documents in production as of 2026-08-17). An empty `shop-order` filter is expected, not an error.
+0e. **Shop rows are live as of 2026-08-27.** The merch shop shipped with the #815–#824 merge, so `shop-order` rows now carry real money and an empty result is a genuine "no merch sold in this range", not the structural blank it was before. (Until 2026-08-27 this section said the shop had not launched and 0 `Order` documents existed — that is no longer true; do not repeat it.) Merch totals include shipping, so a `shop-order` row is not price-comparable with a package row.
 
 ---
 
@@ -1241,7 +1259,7 @@ null | {
 ```
 **Inputs**: `range` (optional, default `last_30_days`).
 
-**Data source**: Klaviyo Reporting API (campaign/flow values-reports + metadata), via `getKlaviyoAnalytics`. Revenue is Klaviyo-attributed `conversion_value` (acquisition; renewals excluded).
+**Data source**: Klaviyo Reporting API (campaign/flow values-reports + metadata), via `getKlaviyoAnalytics`. Revenue is Klaviyo-attributed `conversion_value` on the base **"Placed Order"** metric — it **INCLUDES automated subscription renewals** (~2/3 of attributed revenue in the window sampled 2026-09-02). **Do not describe this as acquisition revenue.** A renewals-excluded "Marketing Revenue" metric exists in the Klaviyo account, but Klaviyo's Reporting API accepts a custom conversion metric id and then returns base numbers regardless (verified 2026-09-02), so that split is reachable in the Klaviyo UI only and is **not** what this endpoint returns.
 
 **Constraints**: `read` tier. `requiredPermission: facebookAds.view`. **Rate limit 2/min** — Klaviyo Reporting is heavily throttled; do not poll. Read-only. No PII (campaign / flow entities only). On upstream throttle the call may surface a 5xx error — retry after a short backoff.
 
@@ -2864,6 +2882,23 @@ Rows are sorted first by `adFormat` (`video` → `static` → `carousel` → `un
 
 `meta.blendedPlatformRevenue: true` warns that under `basis=platform` with `platform=all`, the same purchase may be claimed by both platforms — that revenue and ROAS read high.
 
+**`adUrlIssues` — wrong-brand and typo'd ads hiding inside a row (added 2026-09-01).** A row MAY carry an optional `adUrlIssues` object. It is **absent whenever there is nothing to report**, and that absence covers two different states on purpose: the row is clean, OR none of its ads could be checked at all (no resolved landing URL). **Never read a missing `adUrlIssues` as an all-clear** — say "no issue reported", not "no issues".
+
+```ts
+adUrlIssues?: {
+  mismatchAdCount: number,          // ads NAMED for another brand but landing on this one's page
+  unrecognisedParamAdCount: number, // ads carrying a ?toolbox=/?toolset= value naming no brand (a typo)
+  checkedAdCount: number,           // ads in this row that had a URL to check — the denominator
+  mismatchSpend: number,            // AUD carried by the mismatched ads, weighted like the row's `spend`
+  mismatchBrands: string[],         // e.g. ["stihl"] on a Makita row
+  unrecognisedValues: string[],     // e.g. ["milwakee"]
+}
+```
+
+The two counts are **independent defect classes with different fixes — never add them together**. A mismatch means the campaign/ad naming resolves to one brand and the landing URL positively contradicts it (the real case: `Draw 10 | Sales | STIHL | Sep 2026` spending against `/promotions/makita`, which only showed up as bad Makita ROAS). An unrecognised param means the URL shape is right but the value names nothing, so the landing page silently served its default instead of the toolbox the ad promised. One ad can be both, either, or neither. A missing `?toolbox=` is never a finding.
+
+Computed by `checkAdUrlMismatch` (`src/utils/admin/adUrlMismatchCheck.ts`), the same rule the admin ad drill-down icons use, rolled up through the same lane allocation the row's spend went through. Counts are whole ads even when the row's spend is a fractional toolbox share; only `mismatchSpend` is weighted.
+
 **Data source**: `BrandPerformanceService` (`src/services/analytics/BrandPerformanceService.ts`), the same service the admin Overview card uses. Spend from `LandingPageMetricsDaily` via `SpendByUrlAggregationService`; outcomes from `PaymentEvent`; toolbox mix from `PromoAnalyticsRepository.getToolboxMixByToolsetPage`. Lane bucketing is shared with the Page Analytics toolbox rollup via `src/utils/metrics/brand-lane.ts`, guarded by `npm run test:brand-performance-reconciliation`.
 
 **Constraints**: `read` tier. `requiredPermission: facebookAds.view`. Read-only. Rate limit 10/min. An unconfigured ad platform contributes no spend rather than erroring.
@@ -3580,6 +3615,8 @@ PII not exposed: `segmentConfig.includeUserIds` and `segmentConfig.excludeUserId
 **Data source**: `MonthlyEntryCampaign` collection (full table or `monthKey`-filtered, sorted `monthKey` desc then `createdAt` desc), joined with a single `RedeemableIssuance` `$group` aggregate keyed by `campaignId` that computes both `redeemedCount` (status === "redeemed") and `issuanceCount` (any status) in one pass. Orchestrated by `listCampaignsWithRedemptionCounts` in `src/services/redeemables/MonthlyCouponQueryService.ts` — the same shared helper that the admin route (`GET /api/admin/monthly-coupon/campaign`) calls, so the numbers match by construction.
 
 **Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. The underlying admin route currently authenticates via `requireAdminUser` (legacy admin check) rather than `requirePermission` — a separate migration concern; Norm's own gate uses `promos.view` as the explicit grant.
+
+**Caveat — the list can be SHORT (2026-09-03).** A few `MonthlyEntryCampaign` documents were written directly to Mongo, bypassing Mongoose's `required` validators and `timestamps: true`, so they lack fields this response requires. The route drops any row that fails `MonthlyCampaignRowSchema` (logging its `_id` via `console.error`) rather than failing the whole call, so `count` is **rows successfully returned, not rows in the collection**. At the time of writing 23 of 26 are returned; one dropped row is an *active* March-2026 campaign. Do not present `count` as the total number of campaigns ever created, and if asked to reconcile against the admin UI — which lists all 26 because it applies no response validation — say the difference is malformed legacy rows pending a backfill, not missing data. See `docs/internal-norm/gotchas.md` G10.
 
 ---
 

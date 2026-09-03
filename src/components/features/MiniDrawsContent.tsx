@@ -20,6 +20,7 @@ import MiniDrawCard, { type MiniDrawCardData } from "./MiniDrawCard";
 import MiniDrawsFilters from "./MiniDrawsFilters";
 import MiniDrawQuickEnterSheet from "./MiniDrawQuickEnterSheet";
 import SheetShell from "@/components/ui/SheetShell";
+import { useStickyHeaderOffset } from "@/hooks/useStickyHeaderOffset";
 import { useMiniDraws } from "@/hooks/queries/useMiniDrawQueries";
 import { type MiniDrawType as ReactQueryMiniDraw } from "@/types/mini-draw";
 import { brandLogos } from "@/data/brandLogos";
@@ -86,6 +87,9 @@ export default function MiniDrawsContent({
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [isDesktopSortOpen, setIsDesktopSortOpen] = useState(false);
   const [quickEnterDrawId, setQuickEnterDrawId] = useState<string | null>(null);
+
+  /** Where the mobile control bar docks — the header's live bottom edge. */
+  const { stickyTop } = useStickyHeaderOffset();
 
   /**
    * Terms §5.5 — employees are ineligible, so an internal account gets no quick-enter sheet.
@@ -392,7 +396,16 @@ export default function MiniDrawsContent({
   return (
     <div className="w-full">
       {/* ── Mobile sticky control bar (search · filter · sort + brand chip rail) ── */}
-      <div className="sticky top-[var(--app-header-h)] z-30 border-b border-[#EDEFF2] bg-white/[.96] shadow-[0_6px_18px_-14px_rgba(15,23,42,.5)] backdrop-blur-md lg:hidden dark:border-neutral-800 dark:bg-neutral-950/95">
+      {/*
+        `top` is MEASURED, not `var(--app-header-h)`. That constant is a flat 86px, but the
+        real header bottom is 85px with the announcement bar up and 60px once it is
+        dismissed — so the constant left a transparent 26px strip below the navbar that
+        mini-draw cards scrolled up through. `useStickyHeaderOffset` tracks the live edge.
+      */}
+      <div
+        style={{ top: stickyTop }}
+        className="sticky z-30 border-b border-[#EDEFF2] bg-white/[.96] shadow-[0_6px_18px_-14px_rgba(15,23,42,.5)] backdrop-blur-md lg:hidden dark:border-neutral-800 dark:bg-neutral-950/95"
+      >
         <div className="flex items-center gap-2 px-3.5 pb-2.5 pt-[11px]">
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-[11px] top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />

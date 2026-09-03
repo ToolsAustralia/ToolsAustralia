@@ -106,3 +106,23 @@ Under `/api/admin/**` (in [admin](../admin/)):
 `buildBreakdown` in place of the removed `visitsFrom`. All three now gate on `pageAnalytics.view`
 (was `promos.view`). Rationale for every one of these:
 [backend.md](backend.md#page-analytics-repair--2026-07-31).
+
+### `POST /api/codes/validate` — `reason` on refusals
+
+Every `{ success: true, valid: false }` response now also carries a machine-readable
+`reason: "not_found" | "already_redeemed" | "expired" | "not_held"`, mirroring
+`CampaignCodeValidation.reason`. The referral leg, the promo leg and the generic tail all report
+`not_found`; the campaign leg forwards the service's own reason.
+
+**Why it exists.** The checkout-time resolve (`src/utils/payment/typed-code-at-checkout.ts`) picks a
+different customer-facing sentence for the dominant case — a typo, which deserves the code named
+back — and must do so **without comparing display strings**. `CampaignCodeValidationService`'s own
+comment records why: *"a copy edit to one literal used to be able to silently change routing
+behaviour."*
+
+The field is **additive and optional-safe** — nothing that read this endpoint before looks at it.
+`message` is unchanged and remains the string to show when you have no reason-specific copy.
+
+Unchanged, and load-bearing for callers: a genuine refusal is **HTTP 200 with `success: true`**. The
+`{ success: false, valid: false }` shape is reserved for a 429 (rate limit), a 400 (bad body) and a
+500 (failure) — those mean *"we could not answer"*, never *"the code is bad"*.

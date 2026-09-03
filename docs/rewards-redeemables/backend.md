@@ -4,12 +4,13 @@
 
 | Service | Responsibility |
 |---|---|
-| `RedeemablesWalletService.ts` | Read user wallet (active issuances, history, balances). Sets each campaign coupon's `isRedeemableNow` — gates purchase-required coupons via `hasQualifyingPurchase(...)` (loads user `subscription` + `oneTimePackages`), mirroring `RedemptionService` so the "Claim" button matches the redeem endpoint; ALSO requires the campaign to exist and `isActive !== false` (Task 10, 2026-08-25 — a deactivated/orphaned campaign must not show an enabled Claim button the server then refuses). Every wallet item carries `expiresAtLabel` (see below). |
+| `RedeemablesWalletService.ts` | Read user wallet (active issuances, history, balances). Sets each campaign coupon's `isRedeemableNow` — gates purchase-required coupons via `hasQualifyingPurchase(...)` (loads user `subscription` + `oneTimePackages`), mirroring `RedemptionService` so the "Claim" button matches the redeem endpoint; The **campaign half** of that flag is NOT computed here: it is delegated whole to `isCampaignRedeemable(campaign, now)` — the same predicate `RedemptionService.redeem` gates on, so the button and the endpoint cannot disagree (**corrected 2026-09-01**; this row previously said the wallet required the campaign to be `isActive !== false`, which was a *partial* copy that never consulted `endsAt` and showed 188 members an enabled Claim button on the ended `ANZACDAY25` campaign — see [rules.md R12](./rules.md) and [gotchas.md](./gotchas.md)). `campaign != null` is still checked here, so an orphaned issuance does not become claimable. The projection must therefore select every field the predicate reads — `isActive startsAt endsAt neverExpires validForHours` — or it fails closed and hides live claims. Every wallet item carries `expiresAtLabel` (see below). |
 | `RedemptionService.ts` | Execute redemption: validate, atomic burn, fulfillment hand-off. Purchase-gated coupons are enforced with `hasQualifyingPurchase(...)` before the burn (returns `ineligible` otherwise). |
 | `CampaignService.ts` | Run a campaign: target users, write `RedeemableIssuance` rows. Owns the single expiry stamp site (`resolveIssuanceExpiry`) and both mint paths — see [CampaignService mint surface](#campaignservice-mint-surface). |
 | `DrawGrantService.ts` | Issue redeemables tied to draw outcomes (winners, top-percentile). |
 | `TargetingService.ts` | Audience selection helpers — segments, filters, percentile. |
 | `RedemptionAnalyticsService.ts` | Aggregate redemption analytics for admin dashboards. |
+| `BonusCodeAudienceService.ts` | Read-only bonus-code **status**, per trigger. PRIMARY: real `RedeemableIssuance` state — issued/still-redeemable/redeemed(+entries)/expired-or-lapsed, each with a bounded PII sample. `stillRedeemableCount` delegates campaign redeemability to `isCampaignRedeemable` (never hand-rolled — the exact mistake R12 fixed). SECONDARY (demoted): the recency-bucketed addressable-population forecast from the first version of this service. Never mints/issues/redeems. Behind `GET /api/admin/monthly-coupon/trigger-audience` (see [api.md](./api.md#get-apiadminmonthly-coupontrigger-audience--bonus-code-status-2026-09-01-reworked)). Reads `BONUS_CODE_BY_TRIGGER` from `src/config/bonusCodes.ts`, never restates it. |
 | `CsvImportService.ts` | Bulk CSV import for admin (large campaigns). |
 | `BonusCodeNotifier.ts` | Emits the "Bonus Code Issued" Klaviyo event for a `StampedIssuance` and persists the outcome (`notifiedAt` / `notifyError`). See [BonusCodeNotifier — the Klaviyo emit](#bonuscodenotifier--the-klaviyo-emit). |
 | `mintBonusCodeForTrigger.ts` | **The service the Klaviyo bonus-code webhook delegates to** (`POST /api/bonus-codes/v1/issue` is its only caller — see [api.md](./api.md#post-apibonus-codesv1issue--the-klaviyo-bonus-code-webhook)). `mintBonusCodeForTrigger(user, trigger)` — resolves the code from `BONUS_CODE_BY_TRIGGER`, mints/re-arms, notifies on `minted`/`rearmed` only, never throws, and **returns the `StampedIssuanceResult`** so the route can map the outcome to a status. Owns the production gate (below). Kept as a service rather than inlined into the handler: a route handler must not orchestrate a mint-and-email. |
@@ -20,6 +21,7 @@
 | File | Purpose |
 |---|---|
 | `campaignAudienceFilter.ts` | Pure-policy filter — given a user, does this campaign apply? |
+| `bonusCodeAudienceFilter.ts` | Pure Mongo-filter builders for `BonusCodeAudienceService`. Two families: (1) issuance-state filters (`buildStillRedeemableIssuanceFilter` / `buildRedeemedIssuanceFilter` / `buildExpiredOrLapsedIssuanceFilter`) — exhaustive and non-overlapping over `RedeemableIssuance` rows, campaign redeemability threaded in as a single pre-computed boolean, never re-evaluated per row; (2) the addressable-population "who could this trigger reach" forecast, one per trigger, plus the shared `notCurrentlyActiveSubscriberOr()` / `hasNotResubscribedOr()` fragments (the latter used ONLY by cancel-click — keys off `subscription.autoRenew`, not `isActive`, because a default cancel-at-period-end leaves `isActive: true` through the grace window). `checkout-start`'s forecast builder is a documented **approximation** (no persisted "started checkout" event exists) — see the file header. |
 | `topMajorDrawPercentile.ts` | "Top N%" computation across major-draw participants. |
 | `cancellation-upsell-eligibility.ts` | Decides who gets the cancel-upsell offer based on redeemable history. |
 | `purchase-eligibility.ts` | Pure predicate `hasQualifyingPurchase(user, campaign, requirement, now)` — resolves a campaign's `purchaseRequirement` (`"none"` \| `"membership"` \| `"one-time"` \| `"any"`) against the user's active subscription and in-window `oneTimePackages`. The single source of truth shared by the redeem endpoint and the wallet's `isRedeemableNow`. |
@@ -274,6 +276,27 @@ now exactly one issuance-identification path, so the two can never disagree
 again, and the route now only formats a value it is handed (`route.ts` holds no
 business logic). Rule 11 applies throughout: copy never uses odds/chance/lottery
 language and never frames entries as bought.
+
+**`grant_unavailable` (added 2026-08-27).** A claim that passed every eligibility gate but found no
+Major Draw to grant into. `RedemptionService.landEntriesOrCompensate()` has already reversed
+everything the claim wrote — issuance back to `active`, the `redeemedEverAt` this call stamped
+unset, the wallet `$inc` and the `redemptionHistory` row undone — so the customer still holds their
+one-per-lifetime grant. The route answers **503** (matching `/api/cancellation-upsell/redeem`: the
+request was fine, the draw was not there to receive it) and the copy says both halves — nothing
+landed, and the code is still theirs. Never dress this as a success; that is the exact defect the
+reason exists to prevent. See [gotchas.md](./gotchas.md) — "A claim used to report success while
+granting nothing".
+
+**`grant_unresolved` (added 2026-08-27).** The claim **is** spent and this call could not safely hand
+it back. Two ways in, neither reversible automatically: the draw write could not be proven either way
+(a lost acknowledgement on a `save()` the server may have applied — reversing would re-arm the code
+over entries that may already be in the live draw, and the next claim would grant a second time), or
+the compensation itself failed and the issuance is still `redeemed`. Distinct from
+`grant_unavailable` because that reason *promises* the grant is still held. The route answers **500**,
+not 503: there is nothing to retry, and 503 invites one. Copy says the code has been used and that we
+could not confirm the entries landed — never "your code is still yours". Every occurrence carries a
+`console.error` with the ids needed to reconcile by hand. See [gotchas.md](./gotchas.md) — "…and then
+compensation itself became a double-grant door".
 
 ## Refund integration
 

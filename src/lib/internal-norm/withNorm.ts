@@ -215,6 +215,15 @@ export function withNorm(options: WithNormOptions, handler: NormHandler) {
                 { status: 500 },
               );
             }
+            // Serialise the PARSED value, not the handler's original object. Zod object
+            // schemas strip undeclared keys, so this is what actually makes the
+            // responseSchema a PII *projection* rather than merely a gate — the guarantee
+            // the read-tier permission bypass above (see "the PII boundary lives in each
+            // endpoint's responseSchema projection") depends on. Returning `data` here let
+            // any field a service happened to hydrate reach Norm undeclared: the concrete
+            // case was cancellation-flow-analytics shipping customer email + surname that
+            // its schema never mentions. See docs/internal-norm/gotchas.md G11.
+            return NextResponse.json({ success: true, data: parsed.data, requestId });
           }
           return NextResponse.json({ success: true, data, requestId });
         },

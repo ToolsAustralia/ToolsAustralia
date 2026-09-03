@@ -1,7 +1,21 @@
 import { config } from "dotenv";
 import path from "path";
 
-config({ path: path.resolve(process.cwd(), ".env.local") });
+/**
+ * Which env file to load. Defaults to `.env.local`; `--production` targets `.env.production`.
+ *
+ * MUST be resolved and loaded before importing anything that reads MONGODB_URI —
+ * `src/lib/mongodb.ts` resolves the URI from `process.env` at import time and throws if unset.
+ * Matches the sibling migrations (e.g. 2026-08-13-backfill-users-view-detail.ts).
+ *
+ * Added 2026-08-27: this script had no `--production` flag, so it could only ever seed the
+ * database in `.env.local`. That is how `shop.view` reached the permission catalog in code
+ * while the production Admin role never gained it — the admin Shop group stayed invisible on
+ * a fully-deployed build. Unlike its siblings this script has no `--apply`; `--dry-run` is the
+ * safe mode and the default is to write, so `--production` alone WILL write to production.
+ */
+const ENV_FILE = process.argv.includes("--production") ? ".env.production" : ".env.local";
+config({ path: path.resolve(process.cwd(), ENV_FILE) });
 
 import mongoose from "mongoose";
 import connectDB from "../src/lib/mongodb";
@@ -10,9 +24,14 @@ import User from "../src/models/User";
 import { PERMISSIONS } from "../src/lib/permissions";
 
 const DRY_RUN = process.argv.includes("--dry-run");
+const IS_PRODUCTION = process.argv.includes("--production");
 
 async function main() {
-  console.log(`Starting seed/backfill (dry-run=${DRY_RUN})...`);
+  console.log(
+    `
+Seed/backfill staff roles — target=${IS_PRODUCTION ? "PRODUCTION" : "local"} (${DRY_RUN ? "DRY-RUN" : "APPLY"})
+`
+  );
   await connectDB();
 
   // 1) Seed Admin role
@@ -45,6 +64,12 @@ async function main() {
         .filter(Boolean)
         .join(", ");
       console.log(`✓ Synced Admin role (${changes})`);
+      // Name them. "+4 perms" tells an operator something changed but not WHAT, and this
+      // script is the only thing standing between a shipped permission and an admin who
+      // cannot see the feature it gates. A dry-run that hides the list cannot be reviewed.
+      if (missing.length > 0) {
+        console.log(`    missing -> ${missing.join(", ")}`);
+      }
     } else {
       console.log("✓ Admin role already up to date");
     }
@@ -101,7 +126,16 @@ async function main() {
     );
     console.log(`✓ Backfilled userType=customer on ${res.modifiedCount} users`);
   } else {
-    console.log("  (dry-run: skipped customer backfill)");
+    // Report the REAL blast radius, not the headline. The updateMany above is scoped to
+    // users MISSING userType, so "57,180 customers" overstates it by orders of magnitude on a
+    // re-run. An operator approving a production write needs the number that will actually
+    // change, and a dry-run that only prints the total invites a needless refusal — or worse,
+    // a shrug at a number that turns out to be large.
+    const wouldBackfill = await User.countDocuments({
+      role: { $ne: "admin" },
+      userType: { $exists: false },
+    });
+    console.log(`  (dry-run) would backfill userType=customer on ${wouldBackfill} users`);
   }
 
   await mongoose.disconnect();

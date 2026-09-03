@@ -237,9 +237,12 @@ the shop as its own thing.** The remaining differences are the work, not the lay
 | | Mini-draws | Shop | Status |
 |---|---|---|---|
 | Hero overlay | `bg-black/50` | `bg-black/50` | aligned 2026-08-17 |
-| Mobile filters | Horizontal scrolling **brand chip row** | Single "Filters" drawer button | **open** |
-| Empty state | Icon + "Try a different brand or clear your filters" | Nothing rendered | **open** |
-| Facets | Brands, drawn from real data | Hard-coded power-tool categories (`Power Tools`, `Cutting Tools`) and a `Tool Style` group (`DIY`, `Heavy Duty`) | **open** — merchandise is unfilterable, and the brand list has no `Tools Australia` entry |
+| Mobile filters | Horizontal scrolling **brand chip row** | Category chip rail, same classes | aligned 2026-08-25 |
+| Mobile filter surface | `SheetShell` bottom sheet | `SheetShell` bottom sheet | aligned 2026-08-28 |
+| Mobile sort surface | ↑↓ icon button → sort bottom sheet | ↑↓ icon button → sort bottom sheet | aligned 2026-08-28 |
+| Sticky bar dock | `useStickyHeaderOffset` (measured) | `useStickyHeaderOffset` (measured) | aligned 2026-08-28 |
+| Empty state | Icon + "Try a different brand or clear your filters" | Icon + names the constraint (search vs filter) | aligned 2026-08-25 |
+| Facets | Brands, drawn from real data | Categories / brands / sizes / colours, drawn from real data | aligned 2026-08-17 |
 
 ## The free-entry badge
 
@@ -667,6 +670,52 @@ bug read before.
 control row is search, filter and sort, and a list view of an image-led card is a second
 layout to maintain for a mode the design does not have.
 
+## The mobile control bar and its two sheets (2026-08-28)
+
+The shop's phone controls now match `/mini-draws` exactly, because they are the same three
+decisions and there was no reason for two answers.
+
+**Filters open UPWARD, not from the left.** The panel was a full-height drawer sliding in from
+the left edge — a desktop pattern wearing a phone's clothes. It covered the results it was
+narrowing, put its controls at the top of an 844px screen where a thumb cannot reach, and
+carried a hand-rolled scroll lock, focus trap and a 300ms slide-out `setTimeout` that had to
+stay in step with a keyframe in `globals.css`. It is now
+[`SheetShell`](../../src/components/ui/SheetShell.tsx) — bottom sheet on mobile, centred modal
+from `lg`, with the lock/trap/Escape built in and roughly 45 lines of bespoke machinery deleted.
+
+The split between the sheet and the panel mirrors `MiniDrawsFilters`: **`ShopContent` owns the
+chrome** (title, sub-label, close, and the `Show N items` footer — it is the only component that
+knows the live result count), **`ProductFilters` owns the body**. So `ProductFilters` suppresses
+its own "Refine" header when `isMobile`; without that the sheet printed two headers.
+
+The footer's `Clear` resets **only the facets** — not the search box, not the sort. A button that
+sits inside a panel of filters and silently wipes a typed search term is the kind of surprise that
+makes someone retype it and stop trusting the button. `handleClearAll` (the reset-controls chip and
+the empty state) is the one that clears everything.
+
+**Sorting moved into a sheet, and lost its duplicate.** There were three sort controls on the page:
+the desktop card's `Dropdown`, a full-width picker in the sticky band, and a third pill beside the
+result count. The pill is gone; mobile now sorts through an ↑↓ icon button in the control bar that
+opens a `Sort by` sheet of button rows with a check mark on the active option — the same `sortList`
+shape `MiniDrawsContent` uses.
+
+Dropping the pill also retired the transparent-`<select>`-over-a-drawn-pill trick that existed only
+to dodge `select { font-size: 16px !important }` (see
+[shared-ui/gotchas.md](../shared-ui/gotchas.md)). Button rows have no forced font size. The current
+sort label is no longer printed anywhere on mobile, so it rides on the sort button's `aria-label`
+(`Sort products, currently Price: Low to High`) — that is the only thing a screen reader has left
+to read.
+
+**Sort options** are `Featured` (`displayOrder-asc`, the default) · `Price: Low to High` ·
+`Price: High to Low` · `Most free entries` · `Newest` · `Name (A-Z)` · `Name (Z-A)`. The two name
+sorts are new; `/api/products` already accepted `sortBy=name`, so nothing on the server changed.
+
+**Where the bar docks is measured, not constant.** It pinned at `top-[60px]` — the nav's own
+height — which parks it 25px *behind* the fixed header whenever the announcement bar is up, slicing
+the top off the search field and hiding the chip rail entirely. It now reads
+[`useStickyHeaderOffset`](../../src/hooks/useStickyHeaderOffset.ts). Full write-up, including the
+opposite failure on `/mini-draws`, in [shared-ui/gotchas.md](../shared-ui/gotchas.md).
+
 ## Variant gating on the product page (2026-08-25)
 
 The purchasable unit is a variant, so the page must not let anyone buy before one is
@@ -1030,3 +1079,38 @@ control at the bottom of the screen — "Proceed to Checkout" lands exactly wher
 sits, so the bar showed through beneath the drawer and competed for the same tap.
 Suppressed rather than pushed under by z-index: it stays readable behind a translucent
 overlay, and a visible control that cannot be pressed is worse than one that is not there.
+
+## Shop grid, mobile pass (2026-08-27)
+
+**The per-card FAB is gone.** A red circle half-overlapped each card's image
+carrying a sliders icon whenever the product had variants. Both live garments do,
+so every apparel card on a phone wore what reads as a *filter* control — a thumb's
+width below the real Filters button, on a page whose entire top band is about
+filtering. It was also promising something it could not deliver: on a variant
+product the tap could never add to cart (a colour and size must be chosen first),
+so it routed to the product page — exactly where tapping the card already went.
+The card is now one target that does one thing. The full-width add button from
+`sm:` up is unchanged.
+
+**The sticky band pins at `top-[60px]`, not `var(--app-header-h)`.** That variable
+is a flat **86px** while the mobile header actually renders **60px** (verified:
+`<header>` is `fixed top-0` with a 60px box). Pinning at 86 parked the band 26px
+below the header's bottom edge, and that strip is transparent — so product cards
+scrolled up *through* the gap between the navbar and the bar. Measured flush at
+0px after the fix. Corrected locally rather than by changing the variable, since
+`--app-header-h` is also the top padding on many pages and moving it shifts every
+mobile page by 26px at once — a worthwhile change, but a deliberate one.
+
+**One sort control, not two.** The sticky band carried a full-width sort dropdown
+while the results row below already paired the count with one, so a phone had two
+"Featured" pickers a few hundred pixels apart — and the sticky one spent an entire
+row saying one word, pushing products further down the fold on the breakpoint with
+the least room. The band's copy is removed; sorting lives beside the number it
+reorders.
+
+**Badges step down below `sm:`.** Two columns on a 390px screen leave each card
+~185px wide, and a chip reading "10 ENTRIES" consumed most of it — the two corners
+met in the middle and the entries chip sat hard against the card's right edge.
+`size="sm"` is now `h-[17px]/text-[8px]` on mobile and the previous
+`h-5/text-[9px]` from `sm:` up, with tighter inset and stack gaps. Nothing changes
+at the widths where the old size was never the problem.

@@ -143,6 +143,74 @@ On any `error`, the writer loads the prior snapshot and calls the pure [`mergeAd
 
 When adding a new ad channel, return `error` (not `empty`) for any fetch failure or missing-config path, or you reintroduce the wipe. The live reader ([`DashboardStatsSnapshotReader`](../../src/services/admin/dashboard-stats/DashboardStatsSnapshotReader.ts)) treats `empty` and `error` identically (skip) because a live read is transient and has no prior to preserve.
 
+## Only the newest ~10 days are re-fetched from the ad providers (2026-09-01)
+
+**Read this together with the section directly above — they are two halves of the same
+promise: a cron run must never turn a correct ad-spend number into a wrong one.**
+
+The same 90-day sliding window that made the 2026-06-11 wipe so expensive was also calling
+`fetchForDay` for **every one of those 90 days, on every run**. `vercel.json` fires this cron
+**three times a day**, so that was **~270 Meta Marketing API calls/day** re-fetching spend for
+days that closed months ago and cannot change. Meta's limit is **per-app and hourly-windowed**,
+so a burst of 90 sequential calls is exactly the shape that trips it: production logged
+`[adChannel:facebook] fetch FAILED — Application request limit reached` **9–13×/day**, with
+`Error fetching Facebook ad spend` alongside it.
+
+[`resolveAdChannelsForDate`](../../src/services/admin/dashboard-stats/DashboardStatsSnapshotWriter.ts)
+now decides, per day, in three branches:
+
+| Day | Stored `adChannels` | Action |
+|---|---|---|
+| Inside the restatement window | anything | **FETCH** — the numbers can still move |
+| Outside it | usable value present | **REUSE** it verbatim — no provider call |
+| Outside it | absent / empty / unusable | **FETCH ANYWAY** |
+
+**The third branch is the whole point, and it is not an optimisation — it is the guard.**
+Skipping a settled day just because it is old would write an **empty** `adChannels` for a day
+we hold nothing to preserve for. That is a *fresh zero over real history* — the 2026-06-11
+failure shape, arrived at from a different direction. Days that land here: a first run, a gap
+in history, and a day whose earlier fetch errored with no prior value (the `lost` case). They
+cost one call each. **The fix is to skip the fetch, never to fetch-and-overwrite-with-nothing,
+and never to skip-and-write-nothing.** An *empty* stored map is deliberately treated as "no
+value", not as "$0" — otherwise a single bad day would freeze a zero forever.
+
+**Why the window is 10 days** (`AD_CHANNEL_RESTATEMENT_WINDOW_DAYS`). Meta restates a day's
+conversions and revenue while its attribution window stays open. This account's ad sets report
+under `use_unified_attribution_setting` and the longest window in use is **7-day click** (plus
+1-day view) — see the comment in [`facebook-marketing.ts`](../../src/lib/facebook-marketing.ts).
+Spend settles within ~48h; it is attributed revenue, and therefore ROAS, that keeps moving for
+a week. TikTok is the same shape. Independently, **`sync-meta-ads` and `sync-tiktok-ads` each
+re-pull an 8-day window** (`since = until - 7`), so 10 strictly contains the range those syncs
+can still change — a day can never settle in `TikTokAdInsightsDaily` *after* this writer has
+stopped looking at it. 10 = the 7-day click window + 3 days of margin.
+
+Widen it **without a deploy** via `DASHBOARD_STATS_AD_RESTATEMENT_WINDOW_DAYS` (registered in
+`.env.example`). Larger is always the safe direction — it just fetches more. Values below 1 or
+unparseable fall back to 10, because a window of 0 would stop refreshing even yesterday.
+
+**Unaffected by this change:** revenue and user counts are still recomputed for all 90 days
+(local Mongo aggregates, no quota, and a late refund can restate an old day at any time); the
+03:20 UTC TikTok-settling correction run still works (the day it corrects is yesterday, well
+inside the window); the **reader** is untouched; and the **backfill script** passes no window,
+so `npm run backfill:dashboard-stats-snapshots` still fetches every day it is pointed at — a
+backfill is a deliberate repair.
+
+**How to tell it is working.** The cron's completion line now carries `adFetched` / `adReused`
+beside `written` (on the `console.error` line — `console.log` is stripped from production
+builds). Healthy looks like `written: 90, adFetched: 10, adReused: 80`. If `adFetched` creeps
+back toward 90, either history is missing (every gap costs a call — check for absent snapshot
+rows) or the window has been widened. Measured on production 2026-09-01: **90 of the trailing
+90 days held usable `adChannels`** (facebook + tiktok), so the steady state is 10 fetched / 80
+reused — **270 → 30 Meta calls/day, an 89% reduction**.
+
+Regression test: `npm run test:dashboard-stats-ad-restatement`. Its branch-3 assertions are
+mutation-verified — replacing the implementation with the naive "skip every out-of-window day"
+version fails them while tests 1, 2 and 5 still pass.
+
+There is still **no rate limiter for Meta** anywhere in the codebase (`stripe-rate-limiter.ts`
+has no Meta equivalent). This change removes the burst that was tripping the quota; it does not
+add a limiter.
+
 ## ClickableUserDisplay needs a dark-aware base text colour
 
 [`ClickableUserDisplay`](../../src/components/admin/ClickableUserDisplay.tsx) (the clickable user name/email used across admin tables that opens the User Detail modal) treats a caller-supplied `className` as the **entire** typography token set (so a default `text-sm` isn't merged and Tailwind doesn't pick the wrong size winner). The side effect: callers passing a *size-only* className (e.g. `text-2xs sm:text-xs`) — or a light-only colour like `text-gray-900` — left the text with no `dark:` variant → **black text on the dark admin background**. Fix: the component now applies a `baseTextColor = "text-gray-900 dark:text-gray-100"` in the `cn()` base of both the button and span branches, and the subtext uses `text-gray-500 dark:text-gray-400`. `cn` is `twMerge`-based, so an explicit caller colour still wins for the same variant while the `dark:` fallback is preserved. When adding any always-on text colour, pair it with its `dark:` variant.

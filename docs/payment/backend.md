@@ -12,22 +12,35 @@ The biggest helper directory in the repo. Each module has one focused responsibi
 | `stripe-invoice-payment-intents.ts` | Invoice ↔ PaymentIntent navigation helpers. |
 | `stripe-refund-amount.ts` | Compute refund amount given a charge / invoice. |
 | `stripe-subscription-metadata.ts` | Read/write `metadata` on subscription objects. |
-| `campaign-code-checkout.ts` | `attachCampaignCodeToCheckout()` — the **pre-confirm** write that stamps the customer's applied bonus-entry code onto the still-unpaid subscription / PaymentIntent. See below. |
+| `attach-typed-code.ts` | `attachTypedCodeToCheckout()` — the **pre-confirm** write that classifies the customer's **raw typed code** server-side and stamps it onto the still-unpaid subscription / PaymentIntent. Carries **all three** code types. See below. |
 
-### `campaign-code-checkout.ts` — the authoritative campaign-code write
+### `attach-typed-code.ts` — the authoritative typed-code write
+
+> **Renamed 2026-08-27 (was `campaign-code-checkout.ts`).** The seam carried only campaign
+> codes when it was built; it now carries all three, so the name moved with the behaviour
+> onto `typedCode` — the word its own slot marker (`metadata.typedCodeSlot`), slot type
+> (`CheckoutCodeSlot`) and sibling gate module (`typed-code-at-checkout.ts`) already used.
+> The module, the route (`/api/stripe/attach-typed-code`), the hook method
+> (`attachTypedCode`), the modal ref (`attachedTypedCodeRef`), the test
+> (`npm run test:attach-typed-code`) and the `[typed-code]` log prefix now all say one word.
+> **What deliberately did NOT move:** the `campaignCode` **metadata key** and
+> `CampaignCodeValidationService` — those really are campaign-only, so renaming them would
+> have forked a vocabulary rather than unified one. The `[campaign-code]` log prefix
+> likewise stays on that service.
 
 `MembershipModal` pre-warms the checkout object the moment step 2 mounts, and the coupon box lives on that same step — so at pre-warm time the customer has not typed anything yet, and the object that gets charged carried no `campaignCode`. This module closes that: at the PURCHASE click, **after** the code is final and **before** `confirmPayment`, it writes the desired state of `campaignCode` onto the object.
 
 Contract:
 
-- **Desired-state, not append-only.** `code: null` clears the stamp by writing `campaignCode: ""` (every downstream read is a truthiness check, so `""` and "key absent" are equivalent). This is what makes *apply A → card declines → remove A → retry* correct.
+- **All three code types, classified SERVER-SIDE.** The body's `code` is the **raw string the customer typed**, with no claim about its kind. The module runs the same three-way classification `/api/codes/validate` runs — referral (`validateReferralCodeForUser`) → promo (`PromoLink.findActiveByCode` + `isExpired()`) → campaign (`CampaignCodeValidationService.resolveCodeForCheckout`) — each against an identity resolved from the Stripe object's **own server-written metadata**, and writes `referralCode` / `promoLinkCode` / `campaignCode` accordingly. It returns `{ ok: true, code, slot }`. This is what closes the gap where referral and promo-link codes rode only in a create-subscription body and were lost whenever the pre-warm made that call redundant. **The client gains no new trust** — it never says which kind of code it typed.
+- **Desired-state, not append-only, scoped by `metadata.typedCodeSlot`.** `code: null` clears the slot the marker names by writing `""` (every downstream read is a truthiness check, so `""` and "key absent" are equivalent). This is what makes *apply A → card declines → remove A → retry* correct. The marker exists because three keys are now in play: without it, stamping a campaign code would wipe the `?promo=` **attribution** `promoLinkCode` a *different* writer put there at create time. An object stamped before the marker existed has no marker and is read as slot `"campaign"`, which preserves the original clear behaviour exactly; `promoLinkCode` deliberately gets no such fallback.
 - **Re-verifies server-side.** Calls `CampaignCodeValidationService.resolveCodeForCheckout` verbatim, with a user id resolved **only** from the Stripe object's own server-written metadata (`userId`, else `userEmail` → `User` lookup, else the session). The request body is never an identity claim.
 - **Authorization is a possession proof**, because the caller may be a guest: `metadata.subscriptionRequestId` for a subscription, `client_secret` for a PaymentIntent. Both are server-written and bound to the specific object. The `client_secret` is never logged or echoed.
 - **State guard: the object must be unpaid.** Subscription: `status ∈ {incomplete, trialing}` **and** `latest_invoice.status !== "paid"`. PaymentIntent: `status ∈ {requires_payment_method, requires_confirmation, requires_action}`. `trialing` is accepted because on the anchor days (AEST 25/26/27) the create routes send `trial_end`, and Stripe will not hold a trialing subscription at `incomplete` — the up-front charge rides an `add_invoice_items` line on an open invoice instead. The paired invoice check is what keeps "never stamp a paid object" intact.
 - **Never throws, never blocks the sale.** Every failure is a typed result; the caller charges anyway and a genuine holder keeps the unspent issuance in their rewards wallet.
 - **Metadata is spread in full on every write.** These update calls take a metadata *map*, so a partial payload would destroy `packageId`, the CAPI match keys, the A/B assignment and the attribution on an object the customer is about to be charged on.
 
-Reached over HTTP via `POST /api/stripe/attach-campaign-code` ([billing-stripe/api.md](../billing-stripe/api.md)); called from `useStripeSubscription().attachCampaignCode`.
+Reached over HTTP via `POST /api/stripe/attach-typed-code` ([billing-stripe/api.md](../billing-stripe/api.md)); called from `useStripeSubscription().attachTypedCode`.
 
 ### Ledger & processing (the heart)
 

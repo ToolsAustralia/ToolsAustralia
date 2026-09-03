@@ -98,10 +98,21 @@ export interface AdminDashboardStats {
     dropOffRateTrend?: TrendData;
     periodChurnRate?: number;
     membershipRenewals?: {
-      expectedInRange: number;
+      /** Renewals DUE in range and their outcomes — one cohort, so the parts divide into the
+       *  whole. See src/types/admin/membershipAnalytics.ts for the full semantics. */
+      renewalCohort: {
+        dueInRange: number;
+        landedInRange: number;
+        failedInRange: number;
+        pendingInRange: number;
+        isOpen: boolean;
+        collectionRate: number | null;
+      };
       succeededInRange: number;
+      /** Payment-time count — a DIFFERENT cohort from renewalCohort.landedInRange. */
       succeededDistinctMembers: number;
-      failedInvoicesInRange: number;
+      /** Retry attempts, not members. Exceeds renewalCohort.failedInRange by design. */
+      failedInvoiceAttemptsInRange: number;
       becamePastDueInRange: number;
     };
     cancellationImpact?: {

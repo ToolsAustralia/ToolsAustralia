@@ -25,6 +25,10 @@ import { extractClickIdsFromRequest } from "@/utils/tracking/click-capture";
 import { parseReferrer } from "@/utils/tracking/referrer-helpers";
 import { userDataForRegistration } from "@/utils/tracking/registration-user-data";
 import { trackAffiliateSignup } from "@/lib/affiliate";
+import {
+  signCheckoutIdentityToken,
+  setCheckoutIdentityCookie,
+} from "@/utils/payment/checkout-identity";
 import { extractBrandFromSlug } from "@/utils/integrations/klaviyo/brand-extraction";
 import {
   buildSignupAttribution,
@@ -1022,7 +1026,7 @@ export async function POST(request: NextRequest) {
       console.error("❌ Pixel registration tracking failed (non-blocking):", pixelError);
     }
 
-    return NextResponse.json({
+    const registrationResponse = NextResponse.json({
       success: true,
       message: "Step 1 completed",
       data: {
@@ -1038,8 +1042,37 @@ export async function POST(request: NextRequest) {
         pixelEventId: eventID,
       },
     });
+
+    // Step 1 does NOT log the user in, so step 2's payment call has no session and has to
+    // name the account by email. This cookie is what makes that safe: reaching this line
+    // means the email had no existing account (every earlier branch rejects one), so the
+    // caller demonstrably just created it. `resolveBindablePurchaseUser` requires this
+    // before any purchase route will bind an existing account's Stripe customer.
+    // See src/utils/payment/checkout-identity.ts.
+    try {
+      const token = await signCheckoutIdentityToken({
+        userId: String(newUser._id),
+        email: newUser.email,
+      });
+      setCheckoutIdentityCookie(registrationResponse, token);
+    } catch (identityError) {
+      // Non-blocking: registration succeeded and must not fail over this. The buyer falls
+      // through to the true-guest branch at checkout (customer created during purchase).
+      console.error("❌ Failed to mint checkout identity cookie (non-blocking):", identityError);
+    }
+
+    return registrationResponse;
   } catch (error) {
-    console.error("❌ Registration error:", error);
+    // A Zod failure here is someone mistyping their email in the signup form — the handler
+    // answers it with a 400 and a field-level message, which is the feature working. It is
+    // not a server fault, so it logs at `warn` (stripped in production) and without the
+    // stack: at `error` level it was ~73 entries a week in Vercel, each one a full ZodError
+    // dump of a typo. Everything else still logs as a real error.
+    if (error instanceof z.ZodError) {
+      console.warn("Registration rejected by validation:", error.issues[0]?.message);
+    } else {
+      console.error("❌ Registration error:", error);
+    }
 
     // Handle Zod validation errors
     if (error instanceof z.ZodError) {

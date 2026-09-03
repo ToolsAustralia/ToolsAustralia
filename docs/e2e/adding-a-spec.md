@@ -302,6 +302,20 @@ So a spec MAY now assert `ta_anon_id` is present, `anon_`-prefixed and stable ac
 regression coming back. Still never SEED the cookie to make a spec pass: that hides exactly the
 failure the assertion exists to catch.
 
+## A leg whose assertion is an ABSENT interaction
+
+`e2e/specs/membership/bonus-code-journey.spec.ts` carries a leg — *"minted code TYPED BUT NEVER
+APPLIED"* — that is a near-clone of the leg above it with **one line removed**: the
+`getByRole("button", { name: "Apply", exact: true }).click()`.
+
+That absence is the assertion. It reproduces the customer journey the owner hit on the first real
+run (type the code, press PURCHASE, get charged with nothing attached), and it is the **only**
+executable proof in this repo that the purchase-time code resolve reaches the charge — the
+Apply-first path was never broken, so it stays green either way, and there is no DOM test runner
+here to catch the difference.
+
+When you write a leg like this, say so loudly in the spec's own comment, or the next person will
+"tidy" the two legs into one. It is registered under the existing `npm run e2e:bonus-code` grep.
 ## Shop catalogue spec (2026-08-17) — two harness traps it hit
 
 [`e2e/specs/admin/shop-catalogue.spec.ts`](../../e2e/specs/admin/shop-catalogue.spec.ts) covers

@@ -516,7 +516,9 @@ Client-side Klaviyo calls — [LoginModal](../../src/components/modals/LoginModa
 
 ## MembershipModal pre-warm toast removed — single actionable toast only
 
-The MembershipModal auto-creates a subscription on open (background pre-warm) so checkout is faster on purchase click. Previously, if a stale `EXISTING_SUBSCRIPTION` (409) was returned during this pre-warm, it would immediately surface an `EXISTING_SUBSCRIPTION` error toast — followed by a second "Active Subscription Found" toast if the user then clicked Purchase. This produced two toasts for a single user action. The pre-warm path now only logs the 409 response and does not show a toast; the single actionable "Active Subscription Found" toast on the purchase-click path is the only one displayed. Its **"Manage Subscription"** action deep-links to **`/my-account?open=subscription`**, which opens the **Manage-membership bottom sheet** on arrival (handled in `my-account/page.tsx`) — not just the dashboard home.
+The MembershipModal auto-creates a subscription on open (background pre-warm) so checkout is faster on purchase click. Previously, if a stale `EXISTING_SUBSCRIPTION` (409) was returned during this pre-warm, it would immediately surface an `EXISTING_SUBSCRIPTION` error toast — followed by a second "Active Subscription Found" toast if the user then clicked Purchase. This produced two toasts for a single user action. The pre-warm path now only logs the 409 response and does not show a toast; the single actionable "Active Subscription Found" toast on the purchase-click path is the only one displayed.
+
+> **Superseded twice since.** (1) The pre-warm's silent branch was restored to a toast on 2026-09-01 — see "MembershipModal step-2 pre-warm is gated, and never fails silently" below for why, and for the narrow duplicate-toast case that replaces the one this entry removed. (2) The purchase-click toast's **"Manage Subscription"** action no longer deep-links to a fixed `/my-account?open=subscription`; it takes its destination from `resolveSubscriptionCreationGate`, so a member in payment recovery lands on the **payment** sheet and everyone else on the **Manage-membership** sheet. Both sheets open on arrival, handled by `my-account/membership/page-client.tsx`.
 
 ## Confirm-time card declines surface the real reason in three modals (2026-07-16)
 
@@ -811,6 +813,40 @@ bar's `getBoundingClientRect().top` read **28.8px** at `scrollY = 300` with `top
 was simply scrolling away. Swapping both wrappers to `overflow-x-clip` fixed it. The site-wide
 `body` fix does **not** immunise a page that re-introduces the same declaration one level down;
 `overflow-x-hidden` on a full-bleed page container is a common instinct, so check for it first.
+
+## A sticky bar's `top` must be MEASURED off the header, never a constant (2026-08-28)
+
+Once a bar sticks (previous entry), the next question is *where*. There is no constant that is
+right: `--app-header-h` (86 / 106px) is the **reserved padding** for the header alone, but the
+site also renders a dismissible announcement bar above the nav, so the header's real bottom edge
+moves on the same page while the member is on it.
+
+| mobile, measured live | announcement bar up | bar dismissed |
+| --------------------- | ------------------- | ------------- |
+| `.site-header header` bottom | **85px** | **60px** |
+
+Both wrong answers had shipped at once, on two pages that look the same:
+
+- **Too small.** `/shop`'s bar pinned at `top-[60px]` (the nav's own height). With the bar up
+  that is 25px **behind** the fixed header — the search field was sliced off at the top and the
+  category chip rail never appeared at all. Verified in the browser: header bottom 85, bar top 60.
+- **Too large.** `/mini-draws` pinned at `var(--app-header-h)` = 86px. Once the announcement bar
+  is dismissed that leaves a transparent 26px strip below the navbar, and product cards scroll up
+  through the gap.
+
+**Use [`useStickyHeaderOffset`](../../src/hooks/useStickyHeaderOffset.ts).** It measures
+`.site-header header`'s `getBoundingClientRect().bottom`, keeps it current with a
+`ResizeObserver` (so dismissing the bar mid-scroll re-docks the bar in the same frame), and falls
+back to the constant for SSR and the first paint. Apply it as an inline `style={{ top: stickyTop }}`
+with no `top-*` class, or the class wins.
+
+Two details the hook exists to encode:
+
+- **Observe the fixed CHILD, not `.site-header`.** The wrapper is `static, h=0` by design (see
+  the Suspense-fallback entry above); measuring it yields 0. The child also arrives after a
+  Suspense boundary resolves, so the hook waits for it via `MutationObserver` before observing.
+- `/discount` still carries its own inline copy because it drives a docked-yet `IntersectionObserver`
+  off the same number. If that page changes, fold it onto the hook rather than growing a third variant.
 
 ## The same mutation mounted three times must fail the same way three times (2026-08)
 
@@ -1350,3 +1386,307 @@ tracking endpoint — see `docs/upsell/gotchas.md`.
 
 `UpsellOffer` and `SAMPLE_UPSELL_OFFERS` remain in `types/upsell.ts`: the dev modal gallery
 (`src/components/dev/ModalsGalleryClient.tsx`) still uses them.
+
+## MembershipModal: `handleSubmit` reads a SETTLED LOCAL, never `appliedCouponPayload`
+
+_Added 2026-08-27 with the "Purchase implies Apply" change._
+
+`handleSubmit` is an async closure. It captured `appliedCouponPayload` — the memo that carries
+`referralCode` / `promoLinkCode` / `campaignCode` — **at render time**. Resolving a typed code
+mid-invocation and calling `setCouponApplied(true)` / `setCouponType(...)` updates the UI on the
+NEXT render; it does **not** change the memo this invocation already holds.
+
+So `handleSubmit` builds a `settledCoupon` local once, immediately after the resolve, and **every**
+downstream read comes from it: the `desiredTypedCode` that feeds the attach seam (and the two
+decline-and-retry re-stamps that close over it), all three create-call bodies, and all seven
+`appendCodeBenefits` calls inside the handler.
+
+`settledCoupon.typedCode` is the **raw string**, unclassified, because the attach seam's server side
+is what classifies it. `settledCoupon.appliedLabel` is the exception to "built once": it is settled
+**last**, by `settleAppliedLabel()`, after the attach has answered — see the third bullet below.
+
+**The failure mode if you forget:** it tests green. Press Apply then Purchase — the path that was
+never broken — and the memo is already correct, so the success screen shows the code and the entries
+land. Only the typed-not-applied path, the one the change exists for, still sends `undefined`.
+There is no DOM runner in this repo; the e2e leg *"minted code TYPED BUT NEVER APPLIED"* in
+`e2e/specs/membership/bonus-code-journey.spec.ts` is the only thing that catches it.
+
+Two related rules:
+
+- **The pre-warm create calls keep reading the memo.** Different function, different moment,
+  best-effort by design. Do not "fix" them to read the local — it does not exist there.
+- **`appendCodeBenefits(benefits, settled)` takes `settled.appliedLabel`, not the payload fields.**
+  `promoLinkCode` falls back to the `?promo=` attribution code even when nothing was typed, and
+  rendering that as "Promo code X applied" would be a new claim on the success screen.
+- **The `settled`-less overload reads `couponApplied` state**, and five call sites in
+  `handlePaymentSuccess` / `handlePaymentProcessingSuccess` use it. So `setCouponApplied(true)` is
+  itself a **claim on the success screen**, not just a row decoration — never set it for a code the
+  charge is not going to carry. This is also why the requirement gate's `allow_without_code` outcome
+  clears `couponApplied` / `couponType`: the resolve re-ran on that press and set them, and leaving
+  them would show a green **APPLIED** beside a code the charge is deliberately dropping.
+- **`settleAppliedLabel()` decides what the success screen may claim, and it runs after the attach.**
+  `appliedLabel` exists only when `attachedCodeSlot === typedCodeType` (the server told us which
+  metadata key it wrote) **or** `codeRidesInCreateBody` (the create call in this submit carries all
+  three fields). An attach outcome of `unknown` does not license it. See
+  `docs/payment/gotchas.md` → *"Never claim a code applied unless it reached the server"*.
+- **A refusal the server has already told us about vetoes the claim — `serverRefusedTypedCode`
+  (fixed 2026-08-27, F3).** `codeRidesInCreateBody` says only WHICH BODY the field left the browser
+  in; it is no evidence the server accepted it, and the create routes re-resolve the code against a
+  server-resolved user and **drop** it when the customer does not hold it
+  (`create-one-time-purchase/route.ts`). The live hole: a customer registers at step 1 — which does
+  **not** authenticate them (CLAUDE.md rule 6) — picks the $25 Apprentice Pack, types `EXTRA100` and
+  presses Purchase without Apply. `/api/codes/validate` has no session, so its campaign leg answers
+  from the campaign window alone and returns `valid: true`. The pre-warmed PaymentIntent carries the
+  email, so the attach resolves the real user, `resolveCodeForCheckout` refuses (`not_held`, or
+  `expired` if their 72h lapsed), and the route answers `200 { success: true, code: null, slot: null }`
+  — `attachedCodeSlot` becomes `null`. But `codeRidesInCreateBody` is unconditionally true for a
+  non-monthly plan, so the success screen still printed *"Campaign code EXTRA100 applied"* for a code
+  the server had explicitly refused. **A 200 carrying no slot, on a request that carried a code, is a
+  DEFINITE refusal** — `writeTypedCodeTo` now records it and `settleAppliedLabel` vetoes the claim
+  regardless of which body the field rode in. It is sticky across a decline-and-retry (the refusal is
+  about the customer and the code, not the checkout object) and cleared only by a later attach that
+  positively names a slot. Note the asymmetry that stays: `outcome: "refused"` (a non-`ok` response —
+  `wrong_state`, `not_authorized`, `stripe_error`) is **not** a refusal of the code and does not veto,
+  because the create body may still deliver it. The label proves acceptance, never delivery.
+
+## Both checkout modals: an early return after the submit lock must release it by hand
+
+`MembershipModal.handleSubmit` and `SpecialPackagesModal.handlePurchase` both take a synchronous
+re-entry lock (`checkoutSubmitLockRef` / `specialPackagePurchaseLockRef`) plus `setIsSubmitting` /
+`setIsProcessing`, and only **later** enter the `try` whose `finally` clears them. Any `return`
+between those two points — the typed-code refusal, the campaign purchase-requirement toast — must
+call the local release helper first, or the purchase button stays dead for the modal's lifetime.
+
+**And every one of those returns must leave a second press that works.** Releasing the lock only
+re-enables the button; if the next press re-enters the same branch off unchanged state, the customer
+has a live button that never buys, which is worse than the code being dropped. Record the stop —
+`refusedCodeRef` for a **definite refusal**, `requirementStopRef` for a **requirement mismatch**,
+which are different kinds of fact and must not share a ref — *and* disarm whatever state would
+re-supply the code. This shipped wrong twice: once as a wall with no escape, once as a stop
+remembered by code alone that silently dropped the grant when the customer did what the stop's own
+copy told them to (switch to a membership). `docs/payment/gotchas.md` → *"A stop with no way out"*.
+
+**And every stop must be VISIBLE on the surface it fires on.** `CouponRow` returns `null` on an
+upsell offer and swaps its input+error slot for a static panel under a valid promo-link, so a message
+written only to `referralError` can land nowhere. `MembershipModal` routes every code stop through
+`showCodeStop()`, which sets the inline error **and** toasts when `couponErrorIsVisible` is false; on
+an upsell it skips the typed-code resolve entirely, since an upsell purchase carries no code fields
+at all and a stop there could only ever be a dead button press.
+
+Equally: the resolve must sit **after** the lock, never before it. Awaiting a multi-second network
+call with the Purchase button still enabled is a double-charge window, which is worse than any code
+being dropped.
+## `select { font-size: 16px !important }` silently eats any smaller text (2026-08-27)
+
+`src/app/globals.css` (~line 1496) forces every `input`/`textarea`/`select` to
+16px under 768px:
+
+```css
+@media screen and (max-width: 768px) {
+  select { font-size: 16px !important; }
+}
+```
+
+**That rule is load-bearing, not legacy.** iOS Safari zooms the whole viewport
+when a form control whose text is under 16px takes focus, and it does not zoom
+back — so the guard is the reason the site does not lurch on every filter tap.
+
+The trap: a Tailwind `text-[11.5px]` on a `<select>` applies everywhere *except*
+mobile, where it is discarded with no warning. Padding, height and colour classes
+on the same element all apply normally, so the control looks styled and simply
+renders its text too large — which reads as "Tailwind didn't work" rather than
+"a global rule outranks it".
+
+**Do not raise the specificity to win.** Removing or overriding the guard trades a
+type-size nit for viewport zoom on every iPhone.
+
+**Two patterns satisfy both.** Pick by whether the control has to be a `<select>` at all:
+
+1. **Don't use a `<select>`.** A sheet of `<button>` rows has no forced font size, so
+   the rule never applies. This is what `/shop` and `/mini-draws` both do now: the sort
+   options live in a `SheetShell` bottom sheet (`sortList` in `ShopContent.tsx` /
+   `MiniDrawsContent.tsx`) with a check mark on the active one. Prefer this when the
+   surface is already a sheet — it is less machinery than the trick below, and the two
+   browse pages then sort through one control instead of two lookalikes.
+2. **Keep the `<select>` and move only the painting.** Leave it at its 16px, give it
+   `peer absolute inset-0 opacity-0`, and draw the visible pill as a sibling `div` at
+   whatever size the design wants with `pointer-events-none`. The native picker, arrow
+   keys, `aria-label` and the absence of a scroll lock all survive. Carry the focus ring
+   across with `peer-focus-visible:` or keyboard focus becomes invisible. Reach for this
+   when a full sheet would be overkill — a lone control on an otherwise static page.
+
+_(The shop's sort control used pattern 2 until 2026-08-28 and now uses pattern 1; no
+component in `src/` currently ships the transparent-select trick, so pattern 2 is
+documented here rather than pointed at a live example.)_
+
+## MembershipModal step-2 pre-warm is gated, and never fails silently (2026-09-01)
+
+The step-2 effect pre-creates the subscription to obtain a card-form client secret. It now
+calls `resolveSubscriptionCreationGate` first: a member with a live membership is toasted
+and redirected instead of pre-warming into a guaranteed 409.
+
+The pre-warm's `EXISTING_SUBSCRIPTION` branch previously logged `console.warn` and showed
+nothing, on the reasoning that the purchase-click handler was "the single source" of the
+message. That reasoning failed in practice — with no client secret the card form never
+renders, so there is frequently no purchase click to make, and the member simply sat at a
+blank payment step. It now shows the same "Active Subscription Found" toast.
+
+**Do not restore the silent branch.** The two call sites do not carry the same
+double-toast guarantee: the step-2 backstop calls `onClose()` and redirects, so it
+closes the modal and the purchase-click handler's own `EXISTING_SUBSCRIPTION` toast
+cannot also fire. The pre-warm's `onError` branch only toasts — it does not close the
+modal — so the purchase-click handler stays reachable and could show a second,
+identical toast if the member clicks purchase anyway. That is an accepted, narrow edge
+case (one duplicate toast, not a silent dead end), not a reason to bring back the
+silent branch.
+
+**All THREE "Active Subscription Found" toasts now route through the gate (2026-09-01,
+review follow-up).** There are three, not two: the two above (both behind the shared
+`showExistingSubscriptionToast` helper in the step-2 effect) plus a **pre-existing** one on
+the purchase-click 409 path much further down `index.tsx` (~L5334). That third one still
+hard-coded `router.push("/my-account/membership?open=subscription")`, so a member in payment
+recovery who reached the purchase-click 409 landed on the plan sheet instead of the payment
+sheet — the exact defect already fixed at the other two sites. Its action now resolves
+`resolveSubscriptionCreationGate` and pushes `gate.redirectTo` (falling back to
+`MANAGE_SUBSCRIPTION_PATH` if the gate reads "allowed", i.e. the status changed since the
+409). Its **body copy is deliberately untouched** — it renders a server-supplied
+`errorMessage`, unlike the other two which carry a fixed string.
+
+If a fourth "you already have a membership" surface ever appears, take the destination from
+the gate. Never hard-code a sheet: which sheet is right depends on whether the member owes
+us money, and that is exactly what the gate already knows.
+
+**Both gate calls in this file read the query CACHE, not the last render (2026-09-01,
+review follow-up).** `stepTwoGate` (the backstop above) and the pre-warm's `onError`
+fallback both used to pass `userData` straight from `useUserContext()`. That is the same
+defect fixed at the open-time chokepoint in `useMembershipModal`, through a different door:
+the past-due tier switch on `/my-account/membership` calls `openModal(plan)` in the
+**microtask** continuation after `await invalidateQueries(users.detail)`, while React Query
+notifies on a **macrotask** and React schedules the render on another — so no render has
+happened and `userData` still says `past_due` for a member the switch already canceled.
+`stepTwoGate` would then fire the toast, `onClose()`, and
+`router.push("?open=payment")`: a payment sheet for a subscription that no longer exists.
+
+**Why it was invisible on the mainline, and when it bites.** `LazyMembershipModal` mounts
+the modal only on first open, and awaiting that dynamic chunk import outlasts the pending
+macrotask — so on a first open, context *is* fresh by the time the effect runs. The bug
+needs the modal **already mounted**: a past-due member buys a one-time pack (allowed by
+design), closes it, then does the tier switch. `currentStep` survives a close, so the
+pre-warm effect can run on the very next commit against the stale value. A "harmless because
+of an unrelated import delay" guard is not a guard.
+
+Both now call `readGateUser()`, which reads
+[`selectGateUser`](../../src/utils/subscription/subscription-creation-gate.ts)'s choice of
+cache-then-rendered-user. It reads through a **ref** (not the effect closure) so the async
+`onError` path also gets the latest rendered user, and it depends only on `[queryClient]`
+so its identity is stable — deliberately, because the pre-warm effect must **not** gain a
+`userData` dependency (see the LATENT COUPLING note at the `stepTwoGate` call site).
+
+The two calls are **not** equally severe, and the difference is worth keeping straight:
+
+| Call | Stale how | What it costs |
+| --- | --- | --- |
+| `stepTwoGate` | No render yet at the microtask continuation | **Strands the member** — toast + `onClose()` + redirect to a sheet for a dead subscription |
+| pre-warm `onError` | Closure captured when the effect ran, now a network round-trip old | **Only picks the toast's destination.** It cannot strand anyone: it runs *because* the server returned `EXISTING_SUBSCRIPTION`, so a blocking subscription provably exists, and it neither closes the modal nor redirects |
+
+The `onError` one was fixed anyway because it is the same one-line change and it decides the
+payment-vs-plan sheet split for a member who may have moved between `past_due` and `active`
+during that round-trip — but it was never the stranding bug, and calling it one would
+overstate it.
+
+## MembershipModal: the on-hold pack-step nudge, and why its render condition is two-part (2026-09-01)
+
+A member in payment recovery (`past_due` / `unpaid`) who opens a one-time / Additional
+pack in `MembershipModal` (`index.tsx`, step 2) now sees an inline amber note above that step's
+content offering reactivation, with the real settle amount and the real entries figure — not a
+blocker, the pack purchase stays fully allowed either way.
+
+**The numbers are not computed here.** `onHoldPreview` is derived via `useMemo(() =>
+getPastDueRenewalPreview((userData ?? {}) as unknown as IUser), [userData])`, immediately below
+the `useUserContext()` destructure. This is the exact same canonical util
+(`src/utils/subscription/past-due-renewal-preview.ts`) that already drives the dashboard's
+past-due note, the resolve sheet/popup (`usePastDueResolve`), the renewal-failure email, and the
+Klaviyo `past_due_renewal_entries` property — so this note can never disagree with any of those
+four surfaces. It returns `{ entries: null, cost: null }` for anyone NOT in payment recovery,
+which is what scopes the note away from active members and guests on its own — no separate auth
+or status check needed.
+
+**The render condition is deliberately two-part: `onHoldPreview.cost != null &&
+!isSubscriptionPlan(activePlan)`.** The first half scopes to payment recovery. The second half
+scopes to a *pack*, not a membership purchase — this same step also renders for a member
+re-subscribing to a membership tier (e.g. via the `switch-tier-past-due` teardown), and that path
+already has its own dedicated recovery UI (`RenewalFailedModal` / `PastDueResolvePanel`); this
+nudge is not meant to double up there. `isSubscriptionPlan` is imported from
+`@/utils/subscription/subscription-creation-gate` — the single source this branch already uses
+to answer "is this plan a membership or a pack" (also used by the subscription-creation gate
+itself) — rather than a second, hand-rolled `activePlan.period === "one-time"` check that could
+drift from it.
+
+**Why the note sits above the whole step-2 block, not pixel-adjacent to the purchase button.**
+The button itself lives in a sibling file, `PaymentStep.tsx`, which this change does not touch.
+The note is rendered as a JSX sibling in `index.tsx`, immediately before `<PaymentStep />`,
+inside the same `{currentStep === 2 && (...)}` block (now wrapped in a fragment). Placement is
+therefore enforced **behaviourally** by the render condition above (it can only ever appear
+while looking at a pack, in payment recovery) rather than by DOM adjacency to the button —
+tightening the condition is what makes "an inline note on the pack step" true regardless of
+which file the button lives in.
+
+**Copy is legally constrained (CLAUDE.md rule 11 / spec §4.5 option A).** The note states the
+membership's *own* price and entries (`onHoldPreview.cost` / `onHoldPreview.entries`) and never
+prints the pack's price or entry count (`activePlan.price` / entries are never read in this
+block) — no "cheaper than this pack" / "more entries than this pack" comparison, since a
+price-against-entries juxtaposition reads as per-entry pricing, which rule 11 bans. Two copy
+variants guard against ever rendering `$null` / `null free entries`: the full sentence only when
+`entries` also resolves, a fallback sentence (no entries figure) otherwise.
+
+See `docs/subscription/frontend.md` → "On-hold nudge on the pack step" for the full write-up
+(this entry is the shared-ui pointer; that one is the fuller cross-reference to the subscription
+docs this feature is otherwise part of).
+
+## ComboHero's four stage corners are all spoken for (2026-09-02)
+
+`src/components/sections/promo/prize-selection/ComboHero.tsx` positions four things absolutely
+inside the same `relative` card, and three of them are only conditionally present — so "that
+corner looks free" is not a safe read:
+
+| Corner | Occupant | Present when |
+| --- | --- | --- |
+| top-left | `‹ BACK TO FULL PRIZE` button | `previewTile` set |
+| top-right | zoom control (`ZoomIcon`) | always |
+| bottom-left | single-item caption (`previewTile.alt`, `max-w-[70%]`) | `previewTile` set |
+| bottom-right | `✓ THIS IS WHAT YOU WIN` chip | `previewTile` **not** set |
+
+The badge moved from top-left to bottom-right on 2026-09-02. It is safe there precisely because
+it and the bottom-left caption are **mutually exclusive** — the caption only renders while a
+preview tile is selected, which is the one case that hides the badge. Anything added to a corner
+in future needs the same check against the other three, not just the one it lands in.
+
+Note the comment above the chip sits in a ternary's expression position (`) : ( … )`), so `//`
+is a real JS comment. The same `//` moved a few lines down into JSX **children** position would
+render as visible text on a customer-facing page with no error anywhere — use `{/* … */}` there.
+
+## The sitemap listed no promo page at all (fixed 2026-09-03)
+
+[`sitemap.ts`](../../src/app/sitemap.ts) emitted 9 static routes plus `shop/<id>` and
+`mini-draws/<id>` — and **zero** `/promotions/*` URLs. The six brand landing pages, the 25
+prize-combination pages and the canonical major-draw page were all absent, so the site's main
+organic *and* paid landing surfaces were never declared to Google. `public/robots.txt` allows
+them and none carries `noindex`, so nothing else was suppressing them; they were simply never
+listed. Found while investigating unrelated 404s in the Vercel logs.
+
+Three things to preserve when editing this file:
+
+1. **Promo paths belong in the STATIC section.** The `shop`/`mini-draws` entries sit inside a
+   `try/catch` that falls back to `[]` when Mongo is unreachable. Promo slugs come from
+   compile-time config and need no database, so listing them there would let one DB blip
+   silently empty every promo page out of the sitemap — a failure nobody would notice.
+2. **Reuse the route's own source, never a hand-written list.** `TOOLSET_LANDING_SLUGS` backs
+   the six `promotions/<brand>/page.tsx` routes and `listPrizeSummaries()` is what the catalog
+   route's `generateStaticParams()` prerenders from, so a new brand or prize cannot ship
+   without appearing in the sitemap too. A literal array here would drift within a release.
+3. **Import from `@/config/prize-summaries`, not `@/config/prizes`.** The deep catalog is
+   ~170 KB and runs top-level side effects; only slugs are needed here.
+
+Still open, deliberately: the 25 combination pages carry **no canonical tag**, and they share a
+near-identical structure. That is an SEO strategy call (are they distinct prizes or duplicates?),
+not a defect — decide it before pointing more link equity at them.

@@ -61,3 +61,92 @@ The sub-tab is hidden when the viewer lacks `audit.view`; if the viewer reaches 
 Roles management uses a master-detail layout. On `md+` viewports the list of roles sits in a fixed-width sidebar with the editor to its right. On smaller viewports the list takes the full width; selecting a role slides the editor in over the list with a back-arrow in the editor header to return. Implementation lives in `src/components/admin/settings/RolesManagement.tsx` via a `mobileView` state (`'list' | 'editor'`).
 
 Staff rows stack into two rows on mobile (identity + status above, role selector + actions below) and collapse to a single horizontal row on `sm+`. Implementation in `src/components/admin/settings/StaffManagement.tsx`.
+
+## Date filter lives in the header at every breakpoint (2026-09-02)
+
+The date-range control now **portals into the admin header slot on desktop as well as mobile**.
+The slot (`ADMIN_DATE_TOOLBAR_SLOT_ID`, rendered by `AdminPage`) sits inside the
+`flex-shrink-0` header, **above** the `flex-1 overflow-y-auto` scroll container — so anything
+portalled into it is permanently visible for free, at any scroll position, with no positioning
+tricks.
+
+**What this replaced.** Desktop had *two* different broken behaviours:
+
+| Surface | Before | Problem |
+| --- | --- | --- |
+| `AdminDateRangeToolbar` (Overview, All-Platforms, TikTok, Snapchat, Repeat Purchases) | inline + `sticky top-0` with negative insets | Floated over the cards it was meant to sit above |
+| Six hand-rolled sites (Receipts, Blocked Transactions, Past-Due Charges, Cancellation Flow, Facebook Ads, Promo Analytics) | inline beside the section `<h2>` | Scrolled away entirely |
+
+Both are gone. Every consumer now follows the same two-branch rule:
+
+```tsx
+{slotEl ? createPortal(<AdminLayoutDateRangeShell>{control}</AdminLayoutDateRangeShell>, slotEl)
+        : /* inline fallback — first paint only, before the slot mounts */}
+```
+
+⚠️ **The slot div must never be `lg:hidden`.** Consumers portal into it unconditionally, and
+portalling into a `display: none` element makes the filter **vanish entirely on desktop** — no
+error, nothing in the console. This is the single highest-risk line in the change.
+
+**Renames** (the old names asserted "mobile", which is now false):
+
+| Was | Now |
+| --- | --- |
+| `adminMobileDateToolbarSlot.ts` | `adminDateToolbarSlot.ts` |
+| `useAdminMobileDateToolbarSlot` | `useAdminDateToolbarSlot` |
+| `AdminMobileLayoutDateRangeShell` | `AdminLayoutDateRangeShell` |
+| `ADMIN_TABS_WITH_MOBILE_LAYOUT_DATE_TOOLBAR` | `ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR` |
+| `ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID` | `ADMIN_DATE_TOOLBAR_SLOT_ID` |
+
+The DOM **id string** stays `"admin-mobile-date-toolbar-slot"` — it is internal, has no external
+consumers, and renaming it buys nothing but a chance to miss a reference. The hook no longer
+returns `isLgUp`: the breakpoint is not part of the placement decision any more.
+
+`receipts`, `blocked-transactions` and `past-due-history` were **added** to
+`ADMIN_TABS_WITH_LAYOUT_DATE_TOOLBAR` — they render their own date control and previously had no
+header slot to portal into. Klaviyo and A/B Testing stay deliberately absent (neither uses this
+filter; adding them would mount an empty header slot).
+
+`AdminLayoutDateRangeShell` is `w-full` below `lg` and `lg:w-auto` above, because the desktop
+header lays the slot out next to the theme toggle and a full-width child would push it off the row.
+
+## Collapsible desktop sidebar (2026-09-02)
+
+A toggle on the sidebar's right edge collapses it from `17.5rem` to a `3.75rem` icon rail.
+Collapsed, each of the eight groups renders **only its `groupIcon`**; hovering (or focusing) it
+opens a flyout listing that group's permission-filtered tabs. Group icons — not per-tab icons —
+because the nav is already organised by group and 25 tab icons would need their own scrollbar,
+defeating the point.
+
+**State lives in `AdminPage`**, not `AdminSidebar`: the collapsed *width* is on the wrapper
+`AdminPage` renders, so it has to know anyway. `AdminSidebar` takes `collapsed` +
+`onToggleCollapsed` and stays presentational. Persisted in
+`localStorage["admin-sidebar-collapsed"]` — a chrome preference should outlive the tab, unlike
+group expansion which stays in `sessionStorage["admin-sidebar-expanded"]`. Two keys, two
+lifetimes, deliberately not merged.
+
+⚠️ Read `localStorage` in an **effect**, never in the `useState` initialiser — the server has no
+`localStorage`, so initialising from it renders a different tree on the client and trips
+hydration.
+
+**Two silent traps, both of which look fine in review:**
+
+1. **The nav's `overflow-y-auto` clips the flyout.** A scroll container clips absolutely-
+   positioned children, so the flyout renders and is simply invisible — no error. The nav
+   switches to `overflow-visible` while collapsed; eight icons fit any `lg` viewport, so there
+   is nothing to scroll.
+2. **The attention dot must survive collapsing.** Operations (unviewed submissions) and Draws
+   (mini draws at capacity) carry badges whose entire job is to be seen. Collapsed, they move to
+   the icon's top-right with a ring in the sidebar background. Hiding them behind a hover would
+   defeat the badge.
+
+The flyout also needs an invisible **hover bridge** across its `ml-2` gap, or it dismisses as the
+pointer travels from icon to panel.
+
+**Mobile is untouched** — it keeps the full-width drawer and receives neither prop. A hover rail
+is a dead control on touch.
+
+The tab row is rendered by a single shared `renderTabButton(tab, attachRef)` used by both the
+expanded nav and the flyout, so the two cannot drift. `attachRef` is false inside a flyout:
+`tabButtonRefs` drives the scrollIntoView that keeps the active tab visible in the expanded nav,
+and a hidden flyout would otherwise overwrite that ref with an unscrollable element.

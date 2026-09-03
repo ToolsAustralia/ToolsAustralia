@@ -830,6 +830,15 @@ npm run backfill:missing-renewal-grants:prod:dry     # read-only; exit 2 means g
 
 **What actually fires on this path** (checked, because "grant through the normal path" sounds louder than it is): for `billingReason === "subscription_cycle"` the Meta CAPI Purchase is explicitly skipped (`payment-processing.ts:1462-1466`), the Klaviyo membership event is a `break` (`:1720-1726`), "Invoice Generated" is skipped, and there is no TikTok call. What does fire: Klaviyo "Placed Order" (`isRenewal: true`), Klaviyo profile sync, the milestone check, and the partner-discount queue update.
 
+## The webhook's FRESH retrieves are load-bearing — never read the frozen event payload
+
+`handleInvoicePaymentSucceeded` re-retrieves the invoice from Stripe (`stripe.invoices.retrieve(invoiceId, { expand: [...] })`) and `handlePaymentSuccess` re-retrieves the PaymentIntent (`stripe.paymentIntents.retrieve(paymentIntent.id, { expand: [...] })`) instead of using `event.data.object`. Both look like an easy "one fewer API call" saving. **They are not.**
+
+Since 2026-08-27 the customer's bonus-entry `campaignCode` is written onto the checkout object at the PURCHASE click — after the coupon box has been filled, immediately before `confirmPayment` (`src/utils/payment/attach-typed-code.ts`). It **cannot** be written any earlier: the coupon box lives on the same modal step whose mount already pre-warmed the subscription / PaymentIntent, so at pre-warm time the code does not exist yet.
+
+That stamp lands before the confirm, so a fresh retrieve always sees it. Switching either handler to the event payload — or to `parent.subscription_details.metadata`, which is a snapshot of the same thing — reintroduces the exact production defect that fix closed: **the customer sees APPLIED, is charged, and receives nothing, with no error logged anywhere.**
+
+If you are optimizing these calls, the invariant to preserve is "read the object's metadata as of the moment the grant runs", not "avoid a retrieve". Regression cover: `npm run e2e:bonus-code` (all three legs) plus `npm run test:attach-typed-code`. See [payment/gotchas.md](../payment/gotchas.md#the-applied-discount-code-was-thrown-away-at-checkout-fixed-2026-08-27).
 ## `isValidPendingUpgrade` now delegates to a shared predicate (2026-08-26)
 
 `stripe-webhook-handlers/index.ts` used to own a private `isValidPendingUpgrade` type guard.
@@ -854,3 +863,83 @@ Since 2026-08-27 the customer's bonus-entry `campaignCode` is written onto the c
 That stamp lands before the confirm, so a fresh retrieve always sees it. Switching either handler to the event payload — or to `parent.subscription_details.metadata`, which is a snapshot of the same thing — reintroduces the exact production defect that fix closed: **the customer sees APPLIED, is charged, and receives nothing, with no error logged anywhere.**
 
 If you are optimizing these calls, the invariant to preserve is "read the object's metadata as of the moment the grant runs", not "avoid a retrieve". Regression cover: `npm run e2e:bonus-code` (all three legs) plus `npm run test:campaign-code-checkout`. See [payment/gotchas.md](../payment/gotchas.md#the-applied-discount-code-was-thrown-away-at-checkout-fixed-2026-08-27).
+
+## The two guest purchase routes must resolve identity through one helper (2026-08-28)
+
+`create-payment-intent` and `create-one-time-purchase` both accept a caller-supplied `userEmail`
+without requiring a session. Both used to resolve it with a bare `User.findOne({ email })`, which
+was an account takeover — see
+[payment/gotchas.md](../payment/gotchas.md#account-takeover-an-unauthenticated-caller-could-bind-any-members-stripe-customer-fixed-2026-08-28).
+
+Both now call `resolvePurchaseIdentity` from
+[`src/utils/payment/checkout-identity.ts`](../../src/utils/payment/checkout-identity.ts) and must
+handle its `must_authenticate` outcome by returning **403 `ACCOUNT_EXISTS_LOGIN_REQUIRED`**.
+
+**If you add another route that takes an email and creates a Stripe customer or PaymentIntent, it
+must go through the same helper.** Two routes shared this hole; a third would reopen it. Do not
+reintroduce an email lookup for identity anywhere in this domain — `create-subscription`,
+`create-one-time-purchase-existing-user` and the shop checkout all require a session and must keep
+doing so.
+
+## Card declines log at `warn`; real Stripe faults still log at `error` (2026-09-01)
+
+The purchase routes catch every failure from one `try` block, so an issuer decline and a
+genuine Stripe fault used to produce the same `console.error`. A decline is a business
+outcome — the customer needs a different card, not an engineer — and it is already captured
+in full by `ErrorLoggingService` in the `ErrorReport` collection, correctly graded `medium`.
+
+Affected call sites now branch on
+`isExpectedPaymentDeclineError(error)` from
+`src/utils/error-reporting/error-severity-classifier.ts`:
+
+- `stripe/create-one-time-purchase-existing-user`
+- `stripe/pay-failed-invoice`
+- `mini-draw/purchase`, `upsell/purchase` (same helper, their own domains)
+
+**Use the helper — do not match on message text at the call site.** It wraps the existing,
+tested `isExpectedPaymentDecline` (decline_code → known card-error codes → message hints),
+covered by `npm run test:payment-decline-severity`. A false positive here silences a real
+Stripe fault, which is why the test asserts the negative cases (`No such customer`,
+`api_connection_error`, `rate_limit`) as hard as the positive ones.
+
+`pay-failed-invoice` additionally treats `invoice_already_paid` and "this invoice can no
+longer be paid" as expected: **the branches immediately below that catch turn both into a
+200 success response**, so logging them as errors was reporting a failure the endpoint had
+already decided was fine.
+
+Since 2026-09 it also treats `invoice_payment_intent_requires_action` (3DS/SCA) as expected —
+the recovery below now turns it into an interactive `requiresPaymentConfirmation` response, so
+a member's bank asking for a challenge is the system working, not failing. **This one is checked
+at the call site, NOT added to `EXPECTED_DECLINE_ERROR_CODES`**: that set means "the issuer
+refused the card", and a 3DS challenge is not a refusal. The distinction is already pinned by
+`payment-error-decline-guidance.test.ts` ("non-card code → null"), and the shared classifier feeds
+four other routes. See [payment gotchas](../payment/gotchas.md) for the recovery-path fix itself.
+
+## A re-bill is a renewal to the money and (until 2026-09-03) nothing to the ledger
+
+`invoice.payment_succeeded` classifies a past-due RE-BILL (`mintCurrentCycleInvoice`) via
+`isRebillPayment` and normalises its `billing_reason` to `subscription_cycle` for revenue, admin
+labels, ROAS, conversion tracking and `isRenewal`. That classification happens roughly 300 lines
+BELOW where the renewal-cycle ledger write used to sit — and the ledger write was gated on the
+**raw** `expandedInvoice.billing_reason`.
+
+Result: a re-bill counted as renewal **revenue** while writing **no ledger row** and granting **no
+Membership Streak month**. It is exactly the failure mode two gates on the same concept produce
+when they read different values, and neither `tsc` nor any test saw it — the visible symptom was
+only that the admin Renewals card sat ~1% under the Revenue card's renewal count.
+
+**Fixed 2026-09-03** by moving the ledger write + streak increment down to just after `isRebill`
+and keying both off the shared `effectiveBillingReason` const. It could not be re-gated in place:
+`isUpgrade` and the Stripe `subscription` object that `isRebillPayment` needs are not resolved
+until after the old position, and hoisting a `subscriptions.retrieve` earlier inside a live
+payment handler is a much larger risk than the bug.
+
+**If you add another recovery path, the rule is:** whatever decides the money must also decide the
+ledger. Pass `billingReasonOverride: "subscription_cycle"` to `upsertRenewalCycleFromPaidInvoice`
+**only** for a classified re-bill — the same invoice shape (`subscription_update`) is also a
+genuine tier upgrade, and filing one of those as a renewal would corrupt revenue, ROAS and the
+member's streak. Guarded by `npm run test:renewal-cycle-rebill` (its critical case is the negative
+one: `subscription_update` with no override writes nothing).
+
+Historical gap left unrepaired by decision: 148 recoveries / $4,900 / 147 members, 2026-07-21 →
+2026-09-03. See `docs/subscription/backend.md` for the streak-backfill trap that leaves behind.

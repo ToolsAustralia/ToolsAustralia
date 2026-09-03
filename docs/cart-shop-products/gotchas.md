@@ -570,3 +570,84 @@ first route hit — a 500 that appears only on the deploy right after a restart.
 `import "@/models/Product"` is now there for its side effect. **Any service that
 populates a ref must import the ref'd model itself**; relying on another module's
 import order is a race the compiler cannot see.
+
+## "To order · 3–5 days" was invented, and it fought our own policy (2026-08-27)
+
+The PDP spec grid's **Made** cell read `"To order · 3–5 days"` for every
+made-to-order item. Nothing supplied that figure:
+
+- The print provider's client models **no** turnaround, production-time or
+  lead-time field — `src/lib/print-provider/client.ts` maps `productDetails
+  .description` and pricing, so the mapping layer is real; timing simply is not
+  in it. (Control: the same grep that found zero timing fields did find the
+  description mapping, so the search was working.)
+- No supplier turnaround is recorded anywhere in `docs/`.
+
+Worse, it contradicted a policy the rest of the system holds deliberately.
+`CUSTOMER.md` states **no delivery date is ever promised**, and Cobber is
+grounded to answer *"we'd rather not quote a delivery date we can't stand
+behind"* (`supportChatFaqs.ts`, with a code comment saying no ETA is quoted
+anywhere). The product page was the single surface handing one out — so the
+chatbot refused a date while the page beside it gave one.
+
+It also read shorter than it was. The cell sits next to **Ships**, with nothing
+saying those days elapse *before* the courier is involved; the public FAQ then
+claimed another 3–5 business days for shipping. The honest total was roughly
+6–10 business days.
+
+Now `"Made to order"`. **The signal a buyer needs is that the garment does not
+exist yet** — that is what the cell must say, and it carries no representation
+we cannot substantiate.
+
+**Rule: never put a duration on a fulfilment surface unless it came from the
+supplier in writing and is stored.** If one is ever added, state it as
+production time explicitly and separately from shipping, or it will be read as
+the whole wait.
+
+## A superseded checkout left a payable PaymentIntent behind (fixed 2026-08-28)
+
+**The failure.** A buyer with checkout open changes their cart (second tab, back button, a phone
+restoring a backgrounded page). `resolvePendingOrder` supersedes the first order and calls
+`abandonPendingOrder`, which flipped it to `cancelled` — **and did nothing to its Stripe
+PaymentIntent**, which stayed in `requires_payment_method` and fully payable for the hour-long grace
+window. If the buyer then paid the stale tab:
+
+- Stripe captured the money.
+- `finalizeShopOrder` saw `status === "cancelled"`, assumed "auto-refunded for lost stock", and
+  returned `already_processed` — no stock decrement, no entries, no confirmation email.
+- `refundShopOrder` answered `already_refunded`, so **staff could not fix it by hand** and the
+  customer's order history told them a refund had been issued.
+
+Money in, nothing out, and every surface reporting it as resolved. Reproduced end to end (real
+services, real Stripe test mode, isolated Mongo) by `scripts/smoke-shop-abandoned-intent.ts`.
+
+**Root cause: `cancelled` is four different things.** It has four writers — superseded checkout,
+failed payment, the stale-order sweep, and the stock-loss auto-refund — and only the last means the
+customer got their money back. The distinction lived only in free-text `notes`, which code cannot
+branch on, so `finalizeShopOrder` assumed the most dangerous reading. The service's own comment
+admitted this ("`cancelled` now covers three distinct causes… a human needs to tell them apart")
+while two call sites went on treating them as one.
+
+**The fix, in three parts:**
+
+1. **`Order.cancellationReason`** — a structured value (`stock_loss | refunded | abandoned |
+   payment_failed`), written by all four writers. Optional, because rows cancelled before this date
+   have none; **treat `undefined` as "unknown", never as "refunded"** — that assumption is the bug.
+2. **`abandonPendingOrder` cancels the intent first**, and returns `{ retired: false }` without
+   retiring anything if it cannot prove the intent is `canceled`. Leaving an order `pending` is
+   recoverable; retiring a payable one is not.
+3. **`finalizeShopOrder` branches on the reason.** Only `stock_loss`/`refunded` short-circuit as
+   `already_processed`. Anything else means money landed on an order we retired, so it **refunds,
+   emails the customer, and logs loudly** (`refunded_order_retired`) rather than keeping it.
+   `refundShopOrder` follows the same rule and no longer claims `already_refunded` for an order that
+   was never paid back.
+
+**The sweep had the same bug, worse.** `scripts/cleanup-abandoned-shop-orders.ts` listed
+`requires_payment_method`, `requires_confirmation`, `requires_action` and `requires_capture` in a set
+named `DEAD_INTENT_STATUSES` — "states that mean the intent can never be paid". **Every one of them
+is payable**, and `requires_payment_method` is where a fresh intent sits. It now cancels the intent
+before retiring, and keeps the order if the cancel fails.
+
+**If you add a fifth reason to cancel an order:** add it to the enum, write it at the call site, and
+decide explicitly whether `finalizeShopOrder` should treat it as money-returned. The default must
+stay "no".

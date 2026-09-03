@@ -93,6 +93,134 @@ vanished from `/v1/major-draw/participants` output while every smoke test stayed
 when a projected shape gains a field, **grep the Norm schema for it** — passing smoke tests prove
 nothing about added keys.
 
+### It shipped anyway: `breakdown.shop` 500'd both dashboard endpoints (2026-08-27 → fixed 2026-08-28)
+
+The forward trap G9 describes landed in production for a day. The merch merge added a required
+`shop: RevenueBucketSchema` to `NormDashboardStatsSchema.revenue.breakdown`
+(`src/lib/internal-norm/schemas/dashboard.ts`) and widened `DashboardStatsService` to produce the
+bucket — but neither Norm route that projects that shape gained the matching line. Both
+`/v1/dashboard/stats` and `/v1/dashboard/revenue-breakdown` therefore failed `ctx.ok()`'s
+`safeParse` and returned `500 response_schema_invalid` on **every** call until the two projections
+were added.
+
+Two things made it invisible:
+
+- **`tsc` was green.** `ctx.ok` is generic `<T>(data: T)`, so the object literal is never checked
+  against the Zod shape — exactly the independence G9 warns about.
+- **The admin sibling was fine.** `/api/admin/dashboard/revenue-breakdown` builds its own object
+  and already had `shop`, so the admin UI showed correct merch revenue while Norm was dark. A
+  working admin tab is **not** evidence that the Norm mirror works.
+
+`NormRevenueBreakdownSchema` is derived (`NormDashboardStatsSchema.shape.revenue.shape.breakdown`),
+so one schema edit silently obligated **two** routes. When a shared or derived schema gains a
+required key, grep every route that builds it — the count is rarely one. This is the concrete case
+CLAUDE.md rule 10 exists to prevent, and the cheap check is `npm run norm:smoke` against a dev
+server, which since G9 exits non-zero on the 500.
+
+## G10. A schema-correct route still 500s when the DATA is malformed (2026-09-03)
+
+G9 covers the two failure modes where the **schema and the handler disagree**. There is a third,
+and it fires when both are perfectly correct: **the documents in Mongo do not satisfy the model's
+own contract**, so a faithful projection produces a row the `responseSchema` rightly rejects.
+
+Found by a full-surface smoke of all 97 endpoints: `GET /v1/monthly-coupon/campaign` returned
+`500 handler_exception` on every call. Root cause was three `MonthlyEntryCampaign` documents
+written **straight to Mongo**, bypassing Mongoose — which means bypassing both `required`
+validators and `timestamps: true`:
+
+| `_id` | name | what was absent |
+| --- | --- | --- |
+| `69b55d0b549a6c10596d1702` | Monthly Free Entries (2026-03, **active**) | `code`, `neverExpires`, `requiresPurchase`, `purchaseRequirement` |
+| `69b74fc3cec6ce320de28e0b` | TEST300 (inactive) | `purchaseRequirement` |
+| `6a8feff89cdc8f797f03465d` | probe / `PROBECROSS1` (**active**) | `monthKey`, `createdAt`, `updatedAt`, `entriesAmount`, `targetingMode`, + the above |
+
+Two distinct crashes came out of that one cause: `row.createdAt.toISOString()` threw *before* any
+schema could run, and rows that survived serialisation still failed `ctx.ok()`'s `safeParse`.
+
+What makes this class hard to see:
+
+- **`tsc` is green and the types actively lie.** `MonthlyCampaignListRow` declares
+  `createdAt: Date`, but the value comes from `.lean()`, which returns whatever the document holds
+  — `undefined` for a field that was never written. A non-optional TS type is a claim about the
+  code, never about the collection.
+- **The admin sibling was fine again.** `/api/admin/monthly-coupon/campaign` passes the `Date`
+  objects through raw and has no response validation, so the admin UI listed all 26 campaigns
+  while Norm could read none. As in the `breakdown.shop` case: *a working admin tab is not
+  evidence that the Norm mirror works.*
+- **The failure cascaded.** With the list dead, Norm had no way to obtain a campaign id, so
+  `/v1/monthly-coupon/campaign/{id}/redemptions` was unreachable too. A broken list endpoint
+  silently takes its `:id` children with it.
+
+**The guard.** `projectUsableRows` in the route now validates each projected row against
+`MonthlyCampaignRowSchema` (exported from `src/lib/internal-norm/schemas/monthly-coupon.ts` for
+exactly this) and drops the failures with a `console.error` naming the `_id` and the issues.
+`count` reports rows actually returned. Norm now sees the 23 valid campaigns instead of nothing.
+
+**Dropping a row is damage control, not the fix.** Two of the three rows are legacy campaigns that
+predate fields added later — one of them *active* — so the durable fix is a backfill giving them
+schema-valid values, plus deleting the stray probe document. Until that runs, Norm's campaign list
+is short by those rows. When adding a `required` field to a model that already has documents,
+**backfill in the same change**, or every Norm route projecting that model starts failing on the
+old rows.
+
+Reach for a row-level guard whenever a Norm route projects a collection that predates its current
+schema. Prefer `safeParse` against the row schema over hand-picking fields to null-check — the
+first guard written here checked only the four date/identity fields and still 500'd, because two
+other rows were broken in fields nobody had thought to list.
+
+## G11. `ctx.ok` validated against `responseSchema` but shipped the UNVALIDATED object (fixed 2026-09-03)
+
+For as long as the gateway has existed, `ctx.ok` computed `const parsed = responseSchema.safeParse(data)`,
+used `parsed.success` to decide 200-vs-500, and then serialised **`data`** — the handler's original
+object. `parsed.data`, the stripped value, was bound and thrown away.
+
+Zod strips undeclared keys **on the parsed output**. Discard that output and nothing is stripped,
+so the `responseSchema` was a *gate* (does this pass?) and never a *projection* (send only this).
+
+That distinction is load-bearing, not academic. `withNorm.ts:104-109` gives the schema projection as
+the express reason read-tier endpoints skip the per-permission grant:
+
+> the PII boundary lives in each endpoint's `responseSchema` projection, not in the role grant
+
+No Norm schema is `.strict()` (0 hits across all 36 schema files), so an undeclared key neither
+failed validation nor was removed — it simply shipped. Three docs asserted the strip as fact
+(`gotchas.md` G9's "reverse direction", `rules.md` R5, `backend.md`'s `NormDashboardStatsSchema`
+note); all three described the intended design, and the implementation did not match any of them.
+
+**What actually leaked.** A before/after key-shape capture across all 76 parameterless GET endpoints
+(69 reachable at 200) found exactly two responses carrying undeclared keys:
+
+| Endpoint | Undeclared keys that reached Norm |
+| --- | --- |
+| `/v1/cancellation-flow-analytics` | `otherReasonTexts[*].userEmail`, `.userFirstName`, `.userLastName`, `.userId` |
+| `/v1/facebook-ads/health/insights` | `rows[*].snoozedUntil` |
+
+The first is real customer PII — every member who typed a free-text cancellation reason had their
+email and surname handed to Norm, in a payload whose schema (`schemas/cancellation-flow.ts:43-47`)
+declares only `{text, startedAt, outcome}`, so nothing Norm reads even mentioned the fields. The
+second is the reverse: `norm-context.md:558` states the operator-only `snoozedUntil` "is dropped
+from the Norm projection" — it was not being dropped, it was shipping as `null`.
+
+**The fix** returns `parsed.data` when a `responseSchema` is present. Verified by that same capture:
+**no endpoint changed status, no keys were added, and the only keys removed are the six above** —
+closing the PII leak and making the `snoozedUntil` doc true. Guarded by a case in
+`src/lib/internal-norm/__tests__/withNorm.test.ts` that emits `userEmail`/`userLastName` through a
+schema declaring neither; it fails with `actual: 'leak@example.com'` if `ctx.ok` ever reverts.
+
+**Two lessons.**
+
+- A Zod schema strips nothing unless you *use what it returns*. `safeParse` for validation and
+  `parsed.data` for projection are different acts; only the first was being performed.
+- **Verify a projection empirically, not by reading the schema.** The schema was correct the whole
+  time. Every reviewer who checked "does `cancellation-flow.ts` declare an email field?" got the
+  right answer — no — and the wrong conclusion. Capturing the actual response body is the only
+  check that distinguishes a declared shape from a delivered one.
+
+Endpoints that declare PII in their schema are a **separate** matter this fix does not touch —
+`schemas/receipts.ts:49-52` exposes customer email by a recorded owner decision, and
+`klaviyo.ts` / `invoices.ts` / `charge-past-due.ts` declare email and full names with no such
+record. Zod ships those either way; narrowing them is an owner decision, not a bug fix.
+
 ## eslint/rules/index.js now hosts non-Norm rules too (2026-07-19)
 
 The local ESLint plugin registered as `internal-norm` gained `no-eager-stripe` (a payment-perf guardrail — see docs/payment/gotchas.md). The plugin NAMESPACE no longer implies Norm-only content; if more general rules accumulate, renaming the namespace (e.g. `local-rules`) is a sanctioned future cleanup — coordinate with every `eslint.config.mjs` reference when doing so.

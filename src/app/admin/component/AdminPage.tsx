@@ -7,9 +7,9 @@ import { adminTabLabel } from "./adminTabs";
 import DashboardOverview from "./overview/DashboardOverview";
 import AllPlatformsManagement from "./AllPlatformsManagement";
 import {
-  ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID,
-  adminTabUsesMobileLayoutDateToolbar,
-} from "./adminMobileDateToolbarSlot";
+  ADMIN_DATE_TOOLBAR_SLOT_ID,
+  adminTabUsesLayoutDateToolbar,
+} from "./adminDateToolbarSlot";
 import MajorDrawManagement from "./MajorDrawManagement";
 import MiniDrawManagement from "./MiniDrawManagement";
 import DrawResults from "./DrawResults";
@@ -53,6 +53,38 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
   const router = useRouter();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isClosingMobileSidebar, setIsClosingMobileSidebar] = useState(false);
+
+  /**
+   * Desktop sidebar collapse. Owned here rather than inside AdminSidebar because the collapsed
+   * WIDTH lives on the wrapper below, which this component renders.
+   *
+   * Read in an effect, never in the useState initialiser — the server has no localStorage, so
+   * initialising from it would render a different tree on the client and trip hydration.
+   *
+   * localStorage (not sessionStorage, which holds the group-expansion state): a chrome
+   * preference should outlive the tab.
+   */
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setSidebarCollapsed(localStorage.getItem("admin-sidebar-collapsed") === "1");
+    } catch {
+      // Private mode / storage disabled — stay expanded.
+    }
+  }, []);
+
+  const toggleSidebarCollapsed = React.useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("admin-sidebar-collapsed", next ? "1" : "0");
+      } catch {
+        // Ignore — the toggle still works for this session.
+      }
+      return next;
+    });
+  }, []);
 
   // Handle mobile sidebar close with animation
   const handleCloseMobileSidebar = () => {
@@ -126,13 +158,21 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
         </>
       )}
 
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:block w-[17.5rem] shrink-0">
+      {/* Desktop Sidebar. Collapsed it becomes a 3.75rem icon rail with hover flyouts;
+          the mobile drawer above is deliberately never collapsible (hover means nothing on
+          touch), which is why it gets neither `collapsed` nor `onToggleCollapsed`. */}
+      <div
+        className={`hidden lg:block shrink-0 transition-[width] duration-200 ${
+          sidebarCollapsed ? "w-[3.75rem]" : "w-[17.5rem]"
+        }`}
+      >
         <AdminSidebar
           selectedTab={selectedTab}
           onNavigateToSite={() => navigateTo("home")}
           user={user}
           isMobile={false}
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={toggleSidebarCollapsed}
         />
       </div>
 
@@ -190,9 +230,12 @@ export default function AdminPage({ user, navigateTo, selectedTab = "overview" }
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {/* Mobile: date filter sits inline in the header, beside the theme toggle */}
-              {adminTabUsesMobileLayoutDateToolbar(selectedTab ?? "") && (
-                <div className="lg:hidden" id={ADMIN_MOBILE_DATE_TOOLBAR_SLOT_ID} />
+              {/* Date filter sits in the header beside the theme toggle, at EVERY breakpoint.
+                  This div must never be `lg:hidden` — consumers portal into it unconditionally,
+                  and portalling into a display:none element makes the filter vanish on desktop
+                  with no error anywhere. */}
+              {adminTabUsesLayoutDateToolbar(selectedTab ?? "") && (
+                <div id={ADMIN_DATE_TOOLBAR_SLOT_ID} />
               )}
               <HeaderThemeToggle className="shrink-0" />
             </div>

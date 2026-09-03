@@ -36,7 +36,10 @@
 
 import connectDB from "@/lib/mongodb";
 import PaymentEvent from "@/models/PaymentEvent";
-import { SpendByUrlAggregationService } from "@/services/analytics/SpendByUrlAggregationService";
+import {
+  SpendByUrlAggregationService,
+  type AdUrlCheckAdRow,
+} from "@/services/analytics/SpendByUrlAggregationService";
 import { ensureSpendByUrlFreshness } from "@/services/meta/spendByUrlFreshness";
 import { resolveAdAccountId, AD_PLATFORMS } from "@/services/analytics/adPlatformAccounts";
 import { excludeRefundedBenefitsGrantedStages } from "@/utils/payment/payment-event-net-queries";
@@ -60,6 +63,7 @@ import {
 } from "@/utils/metrics/brand-lane";
 import promoAnalyticsRepository from "@/repositories/PromoAnalyticsRepository";
 import { getBrandLaneDisplay } from "@/config/promo-landing-slugs";
+import { checkAdUrlMismatch } from "@/utils/admin/adUrlMismatchCheck";
 import type { AdDestinationPlatform } from "@/models/AdDestination";
 
 /** Where a row's outcome figures come from. */
@@ -101,7 +105,58 @@ export interface BrandPerformanceRow {
   platforms: AdDestinationPlatform[];
   /** Landing URLs behind this row, per platform — handed to the per-ad drill-down. */
   canonicalUrlsByPlatform: Record<AdDestinationPlatform, string[]>;
+  /**
+   * Ad-URL defects found among THIS row's ads. **Absent when there is nothing to report** —
+   * a clean row and a row with no checkable ads both omit it, and neither renders a badge.
+   *
+   * That asymmetry is the point: a badge is only worth reading if it is rare, so there is
+   * deliberately no "all clear" value to render. A green tick on every clean row would train
+   * the reader to ignore the column, and a tick on a row whose ads could not be checked at all
+   * would be an outright lie.
+   *
+   * Only ever populated for the CURRENT window — a `comparison` row never carries it.
+   */
+  adUrlIssues?: BrandAdUrlIssues;
   comparison?: Omit<BrandPerformanceRow, "comparison">;
+}
+
+/**
+ * The ad-URL brand check, rolled up to one brand row.
+ *
+ * Two INDEPENDENT defect classes, never merged into one number (they have different fixes):
+ *
+ *   mismatch          the campaign/ad naming resolves to one brand and the landing URL
+ *                     positively contradicts it — a wrong-brand ad hiding inside this row's
+ *                     spend. This is the case the roll-up exists for: "Draw 10 | Sales | STIHL"
+ *                     spending against `/promotions/makita` was only visible by opening the
+ *                     per-brand modal.
+ *   unrecognised      a `?toolbox=`/`?toolset=` value matching no known brand (a typo, e.g.
+ *   param             `?toolbox=milwakee`) — the URL shape is right, so the landing page
+ *                     silently falls back to its default instead of the toolbox the ad promised.
+ *
+ * An ad can contribute to both, one, or neither. The rule itself is NOT restated here —
+ * `checkAdUrlMismatch` is the single validated implementation and this is only its roll-up.
+ */
+export interface BrandAdUrlIssues {
+  /** Ads in this row whose naming contradicts their landing URL's brand. */
+  mismatchAdCount: number;
+  /** Ads in this row carrying a `?toolbox=`/`?toolset=` value that names no known brand. */
+  unrecognisedParamAdCount: number;
+  /**
+   * How many of this row's ads had a landing URL to check at all — the denominator, so
+   * "2 ads" can be read as "2 of 14" rather than as an unscaled scare number. Ads with no
+   * resolved destination are excluded: they are unverifiable, not clean and not broken.
+   */
+  checkedAdCount: number;
+  /**
+   * Spend carried by the mismatched ads, in AUD, weighted the SAME way the row's `spend` is —
+   * so "$157 of $330" is a comparison the reader can make against the cell next to it.
+   */
+  mismatchSpend: number;
+  /** The brands those mismatched ads' campaign/ad names actually name (e.g. ["stihl"]). */
+  mismatchBrands: string[];
+  /** The unrecognised param values found (e.g. ["milwakee"]), so the fix is one glance away. */
+  unrecognisedValues: string[];
 }
 
 export interface BrandPerformanceResult {
@@ -158,6 +213,14 @@ interface Bucket {
   >;
   platforms: Set<AdDestinationPlatform>;
   urls: Record<AdDestinationPlatform, Set<string>>;
+  adUrl: {
+    checkedAds: number;
+    mismatchAds: number;
+    unrecognisedParamAds: number;
+    mismatchSpend: number;
+    mismatchBrands: Set<string>;
+    unrecognisedValues: Set<string>;
+  };
 }
 
 function emptyBucket(): Bucket {
@@ -170,6 +233,14 @@ function emptyBucket(): Bucket {
     categories: new Map(),
     platforms: new Set(),
     urls: { meta: new Set(), tiktok: new Set() },
+    adUrl: {
+      checkedAds: 0,
+      mismatchAds: 0,
+      unrecognisedParamAds: 0,
+      mismatchSpend: 0,
+      mismatchBrands: new Set(),
+      unrecognisedValues: new Set(),
+    },
   };
 }
 
@@ -180,9 +251,14 @@ export class BrandPerformanceService {
     await connectDB();
 
     const [current, comparison] = await Promise.all([
-      this.computeWindow(query, query.startDate, query.endDate),
+      this.computeWindow(query, query.startDate, query.endDate, { adUrlCheck: true }),
       query.compareTo
-        ? this.computeWindow(query, query.compareTo.startDate, query.compareTo.endDate)
+        ? // No ad-URL check on the comparison window: nothing renders a badge for a prior
+          // period, so running it there would be two extra queries per platform for a result
+          // that is thrown away.
+          this.computeWindow(query, query.compareTo.startDate, query.compareTo.endDate, {
+            adUrlCheck: false,
+          })
         : Promise.resolve(null),
     ]);
 
@@ -216,11 +292,13 @@ export class BrandPerformanceService {
     query: BrandPerformanceQuery,
     startDate: string,
     endDate: string,
+    options: { adUrlCheck: boolean },
   ): Promise<BrandPerformanceResult> {
     const { lane, basis, platform } = query;
 
     const scopes: AdDestinationPlatform[] = platform === "all" ? [...AD_PLATFORMS] : [platform];
     const spend: BrandSpendSource[] = [];
+    const adChecks: BrandAdUrlCheckSource[] = [];
 
     for (const p of scopes) {
       const adAccountId = resolveAdAccountId(p);
@@ -242,6 +320,21 @@ export class BrandPerformanceService {
         endDate,
       );
       spend.push({ platform: p, rows });
+
+      if (options.adUrlCheck) {
+        try {
+          const ads = await this.spendService.getAdUrlCheckRows(
+            p,
+            adAccountId,
+            startDate,
+            endDate,
+          );
+          adChecks.push({ platform: p, ads });
+        } catch {
+          // Best-effort, exactly like the freshness sync above: the badge is a supplementary
+          // signal on rows that are correct without it. Losing it must never blank the table.
+        }
+      }
     }
 
     let events: BrandOutcomeEvent[] = [];
@@ -331,6 +424,7 @@ export class BrandPerformanceService {
       spend,
       events,
       toolboxMix,
+      adChecks,
     });
   }
 
@@ -355,6 +449,17 @@ export interface BrandSpendSource {
   }>;
 }
 
+/**
+ * Per-platform ad-level input for the ad-URL check roll-up.
+ *
+ * Separate from `BrandSpendSource` on purpose: spend rows are keyed per canonical URL and
+ * carry no ad identity at all, which is exactly why the check could not be run from them.
+ */
+export interface BrandAdUrlCheckSource {
+  platform: AdDestinationPlatform;
+  ads: AdUrlCheckAdRow[];
+}
+
 /** A net BenefitsGranted event with its lane key projected by the caller. */
 export type BrandOutcomeEvent = LeanRevenueEvent & { _laneKey?: string };
 
@@ -375,8 +480,10 @@ export function buildBrandPerformanceWindow(input: {
   events: BrandOutcomeEvent[];
   /** Observed visitor mix per toolset page. Toolbox lane only; empty = page-default model. */
   toolboxMix?: ToolboxMixRow[];
+  /** Per-ad rows for the ad-URL check roll-up. Omitted/empty = no badge on any row. */
+  adChecks?: BrandAdUrlCheckSource[];
 }): BrandPerformanceResult {
-  const { lane, basis, platform, startDate, endDate, spend, events, toolboxMix } = input;
+  const { lane, basis, platform, startDate, endDate, spend, events, toolboxMix, adChecks } = input;
 
   const buckets = new Map<string, Bucket>();
   const bucket = (id: string) => {
@@ -423,6 +530,62 @@ export function buildBrandPerformanceWindow(input: {
         if (basis === "platform") {
           b.revenue += (r.revenueCents / CENTS) * weight;
           b.purchases += r.conversions * weight;
+        }
+      }
+    }
+  }
+
+  // ── Ad-URL check roll-up ──────────────────────────────────────────────────────────────
+  //
+  // Bucketed through the SAME `allocateBrandLanes` call the spend above went through, keyed on
+  // the SAME `canonicalUrl`. That is the whole reason this runs here rather than in a separate
+  // service: a finding is only useful if it lands in the row whose spend it is hiding inside,
+  // and the only way to guarantee that is to reuse the allocation, not re-derive it.
+  //
+  // Two units, deliberately weighted differently under the toolbox lane, where a bare
+  // `/promotions/<toolset>` page's spend splits across several toolbox rows:
+  //   SPEND  takes the allocation weight, so `mismatchSpend` is comparable to the `spend` cell
+  //          printed beside it.
+  //   COUNTS do not. There is no such thing as 0.4 of a wrong-brand ad, and a reader opening
+  //          the drill-down would find the whole ad sitting there. Each lane the ad touches
+  //          counts it once, whole.
+  for (const source of adChecks ?? []) {
+    for (const ad of source.ads) {
+      // RAW urls, never the canonical form — the `?toolbox=`/`?toolset=` the check depends on
+      // is stripped from the canonical one (spec B1). Falling back to the canonical URL only
+      // when no raw URL survived is what the per-ad icon in `CampaignTreeTable` does too.
+      const urls =
+        ad.rawUrls && ad.rawUrls.length > 0
+          ? ad.rawUrls
+          : ad.canonicalUrl
+            ? [ad.canonicalUrl]
+            : [];
+      // No destination resolved at all: unverifiable. NOT counted as checked, and never a
+      // finding — the same rule the check itself applies to a missing `?toolbox=`.
+      if (urls.length === 0) continue;
+
+      const check = checkAdUrlMismatch({
+        campaignName: ad.campaignName,
+        adName: ad.adName,
+        urls,
+      });
+      const isMismatch = check.verdict === "mismatch";
+
+      const { allocations } = allocateBrandLanes(ad.canonicalUrl ?? "", lane, mixBySlug);
+      const adShares: BrandLaneAllocation[] =
+        allocations.length > 0 ? allocations : [{ laneId: UNATTRIBUTED, weight: 1 }];
+
+      for (const { laneId, weight } of adShares) {
+        const b = bucket(laneId);
+        b.adUrl.checkedAds += 1;
+        if (isMismatch) {
+          b.adUrl.mismatchAds += 1;
+          b.adUrl.mismatchSpend += (ad.spendCents / CENTS) * weight;
+          if (check.campaignBrand) b.adUrl.mismatchBrands.add(check.campaignBrand);
+        }
+        if (check.unrecognisedParamValues.length > 0) {
+          b.adUrl.unrecognisedParamAds += 1;
+          for (const v of check.unrecognisedParamValues) b.adUrl.unrecognisedValues.add(v.value);
         }
       }
     }
@@ -509,6 +672,21 @@ export function buildBrandPerformanceWindow(input: {
         meta: [...b.urls.meta],
         tiktok: [...b.urls.tiktok],
       },
+      // Omitted entirely unless there is a finding — see `BrandPerformanceRow.adUrlIssues`.
+      // A clean row and an uncheckable row are indistinguishable here ON PURPOSE: neither
+      // has anything true to say, and the UI must render nothing for both.
+      ...(b.adUrl.mismatchAds > 0 || b.adUrl.unrecognisedParamAds > 0
+        ? {
+            adUrlIssues: {
+              mismatchAdCount: b.adUrl.mismatchAds,
+              unrecognisedParamAdCount: b.adUrl.unrecognisedParamAds,
+              checkedAdCount: b.adUrl.checkedAds,
+              mismatchSpend: b.adUrl.mismatchSpend,
+              mismatchBrands: [...b.adUrl.mismatchBrands].sort(),
+              unrecognisedValues: [...b.adUrl.unrecognisedValues].sort(),
+            },
+          }
+        : {}),
     };
   };
 

@@ -103,9 +103,9 @@ Don't mix. Common mistake: mirroring server-state into Zustand. Don't.
 
 ## Packages-focus additions (2026-07-17)
 
-`src/hooks/queries/usePackagesFocusBreakdown.ts` adds **`usePackagesFocusBreakdown(platform, startDate, endDate, { enabled? })`** — keyed `["admin","analytics","packages-focus", platform, startDate, endDate]`, hits `GET /api/admin/analytics/packages-focus`, enabled only when both dates are set. Response types (`PackagesFocusBreakdownResponse`, `PackagesFocusTotals`, campaign/adset/ad node types) are re-declared in the hook file per convention; `PackagesFocusAdNode.packagesFocus?` is a client-side-only field set by the prize modal's grouper. Consumed by `AdSpendFocusModal`, `PrizePerformanceAdsModal` (types only), `CampaignTreeTable`, and `SpendByUrlSection`'s focus strip (see `docs/admin/frontend.md`).
+`src/hooks/queries/usePackagesFocusBreakdown.ts` adds **`usePackagesFocusBreakdown(platform, startDate, endDate, { enabled? })`** — keyed `["admin","analytics","packages-focus", platform, startDate, endDate]`, hits `GET /api/admin/analytics/packages-focus`, enabled only when both dates are set. Response types (`PackagesFocusBreakdownResponse`, `PackagesFocusTotals`, campaign/adset/ad node types) are re-declared in the hook file per convention; `PackagesFocusAdNode.packagesFocus?` is a client-side-only field set by the prize modal's grouper. Consumed by `AdSpendFocusModal`, `PrizePerformanceAdsModal` (types only), `CampaignTreeTable`, and `SpendByUrlSection`'s focus strip (see `docs/admin/frontend.md`). **`PackagesFocusAdNode.rawUrls?: string[]` added 2026-09-01** — same rule as `canonicalUrl?`: only the mixed-brand tree (`groupSpendByUrlDetailRowsByCampaign`) populates it; the KPI modal's per-bucket trees leave it unset. Feeds `CampaignTreeTable`'s ad-URL mismatch check (`src/utils/admin/adUrlMismatchCheck.ts`) — it carries the query string `canonicalUrl` strips.
 
-`src/hooks/queries/useSpendByUrlAnalytics.ts` type extensions (byte-identical mirrors of the service shapes, per this file's re-declare convention): `SpendByUrlRow.packagesFocus?` — optional membership/one-time split (`SpendByUrlFocusTotals { spend; spendCents; revenue; revenueCents; conversions; roas }`; absent = pre-split data or `unknown://` row); `SpendByUrlDetailRow` gains optional `campaignId/campaignName/adsetId/adsetName` + required `packagesFocus: "membership" | "one-time" | "unclassified"`. Consumed by the Prize Performance modal's campaign tree and the Facebook Ads tab's focus chips/badges (see `docs/admin/frontend.md`).
+`src/hooks/queries/useSpendByUrlAnalytics.ts` type extensions (byte-identical mirrors of the service shapes, per this file's re-declare convention): `SpendByUrlRow.packagesFocus?` — optional membership/one-time split (`SpendByUrlFocusTotals { spend; spendCents; revenue; revenueCents; conversions; roas }`; absent = pre-split data or `unknown://` row); `SpendByUrlDetailRow` gains optional `campaignId/campaignName/adsetId/adsetName` + required `packagesFocus: "membership" | "one-time" | "unclassified"`. Consumed by the Prize Performance modal's campaign tree and the Facebook Ads tab's focus chips/badges (see `docs/admin/frontend.md`). **`SpendByUrlDetailRow.rawUrls?: string[]` added 2026-09-01** — the unmodified (query intact) form of `canonicalUrl`; undefined under the same condition `canonicalUrl` is (destination unresolved). Same ad-URL mismatch check as above.
 
 ## 2026-07-20 — LazyMotion in providers
 
@@ -176,3 +176,26 @@ model has never had. **Add the field to the model first**, then here.
 
 Render `entriesGranted` (what was actually granted, written once by the webhook) rather than
 `includedEntries × quantity × multiplier`, or a later multiplier change would restate history.
+
+## `AdminDashboardStats.users.membershipRenewals` — cohort shape (2026-09-02)
+
+[`useAdminQueries.ts`](../../src/hooks/queries/useAdminQueries.ts) `membershipRenewals` was
+reshaped around a single cohort:
+
+```ts
+membershipRenewals?: {
+  renewalCohort: { dueInRange; landedInRange; failedInRange; pendingInRange; isOpen; collectionRate };
+  succeededInRange: number;              // payment-time — a DIFFERENT cohort
+  succeededDistinctMembers: number;      // payment-time
+  failedInvoiceAttemptsInRange: number;  // retry attempts, not members
+  becamePastDueInRange: number;
+}
+```
+
+`expectedInRange` was **removed** (it was never a forecast) and `failedInvoicesInRange` renamed
+to `failedInvoiceAttemptsInRange`. `succeededInRange` **must stay** — `periodComparisonModel.ts`
+reads it for the Period Comparison card.
+
+⚠️ `renewalCohort.landedInRange` and `succeededDistinctMembers` measure different clocks (due-time
+vs payment-time) and legitimately differ; never divide one by the other. Full semantics in
+[admin/frontend.md](../admin/frontend.md) and [subscription/backend.md](../subscription/backend.md).

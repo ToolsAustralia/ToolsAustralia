@@ -37,6 +37,11 @@ async function run() {
 
   if (failures > 0) { console.error(`\n${failures} test(s) failed`); process.exit(1); }
   console.log("\nAll tests passed");
+  // Explicit exit: the dynamic `@/lib/api-auth-permissions` import pulls in
+  // `@/lib/auth`, which opens a Mongo handle that keeps the event loop alive.
+  // Without this the suite prints "All tests passed" and then hangs forever —
+  // a chained `&&` never returns. Same reason as the other exit(0) suites.
+  process.exit(0);
 }
 
 run().catch((err) => { console.error(err); process.exit(1); });

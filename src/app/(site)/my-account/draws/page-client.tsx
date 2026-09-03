@@ -75,7 +75,12 @@ export default function DrawsPage() {
           <DrawsMajorHero />
           <div className="px-[18px] pb-2 pt-4 sm:px-6 lg:px-[26px]">
             <div className="space-y-4">
-              {dash.acct !== "none" && (
+              {/* Entries, not account state, decide whether this renders. A cancelled member or a
+                  never-joined guest who claims a bonus code (BACKIN200 / LOCKIN100 / EXTRA100) is
+                  `acct === "none"` by definition, so the old gate hid the very entries they had just
+                  been told landed — the claim toast was the ONLY confirmation they ever got. A
+                  customer with entries has entries whether or not they are a member. */}
+              {(dash.acct !== "none" || dash.entries.total > 0) && (
                 <EntryWallet
                   acct={dash.acct}
                   entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime, streak: dash.entries.streak, shop: dash.entries.shop }}

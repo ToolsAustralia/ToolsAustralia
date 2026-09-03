@@ -250,8 +250,9 @@ export default function MyAccountPage() {
           membershipModal.openModalWithPackageSelectionFirst(plan ?? getRecommendedSubscriptionPlan());
           return;
         }
-        membershipModal.setSelectedPlan(plan);
-        membershipModal.openModal();
+        // Pass the plan through so the subscription gate sees it (a bare openModal()
+        // is treated as "not a subscription" and would skip the check).
+        membershipModal.openModal(plan);
       });
     };
 
@@ -357,10 +358,32 @@ export default function MyAccountPage() {
 
       {dash.acct === "none" ? (
         <div className="px-[18px] pt-4 sm:px-6 lg:px-[26px] lg:pt-[26px]">
+          {/* A non-member CAN hold entries — claiming a bonus code (BACKIN200 / LOCKIN100 /
+              EXTRA100) grants them with no membership and no pack, so `acct` stays "none". Before
+              this, the claim toast was the only place those entries were ever acknowledged and the
+              guest panel below still opened with "Membership from $20/mo", reading as "the claim
+              failed". Gate on the entries themselves, not on account state. Same component the
+              member branch renders, so the number is the same number. */}
+          {dash.entries.total > 0 && (
+            <EntryWallet
+              acct={dash.acct}
+              entries={{ membership: dash.entries.membership, oneTime: dash.entries.oneTime, streak: dash.entries.streak }}
+              tierHex={dash.tierHex}
+              drawName={dash.drawName}
+              drawDateIso={dash.drawDateIso}
+              drawStatus={dash.drawStatus}
+              className="mb-4"
+            />
+          )}
           <DashboardGuestPanel
             drawName={dash.drawName}
             onBecomeMember={onBecomeMember}
             onBuyPackage={onBuyPackage}
+            // Same count, same predicate as the member QuickActionsGrid tile below. A guest holding a
+            // trigger code (BACKIN200 / LOCKIN100 / EXTRA100 — all purchaseRequirement "none", so
+            // isRedeemableNow is true with no purchase) otherwise had no badged signal anywhere on
+            // this page, because the whole QuickActionsGrid branch is member-only.
+            redeemCount={claimableWallet?.wallet?.filter((i) => i.isRedeemableNow).length ?? 0}
             streakTeaser={isDashboardFeatureOn("loyaltyStreak") ? <LoyaltyStreak months={null} acct="none" onSeeMemberships={onBecomeMember} /> : null}
           />
         </div>

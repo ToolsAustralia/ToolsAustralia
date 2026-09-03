@@ -6,7 +6,7 @@
 |---|---|---|
 | POST | `/api/bonus-codes/v1/issue` | **The Klaviyo bonus-code webhook.** Mints a customer's per-customer bonus code and starts its 72-hour clock, called from inside a Klaviyo flow immediately before the discount email — see below. |
 | GET | `/api/redeemables/status` | Eligibility + active campaigns for the caller. **A campaign `code` is returned only when the caller holds a `RedeemableIssuance` for it** — see below. |
-| POST | `/api/redeemables/redeem` | Redeem a code/issuance. Failure `error` is human copy, never the raw `RedemptionFailureReason` string — see below. |
+| POST | `/api/redeemables/redeem` | Redeem a code/issuance. Failure `error` is human copy, never the raw `RedemptionFailureReason` string — see below. A **503 / `grant_unavailable`** means the claim was valid but no draw was available: nothing was granted, nothing was spent, the customer still holds the code. A **500 / `grant_unresolved`** (2026-08-27) means the claim IS spent and could not be safely handed back — the draw write could not be proven either way, or the compensation itself failed. Its copy must never say the code is still theirs, and the status is deliberately 500 rather than 503 so it does not invite a retry. |
 | _TODO_ | `/api/redeemables/**` (remaining) | List + redeem |
 | _TODO_ | `/api/rewards/**` | Public catalog + user-facing reward views |
 
@@ -296,6 +296,91 @@ Under `/api/admin/**` (in [admin](../admin/)):
 - Campaign management (create, run, audit)
 - CSV bulk import
 - Redemption analytics
+- Trigger audience forecast (below)
+
+### `GET /api/admin/monthly-coupon/trigger-audience` — bonus-code status (2026-09-01, reworked)
+
+Read-only; never mints, issues, or redeems. Requires `rewards.view`. Delegates to
+`BonusCodeAudienceService.getAudienceForAllTriggers()` and returns one row per trigger
+(`cancel-click` / `checkout-start` / `one-time-purchase`) reading `BONUS_CODE_BY_TRIGGER`
+(`src/config/bonusCodes.ts`) — never a restated map:
+
+```ts
+{
+  success: true,
+  data: Array<{
+    trigger: "cancel-click" | "checkout-start" | "one-time-purchase";
+    code: string;                    // BACKIN200 / LOCKIN100 / EXTRA100
+    campaignFound: boolean;
+    campaignId: string | null;
+    campaignActive: boolean | null;
+    entriesAmount: number | null;
+
+    // PRIMARY — real RedeemableIssuance state ("who already minted it, who
+    // can still redeem, who redeemed" — the owner's own framing).
+    issuance: {
+      issuedCount: number;             // granted, any status — "they have access to it"
+      stillRedeemableCount: number;    // status:"active" AND own window open AND
+                                        // isCampaignRedeemable(campaign, now) — never hand-rolled
+      redeemedCount: number;
+      redeemedEntries: number;         // free entries granted by those redemptions
+      expiredOrLapsedCount: number;    // granted, unused, window (or campaign) closed
+      stillRedeemableSample: Array<{ userId; userName; userEmail; entriesAmount; at }>;  // at = expiresAt, soonest first, bounded 25
+      redeemedSample: Array<{ userId; userName; userEmail; entriesAmount; at }>;         // at = redeemedAt, most recent first, bounded 25
+      expiredOrLapsedSample: Array<{ userId; userName; userEmail; entriesAmount; at }>;  // at = expiresAt, most recently lapsed first, bounded 25
+    };
+
+    // SECONDARY / demoted — the addressable-population FORECAST (2026-09-01,
+    // first version of this endpoint; kept, not deleted, per the owner).
+    addressable: { last30: number; last90: number; allTime: number };
+    sample: Array<{ userId: string; userName: string; userEmail: string; qualifiedAt: string | null }>; // bounded, 25 max
+  }>
+}
+```
+
+**Rework (2026-09-01) — the owner corrected the ask.** The first version of this endpoint led
+with the addressable-population forecast. The owner's own words: *"what i want is to see those
+who already minted it not those are just qualified meaning those already have access to it...
+and number of who redeemed."* `issuance` is now the PRIMARY payload; `addressable`/`sample`
+(the forecast) are kept — the owner did not want them deleted — but demoted, and
+`BonusCodeAudiencePanel` renders them in a collapsed "Potential reach" section, closed by
+default.
+
+**`stillRedeemableCount` NEVER hand-rolls campaign redeemability.** The campaign half of "is
+this issuance still redeemable" is `isCampaignRedeemable(campaign, now)`
+(`@/utils/redeemables/bonus-code-policy`) — evaluated ONCE per campaign and threaded into every
+issuance query that needs it, never re-derived. A partial reimplementation of exactly this
+check is the bug fixed on this branch at `d9350a23` (188 members shown an enabled Claim button
+the server would refuse — see [rules.md R12](./rules.md#r12-the-wallet-must-not-re-implement-redeemability--it-must-call-the-same-predicate-the-redeem-path-calls-2026-09-01)).
+`purchaseRequirement` / `redeemedEverAt` are deliberately not folded into this predicate —
+`verified` in production 2026-09-01, all three trigger campaigns carry
+`purchaseRequirement: "none"`, so `hasQualifyingPurchase` always passes; if a future trigger
+campaign sets a real `purchaseRequirement`, this predicate needs it added.
+
+**All zeros today is correct, not broken.** All three campaigns sit at 0 `RedeemableIssuance`
+rows in production as of 2026-09-01 (re-verified after this rework, including after a live
+expiry cleanup that touched OTHER campaigns — 452 issuances re-dated, 312 moved to
+`status: "expired"` — and `ANZACDAY25` being deactivated; neither event touches these three).
+`BonusCodeAudiencePanel` renders a plain "not minted yet" empty state per trigger when
+`issuedCount === 0`, rather than zero-filled tiles that read as broken.
+
+Predicates live in `src/utils/redeemables/bonusCodeAudienceFilter.ts` (pure Mongo-filter
+builders, no DB — see that file's header for the full reasoning, the `checkout-start`
+approximation, and the exhaustive/non-overlapping issuance-state buckets) and are pinned by
+`npm run test:bonus-code-audience`.
+
+**Every sample is bounded, every count is exact.** Every `.select()` is an explicit
+include-list; every sample query is `.limit(25)` — the same PII shape
+`RedemptionAnalyticsService` / `MonthlyCouponQueryService.filterCampaignAudience` already use
+for this admin surface. No unprojected `.find()` — see CLAUDE.md performance footgun #3.
+
+Rendered by `BonusCodeAudiencePanel` (`src/components/admin/`), mounted above
+`MonthlyRedeemablesCampaignPanel` in the admin "Redeemables" tab (`PromoManagement.tsx`).
+
+**Not mirrored to Norm.** A new admin read under `/api/admin/**` should be flagged for the
+owner per CLAUDE.md rule 10 rather than silently skipped — flagging it here: this could be
+mirrored to Norm (a read-only "how many customers hold / redeemed this bonus code" question is
+exactly Norm's shape) but is not wired as part of this change.
 
 ### `validForHours` contract (create/update campaign)
 

@@ -1944,6 +1944,28 @@ reset row, an optional leading `icon`, and an optional per-option `hint` rendere
 from `Popover`. Used three times on the Receipts tab (category, status, package) —
 [docs/admin/receipts.md § Filters](../admin/receipts.md#filters).
 
+## MembershipModal — the typed code is stamped at the PURCHASE click, not at pre-warm (2026-08-27)
+
+> **Widened 2026-08-27:** the seam carries **all three** code types, not just campaign. What
+> `writeTypedCodeTo` sends is `settledCoupon.typedCode` — the **raw string the customer typed**,
+> unclassified — and the server decides whether it is a referral, a promo link or a campaign code and
+> stamps the matching metadata key. That is what delivers `referralCode` / `promoLinkCode` on the
+> doors where the create call is skipped and they otherwise never left the browser.
+>
+> **Renamed in the same change,** because a seam that carries three types should not be called the
+> campaign attach: `writeCampaignCodeTo` → `writeTypedCodeTo`, `attachedCampaignCodeRef` →
+> `attachedTypedCodeRef`, `attachCampaignCode` → `attachTypedCode`,
+> `/api/stripe/attach-campaign-code` → `/api/stripe/attach-typed-code`, and the seam's log prefix
+> `[campaign-code]` → `[typed-code]`. One concept, one name — `typedCode`, which this modal already
+> used for `settledCoupon.typedCode` and `metadata.typedCodeSlot`. The `campaignCode` metadata key
+> and `CampaignCodeValidationService` keep their names: they really are campaign-only.
+>
+> **Two couplings this rename had to carry with it**, neither visible to `tsc`: `e2e/fixtures/test.ts`
+> matches the seam's log line by regex (`/\[typed-code\] attach outcome unknown/i`) to allowlist it in
+> the console watchdog — a stale regex there would start failing unrelated `@purchase` specs on a
+> benign line; and the old route path is kept as a deprecated one-line alias so an in-flight old
+> bundle does not 404 and silently drop the customer's code (see
+> [billing-stripe/api.md](../billing-stripe/api.md)).
 ### Brand wordmark doctor — `npm run check:brand-wordmarks` (2026-08-24, draw 10)
 
 [`scripts/check-brand-wordmarks.mjs`](../../scripts/check-brand-wordmarks.mjs) is the tool that
@@ -2091,13 +2113,13 @@ step** — so at pre-warm time the customer has had no opportunity to type a cod
 2026-08-27 the object that got charged carried none. The customer saw APPLIED, paid, and received
 nothing.
 
-**The one insertion.** `handleSubmit` calls the local `writeCampaignCodeTo(target)` once, placed
+**The one insertion.** `handleSubmit` calls the local `writeTypedCodeTo(target)` once, placed
 immediately after `lastChargedStaticPackageIdRef.current = packageId` and **above every**
 `confirmStripeIntent()` branch — the subscription reuse branch and the one-time branch. Placement
 is the whole fix, and it has a mechanical check:
 
 ```bash
-grep -n "attachCampaignCode({" src/components/modals/MembershipModal/index.tsx   # exactly ONE line
+grep -n "attachTypedCode({" src/components/modals/MembershipModal/index.tsx   # exactly ONE line
 grep -n "confirmStripeIntent()" src/components/modals/MembershipModal/index.tsx  # all AFTER it
 ```
 
@@ -2108,8 +2130,8 @@ pack leg is a race, so it will sometimes pass anyway. That is the "looks fixed, 
 ⚠️ **That grep passes and is NOT sufficient.** The two `PAYMENT_INTENT_CANCELED_RETRY` recovery
 branches create a **brand-new PaymentIntent** and confirm *that* one, and they do it *between* the
 attach's line number and the confirm's — so the object charged after a decline-and-retry never went
-through the block above. Each recovery therefore calls `writeCampaignCodeTo` again, on its own new
-intent, before its retry confirm (and resets `attachedCampaignCodeRef` first, because the new object
+through the block above. Each recovery therefore calls `writeTypedCodeTo` again, on its own new
+intent, before its retry confirm (and resets `attachedTypedCodeRef` first, because the new object
 carries no stamp). **Any future code path that mints a checkout object after the attach owes the
 same call.** The invariant is "one write per object that is about to be confirmed", not "one write
 per submit".
@@ -2125,9 +2147,9 @@ below; both requirements are on every such path, not one or the other.
 | Ref | Meaning | Set at | Cleared at |
 |---|---|---|---|
 | `subscriptionRequestIdRef` | the `subscriptionRequestId` the server wrote into the subscription's metadata — the possession proof the attach endpoint authorizes against | pre-warm `onSuccess`, sessionStorage restore | package-change teardown |
-| `attachedCampaignCodeRef` | the code we last successfully WROTE onto the object (null = cleared / never written) | after a successful attach | every point a NEW object is minted or restored |
+| `attachedTypedCodeRef` | the code we last successfully WROTE onto the object (null = cleared / never written) | after a successful attach | every point a NEW object is minted or restored |
 
-A new object never carries a stamp — that is the entire reset rule. `attachedCampaignCodeRef` is
+A new object never carries a stamp — that is the entire reset rule. `attachedTypedCodeRef` is
 what makes the write **desired-state**: after *apply A → card declines → remove A → retry*, the
 still-unpaid object has A on it and nothing else would take it off.
 
@@ -2147,7 +2169,7 @@ invisible for so long, so keep them distinct:
 | `attach outcome unknown — server may have written it` | the browser stopped listening (client cap / dropped connection). The server may well have succeeded. | No — allowlisted in `e2e/fixtures/test.ts`. |
 | `pre-warmed checkout object has no attachable target` | a pre-warmed object exists and will be charged, but no possession proof could be built for it (e.g. a sessionStorage blob with no `subscriptionRequestId`). | **Yes.** |
 
-On `unknown` the modal sets `attachedCampaignCodeRef` to the code it *tried* to write, precisely
+On `unknown` the modal sets `attachedTypedCodeRef` to the code it *tried* to write, precisely
 because the write may have landed: a later retry must still be able to clear it. A `null` target on
 the doors that pass the code at create time is normal and logs nothing.
 
@@ -2197,7 +2219,7 @@ rest of the session (`isFormValid()` reads it, so the submit button would never 
 holding it across the 800 ms settle + retry confirm is the correct behaviour anyway. After release
 the gate stays shut on its own, because `paymentIntentClientSecret` now holds the recovery object;
 if recovery failed it is still `null` and the effect **should** mint a fresh one for the reset form
-(its `onSuccess` clears `attachedCampaignCodeRef`, so the next submit re-attaches).
+(its `onSuccess` clears `attachedTypedCodeRef`, so the next submit re-attaches).
 
 `handleAddNewPaymentMethod` has the same un-mutexed shape against a **SetupIntent**. It is not a
 loss path — it is gated on `isAuthenticated && userData`, both objects carry a real `userEmail`,
@@ -2208,5 +2230,82 @@ cannot disagree. Left as-is deliberately; if that ever changes, it needs the sam
 normal journey, but the effect re-runs on later deps and an auto-applied code (the rewards-unlock
 path) can legitimately be present by then. Removing it would delete a path that sometimes works.
 
-Contract details: [payment/backend.md](../payment/backend.md#campaign-code-checkoutts--the-authoritative-campaign-code-write) ·
+Contract details: [payment/backend.md](../payment/backend.md#attach-typed-codets--the-authoritative-typed-code-write) ·
 failure modes: [payment/gotchas.md](../payment/gotchas.md#the-applied-discount-code-was-thrown-away-at-checkout-fixed-2026-08-27).
+
+## `DashboardGuestPanel` — the `redeemCount` Redeem tile (2026-08-27)
+
+The guest dashboard panel takes an optional `redeemCount` and renders a badged **Redeem** tile when it
+is non-zero.
+
+**Why it exists.** `QuickActionsGrid` owns the badged Redeem tile — the only signal anywhere in the app
+that a customer is holding a claimable code — and that whole branch is member-only. A guest never saw
+it. Two of the three bonus-code cohorts (`BACKIN200` for a cancelled member, `LOCKIN100` for a guest
+who never joined) are `acct === "none"` **by definition**, so the population most likely to be holding a
+code was the one population that could not see it.
+
+**Why it renders only when the count is non-zero.** A guest holding nothing is not shown a claim
+affordance; they still reach Rewards via the nav tab.
+
+**The Explore grid reflows for the fifth tile (F3, 2026-08-27).** It was a flat `grid-cols-4`, so the
+Redeem tile made five and dropped `Support` onto a second row **alone** — for exactly the cohort this
+feature exists to serve. Five columns is not the fix: a `QuickTile` is a 56px chip inside `p-1`, so five
+of them need `5 × 64px` plus gaps against a 339px content width on a 375px phone (worse at 360px and
+320px), and the last tile gets clipped. The grid is now
+`redeemCount > 0 ? "grid-cols-3 sm:grid-cols-5" : "grid-cols-4"` — 3 + 2 on mobile so nothing sits
+alone, five across from `sm` where there is room — with `gap-y-4`, matching `QuickActionsGrid`'s own
+two-row spacing. If you add a sixth tile, re-derive the mobile column count from the chip width; do not
+assume five fits.
+
+**Keep the predicate identical to the member tile's.** Both count `isRedeemableNow` from the same
+`{ status: "claimable", limit: 20 }` query, so the two surfaces share one deduped fetch and cannot show
+different numbers. Change one and you must change the other, or a customer moving between them sees two
+different counts for the same wallet.
+
+## Checkout code box: Purchase implies Apply
+
+Both `MembershipModal` (`CouponRow`, inside `PaymentStep`) and `SpecialPackagesModal`
+(`PackagesGrid`) show a discount-code input with an **Apply** button. As of 2026-08-27 that button
+is an **accelerator, not a gate**:
+
+- **Typed but not applied** — the submit handler resolves the code at the click (via
+  `@/utils/payment/typed-code-at-checkout`) and charges on the answer.
+- **Definitely invalid** — the sale **stops once**. The reason renders in the row's existing red
+  slot (`referralError` / `couponError`, both now `role="alert"`), and the copy names the second
+  press as the way through. Nothing is charged; the payment CTA is never relabelled.
+- **We could not check** (timeout, 429, 5xx) — the sale proceeds. A bonus lookup never costs a sale.
+- **Real, but for a different kind of purchase** (a campaign configured
+  `purchaseRequirement: "membership"` / `"one-time"`) — the sale **stops once**, on the same terms.
+  MembershipModal shows this one as a toast rather than in the row, because `CouponRow` is not
+  rendered on an upsell offer or under a valid promo-link panel; SpecialPackagesModal uses its
+  always-rendered error row. Both sentences come from the shared
+  `evaluatePurchaseRequirementGate` and both end with what pressing the button again will do.
+
+**The rule these four share: every stop asks once, at zero cost, and the second press always buys.**
+There must be no state a customer can reach where pressing Purchase repeatedly never completes — a
+dropped code costs a perk, a blocked sale costs the sale. See `docs/payment/gotchas.md` → *"A stop
+with no way out"*.
+
+`onCouponCodeChange` clears the applied state, the error, **and** the one-shot `refusedCodeRef`, so
+correcting a typo re-arms validation instead of silently buying without the code. The ref is also
+cleared on **modal open**, on every programmatic `setCouponCode` (prefill listener, stored-referral
+autofill, `initialCouponCode`) and at the top of `handleCouponApply` — a refusal is a fact about one
+press in one session, and a code re-prefilled without a keystroke must be re-checked, not silently
+dropped from the charge.
+
+A `referral` / `promo` code is **not** marked applied on the membership doors where the subscription
+create call is skipped and the code therefore never reaches the server — see `docs/payment/gotchas.md`
+→ *"Never claim a code applied unless it reached the server"*.
+
+`PackagesGrid`'s input now uppercases on change, matching `CouponRow` — the two surfaces used to
+behave differently for identical typing.
+
+## `BrandPerformanceAdsModal` threads `platform` + `adAccountId` to `CampaignTreeTable` (2026-09-01)
+
+Small plumbing addition, not a behavior change to this modal itself: `BrandPerformanceAdsModal.tsx`
+now passes its live `platform` chip state and `data?.meta?.adAccountId` (already returned by
+`useSpendByUrlDetailMany` — nothing new fetched) down to `CampaignTreeTable` as two new optional
+props. This is what lets that table's ad rows show the "Open in Ads Manager" link and run the
+ad-URL mismatch check — both documented in `docs/admin/frontend.md`, "Ad-URL mismatch check + Ads
+Manager deep link", since the actual behavior lives in `CampaignTreeTable.tsx` (admin domain), not
+here.

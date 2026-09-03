@@ -136,6 +136,10 @@ the Tag Configurator rather than deleting the client-side push. Incident detail:
 
 ## R9 — Shop Purchase fires from `finalizeShopOrder`, keyed on `orderNumber`
 
+> ⚠️ **Numbering clash:** there are two R9s in this file — this one, and "R9. No consent
+> banner" above. A bare cite of "tracking R9" is ambiguous; name the title too. Noted
+> 2026-09-02; not renumbered, because renaming a rule breaks every existing inbound cite.
+
 Merchandise is the one payment type whose canonical Purchase does **not** come
 from `processPaymentBenefits`.
 
@@ -162,9 +166,17 @@ it fire exactly once:
 
 **Klaviyo gets an order-shaped `Placed Order`**, not the package-shaped one.
 `trackShopPlacedOrder` sends the frozen revenue keys (`$value`, `Currency`,
-`Order ID`, `items[]`) plus `order_type: "shop"` as the discriminator, and
-deliberately omits `package_type` / `package_id` / `package_name` — those would
-write "Unknown Package" into Klaviyo on every merch sale.
+`Order ID`, `items[]`) plus `order_type: "shop"` as the discriminator and
+`is_renewal: false`, and deliberately omits `package_type` / `package_id` /
+`package_name` — those would write "Unknown Package" into Klaviyo on every merch sale.
+
+⚠️ **`is_renewal: false` is load-bearing and must never be dropped.** Klaviyo reads a
+missing property as "not set", which does not match the `is_renewal = 0` filter behind
+the "Marketing Revenue" metric — so an absent flag silently removes every merchandise
+sale from that metric with no error. It shipped absent on 2026-08-27 and was fixed
+2026-09-02 before the shop took an order. Fenced by `npm run test:klaviyo-canonical`,
+which also asserts the call site here still exists. See
+[KLAVIYO_INTEGRATION.md](./KLAVIYO_INTEGRATION.md).
 
 ⚠️ **Klaviyo dashboard follow-up:** any existing flow or segment filtering
 `Placed Order` on `package_type` will not match merchandise orders. That is a

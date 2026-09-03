@@ -232,6 +232,8 @@ export default function BrandPerformanceAdsModal({
                 campaigns={campaigns}
                 ariaLabel={`Campaigns for ${brandLabel}`}
                 emptyMessage={`No ${platform === "tiktok" ? "TikTok" : "Meta"} ads ran for ${brandLabel} in this range.`}
+                platform={platform}
+                adAccountId={data?.meta?.adAccountId}
               />
             </>
           )}

@@ -1,4 +1,4 @@
-import type { ElementType } from "react";
+import type { ElementType, ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { TrendPill } from "./Badge";
 
@@ -16,9 +16,13 @@ export const TONES = {
 export type Tone = keyof typeof TONES;
 
 export function MetricCard({
-  title, value, valueAside, sub, icon: Icon, tone = "red", trend, invert = false, onClick, active = false, loading = false,
+  title, value, valueAside, sub, footer, icon: Icon, tone = "red", trend, invert = false, onClick, active = false, loading = false,
 }: {
-  title: string; value: string; valueAside?: string; sub?: string; icon: ElementType; tone?: Tone;
+  title: string; value: string; valueAside?: string; sub?: string;
+  /** Extra row under `sub` — a bar, a legend. The card's root is a <button>, so keep this
+   *  non-interactive: nested interactive elements are invalid HTML and swallow the card's click. */
+  footer?: ReactNode;
+  icon: ElementType; tone?: Tone;
   trend?: number | null; invert?: boolean; onClick?: () => void; active?: boolean; loading?: boolean;
 }) {
   // A loading card is never clickable — keep its shape stable so it doesn't jump when data arrives.
@@ -52,6 +56,7 @@ export function MetricCard({
             )}
           </div>
           {sub && <p className="text-2xs text-neutral-500 dark:text-neutral-400 mt-2 truncate">{sub}</p>}
+          {footer && <div className="mt-2">{footer}</div>}
         </>
       )}
       {interactive && <div className="absolute right-3 bottom-3 text-neutral-300 dark:text-neutral-600 opacity-0 group-hover:opacity-100 transition"><ChevronRight className="w-4 h-4" strokeWidth={2.5} /></div>}

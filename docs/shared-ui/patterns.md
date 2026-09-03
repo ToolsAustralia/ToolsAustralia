@@ -604,3 +604,81 @@ Step 2 (`Step2Demographics`) now collects **gender** alongside state / professio
 `isGenderDropdownOpen` joins `isStep2OverlayOpen`; without it the last field on the step gets clipped when its menu opens.
 
 The `/my-account/settings` **ProfileTab** mirrors this: gender is the one field there with **no amber "Required" chip** and is excluded from the `missing` completeness list — badging an optional field as required would be a lie. It always POSTs the key (as `""` when unset) so clearing works.
+
+## Browse-page control bar — one shape for `/shop` and `/mini-draws` (2026-08-28)
+
+Both browse pages now run the identical mobile control surface. When a third listing page
+arrives, copy this rather than inventing a fourth arrangement.
+
+**The sticky band** (search field · filters icon button · sort icon button, then a horizontally
+scrolling facet chip rail ending in `+ More`):
+
+- Docks at `style={{ top: stickyTop }}` from
+  [`useStickyHeaderOffset`](../../src/hooks/useStickyHeaderOffset.ts) — never a `top-*` class,
+  never `var(--app-header-h)`. See [gotchas.md](./gotchas.md) for the two ways a constant is wrong.
+- Surface: `bg-white/[.96] dark:bg-neutral-950/95` + `backdrop-blur-md` + a hairline and
+  `shadow-[0_6px_18px_-14px_rgba(15,23,42,.5)]`. The **darker-than-the-nav** background is the
+  point: the nav is `neutral-900`, so an equally dark band merges into it and the two read as one
+  slab with the search field apparently growing out of the logo.
+- The two trailing controls are **42×42 icon buttons**, not labelled ones. "Filters" spelled out
+  cost roughly a quarter of a 390px row and left the search field too narrow to show what had been
+  typed. The filter button carries an absolutely-positioned count badge when facets are on.
+
+**Both sheets are [`SheetShell`](../../src/components/ui/SheetShell.tsx)** — bottom sheet on
+mobile, centred modal from `lg`, scroll lock / focus trap / Escape / portal included (see
+[rules.md § R-MODAL](./rules.md)).
+
+**The chrome/body split.** The page component owns the sheet's header, sub-label, close button and
+the `Show N …` footer, because it is the only one holding the live result count; the filter panel
+(`ProductFilters` / `MiniDrawsFilters`) renders the body only and **suppresses its own header when
+`isMobile`**. Get this wrong and the sheet prints two titles.
+
+**The footer's `Clear` clears facets only** — not the search term, not the sort. The panel it sits
+in is a panel of filters; wiping a typed search from a control that never mentions search reads as
+a bug. A separate "reset controls" affordance owns the everything case.
+
+**Sort is a list of `<button>` rows with a check mark**, not a `<select>`. Aside from matching the
+sheet, it sidesteps `select { font-size: 16px !important }` entirely — see
+[gotchas.md](./gotchas.md). One sort control per breakpoint: the desktop card's `Dropdown` above
+`lg`, the sheet below it. Three lookalike pickers on one page is the state both files started in.
+
+## Membership CTA: hierarchy labels the button, the gate routes the click (2026-09-01)
+
+`getPlanHierarchy` / `hierarchy()` answer "is this tier the member's current / an upgrade /
+a downgrade?" and drive the **button label only**. Routing is decided by
+`resolveSubscriptionCreationGate`.
+
+They were previously the same decision, and that was the bug: the hierarchy flags return
+all-false whenever the relationship cannot be determined, so an equal-price tier switch,
+missing `subscriptionPackageData`, or a click before `UserContext` resolved all fell
+through into the new-subscription checkout and 409'd at the payment step.
+
+A label may be wrong-ish and cost nothing; a wrong route costs a purchase. Keep them
+separate.
+
+**One definition of "is this a membership tier?" (review follow-up, same day).** Both sides
+of that split now call the shared
+[`isSubscriptionPlan`](../../src/utils/subscription/subscription-creation-gate.ts) helper.
+`MembershipSection.tsx` had kept two inline copies of the expression
+(`plan.period !== "one-time" && !plan.name.toLowerCase().includes("one-time")`) — one in
+`getPlanHierarchy`, one in `renderPlanCard` — while already importing the helper for its
+routing call. Both are now `const planIsSubscription = isSubscriptionPlan(plan)` (the local
+name only avoids shadowing the import). The substitution is behaviour-identical: the helper
+adds a null-plan guard and `?? ""` on `name`, and `LocalMembershipPlan.name` is a required
+`string`, so no live call can differ. There is now no inline copy left anywhere in `src/`.
+
+That matters precisely because label and route are separate: if the two ever answered
+"is this a subscription?" differently, a card could read **"Update payment"** and still open
+the purchase modal, or read **"Enter Now"** and redirect. The affected labels are
+`"Update payment"` / `"Current Plan"` / `"Upgrade to X"` / `"Downgrade to X"`, rendered by
+this component on 15+ pages, with no component test runner to catch a regression.
+
+**Separate does not mean unrelated: where they overlap, they share the predicate.** The
+`"Update payment"` label and the payment-sheet route are two answers to one question —
+*is this member in payment recovery?* — so both now call `isSubscriptionRecoveryStatus`
+(`past_due` **or** `unpaid`): `MembershipSection.tsx` via `isInPaymentRecovery`, and
+`useMembershipCardCta.ts` via the same name inside `ctaLabelFor`. The label tested
+`past_due` alone until 2026-09-01, so an `unpaid` member read **"Enter Now"** on a tier
+card and was then delivered to the payment sheet. That is this rule's own failure mode
+arriving from the other direction: keeping label and route *independent* is right, keeping
+them *inconsistent* is not. Where one fact drives both, take it from one helper.

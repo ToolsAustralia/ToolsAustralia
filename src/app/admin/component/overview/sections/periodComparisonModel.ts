@@ -306,7 +306,9 @@ export function buildPeriodComparison(
        * a renewal that did not collect — so it inverts like Cancellations.
        *
        * Counts MEMBERS, not failed invoices: one member whose invoice retries three times is one
-       * entry here. `membershipRenewals.failedInvoicesInRange` is the invoice-level figure.
+       * entry here. `membershipRenewals.failedInvoiceAttemptsInRange` is the invoice-level
+       * (retry-inflated) figure; `membershipRenewals.renewalCohort.failedInRange` is the
+       * member-level one for renewals due in the range.
        */
       key: "becamePastDue",
       label: "Became past due",

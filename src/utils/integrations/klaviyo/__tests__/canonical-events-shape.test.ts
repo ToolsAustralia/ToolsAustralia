@@ -182,14 +182,18 @@ function testAcceptsArbitraryAtSuffix() {
 // Snapshot tests for the canonical event builders
 // ============================================================
 
+import path from "node:path";
+import { readFileSync } from "node:fs";
 import {
   createViewedGiveawayEvent,
   createStartedCheckoutEvent,
   createBonusCodeIssuedEvent,
   createSubscriptionCancellationRequestedEvent,
   createOneTimePackagePurchasedEvent,
+  createPlacedOrderEvent,
 } from "../klaviyo-events";
 import type { IUser } from "@/models/User";
+import type { KlaviyoEvent } from "@/types/klaviyo";
 
 function testViewedGiveawayShape() {
   const sample = createViewedGiveawayEvent(
@@ -532,6 +536,146 @@ function testOneTimePackagePurchasedCarriesHadActiveSubscription() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Placed Order — the `is_renewal` discriminator
+//
+// Klaviyo's "Marketing Revenue" custom metric is `Placed Order WHERE is_renewal = 0`.
+// Klaviyo treats a MISSING property as "not set", which does not match that filter —
+// so an omitted flag silently drops the sale out of the metric with no error anywhere.
+// Empirically: the metric reads A$0 for every window before 28 May 2026, which is
+// exactly when `is_renewal` started being emitted.
+//
+// Neither emitter had any test coverage before 2026-09-02 (`grep is_renewal` over
+// *.test.ts returned zero hits), which is how the shop emitter shipped without it.
+// See docs/superpowers/specs/2026-09-02-klaviyo-shop-is-renewal-design.md
+// ---------------------------------------------------------------------------
+
+const shopEmits: KlaviyoEvent[] = [];
+
+/**
+ * Stub for the `@/lib/klaviyo` singleton. `trackShopPlacedOrder` returns void and
+ * calls `trackEventBackground` directly, so it cannot be snapshot-tested like the
+ * pure builders above — the payload has to be captured on its way out.
+ */
+const stubKlaviyo = {
+  trackEventBackground(event: KlaviyoEvent): void {
+    shopEmits.push(event);
+  },
+  async trackEvent(): Promise<never> {
+    throw new Error("trackShopPlacedOrder must use trackEventBackground, never a blocking trackEvent");
+  },
+};
+
+/**
+ * Install `exports` into `require.cache` for a repo-relative `.ts` path, so a module
+ * loaded AFTER this call resolves the stub instead of the real thing. Mechanism copied
+ * from src/services/subscription/__tests__/cancel-subscription-churn-emit.test.ts:145.
+ */
+function stubModule(relativeTsPath: string, exports: unknown): void {
+  const resolved = require.resolve(path.resolve(process.cwd(), relativeTsPath));
+  require.cache[resolved] = {
+    id: resolved,
+    filename: resolved,
+    loaded: true,
+    children: [],
+    paths: [],
+    parent: undefined,
+    exports,
+  } as unknown as NodeJS.Module;
+}
+
+function testShopPlacedOrderCarriesIsRenewalFalse() {
+  stubModule("src/lib/klaviyo.ts", { klaviyo: stubKlaviyo });
+
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const loadedKlaviyo = require("@/lib/klaviyo") as { klaviyo: unknown };
+  const revenueService = require("../klaviyo-revenue-service") as {
+    trackShopPlacedOrder: (p: {
+      email?: string;
+      userId?: string;
+      orderNumber: string;
+      totalAmount: number;
+      items: { productId: string; name: string; quantity: number; price: number }[];
+    }) => void;
+  };
+  /* eslint-enable @typescript-eslint/no-require-imports */
+
+  // HARD SAFETY GATE — prove by object identity that the service reaches the stub,
+  // not the real client, BEFORE emitting anything. A silently-failed stub install
+  // would otherwise turn this test into a live write against production Klaviyo.
+  assert.equal(
+    loadedKlaviyo.klaviyo,
+    stubKlaviyo,
+    "require.cache stub did not take effect — ABORT, this would hit real Klaviyo"
+  );
+
+  shopEmits.length = 0;
+  revenueService.trackShopPlacedOrder({
+    email: "shopper@example.com",
+    userId: "user_123",
+    orderNumber: "TA-1001",
+    totalAmount: 59,
+    items: [{ productId: "prod_1", name: "Hoodie", quantity: 1, price: 59 }],
+  });
+
+  assert.equal(shopEmits.length, 1, "exactly one Placed Order must be emitted");
+  const props = shopEmits[0].properties;
+
+  assert.equal(shopEmits[0].event, "Placed Order");
+  assert.equal(props.is_renewal, false, "merchandise is never a renewal — must emit is_renewal: false");
+
+  // Presence, stated rather than implied. The assertion above already fails if the key
+  // is dropped (strict equal: `undefined` is not `false`), but the contract is that the
+  // property is ALWAYS on the payload. Klaviyo cannot tell an omitted key from a false
+  // one, and only the omitted case silently drops the sale from the metric.
+  assert.equal("is_renewal" in props, true, "is_renewal must be PRESENT, never omitted");
+
+  // The discriminator and the frozen revenue keys must survive the additive edit.
+  assert.equal(props.order_type, "shop");
+  assert.equal(props.$value, 59);
+  assert.equal(props.Currency, "AUD");
+  assert.equal(props["Order ID"], "TA-1001");
+  assert.ok(Array.isArray(props.items), "items[] must still be present");
+}
+
+function testCreatePlacedOrderEventAlwaysCarriesIsRenewal() {
+  const base = {
+    orderId: "order_test_1",
+    value: 20,
+    currency: "AUD",
+    packageType: "membership" as const,
+    packageId: "tradie",
+    packageName: "Tradie",
+  };
+
+  const renewal = createPlacedOrderEvent(fakeUser(), { ...base, isRenewal: true });
+  assert.equal(renewal.properties.is_renewal, true, "a subscription_cycle order must emit is_renewal: true");
+
+  // Omitted must default to false, NOT undefined — the `?? false` at klaviyo-events.ts:736.
+  // Without it every non-renewal order falls out of Marketing Revenue exactly the way
+  // merchandise sales did before 2026-09-02.
+  const firstPurchase = createPlacedOrderEvent(fakeUser(), base);
+  assert.equal(firstPurchase.properties.is_renewal, false, "an omitted isRenewal must emit false, never undefined");
+  assert.equal(
+    "is_renewal" in firstPurchase.properties,
+    true,
+    "is_renewal must be PRESENT on every Placed Order, never omitted"
+  );
+}
+
+function testFinalizeShopOrderStillCallsTheEmitter() {
+  // Deliberately crude: `finalizeShopOrder` reaches Mongo, Stripe and the print provider,
+  // so importing it here is not proportionate. Every other assertion in this file pins the
+  // payload built INSIDE trackShopPlacedOrder — none of them notices if the CALL
+  // disappears, which would stop merch sales reaching Klaviyo entirely while tsc, lint
+  // and this suite all stay green.
+  const source = readFileSync(path.resolve(process.cwd(), "src/services/shop/finalizeShopOrder.ts"), "utf8");
+  assert.ok(
+    source.includes("trackShopPlacedOrder("),
+    "finalizeShopOrder must still call trackShopPlacedOrder — the Klaviyo emit for merch orders"
+  );
+}
+
 function run() {
   testCanonicalKeyAccepted();
   testNonCanonicalKeyRejected();
@@ -548,8 +692,11 @@ function run() {
   testSubscriptionCancellationRequestedShape();
   testSubscriptionCancellationRequestedOmitsUnresolvedPackage();
   testOneTimePackagePurchasedCarriesHadActiveSubscription();
+  testShopPlacedOrderCarriesIsRenewalFalse();
+  testCreatePlacedOrderEventAlwaysCarriesIsRenewal();
+  testFinalizeShopOrderStillCallsTheEmitter();
   console.error(
-    "✓ canonical-events-shape: all self-tests + Viewed Giveaway + Started Checkout + Bonus Code Issued + Subscription Cancellation Requested + One-Time Package Purchased snapshots passed"
+    "✓ canonical-events-shape: all self-tests + Viewed Giveaway + Started Checkout + Bonus Code Issued + Subscription Cancellation Requested + One-Time Package Purchased snapshots + Placed Order is_renewal (shop + package + call site) passed"
   );
 }
 

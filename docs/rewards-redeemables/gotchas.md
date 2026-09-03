@@ -151,7 +151,7 @@ drop the default, or — as here — decide the behaviour from something other t
 
 ## Membership Streak auto-grant path (P2, 2026-07-07)
 
-- **Auto-grant is two-step, crash-safe by sweep, and COMPENSATES on delivery failure (2026-07-15)**: `checkAndIssueMilestones` creates the issuance `active`, then `RedemptionService.autoRedeemMilestoneIssuance` flips it `redeemed` atomically (the concurrency gate) and grants via `DrawGrantService(…, "streak", { skipMilestoneCheck: true })`. `grantMonthlyCouponEntries` now returns a boolean — `false` = no target draw (freeze window); persistence errors (VersionError on the hot draw doc) throw. On EITHER failure autoRedeem reverts the wallet `$inc` + history row, re-opens the issuance (`redeemed → active`), and the next check (payment webhook or nightly cron) retries delivery. The issuance is re-opened ONLY if the wallet revert succeeded (otherwise a retry would double-count); on that double-fault it stays `redeemed` with a loud `console.error`. Never delete the sweep branch or the compensation ordering.
+- **Auto-grant is two-step, crash-safe by sweep, and COMPENSATES on delivery failure (2026-07-15)**: `checkAndIssueMilestones` creates the issuance `active`, then `RedemptionService.autoRedeemMilestoneIssuance` flips it `redeemed` atomically (the concurrency gate) and grants via `DrawGrantService(…, "streak", { skipMilestoneCheck: true })`. `grantMonthlyCouponEntries` returns a `DrawGrantOutcome` and never throws (three states, since 2026-08-27 — see F2 below). On **`not_written`** autoRedeem reverts the wallet `$inc` + history row, re-opens the issuance (`redeemed → active`), and the next check (payment webhook or nightly cron) retries delivery. The issuance is re-opened ONLY if the wallet revert succeeded (otherwise a retry would double-count); on that double-fault it stays `redeemed` with a loud `console.error`. On **`unconfirmed`** it reverts **nothing** and does **not** re-open — a sweep retry over entries that may already be in the draw would grant a second time — returning `grant_unconfirmed_not_reverted` for a human to reconcile. Never delete the sweep branch or the compensation ordering.
 - **New streak issuances are PAYMENT-COUPLED (2026-07-15)**: `checkAndIssueMilestones` only creates `streak-months` issuances when called with `{ allowStreakIssuance: true }` — passed ONLY by the paid-payment path (`payment-processing.ts`). The cron/mass evaluator and post-grant re-checks run with the default false: they can still SWEEP (re-deliver) existing active streak issuances but never newly issue from a possibly-stale `streakMonths` (lapsed member's counter, rung activated after the fact). This replaces the spec's cron circuit-breaker for the streak vector.
 - **Legacy issuance rows must be generation-stamped before the index swap**: pre-streak `MilestoneIssuance` rows have no `streakGeneration`; Mongo's `{streakGeneration: 1}` query does NOT match missing fields, so unstamped rows are invisible to the dedupe query AND the generation-scoped unique index — every pre-launch issuance would re-issue (double-grant). `seed:streak-rewards` stage 1 stamps `streakGeneration: 1` onto them before `syncIndexes()`.
 - **E11000 in the rung loop = "already issued", continue.** Three callers race (payment webhook, nightly cron, post-grant re-check); the generation-scoped unique index is the guarantee. An uncaught duplicate-key throw would abort the user's remaining rungs.
@@ -466,6 +466,207 @@ helper cost 373 members 37,300 promised entries between 2025-12 and 2026-06 — 
 `docs/upsell/gotchas.md`.
 
 The lesson the service's docblock already carried is worth restating: **`grantMonthlyCouponEntries`
+reports whether the entries landed in a draw.** Any caller granting an entitlement must treat
+anything but `landed` as "not delivered" — never record it on the member, never tell the member it
+worked, and never burn a one-time offer on it. (It returned a boolean until 2026-08-27; see F2
+below for why that was not enough, and why only `not_written` may be *reversed*.)
+
+## A claim used to report success while granting nothing — fixed 2026-08-27 (F1)
+
+`RedemptionService.redeem()` had the bug the section above warns about, in the two places it
+matters most. On BOTH claim paths — the monthly-coupon claim and the manual milestone claim — it
+flipped the issuance to `redeemed`, stamped the permanent `redeemedEverAt` marker, `$inc`'d
+`accumulatedEntries`, then called `DrawGrantService.grantMonthlyCouponEntries(...)` and **threw
+away its boolean**, returning `{ success: true, entriesGranted }` unconditionally.
+
+When that boolean was `false` (no target draw — `getTargetMajorDraw()` throws in a freeze window
+with nothing queued, or a gap with no queued draw) the customer was told **"200 free entries added
+to your account"**, their one-per-lifetime grant was spent for good, and no draw received anything.
+The only trace was `DrawGrantService`'s own `console.warn`, which `compiler.removeConsole` strips
+from production builds — which is precisely why it stayed invisible. It is the same shape as the
+retention-offer incident that cost 373 members 37,300 entries.
+
+**The fix is compensation, not reordering.** `RedemptionService.landEntriesOrCompensate()` runs the
+grant, and on `false` (or a throw) reverses the whole claim: wallet `$inc` and `redemptionHistory`
+row `$pull`ed first, then the issuance re-opened `redeemed → active`. `redeem()` returns
+`{ success: false, reason: "grant_unavailable" }`.
+
+Why not grant-first / burn-second, which is what `/api/cancellation-upsell/redeem` does? That route
+has no atomicity to lose — its "already redeemed?" check is a plain read. A claim here does: the
+`findOneAndUpdate(status: "active" → "redeemed")` is the **only** thing between two concurrent POSTs
+and a DOUBLE grant of a money-equivalent code. Trading a rare phantom success for a rare double
+grant is strictly worse, because entries already in a draw decide who wins and cannot be quietly
+withdrawn. The gate stays first; compensation cleans up behind it. Same shape as
+`autoRedeemMilestoneIssuance`, fixed this way in 2026-07 for the same failure mode.
+
+Two details that are load-bearing:
+
+- **`redeemedEverAt` is only unset when THIS call wrote it.** `$min` preserves the first value, so a
+  refunded *legacy* coupon (restored to `active` while keeping the marker) comes back carrying an
+  older date this call did not write. Unsetting that would erase real audit history and hand back a
+  grant that was genuinely spent. The test is exact-timestamp equality with the call's own `now`.
+  This is the one narrow exception to "`redeemedEverAt` is NEVER unset" — a marker written by a
+  claim that then failed to deliver was never true in the first place.
+- **Revert the wallet BEFORE re-opening the issuance,** and re-open only if the revert succeeded —
+  re-opening while the counter still holds the `$inc` would let the next claim double-count it. On
+  that double-fault the issuance stays `redeemed` and a `console.error` says so. Every failure log
+  on this path is `console.error`, never `warn`.
+
+Regression suite: `npm run test:claim-grant-compensation`.
+
+## …and then compensation itself became a double-grant door — fixed 2026-08-27 (F2)
+
+The fix above reversed on `granted === false` **and** on `catch (e)`, in one branch. Those are not
+the same fact.
+
+- `false` came only from `getTargetMajorDraw()` throwing inside `grantMonthlyCouponEntries`'s own
+  try/catch — **before** anything was pushed. Nothing written; reversing is right.
+- A throw could only come from `await activeMajorDraw.save()`, which runs **after**
+  `existingEntry.totalEntries += entries` and `entries.push({...})`.
+
+A mongoose `VersionError` is safe (a received answer: the `__v`-filtered update matched zero rows).
+A **lost acknowledgement** on a `save()` the server actually applied is not: 200 entries sit in the
+live draw, the wallet `$inc` is reversed, `redeemedEverAt` is unset, the issuance returns to
+`active` — the customer retries and a second 200 lands. **400 entries against one 200-entry code**,
+in a draw that decides who wins a real prize, with the wallet counter reading 200.
+
+**The fix: three states, not two.** `grantMonthlyCouponEntries` now returns a `DrawGrantOutcome`
+and **never throws**:
+
+| status | meaning | caller must |
+|---|---|---|
+| `landed` | the entries are in the draw | keep the spend |
+| `not_written` | verified nothing reached the draw | reverse |
+| `unconfirmed` | a write was attempted, unprovable either way | **NOT** reverse |
+
+How it decides after a failed `save()`: a `VersionError` is `not_written` outright; otherwise it
+re-reads the draw and compares this user's `entriesBySource[sourceKey]` against a **pre-mutation
+baseline + amount**. The baseline is why the check lives in `DrawGrantService` and nowhere else —
+a caller re-reading later cannot tell 200 already-held entries from 200 just written. The
+comparison is `>=`, not `===`: a concurrent grant into the same bucket would inflate the number, and
+being wrong in *that* direction leaves a claim spent (an admin can fix it) instead of granting twice
+(nobody can). A failed re-read is `unconfirmed`.
+
+`landEntriesOrCompensate()` returns `"landed" | "reversed" | "unresolved"` and reverses **only**
+`not_written`. `redeem()` maps `unresolved` to the new **`grant_unresolved`** reason (HTTP **500**,
+not the retry-inviting 503) — distinct from `grant_unavailable` precisely because that reason
+promises the code is still held, and here it is not. A half-done compensation (wallet reverted,
+issuance re-open failed) also returns `unresolved` rather than borrowing the reassuring answer.
+
+The same three-state rule now governs `autoRedeemMilestoneIssuance`'s Step B (an `unconfirmed`
+write is **not** reverted and the issuance is **not** re-opened — a sweep retry would grant a second
+time) and `/api/cancellation-upsell/redeem` (which must not answer "your offer is still available"
+over a write that may have landed).
+
+## A thrown wallet write burned the grant and delivered nothing — fixed 2026-08-27 (F1b)
+
+`redeem()` had **no try/catch anywhere**. Both claim paths ran the atomic
+`findOneAndUpdate(active → redeemed)` stamping `$min: { redeemedEverAt: now }`, then a **bare**
+`await User.findByIdAndUpdate({ $inc: accumulatedEntries, $push: redemptionHistory })`.
+
+If that middle write threw — write-concern failure, dropped connection — the exception escaped, the
+route answered 500, and the issuance was left `redeemed` with `redeemedEverAt` set. For a
+personal-window campaign (all three live trigger codes) that marker is terminal in **two** places:
+the pre-check and the atomic filter's `redeemedEverAt: { $exists: false }`. Grant spent for life,
+zero entries, no compensation, admin-only recovery — the same outcome as F1, through a different
+door. The correct pattern was already ~130 lines below in `autoRedeemMilestoneIssuance`'s "Step A";
+only its second half had been copied up.
+
+Now the `reopenIssuance` closure is **hoisted above** the wallet write on both paths (the coupon one
+still carries the `wroteRedeemedEverAt`-conditional `$unset`), the write is wrapped, and
+`reopenAfterWalletFailure()` hands the grant back. It asks `User.exists({ _id, "redemptionHistory.redemptionId" })`
+first: a throw is not proof the write did not apply, and re-opening while the counter still holds the
+`$inc` is how the next claim double-counts it. When that check cannot answer, it re-opens anyway —
+nothing has reached a draw at this point, so the worst case is a counter an admin can correct, never
+entries in a draw that cannot be withdrawn. It returns whether the issuance is actually back to
+`active`, and `redeem()` answers `grant_unavailable` only when it is; otherwise `grant_unresolved`.
+
+**The invariant to check every new branch against:** for every way this can fail, the customer is
+left with either their entries or their code — never neither, never both.
 returns `false` when the entries did not land in a draw.** Any caller granting an entitlement
 must treat `false` as "not delivered" — never record it on the member, never tell the member it
 worked, and never burn a one-time offer on it.
+
+## The unredeem methods double-reversed entries on a refund (fixed 2026-08-28)
+
+`RedemptionService.unredeemMonthlyCouponRedemption` and `unredeemMilestoneRedemption` each did two
+things: restore the redemption record (issuance status + pull the `redemptionHistory` row) **and**
+reverse the entries (`$inc accumulatedEntries: -n` plus `removeMajorDrawEntries`).
+
+That second responsibility was wrong for their only production caller. The refund path
+([`refund-ledger-reversal.ts`](../../src/utils/payment/refund-ledger-reversal.ts)) had **already**
+reversed those entries two steps earlier — `legacyTotalEntries()` counts `grants.campaignEntries`,
+and the `drawEntries` step removes them from the ledger's own draw, scoped by `drawId`. So a
+100-entry code took 200 entries back, and the service's own `removeMajorDrawEntries` call — made
+with **no drawId** — could strip entries from a different, unrefunded draw.
+
+Both methods now accept `entriesAlreadyReversed`. When true they restore the redemption record and
+nothing else; the entry arithmetic belongs to whoever counted it. **The record restoration is not
+optional and still runs either way** — skipping the whole method would have left the issuance stuck
+`redeemed` and unusable.
+
+Read the full write-up, including what was deliberately left alone, in
+[payment/gotchas.md](../payment/gotchas.md#a-refunded-bonus-code-purchase-reversed-its-entries-twice-fixed-2026-08-28).
+
+**If you add a third caller**, decide the flag deliberately: pass `true` only when your own path has
+already reversed both the counter and the draw entries. Passing it wrongly in either direction is
+silent — `true` when nothing reversed leaves a member holding refunded entries; `false` when the
+ledger already did takes them twice.
+
+## 188 members were shown a Claim button the server refused — the wallet had its own copy of the rule (2026-09-01)
+
+**Symptom.** 188 members held an `ANZACDAY25` coupon for 25 free entries that rendered with an
+**enabled Claim button**. Tapping it failed. `RedemptionService.redeem` answered
+`campaign_not_active` every time.
+
+**Cause — a partial copy, not a missing check.** `RedeemablesWalletService` computed
+`isRedeemableNow` from its own hand-written campaign test:
+
+```ts
+campaign != null && campaign.isActive !== false   // the old wallet
+```
+
+while the redeem path called the shared predicate:
+
+```ts
+isCampaignRedeemable(campaign, now)               // isActive && startsAt <= now && (neverExpires || personalWindow || endsAt >= now)
+```
+
+The wallet had **one third** of it. `endsAt` never entered the wallet's answer, so a campaign that had
+ended but was still flagged active looked live to the wallet and dead to the server. The comment
+sitting above the expression said it required `isActive` "too" *in order to mirror*
+`isCampaignRedeemable` — the drift was documented as if it were the mirror.
+
+**The production state that made it bite.** Campaign **ANZAC DAY 25** (`ANZACDAY25`):
+`startsAt` 2026-04-24, `endsAt` **2026-04-27T10:00Z**, `neverExpires: false`, no `validForHours`,
+`isActive: **true**` (never switched off after the promo). 452 of its issuances had been minted with
+the far-future sentinel `expiresAt` `9999-12-31T23:59:59.999Z` — stamped before an expiry was
+configured on the campaign, which was edited mid-run (`updatedAt` 2026-04-27T08:51). Of those 452,
+**264 were already redeemed and 188 were still `status: "active"`**. So for those 188 rows *every*
+condition the wallet checked passed: active status, an expiry in the year 9999, no purchase
+requirement, a campaign that existed and was `isActive`.
+
+Three independent mistakes had to line up, which is why it survived four months: (1) a campaign left
+active past its end date, (2) issuances stamped with a sentinel expiry, (3) a wallet that did not ask
+the shared predicate. Only the third is a code defect, and fixing it alone stops the bad button
+regardless of what the other two do next.
+
+**The fix.** `isRedeemableNow` now calls `isCampaignRedeemable(campaign, now)` — the same function,
+the same arguments, the same answer as the redeem path. The issuance-level conditions stay in the
+wallet because they have no equivalent inside that predicate (row status, this customer's own
+`expiresAt`, the purchase gate, the refund gate). Rule:
+[rules.md R12](./rules.md#r12-the-wallet-must-not-re-implement-redeemability--it-must-call-the-same-predicate-the-redeem-path-calls-2026-09-01).
+
+**The generalised lesson.** A read surface that decides whether to *offer* an action, and a write
+surface that decides whether to *allow* it, must consult one predicate — not two implementations of
+one idea. Copying "just the bit we need" from a shared rule is how a UI starts lying: the copy is
+correct on the day it is written, and every later amendment to the real rule silently skips it.
+A comment claiming a hand-rolled expression "mirrors" a shared function is not evidence that it does;
+either call the function or explain, per condition, why this site legitimately differs.
+
+**The data was a separate defect.** The 452 sentinel `expiresAt` values are simply wrong and are
+repaired by `scripts/fix-redeemable-issuance-expiry.ts` (dry-run by default). That script does not fix
+the button — the code change does — but until it runs, support tooling and admin exports show a
+year-9999 deadline on a coupon that died in April, and 312 rows sit at `status: "active"` with a past
+expiry. See
+[docs/infrastructure/backend.md](../infrastructure/backend.md#fixredeemable-issuance-expiry-2026-09-01).

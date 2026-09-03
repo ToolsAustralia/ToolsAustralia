@@ -53,6 +53,20 @@ function humanRefusalMessage(reason: string | undefined, expiresAt?: Date): stri
       return "This code isn't unlocked on your account yet.";
     case "concurrency_conflict":
       return "That code was just redeemed — refresh and try again.";
+    case "grant_unavailable":
+      // The claim was valid and has been fully reversed — the customer still holds
+      // it. Say both halves: nothing landed, and the code is still theirs. Telling
+      // them "added!" here is the defect this reason exists to prevent.
+      // Rule 11: free entries, a giveaway being set up — no odds/chance framing.
+      return "We couldn't add your free entries just now — the next giveaway is being set up. Your code is still yours, so please try again shortly.";
+    case "grant_unresolved":
+      // NOT the sentence above: this claim is spent and could NOT be handed back,
+      // so promising "your code is still yours" would be the false reassurance
+      // that reason exists to avoid. Say what is true in both ways this happens
+      // (the entries may have landed, or the reversal failed) and stop the
+      // customer retrying a code that is already gone.
+      // Rule 11: free entries, included — never bought, no odds/chance framing.
+      return "Your code has been used, but we couldn't confirm your free entries landed. We've logged it for our team to check — please don't try again; contact support if you don't see them.";
     default:
       return "Redemption failed";
   }
@@ -85,6 +99,12 @@ export async function POST(request: NextRequest) {
         expired: 400,
         ineligible: 403,
         concurrency_conflict: 409,
+        // 503, matching /api/cancellation-upsell/redeem: the request was fine,
+        // the draw wasn't there to receive it. Retryable, and nothing was spent.
+        grant_unavailable: 503,
+        // 500, NOT 503: 503 invites a retry, and there is nothing to retry — the
+        // claim is spent and a human has to reconcile it.
+        grant_unresolved: 500,
       };
       return NextResponse.json(
         { success: false, error: humanRefusalMessage(result.reason, result.expiresAt) },

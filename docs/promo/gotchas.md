@@ -193,6 +193,15 @@ So: `EXCEPTIONS` in `scripts/convert-draw9-landing-to-webp.ts` records what each
 ACTUALLY shows, with the reason. Do not add an entry from a guess, and do not assume a new
 drop repeats the last one's ordering — the 2026-07 export already differed from 2026-06.
 
+**How later drops answered this.** Draw 10 stopped deriving what it *could* measure and made a human
+read the rest. Light/dark is decided by mean luminance, never by the trailing digit — the drop still
+contains `GS - Square - 28` and `KS - Square - 22` where `1` was meant, in both the stills and the
+clips. The tier (`drawn-tomorrow` vs `drawn-tonight`) **cannot** be measured — both files in a pair
+are equally bright and half of them are separate renders, so there is no reference to diff against —
+so `convert-draw10-urgency-landing-assets.ts --sheets` emits four contact sheets pairing every
+assigned file with its label, and a person reads all 384 cells before `--apply`. That is the only
+check that exists for the tier axis; skipping it ships a swapped countdown that nothing else catches.
+
 ## A resolver's "return the broken URL so the failure is visible" stops being safe once the case is reachable (2026-07-27)
 
 `resolveLandingHeroImage` ended with `return desired` when nothing existed for a
@@ -255,30 +264,27 @@ banner **countdown ticks client-side from `endDate`** (`useLeafTimer` leaf ticke
 `FloatingCountdownBanner`) — no on-screen clock depends on the poll; only the multiplier/banner-text *values*
 do. See [client-state/rules.md R8](../client-state/rules.md#r8-prefer-cdn-s-maxage--focusnavigation-refetch-over-a-guest-refetchinterval).
 
-## Drawn-tier stills were redesigned but the drawn CLIPS were not — motion users still see the old art (2026-07-24)
+## Drawn-tier stills and CLIPS drifted to different designs — RESOLVED 2026-09-03
 
-The 2026-07 export re-shipped every `drawn-tomorrow` / `drawn-tonight` **still** in the new
-brand-coloured "WIN A …" design and added HiKOKI. The drawn **video clips** under
-`public/videos/landing/{brand}/` were **not** part of that drop — they are still the previous dark
-"WIN THE ULTIMATE" design for the four original brands, and HiKOKI has no drawn clip at all.
+**History.** The 2026-07 export re-shipped every `drawn-tomorrow` / `drawn-tonight` **still** in a new
+brand-coloured "WIN A …" design and added HiKOKI, but the drawn **video clips** were not part of that
+drop. `PromoHero` is **video-first** (`showVideo = heroVideoPaths != null && !videoFailed`, with the
+still rendered alongside but CSS-hidden: `motion-reduce:hidden` on the `<video>`, `hidden …
+motion-reduce:block` on the `<Image>`), so motion users saw the OLD clip design while reduced-motion
+users saw the NEW still — same page, two designs, nothing broken and nothing to catch it.
 
-This matters because `PromoHero` is **video-first**: `showVideo = heroVideoPaths != null &&
-!videoFailed`, and the still is rendered alongside but CSS-hidden (`motion-reduce:hidden` on the
-`<video>`, `hidden … motion-reduce:block` on the `<Image>`). So on the drawn tier today:
+**Fixed by shipping both halves in one drop.** The 2026-09-03 draw-10 urgency export
+(`npm run convert:draw10-urgency-landing`) installs the 192 stills and 192 clips from the same
+artwork in a single run, so the animated and still heroes now agree for every brand × toolbox ×
+viewport × mode × tier.
 
-| Brand | Motion on (default) | Reduced motion |
-|---|---|---|
-| milwaukee / dewalt / makita / ryobi | **old** dark drawn clip | **new** drawn still |
-| hikoki | base clip (no drawn clip exists) | **new** drawn still |
+**The lesson, which outlives the fix:** a still-only or clip-only tier drop silently splits the hero
+by motion preference. When the next drop arrives, convert stills and clips **together** — the
+converter defaults to both and `--only=stills` / `--only=clips` exist for reruns, not for shipping
+half a design.
 
-So the redesign is only visible to reduced-motion users until the matching drawn clips land. Nothing
-is broken — every path resolves to real art — but the animated and still heroes are **different
-designs** in the meantime. When the new clips arrive, run
-`npm run convert:drawn-tonight-tomorrow-videos` (re-verify its numbering mapping first — see
-[architecture.md](architecture.md), the numbering scheme changed between drops) and the two agree again.
-
-To *see* a drawn still in a browser without waiting for the clips, emulate reduced motion
-(DevTools → Rendering → "Emulate CSS prefers-reduced-motion") — that is exactly what the
+To *see* a drawn hero in a browser, emulate reduced motion (DevTools → Rendering → "Emulate CSS
+prefers-reduced-motion") to force the still, or leave it off for the clip — that is exactly what the
 `landing drawn-state` demo spec does.
 
 ## `router.replace` resets scroll on the prize builder — use `history.replaceState`

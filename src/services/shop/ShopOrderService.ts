@@ -310,18 +310,74 @@ export const ShopOrderService = {
   },
 
   /**
-   * Retire a pending order that will never be paid.
+   * Retire a pending order that will never be paid — cancelling its PaymentIntent first.
    *
-   * `status: "pending"` in the FILTER is the race guard — it mirrors `markPaid`, so
-   * this can never overwrite an order the webhook has already moved to `processing`.
-   * The reason goes in `notes` because `cancelled` now covers three distinct causes
-   * (stock loss, refund, and never-paid) and a human needs to tell them apart.
+   * Two guards, and the order matters:
+   *  1. The Stripe intent must be provably `canceled` before the order is retired. An
+   *     order retired with a live intent is money we can still be given and can no
+   *     longer account for.
+   *  2. `status: "pending"` in the FILTER is the race guard — it mirrors `markPaid`, so
+   *     this can never overwrite an order the webhook has already moved to `processing`.
+   *
+   * Returns `{ retired: false }` when the intent could not be proven dead; the caller
+   * should carry on (a new order is created either way) and leave the old one for the
+   * webhook or the sweep. Refusing is always safer than retiring a payable order.
+   *
+   * The reason is recorded BOTH as prose in `notes` and as `cancellationReason:
+   * "abandoned"`. The structured value is the one code may branch on: `cancelled` has
+   * four writers and only `stock_loss`/`refunded` mean the customer got their money back.
    */
-  async abandonPendingOrder(order: IOrder, reason: string): Promise<void> {
+  async abandonPendingOrder(order: IOrder, reason: string): Promise<{ retired: boolean }> {
+    // Kill the MONEY before retiring the record.
+    //
+    // Retiring the order alone left its PaymentIntent in `requires_payment_method` —
+    // still payable for the full grace window. A buyer with checkout open in a second
+    // tab could then pay a cart we had already superseded: Stripe captured it,
+    // `finalizeShopOrder` saw `cancelled` and dropped it as `already_processed`, and the
+    // admin refund tool answered `already_refunded`. Money in, nothing out, no recovery.
+    // Reproduced by `npx tsx scripts/smoke-shop-abandoned-intent.ts`.
+    if (order.paymentIntentId) {
+      // Imported lazily, NOT at module scope: `@/lib/stripe` throws when
+      // STRIPE_SECRET_KEY is unset, and this module is imported by pure, env-free tests
+      // (`test:shop-checkout-reuse`, `test:shop-order`). A top-level import broke both.
+      const { stripe } = await import("@/lib/stripe");
+
+      let terminal = false;
+      try {
+        await stripe.paymentIntents.cancel(order.paymentIntentId);
+        terminal = true;
+      } catch {
+        // Cancel fails when the intent is already canceled (fine) or already paid (very
+        // much not fine). Do not guess which — ask Stripe.
+        try {
+          const intent = await stripe.paymentIntents.retrieve(order.paymentIntentId);
+          terminal = intent.status === "canceled";
+        } catch {
+          terminal = false;
+        }
+      }
+
+      if (!terminal) {
+        // We could not prove the intent is dead, so it may still take the customer's
+        // money. Leaving the order `pending` is the safe end of the trade: the webhook
+        // can still fulfil it if payment lands, and the sweep will revisit it. Retiring
+        // it here is what created the unrecoverable case.
+        console.error("[shop] refusing to retire an order whose PaymentIntent is not dead", {
+          orderNumber: order.orderNumber,
+          paymentIntentId: order.paymentIntentId,
+          reason,
+        });
+        return { retired: false };
+      }
+    }
+
+    // `status: "pending"` in the FILTER is the race guard — it mirrors `markPaid`, so
+    // this can never overwrite an order the webhook has already moved to `processing`.
     await Order.findOneAndUpdate(
       { _id: order._id, status: "pending" },
-      { status: "cancelled", notes: reason }
+      { status: "cancelled", notes: reason, cancellationReason: "abandoned" }
     );
+    return { retired: true };
   },
 
   async createPendingOrder(input: CreatePendingOrderInput): Promise<CreatePendingOrderResult> {

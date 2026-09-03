@@ -48,6 +48,14 @@ One-shot build-asset converters that turn numbered design exports into the brand
 
 - `convert:draw9-landing-webp` → `scripts/convert-draw9-landing-to-webp.ts` (sharp) — ingests the draw 9 landing export (228 stills) into the resolver's brand folders.
 - `convert:draw9-landing-videos` → `scripts/convert-draw9-landing-videos.ts` (**ffmpeg-based**) — the clip twin, 228 clips → 456 outputs (MP4 remux + VP9 WebM).
+- `convert:draw10-urgency-landing` → `scripts/convert-draw10-urgency-landing-assets.ts` (sharp **and ffmpeg**) — the draw-10 `-drawn-tomorrow` / `-drawn-tonight` countdown export: 192 stills → WebP and 192 clips → 384 outputs (MP4 stream-copy + VP9 WebM) in **one** run, because a still-only or clip-only tier drop splits the hero by motion preference (see `docs/promo/gotchas.md`). `--dry-run` by default, `--apply` to write, `--source=` / `DRAW10_SOURCE_DIR` for the export location, `--only=stills|clips` for reruns. Its sibling `scripts/convert-draw10-landing-assets.ts` (the badge-free BASE heroes) has no npm script and is run with `npx tsx`.
+
+> **`convert:draw10-urgency-landing` adds a step no other converter has: a human sign-off gate.**
+> Light/dark is measured (mean luminance), but the tier axis cannot be — both files in a pair are
+> equally bright, and half the drop is a separate render, so there is nothing to diff against. It is
+> carried by the OS duplicate-name marker (plain → `drawn-tomorrow`, ` (2)` → `drawn-tonight`), which
+> is an accident of how the export was unzipped and can flip between drops. Run with `--sheets` and
+> read the four contact sheets it writes to `.landing-urgency-sheets/` (gitignored) before `--apply`.
 
 > **The draw 9 pair differs from every converter above it in three ways**, all deliberate:
 > 1. **`--dry-run` by default.** They only write with `--apply`, and take `--src` for the export
@@ -60,7 +68,7 @@ One-shot build-asset converters that turn numbered design exports into the brand
 >    table recording what each file actually shows. The video script **imports** that table
 >    rather than duplicating it — see `docs/promo/gotchas.md`.
 
-> **External-tool dependency:** the WebP/PNG converters above only need the `sharp` npm dependency, but `convert:drawn-tonight-tomorrow-videos` and `convert:draw9-landing-videos` shell out to **`ffmpeg`, which must be on `PATH`** — it is an external binary, not an npm package, so it is **not** installed by `npm install`. Both fail immediately if ffmpeg is absent.
+> **External-tool dependency:** the WebP/PNG converters above only need the `sharp` npm dependency, but `convert:drawn-tonight-tomorrow-videos`, `convert:draw9-landing-videos` and `convert:draw10-urgency-landing` shell out to **`ffmpeg`, which must be on `PATH`** — it is an external binary, not an npm package, so it is **not** installed by `npm install`. All three fail immediately if ffmpeg is absent. (`convert:draw10-urgency-landing` needs it even with `--only=stills` when `--sheets` is passed, because clip cells are sampled frames.)
 
 ### Generated manifests chained into `prebuild` / `predev`
 
@@ -230,7 +238,8 @@ propagate to every branch and worktree on merge.
 
 > **Corrected 2026-07-31.** This section previously described `.env.example` as "opt-in, not
 > exhaustive… currently `STRIPE_WORKER_INTERNAL_SECRET`". That has not been true for a long
-> time — it declares **97** vars today — and it contradicted CLAUDE.md §9, which is the rule
+> time — it declares **121** vars as of 2026-09-02 (`grep -c '^[A-Z_][A-Z0-9_]*=' .env.example`;
+> the "97" previously written here was already stale) — and it contradicted CLAUDE.md §9, which is the rule
 > that actually governs. Believing the old text would mean adding a var and never registering
 > it, which is exactly the drift `npm run check:env` exists to catch.
 
