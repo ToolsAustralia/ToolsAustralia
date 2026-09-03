@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import HorizontalCountdown from "./HorizontalCountdown";
 import MetallicButton from "@/components/ui/MetallicButton";
 import BrandScroller from "@/components/ui/BrandScroller";
+import HeroGiveawayCta from "./HeroGiveawayCta";
 import { SectionContainer } from "@/components/ui";
 
 export default function Hero() {
@@ -104,17 +105,27 @@ export default function Hero() {
                   the people. The parent's `pb-8` is the only gap below it. Mobile only: the
                   desktop hero is a left-aligned column where the button already reads under
                   the copy. */}
-              <div className="mt-auto flex flex-col sm:flex-row gap-4 justify-center">
+              {/* `px-6` insets both CTAs from the hero's own `px-4`, so on a phone they read as
+                  buttons rather than full-bleed bars. */}
+              <div className="mt-auto flex flex-col gap-3 justify-center px-6">
                 <MetallicButton href="/membership" variant="primary" size="md" borderRadius="lg">
                   Become a member
                 </MetallicButton>
+                {/* Phone entry point for the draw. The floating countdown banner stays hidden
+                    until the hero scrolls away (see FloatingCountdownBanner), so this is the
+                    only draw CTA on a phone's first screen — and unlike the overlay it covers
+                    nothing. */}
+                <HeroGiveawayCta />
               </div>
 
             </div>
           </div>
 
-          {/* Unified Content Layout - Desktop */}
-          <div className="hidden lg:flex items-start justify-start py-12">
+          {/* Unified Content Layout - Desktop.
+              `justify-between` + the countdown card fills the empty right half of the shot,
+              which is where the floating banner used to have to overlay the brand marquee to
+              be seen at all. */}
+          <div className="hidden lg:flex items-start justify-between gap-10 py-12">
             <div className="max-w-[621px]">
               {/* Main Title */}
               <h1 className="text-[80px] font-black leading-[80px] text-white font-poppins mb-6 [text-shadow:0_2px_4px_rgba(0,0,0,0.85),0_4px_14px_rgba(0,0,0,0.8),0_8px_34px_rgba(0,0,0,0.7)]">
@@ -127,11 +138,14 @@ export default function Hero() {
                 tool giveaways — plus exciting mini draws, open to everyone.
               </p>
 
-              {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-12">
+              {/* CTA Buttons. "Enter Giveaway" sits beside "Become a member" because entering
+                  the draw is the page's main conversion — it carries the live timer badge and a
+                  four-pulse attention nudge on mount. */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-12">
                 <MetallicButton href="/membership" variant="primary" size="md" borderRadius="lg">
                   Become a member
                 </MetallicButton>
+                <HeroGiveawayCta />
               </div>
 
             </div>
