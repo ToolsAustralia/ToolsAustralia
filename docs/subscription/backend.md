@@ -296,10 +296,30 @@ renewals must read `User.subscription.endDate`, as the cohort's pending half doe
 formerly called `expectedRenewalsInRange` was removed for asserting a forecast this table cannot
 provide; it had also been mirrored to Norm under that name.
 
-**Recovery rewrites history.** `upsertRenewalCycleFromPaidInvoice` sets `status: "succeeded"` on
-the **existing** row, so a failed cycle later recovered by dunning flips in place and a past
-range's `failedInRange` decreases over time. Intended (it answers "did they eventually pay?"),
-but it means these figures are not reproducible from a screenshot.
+**Recovery rewrites history — but only for the dunning path.** There are two recovery routes and
+they leave different traces:
+
+| Route | What Stripe sends | Ledger effect |
+| --- | --- | --- |
+| **Dunning retry** (Stripe retries the SAME invoice) | `subscription_cycle`, same invoice id | `upsertRenewalCycleFromPaidInvoice` sets `status: "succeeded"` on the **existing** row — it flips in place, so a past range's `failedInRange` decreases over time |
+| **Past-due RE-BILL** (`mintCurrentCycleInvoice`) | `subscription_update`, a **NEW** invoice; the original is voided | Writes a **NEW** row dated the recovery. The original cycle's `failed` row correctly stays failed — that cycle never collected; the member was re-anchored onto a fresh cycle |
+
+So dunning-recovered figures are not reproducible from a screenshot, while re-billed ones add a
+row rather than amend one. Do **not** "repair" an old `failed` row because the member later paid —
+check which route paid them first.
+
+**The re-bill route was invisible to the ledger until 2026-09-03.** The webhook gated the ledger
+write on the RAW `billing_reason`, so a re-bill counted as renewal revenue while writing no row
+and granting no streak month. Fixed by moving the write below `isRebillPayment` and keying it off
+the **effective** reason (`billingReasonOverride`). Historical gap, deliberately NOT backfilled:
+**148 recoveries / $4,900 / 147 members** between 2026-07-21 (mint shipped) and 2026-09-03, of
+whom **57 active members show an understated `streakMonths`**.
+
+⚠️ **That untouched gap has one trap.** `scripts/backfill-membership-streaks.ts` recomputes
+`streakMonths` **purely from this ledger**. Running it today would *lower* those 57 members'
+counters to match the gap rather than repair it. Safe only because Membership Streak rewards are
+paused in production — the counter still increments, but nothing is issued off it. Before
+unpausing rewards or running that backfill, decide whether to write the 148 missing rows first.
 
 Computed **live** on every range — never from `DashboardStatsDailySnapshot`, which covers revenue
 buckets only. `MembershipRenewalCycle` holds data from 2026-01-26; earlier ranges return zeros,
