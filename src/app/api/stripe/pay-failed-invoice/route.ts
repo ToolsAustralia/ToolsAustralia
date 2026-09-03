@@ -36,6 +36,7 @@ import { analyzePaymentIntentForExcessiveRetry } from "@/utils/payment/stripe/st
 import {
   dropNonConfirmableInvoicePaymentIntent,
   isPaymentIntentClientConfirmable,
+  selectConfirmableInvoicePaymentIntent,
 } from "@/utils/payment/stripe/payment-intent-payable";
 import { classifyStripeInvoicePayInitFailure } from "@/utils/payment/stripe/stripe-invoice-pay-errors";
 import {
@@ -507,20 +508,29 @@ export async function POST(_request: NextRequest) {
               return typeof error === "object" && error !== null;
             };
 
-            // Three outcomes reach this catch and only one is a fault:
+            // Four outcomes reach this catch and only one is a fault:
             //   - an issuer decline (the member's card was refused — routine, and the whole
             //     point of this endpoint is that their last payment failed),
             //   - `invoice_already_paid` / an unpayable invoice, which the branches below
             //     turn straight back into a 200 success,
+            //   - 3DS/SCA required, which the recovery below turns into an interactive
+            //     `requiresPaymentConfirmation` response — the member's bank asking for a
+            //     challenge is the system working, not failing,
             //   - anything else, which is a genuine error.
-            // Logging all three at `error` level put declines and already-settled invoices
+            // Logging all of them at `error` level put declines and already-settled invoices
             // into Vercel's error stream — including a "failure" that returns success.
+            //
+            // 3DS is checked HERE rather than added to `EXPECTED_DECLINE_ERROR_CODES`: that set
+            // means "the issuer refused the card", and a 3DS challenge is not a refusal. The
+            // shared classifier already pins this distinction (payment-error-decline-guidance
+            // test: "non-card code → null"), and it feeds four other routes.
             const payErrorCode =
               isStripeError(payError) && typeof payError.code === "string" ? payError.code : undefined;
             const isAlreadySettled =
               payErrorCode === "invoice_already_paid" ||
               (payError instanceof Error && payError.message.includes("no longer be paid"));
-            if (isExpectedPaymentDeclineError(payError) || isAlreadySettled) {
+            const isAuthenticationRequired = payErrorCode === "invoice_payment_intent_requires_action";
+            if (isExpectedPaymentDeclineError(payError) || isAlreadySettled || isAuthenticationRequired) {
               console.warn("stripe.invoices.pay() did not complete (expected):", payError);
             } else {
               console.error("Error using stripe.invoices.pay() to get PaymentIntent:", payError);
@@ -568,47 +578,62 @@ export async function POST(_request: NextRequest) {
               }
             }
 
-            // invoices.pay() can fail when the Customer has no default payment method — the open invoice may still reference a PaymentIntent
-            if (!paymentIntent && invoiceData.invoice.id) {
-              const msg = isStripeError(payError) ? String(payError.message || "") : "";
-              const likelyMissingDefault =
-                msg.includes("default_payment_method") ||
-                msg.includes("Default payment method") ||
-                msg.toLowerCase().includes("no default payment method");
+            // `invoices.pay()` throwing does NOT mean there is no collectable PaymentIntent. It
+            // throws whenever it could not settle the charge itself, and several of those
+            // outcomes leave a perfectly confirmable PI sitting on the invoice:
+            //   - 3DS/SCA required (`invoice_payment_intent_requires_action`) — PI is
+            //     `requires_action`, waiting for the browser to run the bank's challenge,
+            //   - no default payment method — PI is `requires_payment_method`,
+            //   - an issuer decline that already attached a retryable PI.
+            //
+            // This recovery used to fire ONLY when the error MESSAGE mentioned
+            // "default_payment_method". A 3DS error says nothing of the kind and carries no
+            // top-level `payment_intent`, so it skipped this block, reached the bottom of the
+            // ladder with `paymentIntent` still null, and returned a 500 — while the invoice
+            // held a `requires_action` PI the client already knows how to confirm. A member
+            // whose bank asks for 3DS could not pay their renewal at all. Recovery is now keyed
+            // on the actual question — "is there a confirmable PI?" — not on error phrasing.
+            //
+            // ORDERING IS LOAD-BEARING: `terminalInvoiceFailure` is consulted FIRST. When Stripe
+            // says this invoice can no longer be paid, that is authoritative and we must not go
+            // hunting for a PI to resurrect it with. `invoiceData.invoice` is a CACHED read that
+            // was `open` when we called pay(), so its status cannot be trusted to catch that —
+            // only the error can. Hence the classifier gates the lookup, and the freshly
+            // retrieved invoice (never the cached one) judges the recovered PI.
+            const terminalInvoiceFailure = classifyStripeInvoicePayInitFailure(payError);
 
-              if (likelyMissingDefault) {
-                try {
-                  const refreshed = await stripe.invoices.retrieve(invoiceData.invoice.id, {
-                    expand: ["payment_intent"],
-                  });
-                  let pi = extractPaymentIntentFromInvoice(refreshed);
-                  if (!pi) {
-                    const inv = refreshed as Stripe.Invoice & {
-                      latest_payment_intent?: string | Stripe.PaymentIntent;
-                      payment_intent?: string | Stripe.PaymentIntent;
-                    };
-                    const piIdStr =
-                      typeof inv.latest_payment_intent === "string"
-                        ? inv.latest_payment_intent
-                        : typeof inv.payment_intent === "string"
-                          ? inv.payment_intent
-                          : null;
-                    if (piIdStr) {
-                      pi = await stripe.paymentIntents.retrieve(piIdStr, { expand: ["payment_method"] });
-                    }
+            if (!paymentIntent && invoiceData.invoice.id && !terminalInvoiceFailure) {
+              try {
+                const refreshed = await stripe.invoices.retrieve(invoiceData.invoice.id, {
+                  expand: ["payment_intent"],
+                });
+                let pi = extractPaymentIntentFromInvoice(refreshed);
+                if (!pi) {
+                  const inv = refreshed as Stripe.Invoice & {
+                    latest_payment_intent?: string | Stripe.PaymentIntent;
+                    payment_intent?: string | Stripe.PaymentIntent;
+                  };
+                  const piIdStr =
+                    typeof inv.latest_payment_intent === "string"
+                      ? inv.latest_payment_intent
+                      : typeof inv.payment_intent === "string"
+                        ? inv.payment_intent
+                        : null;
+                  if (piIdStr) {
+                    pi = await stripe.paymentIntents.retrieve(piIdStr, { expand: ["payment_method"] });
                   }
-                  if (pi) {
-                    paymentIntent = dropNonConfirmableInvoicePaymentIntent(invoiceData.invoice, pi);
-                  }
-                } catch (refreshErr) {
-                  console.error("Invoice refresh after invoices.pay default PM error:", refreshErr);
                 }
+                if (pi) {
+                  paymentIntent = selectConfirmableInvoicePaymentIntent(refreshed, pi);
+                }
+              } catch (refreshErr) {
+                console.error("Invoice refresh after invoices.pay error:", refreshErr);
               }
             }
 
             // If we still don't have a PaymentIntent, return error
             if (!paymentIntent) {
-              const classified = classifyStripeInvoicePayInitFailure(payError);
+              const classified = terminalInvoiceFailure;
               if (classified) {
                 return NextResponse.json(
                   {

@@ -1664,3 +1664,29 @@ in future needs the same check against the other three, not just the one it land
 Note the comment above the chip sits in a ternary's expression position (`) : ( … )`), so `//`
 is a real JS comment. The same `//` moved a few lines down into JSX **children** position would
 render as visible text on a customer-facing page with no error anywhere — use `{/* … */}` there.
+
+## The sitemap listed no promo page at all (fixed 2026-09-03)
+
+[`sitemap.ts`](../../src/app/sitemap.ts) emitted 9 static routes plus `shop/<id>` and
+`mini-draws/<id>` — and **zero** `/promotions/*` URLs. The six brand landing pages, the 25
+prize-combination pages and the canonical major-draw page were all absent, so the site's main
+organic *and* paid landing surfaces were never declared to Google. `public/robots.txt` allows
+them and none carries `noindex`, so nothing else was suppressing them; they were simply never
+listed. Found while investigating unrelated 404s in the Vercel logs.
+
+Three things to preserve when editing this file:
+
+1. **Promo paths belong in the STATIC section.** The `shop`/`mini-draws` entries sit inside a
+   `try/catch` that falls back to `[]` when Mongo is unreachable. Promo slugs come from
+   compile-time config and need no database, so listing them there would let one DB blip
+   silently empty every promo page out of the sitemap — a failure nobody would notice.
+2. **Reuse the route's own source, never a hand-written list.** `TOOLSET_LANDING_SLUGS` backs
+   the six `promotions/<brand>/page.tsx` routes and `listPrizeSummaries()` is what the catalog
+   route's `generateStaticParams()` prerenders from, so a new brand or prize cannot ship
+   without appearing in the sitemap too. A literal array here would drift within a release.
+3. **Import from `@/config/prize-summaries`, not `@/config/prizes`.** The deep catalog is
+   ~170 KB and runs top-level side effects; only slugs are needed here.
+
+Still open, deliberately: the 25 combination pages carry **no canonical tag**, and they share a
+near-identical structure. That is an SEO strategy call (are they distinct prizes or duplicates?),
+not a defect — decide it before pointing more link equity at them.

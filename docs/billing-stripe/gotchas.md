@@ -907,6 +907,14 @@ longer be paid" as expected: **the branches immediately below that catch turn bo
 200 success response**, so logging them as errors was reporting a failure the endpoint had
 already decided was fine.
 
+Since 2026-09 it also treats `invoice_payment_intent_requires_action` (3DS/SCA) as expected —
+the recovery below now turns it into an interactive `requiresPaymentConfirmation` response, so
+a member's bank asking for a challenge is the system working, not failing. **This one is checked
+at the call site, NOT added to `EXPECTED_DECLINE_ERROR_CODES`**: that set means "the issuer
+refused the card", and a 3DS challenge is not a refusal. The distinction is already pinned by
+`payment-error-decline-guidance.test.ts` ("non-card code → null"), and the shared classifier feeds
+four other routes. See [payment gotchas](../payment/gotchas.md) for the recovery-path fix itself.
+
 ## A re-bill is a renewal to the money and (until 2026-09-03) nothing to the ledger
 
 `invoice.payment_succeeded` classifies a past-due RE-BILL (`mintCurrentCycleInvoice`) via

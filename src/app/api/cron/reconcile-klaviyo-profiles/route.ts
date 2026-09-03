@@ -80,7 +80,16 @@ export async function GET(request: Request) {
       );
     }
 
-    if (result.backlogCount > BACKLOG_ALERT_THRESHOLD) {
+    // INCREMENTAL ONLY — same guard as the time-budget alert above, and for the same reason.
+    // `backlogCount` counts users past `watermarkAfter`, which on an incremental run means
+    // "not yet synced" (a real alert). On a scheduled FULL pass `watermarkBefore` is the
+    // rotating `fullPassCursor`, which WRAPS TO EPOCH when a circuit completes — so its
+    // backlog is "population this circuit has not walked to yet", which is the design, not a
+    // fault. Ungated, the hourly full pass logged this at error level for most of every
+    // circuit: 394 alerts in the 7 days to 2026-09-03, decaying 29471 → 22966 → 16931 → 7916
+    // exactly as a circuit advances, while the incremental sweep sat 5 minutes behind with a
+    // backlog of 5. Alerts nobody can act on bury the ones they can.
+    if (result.backlogCount > BACKLOG_ALERT_THRESHOLD && result.mode === "incremental") {
       console.error(
         `[reconcile-klaviyo-profiles] BACKLOG: ${result.backlogCount} user(s) still awaiting ` +
           `sync after this run (threshold ${BACKLOG_ALERT_THRESHOLD}) — the sweep is falling behind`

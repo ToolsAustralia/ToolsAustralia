@@ -147,6 +147,16 @@ that survives `compiler.removeConsole` — matching the sibling `reconcile-*` cr
 findings lines: sync failures, time-budget exhaustion on an incremental run, backlog above
 threshold, and entry-ledger divergence.
 
+**Both the time-budget and backlog lines are INCREMENTAL-ONLY** (backlog gained the guard
+2026-09-03). `backlogCount` counts users past `watermarkAfter`. On an incremental run that means
+"not yet synced" — a real alert. On a scheduled full pass `watermarkBefore` is the rotating
+`fullPassCursor`, which **wraps to epoch when a circuit completes**, so its backlog is "population
+this circuit has not walked to yet" — the design, not a fault. Ungated, the hourly full pass logged
+it at error level for most of every circuit: **394 alerts in the 7 days to 2026-09-03**, decaying
+29471 → 22966 → 16931 → 7916 exactly as a circuit advances, while the incremental sweep sat 5
+minutes behind with a backlog of 5 (verified against production). Alerts nobody can act on bury the
+ones they can — if you add a fifth findings line, decide its mode explicitly.
+
 `maxDuration = 60`, and the service self-limits at `MAX_RUN_MS = 45s`. That limit is measured,
 not guessed: a 500-user page took 66.6s, and a Vercel-killed run would have lost its work and
 left the watermark unmoved. Brings `vercel.json` to **24** cron entries.
