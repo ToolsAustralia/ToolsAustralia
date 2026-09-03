@@ -3616,6 +3616,8 @@ PII not exposed: `segmentConfig.includeUserIds` and `segmentConfig.excludeUserId
 
 **Constraints**: `read` tier. `requiredPermission: promos.view`. Read-only. The underlying admin route currently authenticates via `requireAdminUser` (legacy admin check) rather than `requirePermission` — a separate migration concern; Norm's own gate uses `promos.view` as the explicit grant.
 
+**Caveat — the list can be SHORT (2026-09-03).** A few `MonthlyEntryCampaign` documents were written directly to Mongo, bypassing Mongoose's `required` validators and `timestamps: true`, so they lack fields this response requires. The route drops any row that fails `MonthlyCampaignRowSchema` (logging its `_id` via `console.error`) rather than failing the whole call, so `count` is **rows successfully returned, not rows in the collection**. At the time of writing 23 of 26 are returned; one dropped row is an *active* March-2026 campaign. Do not present `count` as the total number of campaigns ever created, and if asked to reconcile against the admin UI — which lists all 26 because it applies no response validation — say the difference is malformed legacy rows pending a backfill, not missing data. See `docs/internal-norm/gotchas.md` G10.
+
 ---
 
 ### `GET /v1/monthly-coupon/campaign/{id}/redemptions`
