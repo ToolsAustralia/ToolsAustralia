@@ -84,6 +84,10 @@ e2e-artifacts/
 # root whenever a session drives a browser through the MCP tools.
 .playwright-mcp/
 
+# Tier verification contact sheets from convert:draw10-urgency-landing --sheets. Regenerable
+# from the designer's export; they are a sign-off artifact, not a build input.
+.landing-urgency-sheets/
+
 # PII export from find:missing-retention-entries (customer emails) — never commit
 missing-retention-entries.csv
 backfill-klaviyo-accuracy-audit.csv

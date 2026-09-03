@@ -39,14 +39,19 @@ const TOOLBOX = ["milTB", "sidTB", "kinTB", "gwTB"];
  * Draw 10 (2026-08-28): the `-drawn-tomorrow` / `-drawn-tonight` sets were WITHDRAWN, not lost.
  * All 160 baked `& $5K CASH` into the headline, and draw 10 removed that bonus — so they were
  * advertising a prize we no longer give, on the highest-intent surface we have, and only inside
- * the countdown window where nobody would routinely look. Deleting them makes
+ * the countdown window where nobody would routinely look. Deleting them made
  * `resolveLandingHeroImage` drop the tier and serve the (correct) base hero, which it already
  * does for any unshipped tier.
  *
- * Restore to [null, "drawn-tomorrow", "drawn-tonight"] when the replacement art lands.
+ * RESTORED 2026-09-03: the replacement export landed (`convert-draw10-urgency-landing-assets.ts`)
+ * and every one of its 192 stills was checked against the live base before installing — 24/24
+ * mobile and 40/48 desktop combos carry a headline pixel-identical to what is already serving,
+ * and the 8 that differ were read by eye. None says `& $5K CASH`; all say "OR TAKE HOME $10,000".
+ * So the withdrawal reason is gone and the guard enforces all three tiers again.
+ *
  * `final-hours` has never shipped for any brand — see header.
  */
-const URGENCIES = [null];
+const URGENCIES = [null, "drawn-tomorrow", "drawn-tonight"];
 const VIEWPORTS = ["desktop", "mobile"];
 const MODES = ["light", "dark"];
 

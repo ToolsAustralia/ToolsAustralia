@@ -249,15 +249,15 @@ async function walkAllCombos(
 }
 
 test.describe("landing drawn-state @demo", () => {
-  // ─── SKIPPED 2026-08-26 (draw 10) ──────────────────────────────────────────────────
-  // Draw 10 deleted all 480 drawn-tier clips and 160 drawn-tier stills: every one carried
-  // "& $5K CASH" burned into the artwork, and the draw no longer awards that cash. This
-  // spec's entire subject is that art, so every assertion here would now fail on a resolver
-  // FALLBACK rather than on a real regression — a red run that says nothing true.
+  // ─── RE-ENABLED 2026-09-03 ─────────────────────────────────────────────────────────
+  // Was skipped on 2026-08-26 because draw 10 deleted all 480 drawn-tier clips and 160 drawn-tier
+  // stills — every one carried "& $5K CASH" burned into the artwork, which the draw no longer
+  // awards. With the art gone, every assertion here would have failed on a resolver FALLBACK
+  // rather than a real regression: a red run that says nothing true.
   //
-  // RE-ENABLE by deleting this line once the replacement drawn-tomorrow / drawn-tonight art
-  // ships. That is the branch's only outstanding asset set, so this is a when-not-if.
-  test.skip(true, "drawn-tier art removed in draw 10; replacement art not yet shipped");
+  // The replacement shipped (`npm run convert:draw10-urgency-landing`) — 192 stills and 192 clips,
+  // both modes, all 6 brands x 4 toolboxes, headline copy verified against the live base — so the
+  // subject of this spec exists again and the skip is removed.
 
   let originalDrawDate: unknown = null;
 
