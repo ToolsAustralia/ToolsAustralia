@@ -988,12 +988,20 @@ Before persisting, the webhook runs a **persisted-UTM reconcile** ([reconcilePer
 | Category | Properties |
 |---|---|
 | Identity / account | `user_id`, `created_at`, `last_login`, `is_active`, `role`, `state`, `profession`, `gender` (omitted entirely when unset — no "unknown" sentinel), `is_email_verified`, `is_mobile_verified`, `profile_setup_completed`, `app_accepts_promotional_email` |
-| Subscription | `has_active_subscription`, `subscription_tier`, `subscription_start/end_date`, `subscription_auto_renew`, `subscription_status`, `subscription_has_pending_upgrade`, `subscription_previous_tier`, `subscription_last_upgrade/downgrade_date`, `past_due_renewal_entries`, `membership_status`, `membership_active_duration_months`, `next_renewal_date` |
+| Subscription | `has_active_subscription`, `subscription_tier`, `subscription_start/end_date`, `subscription_auto_renew`, `subscription_status`, `subscription_has_pending_upgrade`, `subscription_previous_tier`, `subscription_last_upgrade/downgrade_date`, `past_due_renewal_entries`, `membership_status`, `membership_active_duration_months`, `next_renewal_date`, `membership_label`, `next_renewal_label` |
 | Entries / points / spend | `accumulated_entries`, `rewards_points`, `entries_purchased`, `giveaways_entered`, `member/one_time/upsell/mini_draw_entries`, `lifetime_value`, `total_spent`, `first/last_purchase_date`, `total_one_time/mini_draw_packages` |
 | Upsell engagement | `total_upsells_purchased`, `upsell_total_shown/accepted/declined`, `upsell_conversion_rate`, `upsell_last_interaction` |
-| Referral / partner | `referral_code`, `referral_successful_conversions`, `referral_total_entries_awarded`, `partner_discount_active/queued_count/total_days/next_activation_date` |
+| Referral / partner | `referral_code`, `referral_successful_conversions`, `referral_total_entries_awarded`, `partner_discount_active/queued_count/total_days/next_activation_date`, `partner_discount_label` |
 | Segmentation / current draw | `brand_interest` (removed once any purchase is made); `current_draw_id/name/start_date/subscription_active/one_time_packages/entries` |
 
+
+**Three of these are display-only.** `membership_label` ("Tradie Member" / "Not a member"), `partner_discount_label` ("Active" / "Not active") and
+`next_renewal_label` (a date, "Payment retrying", "Renewal date pending" or "Auto-renew off") exist so a Klaviyo merge tag can print a value
+to a customer. They duplicate `subscription_tier`, `partner_discount_active` and `next_renewal_date`, which stay
+the ones segments and flow filters use — the labels are prose and will change. `next_renewal_label` is rendered in
+AEST because renewals anchor to day 24 and are stored as `14:00Z`, which is the following day in Sydney; a
+UTC-formatted label would tell a member the wrong renewal day. See
+[docs/tracking/KLAVIYO_INTEGRATION.md](docs/tracking/KLAVIYO_INTEGRATION.md).
 **Two event-level data points added 2026-08-26** (events, not profile properties — they describe a moment, and the profile only ever describes *now*):
 
 - **`Subscription Cancellation Requested`** — sent the instant a member-initiated cancellation commits. Carries the customer's account id, the tier they are leaving (id, name, tier and monthly price), the time they cancelled and the time their access ends. No new personal information leaves: the email address and name were already on the profile, and the tier and dates are already synced as profile properties. What is new is the *timing* — a cancel-click signal Klaviyo previously never received.

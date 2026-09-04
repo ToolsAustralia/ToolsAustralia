@@ -239,6 +239,66 @@ These five canonical profile properties land on every user's Klaviyo profile via
 | `membership_active_duration_months` | number \| null | `differenceInMonths(now, user.subscription.startDate)` from `date-fns`. Calendar-aware, DST-safe (no `30.4375 * 86400000` averaging). `null` when never subscribed. |
 | `next_renewal_date` | ISO 8601 string \| null | `subscription.endDate` ISO when `isActive && autoRenew`. `null` for canceled / never-subscribed. ISO required for Klaviyo date math (locale strings are unfilterable as dates). |
 
+#### Display-ready twins — for email copy, never for segments
+
+Three properties exist **only** so a Klaviyo merge tag can print them to a customer. Each has a machine-readable
+sibling above; **segments and flow filters must keep using the sibling**, which is stable, typed and filterable.
+
+| Property | Type | Value | Sibling it renders |
+|---|---|---|---|
+| `membership_label` | string | `"Tradie Member"` / `"Foreman Member"` / `"Boss Member"` / `"Not a member"` | `subscription_tier` (the raw packageId) |
+| `partner_discount_label` | string | `"Active"` / `"Not active"` | `partner_discount_active` (boolean) |
+| `next_renewal_label` | string | A date (`"24 September 2026"`), `"Payment retrying"`, `"Renewal date pending"`, or `"Auto-renew off"` | `next_renewal_date` (ISO instant) |
+
+**Why they exist.** Klaviyo's drag-and-drop editor stores a merge tag as a single *expression* — the "Edit code"
+field takes `person|lookup:"x"|default:'y'` and nothing more. `{% if %}` block tags cannot go there, so a
+marketer has no way to map an id to a name, format a date, or hide a line, inside the template. Without these,
+the New Member block shipped reading `Tier: tradie-subscription`, `Partner discount: True`, and
+`Next renewal: 2026-09-23T14:00:00.000Z` to real members.
+
+**Two rules they follow, both load-bearing:**
+
+1. **`next_renewal_label` is formatted in AEST, not UTC.** Renewals anchor to day 24 and are stored as `14:00Z`,
+   which is the *next day* in Sydney. A UTC-formatted label tells a member their renewal is the 23rd when the
+   charge lands on the 24th. Verified against a live profile: `next_renewal_date` `"2026-09-23T14:00:00.000Z"`
+   → `next_renewal_label` `"24 September 2026"`.
+2. **They are always populated** — never `""`, never omitted. Two reasons. The editor cannot hide one line
+   of a multi-line text block, so an empty value leaves a dangling `Partner discount:` with nothing after it.
+   And Klaviyo's upsert **merges** — an omitted property keeps its previous value, so a lapsed member would
+   read `"Boss Member"` forever. Every branch returns a string, so every sync overwrites.
+3. **No branch may assert something false.** `next_renewal_label` has four states, not two:
+   `"Payment retrying"` for past-due — Stripe is still retrying the card and
+   `sync-klaviyo-past-due-profiles.ts` pushes that cohort precisely so a recovery flow can email them, so
+   `"Auto-renew off"` would contradict the email they are being sent; `"Renewal date pending"` when
+   auto-renew is ON but the date is not yet known (`/api/stripe/update-auto-renew` clears `endDate` when
+   RE-ENABLING and syncs on the next line, and `handleSubscriptionPackage` activates before the webhook
+   writes it); `"Auto-renew off"` only when it genuinely is.
+4. **`membership_label` gates on membership STATUS, not on `packageId`.** A lapsed record keeps its id, and
+   gating on the id alone told a `never_subscribed` profile it was a `"Foreman Member"` — caught against
+   production on 2026-09-04, after the unit tests passed. `past_due` and `paused` keep their tier; they are
+   still members whose access continues.
+5. **Never throw.** `formatInTimeZone` raises `RangeError` on an unparseable date, and
+   `classifyKlaviyoFailure` cannot pattern-match that message — so it returns `retryable: true`, which HOLDS
+   the reconciliation cursor and freezes the sweep for **every** user (the 2026-08-27 incident). The label is
+   guarded and degrades to `"Renewal date pending"`.
+
+Both label derivations are pure and exported (`deriveMembershipLabel`, `deriveNextRenewalLabel`) so every
+branch is covered by `npm run test:klaviyo-projection` without a database — including the AEST day-shift,
+which is the whole reason the label exists.
+
+**Propagation to existing profiles is automatic — no backfill script is required.** A new property lands on a
+profile the next time `userToKlaviyoProfile` runs for that user, and two schedules cover that
+([vercel.json](../../vercel.json)):
+
+| Path | Schedule | Covers |
+|---|---|---|
+| `reconcile-klaviyo-profiles` | `*/5 * * * *` | Anyone whose `updatedAt` moved — a purchase, login, verification, tier change. Effectively immediate for active users. |
+| `reconcile-klaviyo-profiles?mode=full` | `7 * * * *` | A rotating `fullPassCursor` over every profile, ~344 per run × 24 runs/day ≈ **a full circuit in ~7 days at 56k profiles**. |
+
+So the only exposure is a flow going live *inside* that ~7-day window, where a dormant profile would render the
+template's `|default:` instead of its real value. If a launch cannot wait, force the circuit with
+`npm run sync:klaviyo-profiles-bulk` (bulk endpoint, one call per batch rather than per profile).
+
 Example segments the ads team can now build:
 
 - *Purchased entries but no membership* — `membership_status EQUALS "never_subscribed" AND entries_purchased > 0`

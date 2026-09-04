@@ -10,6 +10,8 @@
 import type { IUser } from "@/models/User";
 import type { KlaviyoProfile } from "@/types/klaviyo";
 import { getStateByCode } from "@/data/australianStates";
+import { getPackageById } from "@/data/membershipPackages";
+import { formatDateInAEST } from "@/utils/common/timezone";
 import {
   getPartnerCatalogAccessPercentForPlanId,
   getPartnerDiscountCatalogSummaryForPackageId,
@@ -151,6 +153,32 @@ export async function userToKlaviyoProfile(
   const lifetimeValue = calculateLifetimeValue(user, resolvedLedger);
   const partnerDiscountStatus = calculatePartnerDiscountStatus(user);
   const entryBreakdown = calculateEntryBreakdown(user, resolvedLedger);
+  const membershipStatus = deriveMembershipStatus(user);
+
+  /**
+   * DISPLAY-READY LABELS for customer-facing email copy. See the `*_label` properties below.
+   *
+   * THREE RULES, each paid for by a real failure:
+   *
+   * 1. NEVER THROW. `formatInTimeZone` raises `RangeError: Invalid time value` on an
+   *    unparseable date. A throw here does not lose one profile — `classifyKlaviyoFailure`
+   *    cannot pattern-match "invalid time value", so it defaults to `retryable: true`, and
+   *    the reconciliation cursor HOLDS on any retryable failure. One bad row would freeze
+   *    the sweep for every user, exactly as happened in production on 2026-08-27
+   *    (see klaviyo-profile-sync.ts). Hence the isFinite guard.
+   *
+   * 2. ALWAYS POPULATED. Klaviyo's upsert MERGES — a property you omit keeps its previous
+   *    value rather than clearing. An omitted label therefore leaves the LAST one showing:
+   *    an ex-Boss reading "Boss Member" forever, or a stale renewal date. Every branch
+   *    returns a string so each sync overwrites.
+   *
+   * 3. NEVER ASSERT SOMETHING FALSE. The tempting `autoRenew && endDate ? date : "off"`
+   *    tells a member who just re-enabled auto-renew that it is off, because
+   *    /api/stripe/update-auto-renew clears `endDate` and syncs on the next line — and it
+   *    tells a past-due member the same, while Stripe is still retrying their card and a
+   *    recovery flow is emailing them. Those are separate states and get separate wording.
+   */
+  const nextRenewalLabel = deriveNextRenewalLabel(user, membershipStatus);
 
   // Canonical profile properties (added 2026-05-28 — see "Canonical property names"
   // in docs/tracking/KLAVIYO_INTEGRATION.md). These coexist with legacy properties
@@ -234,7 +262,7 @@ export async function userToKlaviyoProfile(
     // console.log(`🏷️ User ${user.email} has no purchases - setting brand_interest to: ${brandInterest}`);
   }
 
-  const klaviyoProfile = {
+  const klaviyoProfile: KlaviyoProfile = {
     email: user.email,
     first_name: user.firstName,
     last_name: user.lastName,
@@ -271,6 +299,23 @@ export async function userToKlaviyoProfile(
         user.subscription?.packageId && user.subscription.packageId.trim() !== ""
           ? user.subscription.packageId
           : undefined, // Handle empty string and undefined
+      /**
+       * DISPLAY-READY twin of `subscription_tier`, for customer-facing email copy.
+       *
+       * `subscription_tier` is the raw packageId ("tradie-subscription") and a Klaviyo
+       * merge tag prints it verbatim — the New Member block shipped reading
+       * "Tier: tradie-subscription" to real members. Klaviyo's drag-and-drop editor
+       * stores a merge tag as one EXPRESSION, so a marketer cannot map the id to a
+       * name in the template without `{% if %}` block tags the chip field rejects.
+       * Sending the label is the only place the mapping can live and stay testable.
+       *
+       * Carries the WHOLE phrase ("Tradie Member"), not just the tier, so the template
+       * needs no concatenation — a template that appends " Member" itself would render
+       * "No membership Member" for a lapsed member.
+       *
+       * Keep `subscription_tier` — segments filter on the stable id, never the label.
+       */
+      membership_label: deriveMembershipLabel(user, membershipStatus),
       subscription_start_date: safeDateToISO(user.subscription?.startDate),
       subscription_end_date: safeDateToISO(user.subscription?.endDate),
       subscription_auto_renew: user.subscription?.autoRenew ?? undefined,
@@ -334,6 +379,13 @@ export async function userToKlaviyoProfile(
 
       // Partner discount status
       partner_discount_active: partnerDiscountStatus.active,
+      /**
+       * DISPLAY-READY twin of `partner_discount_active`, for customer-facing copy.
+       * The boolean prints as "True" in a Klaviyo merge tag. Always populated so the
+       * email never renders a dangling "Partner discount:" with nothing after it —
+       * the drag-and-drop editor cannot hide a single line of a text block.
+       */
+      partner_discount_label: partnerDiscountStatus.active ? "Active" : "Not active",
       partner_discount_queued_count: partnerDiscountStatus.queuedCount,
       partner_discount_total_days: partnerDiscountStatus.totalDays,
       partner_discount_next_activation_date: partnerDiscountStatus.nextActivationDate,
@@ -363,7 +415,7 @@ export async function userToKlaviyoProfile(
       // wired against it). The new properties enable the "Purchased entries but no
       // membership", "At-risk near renewal", and "Long-term member" segments the
       // ads team asked for.
-      membership_status: deriveMembershipStatus(user),
+      membership_status: membershipStatus,
       entries_purchased: entriesPurchased,
       giveaways_entered: giveawaysEntered,
       membership_active_duration_months: computeActiveDurationMonths(user.subscription?.startDate),
@@ -371,6 +423,19 @@ export async function userToKlaviyoProfile(
         user.subscription?.isActive && user.subscription?.autoRenew
           ? safeDateToISO(user.subscription.endDate) ?? null
           : null,
+      /**
+       * DISPLAY-READY twin of `next_renewal_date`, for customer-facing copy.
+       *
+       * `next_renewal_date` is an ISO instant and a merge tag prints it raw
+       * ("2026-09-23T14:00:00.000Z"). Formatted in AEST for a reason that bites:
+       * renewals anchor to day 24 and are stored as 14:00Z, which is the NEXT day
+       * in Sydney. A UTC-formatted label would tell a member their renewal is the
+       * 23rd when the charge lands on the 24th.
+       *
+       * Built above — see the three rules there. Four states, never a false one:
+       * a date, "Payment retrying", "Renewal date pending", or "Auto-renew off".
+       */
+      next_renewal_label: nextRenewalLabel,
     },
   };
 
@@ -723,6 +788,61 @@ export type MembershipStatus = "active" | "past_due" | "canceled" | "paused" | "
  * `userToKlaviyoProfile` for back-compat with existing Klaviyo flows / segments
  * / templates wired against it — do not remove that property.
  */
+/**
+ * The customer-facing membership phrase — "Tradie Member" / "Not a member".
+ *
+ * Pure and exported so the id→name mapping is testable without a database. See
+ * `membership_label` in `userToKlaviyoProfile` for why a display twin exists at all.
+ */
+export function deriveMembershipLabel(user: IUser, membershipStatus: MembershipStatus): string {
+  // GATE ON STATUS, NOT ON packageId. A lapsed subscription keeps its `packageId` on the
+  // record — verified in production: a `never_subscribed` profile still carried
+  // "foreman-subscription" and this label read "Foreman Member" to someone who is not one.
+  // past_due and paused ARE still members (access continues), so they keep the tier.
+  const isMember =
+    membershipStatus === "active" || membershipStatus === "past_due" || membershipStatus === "paused";
+  if (!isMember) return "Not a member";
+
+  const name = getPackageById(user.subscription?.packageId ?? "")?.name;
+  return name ? `${name} Member` : "Not a member";
+}
+
+/**
+ * The customer-facing renewal phrase. Four states, never a false one, never a throw.
+ *
+ * Pure and exported so every branch is testable without a database — including the AEST
+ * day-shift, which is the entire reason this label exists.
+ *
+ * @param membershipStatus - pass `deriveMembershipStatus(user)`; taken as a parameter so
+ *                           callers that already computed it do not compute it twice.
+ */
+export function deriveNextRenewalLabel(user: IUser, membershipStatus: MembershipStatus): string {
+  // Past-due is NOT "auto-renew off" — Stripe is still retrying the card, and
+  // `sync-klaviyo-past-due-profiles.ts` pushes this cohort specifically so a recovery
+  // flow can email them. Telling them renewal is off contradicts that email.
+  if (membershipStatus === "past_due") return "Payment retrying";
+
+  if (!user.subscription?.isActive || !user.subscription?.autoRenew) return "Auto-renew off";
+
+  // Auto-renew IS on, so a missing date is transient, never "off":
+  // `/api/stripe/update-auto-renew` clears `endDate` when re-enabling and syncs on the next
+  // line, and `handleSubscriptionPackage` activates before the webhook writes the date.
+  const endDate = user.subscription.endDate ? new Date(user.subscription.endDate) : null;
+  if (endDate === null || !Number.isFinite(endDate.getTime())) return "Renewal date pending";
+
+  try {
+    // AEST, not UTC: renewals anchor to day 24 and store as 14:00Z, which is the NEXT day
+    // in Sydney. A UTC label would name the 23rd when the charge lands on the 24th.
+    return formatDateInAEST(endDate, "d MMMM yyyy");
+  } catch {
+    // `formatInTimeZone` throws RangeError on an unparseable date. A throw here is not one
+    // lost profile: `classifyKlaviyoFailure` cannot match "invalid time value" so it returns
+    // retryable, and the reconciliation cursor HOLDS on any retryable failure — freezing the
+    // sweep for every user, as happened in production on 2026-08-27.
+    return "Renewal date pending";
+  }
+}
+
 export function deriveMembershipStatus(user: IUser): MembershipStatus {
   const status = user.subscription?.status;
   if (!user.subscription || !status) return "never_subscribed";
