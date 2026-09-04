@@ -15,6 +15,7 @@
  */
 
 import assert from "node:assert/strict";
+import { formatDateForKlaviyo } from "../klaviyo-helpers";
 
 /**
  * Allowlist of canonical property names that may appear on any event added
@@ -195,6 +196,7 @@ import {
   createBonusCodeIssuedEvent,
   createSubscriptionCancellationRequestedEvent,
   createSubscriptionCancelledEvent,
+  createSubscriptionRenewalFailedEvent,
   createOneTimePackagePurchasedEvent,
   createPlacedOrderEvent,
 } from "../klaviyo-events";
@@ -713,32 +715,64 @@ function testFinalizeShopOrderStillCallsTheEmitter() {
 }
 
 // ============================================================
-// Subscription Cancelled (legacy) — the display twin only
+// Subscription Cancelled (legacy) — date formatting
 // ============================================================
 
 // This event is LEGACY and deliberately not held to the canonical shape (it ships
-// package_name "Subscription" and the raw package id as `tier`). Only the new label is
-// asserted here.
-function testCancellationDateLabelIsAESTAndAUFormatted() {
+// package_name "Subscription" and the raw package id as `tier`). What IS pinned is the
+// date format, because `formatDateForKlaviyo` feeds 15 properties and one of them
+// (`renewal_date`) is printed verbatim by a LIVE transactional email.
+//
+// It used to be `toLocaleDateString("en-US")` with no timeZone: US ordering, formatted in
+// the SERVER's zone. Measured 2026-09-04 against production, 112 of 300 consecutive
+// `Subscription Renewed` events (37.3%) printed the PREVIOUS Sydney day.
+function testDatePropertiesAreAESTAndAUFormatted() {
   const sample = createSubscriptionCancelledEvent(fakeUser(), {
     packageId: "tradie-subscription",
     packageName: "Subscription",
     tier: "tradie-subscription",
   });
 
-  const label = sample.properties.cancellation_date_label as string;
+  const date = sample.properties.cancellation_date as string;
 
-  // AU ordering, not the en-US "September 4, 2026" that `cancellation_date` still emits.
-  // Asserted by shape rather than value because the event stamps "now".
-  assert.match(label, /^\d{1,2} [A-Z][a-z]+ \d{4}$/);
-  assert.doesNotMatch(label, /,/);
+  // AU ordering — "4 September 2026", never the en-US "September 4, 2026".
+  assert.match(date, /^\d{1,2} [A-Z][a-z]+ \d{4}$/);
+  assert.doesNotMatch(date, /,/);
 
-  // The legacy sibling is untouched — 15 call sites share its formatter and several are
-  // rendered by live flows, so it keeps its en-US shape on purpose.
-  assert.match(sample.properties.cancellation_date as string, /^[A-Z][a-z]+ \d{1,2}, \d{4}$/);
+  // The boundary that caused the bug: 14:30Z is already the NEXT day in Sydney. Asserted
+  // through the shared helper directly, since the event itself stamps "now".
+  assert.equal(formatDateForKlaviyo(new Date("2026-09-23T14:30:00.000Z")), "24 September 2026");
+  assert.notEqual(formatDateForKlaviyo(new Date("2026-09-23T14:30:00.000Z")), "23 September 2026");
+  // ...and a time safely inside the Sydney day is unaffected.
+  assert.equal(formatDateForKlaviyo(new Date("2026-09-23T09:00:00.000Z")), "23 September 2026");
+}
 
-  // Same instant, two renderings — they must not be the same string, or the twin is pointless.
-  assert.notEqual(label, sample.properties.cancellation_date);
+// `next_payment_attempt` has its OWN inline formatter — fixing the shared helper does not
+// touch it. It carries a TIME, so a UTC render was wrong by up to 11 hours as well as a day:
+// it printed "2:30 PM" for an instant that is 12:30 AM in Sydney.
+function testNextPaymentAttemptIsAESTWithTime() {
+  const ev = createSubscriptionRenewalFailedEvent(fakeUser(), {
+    packageId: "tradie-subscription",
+    packageName: "Tradie",
+    tier: "tradie",
+    failureReason: "card_declined",
+    amount: 20,
+    paymentIntentId: "pi_x",
+    nextPaymentAttempt: Date.parse("2026-09-23T14:30:00.000Z") / 1000,
+  });
+  assert.equal(ev.properties.next_payment_attempt, "24 September 2026 at 12:30 AM");
+
+  // Stripe has exhausted its retries — empty, which the templates gate on.
+  const exhausted = createSubscriptionRenewalFailedEvent(fakeUser(), {
+    packageId: "tradie-subscription",
+    packageName: "Tradie",
+    tier: "tradie",
+    failureReason: "card_declined",
+    amount: 20,
+    paymentIntentId: "pi_x",
+    nextPaymentAttempt: null,
+  });
+  assert.equal(exhausted.properties.next_payment_attempt, "");
 }
 
 function run() {
@@ -756,7 +790,8 @@ function run() {
   testBonusCodeIssuedEmitsThePassedExpiresAt();
   testSubscriptionCancellationRequestedShape();
   testAccessEndsAtLabelNeverThrowsAndNeverBlanks();
-  testCancellationDateLabelIsAESTAndAUFormatted();
+  testDatePropertiesAreAESTAndAUFormatted();
+  testNextPaymentAttemptIsAESTWithTime();
   testSubscriptionCancellationRequestedOmitsUnresolvedPackage();
   testOneTimePackagePurchasedCarriesHadActiveSubscription();
   testShopPlacedOrderCarriesIsRenewalFalse();

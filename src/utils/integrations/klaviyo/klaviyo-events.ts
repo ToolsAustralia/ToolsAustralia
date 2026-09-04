@@ -111,22 +111,6 @@ export function createSubscriptionCancelledEvent(
         price: 0, // No price for cancellation
       }),
       cancellation_date: formatDateForKlaviyo(),
-      /**
-       * DISPLAY-READY twin of `cancellation_date` — the day access actually stopped, since
-       * this event fires from the Stripe `customer.subscription.deleted` webhook.
-       *
-       * `cancellation_date` is `formatDateForKlaviyo()`, which is `toLocaleDateString("en-US")`
-       * with NO timeZone — so it renders US-style ("September 23, 2026") in the SERVER's zone,
-       * which is UTC on Vercel. A cancellation processed after 10am Sydney therefore prints
-       * the PREVIOUS day. Verified: 2026-09-23T14:30:00Z -> "September 23, 2026" while Sydney
-       * is already the 24th.
-       *
-       * That helper is shared by 15 call sites (purchase_date, refund_date, invoice_date,
-       * start_date, upgrade_date, …), several of which are rendered by live legacy flows, so
-       * it is deliberately NOT changed here — see docs/tracking/KLAVIYO_INTEGRATION.md.
-       * New copy should read this label; `cancellation_date` stays for the existing templates.
-       */
-      cancellation_date_label: formatDateInAEST(new Date(), "d MMMM yyyy"),
       days_until_expiry: daysUntilExpiry,
       timestamp: formatTimestampForKlaviyo(),
     },
@@ -148,28 +132,27 @@ export function createSubscriptionRenewalFailedEvent(
     nextPaymentAttempt?: number | null; // Unix timestamp of next payment retry attempt
   }
 ): KlaviyoEvent {
-  // Format next_payment_attempt as human-readable string if available, otherwise empty string
-  // Format: "January 15, 2026 at 2:30 PM" (user-friendly format for email template)
+  // When Stripe will next retry the card, in SYDNEY time — e.g. "15 January 2026 at 2:30 PM".
+  //
+  // This is the one date in a dunning email a member might actually act on, and it is a
+  // Picos flow trigger (`Subscription Renewal Failed`). It carried its own inline copy of
+  // the `toLocaleString("en-US")` bug: US ordering, and no `timeZone`, so it rendered in the
+  // SERVER's zone (UTC on Vercel) and could name the wrong day — and, with a time attached,
+  // an hour up to 11 hours out. "2:30 PM" meaning 2:30am Sydney is worse than a bare date.
+  //
+  // Being inline, it would NOT have been fixed by changing `formatDateForKlaviyo`.
+  // Empty string when Stripe has exhausted its retries — the templates gate on truthiness.
   let nextPaymentAttemptFormatted = "";
   if (packageData.nextPaymentAttempt) {
     try {
-      const date = new Date(packageData.nextPaymentAttempt * 1000);
-      // Format as "January 15, 2026 at 2:30 PM"
-      nextPaymentAttemptFormatted = date.toLocaleString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
+      nextPaymentAttemptFormatted = formatDateInAEST(
+        new Date(packageData.nextPaymentAttempt * 1000),
+        "d MMMM yyyy 'at' h:mm a"
+      );
     } catch {
-      // If date conversion fails, use ISO string as fallback
-      try {
-        nextPaymentAttemptFormatted = new Date(packageData.nextPaymentAttempt * 1000).toISOString();
-      } catch {
-        nextPaymentAttemptFormatted = packageData.nextPaymentAttempt.toString();
-      }
+      // An unparseable timestamp must not take the event with it — the whole builder throws
+      // and the emit is lost. Degrade to empty, which the templates already handle.
+      nextPaymentAttemptFormatted = "";
     }
   }
 

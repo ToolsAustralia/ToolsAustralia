@@ -287,36 +287,63 @@ Both label derivations are pure and exported (`deriveMembershipLabel`, `deriveNe
 branch is covered by `npm run test:klaviyo-projection` without a database — including the AEST day-shift,
 which is the whole reason the label exists.
 
-### `formatDateForKlaviyo` is timezone-naive — read a `*_label` instead
+### Dates for customers are formatted in Sydney time
 
-```ts
-// src/utils/integrations/klaviyo/klaviyo-helpers.ts
-return dateToFormat.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-```
+Every date a customer reads is produced in **AEST/AEDT** via
+`formatDateInAEST(date, "d MMMM yyyy")` — `"23 September 2026"`.
 
-Two defects, both verified by probe:
+**This was wrong until 2026-09-04**, in three independent places, all with the same two
+defects: `toLocaleDateString("en-US")` for an Australian audience, and no `timeZone` option,
+so they formatted in the **server's** zone (UTC on Vercel). Anything fired between 14:00Z and
+24:00Z — Sydney 00:00–10:00, overnight to mid-morning — printed the **previous Sydney day**.
 
-1. **US format** — `"September 23, 2026"` — for an Australian audience.
-2. **No `timeZone` option**, so it formats in the SERVER's zone, which is **UTC on Vercel**. Anything fired
-   between 14:00Z and 23:59Z (13:00Z during daylight saving) renders the **previous Sydney day**:
-   `2026-09-23T14:30:00Z` → `"September 23, 2026"` while Sydney is already the 24th.
+Measured against production before the fix:
 
-It feeds **15** event properties — `purchase_date`, `refund_date`, `invoice_date`, `start_date`, `end_date`,
-`upgrade_date`, `downgrade_date`, `renewal_date`, `effective_date`, `cancellation_date`, `added_date`,
-`selected_date` and others. Several are rendered by live legacy flows, so **the helper is deliberately left
-as it is**: changing it would alter every one of those strings at once.
-
-**The convention going forward:** leave the `*_date` property alone and add a `*_label` twin beside it,
-formatted with `formatDateInAEST(date, "d MMMM yyyy")`. New customer-facing copy reads the label; existing
-templates keep the property they already reference. Shipped so far:
-
-| Label | Event | Twin of |
+| Live email | Renders | Wrong day |
 |---|---|---|
-| `cancellation_date_label` | `Subscription Cancelled` | `cancellation_date` |
-| `access_ends_at_label` | `Subscription Cancellation Requested` | `access_ends_at` |
+| `Invoice` (YsqZbb) — the **receipt** | `{{ event.invoice_date }}` | **30.0%** of 200 events |
+| `Membership Renewal` (UpzmuB) | `{{ event.renewal_date }}` | **37.3%** of 300 events |
 
-The same rule produced the profile-side `next_renewal_label`. Any future date a customer reads should get
-one rather than a raw `*_date`.
+Daylight saving from **2026-10-04** widens the window to 13:00Z–24:00Z (45.8% of the clock)
+for six months.
+
+#### Three producers, not one
+
+| Producer | Feeds | Note |
+|---|---|---|
+| `formatDateForKlaviyo` (klaviyo-helpers.ts) | 15 properties — `purchase_date`, `refund_date`, `start_date`, `end_date`, `upgrade_date`, `downgrade_date`, `renewal_date`, `effective_date`, `cancellation_date`, `added_date`, `selected_date` | Only `renewal_date` has a live renderer |
+| Inline in `formatInvoiceDataForKlaviyo` | `invoice_date` | **NOT fed by the helper.** Its own copy — which is why it outlived the first fix |
+| Inline in `createSubscriptionRenewalFailedEvent` | `next_payment_attempt` | Carries a TIME, so UTC was wrong by up to 11 hours as well as a day |
+
+**Correcting an earlier note in this file:** it previously said `invoice_date` was one of the
+helper's 15 properties and that "several" of them were rendered by live flows. Both were
+wrong. `invoice_date` has its own producer, and exactly **one** helper-fed property
+(`renewal_date`) has a live renderer — verified by opening every live flow's template.
+
+#### Why changing the format was safe
+
+Swept across the whole account before the change: **42 flows** (45 filter objects), **20
+segments**, and **299 renderable assets** (79 library + 82 flow-message + 121 campaign
+templates + 17 universal-content blocks). Nothing **filters** on any of these date strings —
+every filter found is a `profile-metric` count with `metric_filters: null` — and the two
+renderers print verbatim with no Liquid `date:` filter. So a format change is a copy
+improvement, never a parse failure.
+
+One latent exception worth knowing: library template `YcSzpr` ("Invoice Email") runs
+`{{ event.invoice_date | date: "%B %d, %Y" }}`, i.e. it asks Liquid to re-parse our display
+string. It is attached to no flow and no campaign, so it renders for nobody — but if it is
+ever used, drop the filter rather than reformatting upstream.
+
+#### When a `*_label` twin is still the right answer
+
+A twin is for a property that must stay machine-readable. `access_ends_at` is a raw ISO
+instant that segments could filter on, so it keeps `access_ends_at_label` beside it. A
+property that is *already* display text needs no twin — `cancellation_date_label` was added
+on 2026-09-04 as a workaround and removed the same day once the helper was fixed, because it
+had become an exact duplicate of `cancellation_date`.
+
+The profile-side `next_renewal_label` stays for the same reason as `access_ends_at_label`:
+`next_renewal_date` is an ISO instant used for date filtering.
 
 ### The two cancellation moments are different emails
 

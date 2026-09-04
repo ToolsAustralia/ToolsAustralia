@@ -609,12 +609,18 @@ export function formatInvoiceDataForKlaviyo(invoiceData: {
     total_price: number;
   }>;
 }) {
-  // Format date to readable format (e.g., "December 22, 2025")
-  const invoiceDate = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  // Sydney time, AU ordering — e.g. "22 December 2025".
+  //
+  // THE HIGHEST-STAKES DATE ON THE PLATFORM: this is the only producer of `invoice_date`,
+  // and the live `Invoice` flow (YsqZbb, subject "Receipt") prints it under the label
+  // "Invoice date". A receipt is a tax record.
+  //
+  // It carried its own inline copy of the `toLocaleDateString("en-US")` bug — US ordering,
+  // and no `timeZone` so it formatted in UTC. Measured on 200 consecutive real
+  // `Invoice Generated` events (2026-08-30 → 2026-09-04), 60 (30.0%) printed the PREVIOUS
+  // Sydney day. Being a separate function, it would NOT have been fixed by changing
+  // `formatDateForKlaviyo` — which is exactly why it survived that long.
+  const invoiceDate = formatDateInAEST(new Date(), "d MMMM yyyy");
 
   // Format total amount as string with 2 decimal places (already in dollars)
   const formattedTotalAmount = invoiceData.totalAmount.toFixed(2);
@@ -721,13 +727,36 @@ export function formatCanonicalPackageData(p: {
 /**
  * Format date for Klaviyo events
  */
+/**
+ * Human-readable date for a Klaviyo event property, in SYDNEY time.
+ *
+ * This used to be `toLocaleDateString("en-US")` with NO `timeZone` option, which had two
+ * defects for an Australian audience:
+ *
+ *   1. US ordering — "September 23, 2026" — everywhere else in the product reads
+ *      "23 September 2026".
+ *   2. It formatted in the SERVER's zone, which is UTC on Vercel. Anything fired between
+ *      14:00Z and 24:00Z — Sydney 00:00–10:00, i.e. overnight to mid-morning — printed the
+ *      PREVIOUS Sydney day.
+ *
+ * That was not theoretical. Measured against production 2026-09-04, on the ONE property here
+ * with a live renderer: the `Membership Renewal` flow (UpzmuB) prints
+ * `{{ event.renewal_date }}` verbatim, and 112 of 300 consecutive `Subscription Renewed`
+ * events (37.3%) carried the wrong Sydney day. Daylight saving from 2026-10-04 widens the
+ * window to 13:00Z–24:00Z (45.8% of the clock) for six months.
+ *
+ * Safe to change: across the whole Klaviyo account — 42 flows / 45 filter objects, 20
+ * segments, 299 renderable assets — nothing FILTERS on any of these date strings, and the
+ * only renderers print them verbatim with no Liquid `date:` filter. So a format change is a
+ * copy improvement, never a parse failure.
+ *
+ * NOTE: this is not the only producer of a date string in this file. `invoice_date` has its
+ * own copy in `formatInvoiceDataForKlaviyo` below, and `next_payment_attempt` has one in
+ * klaviyo-events.ts — both fixed alongside this. Grep for `toLocaleDateString` /
+ * `toLocaleString` before assuming a date is formatted here.
+ */
 export function formatDateForKlaviyo(date?: Date): string {
-  const dateToFormat = date || new Date();
-  return dateToFormat.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return formatDateInAEST(date || new Date(), "d MMMM yyyy");
 }
 
 /**

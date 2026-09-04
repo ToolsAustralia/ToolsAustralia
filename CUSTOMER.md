@@ -1002,8 +1002,9 @@ member pricing, partner discounts and free entries until the period they have pa
 `autoRenew` flips, and `isActive` stays true (`CancelSubscriptionService`). The exception is a past-due member,
 who loses access at once. `Subscription Cancellation Requested` now carries `access_ends_at_label` (e.g.
 `"24 September 2026"`, AEST) so a confirmation email can name that date without the marketing tool having to
-format an ISO timestamp it cannot format. `Subscription Cancelled` carries `cancellation_date_label` for the same reason — the older
-`cancellation_date` is US-formatted and rendered in UTC, so it can name the previous Sydney day.
+format an ISO timestamp it cannot format. Every other customer-facing date is now formatted in Sydney time too: until 2026-09-04 the
+receipt and renewal emails printed the previous day for roughly a third of customers, because three
+separate formatters rendered in UTC with US ordering.
 **`brand_interest` is captured at registration and now survives.** It records which brand's
 promo page a visitor signed up through (`dewalt`, `makita`, `milwaukee`, `ryobi`, `hikoki`,
 `stihl`), and is cleared when they make any purchase. Until 2026-09-04 it was silently
