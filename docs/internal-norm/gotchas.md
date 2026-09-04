@@ -1,5 +1,39 @@
 # Internal Norm — Gotchas
 
+## `migrate:create-norm` fails on an EMPTY database, and used to fail silently (2026-09-04)
+
+Running the migration against a database that has never held `users` or `roles` — a new
+environment, a restored dump, a CI container — fails with:
+
+```
+MongoServerError: Unable to acquire IX lock on '<db>.users' within 5ms
+code: 24 · codeName: LockTimeout · errorLabels: [ TransientTransactionError ]
+```
+
+**Why.** The migration does its work inside a transaction. On a fresh database Mongoose
+builds each model's indexes the first time the model is touched, and an index build holds
+a lock the transaction cannot acquire within Mongo's 5ms default
+(`maxTransactionLockRequestTimeoutMillis`). It only bites the FIRST run: the failed
+attempt leaves the collections and indexes behind, so an immediate retry succeeds — which
+makes it look intermittent and is why it never reproduces against a warm database.
+
+**How CI avoids it.** `scripts/seed-ci-fixtures.ts` awaits `User.init()` and `Role.init()`
+before the migration runs. `Model.init()` resolves only once index builds have finished,
+so the cost is paid outside the transaction.
+
+**Two things still true of the migration itself:**
+
+1. **No retry on `TransientTransactionError`.** MongoDB explicitly labels this class as
+   retryable and expects the caller to re-run the whole transaction. This one does not, so
+   anyone invoking it directly against a fresh database will hit the failure above. Doing
+   the `Model.init()` warm-up first is the workaround; a retry loop would be the real fix.
+2. **Its inner error handler cannot report this class.** The `catch` block runs
+   `await session.abortTransaction()` BEFORE `console.error(...)`, and the abort throws too
+   when the commit itself failed — so the original error never prints. The outer handler is
+   the backstop, and it used to be `catch(() => process.exit(1))`: exit 1 with no output at
+   all. That turned CI run #122 into a guessing game — the log showed the role and user
+   created, then a bare exit 1. It now logs the reason.
+
 ## G1. Replay nonce TTL ≠ receipt TTL
 
 Two different TTLs, easy to confuse:

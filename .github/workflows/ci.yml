@@ -299,17 +299,51 @@ jobs:
       # pass on behaviour production does not have.
       - name: Start MongoDB
         run: |
+          set -euo pipefail
           docker run -d --name ci-mongo -p 27017:27017 mongo:8.0 --replSet rs0
+
+          echo "waiting for mongod to accept connections..."
           for i in $(seq 1 60); do
             docker exec ci-mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1 && break
             sleep 1
           done
-          docker exec ci-mongo mongosh --quiet --eval 'rs.initiate()'
+
+          docker exec ci-mongo mongosh --quiet --eval 'rs.initiate()' >/dev/null
+          echo "waiting for PRIMARY..."
           for i in $(seq 1 60); do
             [ "$(docker exec ci-mongo mongosh --quiet --eval 'try{rs.status().myState}catch(e){0}' | tr -d '\r')" = "1" ] && break
             sleep 1
           done
-          docker exec ci-mongo mongosh --quiet --eval 'print("replica set ready, myState=" + rs.status().myState)'
+
+          # PRIMARY IS NOT THE SAME AS ABLE TO COMMIT. Probe with a REAL transaction:
+          # begin, write, commit. `startSession()` alone is not a probe — it succeeds
+          # against a set that cannot commit anything, because it does not contact the
+          # server until an operation runs inside it.
+          #
+          # To be clear about what this does and does not fix: it is NOT the cause of the
+          # run #122 failure. That was a LockTimeout from the seed step's transaction
+          # racing implicit collection creation on an empty database, fixed in
+          # scripts/seed-ci-fixtures.ts. This probe stays because "transactions do not
+          # work yet" would otherwise surface as the same baffling error, and it costs 1s.
+          echo "waiting for transactions to actually commit..."
+          for i in $(seq 1 60); do
+            if docker exec ci-mongo mongosh --quiet --eval '
+              const s = db.getMongo().startSession();
+              s.startTransaction();
+              s.getDatabase("ci_probe").ready.insertOne({ ok: 1 });
+              s.commitTransaction();
+              s.endSession();
+            ' >/dev/null 2>&1; then
+              echo "transactions ready after ${i}s"
+              docker exec ci-mongo mongosh --quiet --eval 'db.getSiblingDB("ci_probe").dropDatabase()' >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "MongoDB never became able to commit a transaction." >&2
+          docker exec ci-mongo mongosh --quiet --eval 'printjson(rs.status())' >&2 || true
+          exit 1
 
       # Most suites build and tear down their own fixtures. A few assume a LIVE
       # major draw already exists and mutate it, undoing the change in `finally`.

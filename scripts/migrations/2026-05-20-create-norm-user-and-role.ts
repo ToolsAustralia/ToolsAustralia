@@ -97,6 +97,17 @@ async function run() {
   }
 }
 
-void run().catch(() => {
+void run().catch((error) => {
+  // Log the reason. This used to be `catch(() => process.exit(1))`, which exited 1
+  // with ZERO output — on 2026-09-04 that turned a CI failure into a guessing game:
+  // the log showed "Created Norm role", "Created Norm user", "MongoDB disconnected",
+  // then a bare exit 1 and nothing else. A script that fails silently costs more to
+  // diagnose than it ever saves.
+  //
+  // Note the inner catch cannot be relied on to report either: it does
+  // `await session.abortTransaction()` BEFORE `console.error`, so if the abort also
+  // throws (which it does when the commit itself failed) the original error is never
+  // printed. This handler is the backstop.
+  console.error("migrate:create-norm failed:", error instanceof Error ? error.stack : error);
   process.exit(1);
 });

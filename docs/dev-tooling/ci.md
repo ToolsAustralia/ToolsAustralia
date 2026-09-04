@@ -216,6 +216,35 @@ purchase and admin suites.
 
 ## Gotchas
 
+### CI's database starts genuinely empty, and yours never does
+
+This is the single biggest difference between a run here and a run on your machine, and it
+caused the first real failure of the rebuilt pipeline (run #122).
+
+The `suites` job's seed step runs a migration that writes inside a transaction. On a brand-new
+database Mongoose builds the `users` indexes the first time the model is touched, and an index
+build holds a lock the transaction cannot get within Mongo's 5ms default:
+
+```
+Unable to acquire IX lock on '<db>.users' within 5ms
+code 24 · LockTimeout · errorLabels: [ TransientTransactionError ]
+```
+
+It only ever bites the **first** run. The failed attempt leaves the collections and indexes
+behind, so an immediate retry passes — which makes it look intermittent and is exactly why it
+never reproduced locally against a warm container.
+
+`seed:ci-fixtures` now awaits `User.init()` and `Role.init()` first, which resolve only once
+index builds have finished. Creating the collections alone is **not** enough; that was tried.
+
+**If you are debugging a CI-only failure, drop your local database first.** A warm database
+hides this entire class of bug:
+
+```bash
+docker exec ta-ci-mongo mongosh --quiet "mongodb://localhost:27017/toolsaustralia-ci" \
+  --eval 'db.dropDatabase()'
+```
+
 ### The bug that kept this red for sixteen days
 
 The workflow was added on 2026-08-19 and failed **108 times without ever passing**.

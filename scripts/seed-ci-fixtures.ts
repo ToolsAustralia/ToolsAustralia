@@ -63,6 +63,38 @@ async function main(): Promise<void> {
   console.log(`seed-ci-fixtures: connecting to ${uri.split("@").pop()}`);
   await mongoose.connect(uri);
 
+  // Create the collections migrate:create-norm writes to, BEFORE it opens its
+  // transaction. On a brand-new database they do not exist, and the transaction then
+  // races Mongoose's own implicit collection + index creation:
+  //
+  //   MongoServerError: Unable to acquire IX lock on '<db>.users' within 5ms
+  //   code 24, LockTimeout, errorLabels: [ TransientTransactionError ]
+  //
+  // That is what failed CI run #122. It only ever bites the FIRST run against an empty
+  // database — the failed attempt leaves the collections behind, so a retry passes,
+  // which is why it never reproduced against a warm local container.
+  //
+  // Creating them here is the narrow fix: it costs nothing, and every real environment
+  // (dev, production) already has these collections, so the problem is CI-only.
+  //
+  // NOTE the underlying migration still has no retry on TransientTransactionError,
+  // which MongoDB explicitly labels as retryable. Anyone running it against a fresh
+  // database — a new environment, a restored dump — will hit the same failure.
+  // Creating the collections is NOT sufficient on its own — that was tried first and
+  // still failed. Mongoose's autoIndex builds each model's indexes the first time the
+  // model is used, and an index build holds a lock the transaction cannot get within
+  // Mongo's 5ms default. `Model.init()` resolves only once those builds have FINISHED,
+  // so awaiting it here moves the whole cost outside the migration's transaction.
+  const { default: User } = await import("../src/models/User");
+  const { default: Role } = await import("../src/models/Role");
+  for (const [name, model] of [
+    ["users", User],
+    ["roles", Role],
+  ] as const) {
+    await model.init();
+    console.log(`seed-ci-fixtures: '${name}' collection and indexes ready`);
+  }
+
   const { default: MajorDraw } = await import("../src/models/MajorDraw");
 
   // Idempotent: the suites only need ONE active draw, and creating a second on every

@@ -1,5 +1,33 @@
 # Infrastructure — Gotchas
 
+## `seed:ci-fixtures` — what CI's empty database needs before the suites run (2026-09-04)
+
+`scripts/seed-ci-fixtures.ts` (`npm run seed:ci-fixtures`) prepares the minimum state the
+offline suites assume. It exists because a CI run starts from a genuinely empty database
+and a developer's never is.
+
+It does two things, and the ORDER matters:
+
+1. **Awaits `User.init()` and `Role.init()`.** Not decorative. `Model.init()` resolves only
+   once Mongoose has finished building that model's indexes. Skip it and the very next step
+   — `migrate:create-norm`, which writes inside a transaction — dies with
+   `LockTimeout: Unable to acquire IX lock on '<db>.users' within 5ms`, because the index
+   build holds a lock the transaction cannot get. See `docs/internal-norm/gotchas.md`.
+   Creating the collections alone does **not** fix it; the index builds have to have
+   finished.
+2. **Creates one `active` MajorDraw.** Three suites (`bonus-code-mint`, `campaign-window`,
+   `claim-grant-compensation`) mutate a live draw and undo it in `finally` rather than
+   creating their own. On an empty database `getTargetDrawForGrant()` returns
+   `no_target_draw` and they fail on assertions that have nothing to do with what they test.
+
+**Safety.** It writes a fake ACTIVE major draw, which `getTargetDrawForGrant()` could hand
+real entries to. It therefore refuses any host that is not `localhost`, `127.0.0.1`, `mongo`
+or `0.0.0.0`, and rejects every `mongodb+srv://` URI outright. **There is deliberately no
+override flag** — if you need one, you are doing something this script should not help with.
+Verified against both the production and dev Atlas connection strings.
+
+It is idempotent: a second run finds the existing active draw and does nothing.
+
 ## `membership-daily-snapshot`'s second daily fire silently overwrote the first — and the reschedule that fixed it needed a second pass (2026-08-24)
 
 `/api/cron/membership-daily-snapshot` is scheduled **twice a day** (see [architecture.md](./architecture.md#vercel-cron-schedules)) so a missed/failed first run still gets a snapshot — but both fires resolve to the SAME `(date, packageId)` key (the "yesterday in `Australia/Sydney`" computation is deterministic per calendar day, not per invocation). The upsert was an unconditional `$set`, so the second fire always won regardless of which run had the more trustworthy numbers.
