@@ -137,8 +137,10 @@ export default function DetailHeroBanner({
                   <Ticket className="w-[17px] h-[17px] text-white" />
                 </div>
                 <div className="text-left">
-                  <div className="text-white font-bold text-sm leading-tight">$1</div>
-                  <div className="text-[#94A3B8] text-[11.5px] leading-tight">Entry</div>
+                  {/* RULE 11: prices the pack, not the entry. "$1 / Entry" reads as a
+                      per-unit entry price, which we legally cannot state. */}
+                  <div className="text-white font-bold text-sm leading-tight">From $1</div>
+                  <div className="text-[#94A3B8] text-[11.5px] leading-tight">Mini pack</div>
                 </div>
               </div>
             )}
