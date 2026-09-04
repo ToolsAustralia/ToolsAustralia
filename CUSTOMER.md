@@ -992,9 +992,18 @@ Before persisting, the webhook runs a **persisted-UTM reconcile** ([reconcilePer
 | Entries / points / spend | `accumulated_entries`, `rewards_points`, `entries_purchased`, `giveaways_entered`, `member/one_time/upsell/mini_draw_entries`, `lifetime_value`, `total_spent`, `first/last_purchase_date`, `total_one_time/mini_draw_packages` |
 | Upsell engagement | `total_upsells_purchased`, `upsell_total_shown/accepted/declined`, `upsell_conversion_rate`, `upsell_last_interaction` |
 | Referral / partner | `referral_code`, `referral_successful_conversions`, `referral_total_entries_awarded`, `partner_discount_active/queued_count/total_days/next_activation_date`, `partner_discount_label` |
-| Segmentation / current draw | `brand_interest` (removed once any purchase is made); `current_draw_id/name/start_date/subscription_active/one_time_packages/entries` |
+| Segmentation / current draw | `brand_interest` (the brand promo page they registered through; removed once any purchase is made); `current_draw_id/name/start_date/subscription_active/one_time_packages/entries` |
 
 
+
+**`brand_interest` is captured at registration and now survives.** It records which brand's
+promo page a visitor signed up through (`dewalt`, `makita`, `milwaukee`, `ryobi`, `hikoki`,
+`stihl`), and is cleared when they make any purchase. Until 2026-09-04 it was silently
+overwritten to `"milwaukee"` by the next profile sync after signup — 9,155 of 39,076
+attributed users were affected, so a HiKOKI or STIHL visitor was marketed to as a Milwaukee
+one. It is now read from the persisted `signupAttribution.promotionSlug`, so every sync
+agrees. Users who arrived through no promo page (~33%) still receive `"milwaukee"`, which
+is a default rather than a stated preference — worth knowing before segmenting on it.
 **Three of these are display-only.** `membership_label` ("Tradie Member" / "Not a member"), `partner_discount_label` ("Active" / "Not active") and
 `next_renewal_label` (a date, "Payment retrying", "Renewal date pending" or "Auto-renew off") exist so a Klaviyo merge tag can print a value
 to a customer. They duplicate `subscription_tier`, `partner_discount_active` and `next_renewal_date`, which stay

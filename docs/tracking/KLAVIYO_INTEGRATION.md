@@ -286,6 +286,51 @@ Both label derivations are pure and exported (`deriveMembershipLabel`, `deriveNe
 branch is covered by `npm run test:klaviyo-projection` without a database — including the AEST day-shift,
 which is the whole reason the label exists.
 
+#### `brand_interest` — read the persisted slug, never re-default
+
+`brand_interest` is the brand promo page a visitor registered through. It is set once at
+signup and is meant to survive until they buy something, at which point it is set to `null`
+to REMOVE the tag (a merging upsert needs an explicit null; omitting it would leave a buyer
+tagged forever).
+
+**The regression it used to have.** The value was derived only from the
+`brandInterestFromSignup` PARAMETER, which is request-scoped and only the four registration
+call sites carry. Every other sync path — verify-email, verify-mobile, auto-login,
+update-profile, update-phone, profile setup, admin edit, and the reconciliation sweep
+(`KlaviyoProfileReconciliationService.ts:228` passes `undefined`) — fell through to a
+`"milwaukee"` default and OVERWROTE the real brand. A visitor kept their true brand only
+until they next did anything.
+
+Measured on production, 2026-09-04:
+
+| | Users |
+|---|---|
+| Total | 58,020 |
+| With `signupAttribution.promotionSlug` | 39,076 (67.3%) |
+| milwaukee | 29,884 |
+| makita | 3,156 |
+| dewalt | 2,572 |
+| ryobi | 2,240 |
+| hikoki | 1,023 |
+| stihl | 164 |
+| **Non-milwaukee being relabelled** | **9,155** |
+
+`resolveBrandInterest(user, brandInterestFromSignup)` now resolves in this order:
+
+1. the parameter — registration may hold a slug the user document is not saved with yet;
+2. **`user.signupAttribution.promotionSlug`** — persisted and indexed, so every sync path
+   agrees and the reconciliation sweep CORRECTS wrong profiles instead of writing them;
+3. `"milwaukee"` for the ~33% with no slug at all.
+
+Step 3 asserts an interest those users never expressed. Left as-is deliberately: changing it
+would strip the property from ~19k profiles and could affect existing segments, so it is a
+decision to take on its own rather than a side effect of this fix.
+
+The slug format is `brand-partner` (`hikoki-gearwrench`, `stihl-milwaukee`), so extraction
+takes the first segment and validates it against `getAllBrandKeys()` — `dewalt`, `makita`,
+`milwaukee`, `ryobi`, `hikoki`, `stihl`. Verified against production: all six resolve, a
+purchaser returns `null`, and a slugless user still returns `"milwaukee"`.
+
 **Propagation to existing profiles is automatic — no backfill script is required.** A new property lands on a
 profile the next time `userToKlaviyoProfile` runs for that user, and two schedules cover that
 ([vercel.json](../../vercel.json)):

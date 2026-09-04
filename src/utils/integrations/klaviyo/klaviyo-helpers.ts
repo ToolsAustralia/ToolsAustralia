@@ -239,28 +239,8 @@ export async function userToKlaviyoProfile(
   // Determine brand interest
   // If user has made purchases, explicitly set to null to remove tag from Klaviyo
   // If no purchases, use brand from signup or default to "milwaukee"
-  const userHasPurchases = hasUserMadePurchase(user);
-  let brandInterest: string | null | undefined;
-
-  if (userHasPurchases) {
-    // User has made purchases - explicitly set to null to remove tag from Klaviyo
-    brandInterest = null;
-    // console.log(
-    //   `🏷️ User ${user.email} has purchases - removing brand_interest tag. Has subscription: ${!!user.subscription
-    //     ?.isActive}, upsells: ${user.upsellPurchases?.length || 0}, one-time: ${
-    //     user.oneTimePackages?.length || 0
-    //   }, mini-draw: ${user.miniDrawPackages?.length || 0}`
-    // );
-  } else {
-    // User hasn't purchased yet - set brand interest
-    if (brandInterestFromSignup) {
-      brandInterest = extractBrandFromSlug(brandInterestFromSignup);
-    } else {
-      // Default to milwaukee if no brand provided
-      brandInterest = "milwaukee";
-    }
-    // console.log(`🏷️ User ${user.email} has no purchases - setting brand_interest to: ${brandInterest}`);
-  }
+  // See resolveBrandInterest — null actively REMOVES the tag once a user has purchased.
+  const brandInterest: string | null = resolveBrandInterest(user, brandInterestFromSignup);
 
   const klaviyoProfile: KlaviyoProfile = {
     email: user.email,
@@ -794,6 +774,32 @@ export type MembershipStatus = "active" | "past_due" | "canceled" | "paused" | "
  * Pure and exported so the id→name mapping is testable without a database. See
  * `membership_label` in `userToKlaviyoProfile` for why a display twin exists at all.
  */
+/**
+ * The brand a not-yet-purchased user is interested in, or `null` once they buy anything.
+ *
+ * `null` is meaningful and NOT the same as omitting: the Klaviyo upsert merges, so `null` is
+ * what actively REMOVES the tag from a profile after a purchase. Returning `undefined` here
+ * would leave a buyer tagged forever.
+ *
+ * PRECEDENCE — parameter, then persisted, then default:
+ *  1. `brandInterestFromSignup` — the registration routes hold a slug the user document may
+ *     not have been saved with yet.
+ *  2. `user.signupAttribution.promotionSlug` — persisted and indexed. This is the fix: every
+ *     OTHER sync path (verify-email, auto-login, update-profile, admin edit, and the
+ *     reconciliation sweep) passes no parameter, and used to fall through to the default and
+ *     overwrite the real brand. Measured on production 2026-09-04: 9,155 non-milwaukee
+ *     signups were being relabelled "milwaukee" by the next sync after they registered.
+ *  3. `extractBrandFromSlug(undefined)` → "milwaukee" for the ~33% with no slug at all.
+ *     That asserts an interest they never expressed; changing it would strip the property
+ *     from ~19k profiles and is a deliberate call, not a side effect of this fix.
+ *
+ * Pure and exported so the precedence is testable without a database.
+ */
+export function resolveBrandInterest(user: IUser, brandInterestFromSignup?: string | null): string | null {
+  if (hasUserMadePurchase(user)) return null;
+  return extractBrandFromSlug(brandInterestFromSignup ?? user.signupAttribution?.promotionSlug);
+}
+
 export function deriveMembershipLabel(user: IUser, membershipStatus: MembershipStatus): string {
   // GATE ON STATUS, NOT ON packageId. A lapsed subscription keeps its `packageId` on the
   // record — verified in production: a `never_subscribed` profile still carried
