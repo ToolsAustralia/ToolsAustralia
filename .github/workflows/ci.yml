@@ -95,6 +95,63 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm run lint
 
+  # Consistency checks: cheap, need no services, and each catches a class of defect
+  # that is otherwise SILENT — it ships, looks fine in review, and surfaces in
+  # production or not at all.
+  drift:
+    name: drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Nine files under src/generated/ are committed AND machine-generated from
+      # images, videos and the partner spreadsheet. Vercel regenerates them on every
+      # deploy but never compares them to what is committed — so a PR that adds a
+      # video without re-running the generator looks correct on the preview while the
+      # committed manifest the tests import is stale. Regenerating and diffing is the
+      # only thing that notices. Takes ~4s and needs no env.
+      - name: Generated files match their inputs
+        run: |
+          npm run prebuild
+          if ! git diff --exit-code --stat src/generated/; then
+            echo ""
+            echo "The files above are generated from inputs you changed, but the committed"
+            echo "copies were not regenerated. Run 'npm run prebuild' and commit the result."
+            exit 1
+          fi
+
+      # .env.example is the single source of truth for WHICH vars exist (CLAUDE.md §9)
+      # and there is no runtime validation, so an unregistered var means production
+      # silently reads `undefined`. Checks code reads against the registry; needs no
+      # .env.local, which is why it can run here at all.
+      - name: Env registry
+        run: npm run check:env:registry
+
+      # This repo has no test runner — a *.test.ts with no `test:*` script never runs
+      # anywhere and nothing says so. It looks like coverage in review.
+      - name: Every test file is wired to a script
+        run: npm run check:test-scripts
+
+      # A Norm route with no registry entry is a runtime failure that tsc, next build
+      # AND regenerate-and-diff all miss, because the manifest is generated FROM the
+      # registry and so still matches itself. CLAUDE.md rule 10.
+      - name: Norm route/registry parity
+        run: npm run check:norm-parity
+
+      # Pure filesystem check that every expected landing hero asset is present.
+      - name: Landing assets
+        run: npm run check:promo-landing-assets
+
   suites:
     name: suites
     runs-on: ubuntu-latest

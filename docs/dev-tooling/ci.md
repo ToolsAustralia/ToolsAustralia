@@ -36,7 +36,8 @@ cannot see.
 | Check | What it proves | Roughly |
 |---|---|---|
 | `static` | Types are consistent, and the whole repo passes lint — not just `src/` | ~2 min |
-| `suites` | **289 of the 292** logic suites pass: billing arithmetic, the Stripe webhook queue, renewal-grant reconciliation, shop entry grants, redeemables, promo multipliers, permissions, Cobber's legal-wording guard | ~5 min |
+| `drift` | Machine-generated files still match their inputs, every env var the code reads is registered, every test file is wired to a script, and Norm's routes match its registry | ~1 min |
+| `suites` | **290 of the 293** logic suites pass: billing arithmetic, the Stripe webhook queue, renewal-grant reconciliation, shop entry grants, redeemables, promo multipliers, permissions, Cobber's legal-wording guard | ~5 min |
 
 The `suites` job starts a **scratch MongoDB** — a blank database that lives and dies
 with the run, holds nothing, and is reachable only from that one machine. It is not
@@ -130,6 +131,42 @@ worse than none:
 - **Coverage cannot fall below a committed baseline** (`BASELINE=246`). Delete or
   rename a suite and the run fails until someone lowers that number on purpose and
   says why.
+
+## The `drift` job — four silent failures
+
+Everything here catches a defect that is **silent**: it ships, it looks fine in review,
+and it surfaces in production or not at all. Each runs in about a second and needs no
+database and no secrets.
+
+| Check | The silent failure it catches |
+|---|---|
+| `npm run prebuild` + `git diff` | Nine files in `src/generated/` are committed *and* machine-generated from images, videos and the partner spreadsheet. Vercel regenerates them on every deploy but never compares them to what is committed — so adding a video without re-running the generator gives you a correct-looking preview and a stale manifest that the tests actually import. |
+| `check:env:registry` | `.env.example` is the single source of truth for which env vars exist, and there is no runtime validation. An unregistered var means production reads `undefined` and behaves plausibly wrong. This found **29** already unregistered. |
+| `check:test-scripts` | A `*.test.ts` with no `test:*` entry runs nowhere, forever, and nothing says so. It looks like coverage in a review. This found one that had never executed. |
+| `check:norm-parity` | A Norm route with no registry entry is a runtime failure that `tsc`, `next build` **and** the drift check above all miss — the manifest is generated *from* the registry, so it still matches itself perfectly. |
+
+Run any of them yourself: `npm run check:env:registry`, `npm run check:test-scripts`,
+`npm run check:norm-parity`.
+
+**On marking an env var `[optional]`.** Some vars have a code-side default and are
+never set in practice. Put `[optional]` in the comment above the declaration in
+`.env.example`:
+
+```
+# Verbose Klaviyo payload logging. [optional]
+KLAVIYO_DEBUG_PROFILE=
+```
+
+It stays registered — so the CI check is satisfied and the var is discoverable — but
+`npm run check:env` will not demand it of every folder. Without that escape hatch,
+registering a debug flag makes `check:env` exit 1 in the main checkout and all ~30
+worktrees, and go noisy on every `npm run dev`, which is how vars end up unregistered
+in the first place.
+
+**What `check:norm-parity` does NOT prove.** It confirms the *paths* line up. It cannot
+confirm that each `responseSchema` matches what its handler actually returns — that
+mismatch is a runtime 500 and still needs `npm run norm:smoke` against a live server,
+which CI cannot run.
 
 ## Gotchas
 

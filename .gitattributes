@@ -4,3 +4,10 @@ src/generated/upsellImageManifest.ts linguist-generated=true
 # and a CRLF shell script fails on a Linux CI runner with `$'\r': command not found`.
 # .github/scripts/run-test-suites.sh runs on ubuntu-latest, so this is load-bearing.
 *.sh text eol=lf
+
+# Generated files are written with LF by their generators (scripts/build-*.ts). With
+# core.autocrlf=true a Windows checkout stores them as CRLF in the working tree, so
+# re-running `npm run prebuild` rewrites all nine as LF and they show as modified —
+# a false positive for the `drift` CI check when a developer runs it locally.
+# Pinning eol=lf makes the working tree match what the generators emit on every OS.
+src/generated/** text eol=lf

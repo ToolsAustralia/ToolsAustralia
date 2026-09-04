@@ -22,8 +22,8 @@ cd "$(dirname "$0")/../.." || exit 1
 # ---------------------------------------------------------------------------
 # SKIP — every suite CI does not run, with WHY.
 #
-# Measured 2026-09-04 against a seeded mongo:8.0 single-node replica set: of 292
-# suites, 289 pass and these 3 are excluded. Not inferred from names.
+# Measured 2026-09-04 against a seeded mongo:8.0 single-node replica set: of 293
+# suites, 290 pass and these 3 are excluded. Not inferred from names.
 #
 # Both remaining categories are permanent-or-bug, never environment:
 #   POLICY  — must never run automatically, whatever we provision.
@@ -72,9 +72,11 @@ SKIP=(
 # any other way.
 #
 # Measured 2026-09-04 against a seeded mongo:8.0 single-node replica set with the
-# five placeholder vars: 292 total - 3 skipped = 289 run, 289 pass, 0 fail.
+# five placeholder vars: 293 total - 3 skipped = 290 run, 290 pass, 0 fail.
+# (292 at first measurement; test:klaviyo-bulk-import was wired in Phase 3 after
+# check:test-scripts found it had never run anywhere.)
 # Before the database it was 246; the container plus the seed step revived 43.
-BASELINE=289
+BASELINE=290
 
 # ---------------------------------------------------------------------------
 # Discover suites. `test` (no colon) is an alias for test:anchor-billing, so
