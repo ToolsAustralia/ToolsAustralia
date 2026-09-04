@@ -29,7 +29,7 @@ import {
   getPartnerCatalogAccessPercentForPlanId,
   getPartnerDiscountCatalogSummaryForPackageId,
 } from "@/utils/partner-discounts/partner-catalog-visibility";
-import { formatExpiryLabelAEST } from "@/utils/common/timezone";
+import { formatExpiryLabelAEST, formatDateInAEST } from "@/utils/common/timezone";
 import type { BonusCodeTrigger } from "@/utils/redeemables/bonus-code-policy";
 
 // ============================================================
@@ -132,28 +132,27 @@ export function createSubscriptionRenewalFailedEvent(
     nextPaymentAttempt?: number | null; // Unix timestamp of next payment retry attempt
   }
 ): KlaviyoEvent {
-  // Format next_payment_attempt as human-readable string if available, otherwise empty string
-  // Format: "January 15, 2026 at 2:30 PM" (user-friendly format for email template)
+  // When Stripe will next retry the card, in SYDNEY time — e.g. "15 January 2026 at 2:30 PM".
+  //
+  // This is the one date in a dunning email a member might actually act on, and it is a
+  // Picos flow trigger (`Subscription Renewal Failed`). It carried its own inline copy of
+  // the `toLocaleString("en-US")` bug: US ordering, and no `timeZone`, so it rendered in the
+  // SERVER's zone (UTC on Vercel) and could name the wrong day — and, with a time attached,
+  // an hour up to 11 hours out. "2:30 PM" meaning 2:30am Sydney is worse than a bare date.
+  //
+  // Being inline, it would NOT have been fixed by changing `formatDateForKlaviyo`.
+  // Empty string when Stripe has exhausted its retries — the templates gate on truthiness.
   let nextPaymentAttemptFormatted = "";
   if (packageData.nextPaymentAttempt) {
     try {
-      const date = new Date(packageData.nextPaymentAttempt * 1000);
-      // Format as "January 15, 2026 at 2:30 PM"
-      nextPaymentAttemptFormatted = date.toLocaleString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-      });
+      nextPaymentAttemptFormatted = formatDateInAEST(
+        new Date(packageData.nextPaymentAttempt * 1000),
+        "d MMMM yyyy 'at' h:mm a"
+      );
     } catch {
-      // If date conversion fails, use ISO string as fallback
-      try {
-        nextPaymentAttemptFormatted = new Date(packageData.nextPaymentAttempt * 1000).toISOString();
-      } catch {
-        nextPaymentAttemptFormatted = packageData.nextPaymentAttempt.toString();
-      }
+      // An unparseable timestamp must not take the event with it — the whole builder throws
+      // and the emit is lost. Degrade to empty, which the templates already handle.
+      nextPaymentAttemptFormatted = "";
     }
   }
 
@@ -1079,6 +1078,11 @@ export function createSubscriptionCancellationRequestedEvent(
     accessEndsAt: Date | null;
   }
 ): KlaviyoEvent {
+  // Guard ONCE: an unparseable Date makes toISOString() throw, which used to take the whole
+  // builder with it and silently drop the event.
+  const usableAccessEndsAt =
+    data.accessEndsAt && Number.isFinite(data.accessEndsAt.getTime()) ? data.accessEndsAt : null;
+
   return {
     event: "Subscription Cancellation Requested",
     customer_properties: getCustomerProperties(user),
@@ -1094,7 +1098,35 @@ export function createSubscriptionCancellationRequestedEvent(
           })
         : {}),
       cancelled_at: data.cancelledAt.toISOString(),
-      ...(data.accessEndsAt ? { access_ends_at: data.accessEndsAt.toISOString() } : {}),
+      // `toISOString()` raises RangeError on an unparseable Date, which threw the whole
+      // builder before this guard. The emit is wrapped non-blocking at the call site
+      // (CancelSubscriptionService), so a cancellation never failed — but the event was
+      // silently lost. Validate once and reuse for both the raw value and the label.
+      ...(usableAccessEndsAt ? { access_ends_at: usableAccessEndsAt.toISOString() } : {}),
+      /**
+       * DISPLAY-READY twin of `access_ends_at`, for the cancellation-confirmation email.
+       *
+       * That email's whole job is to name the date access actually stops — a member who
+       * cancels keeps everything until the paid period ends (CancelSubscriptionService sets
+       * `endDate = stripeEndDate` and leaves `isActive` true), so the date is the difference
+       * between "your perks have gone" and "you have until the 24th".
+       *
+       * Formatted HERE for the same two reasons as the profile `*_label` properties:
+       * Klaviyo's drag-and-drop editor stores a merge tag as a single EXPRESSION, so the raw
+       * ISO instant would print verbatim; and it must be AEST, because a renewal stored as
+       * 14:00Z is the NEXT day in Sydney.
+       *
+       * Always a string — "when your current period ends" when the date is unknown — because
+       * the editor cannot hide one line of a multi-line text block.
+       */
+      access_ends_at_label: (() => {
+        if (!usableAccessEndsAt) return "when your current period ends";
+        try {
+          return formatDateInAEST(usableAccessEndsAt, "d MMMM yyyy");
+        } catch {
+          return "when your current period ends";
+        }
+      })(),
     },
   };
 }

@@ -1008,9 +1008,27 @@ Before persisting, the webhook runs a **persisted-UTM reconcile** ([reconcilePer
 | Entries / points / spend | `accumulated_entries`, `rewards_points`, `entries_purchased`, `giveaways_entered`, `member/one_time/upsell/mini_draw_entries`, `lifetime_value`, `total_spent`, `first/last_purchase_date`, `total_one_time/mini_draw_packages` |
 | Upsell engagement | `total_upsells_purchased`, `upsell_total_shown/accepted/declined`, `upsell_conversion_rate`, `upsell_last_interaction` |
 | Referral / partner | `referral_code`, `referral_successful_conversions`, `referral_total_entries_awarded`, `partner_discount_active/queued_count/total_days/next_activation_date`, `partner_discount_label` |
-| Segmentation / current draw | `brand_interest` (removed once any purchase is made); `current_draw_id/name/start_date/subscription_active/one_time_packages/entries` |
+| Segmentation / current draw | `brand_interest` (the brand promo page they registered through; removed once any purchase is made); `current_draw_id/name/start_date/subscription_active/one_time_packages/entries` |
 
 
+
+
+**Cancelling does not end a membership immediately, and the emails must say so.** A member who cancels keeps
+member pricing, partner discounts and free entries until the period they have paid for runs out — only
+`autoRenew` flips, and `isActive` stays true (`CancelSubscriptionService`). The exception is a past-due member,
+who loses access at once. `Subscription Cancellation Requested` now carries `access_ends_at_label` (e.g.
+`"24 September 2026"`, AEST) so a confirmation email can name that date without the marketing tool having to
+format an ISO timestamp it cannot format. Every other customer-facing date is now formatted in Sydney time too: until 2026-09-04 the
+receipt and renewal emails printed the previous day for roughly a third of customers, because three
+separate formatters rendered in UTC with US ordering.
+**`brand_interest` is captured at registration and now survives.** It records which brand's
+promo page a visitor signed up through (`dewalt`, `makita`, `milwaukee`, `ryobi`, `hikoki`,
+`stihl`), and is cleared when they make any purchase. Until 2026-09-04 it was silently
+overwritten to `"milwaukee"` by the next profile sync after signup — 9,155 of 39,076
+attributed users were affected, so a HiKOKI or STIHL visitor was marketed to as a Milwaukee
+one. It is now read from the persisted `signupAttribution.promotionSlug`, so every sync
+agrees. Users who arrived through no promo page (~33%) still receive `"milwaukee"`, which
+is a default rather than a stated preference — worth knowing before segmenting on it.
 **Three of these are display-only.** `membership_label` ("Tradie Member" / "Not a member"), `partner_discount_label` ("Active" / "Not active") and
 `next_renewal_label` (a date, "Payment retrying", "Renewal date pending" or "Auto-renew off") exist so a Klaviyo merge tag can print a value
 to a customer. They duplicate `subscription_tier`, `partner_discount_active` and `next_renewal_date`, which stay

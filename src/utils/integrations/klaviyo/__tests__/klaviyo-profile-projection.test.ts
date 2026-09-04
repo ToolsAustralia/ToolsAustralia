@@ -5,6 +5,7 @@ import {
   calculateLifetimeValue,
   deriveMembershipLabel,
   deriveNextRenewalLabel,
+  resolveBrandInterest,
 } from "../klaviyo-helpers";
 import { emptyGrantLedger } from "@/utils/payment/payment-event-net-queries";
 
@@ -158,6 +159,54 @@ function testLapsedMemberIsNotStillATier() {
   assert.equal(deriveMembershipLabel(lapsed, "paused"), "Foreman Member");
 }
 
+// ---------------------------------------------------------------------------
+// brand_interest precedence. Measured on production 2026-09-04: 9,155 non-milwaukee
+// signups (makita 3,156 · dewalt 2,572 · ryobi 2,240 · hikoki 1,023 · stihl 164) were
+// being relabelled "milwaukee" because every sync path except registration passed no
+// slug and fell through to the default.
+// ---------------------------------------------------------------------------
+
+function visitor(promotionSlug?: string): IUser {
+  return {
+    signupAttribution: promotionSlug === undefined ? undefined : { promotionSlug },
+    oneTimePackages: [],
+    miniDrawPackages: [],
+    upsellPurchases: [],
+  } as unknown as IUser;
+}
+
+// THE FIX. A sync with no parameter must read the persisted slug, not default to milwaukee.
+function testPersistedSlugSurvivesASyncThatPassesNoParameter() {
+  assert.equal(resolveBrandInterest(visitor("hikoki-gearwrench")), "hikoki");
+  assert.equal(resolveBrandInterest(visitor("stihl-milwaukee")), "stihl");
+  assert.equal(resolveBrandInterest(visitor("makita-milwaukee")), "makita");
+  assert.equal(resolveBrandInterest(visitor("dewalt-kincrome")), "dewalt");
+  assert.equal(resolveBrandInterest(visitor("ryobi-milwaukee")), "ryobi");
+  // the regression itself: these must NOT come back as milwaukee
+  assert.notEqual(resolveBrandInterest(visitor("hikoki-gearwrench")), "milwaukee");
+  assert.notEqual(resolveBrandInterest(visitor("stihl-milwaukee")), "milwaukee");
+}
+
+// The registration routes hold a slug the user document may not be saved with yet.
+function testExplicitParameterWinsOverPersisted() {
+  assert.equal(resolveBrandInterest(visitor("milwaukee-sidchrome"), "stihl-milwaukee"), "stihl");
+}
+
+function testNoSlugStillDefaultsToMilwaukee() {
+  assert.equal(resolveBrandInterest(visitor(undefined)), "milwaukee");
+  assert.equal(resolveBrandInterest(visitor("")), "milwaukee");
+  assert.equal(resolveBrandInterest(visitor("cash-prize")), "milwaukee");
+}
+
+// null is NOT the same as undefined here — the Klaviyo upsert merges, so null is what
+// actively REMOVES the tag. Returning undefined would leave a buyer tagged forever.
+function testPurchaseRemovesTheTagWithNull() {
+  const buyer = { subscription: { isActive: true }, signupAttribution: { promotionSlug: "hikoki-gearwrench" } } as unknown as IUser;
+  assert.equal(resolveBrandInterest(buyer), null);
+  const packBuyer = { oneTimePackages: [{}], signupAttribution: { promotionSlug: "stihl-milwaukee" } } as unknown as IUser;
+  assert.equal(resolveBrandInterest(packBuyer), null);
+}
+
 function run() {
   testMemberEntriesComeFromLedgerNotCatalogue();
   testOtherBucketsPassThroughFromLedger();
@@ -172,6 +221,10 @@ function run() {
   testMembershipLabelMapsIdToPhrase();
   testMembershipLabelIsAlwaysPopulated();
   testLapsedMemberIsNotStillATier();
+  testPersistedSlugSurvivesASyncThatPassesNoParameter();
+  testExplicitParameterWinsOverPersisted();
+  testNoSlugStillDefaultsToMilwaukee();
+  testPurchaseRemovesTheTagWithNull();
   console.log("klaviyo-profile-projection tests passed");
 }
 

@@ -15,6 +15,7 @@
  */
 
 import assert from "node:assert/strict";
+import { formatDateForKlaviyo } from "../klaviyo-helpers";
 
 /**
  * Allowlist of canonical property names that may appear on any event added
@@ -66,6 +67,11 @@ export const CANONICAL_KEYS: ReadonlySet<string> = new Set([
   // Bonus Code Issued (per-customer coupon expiry)
   "code",
   "expires_at_label",
+  // Subscription Cancellation Requested — the day access actually stops, formatted in AEST.
+  // A display twin exists because Klaviyo stores a merge tag as one EXPRESSION and cannot
+  // format an ISO instant, and because an anchor-24 period end stored as 14:00Z is the NEXT
+  // day in Sydney. Always a string, never blank.
+  "access_ends_at_label",
   "trigger",
   // Klaviyo standard revenue triple (only on Placed Order / Refunded Order — included for completeness)
   "Currency",
@@ -189,6 +195,8 @@ import {
   createStartedCheckoutEvent,
   createBonusCodeIssuedEvent,
   createSubscriptionCancellationRequestedEvent,
+  createSubscriptionCancelledEvent,
+  createSubscriptionRenewalFailedEvent,
   createOneTimePackagePurchasedEvent,
   createPlacedOrderEvent,
 } from "../klaviyo-events";
@@ -455,6 +463,36 @@ function testSubscriptionCancellationRequestedShape() {
   // the implementation would pass even if the builder swapped the two fields.
   assert.equal(sample.properties.cancelled_at, "2026-08-26T04:30:00.000Z");
   assert.equal(sample.properties.access_ends_at, "2026-09-24T13:59:59.000Z");
+
+  // DISPLAY-READY twin. The cancellation-confirmation email's whole job is to name the day
+  // access stops, and Klaviyo's editor cannot format an ISO instant — a merge tag prints it
+  // verbatim. AEST, not UTC: 13:59:59Z is still the 24th in Sydney, but an anchor-24 renewal
+  // stored as 14:00Z is the 25th, so a UTC label would name the wrong day.
+  assert.equal(sample.properties.access_ends_at_label, "24 September 2026");
+}
+
+// A member who cancels keeps everything until the paid period ends, so the confirmation
+// email must name a date. These are the two ways it can fail to have one.
+function testAccessEndsAtLabelNeverThrowsAndNeverBlanks() {
+  // Unparseable Date. `toISOString()` raises RangeError on this, which used to take the
+  // whole builder down and silently drop the event (the emit is wrapped non-blocking at
+  // CancelSubscriptionService, so the cancellation itself always survived).
+  const broken = createSubscriptionCancellationRequestedEvent(fakeUser(), {
+    packageData: null,
+    cancelledAt: new Date("2026-08-26T04:30:00.000Z"),
+    accessEndsAt: new Date("not-a-date"),
+  });
+  assert.equal(broken.properties.access_ends_at_label, "when your current period ends");
+  assert.equal(broken.properties.access_ends_at, undefined);
+
+  // Unknown date. Never empty — the Klaviyo editor cannot hide one line of a text block,
+  // so a blank would leave a dangling label in the customer's email.
+  const unknown = createSubscriptionCancellationRequestedEvent(fakeUser(), {
+    packageData: null,
+    cancelledAt: new Date("2026-08-26T04:30:00.000Z"),
+    accessEndsAt: null,
+  });
+  assert.equal(unknown.properties.access_ends_at_label, "when your current period ends");
 }
 
 function testSubscriptionCancellationRequestedOmitsUnresolvedPackage() {
@@ -676,6 +714,67 @@ function testFinalizeShopOrderStillCallsTheEmitter() {
   );
 }
 
+// ============================================================
+// Subscription Cancelled (legacy) — date formatting
+// ============================================================
+
+// This event is LEGACY and deliberately not held to the canonical shape (it ships
+// package_name "Subscription" and the raw package id as `tier`). What IS pinned is the
+// date format, because `formatDateForKlaviyo` feeds 15 properties and one of them
+// (`renewal_date`) is printed verbatim by a LIVE transactional email.
+//
+// It used to be `toLocaleDateString("en-US")` with no timeZone: US ordering, formatted in
+// the SERVER's zone. Measured 2026-09-04 against production, 112 of 300 consecutive
+// `Subscription Renewed` events (37.3%) printed the PREVIOUS Sydney day.
+function testDatePropertiesAreAESTAndAUFormatted() {
+  const sample = createSubscriptionCancelledEvent(fakeUser(), {
+    packageId: "tradie-subscription",
+    packageName: "Subscription",
+    tier: "tradie-subscription",
+  });
+
+  const date = sample.properties.cancellation_date as string;
+
+  // AU ordering — "4 September 2026", never the en-US "September 4, 2026".
+  assert.match(date, /^\d{1,2} [A-Z][a-z]+ \d{4}$/);
+  assert.doesNotMatch(date, /,/);
+
+  // The boundary that caused the bug: 14:30Z is already the NEXT day in Sydney. Asserted
+  // through the shared helper directly, since the event itself stamps "now".
+  assert.equal(formatDateForKlaviyo(new Date("2026-09-23T14:30:00.000Z")), "24 September 2026");
+  assert.notEqual(formatDateForKlaviyo(new Date("2026-09-23T14:30:00.000Z")), "23 September 2026");
+  // ...and a time safely inside the Sydney day is unaffected.
+  assert.equal(formatDateForKlaviyo(new Date("2026-09-23T09:00:00.000Z")), "23 September 2026");
+}
+
+// `next_payment_attempt` has its OWN inline formatter — fixing the shared helper does not
+// touch it. It carries a TIME, so a UTC render was wrong by up to 11 hours as well as a day:
+// it printed "2:30 PM" for an instant that is 12:30 AM in Sydney.
+function testNextPaymentAttemptIsAESTWithTime() {
+  const ev = createSubscriptionRenewalFailedEvent(fakeUser(), {
+    packageId: "tradie-subscription",
+    packageName: "Tradie",
+    tier: "tradie",
+    failureReason: "card_declined",
+    amount: 20,
+    paymentIntentId: "pi_x",
+    nextPaymentAttempt: Date.parse("2026-09-23T14:30:00.000Z") / 1000,
+  });
+  assert.equal(ev.properties.next_payment_attempt, "24 September 2026 at 12:30 AM");
+
+  // Stripe has exhausted its retries — empty, which the templates gate on.
+  const exhausted = createSubscriptionRenewalFailedEvent(fakeUser(), {
+    packageId: "tradie-subscription",
+    packageName: "Tradie",
+    tier: "tradie",
+    failureReason: "card_declined",
+    amount: 20,
+    paymentIntentId: "pi_x",
+    nextPaymentAttempt: null,
+  });
+  assert.equal(exhausted.properties.next_payment_attempt, "");
+}
+
 function run() {
   testCanonicalKeyAccepted();
   testNonCanonicalKeyRejected();
@@ -690,6 +789,9 @@ function run() {
   testBonusCodeIssuedShape();
   testBonusCodeIssuedEmitsThePassedExpiresAt();
   testSubscriptionCancellationRequestedShape();
+  testAccessEndsAtLabelNeverThrowsAndNeverBlanks();
+  testDatePropertiesAreAESTAndAUFormatted();
+  testNextPaymentAttemptIsAESTWithTime();
   testSubscriptionCancellationRequestedOmitsUnresolvedPackage();
   testOneTimePackagePurchasedCarriesHadActiveSubscription();
   testShopPlacedOrderCarriesIsRenewalFalse();

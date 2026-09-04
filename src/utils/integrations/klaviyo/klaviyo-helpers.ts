@@ -239,28 +239,8 @@ export async function userToKlaviyoProfile(
   // Determine brand interest
   // If user has made purchases, explicitly set to null to remove tag from Klaviyo
   // If no purchases, use brand from signup or default to "milwaukee"
-  const userHasPurchases = hasUserMadePurchase(user);
-  let brandInterest: string | null | undefined;
-
-  if (userHasPurchases) {
-    // User has made purchases - explicitly set to null to remove tag from Klaviyo
-    brandInterest = null;
-    // console.log(
-    //   `🏷️ User ${user.email} has purchases - removing brand_interest tag. Has subscription: ${!!user.subscription
-    //     ?.isActive}, upsells: ${user.upsellPurchases?.length || 0}, one-time: ${
-    //     user.oneTimePackages?.length || 0
-    //   }, mini-draw: ${user.miniDrawPackages?.length || 0}`
-    // );
-  } else {
-    // User hasn't purchased yet - set brand interest
-    if (brandInterestFromSignup) {
-      brandInterest = extractBrandFromSlug(brandInterestFromSignup);
-    } else {
-      // Default to milwaukee if no brand provided
-      brandInterest = "milwaukee";
-    }
-    // console.log(`🏷️ User ${user.email} has no purchases - setting brand_interest to: ${brandInterest}`);
-  }
+  // See resolveBrandInterest — null actively REMOVES the tag once a user has purchased.
+  const brandInterest: string | null = resolveBrandInterest(user, brandInterestFromSignup);
 
   const klaviyoProfile: KlaviyoProfile = {
     email: user.email,
@@ -629,12 +609,18 @@ export function formatInvoiceDataForKlaviyo(invoiceData: {
     total_price: number;
   }>;
 }) {
-  // Format date to readable format (e.g., "December 22, 2025")
-  const invoiceDate = new Date().toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  // Sydney time, AU ordering — e.g. "22 December 2025".
+  //
+  // THE HIGHEST-STAKES DATE ON THE PLATFORM: this is the only producer of `invoice_date`,
+  // and the live `Invoice` flow (YsqZbb, subject "Receipt") prints it under the label
+  // "Invoice date". A receipt is a tax record.
+  //
+  // It carried its own inline copy of the `toLocaleDateString("en-US")` bug — US ordering,
+  // and no `timeZone` so it formatted in UTC. Measured on 200 consecutive real
+  // `Invoice Generated` events (2026-08-30 → 2026-09-04), 60 (30.0%) printed the PREVIOUS
+  // Sydney day. Being a separate function, it would NOT have been fixed by changing
+  // `formatDateForKlaviyo` — which is exactly why it survived that long.
+  const invoiceDate = formatDateInAEST(new Date(), "d MMMM yyyy");
 
   // Format total amount as string with 2 decimal places (already in dollars)
   const formattedTotalAmount = invoiceData.totalAmount.toFixed(2);
@@ -741,13 +727,36 @@ export function formatCanonicalPackageData(p: {
 /**
  * Format date for Klaviyo events
  */
+/**
+ * Human-readable date for a Klaviyo event property, in SYDNEY time.
+ *
+ * This used to be `toLocaleDateString("en-US")` with NO `timeZone` option, which had two
+ * defects for an Australian audience:
+ *
+ *   1. US ordering — "September 23, 2026" — everywhere else in the product reads
+ *      "23 September 2026".
+ *   2. It formatted in the SERVER's zone, which is UTC on Vercel. Anything fired between
+ *      14:00Z and 24:00Z — Sydney 00:00–10:00, i.e. overnight to mid-morning — printed the
+ *      PREVIOUS Sydney day.
+ *
+ * That was not theoretical. Measured against production 2026-09-04, on the ONE property here
+ * with a live renderer: the `Membership Renewal` flow (UpzmuB) prints
+ * `{{ event.renewal_date }}` verbatim, and 112 of 300 consecutive `Subscription Renewed`
+ * events (37.3%) carried the wrong Sydney day. Daylight saving from 2026-10-04 widens the
+ * window to 13:00Z–24:00Z (45.8% of the clock) for six months.
+ *
+ * Safe to change: across the whole Klaviyo account — 42 flows / 45 filter objects, 20
+ * segments, 299 renderable assets — nothing FILTERS on any of these date strings, and the
+ * only renderers print them verbatim with no Liquid `date:` filter. So a format change is a
+ * copy improvement, never a parse failure.
+ *
+ * NOTE: this is not the only producer of a date string in this file. `invoice_date` has its
+ * own copy in `formatInvoiceDataForKlaviyo` below, and `next_payment_attempt` has one in
+ * klaviyo-events.ts — both fixed alongside this. Grep for `toLocaleDateString` /
+ * `toLocaleString` before assuming a date is formatted here.
+ */
 export function formatDateForKlaviyo(date?: Date): string {
-  const dateToFormat = date || new Date();
-  return dateToFormat.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return formatDateInAEST(date || new Date(), "d MMMM yyyy");
 }
 
 /**
@@ -794,6 +803,32 @@ export type MembershipStatus = "active" | "past_due" | "canceled" | "paused" | "
  * Pure and exported so the id→name mapping is testable without a database. See
  * `membership_label` in `userToKlaviyoProfile` for why a display twin exists at all.
  */
+/**
+ * The brand a not-yet-purchased user is interested in, or `null` once they buy anything.
+ *
+ * `null` is meaningful and NOT the same as omitting: the Klaviyo upsert merges, so `null` is
+ * what actively REMOVES the tag from a profile after a purchase. Returning `undefined` here
+ * would leave a buyer tagged forever.
+ *
+ * PRECEDENCE — parameter, then persisted, then default:
+ *  1. `brandInterestFromSignup` — the registration routes hold a slug the user document may
+ *     not have been saved with yet.
+ *  2. `user.signupAttribution.promotionSlug` — persisted and indexed. This is the fix: every
+ *     OTHER sync path (verify-email, auto-login, update-profile, admin edit, and the
+ *     reconciliation sweep) passes no parameter, and used to fall through to the default and
+ *     overwrite the real brand. Measured on production 2026-09-04: 9,155 non-milwaukee
+ *     signups were being relabelled "milwaukee" by the next sync after they registered.
+ *  3. `extractBrandFromSlug(undefined)` → "milwaukee" for the ~33% with no slug at all.
+ *     That asserts an interest they never expressed; changing it would strip the property
+ *     from ~19k profiles and is a deliberate call, not a side effect of this fix.
+ *
+ * Pure and exported so the precedence is testable without a database.
+ */
+export function resolveBrandInterest(user: IUser, brandInterestFromSignup?: string | null): string | null {
+  if (hasUserMadePurchase(user)) return null;
+  return extractBrandFromSlug(brandInterestFromSignup ?? user.signupAttribution?.promotionSlug);
+}
+
 export function deriveMembershipLabel(user: IUser, membershipStatus: MembershipStatus): string {
   // GATE ON STATUS, NOT ON packageId. A lapsed subscription keeps its `packageId` on the
   // record — verified in production: a `never_subscribed` profile still carried
