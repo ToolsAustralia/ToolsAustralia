@@ -152,6 +152,117 @@ jobs:
       - name: Landing assets
         run: npm run check:promo-landing-assets
 
+  # Reads the DEPLOYED preview with a real browser. This is the only automated defence
+  # of the rule-11 free-entry wording (CLAUDE.md §11) outside Cobber's FAQ corpus.
+  #
+  # ADVISORY BY DESIGN — never add this to branch protection. It depends on a Vercel
+  # deployment existing, and a required check that never reports (deployment skipped,
+  # cancelled, or a fork PR) leaves the PR permanently unmergeable. `continue-on-error`
+  # keeps the job's own result visible while the workflow stays green.
+  #
+  # Safe to run: DJ confirmed 2026-09-04 that Preview deployments read the DEV database,
+  # not production — verified independently by comparing connection strings, which point
+  # at different Atlas clusters. EXTERNAL mode is read-only regardless: e2e/run.ts:244
+  # routes to runExternal() before any DB wipe/seed or server boot, and hard-excludes
+  # @purchase and @admin.
+  preview:
+    name: preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+    permissions:
+      contents: read
+      # An explicit permissions block sets every unlisted scope to none, and finding the
+      # preview URL needs to read the deployment the Vercel integration created.
+      deployments: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # `npm ci` installs NO browsers — all three playwright packages have
+      # hasInstallScript:false. Cache on the resolved version so a playwright bump
+      # invalidates it rather than silently reusing a mismatched build (a local run hit
+      # exactly that: "Executable doesn't exist at …chromium_headless_shell-1228").
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      # chromium only. chromium-desktop AND mobile-chrome both run on it, and mobile
+      # coverage is not optional here: the rule-11 breach this job exists to catch sat
+      # inside `lg:hidden` and was invisible at a desktop viewport. mobile-safari would
+      # additionally need webkit, which is a much larger download for a third viewport.
+      - name: Install Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # Vercel publishes a GitHub Deployment per push. Poll for one whose status is
+      # success and take its environment_url.
+      # Use pull_request.head.sha, NOT github.sha — on a pull_request event github.sha
+      # is the ephemeral merge commit, which Vercel never deploys and which therefore
+      # never matches.
+      - name: Wait for the Vercel preview
+        id: deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          for attempt in $(seq 1 60); do
+            ids=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
+                       -H "Accept: application/vnd.github+json" \
+                       "${api}/deployments?sha=${SHA}&per_page=100" | jq -r '.[].id')
+            for id in $ids; do
+              url=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
+                         -H "Accept: application/vnd.github+json" \
+                         "${api}/deployments/${id}/statuses?per_page=100" \
+                    | jq -r 'map(select(.state == "success")) | .[0].environment_url // empty')
+              if [ -n "$url" ] && [ "$url" != "null" ]; then
+                echo "url=$url" >> "$GITHUB_OUTPUT"
+                echo "preview ready: $url"
+                exit 0
+              fi
+            done
+            echo "attempt ${attempt}/60 — no successful preview deployment yet for ${SHA}"
+            sleep 15
+          done
+          echo "No successful Vercel preview deployment for ${SHA} after 15 minutes." >&2
+          echo "This job does NOT pass by default — a preview that was never scanned is not a clean scan." >&2
+          exit 1
+
+      # EXTERNAL mode: no database, no Stripe, no secrets, no server boot. It reads
+      # whatever is deployed, so it can legitimately flag copy this PR did not touch —
+      # that is the accepted cost of scanning the real deployed build. Re-run once the
+      # offending copy is fixed on the branch it came from.
+      - name: Legal-copy + smoke scan against the preview
+        env:
+          E2E_TARGET_URL: ${{ steps.deployment.outputs.url }}
+        run: npx tsx e2e/run.ts --grep @smoke --project chromium-desktop --project mobile-chrome
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preview-e2e-report
+          path: |
+            e2e-artifacts/report
+            e2e-artifacts/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
   suites:
     name: suites
     runs-on: ubuntu-latest

@@ -38,6 +38,7 @@ cannot see.
 | `static` | Types are consistent, and the whole repo passes lint — not just `src/` | ~2 min |
 | `drift` | Machine-generated files still match their inputs, every env var the code reads is registered, every test file is wired to a script, and Norm's routes match its registry | ~1 min |
 | `suites` | **290 of the 293** logic suites pass: billing arithmetic, the Stripe webhook queue, renewal-grant reconciliation, shop entry grants, redeemables, promo multipliers, permissions, Cobber's legal-wording guard | ~5 min |
+| `preview` | Opens a real browser against the deployed preview and reads the pages, checking the free-entry wording. **Advisory — never blocks a merge** | ~6 min wait + 2 min |
 
 The `suites` job starts a **scratch MongoDB** — a blank database that lives and dies
 with the run, holds nothing, and is reachable only from that one machine. It is not
@@ -167,6 +168,43 @@ in the first place.
 confirm that each `responseSchema` matches what its handler actually returns — that
 mismatch is a runtime 500 and still needs `npm run norm:smoke` against a live server,
 which CI cannot run.
+
+## The `preview` job — the legal-wording guard
+
+This one opens an actual browser against the Vercel preview deployment for the pull
+request and reads the pages the way a customer would. It is the **only** automated
+defence of the free-entry wording (CLAUDE.md §11) outside Cobber's FAQ corpus — the
+wording that has a trade-promotion permit attached.
+
+**Why it exists.** On 2026-08-12 the mini-draw detail page shipped `$1 / "Per entry"`
+and its hero shipped `$1 / "Entry"`. Both sat in production for 23 days. The banned-word
+list already contained `per entry` — **the pattern was never the problem**. The page list
+did not include the mini-draw *detail* route, so nothing ever looked at it. The same rule
+had already been applied and then regressed once before, in a design-handoff rebuild.
+
+Three things follow from that, all now baked in:
+
+1. **Adding a customer-facing route means adding it to `PAGES`** in
+   `e2e/specs/marketing/legal-copy.spec.ts`. There is no discovery mechanism; the list
+   is the coverage.
+2. **At least one mobile viewport must run.** The offending strip was inside `lg:hidden`
+   — invisible at a desktop viewport to a human reviewer *and* to any desktop-only scan.
+   The job runs `chromium-desktop` and `mobile-chrome`.
+3. **An empty scan must fail, not pass.** If the detail page renders no draw content,
+   the test fails loudly rather than reporting green having read nothing.
+
+**It is advisory on purpose, and must stay that way.** It depends on a Vercel deployment
+existing. A required check that never reports — deployment skipped, cancelled, or a pull
+request from a fork — leaves the PR permanently unmergeable, which is worse than the gap
+it closes. Never add `preview` to branch protection.
+
+**It reads whatever is deployed**, so it can legitimately flag copy your PR did not
+touch. That is the accepted cost of scanning the real build. Fix the copy on the branch
+it came from and re-run.
+
+**Safe to run:** preview deployments read the **dev** database, not production, and the
+external mode is read-only regardless — it skips all database setup and hard-excludes the
+purchase and admin suites.
 
 ## Gotchas
 
