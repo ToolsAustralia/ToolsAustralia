@@ -121,12 +121,16 @@ ratchet, not a break — it forces the count to be changed knowingly.
 A `*.test.ts` file with no matching `test:*` entry in `package.json` runs nowhere,
 forever, and nothing tells you. One suite in this repo is in that state today.
 
-### Lint has almost no headroom
+### Lint runs on a budget, with deliberate headroom
 
-`npm run lint` allows a fixed number of warnings and sits very close to it. Add one
-unrelated warning and CI goes red on a rule you never touched. If that happens, fix
-the warning — do not raise the ceiling. The ceiling is the only thing stopping the
-count creeping upward forever. It lives in `package.json`, not in the workflow.
+`npm run lint` allows at most **77** warnings and currently emits **70** — so there are
+seven spare. That gap is on purpose. It used to be 77 of 77, meaning the next warning
+anyone added turned CI red on a rule they had never touched, which is the fastest way
+to teach people that a red tick is noise.
+
+If you use up the headroom, **fix the warning — do not raise the ceiling.** The ceiling
+is the only thing stopping the count creeping upward forever, and it is meant to go
+down, not up. It lives in `package.json`, not in the workflow.
 
 ### Editing anything under `.github/` needs a doc update
 
