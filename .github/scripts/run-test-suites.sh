@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# run-test-suites.sh — run every `test:*` npm script that can pass without secrets.
+# run-test-suites.sh — run every `test:*` npm script that CI can run.
 #
 # This is the body of CI's "test suites" step, kept out of the workflow YAML for one
 # reason: you can run it yourself. Reproducing a red CI should not require pushing.
@@ -8,8 +8,10 @@
 #   bash .github/scripts/run-test-suites.sh            # run them
 #   bash .github/scripts/run-test-suites.sh --list     # just print what would run/skip
 #
-# Locally you will have a .env.local, so suites the runner cannot pass will pass for
-# you. That difference is the whole reason the SKIP table below exists.
+# It expects the same environment the `suites` job provides — a MongoDB with the
+# fixtures seeded, plus the five placeholder vars. See "Run the checks yourself" in
+# docs/dev-tooling/ci.md for the two docker commands that reproduce it locally.
+# Without a database, 43 suites fail here that pass in CI.
 #
 # Docs: docs/dev-tooling/ci.md
 
@@ -18,93 +20,41 @@ set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
 # ---------------------------------------------------------------------------
-# SKIP — every suite that cannot pass on a runner today, with WHY.
+# SKIP — every suite CI does not run, with WHY.
 #
-# Measured 2026-09-04 by running all 292 suites with no .env.local and every
-# relevant variable unset: 246 passed, these 46 failed. Not inferred from names.
+# Measured 2026-09-04 against a seeded mongo:8.0 single-node replica set: of 292
+# suites, 289 pass and these 3 are excluded. Not inferred from names.
 #
-# The reason tags are load-bearing. `NEEDS_*` means "we could turn this on by
-# giving CI a thing" and Phase 2 of docs/superpowers/specs/2026-09-04-ci-pipeline-design.md
-# does exactly that. POLICY and BROKEN never become NEEDS_*.
+# Both remaining categories are permanent-or-bug, never environment:
+#   POLICY  — must never run automatically, whatever we provision.
+#   BROKEN  — a real defect. Fix it and delete the line.
+#
+# There is deliberately no third category for "needs a service we could provide".
+# Before the database there were 43 such suites in four NEEDS_* groups; Phase 2
+# provisioned what they needed instead of leaving them listed here. If you find
+# yourself adding a NEEDS_* group back, provision the thing instead — a skip list
+# that accumulates environment excuses is how the previous one rotted.
 # ---------------------------------------------------------------------------
 
-# NEEDS_MONGO — src/lib/mongodb.ts throws from getMongoURI() without MONGODB_URI.
-SKIP_NEEDS_MONGO=(
-  test:bonus-code-mint
-  test:bonus-code-webhook
-  test:campaign-enrolment
-  test:campaign-window
-  test:checkout-intent-recovery
-  test:claim-grant-compensation
-  test:code-visibility
-  test:dashboard-stats-aggregator
-  test:dashboard-stats-reader
-  test:dashboard-stats-service
-  test:global-campaign-enrolment
-  test:hourly-revenue
-  test:membership-snapshot-write-once
-  test:norm-call-log
-  test:norm-kill-switch
-  test:norm-pending
-  test:norm-permissions
-  test:norm-receipt
-  test:norm-user-service-account
-  test:norm-with-norm
-  test:recovery-claim
-  test:renewal-grant-reconciler
-  test:resolve-norm-date-range
-  test:upsell-entries-v2
-  test:upsell-multiplier-resolver
-  test:webhook-queue-claim
-  test:webhook-queue-enqueue
-  test:webhook-queue-mark-result
-  test:webhook-queue-orphan-recovery
-)
-
-# NEEDS_E2E_MONGO — these read E2E_MONGODB_URI, never MONGODB_URI, and refuse to
-# fall back so they can never touch a real database. checkout-reuse additionally
-# requires /e2e/i to match the whole connection string.
-SKIP_NEEDS_E2E_MONGO=(
-  test:shop-checkout-reuse
-  test:shop-entries
-)
-
-# NEEDS_STRIPE_KEY — src/lib/stripe.ts:4-5 throws at module scope, so these die at
-# import without ever calling Stripe. Presence is enough; validity is not needed.
-SKIP_NEEDS_STRIPE_KEY=(
-  test:ack-gate
-  test:allowlist-reconcile
-  test:campaign-refund-reversal
-  test:force-charge-mint-map
-  test:mint-current-cycle
-  test:prepare-recovered-cycle
-  test:webhook-queue-process
-  test:webhook-queue-replay-safe
-  test:zero-trial-guard
-)
-
-# NEEDS_AUTH_ENV — src/lib/auth.ts:24-40 gates on FIVE vars (NEXTAUTH_SECRET,
-# NEXTAUTH_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, MONGODB_URI) with a !value
-# test, and throws at module scope. Note: an empty string counts as missing, and
-# next-auth's parseUrl throws on NEXTAUTH_URL='' — never blank these, unset them.
-SKIP_NEEDS_AUTH_ENV=(
-  test:api-auth-permissions
-  test:campaign-code-metadata
-  test:staff-activity
-)
-
-# POLICY — never runs in CI, no matter what secrets exist. This one POSTs and GETs
-# against the LIVE production partner portal myrewards.toolsaustralia.com.au, so
-# giving CI the secret would fire real third-party traffic on every push.
+# POLICY — never runs in CI, no matter what secrets or services exist. This one
+# POSTs and GETs against the LIVE production partner portal
+# myrewards.toolsaustralia.com.au (:126, :148), so giving CI the secret would fire
+# real third-party traffic on every push. This category never becomes NEEDS_*.
 SKIP_POLICY=(
   test:igodirect-sso
 )
 
-# BROKEN — genuinely failing on main, not an environment problem. Each must be
-# fixed and removed from this list; this category is meant to be empty.
+# BROKEN — genuinely failing on main. Not an environment problem, and NOT fixed by
+# the database. Each must be fixed and its line deleted; this category is meant to
+# be empty. Keeping "cannot run here" and "known broken" in one undifferentiated
+# list is what destroyed the credibility of the previous skip list.
+#
 #   subscription-management: 5/5 "invariant expected app router to be mounted".
-#     The test mounts UserProvider (:157) which reads usePathname, and provides no
-#     router. Already red when the original skip list was written on 2026-08-19.
+#     The test imports UserProvider (:24) and wraps the tree in it (:157);
+#     UserContext.tsx:5 has read usePathname since 2026-07-20 (94e7b784) and no
+#     router is provided. The sibling membership-modal test does provide one.
+#     Already red when the original skip list was written on 2026-08-19, despite
+#     that list claiming it was "verified by running all 237".
 #   dashboard-date-range: real assertion — membershipAsOfMode expected "live",
 #     got "snapshot". Skipped since 2026-08-19.
 SKIP_BROKEN=(
@@ -113,18 +63,18 @@ SKIP_BROKEN=(
 )
 
 SKIP=(
-  "${SKIP_NEEDS_MONGO[@]}"
-  "${SKIP_NEEDS_E2E_MONGO[@]}"
-  "${SKIP_NEEDS_STRIPE_KEY[@]}"
-  "${SKIP_NEEDS_AUTH_ENV[@]}"
   "${SKIP_POLICY[@]}"
   "${SKIP_BROKEN[@]}"
 )
 
 # Coverage ratchet. Raise it deliberately when suites are added; a DROP means a
 # script was deleted or renamed, which is the one failure this file cannot detect
-# any other way. Measured 2026-09-04: 292 total - 46 skipped = 246.
-BASELINE=246
+# any other way.
+#
+# Measured 2026-09-04 against a seeded mongo:8.0 single-node replica set with the
+# five placeholder vars: 292 total - 3 skipped = 289 run, 289 pass, 0 fail.
+# Before the database it was 246; the container plus the seed step revived 43.
+BASELINE=289
 
 # ---------------------------------------------------------------------------
 # Discover suites. `test` (no colon) is an alias for test:anchor-billing, so

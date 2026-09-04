@@ -46,6 +46,7 @@
     "seed:past-due-member:dry": "tsx scripts/seed-past-due-member.ts --dry-run",
     "seed:active-member": "tsx scripts/seed-active-member.ts",
     "seed:active-member:dry": "tsx scripts/seed-active-member.ts --dry-run",
+    "seed:ci-fixtures": "tsx scripts/seed-ci-fixtures.ts",
     "migrate:normalise-mobiles": "tsx scripts/migrate-normalise-mobiles.ts",
     "migrate:normalise-mobiles:dry": "tsx scripts/migrate-normalise-mobiles.ts --dry-run",
     "migrate:normalise-mobiles:prod:dry": "tsx scripts/migrate-normalise-mobiles.ts --prod --dry-run",

@@ -1,7 +1,8 @@
 # CI pipeline — design
 
 **Date:** 2026-09-04 · **Branch:** `feature/ci-pipeline` · **Worktree:** `.worktrees/ci-pipeline/`
-**Status:** awaiting sign-off · **Revision:** 2 (after a five-lens adversarial review; 50 raw findings, 36 survived verification)
+**Status:** phases 1a, 1b and 2 landed and verified · **Revision:** 3
+**History:** rev 2 after a five-lens adversarial review (50 raw findings, 36 survived verification); rev 3 after Phase 2 was measured against a real container, which refuted two claims rev 2 marked `verified`.
 
 ---
 
@@ -24,9 +25,10 @@ because they need a database. That list was written when there were 236 suites; 
 292, and nobody updated it. The third reason is real — one test is genuinely broken, and the
 checker is currently hiding a second broken one inside that skip list. Step five fixes both.
 
-Of our 292 test suites, forty-six fail on a checking machine. Forty-three of those just need a
-database and a few access keys it doesn't have. One talks to a live partner website and will
-never be allowed to run automatically. The last two are the genuinely broken ones.
+Of our 292 test suites, forty-six used to fail on a checking machine. Forty-three of those just
+needed a database and a few access keys it did not have; step two gave them one, and they now
+pass. Of the three left, one talks to a live partner website and will never be allowed to run
+automatically, and two are the genuinely broken ones.
 
 Separately, and more seriously: **anyone can merge anything into the live site right now.** The
 `main` branch is completely unguarded — no required checks, no required approvals — and merging
@@ -57,9 +59,10 @@ arithmetic, payment retries and renewal credits. Add checks for drift nothing cu
 watches. Point a browser at the preview site to defend the prize-draw wording that has a legal
 permit attached. Then, and only once green is normal, make passing compulsory.
 
-**Step four needs one answer from you first:** we do not know whether the preview copy of the
-site reads from the real customer database or a test one. If it is the real one, the browser
-check must only ever look, never touch. It already only looks — but that needs confirming.
+**One question that was open here has been answered:** the preview copy of the site reads the
+*dev* database, not the real customer one — confirmed by DJ on 2026-09-04 and corroborated by
+comparing the two connection strings, which point at genuinely different Atlas clusters. The
+browser check in step four is therefore safe to run, and it only ever reads anyway.
 
 One thing we are deliberately **not** doing: building the app in the checker. Vercel already
 builds the entire app on every push, and that build does check the code compiles — but nothing
@@ -99,7 +102,7 @@ change is wrong."
 |---|---|---|---|
 | D1 | Repair `ci.yml` or write a new pipeline | **Repair** | One check name, one file, one history. Its comment block is wrong in four places and gets rewritten wholesale. |
 | D2 | Fix the missing `next-env.d.ts` | **`npx next typegen` step** | `verified`: 4.3s, recreates the file *and* `.next/types/routes.d.ts`, after which `tsc --noEmit` exits 0. Next's own supported command (present in 15.5.9). Rejected: committing the file — fights `.gitignore:68` and goes stale against `routes.d.ts`. |
-| D3 | Does CI get a database | **Yes — ephemeral MongoDB service container** | `verified`: `src/lib/mongodb.ts:5-13` throws lazily inside `getMongoURI()` (throw at `:9`), reached only from `connectDB()` at `:230` — not at module scope. So no test code changes. These are the money paths. |
+| D3 | Does CI get a database | **Yes — an ephemeral `mongo:8.0` single-node replica set, started with `docker run`** | `verified`: `src/lib/mongodb.ts:5-13` throws lazily inside `getMongoURI()` (throw at `:9`), reached only from `connectDB()` at `:230` — not at module scope, so no test code changes. Started with `docker run` rather than a `services:` block because service containers cannot override the image command and `--replSet` must be passed; see the replica-set correction in §3 for why standalone is not enough. These are the money paths. |
 | D4 | Placeholder env vars | **Five, all non-empty** | `verified`: `src/lib/stripe.ts:4-5` throws at module scope; `src/lib/auth.ts:24-40` gates on **five** vars via a `!value` test — `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MONGODB_URI` — and throws at module scope. Set `STRIPE_SECRET_KEY=sk_test_ci_placeholder`, `NEXTAUTH_SECRET=ci-not-a-secret`, `NEXTAUTH_URL=http://localhost:3000`, `GOOGLE_CLIENT_ID=ci-placeholder`, `GOOGLE_CLIENT_SECRET=ci-placeholder`. Two placeholders would have failed; see §3's empty-string trap for why none may be `''`. |
 | D5 | `test:igodirect-sso` | **Permanently excluded, reason stated** | `verified`: it POSTs/GETs against the *live production* partner portal `myrewards.toolsaustralia.com.au` (`:126`, `:148`). Supplying the secret fires real third-party traffic on every push. The one exclusion that is policy, not capability. |
 | D6 | Build the app in CI | **No** | `verified`: Vercel runs `next build --turbopack` on every push to every branch with `typescript.ignoreBuildErrors` unset, so compile+typecheck is already gated. A CI build costs ~4 min and needs a *reachable* database — `getAllWinners()` calls `connectDB()` with no try/catch (`src/utils/draws/get-all-winners.ts:46`) and `/winners`, `/draw-results` are ISR pages that use it. |
@@ -186,11 +189,33 @@ dev database always has an active draw, which is why this never surfaced locally
 `assert.ok(role, "Norm role exists (run npm run migrate:create-norm first)")`
 (`src/lib/internal-norm/__tests__/permissions.test.ts:23,26`). Seed data, not a defect.
 
-`verified` — **a standalone container is sufficient; no replica set needed.** Zero of the 292
-failed with a transaction or replica-set error, confirming the earlier static finding that
-`startSession`/`withTransaction` appear only in API routes and migrations, never in a suite.
-Production is a 3-node replica set (Atlas M10, `ap-southeast-2`), and standalone is the stricter
-of the two, so anything green here is green there.
+**CORRECTION — an earlier revision of this spec claimed "a standalone container is sufficient;
+no replica set needed." That was wrong, and it was wrong in a way worth recording.**
+
+The reasoning behind it was sound as far as it went: `startSession`/`withTransaction` appear in
+8 files, all of them API routes or migration scripts, and **none** of the 292 suites uses one —
+so no *suite* needs a replica set, and indeed zero suites failed on a transaction error.
+
+The error was scope. Phase 2's own **seed step** runs
+`scripts/migrations/2026-05-20-create-norm-user-and-role.ts`, which was sitting in that same
+grep result under "migrations". Against a standalone node it dies with
+`MongoServerError: Transaction numbers are only allowed on a replica set member or mongos`,
+`norm-permissions` then still fails for want of the Norm role, and the phase silently lands at
+288 instead of 289. I checked the thing being tested and not the thing being added.
+
+`verified` — **a single-node replica set is required**: `docker run … mongo:8.0 --replSet rs0`
+followed by `rs.initiate()`. Proved by committing a real write inside a transaction, not by
+calling `startTransaction()` — which returns successfully against an *uninitiated* set because
+it does not contact the server until an operation runs inside it. That false positive is the
+second trap here.
+
+`verified` — **the connection string needs `?directConnection=true`.** A single-node set
+advertises the container's own hostname (`b661606aa3cb:27017`), unresolvable outside the
+container, and the driver hangs on topology discovery rather than failing clearly.
+
+Production being a 3-node replica set (Atlas M10, `ap-southeast-2`, 8.0.30) means this is also
+the more faithful choice — the standalone shortcut was diverging from production as well as
+being broken.
 
 `verified` — **pin the image to `mongo:8.0`, not `mongo:8`.** Production runs 8.0.30; the
 floating `mongo:8` tag resolved to 8.3.8, which is *ahead* of production. Testing against a
@@ -430,12 +455,15 @@ otherwise). Coverage after: 246 green, 46 excluded with stated reasons.
 2026-09-04); add `.worktrees/**` to the eslint ignores; delete the 7 dead `eslint-disable`
 directives keeping the ceiling at 77; write `docs/dev-tooling/ci.md`.
 
-**Phase 2 — Turn on the database.** *Win: the money-path suites come back.*
-Measurement is **done** (§3): 39 revive on the container alone, 4 more need seed data.
-Provision a `mongo:8.0` service container with `MONGODB_URI` and a *separate* `E2E_MONGODB_URI`
-whose whole connection string matches `/e2e/i`; add the five D4 placeholders. Then a seed step:
-`npm run migrate:create-norm` (existing script — do not write a new one) plus one `active`
-MajorDraw. Re-measure to confirm 289 of 292 before the phase is done. Skip list shrinks to 3.
+**Phase 2 — Turn on the database. DONE.** *Win: the money-path suites came back.*
+`mongo:8.0` started with `--replSet rs0` + `rs.initiate()`, both connection strings carrying
+`directConnection=true`, the five D4 placeholders, and a seed step —
+`npm run seed:ci-fixtures` (one `active` MajorDraw, with a hard refusal to run against any
+non-local host) plus the existing `npm run migrate:create-norm`.
+
+**Verified end-to-end: 289 of 292 run, 289 pass, 0 fail.** Skip list is down from 46 entries to
+3, and the `NEEDS_*` categories were removed rather than emptied — the remaining two, POLICY
+and BROKEN, can never be resolved by provisioning something.
 
 **Phase 3 — Catch what nothing catches.** *Win: generated-file and env drift become unmergeable.*
 First register the ~20 unregistered env reads plus the `# optional` marker, so the gate is green

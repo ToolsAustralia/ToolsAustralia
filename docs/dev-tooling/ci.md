@@ -36,7 +36,13 @@ cannot see.
 | Check | What it proves | Roughly |
 |---|---|---|
 | `static` | Types are consistent, and the whole repo passes lint — not just `src/` | ~2 min |
-| `suites` | 246 of the 292 logic suites pass: billing arithmetic, redeemables, promo multipliers, permissions, Cobber's legal-wording guard | ~4 min |
+| `suites` | **289 of the 292** logic suites pass: billing arithmetic, the Stripe webhook queue, renewal-grant reconciliation, shop entry grants, redeemables, promo multipliers, permissions, Cobber's legal-wording guard | ~5 min |
+
+The `suites` job starts a **scratch MongoDB** — a blank database that lives and dies
+with the run, holds nothing, and is reachable only from that one machine. It is not
+your production database and not the dev cluster; it cannot touch a customer record.
+It exists because ~43 suites test code that calls `connectDB()` on the way in, and
+with no database configured they throw at import and never run at all.
 
 **What a green tick does not mean.** It does not mean the app builds — there is no
 build step, on purpose (Vercel already does that, and repeating it costs four
@@ -47,38 +53,71 @@ And it does not mean all 292 suites ran — see the skip list below.
 
 You never need to push to find out why CI is red.
 
+The `static` job needs nothing:
+
 ```bash
-npm run type-check                              # what the `static` job runs
+npm run type-check
 npm run lint
-bash .github/scripts/run-test-suites.sh         # what the `suites` job runs
-bash .github/scripts/run-test-suites.sh --list  # just show what runs vs skips
-npm run <suite-name>                            # re-run one failing suite
 ```
 
-One honest caveat: locally you have a `.env.local`, so suites that CI cannot pass
-will pass for you. That gap is exactly what the skip list exists to record.
+The `suites` job needs a database. Two commands stand one up — a throwaway you can
+delete afterwards:
 
-## The skip list — why 46 suites do not run
+```bash
+docker run -d --name ta-ci-mongo -p 27018:27017 mongo:8.0 --replSet rs0
+docker exec ta-ci-mongo mongosh --quiet --eval 'rs.initiate()'
+```
 
-`.github/scripts/run-test-suites.sh` holds every suite CI cannot run, grouped by
+Then point the suites at it and run them:
+
+```bash
+export MONGODB_URI="mongodb://localhost:27018/toolsaustralia-ci?directConnection=true"
+export E2E_MONGODB_URI="mongodb://localhost:27018/toolsaustralia-e2e?directConnection=true"
+npm run seed:ci-fixtures        # one active major draw
+npm run migrate:create-norm     # the Norm role + service user
+bash .github/scripts/run-test-suites.sh         # run them
+bash .github/scripts/run-test-suites.sh --list  # just show what runs vs skips
+npm run <suite-name>                            # re-run one failing suite
+docker rm -f ta-ci-mongo                        # done
+```
+
+Three details that will cost you an hour if you skip them:
+
+- **`--replSet rs0` and `rs.initiate()` are not optional.** `migrate:create-norm`
+  uses a transaction, and MongoDB refuses transactions on a standalone node with
+  *"Transaction numbers are only allowed on a replica set member or mongos"*.
+- **`directConnection=true` is not optional.** A single-node replica set advertises
+  the *container's* hostname, which nothing outside the container can resolve.
+  Without it the driver hangs on topology discovery rather than failing clearly.
+- **Port 27018, not 27017**, so it cannot collide with a local MongoDB you already
+  run. CI uses 27017 because nothing else is there.
+
+One caveat: locally you also have a `.env.local`, so a suite may pass for you using
+real config where CI uses placeholders.
+
+## The skip list — why 3 suites do not run
+
+`.github/scripts/run-test-suites.sh` holds every suite CI does not run, grouped by
 **why**. The reason matters more than the list:
 
 | Reason | Count | Meaning |
 |---|---|---|
-| `NEEDS_MONGO` | 29 | Wants a database. Fixed by giving CI a scratch one. |
-| `NEEDS_STRIPE_KEY` | 9 | Dies at import without a Stripe key, without ever calling Stripe. |
-| `NEEDS_AUTH_ENV` | 3 | `src/lib/auth.ts` demands five login-related variables and throws without them. |
-| `NEEDS_E2E_MONGO` | 2 | Wants its own throwaway database and refuses to touch a real one. |
-| `POLICY` | 1 | **Never runs here.** `test:igodirect-sso` talks to the live production partner portal — giving CI that secret would fire real third-party traffic on every push. |
-| `BROKEN` | 2 | Genuinely failing. Not an environment problem. |
+| `POLICY` | 1 | **Never runs here, whatever we provision.** `test:igodirect-sso` POSTs to the live production partner portal — giving CI that secret would fire real third-party traffic on every push. |
+| `BROKEN` | 2 | Genuinely failing on `main`. Not an environment problem. |
 
-`NEEDS_*` are temporary — they become runnable once CI gets a database. `POLICY` and
-`BROKEN` never do. **`BROKEN` is meant to be empty**; two suites sit there today and
-each one is named in the script with what is actually wrong.
+**`BROKEN` is meant to be empty.** Two suites sit there today, each named in the
+script with what is actually wrong with it.
 
-That distinction is the lesson from the previous version of this file. Its skip list
-mixed "cannot run here" with "known broken", and once those blur, no entry on the
-list can be trusted.
+There is deliberately **no category for "needs a service we could provide"**. Before
+the database there were 43 such suites across four `NEEDS_*` groups; rather than
+leave them listed, Phase 2 provisioned what they needed. If you are tempted to add a
+`NEEDS_*` group back, provision the thing instead.
+
+That is the lesson from the previous version of this file. Its skip list mixed
+"cannot run here" with "known broken" in one undifferentiated array, and once those
+blur, no entry on the list can be trusted — which is precisely what happened: it
+claimed to have been "verified by running all 237" suites while one of its entries
+had already been failing for an unrelated reason.
 
 ### The list defends itself
 
@@ -150,11 +189,17 @@ orphaned file.
 
 ## What is coming, and what is deliberately not
 
-Planned, in order: a scratch database (revives most of the 46), drift checks for the
-auto-generated image/video manifests, and a real browser run against the Vercel
-preview to defend the free-entry wording. Only after all of that has been reliably
-green does passing become **required** to merge — turning that on while the pipeline
-is unreliable would block every merge and teach everyone to bypass it.
+Done: the pipeline passes, and the scratch database revived 43 suites.
+
+Planned, in order: drift checks for the auto-generated image/video manifests and the
+environment registry, then a real browser run against the Vercel preview to defend
+the free-entry wording. Only after all of that has been reliably green does passing
+become **required** to merge — turning that on while the pipeline is unreliable would
+block every merge and teach everyone to bypass it.
+
+The browser check will stay **advisory even then**. A required check that never
+reports — because a deployment was skipped or cancelled — leaves the pull request
+permanently unmergeable, and that failure mode is worse than the gap it closes.
 
 Deliberately excluded: building the app (Vercel does it), Prettier (would reformat
 ~2,700 files and collide with every open branch), and the full e2e suite (needs an

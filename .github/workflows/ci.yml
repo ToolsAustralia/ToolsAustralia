@@ -114,10 +114,72 @@ jobs:
       - name: Install
         run: npm ci
 
+      # A throwaway MongoDB that lives and dies with this run. It holds nothing,
+      # is reachable only from this machine, and revives 43 suites that cannot
+      # run without a database — the webhook queue, renewal-grant reconciler and
+      # shop entry-grant paths among them.
+      #
+      # Started with `docker run` rather than a `services:` block on purpose:
+      # service containers cannot override the image command, and we must pass
+      # `--replSet`. Transactions require a replica set, and `migrate:create-norm`
+      # below uses one — on a standalone node it dies with
+      # "Transaction numbers are only allowed on a replica set member or mongos".
+      # Production is a 3-node set, so this is also the closer match.
+      #
+      # Pinned to 8.0 because production is 8.0.30; the floating `mongo:8` tag
+      # resolves to 8.3.x, and testing against a server NEWER than production can
+      # pass on behaviour production does not have.
+      - name: Start MongoDB
+        run: |
+          docker run -d --name ci-mongo -p 27017:27017 mongo:8.0 --replSet rs0
+          for i in $(seq 1 60); do
+            docker exec ci-mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec ci-mongo mongosh --quiet --eval 'rs.initiate()'
+          for i in $(seq 1 60); do
+            [ "$(docker exec ci-mongo mongosh --quiet --eval 'try{rs.status().myState}catch(e){0}' | tr -d '\r')" = "1" ] && break
+            sleep 1
+          done
+          docker exec ci-mongo mongosh --quiet --eval 'print("replica set ready, myState=" + rs.status().myState)'
+
+      # Most suites build and tear down their own fixtures. A few assume a LIVE
+      # major draw already exists and mutate it, undoing the change in `finally`.
+      # A developer's database always has one; an empty container does not, and
+      # those suites fail on `no_target_draw` — nothing to do with what they test.
+      # Measured: exactly 3 suites need the draw, 1 needs the Norm role + user.
+      - name: Seed fixtures
+        env:
+          # directConnection=true is REQUIRED. A single-node replica set advertises
+          # the container's own hostname, which nothing outside the container can
+          # resolve; without this the driver hangs on topology discovery.
+          MONGODB_URI: mongodb://localhost:27017/toolsaustralia-ci?directConnection=true
+        run: |
+          npm run seed:ci-fixtures
+          npm run migrate:create-norm
+
       # The skip table, the integrity guards and the runner all live in the
       # script so you can run them locally:
       #   bash .github/scripts/run-test-suites.sh --list
       #   bash .github/scripts/run-test-suites.sh
       # Reproducing a red CI should never require pushing.
       - name: Test suites
+        env:
+          MONGODB_URI: mongodb://localhost:27017/toolsaustralia-ci?directConnection=true
+          # A SEPARATE database, and its whole connection string must match /e2e/i:
+          # two shop suites refuse to run otherwise, which is their guard against
+          # ever touching real data. Deliberately not in .env.example — it is
+          # LOCAL_ONLY (scripts/check-env.mjs).
+          E2E_MONGODB_URI: mongodb://localhost:27017/toolsaustralia-e2e?directConnection=true
+          # Placeholders, not secrets. src/lib/stripe.ts and src/lib/auth.ts throw at
+          # MODULE SCOPE when these are absent, so the suites die at import without
+          # ever making a call. Presence is what matters, not validity.
+          # auth.ts gates on all five; NEVER set any of them to "" — its `!value`
+          # test treats empty as missing, and next-auth's parseUrl throws on
+          # NEXTAUTH_URL='' with a misleading "Invalid URL".
+          STRIPE_SECRET_KEY: sk_test_ci_placeholder
+          NEXTAUTH_SECRET: ci-not-a-secret
+          NEXTAUTH_URL: http://localhost:3000
+          GOOGLE_CLIENT_ID: ci-placeholder
+          GOOGLE_CLIENT_SECRET: ci-placeholder
         run: bash .github/scripts/run-test-suites.sh
