@@ -1,1 +1,6 @@
 src/generated/upsellImageManifest.ts linguist-generated=true
+
+# Shell scripts MUST be LF. Windows checkouts default to CRLF (core.autocrlf=true),
+# and a CRLF shell script fails on a Linux CI runner with `$'\r': command not found`.
+# .github/scripts/run-test-suites.sh runs on ubuntu-latest, so this is load-bearing.
+*.sh text eol=lf
