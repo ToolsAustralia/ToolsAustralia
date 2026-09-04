@@ -111,6 +111,22 @@ export function createSubscriptionCancelledEvent(
         price: 0, // No price for cancellation
       }),
       cancellation_date: formatDateForKlaviyo(),
+      /**
+       * DISPLAY-READY twin of `cancellation_date` — the day access actually stopped, since
+       * this event fires from the Stripe `customer.subscription.deleted` webhook.
+       *
+       * `cancellation_date` is `formatDateForKlaviyo()`, which is `toLocaleDateString("en-US")`
+       * with NO timeZone — so it renders US-style ("September 23, 2026") in the SERVER's zone,
+       * which is UTC on Vercel. A cancellation processed after 10am Sydney therefore prints
+       * the PREVIOUS day. Verified: 2026-09-23T14:30:00Z -> "September 23, 2026" while Sydney
+       * is already the 24th.
+       *
+       * That helper is shared by 15 call sites (purchase_date, refund_date, invoice_date,
+       * start_date, upgrade_date, …), several of which are rendered by live legacy flows, so
+       * it is deliberately NOT changed here — see docs/tracking/KLAVIYO_INTEGRATION.md.
+       * New copy should read this label; `cancellation_date` stays for the existing templates.
+       */
+      cancellation_date_label: formatDateInAEST(new Date(), "d MMMM yyyy"),
       days_until_expiry: daysUntilExpiry,
       timestamp: formatTimestampForKlaviyo(),
     },

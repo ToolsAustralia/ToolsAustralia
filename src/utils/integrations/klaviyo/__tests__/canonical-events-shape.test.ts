@@ -194,6 +194,7 @@ import {
   createStartedCheckoutEvent,
   createBonusCodeIssuedEvent,
   createSubscriptionCancellationRequestedEvent,
+  createSubscriptionCancelledEvent,
   createOneTimePackagePurchasedEvent,
   createPlacedOrderEvent,
 } from "../klaviyo-events";
@@ -711,6 +712,35 @@ function testFinalizeShopOrderStillCallsTheEmitter() {
   );
 }
 
+// ============================================================
+// Subscription Cancelled (legacy) — the display twin only
+// ============================================================
+
+// This event is LEGACY and deliberately not held to the canonical shape (it ships
+// package_name "Subscription" and the raw package id as `tier`). Only the new label is
+// asserted here.
+function testCancellationDateLabelIsAESTAndAUFormatted() {
+  const sample = createSubscriptionCancelledEvent(fakeUser(), {
+    packageId: "tradie-subscription",
+    packageName: "Subscription",
+    tier: "tradie-subscription",
+  });
+
+  const label = sample.properties.cancellation_date_label as string;
+
+  // AU ordering, not the en-US "September 4, 2026" that `cancellation_date` still emits.
+  // Asserted by shape rather than value because the event stamps "now".
+  assert.match(label, /^\d{1,2} [A-Z][a-z]+ \d{4}$/);
+  assert.doesNotMatch(label, /,/);
+
+  // The legacy sibling is untouched — 15 call sites share its formatter and several are
+  // rendered by live flows, so it keeps its en-US shape on purpose.
+  assert.match(sample.properties.cancellation_date as string, /^[A-Z][a-z]+ \d{1,2}, \d{4}$/);
+
+  // Same instant, two renderings — they must not be the same string, or the twin is pointless.
+  assert.notEqual(label, sample.properties.cancellation_date);
+}
+
 function run() {
   testCanonicalKeyAccepted();
   testNonCanonicalKeyRejected();
@@ -726,6 +756,7 @@ function run() {
   testBonusCodeIssuedEmitsThePassedExpiresAt();
   testSubscriptionCancellationRequestedShape();
   testAccessEndsAtLabelNeverThrowsAndNeverBlanks();
+  testCancellationDateLabelIsAESTAndAUFormatted();
   testSubscriptionCancellationRequestedOmitsUnresolvedPackage();
   testOneTimePackagePurchasedCarriesHadActiveSubscription();
   testShopPlacedOrderCarriesIsRenewalFalse();

@@ -287,6 +287,37 @@ Both label derivations are pure and exported (`deriveMembershipLabel`, `deriveNe
 branch is covered by `npm run test:klaviyo-projection` without a database — including the AEST day-shift,
 which is the whole reason the label exists.
 
+### `formatDateForKlaviyo` is timezone-naive — read a `*_label` instead
+
+```ts
+// src/utils/integrations/klaviyo/klaviyo-helpers.ts
+return dateToFormat.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+```
+
+Two defects, both verified by probe:
+
+1. **US format** — `"September 23, 2026"` — for an Australian audience.
+2. **No `timeZone` option**, so it formats in the SERVER's zone, which is **UTC on Vercel**. Anything fired
+   between 14:00Z and 23:59Z (13:00Z during daylight saving) renders the **previous Sydney day**:
+   `2026-09-23T14:30:00Z` → `"September 23, 2026"` while Sydney is already the 24th.
+
+It feeds **15** event properties — `purchase_date`, `refund_date`, `invoice_date`, `start_date`, `end_date`,
+`upgrade_date`, `downgrade_date`, `renewal_date`, `effective_date`, `cancellation_date`, `added_date`,
+`selected_date` and others. Several are rendered by live legacy flows, so **the helper is deliberately left
+as it is**: changing it would alter every one of those strings at once.
+
+**The convention going forward:** leave the `*_date` property alone and add a `*_label` twin beside it,
+formatted with `formatDateInAEST(date, "d MMMM yyyy")`. New customer-facing copy reads the label; existing
+templates keep the property they already reference. Shipped so far:
+
+| Label | Event | Twin of |
+|---|---|---|
+| `cancellation_date_label` | `Subscription Cancelled` | `cancellation_date` |
+| `access_ends_at_label` | `Subscription Cancellation Requested` | `access_ends_at` |
+
+The same rule produced the profile-side `next_renewal_label`. Any future date a customer reads should get
+one rather than a raw `*_date`.
+
 ### The two cancellation moments are different emails
 
 There are two cancellation events and they are **not** interchangeable. Picking the wrong one does not just
