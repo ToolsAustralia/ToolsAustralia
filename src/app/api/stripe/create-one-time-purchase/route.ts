@@ -28,6 +28,10 @@ import mongoose from "mongoose";
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import {
+  resolvePurchasePaymentIntent,
+  PaymentIntentNotAdoptableError,
+} from "@/utils/payment/stripe/resolve-purchase-payment-intent";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
@@ -488,63 +492,48 @@ export async function POST(request: NextRequest) {
       context: "create-one-time-purchase",
     });
 
-    // ✅ SINGLE SOURCE OF TRUTH: Reuse confirmed PaymentIntent if provided, otherwise create new one
-    let paymentIntent: Stripe.PaymentIntent;
+    // ✅ SINGLE SOURCE OF TRUTH: one config, one resolver, for BOTH reuse and create.
+    // This route used to carry its own copy of the reuse logic while
+    // create-one-time-purchase-existing-user carried none. That divergence is exactly what
+    // double-charged 54 members (see resolve-purchase-payment-intent.ts) — so both routes
+    // now share the one implementation, and a third caller cannot quietly miss it.
 
-    if (validatedData.paymentIntentId) {
-      // Validate the existing PaymentIntent
-      const existingPaymentIntent = await stripe.paymentIntents.retrieve(validatedData.paymentIntentId);
+    // (Customer email sync + deleted-customer guard already ran unconditionally above,
+    // before the payment method was attached — no second pass needed here.)
 
-      // Validate PaymentIntent status
-      // ✅ FIX: Accept "succeeded" OR "processing" status (wallet payments may be processing)
-      if (existingPaymentIntent.status !== "succeeded" && existingPaymentIntent.status !== "processing") {
-        return NextResponse.json(
+    // ✅ STRIPE BEST PRACTICE: idempotency key so a double-submit cannot create two intents.
+    const idempotencyKey =
+      validatedData.idempotencyKey ||
+      `pi_${validatedData.packageId}_${validatedData.userEmail}_${Date.now()}`;
+
+    // Note: experimentAssignment is already retrieved above.
+    const paymentIntentConfig = createPaymentIntentConfig({
+      amount: Math.round(membershipPackage.price * 100), // Convert to cents
+      currency: "aud",
+      customer: customer.id,
+      paymentMethod: finalPaymentMethodId, // Use the final payment method ID
+      confirm: true, // Auto-confirm
+      paymentType: "one-time",
+      description: membershipPackage.name,
+      setupFutureUsage: "off_session", // ✅ Save payment method for future use (required for production/staging)
+      metadata: {
+        items: JSON.stringify([
           {
-            error: "PaymentIntent must be succeeded or processing to reuse",
-            details: `Current status: ${existingPaymentIntent.status}`,
+            type: "membership",
+            id: validatedData.packageId,
+            name: membershipPackage.name,
+            price: membershipPackage.price,
           },
-          { status: 400 }
-        );
-      }
-
-      // Validate amount matches
-      const expectedAmount = Math.round(membershipPackage.price * 100);
-      if (existingPaymentIntent.amount !== expectedAmount) {
-        return NextResponse.json({ error: "PaymentIntent amount mismatch" }, { status: 400 });
-      }
-
-      // ✅ FIX: Validate customer matches only if PaymentIntent has a customer
-      // PaymentIntents created without a customer (our new flow) will have customer as null
-      // In that case, we skip validation since we're creating/attaching the customer now
-      const customerId =
-        typeof existingPaymentIntent.customer === "string"
-          ? existingPaymentIntent.customer
-          : existingPaymentIntent.customer?.id;
-
-      if (customerId && customerId !== customer.id) {
-        return NextResponse.json({ error: "PaymentIntent customer mismatch" }, { status: 400 });
-      }
-
-      // Use existing PaymentIntent - DON'T CREATE NEW ONE
-      paymentIntent = existingPaymentIntent;
-
-      // ✅ FIX: Update PaymentIntent with customer and metadata
-      // This ensures webhook can find the user by customer ID
-      const packageTypeValue = "one-time";
-      console.log(`🔄 Updating PaymentIntent ${existingPaymentIntent.id} with metadata for webhook processing...`);
-      console.log(`📋 Original metadata:`, existingPaymentIntent.metadata);
-
-      const updatedMetadata = {
-        ...existingPaymentIntent.metadata,
+        ]),
         packageId: validatedData.packageId,
         userEmail: validatedData.userEmail,
         // ✅ FIX: Add userId for registered users so webhook can find them
         // This fixes the issue where userId remains "guest" even for registered users
         ...(registeredUser && { userId: registeredUser._id.toString() }),
-        type: packageTypeValue, // ✅ CRITICAL: Set 'type' for webhook compatibility
-        packageType: packageTypeValue, // ✅ Also set 'packageType' for consistency
+        type: "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
+        packageType: "one-time", // ✅ Also set 'packageType' for consistency
         entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
-        price: Math.round(membershipPackage.price * 100).toString(),
+        price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
         // ✅ ADD: Include user data for account creation in webhook (for new users)
         ...(!registeredUser && {
           firstName: validatedData.firstName,
@@ -574,151 +563,31 @@ export async function POST(request: NextRequest) {
         ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
         ...buildAttributionMetadata(validatedData.attribution),
         ...resolvedAttr,
-      };
+      },
+    });
 
-      console.log(`📋 Updated metadata:`, updatedMetadata);
-
-      // ✅ CRITICAL FIX: Wrap PaymentIntent update in try-catch
-      // PaymentIntent update may fail if it's already "succeeded" (wallet payments confirm immediately)
-      // If customer update fails, at least update metadata (which can be updated on succeeded PaymentIntents)
-      try {
-        await stripe.paymentIntents.update(existingPaymentIntent.id, {
-          customer: customer.id, // ✅ Update customer field so webhook can find user
-          // ✅ STRIPE BEST PRACTICE: Update description to package name for better tracking
-          description: membershipPackage.name,
-          metadata: updatedMetadata,
-        });
-        console.log(`✅ PaymentIntent ${existingPaymentIntent.id} updated with customer ${customer.id} and metadata`);
-      } catch (updateError: unknown) {
-        // ✅ CRITICAL: If customer update fails (PaymentIntent already succeeded), at least update metadata
-        // Metadata can be updated even on succeeded PaymentIntents
-        const stripeError = updateError as { code?: string; message?: string };
-        const errorCode = stripeError?.code || "";
-        const errorMessage = stripeError?.message || "";
-        
-        if (
-          errorCode === "resource_already_exists" ||
-          errorMessage.includes("succeeded") ||
-          errorMessage.includes("cannot be modified")
-        ) {
-          console.warn(`⚠️ PaymentIntent ${existingPaymentIntent.id} already succeeded - updating metadata only (customer update skipped)`);
-          try {
-            await stripe.paymentIntents.update(existingPaymentIntent.id, {
-              metadata: updatedMetadata,
-            });
-            console.log(`✅ Updated PaymentIntent metadata (customer update skipped - webhook will use charge billing_details fallback)`);
-          } catch (metadataError) {
-            console.error(`❌ Failed to update PaymentIntent metadata: ${metadataError}`);
-            // Continue - webhook will handle via charge billing_details fallback
-          }
-        } else {
-          // Re-throw other errors (network issues, invalid data, etc.)
-          console.error(`❌ PaymentIntent update failed with unexpected error: ${updateError}`);
-          throw updateError;
-        }
-      }
-
-      // ✅ SYNC: Ensure customer email matches form email (in case user changed email in form)
-      // ✅ FIX: Ensure customer is not deleted before accessing email
-      if ("deleted" in customer && customer.deleted) {
-        throw new Error("Stripe customer was deleted - cannot proceed with purchase");
-      }
-
-      const customerEmail = customer.email || "";
-      if (customerEmail.toLowerCase() !== validatedData.userEmail.toLowerCase()) {
-        console.log(
-          `🔄 Syncing customer email after PaymentIntent update: ${customerEmail} → ${validatedData.userEmail}`
-        );
-        customer = await stripe.customers.update(customer.id, {
-          email: validatedData.userEmail,
-        });
-        console.log(`✅ Customer email synced: ${customer.id}`);
-      }
-
-      // ✅ CRITICAL: Re-fetch PaymentIntent to get fresh metadata after update
-      // This ensures fallback processing uses the correct metadata with entriesCount
-      paymentIntent = await stripe.paymentIntents.retrieve(existingPaymentIntent.id);
-      console.log(`🔄 Re-fetched PaymentIntent with updated metadata:`, {
-        id: paymentIntent.id,
-        entriesCount: paymentIntent.metadata.entriesCount,
-        price: paymentIntent.metadata.price,
-        userEmail: paymentIntent.metadata.userEmail,
+    let paymentIntent: Stripe.PaymentIntent;
+    try {
+      const resolved = await resolvePurchasePaymentIntent({
+        customerId: customer.id,
+        packageId: validatedData.packageId,
+        suppliedPaymentIntentId: validatedData.paymentIntentId,
+        createConfig: paymentIntentConfig,
+        idempotencyKey,
+        context: "create-one-time-purchase",
       });
-    } else {
-      // Fallback: Create new PaymentIntent (for non-wallet payments)
-      // ✅ STRIPE BEST PRACTICE: Generate idempotency key to prevent duplicate PaymentIntent creation
-      // This ensures that even if the API is called twice (e.g., double-click), only one PaymentIntent is created
-      const idempotencyKey =
-        validatedData.idempotencyKey || 
-        `pi_${validatedData.packageId}_${validatedData.userEmail}_${Date.now()}`;
-
-      // ✅ Use centralized PaymentIntent configuration with 3DS support
-      // Note: experimentAssignment is already retrieved above (before if/else block)
-      const paymentIntentConfig = createPaymentIntentConfig({
-        amount: Math.round(membershipPackage.price * 100), // Convert to cents
-        currency: "aud",
-        customer: customer.id,
-        paymentMethod: finalPaymentMethodId, // Use the final payment method ID
-        confirm: true, // Auto-confirm
-        paymentType: "one-time",
-        description: membershipPackage.name,
-        setupFutureUsage: "off_session", // ✅ Save payment method for future use (required for production/staging)
-        metadata: {
-          items: JSON.stringify([
-            {
-              type: "membership",
-              id: validatedData.packageId,
-              name: membershipPackage.name,
-              price: membershipPackage.price,
-            },
-          ]),
-          packageId: validatedData.packageId,
-          userEmail: validatedData.userEmail,
-          // ✅ FIX: Add userId for registered users so webhook can find them
-          // This fixes the issue where userId remains "guest" even for registered users
-          ...(registeredUser && { userId: registeredUser._id.toString() }),
-          type: "one-time", // ✅ CRITICAL: Set 'type' for webhook compatibility
-          packageType: "one-time", // ✅ Also set 'packageType' for consistency
-          entriesCount: (membershipPackage.totalEntries || membershipPackage.entriesPerMonth || 0).toString(),
-          price: Math.round(membershipPackage.price * 100).toString(), // Price in cents for webhook processing
-          // ✅ ADD: Include user data for account creation in webhook (for new users)
-          ...(!registeredUser && {
-            firstName: validatedData.firstName,
-            lastName: validatedData.lastName,
-            mobile: validatedData.mobile || "",
-            isNewUser: "true", // Flag to indicate this is a new user
-            ...(validatedData.password && { password: validatedData.password }), // Only if provided
-          }),
-          // ✅ ADD: Store payment method ID for webhook to save after payment succeeds
-          paymentMethodId: finalPaymentMethodId,
-          ...(affiliateMetadataCode ? { affiliateCode: affiliateMetadataCode } : {}),
-          ...(validatedData.promoLinkCode && { promoLinkCode: validatedData.promoLinkCode }),
-          ...(validatedData.referralCode && { referralCode: validatedData.referralCode }),
-          ...(verifiedCampaignCode && { campaignCode: verifiedCampaignCode }),
-          // ✅ A/B Testing: Store experiment assignment in metadata for accurate tracking
-          ...(experimentAssignment && {
-            experimentId: experimentAssignment.experimentId,
-            variantId: experimentAssignment.variantId,
-          }),
-          // Store request context for Facebook CAPI (webhook will extract and use)
-          ...(requestContext.client_ip_address ? { capi_client_ip: requestContext.client_ip_address } : {}),
-          ...(requestContext.client_user_agent ? { capi_user_agent: requestContext.client_user_agent } : {}),
-          ...(requestContext.fbc ? { capi_fbc: requestContext.fbc } : {}),
-          ...(requestContext.fbp ? { capi_fbp: requestContext.fbp } : {}),
-          ...(requestContext.ttclid ? { capi_ttclid: requestContext.ttclid } : {}),
-          ...(requestContext.ttp ? { capi_ttp: requestContext.ttp } : {}),
-          ...(capiEventSourceUrl ? { capi_event_source_url: capiEventSourceUrl } : {}),
-          ...buildAttributionMetadata(validatedData.attribution),
-          ...resolvedAttr,
-        },
-      });
-
-      paymentIntent = await stripe.paymentIntents.create(
-        paymentIntentConfig,
-        {
-          idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
-        }
+      paymentIntent = resolved.paymentIntent;
+      console.log(
+        `💳 One-time charge ${resolved.outcome}: ${paymentIntent.id} (${paymentIntent.status})`
       );
+    } catch (resolveError) {
+      if (resolveError instanceof PaymentIntentNotAdoptableError) {
+        return NextResponse.json(
+          { error: resolveError.reason, details: resolveError.details },
+          { status: 400 }
+        );
+      }
+      throw resolveError;
     }
 
     console.log(`💳 Using payment intent: ${paymentIntent.id}`);

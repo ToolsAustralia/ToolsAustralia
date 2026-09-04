@@ -82,6 +82,12 @@ export interface OneTimeMembership {
 export interface MembershipPurchaseData {
   packageId: string;
   paymentMethodId?: string;
+  /**
+   * PaymentIntent the card form ALREADY CONFIRMED for this checkout — that confirm is a real
+   * charge. Sending it lets the route reuse that charge instead of taking a second one.
+   * Absent when paying with a saved card, where nothing was confirmed up front.
+   */
+  paymentIntentId?: string;
   /** One per user checkout action; sent to Stripe for PaymentIntent idempotency (retries / duplicate requests). */
   idempotencyKey?: string;
   referralCode?: string;
@@ -187,6 +193,7 @@ export const usePurchaseMembership = () => {
     mutationFn: async ({
       packageId,
       paymentMethodId,
+      paymentIntentId,
       idempotencyKey,
       referralCode,
       affiliateCode,
@@ -196,6 +203,9 @@ export const usePurchaseMembership = () => {
       const response = await apiPost<MembershipResponse>("/api/stripe/create-one-time-purchase-existing-user", {
         packageId,
         paymentMethodId,
+        // Must be destructured above AND forwarded here. Adding it to the interface alone
+        // type-checks clean while silently dropping the value, which is the double charge.
+        paymentIntentId,
         idempotencyKey: idempotencyKey ?? crypto.randomUUID(),
         referralCode,
         affiliateCode,

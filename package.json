@@ -553,6 +553,7 @@
     "test:issuance-expiry": "tsx src/services/redeemables/__tests__/issuance-expiry.test.ts",
     "test:campaign-window": "tsx src/services/redeemables/__tests__/campaign-window.test.ts",
     "test:campaign-code-metadata": "tsx src/app/api/stripe/__tests__/campaign-code-metadata.test.ts",
+    "test:one-time-charge": "tsx src/utils/payment/stripe/__tests__/resolve-purchase-payment-intent.test.ts",
     "test:attach-typed-code": "tsx src/utils/payment/__tests__/attach-typed-code.test.ts",
     "test:campaign-code-checkout": "npm run test:attach-typed-code",
     "test:typed-code-checkout": "tsx src/utils/payment/__tests__/typed-code-at-checkout.test.ts",

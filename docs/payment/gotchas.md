@@ -852,3 +852,34 @@ the same answer registration would give them.
 The smoke script asserts **both** halves — the attack is blocked AND a fresh registrant still binds
 — because blocking the attack by breaking checkout would not be a fix. It exits non-zero if either
 regresses.
+
+## The upfront PaymentIntent is a real charge, not a price tag (2026-09-04)
+
+The most expensive misreading in this domain. `/api/stripe/create-payment-intent` exists so
+wallets can show the correct amount, and its name and comments make it sound like a display
+concern. It is not: `intentType` becomes `"payment"` whenever a `paymentIntentClientSecret`
+exists ([PaymentStep.tsx](../../src/components/modals/MembershipModal/PaymentStep.tsx)), and
+`confirmStripeIntent()` then calls `stripe.confirmPayment()` — **money moves in the browser,
+before the purchase route is ever called.**
+
+The subscription branch knew this (its upfront intent is confirmed "for wallet display only"
+and cancelled server-side). The one-time branch did not, and charged again on the server 1–3
+seconds later. 57 checkouts, 54 members, Jan–Sep 2026.
+
+Symptoms, if you are ever diagnosing this again:
+
+- Two succeeded PaymentIntents on one customer, same amount, **1–3 seconds apart** (a human
+  double-click is tens of seconds — that gap is machine-speed and diagnostic on its own).
+- Both carry the **same** `payment_method`.
+- The first has **no** `entriesCount` / `items` / `price` / `paymentMethodId` in metadata (it
+  came from `create-payment-intent`); the second has all of them (it came from the purchase
+  route). That metadata fingerprint is how the two creators are told apart in Stripe.
+- Two `BenefitsGranted` PaymentEvents, because the webhook grants per PaymentIntent.
+
+Saved-card purchases were never affected — that path never confirms the upfront intent, which
+is also why mini-draws (server-side charge only) show zero occurrences and served as the
+control that proved the diagnosis.
+
+Fixed by [R14](./rules.md#r14-one-checkout-takes-at-most-one-charge--never-create-a-paymentintent-without-first-trying-to-adopt-one)
+/ `resolve-purchase-payment-intent.ts`. Spec:
+`docs/superpowers/specs/2026-09-04-one-time-pack-double-charge-design.md`.

@@ -240,3 +240,16 @@ never mounted — see `docs/upsell/gotchas.md`. `useUpsellTracking` additionally
 `useUpsellAnalytics`, `useAcceptUpsellOffer` and `useDismissUpsellOffer` now have zero consumers
 (their only caller was `useUpsellManager`) — left in place as they are separate dead code, not
 part of the tracker.
+
+## `usePurchaseMembership` — `paymentIntentId` must be destructured AND forwarded (2026-09-04)
+
+`MembershipPurchaseData` carries `paymentIntentId`: the PaymentIntent the card form already
+**charged** for this checkout. The route reuses that charge instead of taking a second one.
+
+The trap is that this mutation destructures its parameters, so the field must be added in
+**three** places — the interface, the `mutationFn` destructure, and the `apiPost` body. Adding
+it to the interface alone type-checks perfectly clean while silently dropping the value, which
+reinstates a double charge with no error anywhere. Fenced by `npm run test:one-time-charge`.
+
+Absent for saved-card purchases, where nothing was confirmed up front.
+See [payment/rules.md R14](../payment/rules.md#r14-one-checkout-takes-at-most-one-charge--never-create-a-paymentintent-without-first-trying-to-adopt-one).
