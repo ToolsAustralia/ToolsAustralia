@@ -49,6 +49,31 @@ because it calls `useUserContext` internally. Provider nesting order is:
 `UserProvider` must sit inside `QueryClientProvider` because it uses TanStack
 Query hooks internally.
 
+### `UserProvider` also needs an app-router context (2026-09-04)
+
+Any modal smoke test that mounts `UserProvider` must ALSO wrap the tree in
+`AppRouterContext.Provider` **and** `PathnameContext.Provider`, outermost:
+
+```
+AppRouterContext > PathnameContext > SessionProvider > QueryClientProvider
+  > UserProvider > LoadingProvider > ToastProvider > modal
+```
+
+`src/contexts/UserContext.tsx:5` has read `usePathname` since 2026-07-20
+(`94e7b784`). Without those two contexts every case fails with **"invariant
+expected app router to be mounted"** — not a partial failure, the whole suite.
+Use a noop `AppRouterInstance` (`back`/`forward`/`refresh`/`push`/`replace`/
+`prefetch` all `() => {}`) and `PathnameContext` value `"/"`.
+
+`MembershipModal.test.ts:21-33,162` has done this since it was written and is the
+reference. `SubscriptionManagementModal.test.ts` did not, failed 5/5 from
+2026-07-20 onward, and was added to CI's skip list on 2026-08-19 rather than
+fixed — so the modal shipped with no render coverage for seven weeks. Fixed
+2026-09-04.
+
+**If you add a modal smoke test and see the invariant error, this is why.** The
+fix is the two wrappers, never removing `UserProvider`.
+
 Tests live at:
 
 ```

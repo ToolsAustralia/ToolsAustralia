@@ -23,11 +23,11 @@ cd "$(dirname "$0")/../.." || exit 1
 # SKIP — every suite CI does not run, with WHY.
 #
 # Measured 2026-09-04 against a seeded mongo:8.0 single-node replica set: of 293
-# suites, 290 pass and these 3 are excluded. Not inferred from names.
+# suites, 292 run and pass. ONE is excluded. Not inferred from names.
 #
-# Both remaining categories are permanent-or-bug, never environment:
+# Both categories are permanent-or-bug, never environment:
 #   POLICY  — must never run automatically, whatever we provision.
-#   BROKEN  — a real defect. Fix it and delete the line.
+#   BROKEN  — a real defect. Fix it and delete the line. Currently EMPTY.
 #
 # There is deliberately no third category for "needs a service we could provide".
 # Before the database there were 43 such suites in four NEEDS_* groups; Phase 2
@@ -45,22 +45,19 @@ SKIP_POLICY=(
 )
 
 # BROKEN — genuinely failing on main. Not an environment problem, and NOT fixed by
-# the database. Each must be fixed and its line deleted; this category is meant to
-# be empty. Keeping "cannot run here" and "known broken" in one undifferentiated
-# list is what destroyed the credibility of the previous skip list.
+# the database. Each must be fixed and its line deleted.
 #
-#   subscription-management: 5/5 "invariant expected app router to be mounted".
-#     The test imports UserProvider (:24) and wraps the tree in it (:157);
-#     UserContext.tsx:5 has read usePathname since 2026-07-20 (94e7b784) and no
-#     router is provided. The sibling membership-modal test does provide one.
-#     Already red when the original skip list was written on 2026-08-19, despite
-#     that list claiming it was "verified by running all 237".
-#   dashboard-date-range: real assertion — membershipAsOfMode expected "live",
-#     got "snapshot". Skipped since 2026-08-19.
-SKIP_BROKEN=(
-  test:dashboard-date-range
-  test:subscription-management
-)
+# THIS CATEGORY IS EMPTY, WHICH IS THE POINT. Both former entries were fixed on
+# 2026-09-04 rather than left skipped:
+#   subscription-management — the test mounted UserProvider (which reads usePathname)
+#     without an app-router context, so all 5 cases threw. The sibling MembershipModal
+#     test had always provided one. Fixed by wrapping the same two contexts.
+#   dashboard-date-range — the TEST was stale, not the code. It asserted that every
+#     range reads live membership; snapshot-for-past-ranges shipped 2026-04-29, one day
+#     after the test was last touched, and is documented in docs/admin/backend.md:334.
+#
+# Adding an entry here is admitting a real defect ships unchecked. Prefer fixing it.
+SKIP_BROKEN=()
 
 SKIP=(
   "${SKIP_POLICY[@]}"
@@ -72,11 +69,12 @@ SKIP=(
 # any other way.
 #
 # Measured 2026-09-04 against a seeded mongo:8.0 single-node replica set with the
-# five placeholder vars: 293 total - 3 skipped = 290 run, 290 pass, 0 fail.
-# (292 at first measurement; test:klaviyo-bulk-import was wired in Phase 3 after
-# check:test-scripts found it had never run anywhere.)
-# Before the database it was 246; the container plus the seed step revived 43.
-BASELINE=290
+# five placeholder vars: 293 total - 1 skipped = 292 run, 292 pass, 0 fail.
+#
+# How it got here: 246 before CI had a database; 289 once the container and seed step
+# landed; 290 after check:test-scripts found test:klaviyo-bulk-import had never run
+# anywhere; 292 once the two genuinely-broken suites were fixed instead of skipped.
+BASELINE=292
 
 # ---------------------------------------------------------------------------
 # Discover suites. `test` (no colon) is an alias for test:anchor-billing, so

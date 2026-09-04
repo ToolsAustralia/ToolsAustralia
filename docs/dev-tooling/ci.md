@@ -14,16 +14,19 @@ everyone else. CI is the machine that has nothing, so it finds those.
 
 Two terms you will see on a pull request page:
 
-- **A check** — one named pass/fail result. Ours are `static` and `suites`.
-- **A required check** — a check GitHub will not let you merge past. Ours are
-  **not required yet**; that is the last phase of the rollout plan.
+- **A check** — one named pass/fail result. Ours are `static`, `drift`, `suites`
+  and `preview`.
+- **A required check** — a check GitHub will not let you merge past. **None of ours
+  are required yet.** Turning that on is the last step, and it is deliberately last:
+  a gate that fires while the pipeline is still unreliable just teaches everyone to
+  bypass it.
 
 ## Why ours exists when Vercel already builds everything
 
 Reasonable question — Vercel does build the entire app on every push, and that
 build does catch type errors. Three things it does not do:
 
-1. **It never runs a single test suite.** All 292 of them are invisible to it.
+1. **It never runs a single test suite.** All 293 of them are invisible to it.
 2. **It only lints `src/`.** Everything in `scripts/` and `e2e/` — hundreds of
    files — is never checked.
 3. **Nothing stops you merging when it fails.** It reports; it does not gate.
@@ -37,7 +40,7 @@ cannot see.
 |---|---|---|
 | `static` | Types are consistent, and the whole repo passes lint — not just `src/` | ~2 min |
 | `drift` | Machine-generated files still match their inputs, every env var the code reads is registered, every test file is wired to a script, and Norm's routes match its registry | ~1 min |
-| `suites` | **290 of the 293** logic suites pass: billing arithmetic, the Stripe webhook queue, renewal-grant reconciliation, shop entry grants, redeemables, promo multipliers, permissions, Cobber's legal-wording guard | ~5 min |
+| `suites` | **292 of the 293** logic suites pass: billing arithmetic, the Stripe webhook queue, renewal-grant reconciliation, shop entry grants, redeemables, promo multipliers, permissions, Cobber's legal-wording guard | ~5 min |
 | `preview` | Opens a real browser against the deployed preview and reads the pages, checking the free-entry wording. **Advisory — never blocks a merge** | ~6 min wait + 2 min |
 
 The `suites` job starts a **scratch MongoDB** — a blank database that lives and dies
@@ -49,7 +52,7 @@ with no database configured they throw at import and never run at all.
 **What a green tick does not mean.** It does not mean the app builds — there is no
 build step, on purpose (Vercel already does that, and repeating it costs four
 minutes and a real database for nothing). It does not mean the browser tests ran.
-And it does not mean all 292 suites ran — see the skip list below.
+And it does not mean all 293 suites ran — see the skip list below.
 
 ## Run the checks yourself
 
@@ -97,7 +100,7 @@ Three details that will cost you an hour if you skip them:
 One caveat: locally you also have a `.env.local`, so a suite may pass for you using
 real config where CI uses placeholders.
 
-## The skip list — why 3 suites do not run
+## The skip list — why ONE suite does not run
 
 `.github/scripts/run-test-suites.sh` holds every suite CI does not run, grouped by
 **why**. The reason matters more than the list:
@@ -105,10 +108,13 @@ real config where CI uses placeholders.
 | Reason | Count | Meaning |
 |---|---|---|
 | `POLICY` | 1 | **Never runs here, whatever we provision.** `test:igodirect-sso` POSTs to the live production partner portal — giving CI that secret would fire real third-party traffic on every push. |
-| `BROKEN` | 2 | Genuinely failing on `main`. Not an environment problem. |
+| `BROKEN` | 0 | Genuinely failing on `main`. Not an environment problem. |
 
-**`BROKEN` is meant to be empty.** Two suites sit there today, each named in the
-script with what is actually wrong with it.
+**`BROKEN` is empty, and that is the point.** Two suites lived there:
+`subscription-management` (the test mounted a provider needing Next's router and
+never supplied one) and `dashboard-date-range` (the test was stale, not the code).
+Both were fixed on 2026-09-04 rather than left skipped. Adding an entry back is
+admitting a real defect ships unchecked — prefer fixing it.
 
 There is deliberately **no category for "needs a service we could provide"**. Before
 the database there were 43 such suites across four `NEEDS_*` groups; rather than
@@ -129,9 +135,11 @@ worse than none:
 - **Every skip entry must name a script that still exists.** Rename a suite and
   forget the list, and CI fails rather than quietly running something you thought
   was skipped.
-- **Coverage cannot fall below a committed baseline** (`BASELINE=246`). Delete or
+- **Coverage cannot fall below a committed baseline** (`BASELINE=292`). Delete or
   rename a suite and the run fails until someone lowers that number on purpose and
-  says why.
+  says why. It has only ever gone up: 246 before CI had a database, 289 with the
+  container and seed step, 290 once a never-executed suite was found and wired, 292
+  once the two broken suites were fixed.
 
 ## The `drift` job — four silent failures
 
