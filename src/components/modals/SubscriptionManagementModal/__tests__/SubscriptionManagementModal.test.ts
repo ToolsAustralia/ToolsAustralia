@@ -22,8 +22,26 @@ import { SessionProvider } from "next-auth/react";
 import { LoadingProvider } from "@/contexts/LoadingContext";
 import { ToastProvider } from "@/components/ui/Toast";
 import { UserProvider } from "@/contexts/UserContext";
+import { AppRouterContext, type AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import SubscriptionManagementModal from "../index";
 import type { SubMgmtUser } from "../types";
+
+// Mock app-router instance — every method is a noop.
+//
+// UserProvider reads usePathname (src/contexts/UserContext.tsx:5, since 2026-07-20),
+// so rendering it without a router throws "invariant expected app router to be
+// mounted" — all 5 cases, every run. The sibling MembershipModal test has provided
+// these two contexts since it was written; this file simply never did, and the suite
+// was quietly skipped in CI rather than fixed.
+const mockRouter: AppRouterInstance = {
+  back: () => {},
+  forward: () => {},
+  refresh: () => {},
+  push: () => {},
+  replace: () => {},
+  prefetch: () => {},
+};
 
 let testsRun = 0;
 let testsFailed = 0;
@@ -156,7 +174,9 @@ for (const combo of combos) {
     const loadingEl = React.createElement(LoadingProvider, { children: toastEl });
     const userEl = React.createElement(UserProvider, { children: loadingEl });
     const queryEl = React.createElement(QueryClientProvider, { client: queryClient, children: userEl });
-    const tree = React.createElement(SessionProvider, { session: null, children: queryEl });
+    const sessionEl = React.createElement(SessionProvider, { session: null, children: queryEl });
+    const pathnameEl = React.createElement(PathnameContext.Provider, { value: "/", children: sessionEl });
+    const tree = React.createElement(AppRouterContext.Provider, { value: mockRouter, children: pathnameEl });
     const html = renderToString(tree);
     assert.ok(typeof html === "string", "renderToString must return a string");
   });

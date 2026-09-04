@@ -127,21 +127,27 @@ Two things to know before touching them:
   hold the page after the panel is visually gone.
 
 **Guard rail:** `internal-norm/no-adhoc-scroll-lock` flags direct
-`document.body.style.{overflow,overflowY,position}` writes, at **`warn`** — 57 pre-existing
+`document.body.style.{overflow,overflowY,position}` writes, at **`warn`** — **45** pre-existing
 hand-rolled locks remain (`Header`, `AdminPage`, `RewardsFloatingWidget`, `WinnersTestimony`,
 the `*/Shell.tsx` family, the two admin filter drawers).
 
-**A warning alone was not enough**, and an audit was right to call that a band-aid: warning
-#58 would appear in a run that already emitted 57 and exits the same way, so a reviewer has no
-signal distinguishing the new one from the noise they have learned to scroll past.
+**A warning alone was not enough**, and an audit was right to call that a band-aid: a new warning
+appears in a run that already emitted dozens and exits the same way, so a reviewer has no signal
+distinguishing the new one from the noise they have learned to scroll past. `--max-warnings`
+is what converts it into an exit code.
 
-**Be honest about what the ratchet does today, though:** `npm run lint` ALREADY exits non-zero
-because of **6 pre-existing errors** in `e2e/` and `scripts/`, so the warning budget does not
-yet change any exit code. It is a tripwire waiting to become load-bearing — fix those 6 errors
-and it starts governing immediately, at which point it has zero headroom, so expect to move the
-number when unrelated warnings are added or removed. So `lint`
-now carries **`--max-warnings 77`** (the current total). The count can only go down: a new
-hand-rolled lock fails the command rather than needing to be spotted.
+**Status as of 2026-09-04 (measured, `npm run lint`):** 0 errors, **70 warnings**, exit 0 —
+45 scroll-lock, 17 `no-unused-vars`, 8 `exhaustive-deps`. The ratchet is therefore **live**: the
+budget now governs the exit code. The 6 pre-existing errors in `e2e/` and `scripts/` this
+section used to describe are **fixed** — do not reintroduce that claim.
+
+`lint` carries **`--max-warnings 77`** against an actual 70, i.e. **7 warnings of headroom**,
+deliberately. It was briefly proposed to drop the ceiling to 70 after deleting 7 dead
+`eslint-disable` directives; that would have restored the exact zero-headroom state the budget
+exists to avoid, where the next unrelated warning turns CI red on a rule the author never
+touched. Raise the ceiling only to match a deliberate decision, never to absorb creep — the
+count is meant to go down.
+
 
 **`Header` and `AdminPage` are now migrated** — they were the two genuinely live surfaces, and
 both had the same defect for the same reason: they cleared the body styles unconditionally in

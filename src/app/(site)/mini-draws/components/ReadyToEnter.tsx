@@ -60,7 +60,7 @@ export default function ReadyToEnter() {
             <div className="flex flex-col gap-1.5 text-center">
               <span className="inline-flex items-center gap-1.5 self-center rounded-full bg-[#FEF2F2] px-2.5 py-[5px] text-[10.5px] font-extrabold uppercase tracking-[0.07em] text-[#C70000] dark:bg-red-950/40 dark:text-red-400">
                 <Ticket className="h-3 w-3" />
-                Entries from $1
+                Mini packs from $1
               </span>
               <h3 className="mt-1 text-[17px] font-extrabold text-[#111827] dark:text-white">Ready to enter?</h3>
               <p className="text-[12.5px] leading-[1.55] text-[#6B7280] text-pretty dark:text-neutral-400">
@@ -85,7 +85,7 @@ export default function ReadyToEnter() {
             <div className="min-w-0 flex-1">
               <span className="inline-flex items-center gap-2 rounded-full bg-[#FEF2F2] px-3.5 py-1.5 text-[11.5px] font-extrabold uppercase tracking-[0.07em] text-[#C70000] dark:bg-red-950/40 dark:text-red-400">
                 <Ticket className="h-[13px] w-[13px]" />
-                Entries from $1
+                Mini packs from $1
               </span>
               <h3 className="mb-1.5 mt-3 text-[22px] font-extrabold text-[#111827] dark:text-white">Ready to enter?</h3>
               <p className="max-w-[520px] text-[14.5px] leading-[1.6] text-[#6B7280] text-pretty dark:text-neutral-400">

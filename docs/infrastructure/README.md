@@ -48,8 +48,17 @@ Cross-cutting infra: health checks, cron, upload, Cloudinary, environment, Zod h
 > `.env.example` — `BONUS_CODE_WEBHOOK_SECRET`, `BONUS_CODE_DAILY_MINT_CAP`, `BONUS_CODE_KILL_SWITCH`
 > (added 2026-08-26) guard the inbound bonus-code webhook, which **mints codes that grant real
 > prize-draw entries**. Treat the secret as a payment credential: **scope it to Vercel's Production
-> environment only** (a preview deploy plus the secret would otherwise mint into the shared
-> production database). It is a **comma-separated** list so rotation can overlap; each entry must be
+> environment only** — a preview deploy plus the secret would otherwise mint real issuance rows
+> without anyone asking for them.
+>
+> _Correction (2026-09-04): this previously said a preview would mint into "the shared production
+> database". **Preview deployments read the DEV cluster, not production** — confirmed by DJ, and
+> corroborated by `.env.local` and `.env.production` resolving to different Atlas clusters
+> (`tools-australia.agfdola…` vs `toolsaustralia-producti.a4b0clk…`). The instruction above is
+> unchanged and still correct: minting unasked-for codes into the dev database is still wrong, and
+> the Production-only scoping is what keeps the separation true. Only the stated reason was wrong.
+> The same false premise appears in `docs/superpowers/specs/2026-08-26-bonus-code-webhook-rework.md:473`,
+> which is left as a dated record of what was believed then._ It is a **comma-separated** list so rotation can overlap; each entry must be
 > ≥ 16 characters or it is ignored. All three fail **closed**: an unset/too-short secret refuses
 > every call with `500 misconfigured` (NOT the `if (!cronSecret) return true` idiom in
 > `src/app/api/cron/monthly-redeemables-issuance/route.ts`), and a DB outage while reading the cap

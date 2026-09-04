@@ -494,6 +494,15 @@ live draw entries and can win. Staff are diverted to `/admin` before this check.
 
 Members manage their membership from **My Account → Membership → Manage plan** (the "manage" overlay sheet), reachable from the Membership page or the `/my-account?open=subscription` deep-link. (The old **Settings → Subscription** tab was removed in the 2026-07 dashboard revamp; Settings now holds only Profile / Theme / Password.) This section covers only the customer-OWNED facts (where the action happens, which fields change). For pricing, proration mechanics, retention-offer tables, and the full cancellation-flow internals, see [BUSINESS.md §9, §10, §13](BUSINESS.md).
 
+_Coverage note (2026-09-04) — no customer-facing change._ The manage overlay is
+`SubscriptionManagementModal`. Its automated render test had been failing on every run
+since 2026-07-20 (it mounted `UserProvider`, which reads `usePathname`, without an
+app-router context) and was added to CI's skip list on 2026-08-19 rather than fixed — so
+this surface, the one place a member changes or cancels their own membership, carried **no
+automated render coverage for seven weeks**. The test is fixed and running again. Nothing
+a customer sees or can do changed; recorded here only so the confidence level attached to
+this section's claims over that window is on the record.
+
 ### 5.1 Joining
 
 Customer pays full package price immediately at signup via Stripe. There is **no free trial** — `trialing` is a billing-anchor artifact for 25th–27th joiners only (see [BUSINESS.md §9b](BUSINESS.md)).
@@ -591,6 +600,22 @@ A customer is **ineligible** for any giveaway if any of these hold ([giveaway-el
 The employee exclusion sits on a different axis from the other two and is checked in a different place. Age and state are **profile** questions, validated on the forms that collect them; an internal account is an **account** question, checked at the **purchase boundary** — `POST /api/mini-draw/purchase` returns **403** when `userType` is `"staff"` or `"admin"`, so an internal account is never charged for entries that could not pay out. It reads the User document rather than the session's `userType` claim, which can be stale after a role change. The buy widget is also hidden from internal accounts on `/mini-draws` and `/mini-draws/<id>`, but that is presentation — the endpoint is the guard. This became necessary on 2026-08-20: staff had been kept off `/mini-draws` by the middleware block-list, which prevented the purchase as a side effect, and that block was lifted so staff could open the draw page the admin UI links to.
 
 The Australian-resident requirement is enforced via the `state` field (codes are AU states/territories); there is **no explicit "Australian resident" boolean** in `giveaway-eligibility.ts` — eligibility keys only on state code + age. *(Unverified: whether residency is gated elsewhere, e.g. at registration.)* Customer-facing eligibility checks route through this shared helper — its only consumers are the profile settings form ([ProfileTab.tsx](src/app/(site)/my-account/components/settings/ProfileTab.tsx)) and the post-purchase setup modal ([Step2Demographics.tsx](src/components/modals/UserSetupModal/Step2Demographics.tsx)). The admin major-draw winner-export and eligibility-summary paths do **not** call it — they re-implement the SA/ACT exclusion inline with hard-coded state comparisons ([MajorDrawService.ts:758-762](src/services/admin/MajorDrawService.ts#L758), [export/route.ts:130-131](src/app/api/admin/major-draw/export/route.ts#L130)) and apply no age check at export time.
+
+### Buying a one-time pack charges the customer once (defect fixed 2026-09-04)
+
+Between January and September 2026, a **logged-in member buying a one-time pack with a newly
+typed card** was charged **twice** and received the pack's free entries **twice**. What the
+customer saw: two identical charges on their statement seconds apart, and an entry count double
+what the pack advertises (Mick Beswick, 3 Sept: two $25 Apprentice Pack charges, 18 entries
+instead of 9). 54 members across 57 checkouts.
+
+Customers **not** affected: anyone paying with a **saved card**, anyone buying a **Mini Pack**,
+and anyone buying or renewing a **membership** — those paths only ever charged once.
+
+Fixed by making the purchase reuse the payment the checkout had already taken rather than
+taking a second one. A customer who genuinely buys the same pack twice is still charged twice,
+as they should be. The historical charges were **not** reversed automatically; any refund is a
+separate deliberate decision. See [BUSINESS.md §9j](BUSINESS.md).
 
 ---
 
@@ -988,12 +1013,38 @@ Before persisting, the webhook runs a **persisted-UTM reconcile** ([reconcilePer
 | Category | Properties |
 |---|---|
 | Identity / account | `user_id`, `created_at`, `last_login`, `is_active`, `role`, `state`, `profession`, `gender` (omitted entirely when unset — no "unknown" sentinel), `is_email_verified`, `is_mobile_verified`, `profile_setup_completed`, `app_accepts_promotional_email` |
-| Subscription | `has_active_subscription`, `subscription_tier`, `subscription_start/end_date`, `subscription_auto_renew`, `subscription_status`, `subscription_has_pending_upgrade`, `subscription_previous_tier`, `subscription_last_upgrade/downgrade_date`, `past_due_renewal_entries`, `membership_status`, `membership_active_duration_months`, `next_renewal_date` |
+| Subscription | `has_active_subscription`, `subscription_tier`, `subscription_start/end_date`, `subscription_auto_renew`, `subscription_status`, `subscription_has_pending_upgrade`, `subscription_previous_tier`, `subscription_last_upgrade/downgrade_date`, `past_due_renewal_entries`, `membership_status`, `membership_active_duration_months`, `next_renewal_date`, `membership_label`, `next_renewal_label` |
 | Entries / points / spend | `accumulated_entries`, `rewards_points`, `entries_purchased`, `giveaways_entered`, `member/one_time/upsell/mini_draw_entries`, `lifetime_value`, `total_spent`, `first/last_purchase_date`, `total_one_time/mini_draw_packages` |
 | Upsell engagement | `total_upsells_purchased`, `upsell_total_shown/accepted/declined`, `upsell_conversion_rate`, `upsell_last_interaction` |
-| Referral / partner | `referral_code`, `referral_successful_conversions`, `referral_total_entries_awarded`, `partner_discount_active/queued_count/total_days/next_activation_date` |
-| Segmentation / current draw | `brand_interest` (removed once any purchase is made); `current_draw_id/name/start_date/subscription_active/one_time_packages/entries` |
+| Referral / partner | `referral_code`, `referral_successful_conversions`, `referral_total_entries_awarded`, `partner_discount_active/queued_count/total_days/next_activation_date`, `partner_discount_label` |
+| Segmentation / current draw | `brand_interest` (the brand promo page they registered through; removed once any purchase is made); `current_draw_id/name/start_date/subscription_active/one_time_packages/entries` |
 
+
+
+
+**Cancelling does not end a membership immediately, and the emails must say so.** A member who cancels keeps
+member pricing, partner discounts and free entries until the period they have paid for runs out — only
+`autoRenew` flips, and `isActive` stays true (`CancelSubscriptionService`). The exception is a past-due member,
+who loses access at once. `Subscription Cancellation Requested` now carries `access_ends_at_label` (e.g.
+`"24 September 2026"`, AEST) so a confirmation email can name that date without the marketing tool having to
+format an ISO timestamp it cannot format. Every other customer-facing date is now formatted in Sydney time too: until 2026-09-04 the
+receipt and renewal emails printed the previous day for roughly a third of customers, because three
+separate formatters rendered in UTC with US ordering.
+**`brand_interest` is captured at registration and now survives.** It records which brand's
+promo page a visitor signed up through (`dewalt`, `makita`, `milwaukee`, `ryobi`, `hikoki`,
+`stihl`), and is cleared when they make any purchase. Until 2026-09-04 it was silently
+overwritten to `"milwaukee"` by the next profile sync after signup — 9,155 of 39,076
+attributed users were affected, so a HiKOKI or STIHL visitor was marketed to as a Milwaukee
+one. It is now read from the persisted `signupAttribution.promotionSlug`, so every sync
+agrees. Users who arrived through no promo page (~33%) still receive `"milwaukee"`, which
+is a default rather than a stated preference — worth knowing before segmenting on it.
+**Three of these are display-only.** `membership_label` ("Tradie Member" / "Not a member"), `partner_discount_label` ("Active" / "Not active") and
+`next_renewal_label` (a date, "Payment retrying", "Renewal date pending" or "Auto-renew off") exist so a Klaviyo merge tag can print a value
+to a customer. They duplicate `subscription_tier`, `partner_discount_active` and `next_renewal_date`, which stay
+the ones segments and flow filters use — the labels are prose and will change. `next_renewal_label` is rendered in
+AEST because renewals anchor to day 24 and are stored as `14:00Z`, which is the following day in Sydney; a
+UTC-formatted label would tell a member the wrong renewal day. See
+[docs/tracking/KLAVIYO_INTEGRATION.md](docs/tracking/KLAVIYO_INTEGRATION.md).
 **Two event-level data points added 2026-08-26** (events, not profile properties — they describe a moment, and the profile only ever describes *now*):
 
 - **`Subscription Cancellation Requested`** — sent the instant a member-initiated cancellation commits. Carries the customer's account id, the tier they are leaving (id, name, tier and monthly price), the time they cancelled and the time their access ends. No new personal information leaves: the email address and name were already on the profile, and the tier and dates are already synced as profile properties. What is new is the *timing* — a cancel-click signal Klaviyo previously never received.

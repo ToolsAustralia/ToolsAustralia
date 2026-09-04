@@ -344,7 +344,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
 ```json
 {
   "version": 1,
-  "lastModified": "2026-09-03",
+  "lastModified": "2026-09-04",
   "domains": {
     "subscription": {
       "docs": "docs/subscription/",
@@ -999,6 +999,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
       "docs": "docs/dev-tooling/",
       "paths": [
         ".mcp.json",
+        ".github/**",
         "src/app/api/debug/**",
         "src/app/api/dev/**",
         "src/app/api/test/**",
@@ -1012,7 +1013,7 @@ The manifest format is JSON (versioned). Path globs use minimatch syntax (`**` f
         "scripts/wt-*.sh",
         "scripts/codemods/**"
       ],
-      "lastVerified": "2026-08-26"
+      "lastVerified": "2026-09-04"
     },
     "config-and-data": {
       "docs": "docs/config-and-data/",

@@ -238,8 +238,11 @@ and what replaced each:
 
 ### Detail (`/mini-draws/[id]`)
 
-- **Key facts strip** (mobile only) under the hero: `$1 / Per entry`, `{n} / Entries left`,
-  `{pct}% / Filled`. The `$1 Entry` pill stays desktop-only — on mobile the sticky bar carries the price.
+- **Key facts strip** (mobile only) under the hero: `From $1 / Mini packs`, `{n} / Entries left`,
+  `{pct}% / Filled`. The `From $1 / Mini pack` pill stays desktop-only — on mobile the sticky bar
+  carries the price. **Rule 11: the price attaches to the pack, never to an entry.** This strip
+  shipped as `$1 / Per entry` on 2026-08-12 (`ade906ab`) and was corrected on 2026-09-04 — see
+  the regression note in [gotchas.md](./gotchas.md).
 - **Sticky gallery column** on `lg+`. The gallery sits in a wrapper `div` that stretches to the grid row
   height, with `sticky top-24` on an inner div; `sticky` applied directly to a grid item collapses to
   content height and never engages. The right column's old `lg:sticky lg:top-28` is gone — two sticky

@@ -1,163 +1,353 @@
 name: CI
 
-# The checks that need nothing but a checkout and a lockfile install.
+# What a green tick here means, and what it does not.
 #
-# WHAT A GREEN TICK HERE DOES **NOT** MEAN — read this before trusting it:
+# MEANS: the code type-checks, passes lint across the WHOLE repo (including
+# scripts/ and e2e/, which Vercel's build never compiles), and 246 of the 292
+# logic suites pass.
 #
-#   * The e2e suite does not run. e2e/ needs a live MongoDB and `stripe listen`
-#     webhook forwarding; a runner has neither. A push-triggered e2e job would fail
-#     on every push and be switched off within a week, taking the useful checks
-#     down with it. e2e stays a local/manual run.
+# DOES NOT MEAN:
+#   * It builds. There is no `npm run build` step, deliberately — Vercel already
+#     runs `next build --turbopack` on every push to every branch, with type
+#     errors left enabled. Repeating it here costs ~4 minutes and a reachable
+#     database for no new information.
+#   * The e2e suite ran. It needs a seeded database and a booted server. Browser
+#     coverage against the deployed preview arrives in Phase 4.
+#   * All 292 suites ran. 46 cannot pass on a runner today; every one is listed
+#     with its reason in .github/scripts/run-test-suites.sh. Phase 2 revives most
+#     of them by giving CI a throwaway database.
 #
-#   * Nothing is built. There is no `npm run build` step, so this proves the code
-#     type-checks — not that Next/Turbopack compiles it or that a page renders.
-#     `prebuild` also regenerates six manifests; those generated files are
-#     committed, which is the only reason the suites below can import them.
-#
-#   * 31 of the 236 `test:*` suites are skipped because they need a database or a
-#     secret this workflow deliberately does not hold. Every one is listed in SKIP
-#     below with its reason. Coverage here is 205 suites, NOT the whole repo.
-#
-#   * This repo has no test runner. Each suite is a standalone tsx script that
-#     signals failure only by exiting non-zero, so a script that asserts nothing
-#     still reads as a pass. Green means "did not throw", not "is correct".
+# Full explanation, written for someone who has not set up CI before:
+#   docs/dev-tooling/ci.md
+# Design and phase plan:
+#   docs/superpowers/specs/2026-09-04-ci-pipeline-design.md
 
 on:
-  push:
+  # Every PR, on every push to it.
   pull_request:
+  # Plus the two branches that deploy somewhere real. `main` is production;
+  # `staging` is a deployed environment (docs/e2e/how-to-run.md). Pushes to a
+  # feature branch with no open PR are deliberately NOT covered — open a PR.
+  #
+  # Listing branches here is what stops the double run: previously `on: push`
+  # and `on: pull_request` both fired unfiltered, landing in different
+  # concurrency groups (refs/heads/x vs refs/pull/N/merge), so every PR ran the
+  # whole pipeline twice.
+  push:
+    branches: [main, staging]
 
-# A second push to the same branch makes the first run's answer worthless.
+# github.ref is already per-PR on pull_request (refs/pull/N/merge, stable across
+# re-pushes) and per-branch on push. Do not "improve" this to head_ref — that
+# collapses per-PR isolation into per-branch.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# An explicit block sets every unlisted scope to none. Without this the job
+# inherits the repo-default token scope, which is far wider than it needs.
+permissions:
+  contents: read
+
 jobs:
-  verify:
+  static:
+    name: static
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # package.json engines.node is "22.x". There is no .nvmrc in this repo.
           node-version: '22'
           cache: npm
 
-      # ci, not install: it installs exactly what package-lock.json pins and fails
+      # ci, not install: installs exactly what package-lock.json pins, and fails
       # if the lockfile and package.json have drifted apart.
       - name: Install
         run: npm ci
 
+      # THE FIX THAT MADE THIS WORKFLOW PASS FOR THE FIRST TIME.
+      #
+      # next-env.d.ts is gitignored (.gitignore:68) because Next regenerates it
+      # on every build. It is also the only supplier of next/image-types/global,
+      # which is what teaches tsc to read a `.webp` import. On a fresh checkout
+      # that file does not exist, so tsc reported 9 TS2307 errors on .webp
+      # imports and this workflow failed 108 times in a row.
+      #
+      # Vercel never hit it because `next build` writes the file itself — which
+      # is exactly why the breakage stayed invisible for sixteen days.
+      #
+      # `next typegen` is Next's own supported command for this and takes ~4s.
+      # Do not replace it by committing next-env.d.ts: it would go stale against
+      # .next/types/routes.d.ts, which this same step generates.
+      - name: Generate Next type definitions
+        run: npx next typegen
+
       - name: Type check
         run: npm run type-check
 
-      # Each gate runs even when an earlier one fails, so one red step cannot hide
-      # the state of the other two. Three separate answers beat one early exit.
-      #
-      # HEADS UP: this step is red on first run. `npm run lint` already fails on
-      # main, on 6 errors that predate this workflow and have nothing to do with
-      # whatever you just pushed:
-      #     e2e/fixtures/test.ts               x3  react-hooks/rules-of-hooks
-      #                                            (Playwright's `use` fixture arg
-      #                                            read as a React Hook)
-      #     scripts/codemod-dark-text.js       x2  no-require-imports
-      #     scripts/migrate-klaviyo-draw-properties.ts  x1  no-explicit-any
-      # Warnings currently sit at 77 against the script's own ceiling of 77, so the
-      # next warning added also turns this red. Fix the six, don't raise the ceiling
-      # — the ceiling is the only thing stopping warning creep.
+      # Runs even when type-check failed, so one red step cannot hide the other.
+      # Note this lints the whole repo (~2.7k files); Vercel's build lints src/**
+      # only, and that delta is the reason this step earns its place.
       - name: Lint
         if: ${{ !cancelled() }}
         run: npm run lint
 
-      - name: Offline test suites
-        if: ${{ !cancelled() }}
-        shell: bash
+  # Consistency checks: cheap, need no services, and each catches a class of defect
+  # that is otherwise SILENT — it ships, looks fine in review, and surfaces in
+  # production or not at all.
+  drift:
+    name: drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Nine files under src/generated/ are committed AND machine-generated from
+      # images, videos and the partner spreadsheet. Vercel regenerates them on every
+      # deploy but never compares them to what is committed — so a PR that adds a
+      # video without re-running the generator looks correct on the preview while the
+      # committed manifest the tests import is stale. Regenerating and diffing is the
+      # only thing that notices. Takes ~4s and needs no env.
+      - name: Generated files match their inputs
         run: |
-          set -uo pipefail
+          npm run prebuild
+          if ! git diff --exit-code --stat src/generated/; then
+            echo ""
+            echo "The files above are generated from inputs you changed, but the committed"
+            echo "copies were not regenerated. Run 'npm run prebuild' and commit the result."
+            exit 1
+          fi
 
-          # Suites that cannot pass on a runner. Verified by running all 237 with
-          # every declared env var absent — not inferred from their names.
-          SKIP=(
-            # --- need a MongoDB connection (src/lib/mongodb.ts throws without MONGODB_URI)
-            test:dashboard-stats-aggregator
-            test:dashboard-stats-reader
-            test:dashboard-stats-service
-            test:hourly-revenue
-            test:norm-call-log
-            test:norm-kill-switch
-            test:norm-pending
-            test:norm-permissions
-            test:norm-receipt
-            test:norm-user-service-account
-            test:norm-with-norm
-            test:recovery-claim
-            test:resolve-norm-date-range
-            test:upsell-entries-v2
-            test:upsell-multiplier-resolver
-            test:webhook-queue-claim
-            test:webhook-queue-enqueue
-            test:webhook-queue-mark-result
-            test:webhook-queue-orphan-recovery
+      # .env.example is the single source of truth for WHICH vars exist (CLAUDE.md §9)
+      # and there is no runtime validation, so an unregistered var means production
+      # silently reads `undefined`. Checks code reads against the registry; needs no
+      # .env.local, which is why it can run here at all.
+      - name: Env registry
+        run: npm run check:env:registry
 
-            # --- need STRIPE_SECRET_KEY (src/lib/stripe.ts throws at import)
-            test:allowlist-reconcile
-            test:force-charge-mint-map
-            test:mint-current-cycle
-            test:prepare-recovered-cycle
-            test:webhook-queue-process
-            test:webhook-queue-replay-safe
-            test:zero-trial-guard
+      # This repo has no test runner — a *.test.ts with no `test:*` script never runs
+      # anywhere and nothing says so. It looks like coverage in review.
+      - name: Every test file is wired to a script
+        run: npm run check:test-scripts
 
-            # --- need NEXTAUTH_SECRET (src/lib/jwt.ts refuses to sign without it)
-            test:api-auth-permissions
-            test:staff-activity
+      # A Norm route with no registry entry is a runtime failure that tsc, next build
+      # AND regenerate-and-diff all miss, because the manifest is generated FROM the
+      # registry and so still matches itself. CLAUDE.md rule 10.
+      - name: Norm route/registry parity
+        run: npm run check:norm-parity
 
-            # --- needs IGODIRECT_SSO_SECRET; it signs a real partner SSO payload
-            test:igodirect-sso
+      # Pure filesystem check that every expected landing hero asset is present.
+      - name: Landing assets
+        run: npm run check:promo-landing-assets
 
-            # --- needs its own throwaway database via E2E_MONGODB_URI. It exits 1
-            #     on purpose rather than fall back to the dev DB and mutate it.
-            #     This is the shop entry-grant suite: the shop's entry arithmetic
-            #     is therefore NOT covered by this workflow.
-            test:shop-entries
+  # Reads the DEPLOYED preview with a real browser. This is the only automated defence
+  # of the rule-11 free-entry wording (CLAUDE.md §11) outside Cobber's FAQ corpus.
+  #
+  # ADVISORY BY DESIGN — never add this to branch protection. It depends on a Vercel
+  # deployment existing, and a required check that never reports (deployment skipped,
+  # cancelled, or a fork PR) leaves the PR permanently unmergeable. `continue-on-error`
+  # keeps the job's own result visible while the workflow stays green.
+  #
+  # Safe to run: DJ confirmed 2026-09-04 that Preview deployments read the DEV database,
+  # not production — verified independently by comparing connection strings, which point
+  # at different Atlas clusters. EXTERNAL mode is read-only regardless: e2e/run.ts:244
+  # routes to runExternal() before any DB wipe/seed or server boot, and hard-excludes
+  # @purchase and @admin.
+  preview:
+    name: preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+    permissions:
+      contents: read
+      # An explicit permissions block sets every unlisted scope to none, and finding the
+      # preview URL needs to read the deployment the Vercel integration created.
+      deployments: read
 
-            # --- NOT an environment problem. This one fails on main today, with a
-            #     full local env, on a real assertion (membershipAsOfMode: expected
-            #     "live", got "snapshot"). Skipped so it cannot mask new breakage;
-            #     it needs fixing, and then this line deleted.
-            test:dashboard-date-range
-          )
+    steps:
+      - uses: actions/checkout@v7
 
-          # The bare `test` alias just re-runs test:anchor-billing, so filtering on
-          # the `test:` prefix keeps it from running twice.
-          mapfile -t ALL < <(node -p "Object.keys(require('./package.json').scripts).filter(s => s.startsWith('test:')).sort().join('\n')")
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
 
-          FAILED=()
-          RAN=0
-          for suite in "${ALL[@]}"; do
-            case " ${SKIP[*]} " in *" $suite "*) continue ;; esac
-            RAN=$((RAN + 1))
-            if out=$(npm run --silent "$suite" 2>&1); then
-              echo "PASS  $suite"
-            else
-              echo "FAIL  $suite"
-              printf '%s\n' "$out" | tail -30 | sed 's/^/      /'
-              FAILED+=("$suite")
-            fi
+      - name: Install
+        run: npm ci
+
+      # `npm ci` installs NO browsers — all three playwright packages have
+      # hasInstallScript:false. Cache on the resolved version so a playwright bump
+      # invalidates it rather than silently reusing a mismatched build (a local run hit
+      # exactly that: "Executable doesn't exist at …chromium_headless_shell-1228").
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      # chromium only. chromium-desktop AND mobile-chrome both run on it, and mobile
+      # coverage is not optional here: the rule-11 breach this job exists to catch sat
+      # inside `lg:hidden` and was invisible at a desktop viewport. mobile-safari would
+      # additionally need webkit, which is a much larger download for a third viewport.
+      - name: Install Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # Vercel publishes a GitHub Deployment per push. Poll for one whose status is
+      # success and take its environment_url.
+      # Use pull_request.head.sha, NOT github.sha — on a pull_request event github.sha
+      # is the ephemeral merge commit, which Vercel never deploys and which therefore
+      # never matches.
+      - name: Wait for the Vercel preview
+        id: deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          for attempt in $(seq 1 60); do
+            ids=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
+                       -H "Accept: application/vnd.github+json" \
+                       "${api}/deployments?sha=${SHA}&per_page=100" | jq -r '.[].id')
+            for id in $ids; do
+              url=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
+                         -H "Accept: application/vnd.github+json" \
+                         "${api}/deployments/${id}/statuses?per_page=100" \
+                    | jq -r 'map(select(.state == "success")) | .[0].environment_url // empty')
+              if [ -n "$url" ] && [ "$url" != "null" ]; then
+                echo "url=$url" >> "$GITHUB_OUTPUT"
+                echo "preview ready: $url"
+                exit 0
+              fi
+            done
+            echo "attempt ${attempt}/60 — no successful preview deployment yet for ${SHA}"
+            sleep 15
           done
+          echo "No successful Vercel preview deployment for ${SHA} after 15 minutes." >&2
+          echo "This job does NOT pass by default — a preview that was never scanned is not a clean scan." >&2
+          exit 1
 
-          echo
-          echo "ran $RAN suites, ${#FAILED[@]} failed (${#SKIP[@]} skipped)"
+      # EXTERNAL mode: no database, no Stripe, no secrets, no server boot. It reads
+      # whatever is deployed, so it can legitimately flag copy this PR did not touch —
+      # that is the accepted cost of scanning the real deployed build. Re-run once the
+      # offending copy is fixed on the branch it came from.
+      - name: Legal-copy + smoke scan against the preview
+        env:
+          E2E_TARGET_URL: ${{ steps.deployment.outputs.url }}
+        run: npx tsx e2e/run.ts --grep @smoke --project chromium-desktop --project mobile-chrome
 
-          # A rename or a broken filter would otherwise run nothing and still go
-          # green — the worst possible outcome for a check nobody reads twice.
-          if [ "$RAN" -lt 150 ]; then
-            echo "Only $RAN suites ran; expected ~205. Refusing to report success."
-            exit 1
-          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preview-e2e-report
+          path: |
+            e2e-artifacts/report
+            e2e-artifacts/test-results
+          retention-days: 7
+          if-no-files-found: ignore
 
-          if [ ${#FAILED[@]} -gt 0 ]; then
-            printf 'failed: %s\n' "${FAILED[@]}"
-            exit 1
-          fi
+  suites:
+    name: suites
+    runs-on: ubuntu-latest
+    # Measured at 417s on a Windows dev machine for all 292; 246 on Linux should
+    # sit well under this. A hang is the real risk being capped here — no suite
+    # sets its own timeout and 33 of them contain http(s) URLs.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # A throwaway MongoDB that lives and dies with this run. It holds nothing,
+      # is reachable only from this machine, and revives 43 suites that cannot
+      # run without a database — the webhook queue, renewal-grant reconciler and
+      # shop entry-grant paths among them.
+      #
+      # Started with `docker run` rather than a `services:` block on purpose:
+      # service containers cannot override the image command, and we must pass
+      # `--replSet`. Transactions require a replica set, and `migrate:create-norm`
+      # below uses one — on a standalone node it dies with
+      # "Transaction numbers are only allowed on a replica set member or mongos".
+      # Production is a 3-node set, so this is also the closer match.
+      #
+      # Pinned to 8.0 because production is 8.0.30; the floating `mongo:8` tag
+      # resolves to 8.3.x, and testing against a server NEWER than production can
+      # pass on behaviour production does not have.
+      - name: Start MongoDB
+        run: |
+          docker run -d --name ci-mongo -p 27017:27017 mongo:8.0 --replSet rs0
+          for i in $(seq 1 60); do
+            docker exec ci-mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec ci-mongo mongosh --quiet --eval 'rs.initiate()'
+          for i in $(seq 1 60); do
+            [ "$(docker exec ci-mongo mongosh --quiet --eval 'try{rs.status().myState}catch(e){0}' | tr -d '\r')" = "1" ] && break
+            sleep 1
+          done
+          docker exec ci-mongo mongosh --quiet --eval 'print("replica set ready, myState=" + rs.status().myState)'
+
+      # Most suites build and tear down their own fixtures. A few assume a LIVE
+      # major draw already exists and mutate it, undoing the change in `finally`.
+      # A developer's database always has one; an empty container does not, and
+      # those suites fail on `no_target_draw` — nothing to do with what they test.
+      # Measured: exactly 3 suites need the draw, 1 needs the Norm role + user.
+      - name: Seed fixtures
+        env:
+          # directConnection=true is REQUIRED. A single-node replica set advertises
+          # the container's own hostname, which nothing outside the container can
+          # resolve; without this the driver hangs on topology discovery.
+          MONGODB_URI: mongodb://localhost:27017/toolsaustralia-ci?directConnection=true
+        run: |
+          npm run seed:ci-fixtures
+          npm run migrate:create-norm
+
+      # The skip table, the integrity guards and the runner all live in the
+      # script so you can run them locally:
+      #   bash .github/scripts/run-test-suites.sh --list
+      #   bash .github/scripts/run-test-suites.sh
+      # Reproducing a red CI should never require pushing.
+      - name: Test suites
+        env:
+          MONGODB_URI: mongodb://localhost:27017/toolsaustralia-ci?directConnection=true
+          # A SEPARATE database, and its whole connection string must match /e2e/i:
+          # two shop suites refuse to run otherwise, which is their guard against
+          # ever touching real data. Deliberately not in .env.example — it is
+          # LOCAL_ONLY (scripts/check-env.mjs).
+          E2E_MONGODB_URI: mongodb://localhost:27017/toolsaustralia-e2e?directConnection=true
+          # Placeholders, not secrets. src/lib/stripe.ts and src/lib/auth.ts throw at
+          # MODULE SCOPE when these are absent, so the suites die at import without
+          # ever making a call. Presence is what matters, not validity.
+          # auth.ts gates on all five; NEVER set any of them to "" — its `!value`
+          # test treats empty as missing, and next-auth's parseUrl throws on
+          # NEXTAUTH_URL='' with a misleading "Invalid URL".
+          STRIPE_SECRET_KEY: sk_test_ci_placeholder
+          NEXTAUTH_SECRET: ci-not-a-secret
+          NEXTAUTH_URL: http://localhost:3000
+          GOOGLE_CLIENT_ID: ci-placeholder
+          GOOGLE_CLIENT_SECRET: ci-placeholder
+        run: bash .github/scripts/run-test-suites.sh

@@ -943,3 +943,23 @@ one: `subscription_update` with no override writes nothing).
 
 Historical gap left unrepaired by decision: 148 recoveries / $4,900 / 147 members, 2026-07-21 →
 2026-09-03. See `docs/subscription/backend.md` for the streak-backfill trap that leaves behind.
+
+## One-time purchase routes must not call `paymentIntents.create` directly (2026-09-04)
+
+`/api/stripe/create-one-time-purchase` and `/api/stripe/create-one-time-purchase-existing-user`
+now both resolve their charge through `resolvePurchasePaymentIntent()`
+(`src/utils/payment/stripe/resolve-purchase-payment-intent.ts`), and accept an optional
+`paymentIntentId` naming a PaymentIntent the **browser already confirmed**.
+
+This matters at the Stripe boundary because the browser's `stripe.confirmPayment()` on the
+upfront intent is a real charge that leaves no trace in our routes. `-existing-user` used to
+create a second PaymentIntent regardless, double-charging every authenticated member who paid
+with a new card (57 checkouts, 54 members, Jan–Sep 2026). Idempotency keys could never have
+caught it: they dedupe `create` calls, and the first charge was a client-side `confirm` on an
+intent that already existed.
+
+Both routes answer **400** on `PaymentIntentNotAdoptableError` (wrong amount, wrong customer,
+wrong package, or still `requires_action`).
+
+Full behaviour: [payment/backend.md](../payment/backend.md#resolve-purchase-payment-intentts--the-one-charge-rule)
+and [payment/rules.md R14](../payment/rules.md#r14-one-checkout-takes-at-most-one-charge--never-create-a-paymentintent-without-first-trying-to-adopt-one).

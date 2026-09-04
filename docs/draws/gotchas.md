@@ -1,5 +1,26 @@
 # Draws — Gotchas
 
+## Mini-draw copy REGRESSED, and nothing caught it (2026-09-04)
+
+The rule below was applied on 2026-07-08. It regressed on 2026-08-12 (`ade906ab`, "rebuild the
+browse + detail surfaces from the design handoff"), which reintroduced `$1` / "Per entry" on the
+mini-draw **detail** page and `$1` / "Entry" in its desktop hero, plus "Entries from $1" in
+`ReadyToEnter`. All three shipped to production and sat there for 23 days. Fixed 2026-09-04.
+
+**Why nothing caught it.** The only automated rule-11 guard for live pages is
+`e2e/specs/marketing/legal-copy.spec.ts`, whose `PAGES` list covers `/mini-draws` but **not**
+`/mini-draws/[id]`. That file's own comment already warns about exactly this failure mode for
+`/shop`. It happened again on a different route.
+
+Two structural lessons, both now acted on:
+1. **A copy rule enforced only by review will regress at the next redesign.** A design handoff
+   reintroduces whatever the mockup says; the reviewer sees a pretty page, not a legal breach.
+2. **The mobile-only case is the dangerous one.** The offending strip sits inside `lg:hidden`, so
+   it was invisible at a desktop viewport — to a human reviewer *and* to any desktop-only scan.
+   Any automated check must run at least one mobile viewport.
+
+When adding a customer-facing route, add it to `PAGES` in `legal-copy.spec.ts` in the same change.
+
 ## Mini-draw copy: "Mini Pack" (never "entries"/"entry pack"), free-entry framing (2026-07-08)
 
 Mini-draw customer copy must sell the **pack**, not entries — the canonical product name is **"Mini Pack"** (`upsellPackages.ts` `displayName`), and entries are a **free inclusion**. Fixed the hero ("Entries start from $1" → "Mini packs start from $1"; "Per Entry" → "Per Pack"), `MiniDrawTabs` ("Purchase entry packages" / "entries can be purchased" → "mini pack"), `HowMiniDrawsWork`, and `MiniDrawEntrySheet` ("entry pack" → "mini pack"). Never price entries per unit and never say "buy entries". This is the site-wide legal rule — see **CLAUDE.md §11** (game-of-chance trade promotion; entries never sold; no odds/chance/gambling framing).

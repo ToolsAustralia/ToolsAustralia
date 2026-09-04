@@ -5,7 +5,7 @@
  * Module.prototype.require boundary so we can drive the orchestrator through
  * loading / error / empty / populated states.
  */
-/* eslint-disable react/no-children-prop */
+
 
 import assert from "node:assert/strict";
 import * as React from "react";

@@ -4,7 +4,7 @@
  * and is exercised manually via /dev/modals?modal=login. The form logic was
  * preserved byte-identical when the file was moved into the folder.
  */
-/* eslint-disable react/no-children-prop */
+
 
 import assert from "node:assert/strict";
 import * as React from "react";

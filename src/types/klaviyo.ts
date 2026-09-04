@@ -24,6 +24,8 @@ export interface KlaviyoProfileProperties {
   role: string;
   state?: string; // Australian state/territory
   profession?: string; // User's profession
+  /** Omitted entirely when unset — no 'unknown' sentinel (see klaviyo-helpers.ts). */
+  gender?: string;
 
   // Verification status
   is_email_verified: boolean;
@@ -32,6 +34,8 @@ export interface KlaviyoProfileProperties {
   // Subscription details
   has_active_subscription: boolean;
   subscription_tier?: string;
+  /** Display-only twin of subscription_tier: "Tradie Member" … "Not a member". Never segment on it. */
+  membership_label?: string;
   subscription_start_date?: string;
   subscription_end_date?: string;
   subscription_auto_renew?: boolean;
@@ -82,6 +86,8 @@ export interface KlaviyoProfileProperties {
 
   // Partner discount status
   partner_discount_active?: boolean;
+  /** Display-only twin of partner_discount_active: "Active" | "Not active". Never segment on it. */
+  partner_discount_label?: string;
   partner_discount_queued_count?: number;
   partner_discount_total_days?: number;
   partner_discount_next_activation_date?: string;
@@ -129,6 +135,12 @@ export interface KlaviyoProfileProperties {
   membership_active_duration_months?: number | null;
   /** ISO 8601 string of the next renewal date when an active subscription has auto-renew on. null otherwise. */
   next_renewal_date?: string | null;
+  /**
+   * Display-only twin of next_renewal_date, formatted in AEST. One of a date
+   * ("24 September 2026"), "Payment retrying", "Renewal date pending" or
+   * "Auto-renew off" — never empty, never a raw ISO instant. Never segment on it.
+   */
+  next_renewal_label?: string;
 }
 
 export interface KlaviyoProfile {

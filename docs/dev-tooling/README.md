@@ -14,6 +14,7 @@ Dev-only routes, test pages, debug endpoints, examples, test scripts.
 - [models.md](./models.md) — _N/A_
 - [testing.md](./testing.md) — test scripts under `scripts/test-*.ts`
 - [worktrees.md](./worktrees.md) — `scripts/wt-*.sh` workflow for parallel checkouts
+- [ci.md](./ci.md) — `.github/` GitHub Actions checks on every PR, and how to run them locally
 
 ## Cancellation-flow harness — stakes panels (2026-07-15)
 

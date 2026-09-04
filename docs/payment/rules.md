@@ -93,3 +93,33 @@ In any path that succeeds a renewal payment (webhook, admin retry, user retry), 
 ### R13. A post-payment sign-in must never surface as a payment error
 
 The 3DS landing exchanges the redirect's client secret for a session ([frontend.md](./frontend.md#3ds-session-establishment)). That call is fired with `void`, is never awaited into rendered state, and swallows every failure — no error state, no toast, no `ErrorReport`. The money has already moved, so a failed sign-in must degrade to "success page, logged out", never to "your payment failed". Retry only the `202 pending` webhook race; treat every other status as terminal. The same applies to any future landing that signs a buyer in from proof of payment.
+
+## One-time pack charging
+
+### R14. One checkout takes at most one charge — never create a PaymentIntent without first trying to adopt one
+
+A one-time pack checkout has **two** places that can move money, and only one of them may
+actually do so:
+
+1. `/api/stripe/create-payment-intent` mints an **upfront PaymentIntent** so Apple Pay /
+   Google Pay can display the amount. When the buyer presses Purchase with a **new card**,
+   `confirmStripeIntent()` confirms it — **that is a real charge**, not a dry run.
+2. The purchase route (`create-one-time-purchase` / `-existing-user`) would otherwise create
+   its own PaymentIntent with `confirm: true`.
+
+Both purchase routes MUST therefore resolve their charge through
+`resolvePurchasePaymentIntent()` ([backend.md](./backend.md#resolve-purchase-payment-intentts--the-one-charge-rule)),
+never by calling `stripe.paymentIntents.create()` directly. The resolver adopts the charge the
+browser already made, recovers an unclaimed one, and only creates as a last resort.
+
+**Why this is a rule and not a convention.** `create-one-time-purchase` had the reuse branch
+from the start; `create-one-time-purchase-existing-user` never did. Every authenticated member
+paying with a new card was billed twice and granted the pack's entries twice — 57 checkouts,
+54 members, Jan–Sep 2026, confirmed against live Stripe metadata on 14/14 sampled pairs. The
+defect was not a missing parameter; it was **two copies of the same logic where only one got
+fixed**. If you add a third one-time purchase path, it goes through the resolver too.
+
+Corollary: whichever path takes ownership of a charge stamps `oneTimeChargeClaimed: "true"`
+into its metadata. That marker is what lets recovery tell an *orphaned* upfront charge (adopt
+it) from one already booked (charge again, because the member is deliberately buying a second
+pack). Dropping the marker silently gives away packs.

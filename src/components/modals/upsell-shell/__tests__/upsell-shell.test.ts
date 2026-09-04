@@ -1,4 +1,4 @@
-/* eslint-disable react/no-children-prop */
+
 import assert from "node:assert/strict";
 import * as React from "react";
 import { renderToString } from "react-dom/server";

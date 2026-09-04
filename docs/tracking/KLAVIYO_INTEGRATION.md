@@ -225,6 +225,7 @@ This is intentional drift containment — we accept the legacy schema as paid co
 | Deep link back to action | `checkout_url`, `resume_url`, etc. | string (absolute URL with UTM) | When the email's CTA needs to return the user to a specific preselected state. Always include UTM params so the ads team can attribute. |
 | Bonus-entry code | `code` | string | The redeemable code, e.g. `"BONUS-ABC123"`. |
 | Human-readable expiry, pre-formatted | `expires_at_label` | string | Built via `formatExpiryLabelAEST()` (`src/utils/common/timezone.ts`) — the single server-side formatter every rendered copy of the deadline derives from, so no copy can disagree with the instant redemption enforces. **It reaches the `Bonus Code Issued` metric only: neither the three discount emails nor any live page renders it today** — see [`Bonus Code Issued`](#bonus-code-issued-2026-08-25) below before you put `{{ event.expires_at_label }}` in a template. Corrected 2026-08-26; this cell used to say it was "the SAME function the rewards wallet renders, so the email and the app can never disagree" — the wallet components are unreachable and no email renders it. **Never** hand-format from `expires_at`; never use `formatDateForKlaviyo` (`en-US`, no `timeZone`). |
+| Access end date, pre-formatted | `access_ends_at_label` | string | Carried by `Subscription Cancellation Requested`. The day a cancelling member's access actually stops, formatted in **AEST** via `formatDateInAEST()`. A display twin of `access_ends_at` exists because Klaviyo's drag-and-drop editor stores a merge tag as a single EXPRESSION — it can print a value but cannot format one, so the raw ISO instant would reach the customer verbatim. AEST because an anchor-24 period end stored as `14:00Z` is the **next day** in Sydney. **Always a string** — `"when your current period ends"` when the date is unknown or unparseable — because the editor cannot hide one line of a multi-line text block. Never hand-format from `access_ends_at`. |
 | Which flow minted/re-armed the code | `trigger` | enum string | `BonusCodeTrigger` — `"cancel-click"` / `"checkout-start"` / `"one-time-purchase"` (`src/utils/redeemables/bonus-code-policy.ts`). **Supplied by the caller in the webhook body** since 2026-08-26, not derived server-side: the Klaviyo flow names which of the three it is when it calls `POST /api/bonus-codes/v1/issue`. An unknown value is a `400`. |
 
 ### Profile properties added 2026-05-28
@@ -238,6 +239,193 @@ These five canonical profile properties land on every user's Klaviyo profile via
 | `giveaways_entered` | number | Distinct draws (Major + Mini) the user has at least one entry in. Two parallel queries via `Promise.all` because Major Draw entries live as embedded subdocs on `MajorDraw.entries[]` (indexed at [MajorDraw.ts:269](../../src/models/MajorDraw.ts#L269)) and Mini Draw entries live in the flat `TicketEntry` collection (indexed at [TicketEntry.ts:58](../../src/models/TicketEntry.ts#L58)). |
 | `membership_active_duration_months` | number \| null | `differenceInMonths(now, user.subscription.startDate)` from `date-fns`. Calendar-aware, DST-safe (no `30.4375 * 86400000` averaging). `null` when never subscribed. |
 | `next_renewal_date` | ISO 8601 string \| null | `subscription.endDate` ISO when `isActive && autoRenew`. `null` for canceled / never-subscribed. ISO required for Klaviyo date math (locale strings are unfilterable as dates). |
+
+#### Display-ready twins — for email copy, never for segments
+
+Three properties exist **only** so a Klaviyo merge tag can print them to a customer. Each has a machine-readable
+sibling above; **segments and flow filters must keep using the sibling**, which is stable, typed and filterable.
+
+| Property | Type | Value | Sibling it renders |
+|---|---|---|---|
+| `membership_label` | string | `"Tradie Member"` / `"Foreman Member"` / `"Boss Member"` / `"Not a member"` | `subscription_tier` (the raw packageId) |
+| `partner_discount_label` | string | `"Active"` / `"Not active"` | `partner_discount_active` (boolean) |
+| `next_renewal_label` | string | A date (`"24 September 2026"`), `"Payment retrying"`, `"Renewal date pending"`, or `"Auto-renew off"` | `next_renewal_date` (ISO instant) |
+
+**Why they exist.** Klaviyo's drag-and-drop editor stores a merge tag as a single *expression* — the "Edit code"
+field takes `person|lookup:"x"|default:'y'` and nothing more. `{% if %}` block tags cannot go there, so a
+marketer has no way to map an id to a name, format a date, or hide a line, inside the template. Without these,
+the New Member block shipped reading `Tier: tradie-subscription`, `Partner discount: True`, and
+`Next renewal: 2026-09-23T14:00:00.000Z` to real members.
+
+**Two rules they follow, both load-bearing:**
+
+1. **`next_renewal_label` is formatted in AEST, not UTC.** Renewals anchor to day 24 and are stored as `14:00Z`,
+   which is the *next day* in Sydney. A UTC-formatted label tells a member their renewal is the 23rd when the
+   charge lands on the 24th. Verified against a live profile: `next_renewal_date` `"2026-09-23T14:00:00.000Z"`
+   → `next_renewal_label` `"24 September 2026"`.
+2. **They are always populated** — never `""`, never omitted. Two reasons. The editor cannot hide one line
+   of a multi-line text block, so an empty value leaves a dangling `Partner discount:` with nothing after it.
+   And Klaviyo's upsert **merges** — an omitted property keeps its previous value, so a lapsed member would
+   read `"Boss Member"` forever. Every branch returns a string, so every sync overwrites.
+3. **No branch may assert something false.** `next_renewal_label` has four states, not two:
+   `"Payment retrying"` for past-due — Stripe is still retrying the card and
+   `sync-klaviyo-past-due-profiles.ts` pushes that cohort precisely so a recovery flow can email them, so
+   `"Auto-renew off"` would contradict the email they are being sent; `"Renewal date pending"` when
+   auto-renew is ON but the date is not yet known (`/api/stripe/update-auto-renew` clears `endDate` when
+   RE-ENABLING and syncs on the next line, and `handleSubscriptionPackage` activates before the webhook
+   writes it); `"Auto-renew off"` only when it genuinely is.
+4. **`membership_label` gates on membership STATUS, not on `packageId`.** A lapsed record keeps its id, and
+   gating on the id alone told a `never_subscribed` profile it was a `"Foreman Member"` — caught against
+   production on 2026-09-04, after the unit tests passed. `past_due` and `paused` keep their tier; they are
+   still members whose access continues.
+5. **Never throw.** `formatInTimeZone` raises `RangeError` on an unparseable date, and
+   `classifyKlaviyoFailure` cannot pattern-match that message — so it returns `retryable: true`, which HOLDS
+   the reconciliation cursor and freezes the sweep for **every** user (the 2026-08-27 incident). The label is
+   guarded and degrades to `"Renewal date pending"`.
+
+Both label derivations are pure and exported (`deriveMembershipLabel`, `deriveNextRenewalLabel`) so every
+branch is covered by `npm run test:klaviyo-projection` without a database — including the AEST day-shift,
+which is the whole reason the label exists.
+
+### Dates for customers are formatted in Sydney time
+
+Every date a customer reads is produced in **AEST/AEDT** via
+`formatDateInAEST(date, "d MMMM yyyy")` — `"23 September 2026"`.
+
+**This was wrong until 2026-09-04**, in three independent places, all with the same two
+defects: `toLocaleDateString("en-US")` for an Australian audience, and no `timeZone` option,
+so they formatted in the **server's** zone (UTC on Vercel). Anything fired between 14:00Z and
+24:00Z — Sydney 00:00–10:00, overnight to mid-morning — printed the **previous Sydney day**.
+
+Measured against production before the fix:
+
+| Live email | Renders | Wrong day |
+|---|---|---|
+| `Invoice` (YsqZbb) — the **receipt** | `{{ event.invoice_date }}` | **30.0%** of 200 events |
+| `Membership Renewal` (UpzmuB) | `{{ event.renewal_date }}` | **37.3%** of 300 events |
+
+Daylight saving from **2026-10-04** widens the window to 13:00Z–24:00Z (45.8% of the clock)
+for six months.
+
+#### Three producers, not one
+
+| Producer | Feeds | Note |
+|---|---|---|
+| `formatDateForKlaviyo` (klaviyo-helpers.ts) | 15 properties — `purchase_date`, `refund_date`, `start_date`, `end_date`, `upgrade_date`, `downgrade_date`, `renewal_date`, `effective_date`, `cancellation_date`, `added_date`, `selected_date` | Only `renewal_date` has a live renderer |
+| Inline in `formatInvoiceDataForKlaviyo` | `invoice_date` | **NOT fed by the helper.** Its own copy — which is why it outlived the first fix |
+| Inline in `createSubscriptionRenewalFailedEvent` | `next_payment_attempt` | Carries a TIME, so UTC was wrong by up to 11 hours as well as a day |
+
+**Correcting an earlier note in this file:** it previously said `invoice_date` was one of the
+helper's 15 properties and that "several" of them were rendered by live flows. Both were
+wrong. `invoice_date` has its own producer, and exactly **one** helper-fed property
+(`renewal_date`) has a live renderer — verified by opening every live flow's template.
+
+#### Why changing the format was safe
+
+Swept across the whole account before the change: **42 flows** (45 filter objects), **20
+segments**, and **299 renderable assets** (79 library + 82 flow-message + 121 campaign
+templates + 17 universal-content blocks). Nothing **filters** on any of these date strings —
+every filter found is a `profile-metric` count with `metric_filters: null` — and the two
+renderers print verbatim with no Liquid `date:` filter. So a format change is a copy
+improvement, never a parse failure.
+
+One latent exception worth knowing: library template `YcSzpr` ("Invoice Email") runs
+`{{ event.invoice_date | date: "%B %d, %Y" }}`, i.e. it asks Liquid to re-parse our display
+string. It is attached to no flow and no campaign, so it renders for nobody — but if it is
+ever used, drop the filter rather than reformatting upstream.
+
+#### When a `*_label` twin is still the right answer
+
+A twin is for a property that must stay machine-readable. `access_ends_at` is a raw ISO
+instant that segments could filter on, so it keeps `access_ends_at_label` beside it. A
+property that is *already* display text needs no twin — `cancellation_date_label` was added
+on 2026-09-04 as a workaround and removed the same day once the helper was fixed, because it
+had become an exact duplicate of `cancellation_date`.
+
+The profile-side `next_renewal_label` stays for the same reason as `access_ends_at_label`:
+`next_renewal_date` is an ISO instant used for date filtering.
+
+### The two cancellation moments are different emails
+
+There are two cancellation events and they are **not** interchangeable. Picking the wrong one does not just
+shift the send time — it makes the copy untrue.
+
+| | `Subscription Cancellation Requested` | `Subscription Cancelled` |
+|---|---|---|
+| Fires | The moment the member clicks cancel | When the paid period ends and access stops |
+| Source | `CancelSubscriptionService` | Stripe `customer.subscription.deleted` |
+| Member state | Still `isActive`, keeps everything for up to a month | Access has ended |
+| Date property | `access_ends_at` / `access_ends_at_label` | `cancellation_date` (the day it ended) |
+| Email job | Confirm, and say what they keep and until when | Win them back |
+
+A normal cancellation only sets `autoRenew = false` and writes `endDate = stripeEndDate`
+(`CancelSubscriptionService.ts`) — `isActive` stays true. So member pricing, partner discounts and free
+entries all **continue to the end of the paid period**. Only a past-due member cancelling hits
+`shouldCancelImmediately` and loses access straight away.
+
+That makes wording like *"perks end at your cancellation date"* wrong on the REQUESTED event — the member
+still has everything — and it is also the worst retention message available, because it tells someone who
+could un-cancel in one click that there is nothing left to save. On the CANCELLED event the same sentence is
+roughly true but should be past tense, and `cancellation_date` there is the day access ended, not the day
+they clicked.
+
+#### `brand_interest` — read the persisted slug, never re-default
+
+`brand_interest` is the brand promo page a visitor registered through. It is set once at
+signup and is meant to survive until they buy something, at which point it is set to `null`
+to REMOVE the tag (a merging upsert needs an explicit null; omitting it would leave a buyer
+tagged forever).
+
+**The regression it used to have.** The value was derived only from the
+`brandInterestFromSignup` PARAMETER, which is request-scoped and only the four registration
+call sites carry. Every other sync path — verify-email, verify-mobile, auto-login,
+update-profile, update-phone, profile setup, admin edit, and the reconciliation sweep
+(`KlaviyoProfileReconciliationService.ts:228` passes `undefined`) — fell through to a
+`"milwaukee"` default and OVERWROTE the real brand. A visitor kept their true brand only
+until they next did anything.
+
+Measured on production, 2026-09-04:
+
+| | Users |
+|---|---|
+| Total | 58,020 |
+| With `signupAttribution.promotionSlug` | 39,076 (67.3%) |
+| milwaukee | 29,884 |
+| makita | 3,156 |
+| dewalt | 2,572 |
+| ryobi | 2,240 |
+| hikoki | 1,023 |
+| stihl | 164 |
+| **Non-milwaukee being relabelled** | **9,155** |
+
+`resolveBrandInterest(user, brandInterestFromSignup)` now resolves in this order:
+
+1. the parameter — registration may hold a slug the user document is not saved with yet;
+2. **`user.signupAttribution.promotionSlug`** — persisted and indexed, so every sync path
+   agrees and the reconciliation sweep CORRECTS wrong profiles instead of writing them;
+3. `"milwaukee"` for the ~33% with no slug at all.
+
+Step 3 asserts an interest those users never expressed. Left as-is deliberately: changing it
+would strip the property from ~19k profiles and could affect existing segments, so it is a
+decision to take on its own rather than a side effect of this fix.
+
+The slug format is `brand-partner` (`hikoki-gearwrench`, `stihl-milwaukee`), so extraction
+takes the first segment and validates it against `getAllBrandKeys()` — `dewalt`, `makita`,
+`milwaukee`, `ryobi`, `hikoki`, `stihl`. Verified against production: all six resolve, a
+purchaser returns `null`, and a slugless user still returns `"milwaukee"`.
+
+**Propagation to existing profiles is automatic — no backfill script is required.** A new property lands on a
+profile the next time `userToKlaviyoProfile` runs for that user, and two schedules cover that
+([vercel.json](../../vercel.json)):
+
+| Path | Schedule | Covers |
+|---|---|---|
+| `reconcile-klaviyo-profiles` | `*/5 * * * *` | Anyone whose `updatedAt` moved — a purchase, login, verification, tier change. Effectively immediate for active users. |
+| `reconcile-klaviyo-profiles?mode=full` | `7 * * * *` | A rotating `fullPassCursor` over every profile, ~344 per run × 24 runs/day ≈ **a full circuit in ~7 days at 56k profiles**. |
+
+So the only exposure is a flow going live *inside* that ~7-day window, where a dormant profile would render the
+template's `|default:` instead of its real value. If a launch cannot wait, force the circuit with
+`npm run sync:klaviyo-profiles-bulk` (bulk endpoint, one call per batch rather than per profile).
 
 Example segments the ads team can now build:
 
