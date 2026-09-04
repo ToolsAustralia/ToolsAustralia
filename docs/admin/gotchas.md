@@ -1,5 +1,29 @@
 # Admin — Gotchas
 
+## Past date ranges read a membership SNAPSHOT, not live subscriptions (2026-09-04)
+
+`parseAdminDashboardDateRange` returns `membershipAsOfMode` (`dashboardDateRange.ts:128-129`):
+
+| Range | Mode | Reads |
+|---|---|---|
+| `today`, any range ending today or later, `all-time` | `live` | current `User.subscription`; `asOfDate` is `null` |
+| `yesterday`, any custom range ending in the past | `snapshot` | `MembershipDailySnapshot` as at `asOfDate` |
+
+The point is that a historical membership count must reflect what was true THEN, not
+what is true now. A member who cancelled today must still appear active in last
+week's numbers.
+
+**The trap:** `dashboardDateRange.test.ts` asserted `"live"` for every range, including
+`yesterday`. That was correct until 2026-04-29, when snapshot mode landed — one day
+after the test was last touched. The test then failed on every run for four months, was
+added to CI's skip list on 2026-08-19 with a note to fix it, and sat there. Corrected
+2026-09-04 to assert the documented contract.
+
+If this suite fails again, **check which side actually moved before editing an
+assertion.** Making a test agree with the code is only right when the code is the thing
+that is right — here it was, evidenced by the two `membership-daily-snapshot` cron
+entries in `vercel.json`, the dedicated snapshot suites, and `docs/admin/backend.md:334`.
+
 ## The charge run manufactured the Stripe blocks it then failed against (2026-08-24)
 
 **The shape.** The daily past-due run submitted the *same* invoices to Stripe every day —

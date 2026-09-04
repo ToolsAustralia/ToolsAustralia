@@ -494,6 +494,15 @@ live draw entries and can win. Staff are diverted to `/admin` before this check.
 
 Members manage their membership from **My Account → Membership → Manage plan** (the "manage" overlay sheet), reachable from the Membership page or the `/my-account?open=subscription` deep-link. (The old **Settings → Subscription** tab was removed in the 2026-07 dashboard revamp; Settings now holds only Profile / Theme / Password.) This section covers only the customer-OWNED facts (where the action happens, which fields change). For pricing, proration mechanics, retention-offer tables, and the full cancellation-flow internals, see [BUSINESS.md §9, §10, §13](BUSINESS.md).
 
+_Coverage note (2026-09-04) — no customer-facing change._ The manage overlay is
+`SubscriptionManagementModal`. Its automated render test had been failing on every run
+since 2026-07-20 (it mounted `UserProvider`, which reads `usePathname`, without an
+app-router context) and was added to CI's skip list on 2026-08-19 rather than fixed — so
+this surface, the one place a member changes or cancels their own membership, carried **no
+automated render coverage for seven weeks**. The test is fixed and running again. Nothing
+a customer sees or can do changed; recorded here only so the confidence level attached to
+this section's claims over that window is on the record.
+
 ### 5.1 Joining
 
 Customer pays full package price immediately at signup via Stripe. There is **no free trial** — `trialing` is a billing-anchor artifact for 25th–27th joiners only (see [BUSINESS.md §9b](BUSINESS.md)).

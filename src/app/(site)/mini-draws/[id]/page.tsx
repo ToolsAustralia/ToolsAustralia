@@ -220,7 +220,10 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
 
   /** Mobile-only answer to the three questions the hero no longer has room for. */
   const keyFacts = [
-    { value: "$1", label: "Per entry", accent: false },
+    // RULE 11: the price belongs to the Mini Pack, never to an entry. Entries are a
+    // free inclusion and are never sold or priced per unit — "Per entry" is named
+    // verbatim as forbidden. Matches the index hero's "Mini packs start from just $1".
+    { value: "From $1", label: "Mini packs", accent: false },
     { value: entriesRemaining.toLocaleString(), label: "Entries left", accent: false },
     { value: `${filledPercentage}%`, label: "Filled", accent: true },
   ];
@@ -250,7 +253,7 @@ export default async function MiniDrawDetailPage({ params }: MiniDrawDetailPageP
         entriesRemaining={entriesRemaining}
       />
 
-      {/* Key facts strip — mobile only; the desktop hero still carries the $1 Entry card. */}
+      {/* Key facts strip — mobile only; the desktop hero still carries the "From $1 · Mini pack" card. */}
       <div className="grid grid-cols-3 gap-2 px-3.5 pb-1 pt-3 lg:hidden">
         {keyFacts.map((fact) => (
           <div

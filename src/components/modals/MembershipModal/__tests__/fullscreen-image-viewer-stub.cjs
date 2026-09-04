@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
+
 /**
  * FullscreenImageViewer stub for MembershipModal smoke test. The real viewer
  * imports Swiper components and uses bare JSX without `import React`, which

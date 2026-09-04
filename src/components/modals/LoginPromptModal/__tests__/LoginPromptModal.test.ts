@@ -6,7 +6,7 @@
  * outside the App Router context. We register a minimal stub before the
  * component is loaded.
  */
-/* eslint-disable react/no-children-prop */
+
 
 import assert from "node:assert/strict";
 import * as React from "react";

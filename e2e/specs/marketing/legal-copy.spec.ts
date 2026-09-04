@@ -64,4 +64,65 @@ test.describe("legal copy guard @smoke", () => {
       expect(text).toMatch(/free entr(y|ies)/i); // positive framing must be present
     });
   }
+
+  // The mini-draw DETAIL route, reached by navigation rather than a hard-coded id
+  // because ids differ per environment.
+  //
+  // WHY THIS TEST EXISTS. On 2026-08-12 (ade906ab) the detail page shipped
+  // `$1 / "Per entry"` in its mobile key-facts strip, and its desktop hero shipped
+  // `$1 / "Entry"`. Both sat in production for 23 days. BANNED_COPY already contained
+  // /\bper entry\b/i — the regex was never the problem. PAGES listed /mini-draws but
+  // not the detail route underneath it, so nothing ever scanned the page. The comment
+  // above /shop warns about precisely this failure mode; it then happened again on a
+  // different route.
+  //
+  // The strip is inside `lg:hidden`, so a desktop-only run would not have caught it
+  // either. This spec must keep running on at least one mobile project.
+  test("no gambling/sold-entry framing on a mini-draw detail page", async ({ page }) => {
+    await page.goto("/mini-draws");
+    await page.waitForLoadState("networkidle");
+
+    const firstDraw = page.locator('a[href^="/mini-draws/"]').first();
+    // Fail loudly rather than vacuously pass. A detail page that cannot be reached is
+    // a page that was not scanned, and "green because there was nothing to look at" is
+    // the exact failure this file already documents at F-037.
+    await expect(
+      firstDraw,
+      "No mini-draw detail link found on /mini-draws — the detail route went unscanned. " +
+        "If the target environment genuinely has no mini draws, that is worth knowing; " +
+        "do NOT relax this into a skip."
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Read the href and navigate directly rather than clicking. Clicking a Next.js
+    // <Link> is a SOFT navigation: no document load, so waitForLoadState("networkidle")
+    // resolves while the RSC payload is still in flight and the scan reads a page that
+    // is only banner + footer. A real goto is deterministic, and matches what a visitor
+    // arriving on the URL actually gets.
+    const href = await firstDraw.getAttribute("href");
+    expect(href, "mini-draw card had no href").toBeTruthy();
+    await page.goto(href!);
+    await page.waitForLoadState("networkidle");
+
+    const text = await page.locator("body").innerText();
+
+    // Prove the detail CONTENT rendered before trusting the scan. Without this, a page
+    // that is only header + footer chrome fails on the positive "free entries"
+    // assertion with a confusing message — or worse, passes the banned-copy check
+    // having looked at nothing. Same reasoning as the rewards-banner gate above (F-037).
+    //
+    // Asserted against innerText, NOT element visibility. The key-facts strip is
+    // `lg:hidden` (mobile only) while the hero card is `hidden sm:flex` (desktop only),
+    // so a locator matching both resolves .first() to whichever is hidden in the
+    // current viewport and fails for the wrong reason. innerText already excludes
+    // hidden nodes, so it reads exactly what this viewport shows.
+    expect(
+      text,
+      `The mini-draw detail page at ${page.url()} rendered no draw content — only page ` +
+        `chrome. The scan would have covered nothing. Check the target environment has an ` +
+        `active mini draw, and that the request was not rate-limited or error-paged.`
+    ).toMatch(/entries left|filled|mini pack/i);
+    const hits = BANNED_COPY.filter((rx) => rx.test(text)).map(String);
+    expect(hits, `Banned copy found on ${page.url()}: ${hits.join(", ")}`).toEqual([]);
+    expect(text).toMatch(/free entr(y|ies)/i);
+  });
 });

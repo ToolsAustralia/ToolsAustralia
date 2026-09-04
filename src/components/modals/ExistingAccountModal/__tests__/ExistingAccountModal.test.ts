@@ -2,7 +2,7 @@
  * Smoke test for ExistingAccountModal. The modal imports LoginModal (heavy
  * deps: next-auth, popup auth, klaviyo) so we stub it out in this test.
  */
-/* eslint-disable react/no-children-prop */
+
 
 import assert from "node:assert/strict";
 import * as React from "react";

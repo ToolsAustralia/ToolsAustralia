@@ -15,7 +15,7 @@
  *   email-verification flow. Those paths are exercised by the existing dev-server
  *   route at /dev/modals?modal=user-setup.
  */
-/* eslint-disable react/no-children-prop */
+
 
 import assert from "node:assert/strict";
 import * as React from "react";

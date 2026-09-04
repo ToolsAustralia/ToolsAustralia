@@ -21,7 +21,13 @@ const eslintConfig = [
     // ".next-e2e/**" is the e2e harness build dir (next.config.ts distDir). It was
     // added to .gitignore when the builds were split but not here, so a single
     // e2e run put ~22,000 lint problems from compiled output into the report.
-    ignores: ["node_modules/**", ".next/**", ".next-e2e/**", "out/**", "build/**", "next-env.d.ts", "src/generated/**", "claudeDesign/**", "e2e-artifacts/**", "playwright-report/**", "test-results/**"],
+    // ".worktrees/**" holds sibling checkouts (docs/dev-tooling/worktrees.md). It is
+    // gitignored with zero tracked files, so this has NO effect in CI — a fresh
+    // checkout has no .worktrees at all. It matters locally: with ~30 worktrees, each
+    // carrying its own .next/ output, `npm run lint` walked 34k files and reported
+    // 224k problems in ~15 minutes, which made the command unusable. Scoped to the
+    // repo itself it is 24 seconds.
+    ignores: ["node_modules/**", ".next/**", ".next-e2e/**", ".worktrees/**", "out/**", "build/**", "next-env.d.ts", "src/generated/**", "claudeDesign/**", "e2e-artifacts/**", "playwright-report/**", "test-results/**"],
   },
   {
     plugins: {
@@ -34,7 +40,7 @@ const eslintConfig = [
       "internal-norm/norm-must-import-service": "error",
       // loadStripe/getStripePromise must not run at module scope — see src/lib/stripe-client.ts.
       "internal-norm/no-eager-stripe": "error",
-      // WARN, not error, deliberately: 57 pre-existing hand-rolled locks remain (Header,
+      // WARN, not error, deliberately: 45 pre-existing hand-rolled locks remain (Header,
       // AdminPage, RewardsFloatingWidget, WinnersTestimony, the */Shell.tsx family, the admin
       // filter drawers). The rule earns its keep by flagging NEW ones in review and in-editor;
       // flipping it to "error" is the last step of the migration, not the first. Sweeping 57

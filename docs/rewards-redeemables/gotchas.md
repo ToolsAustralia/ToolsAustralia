@@ -173,8 +173,12 @@ void: with no active campaign carrying the code, `ensureCampaignIssuanceForUser`
 fails at checkout with "Invalid campaign code". The flow is now the LAST thing published.
 
 1. **Deploy the endpoint to production** with `BONUS_CODE_WEBHOOK_SECRET` set — scoped to Vercel's
-   **Production** environment only, so a preview deploy cannot mint into the production database
-   even if someone points one at it.
+   **Production** environment only, so a preview deploy cannot mint at all even if someone points
+   one at it.
+   _(Corrected 2026-09-04: this used to say "cannot mint into the production database". Preview
+   deployments read the DEV cluster, not production — see `docs/infrastructure/README.md`. The
+   scoping instruction is unchanged; a preview minting unasked-for issuance rows into the dev
+   database is still wrong.)_
 2. **Create the campaign(s)** in Admin → Monthly Coupons. Under **"How this coupon ends"** pick
    **"Each customer gets their own countdown"** — that is the `personal-window` shape, and picking it is
    what sets `validForHours` (the mass-mint defence marker, see trap 6b). Then:
