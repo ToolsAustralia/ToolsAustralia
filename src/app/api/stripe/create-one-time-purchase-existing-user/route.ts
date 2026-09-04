@@ -18,6 +18,10 @@ import { savePaymentMethodToUser } from "@/utils/payment/payment-method-manager"
 // Klaviyo integration handled by webhook for best practices
 // Benefits are granted via webhook processing only
 import { createPaymentIntentConfig } from "@/utils/payment/stripe/payment-intent-config";
+import {
+  resolvePurchasePaymentIntent,
+  PaymentIntentNotAdoptableError,
+} from "@/utils/payment/stripe/resolve-purchase-payment-intent";
 import { buildAttributionMetadata } from "@/utils/tracking/attribution-metadata";
 import { attributionSchema } from "@/utils/tracking/attribution-schema";
 import { resolveAttributionAtEdge } from "@/services/attribution/resolveAtEdge";
@@ -39,6 +43,10 @@ import { isExpectedPaymentDeclineError } from "@/utils/error-reporting/error-sev
 const createOneTimePurchaseExistingUserSchema = z.object({
   packageId: z.string().min(1, "Package ID is required"),
   paymentMethodId: z.string().min(1, "Payment method ID is required").optional(),
+  // PaymentIntent the browser already CONFIRMED (a real charge) before calling us. Reused
+  // instead of charging again — see resolve-purchase-payment-intent.ts. Zod strips unknown
+  // keys silently, so omitting this line reinstates the double charge with no error.
+  paymentIntentId: z.string().optional(),
   idempotencyKey: z.string().optional(), // ✅ STRIPE BEST PRACTICE: Idempotency key to prevent duplicate PaymentIntent creation
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
@@ -452,12 +460,34 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const paymentIntent = await stripe.paymentIntents.create(
-      paymentIntentConfig,
-      {
-        idempotencyKey: idempotencyKey, // ✅ STRIPE BEST PRACTICE: Prevent duplicate PaymentIntent creation
+    // ✅ SINGLE SOURCE OF TRUTH: reuse the PaymentIntent the browser already confirmed,
+    // otherwise create one. Creating unconditionally here charged the member a SECOND time
+    // whenever they paid with a new card — the card form confirms the upfront PaymentIntent
+    // (a real charge) and this route then charged again 1–3s later. 57 checkouts, 54
+    // members, Jan–Sep 2026. See resolve-purchase-payment-intent.ts.
+    let paymentIntent: Stripe.PaymentIntent;
+    try {
+      const resolved = await resolvePurchasePaymentIntent({
+        customerId: customer.id,
+        packageId: canonicalPackageId,
+        suppliedPaymentIntentId: validatedData.paymentIntentId,
+        createConfig: paymentIntentConfig,
+        idempotencyKey,
+        context: "create-one-time-purchase-existing-user",
+      });
+      paymentIntent = resolved.paymentIntent;
+      console.log(
+        `💳 One-time charge ${resolved.outcome}: ${paymentIntent.id} (${paymentIntent.status})`
+      );
+    } catch (resolveError) {
+      if (resolveError instanceof PaymentIntentNotAdoptableError) {
+        return NextResponse.json(
+          { success: false, error: resolveError.reason, details: resolveError.details },
+          { status: 400 }
+        );
       }
-    );
+      throw resolveError;
+    }
 
     // console.log(`✅ Payment intent created: ${paymentIntent.id} with status: ${paymentIntent.status}`);
 

@@ -1690,3 +1690,17 @@ Three things to preserve when editing this file:
 Still open, deliberately: the 25 combination pages carry **no canonical tag**, and they share a
 near-identical structure. That is an SEO strategy call (are they distinct prizes or duplicates?),
 not a defect — decide it before pointing more link equity at them.
+
+## MembershipModal: the one-time branch must pass the PaymentIntent it already charged (2026-09-04)
+
+In the purchase handler, `confirmStripeIntent()` on a one-time pack with a **new card** calls
+`stripe.confirmPayment()` — a real charge — and returns its id into `confirmedPaymentIntentId`.
+
+The **guest** branch had always forwarded that id to the server. The **authenticated** branch
+computed it and threw it away, so the server charged again 1–3 seconds later. Both branches now
+pass `paymentIntentId: confirmedPaymentIntentId`.
+
+If you refactor this handler, the two branches must stay symmetric — the asymmetry *was* the
+bug, and it survived nine months because both branches otherwise look correct in isolation.
+Fenced by `npm run test:one-time-charge`.
+See [payment/rules.md R14](../payment/rules.md#r14-one-checkout-takes-at-most-one-charge--never-create-a-paymentintent-without-first-trying-to-adopt-one).

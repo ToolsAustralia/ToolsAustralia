@@ -592,6 +592,22 @@ The employee exclusion sits on a different axis from the other two and is checke
 
 The Australian-resident requirement is enforced via the `state` field (codes are AU states/territories); there is **no explicit "Australian resident" boolean** in `giveaway-eligibility.ts` — eligibility keys only on state code + age. *(Unverified: whether residency is gated elsewhere, e.g. at registration.)* Customer-facing eligibility checks route through this shared helper — its only consumers are the profile settings form ([ProfileTab.tsx](src/app/(site)/my-account/components/settings/ProfileTab.tsx)) and the post-purchase setup modal ([Step2Demographics.tsx](src/components/modals/UserSetupModal/Step2Demographics.tsx)). The admin major-draw winner-export and eligibility-summary paths do **not** call it — they re-implement the SA/ACT exclusion inline with hard-coded state comparisons ([MajorDrawService.ts:758-762](src/services/admin/MajorDrawService.ts#L758), [export/route.ts:130-131](src/app/api/admin/major-draw/export/route.ts#L130)) and apply no age check at export time.
 
+### Buying a one-time pack charges the customer once (defect fixed 2026-09-04)
+
+Between January and September 2026, a **logged-in member buying a one-time pack with a newly
+typed card** was charged **twice** and received the pack's free entries **twice**. What the
+customer saw: two identical charges on their statement seconds apart, and an entry count double
+what the pack advertises (Mick Beswick, 3 Sept: two $25 Apprentice Pack charges, 18 entries
+instead of 9). 54 members across 57 checkouts.
+
+Customers **not** affected: anyone paying with a **saved card**, anyone buying a **Mini Pack**,
+and anyone buying or renewing a **membership** — those paths only ever charged once.
+
+Fixed by making the purchase reuse the payment the checkout had already taken rather than
+taking a second one. A customer who genuinely buys the same pack twice is still charged twice,
+as they should be. The historical charges were **not** reversed automatically; any refund is a
+separate deliberate decision. See [BUSINESS.md §9j](BUSINESS.md).
+
 ---
 
 ## 7. Customer perks

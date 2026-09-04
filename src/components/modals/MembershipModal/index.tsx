@@ -4408,6 +4408,11 @@ const MembershipModal: React.FC<MembershipModalProps> = ({
             packageId,
             userId: userData?._id || "",
             paymentMethodId,
+            // The card form's confirmStripeIntent() above already CHARGED this PaymentIntent.
+            // Hand it to the route so it reuses that charge instead of taking a second one —
+            // the guest branch below has always done this; this branch did not, and every
+            // authenticated member paying by new card was billed twice.
+            paymentIntentId: confirmedPaymentIntentId,
             idempotencyKey: oneTimeCheckoutIdempotencyKey,
             referralCode: settledCoupon.referralCode,
             affiliateCode: affiliateCode || undefined,

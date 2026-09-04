@@ -697,6 +697,29 @@ The non-obvious rule that ties everything together:
 - **A declined past-due charge is a feature, not a dead-end: it notifies.** Whichever channel attempts collection on a past-due/unpaid member — the per-user admin Charge, Force-Charge, the §9e bulk run, the member's own Pay-Now / resolve, or a re-billed fresh cycle (§9e) — a card decline fires the **`Subscription Renewal Failed`** Klaviyo event, which drives the dunning / re-engagement flow. Re-engaging a stranded member matters more than a clean success rate: a run that charges 300 members and collects 3 still notifies the other 297.
 - **A re-billed cycle failure is classified as a renewal failure even though Stripe calls it `subscription_update`.** The mint (`billing_cycle_anchor:'now'`) produces a `subscription_update` invoice, so a decline arrives as `invoice.payment_failed` with `billing_reason: subscription_update`. The webhook still routes it to `Subscription Renewal Failed` via `isRebill` (`subscription_update` while the member was `past_due`/`unpaid` — upgrades are blocked while past_due, so this is never a mis-classified upgrade). It deliberately does **not** re-pause the member: a re-billed member whose card declines is left **unpaused / in Stripe dunning** on the fresh cycle, not frozen back into `pause_collection`, so Stripe's smart retries and the Klaviyo flow both keep working on them.
 
+### 9j. One pack purchase = one charge (defect fixed 2026-09-04)
+
+**A one-time pack checkout must take exactly one payment, and until 2026-09-04 it did not.** A
+logged-in member buying a one-time pack **with a newly typed card** was charged twice and
+granted the pack's free entries twice. The checkout mints an upfront PaymentIntent so Apple
+Pay / Google Pay can display the amount; the card form *confirms* that intent — a real charge —
+and the purchase route then created and confirmed a second one 1–3 seconds later. Both charges
+looked legitimate, so the webhook (which grants per PaymentIntent) granted twice.
+
+Scope, measured against production `PaymentEvent` history: **57 checkouts, 54 members,
+Jan–Sep 2026.** Not affected: saved-card purchases (that path never confirms the upfront
+intent), Mini Packs (server-side charge only), and memberships.
+
+Both one-time purchase routes now resolve their charge through a single shared resolver that
+reuses the charge the browser already made, recovers an unclaimed one, and only creates as a
+last resort — so a deliberate second purchase of the same pack still charges correctly.
+Guarded by `npm run test:one-time-charge`.
+[docs/payment/rules.md R14](docs/payment/rules.md) · spec:
+`docs/superpowers/specs/2026-09-04-one-time-pack-double-charge-design.md`.
+
+**Not repaired retrospectively** — the affected charges stand unless refunded by a separate
+deliberate decision.
+
 ---
 
 ## 10. Subscription lifecycle — the state machine everything reacts to
