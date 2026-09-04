@@ -66,6 +66,11 @@ export const CANONICAL_KEYS: ReadonlySet<string> = new Set([
   // Bonus Code Issued (per-customer coupon expiry)
   "code",
   "expires_at_label",
+  // Subscription Cancellation Requested — the day access actually stops, formatted in AEST.
+  // A display twin exists because Klaviyo stores a merge tag as one EXPRESSION and cannot
+  // format an ISO instant, and because an anchor-24 period end stored as 14:00Z is the NEXT
+  // day in Sydney. Always a string, never blank.
+  "access_ends_at_label",
   "trigger",
   // Klaviyo standard revenue triple (only on Placed Order / Refunded Order — included for completeness)
   "Currency",
@@ -455,6 +460,36 @@ function testSubscriptionCancellationRequestedShape() {
   // the implementation would pass even if the builder swapped the two fields.
   assert.equal(sample.properties.cancelled_at, "2026-08-26T04:30:00.000Z");
   assert.equal(sample.properties.access_ends_at, "2026-09-24T13:59:59.000Z");
+
+  // DISPLAY-READY twin. The cancellation-confirmation email's whole job is to name the day
+  // access stops, and Klaviyo's editor cannot format an ISO instant — a merge tag prints it
+  // verbatim. AEST, not UTC: 13:59:59Z is still the 24th in Sydney, but an anchor-24 renewal
+  // stored as 14:00Z is the 25th, so a UTC label would name the wrong day.
+  assert.equal(sample.properties.access_ends_at_label, "24 September 2026");
+}
+
+// A member who cancels keeps everything until the paid period ends, so the confirmation
+// email must name a date. These are the two ways it can fail to have one.
+function testAccessEndsAtLabelNeverThrowsAndNeverBlanks() {
+  // Unparseable Date. `toISOString()` raises RangeError on this, which used to take the
+  // whole builder down and silently drop the event (the emit is wrapped non-blocking at
+  // CancelSubscriptionService, so the cancellation itself always survived).
+  const broken = createSubscriptionCancellationRequestedEvent(fakeUser(), {
+    packageData: null,
+    cancelledAt: new Date("2026-08-26T04:30:00.000Z"),
+    accessEndsAt: new Date("not-a-date"),
+  });
+  assert.equal(broken.properties.access_ends_at_label, "when your current period ends");
+  assert.equal(broken.properties.access_ends_at, undefined);
+
+  // Unknown date. Never empty — the Klaviyo editor cannot hide one line of a text block,
+  // so a blank would leave a dangling label in the customer's email.
+  const unknown = createSubscriptionCancellationRequestedEvent(fakeUser(), {
+    packageData: null,
+    cancelledAt: new Date("2026-08-26T04:30:00.000Z"),
+    accessEndsAt: null,
+  });
+  assert.equal(unknown.properties.access_ends_at_label, "when your current period ends");
 }
 
 function testSubscriptionCancellationRequestedOmitsUnresolvedPackage() {
@@ -690,6 +725,7 @@ function run() {
   testBonusCodeIssuedShape();
   testBonusCodeIssuedEmitsThePassedExpiresAt();
   testSubscriptionCancellationRequestedShape();
+  testAccessEndsAtLabelNeverThrowsAndNeverBlanks();
   testSubscriptionCancellationRequestedOmitsUnresolvedPackage();
   testOneTimePackagePurchasedCarriesHadActiveSubscription();
   testShopPlacedOrderCarriesIsRenewalFalse();

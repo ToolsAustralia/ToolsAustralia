@@ -29,7 +29,7 @@ import {
   getPartnerCatalogAccessPercentForPlanId,
   getPartnerDiscountCatalogSummaryForPackageId,
 } from "@/utils/partner-discounts/partner-catalog-visibility";
-import { formatExpiryLabelAEST } from "@/utils/common/timezone";
+import { formatExpiryLabelAEST, formatDateInAEST } from "@/utils/common/timezone";
 import type { BonusCodeTrigger } from "@/utils/redeemables/bonus-code-policy";
 
 // ============================================================
@@ -1079,6 +1079,11 @@ export function createSubscriptionCancellationRequestedEvent(
     accessEndsAt: Date | null;
   }
 ): KlaviyoEvent {
+  // Guard ONCE: an unparseable Date makes toISOString() throw, which used to take the whole
+  // builder with it and silently drop the event.
+  const usableAccessEndsAt =
+    data.accessEndsAt && Number.isFinite(data.accessEndsAt.getTime()) ? data.accessEndsAt : null;
+
   return {
     event: "Subscription Cancellation Requested",
     customer_properties: getCustomerProperties(user),
@@ -1094,7 +1099,35 @@ export function createSubscriptionCancellationRequestedEvent(
           })
         : {}),
       cancelled_at: data.cancelledAt.toISOString(),
-      ...(data.accessEndsAt ? { access_ends_at: data.accessEndsAt.toISOString() } : {}),
+      // `toISOString()` raises RangeError on an unparseable Date, which threw the whole
+      // builder before this guard. The emit is wrapped non-blocking at the call site
+      // (CancelSubscriptionService), so a cancellation never failed — but the event was
+      // silently lost. Validate once and reuse for both the raw value and the label.
+      ...(usableAccessEndsAt ? { access_ends_at: usableAccessEndsAt.toISOString() } : {}),
+      /**
+       * DISPLAY-READY twin of `access_ends_at`, for the cancellation-confirmation email.
+       *
+       * That email's whole job is to name the date access actually stops — a member who
+       * cancels keeps everything until the paid period ends (CancelSubscriptionService sets
+       * `endDate = stripeEndDate` and leaves `isActive` true), so the date is the difference
+       * between "your perks have gone" and "you have until the 24th".
+       *
+       * Formatted HERE for the same two reasons as the profile `*_label` properties:
+       * Klaviyo's drag-and-drop editor stores a merge tag as a single EXPRESSION, so the raw
+       * ISO instant would print verbatim; and it must be AEST, because a renewal stored as
+       * 14:00Z is the NEXT day in Sydney.
+       *
+       * Always a string — "when your current period ends" when the date is unknown — because
+       * the editor cannot hide one line of a multi-line text block.
+       */
+      access_ends_at_label: (() => {
+        if (!usableAccessEndsAt) return "when your current period ends";
+        try {
+          return formatDateInAEST(usableAccessEndsAt, "d MMMM yyyy");
+        } catch {
+          return "when your current period ends";
+        }
+      })(),
     },
   };
 }

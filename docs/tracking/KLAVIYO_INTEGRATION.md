@@ -225,6 +225,7 @@ This is intentional drift containment — we accept the legacy schema as paid co
 | Deep link back to action | `checkout_url`, `resume_url`, etc. | string (absolute URL with UTM) | When the email's CTA needs to return the user to a specific preselected state. Always include UTM params so the ads team can attribute. |
 | Bonus-entry code | `code` | string | The redeemable code, e.g. `"BONUS-ABC123"`. |
 | Human-readable expiry, pre-formatted | `expires_at_label` | string | Built via `formatExpiryLabelAEST()` (`src/utils/common/timezone.ts`) — the single server-side formatter every rendered copy of the deadline derives from, so no copy can disagree with the instant redemption enforces. **It reaches the `Bonus Code Issued` metric only: neither the three discount emails nor any live page renders it today** — see [`Bonus Code Issued`](#bonus-code-issued-2026-08-25) below before you put `{{ event.expires_at_label }}` in a template. Corrected 2026-08-26; this cell used to say it was "the SAME function the rewards wallet renders, so the email and the app can never disagree" — the wallet components are unreachable and no email renders it. **Never** hand-format from `expires_at`; never use `formatDateForKlaviyo` (`en-US`, no `timeZone`). |
+| Access end date, pre-formatted | `access_ends_at_label` | string | Carried by `Subscription Cancellation Requested`. The day a cancelling member's access actually stops, formatted in **AEST** via `formatDateInAEST()`. A display twin of `access_ends_at` exists because Klaviyo's drag-and-drop editor stores a merge tag as a single EXPRESSION — it can print a value but cannot format one, so the raw ISO instant would reach the customer verbatim. AEST because an anchor-24 period end stored as `14:00Z` is the **next day** in Sydney. **Always a string** — `"when your current period ends"` when the date is unknown or unparseable — because the editor cannot hide one line of a multi-line text block. Never hand-format from `access_ends_at`. |
 | Which flow minted/re-armed the code | `trigger` | enum string | `BonusCodeTrigger` — `"cancel-click"` / `"checkout-start"` / `"one-time-purchase"` (`src/utils/redeemables/bonus-code-policy.ts`). **Supplied by the caller in the webhook body** since 2026-08-26, not derived server-side: the Klaviyo flow names which of the three it is when it calls `POST /api/bonus-codes/v1/issue`. An unknown value is a `400`. |
 
 ### Profile properties added 2026-05-28
@@ -285,6 +286,30 @@ the New Member block shipped reading `Tier: tradie-subscription`, `Partner disco
 Both label derivations are pure and exported (`deriveMembershipLabel`, `deriveNextRenewalLabel`) so every
 branch is covered by `npm run test:klaviyo-projection` without a database — including the AEST day-shift,
 which is the whole reason the label exists.
+
+### The two cancellation moments are different emails
+
+There are two cancellation events and they are **not** interchangeable. Picking the wrong one does not just
+shift the send time — it makes the copy untrue.
+
+| | `Subscription Cancellation Requested` | `Subscription Cancelled` |
+|---|---|---|
+| Fires | The moment the member clicks cancel | When the paid period ends and access stops |
+| Source | `CancelSubscriptionService` | Stripe `customer.subscription.deleted` |
+| Member state | Still `isActive`, keeps everything for up to a month | Access has ended |
+| Date property | `access_ends_at` / `access_ends_at_label` | `cancellation_date` (the day it ended) |
+| Email job | Confirm, and say what they keep and until when | Win them back |
+
+A normal cancellation only sets `autoRenew = false` and writes `endDate = stripeEndDate`
+(`CancelSubscriptionService.ts`) — `isActive` stays true. So member pricing, partner discounts and free
+entries all **continue to the end of the paid period**. Only a past-due member cancelling hits
+`shouldCancelImmediately` and loses access straight away.
+
+That makes wording like *"perks end at your cancellation date"* wrong on the REQUESTED event — the member
+still has everything — and it is also the worst retention message available, because it tells someone who
+could un-cancel in one click that there is nothing left to save. On the CANCELLED event the same sentence is
+roughly true but should be past tense, and `cancellation_date` there is the day access ended, not the day
+they clicked.
 
 #### `brand_interest` — read the persisted slug, never re-default
 

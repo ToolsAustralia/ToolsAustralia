@@ -996,6 +996,13 @@ Before persisting, the webhook runs a **persisted-UTM reconcile** ([reconcilePer
 
 
 
+
+**Cancelling does not end a membership immediately, and the emails must say so.** A member who cancels keeps
+member pricing, partner discounts and free entries until the period they have paid for runs out — only
+`autoRenew` flips, and `isActive` stays true (`CancelSubscriptionService`). The exception is a past-due member,
+who loses access at once. `Subscription Cancellation Requested` now carries `access_ends_at_label` (e.g.
+`"24 September 2026"`, AEST) so a confirmation email can name that date without the marketing tool having to
+format an ISO timestamp it cannot format.
 **`brand_interest` is captured at registration and now survives.** It records which brand's
 promo page a visitor signed up through (`dewalt`, `makita`, `milwaukee`, `ryobi`, `hikoki`,
 `stihl`), and is cleared when they make any purchase. Until 2026-09-04 it was silently
