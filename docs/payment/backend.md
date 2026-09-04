@@ -350,3 +350,37 @@ bonus-entry-promo — never produce a `BenefitsGranted` row. The all-sources lif
 
 Consumed by the Klaviyo profile projection to replace a catalogue reconstruction that was
 wrong for 4,904 of 4,904 active members. See `docs/tracking/KLAVIYO_INTEGRATION.md`.
+
+## `resolve-purchase-payment-intent.ts` — the one-charge rule (2026-09-04)
+
+`resolvePurchasePaymentIntent()` is the **only** sanctioned way for a one-time pack purchase
+route to obtain its PaymentIntent. Both `create-one-time-purchase` and
+`create-one-time-purchase-existing-user` call it; neither calls `stripe.paymentIntents.create()`
+directly any more. See [rules.md R14](./rules.md#r14-one-checkout-takes-at-most-one-charge--never-create-a-paymentintent-without-first-trying-to-adopt-one).
+
+Resolution order, **first match wins**:
+
+| Step | When | Charges? | Outcome |
+|---|---|---|---|
+| **adopt** | The client passed `paymentIntentId` — the card form already confirmed it | No | `adopted` |
+| **recover** | No id passed, but an **unclaimed** succeeded/processing intent for this customer + package + amount exists within 15 min | No | `recovered` |
+| **create** | Nothing to adopt | Yes | `created` |
+
+Key behaviours worth knowing before you touch it:
+
+- **`createConfig` is the single source of amount, description and metadata**, for both the
+  create path and the stamp path. It is deliberately *not* accepted alongside separate
+  `amount` / `metadata` params — that would let the charged amount and the validated amount
+  drift apart, which is the one mistake this module exists to prevent.
+- **Package ids are compared after `normalizeMembershipPlanId`.** The upfront intent carries
+  the raw id from the browser, which may still hold the `-member` suffix.
+- **A supplied intent that is already claimed and matches is a replay, not an error** — the
+  previous call succeeded and its response was lost. It is returned as `adopted`. Answering
+  400 there would report failure for a purchase that completed.
+- **Stamping never throws.** The money has already moved; the webhook falls back to package
+  data when `entriesCount` is missing, so entries still land and only the optional attribution
+  codes are at risk. Failing the request would show an error for a successful payment.
+- **The recovery lookup is best-effort.** If `paymentIntents.list` fails, it falls through to
+  `create` — i.e. exactly the previous behaviour. Never block a sale because a lookup failed.
+
+Callers map `PaymentIntentNotAdoptableError` to a 400.

@@ -70,3 +70,34 @@ adding a guard here, mutate the code it guards and confirm the test goes red bef
 > _TODO: identify specific gaps and add test scripts._
 
 | `npm run test:typed-code-checkout` | Fences `resolveTypedCodeAtCheckout` / `typedCodeRefusalCopy` (`src/utils/payment/typed-code-at-checkout.ts`) — the purchase-click resolve for a code the customer typed but never pressed **Apply** on ([frontend.md](./frontend.md), [gotchas.md](./gotchas.md)). `globalThis.fetch` is stubbed; no DB/env. **The file's whole reason for existing is the 429/500 pair:** `/api/codes/validate` returns `{ success: false, valid: false }` for both its own rate limiter and its own outage, and `{ success: true, valid: false }` at HTTP 200 for a genuine refusal — so a `!body.valid` read would make our rate limiter and our downtime start **stopping sales**, strictly worse than the bug being fixed and invisible to `tsc`. Both directions are pinned (429/400/500/`success:false`/unknown `type`/thrown fetch/unparseable body → `inconclusive`; a real `valid:false` → `refused`). Also: each of the three code types resolves as **itself** rather than being flattened to campaign; an empty box short-circuits without touching the network; and the 8s cap is **actually exercised** against a fetch that honours the abort signal and never settles otherwise, because an unexercised timeout is a promise, not a behaviour. Finally a rule-11 sweep over the assembled refusal copy (ban list mirrored from the FAQ corpus's) — every string here is customer-facing at the most sensitive moment there is. **§6 — `evaluatePurchaseRequirementGate`, the sale-block regression (added 2026-08-27):** a campaign code configured `purchaseRequirement: "membership"`, typed on a one-time pack, must stop the customer **once** and then get out of the way. The load-bearing assertion is not that press 1 stops — it is that **press 2 with identical inputs returns `allow`**, because the first shipped form of that gate toasted and returned without recording anything and therefore blocked that sale *forever*, which is strictly worse than the dropped code the branch exists to fix. Pinned in both requirement directions and both surfaces' button labels, plus: the escape survives casing/whitespace drift between the press and the remembered refusal; a *different* code is still asked about once (the escape must not leak across codes); and `none` / `any` / a matching requirement / an absent requirement / no code at all never stop a sale — the live configuration for all three codes shipping this week. A rule-11 sweep runs over the gate's own two sentences. **§6b — the switch the stop's own copy sends them on (added 2026-08-27):** the stop says *"This code is for membership packs only"*, so the sensible customer switches to a membership tier — where the code is valid. While the stop was remembered by **code alone**, that switch skipped the resolve and charged them with their one-per-lifetime grant silently dropped; the fix's own message was what routed them into the loss. The stop is therefore a **pairing**, `{ code, isSubscriptionPurchase }`, and §6b pins all three consequences: the same code after switching to a membership returns `allow` (honoured, not remembered as refused), switching **back** to a pack still returns `allow_without_code` so the sale is never re-walled, and the mirror case (a pack-only code stopped on a membership) behaves symmetrically. **What it cannot prove:** that the modals thread the answer into the charge. No DOM runner exists here, and a source-text grep guard is the pattern `test:campaign-code-metadata` was written to replace — that half is proven by the e2e leg *"minted code TYPED BUT NEVER APPLIED"*. |
+
+## `npm run test:one-time-charge` — the double-charge fence (added 2026-09-04)
+
+Fences `resolvePurchasePaymentIntent()` (`src/utils/payment/stripe/resolve-purchase-payment-intent.ts`),
+the module that decides whether a one-time pack checkout charges the card at all. `@/lib/stripe`
+is replaced in `require.cache` and **identity-checked before any case runs**, so nothing leaves
+the process; every Stripe call is recorded and asserted on.
+
+**The load-bearing assertions are negative**, at the money layer: `paymentIntents.create` must
+NOT be called when the browser already confirmed a charge, and must NOT be called when an
+unclaimed matching charge is recoverable. A test that only checked the returned PaymentIntent
+would have passed for the entire nine months the bug shipped.
+
+Pinned in **both** directions, which is the half that matters: a *claimed* charge must NOT be
+recovered, so a member deliberately buying the same pack twice is still charged twice —
+under-charging is a worse failure than the bug being fixed. Also pinned: `-member` suffix
+normalisation in the recovery match; a claimed-but-matching supplied id is replayed rather than
+rejected (a retry after a lost response is not a failure); amount / customer / package /
+`requires_action` mismatches all refuse *without* falling through to a charge; and both
+best-effort paths (a failed metadata stamp, a failed recovery lookup) degrade without either
+failing the sale or double-charging.
+
+A final source-level check asserts `paymentIntentId` is threaded through all three layers
+(route Zod schema → mutation destructure → mutation body → modal call site). Every way of
+losing it is **silent** — Zod strips undeclared keys, and an unforwarded destructured parameter
+type-checks clean. That check is weaker than driving the code and is labelled as such in the
+file; it exists because the realistic regression is deletion, against which it is exact.
+
+**Verified to have teeth:** mutating the resolver to ignore the client's confirmed intent
+(reintroducing the original bug) makes it fail on
+`"Must NOT create a second PaymentIntent when the client already confirmed one"`.
